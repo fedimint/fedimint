@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use bitcoin::secp256k1;
-pub use error::{FederationError, OutputOutcomeError};
+pub use error::{FederationError, FederationGeneralError, OutputOutcomeError};
 pub use fedimint_connectors::ServerResult;
 pub use fedimint_connectors::error::ServerError;
 use fedimint_connectors::{
@@ -391,7 +391,7 @@ pub trait FederationApiExt: IRawFederationApi {
             return Err(FederationError::general(
                 method,
                 params,
-                anyhow::format_err!("Admin peer_id not set"),
+                FederationGeneralError::AdminPeerIdNotSet,
             ));
         };
 
@@ -411,7 +411,7 @@ pub trait FederationApiExt: IRawFederationApi {
             return Err(FederationError::general(
                 method,
                 params,
-                anyhow::format_err!("Admin peer_id not set"),
+                FederationGeneralError::AdminPeerIdNotSet,
             ));
         };
 

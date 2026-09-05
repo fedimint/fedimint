@@ -5,13 +5,31 @@ use std::time::Duration;
 use fedimint_connectors::error::ServerError;
 use fedimint_core::PeerId;
 use fedimint_core::fmt_utils::AbbreviateJson;
-use fedimint_core::util::FmtCompactAnyhow as _;
+use fedimint_core::util::FmtCompact as _;
 #[cfg(feature = "uniffi")]
 use fedimint_core::util::ffi::UniffiError;
 use fedimint_logging::LOG_CLIENT_NET_API;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::{trace, warn};
+
+/// A federation-wide failure that is not simply peers returning errors.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum FederationGeneralError {
+    /// The call is an admin call, but this api handle does not know which peer
+    /// it speaks for.
+    #[error("Admin peer id not set")]
+    AdminPeerIdNotSet,
+
+    /// Not enough peers agreed for the request to produce an answer.
+    #[error("{message}")]
+    ThresholdFailed { message: String },
+
+    /// A peer answered, but with something the caller cannot use.
+    #[error("{message}")]
+    UnexpectedResponse { message: String },
+}
 
 /// An API request error when calling an entire federation
 ///
@@ -24,7 +42,7 @@ pub struct FederationError {
     ///
     /// The `general` error should be Some, when the error is not simply peers
     /// responding with enough errors, but something more global.
-    pub general: Option<anyhow::Error>,
+    pub general: Option<FederationGeneralError>,
     pub peer_errors: BTreeMap<PeerId, ServerError>,
 }
 
@@ -44,7 +62,7 @@ impl Display for FederationError {
                 "params => {:?}, ",
                 AbbreviateJson(&self.params)
             ))?;
-            f.write_fmt(format_args!("general => {general}, "))?;
+            f.write_fmt(format_args!("general => {}, ", general.fmt_compact()))?;
             if !self.peer_errors.is_empty() {
                 f.write_str(", ")?;
             }
@@ -64,12 +82,12 @@ impl FederationError {
     pub fn general(
         method: impl Into<String>,
         params: impl Serialize,
-        e: impl Into<anyhow::Error>,
+        e: FederationGeneralError,
     ) -> FederationError {
         FederationError {
             method: method.into(),
             params: serde_json::to_value(params).unwrap_or_default(),
-            general: Some(e.into()),
+            general: Some(e),
             peer_errors: BTreeMap::default(),
         }
     }
@@ -105,15 +123,15 @@ impl FederationError {
     pub fn report_if_unusual(&self, context: &str) {
         if let Some(error) = self.general.as_ref() {
             // Any general federation errors are unusual
-            warn!(target: LOG_CLIENT_NET_API, err = %error.fmt_compact_anyhow(), %context, "General FederationError");
+            warn!(target: LOG_CLIENT_NET_API, err = %error.fmt_compact(), %context, "General FederationError");
         }
         for (peer_id, e) in &self.peer_errors {
             e.report_if_unusual(*peer_id, context);
         }
     }
 
-    /// Get the general error if any.
-    pub fn get_general_error(&self) -> Option<&anyhow::Error> {
+    /// The general error, if any.
+    pub fn get_general_error(&self) -> Option<&FederationGeneralError> {
         self.general.as_ref()
     }
 

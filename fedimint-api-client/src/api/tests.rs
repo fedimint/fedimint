@@ -6,6 +6,8 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{NumPeersExt as _, PeerId};
 
+use crate::api::{FederationError, FederationGeneralError};
+
 #[test]
 fn converts_invite_code() {
     let connect = InviteCode::new(
@@ -43,4 +45,18 @@ fn creates_essential_guardians_invite_code() {
     let expected_map: BTreeMap<PeerId, SafeUrl> =
         peer_to_url_map.into_iter().take(max_size).collect();
     assert_eq!(expected_map, code.peers());
+}
+
+#[test]
+fn a_general_federation_error_keeps_its_condition() {
+    let err =
+        FederationError::general("some_method", (), FederationGeneralError::AdminPeerIdNotSet);
+    assert!(
+        matches!(
+            err.get_general_error(),
+            Some(FederationGeneralError::AdminPeerIdNotSet)
+        ),
+        "{err:?}"
+    );
+    assert!(err.to_string().contains("Admin peer id not set"), "{err}");
 }
