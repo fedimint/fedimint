@@ -91,7 +91,7 @@ use fedimint_core::secp256k1::{All, Keypair, Secp256k1};
 use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
 use fedimint_core::{
     Amount, IdxRange, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId, apply,
-    async_trait_maybe_send, base32, push_db_pair_items,
+    async_trait_maybe_send, base32, push_db_pair_items, runtime,
 };
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
@@ -183,7 +183,7 @@ async fn download_slice_with_hash(
         let peer = peer_selector.choose_peer();
         let start_time = fedimint_core::time::now();
 
-        match tokio::time::timeout(TIMEOUT, module_api.fetch_recovery_slice(peer, start, end))
+        match runtime::timeout(TIMEOUT, module_api.fetch_recovery_slice(peer, start, end))
             .await
             .map_err(Into::into)
             .and_then(|r| r)

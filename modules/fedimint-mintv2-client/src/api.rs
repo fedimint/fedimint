@@ -5,7 +5,7 @@ use bitcoin_hashes::sha256;
 use fedimint_api_client::api::{DynModuleApi, FederationApiExt, ServerError};
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::{NumPeersExt, OutPointRange, PeerId, apply, async_trait_maybe_send};
+use fedimint_core::{NumPeersExt, OutPointRange, PeerId, apply, async_trait_maybe_send, runtime};
 use fedimint_mintv2_common::endpoint_constants::{
     RECOVERY_COUNT_ENDPOINT, RECOVERY_SLICE_ENDPOINT, RECOVERY_SLICE_HASH_ENDPOINT,
     SIGNATURE_SHARES_ENDPOINT, SIGNATURE_SHARES_RECOVERY_ENDPOINT,
@@ -116,7 +116,7 @@ impl MintV2ModuleApi for DynModuleApi {
         start: u64,
         end: u64,
     ) -> anyhow::Result<Vec<RecoveryItem>> {
-        let result = tokio::time::timeout(
+        let result = runtime::timeout(
             timeout,
             self.request_single_peer::<Vec<RecoveryItem>>(
                 RECOVERY_SLICE_ENDPOINT.to_owned(),
