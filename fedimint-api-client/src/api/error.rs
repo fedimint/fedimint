@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use fedimint_connectors::error::ServerError;
 use fedimint_core::PeerId;
+use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::encoding::DecodeError;
 use fedimint_core::fmt_utils::AbbreviateJson;
@@ -175,8 +176,10 @@ pub enum OutputOutcomeError {
     /// The transaction that would have produced the outcome was rejected.
     #[error("Transaction rejected: {0}")]
     Rejected(String),
+    /// The transaction has no output at the index the caller asked about.
     #[error("Invalid output index {out_idx}, larger than {outputs_num} in the transaction")]
     InvalidVout { out_idx: u64, outputs_num: usize },
+    /// The outcome did not become available within the time the caller allowed.
     #[error("Timeout reached after waiting {}s", .0.as_secs())]
     Timeout(Duration),
 }
@@ -208,4 +211,21 @@ impl OutputOutcomeError {
             OutputOutcomeError::Rejected(_) | OutputOutcomeError::InvalidVout { .. }
         )
     }
+}
+
+/// A failure to download a federation's client config.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ClientConfigDownloadError {
+    /// The federation could not be asked for its config.
+    #[error("Failed to request the client config")]
+    Federation(#[from] FederationError),
+
+    /// The config the federation returned belongs to a different federation
+    /// than the invite code names.
+    #[error("Obtained client config has federation id {found}, expected {expected}")]
+    FederationIdMismatch {
+        expected: FederationId,
+        found: FederationId,
+    },
 }

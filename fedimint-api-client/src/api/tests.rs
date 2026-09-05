@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::error::Error as _;
 use std::str::FromStr as _;
 
 use fedimint_core::config::FederationId;
@@ -6,7 +7,7 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{NumPeersExt as _, PeerId};
 
-use crate::api::{FederationError, FederationGeneralError};
+use crate::api::{ClientConfigDownloadError, FederationError, FederationGeneralError};
 
 #[test]
 fn converts_invite_code() {
@@ -59,4 +60,37 @@ fn a_general_federation_error_keeps_its_condition() {
         "{err:?}"
     );
     assert!(err.to_string().contains("Admin peer id not set"), "{err}");
+}
+
+#[test]
+fn a_federation_id_mismatch_names_both_ids() {
+    let expected = FederationId::dummy();
+    let found =
+        FederationId::from_str("0000000000000000000000000000000000000000000000000000000000000001")
+            .expect("parses");
+    let err = ClientConfigDownloadError::FederationIdMismatch { expected, found };
+
+    assert!(
+        matches!(err, ClientConfigDownloadError::FederationIdMismatch { .. }),
+        "{err:?}"
+    );
+    let msg = err.to_string();
+    assert!(msg.contains(&expected.to_string()), "{msg}");
+    assert!(msg.contains(&found.to_string()), "{msg}");
+}
+
+#[test]
+fn a_download_error_keeps_the_federation_cause() {
+    let cause =
+        FederationError::general("some_method", (), FederationGeneralError::AdminPeerIdNotSet);
+    let cause_msg = cause.to_string();
+    let err = ClientConfigDownloadError::from(cause);
+
+    assert!(
+        matches!(err, ClientConfigDownloadError::Federation(_)),
+        "{err:?}"
+    );
+    // The variant's own message must not repeat what its source already says.
+    assert!(!err.to_string().contains("Admin peer id not set"), "{err}");
+    assert_eq!(err.source().expect("has a source").to_string(), cause_msg);
 }

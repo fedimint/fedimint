@@ -10,7 +10,9 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use bitcoin::secp256k1;
-pub use error::{FederationError, FederationGeneralError, OutputOutcomeError};
+pub use error::{
+    ClientConfigDownloadError, FederationError, FederationGeneralError, OutputOutcomeError,
+};
 pub use fedimint_connectors::ServerResult;
 pub use fedimint_connectors::error::ServerError;
 use fedimint_connectors::{
