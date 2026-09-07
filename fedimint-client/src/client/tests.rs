@@ -951,3 +951,32 @@ async fn a_balance_without_a_primary_module_is_reported_as_such() {
         "{err:?}"
     );
 }
+
+#[tokio::test]
+async fn loading_a_client_secret_that_was_never_stored_is_typed() {
+    use crate::error::ClientSecretError;
+
+    let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+
+    let err = Client::load_decodable_client_secret::<[u8; 64]>(&db)
+        .await
+        .expect_err("Nothing was ever stored");
+
+    assert!(matches!(err, ClientSecretError::NotPresent), "{err:?}");
+}
+
+#[tokio::test]
+async fn storing_a_second_client_secret_is_typed() {
+    use crate::error::ClientSecretError;
+
+    let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+
+    Client::store_encodable_client_secret(&db, [0u8; 64])
+        .await
+        .expect("The first secret must be stored");
+    let err = Client::store_encodable_client_secret(&db, [1u8; 64])
+        .await
+        .expect_err("A stored secret must not be overwritten");
+
+    assert!(matches!(err, ClientSecretError::AlreadyExists), "{err:?}");
+}

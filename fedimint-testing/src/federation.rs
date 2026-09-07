@@ -118,7 +118,7 @@ impl FederationTest {
         if let Some(admin_creds) = admin_creds {
             client_builder.set_admin_creds(admin_creds);
         }
-        let client_secret = Client::load_or_generate_client_secret(&db).await.unwrap();
+        let client_secret = Client::load_or_generate_client_secret(&db).await;
         client_builder
             .preview_with_existing_config(self.connectors.clone(), client_config, None)
             .await

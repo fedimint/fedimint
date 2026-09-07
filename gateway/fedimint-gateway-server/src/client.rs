@@ -53,7 +53,7 @@ impl GatewayClientBuilder {
     async fn client_plainrootsecret(&self, db: &Database) -> AdminResult<DerivableSecret> {
         let client_secret = Client::load_decodable_client_secret::<[u8; 64]>(db)
             .await
-            .map_err(AdminGatewayError::ClientCreationError)?;
+            .map_err(|err| AdminGatewayError::ClientCreationError(err.into()))?;
         Ok(PlainRootSecretStrategy::to_root_secret(&client_secret))
     }
 

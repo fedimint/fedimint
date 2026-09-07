@@ -698,7 +698,7 @@ impl Gateway {
 
                 Client::store_encodable_client_secret(&gateway_db, mnemonic.to_entropy())
                     .await
-                    .map_err(AdminGatewayError::MnemonicError)?;
+                    .map_err(|err| AdminGatewayError::MnemonicError(err.into()))?;
                 GatewayState::Disconnected
             } else {
                 GatewayState::NotConfigured { mnemonic_sender }
@@ -3212,7 +3212,7 @@ impl IAdminGateway for Gateway {
 
         Client::store_encodable_client_secret(&self.gateway_db, mnemonic.to_entropy())
             .await
-            .map_err(AdminGatewayError::MnemonicError)?;
+            .map_err(|err| AdminGatewayError::MnemonicError(err.into()))?;
 
         *state_guard = GatewayState::Disconnected;
         drop(state_guard);

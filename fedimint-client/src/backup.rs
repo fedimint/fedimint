@@ -23,6 +23,7 @@ use tracing::{debug, info, warn};
 
 use super::Client;
 use crate::db::LastBackupKey;
+use crate::error::ClientSecretError;
 use crate::secret::DeriveableSecretClientExt;
 
 /// Backup metadata
@@ -465,7 +466,7 @@ impl Client {
         Self::get_derived_backup_signing_key_static(&self.root_secret())
     }
 
-    pub async fn get_decoded_client_secret<T: Decodable>(&self) -> anyhow::Result<T> {
+    pub async fn get_decoded_client_secret<T: Decodable>(&self) -> Result<T, ClientSecretError> {
         crate::db::get_decoded_client_secret::<T>(self.db()).await
     }
 }

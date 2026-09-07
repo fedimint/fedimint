@@ -6,7 +6,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use anyhow::{Context as _, anyhow, bail};
+use anyhow::{Context as _, anyhow};
 use async_stream::try_stream;
 use bitcoin::key::Secp256k1;
 use bitcoin::key::rand::thread_rng;
@@ -88,10 +88,11 @@ use crate::db::{
     ChronologicalOperationLogKey, ClientConfigKey, ClientMetadataKey, ClientModuleRecovery,
     ClientModuleRecoveryState, EncodedClientSecretKey, OperationLogKey, PeerLastApiVersionsSummary,
     PeerLastApiVersionsSummaryKey, PendingClientConfigKey, TransactionFeesKey,
-    apply_migrations_core_client_dbtx, get_decoded_client_secret, verify_client_db_integrity_dbtx,
+    apply_migrations_core_client_dbtx, verify_client_db_integrity_dbtx,
 };
 use crate::error::{
-    ModuleLookupError, OperationAlreadyExistsError, OperationNotFoundError, TransactionSubmitError,
+    ClientSecretError, ModuleLookupError, OperationAlreadyExistsError, OperationNotFoundError,
+    TransactionSubmitError,
 };
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
@@ -477,12 +478,12 @@ impl Client {
     pub async fn store_encodable_client_secret<T: Encodable>(
         db: &Database,
         secret: T,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ClientSecretError> {
         let mut dbtx = db.begin_transaction().await;
 
         // Don't overwrite an existing secret
         if dbtx.get_value(&EncodedClientSecretKey).await.is_some() {
-            bail!("Encoded client secret already exists, cannot overwrite")
+            return Err(ClientSecretError::AlreadyExists);
         }
 
         let encoded_secret = T::consensus_encode_to_vec(&secret);
@@ -492,31 +493,34 @@ impl Client {
         Ok(())
     }
 
-    pub async fn load_decodable_client_secret<T: Decodable>(db: &Database) -> anyhow::Result<T> {
+    pub async fn load_decodable_client_secret<T: Decodable>(
+        db: &Database,
+    ) -> Result<T, ClientSecretError> {
         let Some(secret) = Self::load_decodable_client_secret_opt(db).await? else {
-            bail!("Encoded client secret not present in DB")
+            return Err(ClientSecretError::NotPresent);
         };
 
         Ok(secret)
     }
+
     pub async fn load_decodable_client_secret_opt<T: Decodable>(
         db: &Database,
-    ) -> anyhow::Result<Option<T>> {
+    ) -> Result<Option<T>, ClientSecretError> {
         let mut dbtx = db.begin_transaction_nc().await;
 
         let client_secret = dbtx.get_value(&EncodedClientSecretKey).await;
 
         Ok(match client_secret {
-            Some(client_secret) => Some(
-                T::consensus_decode_whole(&client_secret, &ModuleRegistry::default())
-                    .context("Decoding failed")?,
-            ),
+            Some(client_secret) => Some(T::consensus_decode_whole(
+                &client_secret,
+                &ModuleRegistry::default(),
+            )?),
             None => None,
         })
     }
 
-    pub async fn load_or_generate_client_secret(db: &Database) -> anyhow::Result<[u8; 64]> {
-        let client_secret = match Self::load_decodable_client_secret::<[u8; 64]>(db).await {
+    pub async fn load_or_generate_client_secret(db: &Database) -> [u8; 64] {
+        match Self::load_decodable_client_secret::<[u8; 64]>(db).await {
             Ok(secret) => secret,
             _ => {
                 let secret = PlainRootSecretStrategy::random(&mut thread_rng());
@@ -525,8 +529,7 @@ impl Client {
                     .expect("Storing client secret must work");
                 secret
             }
-        };
-        Ok(client_secret)
+        }
     }
 
     pub async fn is_initialized(db: &Database) -> bool {
@@ -1363,12 +1366,6 @@ impl Client {
             .iter_modules()
             .find(|(_, kind, _module)| *kind == module_kind)
             .map(|(instance_id, _, _)| instance_id)
-    }
-
-    /// Returns the data from which the client's root secret is derived (e.g.
-    /// BIP39 seed phrase struct).
-    pub async fn root_secret_encoding<T: Decodable>(&self) -> anyhow::Result<T> {
-        get_decoded_client_secret::<T>(self.db()).await
     }
 
     /// Waits for outputs from the primary module to reach its final

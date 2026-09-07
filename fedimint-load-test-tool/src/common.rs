@@ -160,7 +160,7 @@ pub async fn build_client(
     client_builder.with_module(MintClientInit);
     client_builder.with_module(LightningClientInit::default());
     client_builder.with_module(WalletClientInit::default());
-    let client_secret = Client::load_or_generate_client_secret(&db).await?;
+    let client_secret = Client::load_or_generate_client_secret(&db).await;
     let root_secret =
         RootSecret::StandardDoubleDerive(PlainRootSecretStrategy::to_root_secret(&client_secret));
     let connectors = ConnectorRegistry::build_from_client_env().bind().await;
