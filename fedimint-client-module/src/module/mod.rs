@@ -34,6 +34,7 @@ use serde::de::DeserializeOwned;
 use tracing::warn;
 
 use self::init::ClientModuleInit;
+use crate::error::{OperationLookupError, OperationNotFoundError};
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::oplog::{IOperationLog, OperationLogEntry, UpdateStreamOrOutcome};
 use crate::sm::executor::{ActiveStateKey, IExecutor, InactiveStateKey};
@@ -468,17 +469,21 @@ where
     pub async fn get_operation(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<oplog::OperationLogEntry> {
+    ) -> Result<oplog::OperationLogEntry, OperationLookupError> {
         let operation = self
             .client
             .get()
             .operation_log()
             .get_operation(operation_id)
             .await
-            .ok_or(anyhow::anyhow!("Operation not found"))?;
+            .ok_or(OperationNotFoundError { operation_id })?;
 
         if operation.operation_module_kind() != M::kind().as_str() {
-            bail!("Operation is not a lightning operation");
+            return Err(OperationLookupError::WrongModuleKind {
+                operation_id,
+                expected: M::kind(),
+                found: operation.operation_module_kind().to_owned(),
+            });
         }
 
         Ok(operation)

@@ -90,6 +90,7 @@ use crate::db::{
     PeerLastApiVersionsSummaryKey, PendingClientConfigKey, TransactionFeesKey,
     apply_migrations_core_client_dbtx, get_decoded_client_secret, verify_client_db_integrity_dbtx,
 };
+use crate::error::OperationNotFoundError;
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
 use crate::oplog::OperationLog;
@@ -1224,9 +1225,9 @@ impl Client {
     pub async fn get_operation_fees(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<Option<Amounts>> {
+    ) -> Result<Option<Amounts>, OperationNotFoundError> {
         if !self.operation_exists(operation_id).await {
-            bail!("Operation does not exist");
+            return Err(OperationNotFoundError { operation_id });
         }
 
         let (active_states, inactive_states) =

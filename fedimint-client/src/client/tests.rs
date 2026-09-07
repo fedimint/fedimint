@@ -8,6 +8,8 @@ use anyhow::anyhow;
 use bitcoin::key::Secp256k1;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
+use fedimint_client_module::OperationId;
+use fedimint_client_module::error::OperationNotFoundError;
 use fedimint_client_module::meta::LegacyMetaSource;
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{ClientModuleRegistry, FinalClientIface};
@@ -843,4 +845,38 @@ async fn client_handle_drop_outside_runtime_does_not_panic() {
     std::thread::spawn(move || drop(handle))
         .join()
         .expect("Dropping a ClientHandle outside a runtime must not panic");
+}
+
+/// A client with no modules and an empty database, enough to exercise the
+/// lookups that only read the operation log.
+async fn client_for_lookup_test() -> Client {
+    let (_status_sender, status_receiver) = watch::channel(BTreeMap::new());
+    client_for_recovery_test(status_receiver, BTreeMap::new()).await
+}
+
+#[tokio::test]
+async fn operation_fees_of_a_missing_operation_are_reported_as_not_found() {
+    let client = client_for_lookup_test().await;
+    let operation_id = OperationId::new_random();
+
+    let err = client
+        .get_operation_fees(operation_id)
+        .await
+        .expect_err("An operation that was never started has no fees");
+
+    assert_eq!(err.operation_id, operation_id);
+}
+
+#[tokio::test]
+async fn visualizing_a_missing_operation_is_reported_as_not_found() {
+    let client = client_for_lookup_test().await;
+    let operation_id = OperationId::new_random();
+
+    // `OperationVisData` is not `Debug`, so `expect_err` is not available here.
+    let Err(err) = client.get_operations_vis(Some(operation_id), None).await else {
+        panic!("An operation that was never started cannot be visualized");
+    };
+    let err: OperationNotFoundError = err;
+
+    assert_eq!(err.operation_id, operation_id);
 }

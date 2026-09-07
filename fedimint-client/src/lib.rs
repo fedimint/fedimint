@@ -91,6 +91,8 @@ mod client;
 pub mod backup;
 /// Database keys used by the client
 pub mod db;
+/// Error types of the client
+pub mod error;
 #[cfg(feature = "uniffi")]
 pub mod ffi;
 

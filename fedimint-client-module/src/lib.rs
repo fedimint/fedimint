@@ -41,6 +41,7 @@ use transaction::{
     ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputSM, TxSubmissionStatesSM,
 };
 
+pub use crate::error::{OperationAlreadyExistsError, OperationLookupError, OperationNotFoundError};
 pub use crate::module::{ClientModule, StateGenerator};
 use crate::sm::executor::ContextGen;
 use crate::sm::{ClientSMDatabaseTransaction, DynState, IState, State};
@@ -49,6 +50,9 @@ use crate::transaction::{ClientInput, ClientOutputBundle, TxSubmissionStates};
 pub mod api;
 
 pub mod db;
+
+/// Error types shared between the client and its modules
+pub mod error;
 
 pub mod backup;
 /// Environment variables
