@@ -35,15 +35,14 @@ use fedimint_logging::LOG_CLIENT;
 use futures::StreamExt;
 use module::OutPointRange;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use tracing::debug;
 use transaction::{
     ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputSM, TxSubmissionStatesSM,
 };
 
 pub use crate::error::{
-    ModuleLookupError, OperationAlreadyExistsError, OperationLookupError, OperationNotFoundError,
-    TransactionSubmitError,
+    AddStateMachinesError, ModuleLookupError, OperationAlreadyExistsError, OperationLookupError,
+    OperationNotFoundError, TransactionSubmitError,
 };
 pub use crate::module::{ClientModule, StateGenerator};
 use crate::sm::executor::ContextGen;
@@ -210,14 +209,6 @@ pub type InstancelessDynClientOutputBundle = ClientOutputBundle<
     Box<maybe_add_send_sync!(dyn IOutput + 'static)>,
     Box<maybe_add_send_sync!(dyn IState + 'static)>,
 >;
-
-#[derive(Debug, Error)]
-pub enum AddStateMachinesError {
-    #[error("State already exists in database")]
-    StateAlreadyExists,
-    #[error("Got {0}")]
-    Other(#[from] anyhow::Error),
-}
 
 pub type AddStateMachinesResult = Result<(), AddStateMachinesError>;
 

@@ -10,7 +10,30 @@ use fedimint_core::db::DatabaseError;
 use fedimint_core::module::AmountUnit;
 use thiserror::Error;
 
-use crate::AddStateMachinesError;
+/// A failure to add state machines to the client's executor.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum AddStateMachinesError {
+    /// One of the states is already in the database.
+    #[error("State already exists in database")]
+    StateAlreadyExists,
+
+    /// A state belongs to a module instance the executor does not know.
+    #[error("Unknown module instance {module_instance_id}")]
+    UnknownModule {
+        /// The instance the state claims to belong to.
+        module_instance_id: ModuleInstanceId,
+    },
+
+    /// A state that can no longer transition was handed to the executor,
+    /// which would never make progress on it.
+    #[error("State is already terminal, adding it to the executor does not make sense")]
+    StateAlreadyTerminal,
+
+    /// The database write failed.
+    #[error("Database error")]
+    Database(#[from] DatabaseError),
+}
 
 /// An operation with the same id already exists in the operation log.
 #[derive(Debug, Error)]

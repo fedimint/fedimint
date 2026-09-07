@@ -2,6 +2,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
 
+use fedimint_client_module::error::AddStateMachinesError;
 use fedimint_client_module::sm::{Context, DynContext, DynState, State, StateTransition};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::Database;
@@ -171,15 +172,16 @@ async fn test_executor() {
         .await
         .unwrap();
 
+    let err = executor
+        .add_state_machines(vec![DynState::from_typed(
+            MOCK_INSTANCE_1,
+            MockStateMachine::Start,
+        )])
+        .await
+        .expect_err("Running the same state machine a second time should fail");
     assert!(
-        executor
-            .add_state_machines(vec![DynState::from_typed(
-                MOCK_INSTANCE_1,
-                MockStateMachine::Start
-            )])
-            .await
-            .is_err(),
-        "Running the same state machine a second time should fail"
+        matches!(err, AddStateMachinesError::StateAlreadyExists),
+        "{err:?}"
     );
 
     assert!(
@@ -205,6 +207,31 @@ async fn test_executor() {
             .contains_inactive_state(MOCK_INSTANCE_1, MockStateMachine::Final)
             .await,
         "State was written to DB and waits for broadcast"
+    );
+}
+
+#[tokio::test]
+async fn adding_a_state_of_an_unknown_module_is_typed() {
+    const UNREGISTERED_INSTANCE: ModuleInstanceId = 21;
+
+    let (executor, _sender, _db) = get_executor();
+
+    let err = executor
+        .add_state_machines(vec![DynState::from_typed(
+            UNREGISTERED_INSTANCE,
+            MockStateMachine::Start,
+        )])
+        .await
+        .expect_err("The executor does not know this module instance");
+
+    assert!(
+        matches!(
+            err,
+            AddStateMachinesError::UnknownModule {
+                module_instance_id: UNREGISTERED_INSTANCE
+            }
+        ),
+        "{err:?}"
     );
 }
 
