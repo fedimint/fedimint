@@ -517,7 +517,7 @@ impl FeeQuote {
 ///
 /// The LNv2 and LNv1 send-all flows share this solver; they differ only in
 /// `gross_up` (the gateway fee model) and which `fee_quote` they pass.
-pub async fn max_affordable_send_amount<GrossUp, Quote, Fut>(
+pub async fn max_affordable_send_amount<GrossUp, Quote, Fut, E>(
     balance: Amount,
     min_amount: Amount,
     max_amount: Amount,
@@ -527,7 +527,7 @@ pub async fn max_affordable_send_amount<GrossUp, Quote, Fut>(
 where
     GrossUp: Fn(Amount) -> Amount,
     Quote: Fn(Amount) -> Fut,
-    Fut: Future<Output = anyhow::Result<FeeQuote>>,
+    Fut: Future<Output = Result<FeeQuote, E>>,
 {
     // Nothing above the balance can ever be funded, so cap the upper bound.
     let hi_bound = max_amount.msats.min(balance.msats);
@@ -621,7 +621,7 @@ where
 /// balance. A quote error (the balance cannot fund a value this large) counts
 /// as unaffordable, making this safe as the monotone predicate for
 /// [`max_affordable_send_amount`].
-async fn send_amount_affordable<GrossUp, Quote, Fut>(
+async fn send_amount_affordable<GrossUp, Quote, Fut, E>(
     amount: Amount,
     balance: Amount,
     gross_up: &GrossUp,
@@ -630,7 +630,7 @@ async fn send_amount_affordable<GrossUp, Quote, Fut>(
 where
     GrossUp: Fn(Amount) -> Amount,
     Quote: Fn(Amount) -> Fut,
-    Fut: Future<Output = anyhow::Result<FeeQuote>>,
+    Fut: Future<Output = Result<FeeQuote, E>>,
 {
     let funded_amount = gross_up(amount);
 
