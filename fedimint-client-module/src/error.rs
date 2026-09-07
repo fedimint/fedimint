@@ -5,6 +5,7 @@
 //! sides; they live here rather than in `fedimint-client`, which the modules do
 //! not depend on.
 
+use fedimint_core::config::{FederationId, ModuleConfigError};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::DatabaseError;
 use fedimint_core::module::AmountUnit;
@@ -171,3 +172,35 @@ impl From<ModuleLookupError> for fedimint_core::util::ffi::UniffiError {
 #[derive(Debug, Error)]
 #[error("Could not find a common core API version")]
 pub struct ApiVersionDiscoveryError;
+
+/// A failure to fetch the federation's meta fields.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum MetaFetchError {
+    /// The meta override url could not be read from the client config.
+    #[error("Failed to read the meta override url from the client config")]
+    Config(#[from] ModuleConfigError),
+
+    /// The meta override source could not be reached, or did not answer with
+    /// the expected body.
+    #[error("The meta override source could not be fetched")]
+    Http(#[from] reqwest::Error),
+
+    /// The meta override source answered with a non-success status.
+    #[error("The meta override source answered with status {status}")]
+    Status {
+        /// The status the source answered with.
+        status: reqwest::StatusCode,
+    },
+
+    /// The meta override source's body is not the expected JSON.
+    #[error("The meta override source returned invalid JSON")]
+    Json(#[from] serde_json::Error),
+
+    /// The meta override source has no entry for this federation.
+    #[error("The meta override source has no entry for federation {federation_id}")]
+    NoEntry {
+        /// The federation that was looked up.
+        federation_id: FederationId,
+    },
+}

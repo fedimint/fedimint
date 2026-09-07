@@ -41,7 +41,7 @@ use transaction::{
 };
 
 pub use crate::error::{
-    AddStateMachinesError, ApiVersionDiscoveryError, ModuleLookupError,
+    AddStateMachinesError, ApiVersionDiscoveryError, MetaFetchError, ModuleLookupError,
     OperationAlreadyExistsError, OperationLookupError, OperationNotFoundError,
     TransactionSubmitError,
 };
