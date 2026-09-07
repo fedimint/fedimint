@@ -4,7 +4,7 @@
 //! [`fedimint_client_module::error`] and re-exported here, so this module is
 //! the single place to look.
 
-use fedimint_api_client::api::ClientConfigDownloadError;
+use fedimint_api_client::api::{ClientConfigDownloadError, FederationError};
 pub use fedimint_client_module::error::*;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{DatabaseError, DbMigrationError};
@@ -96,6 +96,53 @@ pub enum ClientBuildError {
 impl From<ClientConfigDownloadError> for ClientBuildError {
     fn from(source: ClientConfigDownloadError) -> Self {
         Self::ConfigDownload(Box::new(source))
+    }
+}
+
+/// A failure to create, encrypt, upload or read back a client backup.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum BackupError {
+    /// A module is still recovering, so its state is not backed up yet.
+    #[error("Cannot back up while a module recovery is still running")]
+    PendingRecoveries,
+
+    /// The federation could not be reached.
+    #[error("The federation could not be reached")]
+    Federation(#[source] Box<FederationError>),
+
+    /// A module failed to produce its part of the backup.
+    // The boxed cause narrows to `ClientModuleError` in #8821 part E.
+    #[error("Module {instance_id} failed to produce its backup")]
+    Module {
+        /// The module that failed.
+        instance_id: ModuleInstanceId,
+        /// The failure the module reported.
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+
+    /// The encrypted backup is larger than the federation stores.
+    #[error("The backup payload is {size} bytes, over the limit of {max}")]
+    TooLarge {
+        /// The size of the encrypted backup.
+        size: usize,
+        /// The largest payload the federation stores.
+        max: usize,
+    },
+
+    /// The backup could not be encrypted or decrypted.
+    #[error("The backup could not be encrypted or decrypted")]
+    Encryption(#[source] Box<dyn std::error::Error + Send + Sync>),
+
+    /// A downloaded backup could not be decoded.
+    #[error("The backup could not be decoded")]
+    Decode(#[from] DecodeError),
+}
+
+impl From<FederationError> for BackupError {
+    fn from(source: FederationError) -> Self {
+        Self::Federation(Box::new(source))
     }
 }
 

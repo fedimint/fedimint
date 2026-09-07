@@ -11,6 +11,7 @@ use fedimint_api_client::api::global_api::with_request_hook::{
 };
 use fedimint_api_client::api::{
     ApiVersionSet, ClientConfigDownloadError, DynGlobalApi, FederationApi, FederationApiExt as _,
+    FederationError,
 };
 use fedimint_api_client::download_from_invite_code;
 use fedimint_bitcoind::DynBitcoindRpc;
@@ -1555,7 +1556,7 @@ impl ClientPreview {
     pub async fn download_backup_from_federation(
         &self,
         pre_root_secret: RootSecret,
-    ) -> anyhow::Result<Option<ClientBackup>> {
+    ) -> Result<Option<ClientBackup>, FederationError> {
         let pre_root_secret = pre_root_secret.to_inner(self.config.calculate_federation_id());
         let api = DynGlobalApi::new(
             self.connectors.clone(),

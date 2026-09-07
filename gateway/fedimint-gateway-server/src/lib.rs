@@ -1629,7 +1629,8 @@ impl Gateway {
             .backup_to_federation(fedimint_client::backup::Metadata::from_json_serialized(
                 metadata,
             ))
-            .await?;
+            .await
+            .map_err(anyhow::Error::from)?;
         Ok(())
     }
 
