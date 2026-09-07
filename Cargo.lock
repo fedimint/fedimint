@@ -3625,6 +3625,7 @@ dependencies = [
  "serde",
  "serde_json",
  "test-log",
+ "thiserror 2.0.18",
  "tokio",
  "tracing",
  "uniffi",

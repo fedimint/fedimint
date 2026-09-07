@@ -1,7 +1,6 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicU8;
 
-use anyhow::bail;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{
     DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _, IRawDatabaseExt as _,
@@ -54,6 +53,11 @@ impl EventLogNonTrimableTracker for TestEventLogTracker {
     }
 }
 
+/// The error the test handler returns to stop handling events.
+#[derive(Debug, thiserror::Error)]
+#[error("Time to wrap up")]
+struct WrapUp;
+
 #[test_log::test(tokio::test)]
 async fn sanity_handle_events() {
     let db = MemDatabase::new().into_database();
@@ -94,7 +98,7 @@ async fn sanity_handle_events() {
                     );
 
                     if counter.load(std::sync::atomic::Ordering::Relaxed) == 4 {
-                        bail!("Time to wrap up");
+                        return Err(WrapUp);
                     }
                     counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     Ok(())

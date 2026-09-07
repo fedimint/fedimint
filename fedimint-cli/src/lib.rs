@@ -1826,7 +1826,7 @@ impl FedimintCli {
                             Box::pin(async move {
                                 info!(target: LOG_CLIENT, "{event:?}");
 
-                                Ok(())
+                                Ok::<(), std::convert::Infallible>(())
                             })
                         },
                     )

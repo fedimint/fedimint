@@ -67,8 +67,9 @@ use fedimint_core::{
 };
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
-    DBTransactionEventLogExt as _, DynEventLogTrimableTracker, Event, EventKind, EventLogEntry,
-    EventLogId, EventLogTrimableId, EventLogTrimableTracker, EventPersistence, PersistedLogEntry,
+    DBTransactionEventLogExt as _, DynEventLogTrimableTracker, Event, EventHandlerError, EventKind,
+    EventLogEntry, EventLogId, EventLogTrimableId, EventLogTrimableTracker, EventPersistence,
+    PersistedLogEntry,
 };
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
 use futures::stream::FuturesUnordered;
@@ -2682,14 +2683,15 @@ impl Client {
     /// that is infrequent and important enough to be persisted
     /// forever. Most applications should prefer to use [`Self::handle_events`]
     /// which emits *all* events.
-    pub async fn handle_historical_events<F, R>(
+    pub async fn handle_historical_events<F, R, E>(
         &self,
         tracker: fedimint_eventlog::DynEventLogTracker,
         handler_fn: F,
-    ) -> anyhow::Result<()>
+    ) -> Result<(), EventHandlerError<E>>
     where
         F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
-        R: Future<Output = anyhow::Result<()>>,
+        R: Future<Output = Result<(), E>>,
+        E: std::error::Error + 'static,
     {
         fedimint_eventlog::handle_events(
             self.db.clone(),
@@ -2718,14 +2720,15 @@ impl Client {
     /// This method returns only when client is shutting down or on internal
     /// error, so typically should be called in a background task dedicated
     /// to handling events.
-    pub async fn handle_events<F, R>(
+    pub async fn handle_events<F, R, E>(
         &self,
         tracker: fedimint_eventlog::DynEventLogTrimableTracker,
         handler_fn: F,
-    ) -> anyhow::Result<()>
+    ) -> Result<(), EventHandlerError<E>>
     where
         F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
-        R: Future<Output = anyhow::Result<()>>,
+        R: Future<Output = Result<(), E>>,
+        E: std::error::Error + 'static,
     {
         fedimint_eventlog::handle_trimable_events(
             self.db.clone(),

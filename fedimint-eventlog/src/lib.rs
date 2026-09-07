@@ -31,6 +31,7 @@ use fedimint_logging::LOG_CLIENT_EVENT_LOG;
 use futures::{Future, StreamExt};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use tokio::sync::{broadcast, watch};
 use tracing::{debug, trace};
 
@@ -850,19 +851,34 @@ pub trait EventLogTrimableTracker {
 }
 pub type DynEventLogTrimableTracker = Box<dyn EventLogTrimableTracker>;
 
-pub async fn handle_events<F, R>(
+/// A failure while handling entries from the event log.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum EventHandlerError<E> {
+    /// The handler rejected an event.
+    #[error("The event handler failed")]
+    Handler(#[source] E),
+
+    /// The tracker could not load or store the position in the log.
+    #[error("The event log tracker failed")]
+    Tracker(#[source] Box<dyn std::error::Error + Send + Sync>),
+}
+
+pub async fn handle_events<F, R, E>(
     db: Database,
     mut tracker: DynEventLogTracker,
     mut log_event_added: watch::Receiver<()>,
     call_fn: F,
-) -> anyhow::Result<()>
+) -> Result<(), EventHandlerError<E>>
 where
     F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
-    R: Future<Output = anyhow::Result<()>>,
+    R: Future<Output = Result<(), E>>,
+    E: std::error::Error + 'static,
 {
     let mut next_key: EventLogId = tracker
         .load(&mut db.begin_transaction_nc().await)
-        .await?
+        .await
+        .map_err(|err| EventHandlerError::Tracker(err.into()))?
         .unwrap_or_default();
 
     trace!(target: LOG_CLIENT_EVENT_LOG, ?next_key, "Handling events");
@@ -872,11 +888,16 @@ where
 
         match dbtx.get_value(&next_key).await {
             Some(event) => {
-                (call_fn)(&mut dbtx.to_ref_nc(), event).await?;
+                (call_fn)(&mut dbtx.to_ref_nc(), event)
+                    .await
+                    .map_err(EventHandlerError::Handler)?;
 
                 next_key = next_key.next();
 
-                tracker.store(&mut dbtx.to_ref_nc(), next_key).await?;
+                tracker
+                    .store(&mut dbtx.to_ref_nc(), next_key)
+                    .await
+                    .map_err(|err| EventHandlerError::Tracker(err.into()))?;
 
                 dbtx.commit_tx().await;
             }
@@ -889,19 +910,21 @@ where
     }
 }
 
-pub async fn handle_trimable_events<F, R>(
+pub async fn handle_trimable_events<F, R, E>(
     db: Database,
     mut tracker: DynEventLogTrimableTracker,
     mut log_event_added: watch::Receiver<()>,
     call_fn: F,
-) -> anyhow::Result<()>
+) -> Result<(), EventHandlerError<E>>
 where
     F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
-    R: Future<Output = anyhow::Result<()>>,
+    R: Future<Output = Result<(), E>>,
+    E: std::error::Error + 'static,
 {
     let mut next_key: EventLogTrimableId = tracker
         .load(&mut db.begin_transaction_nc().await)
-        .await?
+        .await
+        .map_err(|err| EventHandlerError::Tracker(err.into()))?
         .unwrap_or_default();
     trace!(target: LOG_CLIENT_EVENT_LOG, ?next_key, "Handling trimable events");
 
@@ -910,10 +933,15 @@ where
 
         match dbtx.get_value(&next_key).await {
             Some(event) => {
-                (call_fn)(&mut dbtx.to_ref_nc(), event).await?;
+                (call_fn)(&mut dbtx.to_ref_nc(), event)
+                    .await
+                    .map_err(EventHandlerError::Handler)?;
 
                 next_key = next_key.next();
-                tracker.store(&mut dbtx.to_ref_nc(), next_key).await?;
+                tracker
+                    .store(&mut dbtx.to_ref_nc(), next_key)
+                    .await
+                    .map_err(|err| EventHandlerError::Tracker(err.into()))?;
 
                 dbtx.commit_tx().await;
             }

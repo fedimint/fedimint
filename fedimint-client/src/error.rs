@@ -9,6 +9,7 @@ pub use fedimint_client_module::error::*;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{DatabaseError, DbMigrationError};
 use fedimint_core::encoding::DecodeError;
+pub use fedimint_eventlog::EventHandlerError;
 use thiserror::Error;
 
 /// A failure to read or write the client's stored root secret.
