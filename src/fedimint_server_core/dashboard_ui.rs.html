@@ -122,7 +122,10 @@
 <a href=#122 id=122 data-nosnippet>122</a></span><span class="kw">pub struct </span>ServerBitcoinRpcStatus {
 <a href=#123 id=123 data-nosnippet>123</a>    <span class="kw">pub </span>network: Network,
 <a href=#124 id=124 data-nosnippet>124</a>    <span class="kw">pub </span>block_count: u64,
-<a href=#125 id=125 data-nosnippet>125</a>    <span class="kw">pub </span>fee_rate: Feerate,
-<a href=#126 id=126 data-nosnippet>126</a>    <span class="kw">pub </span>sync_progress: <span class="prelude-ty">Option</span>&lt;f64&gt;,
-<a href=#127 id=127 data-nosnippet>127</a>}
+<a href=#125 id=125 data-nosnippet>125</a>    <span class="doccomment">/// `None` while the backend cannot estimate fees yet — a node in initial
+<a href=#126 id=126 data-nosnippet>126</a>    /// block download has no fee data until it reaches the tip, and consensus
+<a href=#127 id=127 data-nosnippet>127</a>    /// does not start before then.
+<a href=#128 id=128 data-nosnippet>128</a>    </span><span class="kw">pub </span>fee_rate: <span class="prelude-ty">Option</span>&lt;Feerate&gt;,
+<a href=#129 id=129 data-nosnippet>129</a>    <span class="kw">pub </span>sync_progress: <span class="prelude-ty">Option</span>&lt;f64&gt;,
+<a href=#130 id=130 data-nosnippet>130</a>}
 </code></pre></div></section></main></body></html>

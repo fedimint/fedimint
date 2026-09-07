@@ -2,7 +2,7 @@
 <a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>std::sync::{Arc, OnceLock};
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>std::time::Duration;
 <a href=#4 id=4 data-nosnippet>4</a>
-<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>anyhow::{Context, <span class="prelude-ty">Result</span>, ensure};
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>anyhow::{<span class="prelude-ty">Result</span>, ensure};
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_core::bitcoin::{Block, BlockHash, Network, Transaction};
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::task::TaskGroup;
@@ -103,9 +103,9 @@
 <a href=#103 id=103 data-nosnippet>103</a>        <span class="kw">let </span>sync_progress = rpc.get_sync_progress().<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#104 id=104 data-nosnippet>104</a>
 <a href=#105 id=105 data-nosnippet>105</a>        <span class="kw">let </span>fee_rate = <span class="kw">if </span>network == Network::Regtest {
-<a href=#106 id=106 data-nosnippet>106</a>            Feerate { sats_per_kvb: <span class="number">1000 </span>}
+<a href=#106 id=106 data-nosnippet>106</a>            <span class="prelude-val">Some</span>(Feerate { sats_per_kvb: <span class="number">1000 </span>})
 <a href=#107 id=107 data-nosnippet>107</a>        } <span class="kw">else </span>{
-<a href=#108 id=108 data-nosnippet>108</a>            rpc.get_feerate().<span class="kw">await</span><span class="question-mark">?</span>.context(<span class="string">"Feerate not available"</span>)<span class="question-mark">?
+<a href=#108 id=108 data-nosnippet>108</a>            rpc.get_feerate().<span class="kw">await</span><span class="question-mark">?
 <a href=#109 id=109 data-nosnippet>109</a>        </span>};
 <a href=#110 id=110 data-nosnippet>110</a>
 <a href=#111 id=111 data-nosnippet>111</a>        <span class="prelude-val">Ok</span>(ServerBitcoinRpcStatus {
