@@ -1,11 +1,12 @@
 use std::collections::{BTreeMap, HashMap};
 use std::convert::identity;
+use std::future::Future;
 use std::time::Duration;
 
 use anyhow::anyhow;
 use bitcoin::hashes::sha256::{self, Hash as Sha256Hash};
 use fedimint_api_client::api::{
-    FederationApiExt, FederationResult, IModuleFederationApi, ServerError,
+    FederationApiExt, FederationError, FederationResult, IModuleFederationApi, ServerError,
 };
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::module::{ApiRequestErased, ModuleConsensusVersion};
@@ -25,7 +26,9 @@ use fedimint_ln_common::{
     ContractAccount, FederationPublicKey, LightningGateway, LightningGatewayAnnouncement,
     RemoveGatewayRequest,
 };
+use futures::future::join_all;
 use itertools::Itertools;
+use serde::de::DeserializeOwned;
 use tracing::{info, warn};
 
 #[apply(async_trait_maybe_send!)]
@@ -46,6 +49,26 @@ pub trait LnFederationApi {
         &self,
         contract: ContractId,
     ) -> FederationResult<Option<ContractAccount>>;
+
+    /// Reprobes every peer after a failed contract query to determine whether
+    /// the failure contains only connection or transport errors.
+    ///
+    /// This issues fresh network requests, can wait for the diagnostic timeout,
+    /// and returns `false` for any known or reprobed server, protocol, or
+    /// deserialization error. Call it only after the original query failed.
+    async fn contract_query_failure_is_unreachable(
+        &self,
+        error: &FederationError,
+        contract: ContractId,
+    ) -> bool;
+
+    /// Reprobes every peer after a failed block-count query to determine
+    /// whether the failure contains only connection or transport errors.
+    ///
+    /// This issues fresh network requests, can wait for the diagnostic timeout,
+    /// and returns `false` for any known or reprobed server, protocol, or
+    /// deserialization error. Call it only after the original query failed.
+    async fn block_count_query_failure_is_unreachable(&self, error: &FederationError) -> bool;
 
     async fn await_contract(&self, contract: ContractId) -> ContractAccount;
 
@@ -138,6 +161,30 @@ where
         self.request_current_consensus(
             ACCOUNT_ENDPOINT.to_string(),
             ApiRequestErased::new(contract),
+        )
+        .await
+    }
+
+    async fn contract_query_failure_is_unreachable(
+        &self,
+        error: &FederationError,
+        contract: ContractId,
+    ) -> bool {
+        query_failure_is_unreachable::<_, Option<ContractAccount>>(
+            self,
+            error,
+            ACCOUNT_ENDPOINT,
+            ApiRequestErased::new(contract),
+        )
+        .await
+    }
+
+    async fn block_count_query_failure_is_unreachable(&self, error: &FederationError) -> bool {
+        query_failure_is_unreachable::<_, Option<u64>>(
+            self,
+            error,
+            BLOCK_COUNT_ENDPOINT,
+            ApiRequestErased::default(),
         )
         .await
     }
@@ -303,6 +350,68 @@ where
     }
 }
 
+const FAILURE_DIAGNOSTIC_TIMEOUT: Duration = Duration::from_secs(5);
+
+async fn query_failure_is_unreachable<T, R>(
+    api: &T,
+    original_error: &FederationError,
+    method: &str,
+    params: ApiRequestErased,
+) -> bool
+where
+    T: IModuleFederationApi + MaybeSend + MaybeSync + 'static + ?Sized,
+    R: DeserializeOwned,
+{
+    if !original_failure_allows_reprobe(original_error) {
+        return false;
+    }
+
+    collect_all_peer_query_results_are_connectivity(api.all_peers().iter().map(|peer| {
+        let method = method.to_string();
+        let params = params.clone();
+        async move {
+            timeout(
+                FAILURE_DIAGNOSTIC_TIMEOUT,
+                api.request_single_peer::<R>(method, params, *peer),
+            )
+            .await
+            .map_err(|error| ServerError::Transport(anyhow!("Request timed out: {error}")))
+            .and_then(identity)
+        }
+    }))
+    .await
+}
+
+fn original_failure_allows_reprobe(error: &FederationError) -> bool {
+    error.general.is_none()
+        && error.peer_errors.values().all(|error| {
+            matches!(
+                error,
+                ServerError::Connection(_) | ServerError::Transport(_)
+            )
+        })
+}
+
+async fn collect_all_peer_query_results_are_connectivity<F, R>(
+    requests: impl IntoIterator<Item = F>,
+) -> bool
+where
+    F: Future<Output = Result<R, ServerError>>,
+{
+    let results = join_all(requests).await;
+    all_peer_query_results_are_connectivity(&results)
+}
+
+fn all_peer_query_results_are_connectivity<R>(results: &[Result<R, ServerError>]) -> bool {
+    results.iter().any(Result::is_err)
+        && results.iter().all(|result| {
+            matches!(
+                result,
+                Ok(_) | Err(ServerError::Connection(_) | ServerError::Transport(_))
+            )
+        })
+}
+
 /// Filter out duplicate gateways. This is necessary because different guardians
 /// may have different TTLs for the same gateway, so two
 /// `LightningGatewayAnnouncement`s representing the same gateway registration
@@ -371,3 +480,6 @@ fn filter_duplicate_gateways(
         })
         .collect()
 }
+
+#[cfg(test)]
+mod api_tests;

@@ -46,7 +46,9 @@ pub(super) mod lightningpay {
     use fedimint_core::encoding::{Decodable, Encodable};
 
     use super::{
-        LightningPayCreatedOutgoingLnContract, LightningPayFunded, LightningPayRefund,
+        LightningPayCreatedOutgoingLnContract, LightningPayFederationUnreachable,
+        LightningPayFederationUnreachableRefundFailed,
+        LightningPayFederationUnreachableRefundSubmitted, LightningPayFunded, LightningPayRefund,
         LightningPayRefundable,
     };
 
@@ -64,6 +66,12 @@ pub(super) mod lightningpay {
     ///  Funded -- await gateway cancel payment --> Refund
     ///  Funded -- await payment timeout --> Refund
     ///  Funded -- unrecoverable payment error --> Failure
+    ///  Funded -- federation unreachable --> FederationUnreachablePendingRefund
+    ///  FederationUnreachablePendingRefund -- contract cancelled --> FederationUnreachableRefundSubmitted
+    ///  FederationUnreachablePendingRefund -- contract timeout --> FederationUnreachableRefundSubmitted
+    ///  FederationUnreachableRefundSubmitted -- refund rejected --> FederationUnreachablePendingRefund
+    ///  FederationUnreachableRefundSubmitted -- accepted and outputs finalized --> FederationUnreachable
+    ///  FederationUnreachableRefundSubmitted -- refund output failed --> FederationUnreachableRefundFailed
     ///  Refundable -- gateway issued refunded --> Refund
     ///  Refundable -- transaction timeout --> Refund
     /// ```
@@ -86,6 +94,17 @@ pub(super) mod lightningpay {
         )]
         Refunded(Vec<OutPoint>),
         Failure(String),
+        /// The gateway reported a sanitized gateway-to-federation connectivity
+        /// failure; the client is waiting until it can reclaim the contract.
+        FederationUnreachablePendingRefund(LightningPayRefundable),
+        /// The client submitted the reclaim transaction and is waiting for its
+        /// acceptance and primary-module output finalization.
+        FederationUnreachableRefundSubmitted(LightningPayFederationUnreachableRefundSubmitted),
+        /// The reclaim transaction and its primary-module outputs finalized.
+        FederationUnreachable(LightningPayFederationUnreachable),
+        /// The reclaim transaction was accepted, but a primary-module output
+        /// failed terminally and requires operator recovery.
+        FederationUnreachableRefundFailed(LightningPayFederationUnreachableRefundFailed),
     }
 }
 
@@ -120,8 +139,12 @@ impl State for LightningPayStateMachine {
             LightningPayStates::Funded(funded) => {
                 funded.transitions(self.common.clone(), context.clone(), global_context.clone())
             }
+            LightningPayStates::FederationUnreachableRefundSubmitted(submitted) => {
+                submitted.transitions(self.common.clone(), context, global_context)
+            }
             #[allow(deprecated)]
-            LightningPayStates::Refundable(refundable) => {
+            LightningPayStates::FederationUnreachablePendingRefund(refundable)
+            | LightningPayStates::Refundable(refundable) => {
                 refundable.transitions(self.common.clone(), context.clone(), global_context.clone())
             }
             #[allow(deprecated)]
@@ -129,7 +152,9 @@ impl State for LightningPayStateMachine {
             | LightningPayStates::FundingRejected
             | LightningPayStates::Refund(_)
             | LightningPayStates::Refunded(_)
-            | LightningPayStates::Failure(_) => {
+            | LightningPayStates::Failure(_)
+            | LightningPayStates::FederationUnreachable(_)
+            | LightningPayStates::FederationUnreachableRefundFailed(_) => {
                 vec![]
             }
         }
@@ -158,7 +183,7 @@ impl LightningPayCreatedOutgoingLnContract {
         let gateway = self.gateway.clone();
         vec![StateTransition::new(
             Self::await_outgoing_contract_funded(success_context, txid, contract_id),
-            move |_dbtx, result, old_state| {
+            move |_dbtx, result, old_state: LightningPayStateMachine| {
                 let gateway = gateway.clone();
                 Box::pin(async move {
                     Self::transition_outgoing_contract_funded(&result, old_state, gateway)
@@ -293,6 +318,30 @@ pub enum GatewayPayError {
     },
     #[error("OutgoingContract was not created in the federation")]
     OutgoingContractError,
+    #[error("The gateway could not communicate with the federation")]
+    FederationUnreachable,
+}
+
+impl GatewayPayError {
+    /// Convert a connector error into the stable public payment error class.
+    ///
+    /// Only the recognized versioned gateway envelope becomes
+    /// `FederationUnreachable`; legacy, malformed, and future responses retain
+    /// the generic gateway-error fallback.
+    pub(super) fn from_server_error(error: fedimint_api_client::api::ServerError) -> Self {
+        match error {
+            fedimint_api_client::api::ServerError::GatewayResponse { response, .. }
+                if response.recognized_error()
+                    == Some(fedimint_core::module::GatewayErrorCode::FederationUnreachable) =>
+            {
+                Self::FederationUnreachable
+            }
+            error => Self::GatewayInternalError {
+                error_code: None,
+                error_message: error.to_string(),
+            },
+        }
+    }
 }
 
 impl LightningPayFunded {
@@ -338,7 +387,7 @@ impl LightningPayFunded {
                         common.clone(),
                         dbtx,
                         global_context.clone(),
-                        format!("Gateway cancelled contract: {contract_id}"),
+                        RefundReason::Legacy(format!("Gateway cancelled contract: {contract_id}")),
                         cancel_context,
                     ))
                 },
@@ -352,7 +401,9 @@ impl LightningPayFunded {
                         timeout_common.clone(),
                         dbtx,
                         timeout_global_context.clone(),
-                        format!("Outgoing contract timed out, BlockHeight: {timelock}"),
+                        RefundReason::Legacy(format!(
+                            "Outgoing contract timed out, BlockHeight: {timelock}"
+                        )),
                         timeout_context,
                     ))
                 },
@@ -410,7 +461,8 @@ impl LightningPayFunded {
                                 continue;
                             }
                         }
-                        GatewayPayError::OutgoingContractError => {
+                        GatewayPayError::OutgoingContractError
+                        | GatewayPayError::FederationUnreachable => {
                             return Err(err);
                         }
                     }
@@ -470,6 +522,21 @@ impl LightningPayFunded {
                     state: LightningPayStates::Success(preimage),
                 }
             }
+            Err(e @ GatewayPayError::FederationUnreachable) => {
+                let LightningPayStates::Funded(funded) = old_state.state else {
+                    unreachable!("gateway payment transition starts from funded state");
+                };
+                LightningPayStateMachine {
+                    common: old_state.common,
+                    state: LightningPayStates::FederationUnreachablePendingRefund(
+                        LightningPayRefundable {
+                            contract_id,
+                            block_timelock: funded.timelock,
+                            error: e,
+                        },
+                    ),
+                }
+            }
             Err(e) => LightningPayStateMachine {
                 common: old_state.common,
                 state: LightningPayStates::Failure(e.to_string()),
@@ -500,17 +567,27 @@ impl LightningPayRefundable {
         let timelock = self.block_timelock;
         let cancel_context = context.clone();
         let timeout_context = context;
+        let cancel_error = self.error.clone();
+        let timeout_error = self.error.clone();
         vec![
             StateTransition::new(
                 await_contract_cancelled(contract_id, global_context.clone()),
                 move |dbtx, (), old_state| {
                     let cancel_context = cancel_context.clone();
+                    let refund_reason = match cancel_error.clone() {
+                        GatewayPayError::FederationUnreachable => {
+                            RefundReason::FederationUnreachable
+                        }
+                        error => RefundReason::Legacy(format!(
+                            "Refundable: Gateway cancelled contract: {contract_id}: {error}"
+                        )),
+                    };
                     Box::pin(try_refund_outgoing_contract(
                         old_state,
                         common.clone(),
                         dbtx,
                         global_context.clone(),
-                        format!("Refundable: Gateway cancelled contract: {contract_id}"),
+                        refund_reason,
                         cancel_context,
                     ))
                 },
@@ -519,14 +596,20 @@ impl LightningPayRefundable {
                 await_contract_timeout(timeout_global_context.clone(), timelock),
                 move |dbtx, (), old_state| {
                     let timeout_context = timeout_context.clone();
+                    let refund_reason = match timeout_error.clone() {
+                        GatewayPayError::FederationUnreachable => {
+                            RefundReason::FederationUnreachable
+                        }
+                        error => RefundReason::Legacy(format!(
+                            "Refundable: Outgoing contract timed out. ContractId: {contract_id} BlockHeight: {timelock}: {error}"
+                        )),
+                    };
                     Box::pin(try_refund_outgoing_contract(
                         old_state,
                         timeout_common.clone(),
                         dbtx,
                         timeout_global_context.clone(),
-                        format!(
-                            "Refundable: Outgoing contract timed out. ContractId: {contract_id} BlockHeight: {timelock}"
-                        ),
+                        refund_reason,
                         timeout_context,
                     ))
                 },
@@ -574,7 +657,7 @@ async fn try_refund_outgoing_contract(
     common: LightningPayCommon,
     dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
     global_context: DynGlobalClientContext,
-    error_reason: String,
+    refund_reason: RefundReason,
     context: LightningClientContext,
 ) -> LightningPayStateMachine {
     let contract_data = common.contract;
@@ -612,14 +695,30 @@ async fn try_refund_outgoing_contract(
             .await;
     }
 
-    LightningPayStateMachine {
-        common: old_state.common,
-        state: LightningPayStates::Refund(LightningPayRefund {
-            txid: change_range.txid(),
-            out_points: change_range.into_iter().collect(),
+    let txid = change_range.txid();
+    let out_points = change_range.into_iter().collect();
+    let state = match refund_reason {
+        RefundReason::Legacy(error_reason) => LightningPayStates::Refund(LightningPayRefund {
+            txid,
+            out_points,
             error_reason,
         }),
+        RefundReason::FederationUnreachable => {
+            LightningPayStates::FederationUnreachableRefundSubmitted(
+                LightningPayFederationUnreachableRefundSubmitted { txid, out_points },
+            )
+        }
+    };
+
+    LightningPayStateMachine {
+        common: old_state.common,
+        state,
     }
+}
+
+enum RefundReason {
+    Legacy(String),
+    FederationUnreachable,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
@@ -627,6 +726,118 @@ pub struct LightningPayRefund {
     pub txid: TransactionId,
     pub out_points: Vec<OutPoint>,
     pub error_reason: String,
+}
+
+/// A persisted federation-connectivity refund awaiting acceptance and output
+/// finalization.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct LightningPayFederationUnreachableRefundSubmitted {
+    /// Submitted refund transaction.
+    pub txid: TransactionId,
+    /// Primary-module outputs expected from the refund.
+    pub out_points: Vec<OutPoint>,
+}
+
+#[derive(Serialize, Deserialize)]
+enum RefundFinalization {
+    Complete,
+    Rejected,
+    OutputFailed(String),
+}
+
+impl LightningPayFederationUnreachableRefundSubmitted {
+    fn transitions(
+        &self,
+        common: LightningPayCommon,
+        context: &LightningClientContext,
+        global_context: &DynGlobalClientContext,
+    ) -> Vec<StateTransition<LightningPayStateMachine>> {
+        let txid = self.txid;
+        let out_points = self.out_points.clone();
+        let final_txid = self.txid;
+        let final_out_points = self.out_points.clone();
+        let operation_id = common.operation_id;
+        let client_ctx = context
+            .client_ctx
+            .clone()
+            .expect("outgoing client payment has a client context");
+        let global_context = global_context.clone();
+
+        vec![StateTransition::new(
+            async move {
+                match global_context.await_tx_accepted(txid).await {
+                    Ok(()) => match client_ctx
+                        .await_primary_module_outputs(operation_id, out_points)
+                        .await
+                    {
+                        Ok(()) => RefundFinalization::Complete,
+                        Err(error) => RefundFinalization::OutputFailed(error.to_string()),
+                    },
+                    Err(_) => RefundFinalization::Rejected,
+                }
+            },
+            move |_dbtx, result, old_state: LightningPayStateMachine| {
+                Box::pin(futures::future::ready(match result {
+                    RefundFinalization::Complete => LightningPayStateMachine {
+                        common: old_state.common,
+                        state: LightningPayStates::FederationUnreachable(
+                            LightningPayFederationUnreachable {
+                                txid: final_txid,
+                                out_points: final_out_points.clone(),
+                            },
+                        ),
+                    },
+                    RefundFinalization::Rejected => LightningPayStateMachine {
+                        common: old_state.common,
+                        state: LightningPayStates::FederationUnreachablePendingRefund(
+                            LightningPayRefundable {
+                                contract_id: common
+                                    .contract
+                                    .contract_account
+                                    .contract
+                                    .contract_id(),
+                                block_timelock: common.contract.contract_account.contract.timelock,
+                                error: GatewayPayError::FederationUnreachable,
+                            },
+                        ),
+                    },
+                    RefundFinalization::OutputFailed(error) => LightningPayStateMachine {
+                        common: old_state.common,
+                        state: LightningPayStates::FederationUnreachableRefundFailed(
+                            LightningPayFederationUnreachableRefundFailed {
+                                txid: final_txid,
+                                out_points: final_out_points.clone(),
+                                error,
+                            },
+                        ),
+                    },
+                }))
+            },
+        )]
+    }
+}
+
+/// Persisted terminal state for a gateway-to-federation connectivity failure.
+///
+/// The client enters this state only after the refund outputs finalize.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct LightningPayFederationUnreachable {
+    /// Transaction that reclaimed the outgoing contract.
+    pub txid: TransactionId,
+    /// Finalized primary-module outputs containing the refund.
+    pub out_points: Vec<OutPoint>,
+}
+
+/// Persisted recovery record for a terminal refund-output failure.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct LightningPayFederationUnreachableRefundFailed {
+    /// Accepted refund transaction whose output failed.
+    pub txid: TransactionId,
+    /// Failed primary-module outputs needed for operator recovery.
+    pub out_points: Vec<OutPoint>,
+    /// Local output-finalization error retained for recovery and never exposed
+    /// through the public payment state.
+    pub error: String,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Decodable, Encodable)]
@@ -719,3 +930,6 @@ impl PaymentData {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -359,6 +359,52 @@ pub struct IrohGatewayResponse {
     pub body: serde_json::Value,
 }
 
+/// Version of the structured gateway error response understood by this release.
+pub const GATEWAY_ERROR_RESPONSE_VERSION: u16 = 1;
+
+/// A stable, sanitized gateway failure category.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum GatewayErrorCode {
+    /// The gateway could not communicate with the federation.
+    FederationUnreachable,
+    /// A failure category introduced by a newer gateway.
+    #[serde(other)]
+    Unknown,
+}
+
+/// A versioned error returned by a gateway's public API.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]
+pub struct GatewayErrorResponse {
+    /// The response schema version.
+    pub version: u16,
+    /// The sanitized failure category.
+    pub error: GatewayErrorCode,
+}
+
+impl GatewayErrorResponse {
+    /// Construct a response using the current schema version.
+    pub const fn new(error: GatewayErrorCode) -> Self {
+        Self {
+            version: GATEWAY_ERROR_RESPONSE_VERSION,
+            error,
+        }
+    }
+
+    /// Return the failure category if this response is understood.
+    pub const fn recognized_error(self) -> Option<GatewayErrorCode> {
+        if self.version != GATEWAY_ERROR_RESPONSE_VERSION {
+            return None;
+        }
+
+        match self.error {
+            GatewayErrorCode::FederationUnreachable => Some(self.error),
+            GatewayErrorCode::Unknown => None,
+        }
+    }
+}
+
 pub const FEDIMINT_API_ALPN: &[u8] = b"FEDIMINT_API_ALPN";
 pub const FEDIMINT_GATEWAY_ALPN: &[u8] = b"FEDIMINT_GATEWAY_ALPN";
 
@@ -950,3 +996,6 @@ impl<T: Encodable + Decodable + 'static> SerdeModuleEncodingBase64<T> {
         )
     }
 }
+
+#[cfg(test)]
+mod gateway_error_response_tests;

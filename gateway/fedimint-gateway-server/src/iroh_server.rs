@@ -7,7 +7,10 @@ use anyhow::anyhow;
 use axum::extract::{Path, Query};
 use axum::{Extension, Json};
 use bitcoin::hashes::sha256;
-use fedimint_core::module::{FEDIMINT_GATEWAY_ALPN, IrohGatewayRequest, IrohGatewayResponse};
+use fedimint_core::module::{
+    FEDIMINT_GATEWAY_ALPN, GatewayErrorCode, GatewayErrorResponse, IrohGatewayRequest,
+    IrohGatewayResponse,
+};
 use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompactAnyhow as _;
@@ -265,6 +268,23 @@ async fn run_handler(
             "Gateway API handler returned an error"
         );
 
+        if matches!(
+            err.downcast_ref::<GatewayError>(),
+            Some(GatewayError::Public(
+                PublicGatewayError::FederationUnreachable
+            ))
+        ) {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(
+                    serde_json::to_value(GatewayErrorResponse::new(
+                        GatewayErrorCode::FederationUnreachable,
+                    ))
+                    .expect("gateway error response serialization cannot fail"),
+                ),
+            );
+        }
+
         (StatusCode::INTERNAL_SERVER_ERROR, Json(json!(())))
     })
 }
@@ -417,6 +437,7 @@ fn iroh_verify_password(
 #[cfg(test)]
 mod tests {
     use bitcoin::hashes::Hash as _;
+    use fedimint_core::module::GATEWAY_ERROR_RESPONSE_VERSION;
 
     use super::*;
 
@@ -435,6 +456,26 @@ mod tests {
         .await;
 
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    #[tokio::test]
+    async fn federation_unreachable_handler_returns_sanitized_error() {
+        let (status, body) = run_handler("/pay_invoice", async {
+            Err::<(StatusCode, Json<serde_json::Value>), _>(
+                GatewayError::Public(PublicGatewayError::FederationUnreachable).into(),
+            )
+        })
+        .await;
+
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            body.0,
+            serde_json::json!({
+                "version": GATEWAY_ERROR_RESPONSE_VERSION,
+                "error": "federation_unreachable"
+            })
+        );
+        assert!(!body.0.to_string().contains("sensitive-debug-sentinel"));
     }
 
     #[test]

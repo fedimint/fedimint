@@ -97,9 +97,21 @@ impl IGatewayConnection for HttpConnection {
                 .json::<Value>()
                 .await
                 .map_err(|e| ServerError::InvalidResponse(e.into()))?),
-            status => Err(ServerError::InvalidRequest(anyhow::anyhow!(
-                "HTTP request returned unexpected status: {status}"
-            ))),
+            status => {
+                let status = status.as_u16();
+                if let Ok(body) = response.json::<Value>().await
+                    && let Some(error) = ServerError::from_gateway_response(status, body)
+                {
+                    return Err(error);
+                }
+
+                Err(ServerError::InvalidRequest(anyhow::anyhow!(
+                    "HTTP request returned unexpected status: {status}"
+                )))
+            }
         }
     }
 }
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod http_tests;

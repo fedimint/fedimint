@@ -110,6 +110,13 @@ pub enum GatewayExtPayStates {
     OfferDoesNotExist {
         contract_id: ContractId,
     },
+    /// The gateway could not reach enough federation peers to begin or validate
+    /// the payment.
+    ///
+    /// This sanitized gateway-side terminal state does not mean the sender's
+    /// outgoing contract has been refunded. The sender separately waits for
+    /// cancellation or timeout and finalized refund outputs.
+    FederationUnreachable,
 }
 
 /// The high-level state of an intercepted HTLC operation started with
@@ -985,9 +992,10 @@ impl GatewayClientModule {
         Ok(self.client_ctx.outcome_or_updates(&operation, operation_id, |state| match state {
                 GatewayExtPayStates::Created | GatewayExtPayStates::Preimage { .. } => false,
                 GatewayExtPayStates::Success { .. }
-                | GatewayExtPayStates::Canceled { .. }
-                | GatewayExtPayStates::Fail { .. }
-                | GatewayExtPayStates::OfferDoesNotExist { .. } => true,
+                 | GatewayExtPayStates::Canceled { .. }
+                 | GatewayExtPayStates::Fail { .. }
+                 | GatewayExtPayStates::OfferDoesNotExist { .. }
+                 | GatewayExtPayStates::FederationUnreachable => true,
             }, move || {
             stream! {
                 yield GatewayExtPayStates::Created;
@@ -1030,10 +1038,18 @@ impl GatewayClientModule {
                                 warn!("Yielding OfferDoesNotExist state for {} and contract {contract_id}", operation_id.fmt_short());
                                 yield GatewayExtPayStates::OfferDoesNotExist { contract_id };
                             }
-                            GatewayPayStates::Failed{ error, error_message } => {
-                                warn!("Yielding Fail state for {} due to {error:?} {error_message:?}", operation_id.fmt_short());
-                                yield GatewayExtPayStates::Fail{ error, error_message };
-                            },
+                             GatewayPayStates::Failed{ error, error_message } => {
+                                 warn!("Yielding Fail state for {} due to {error:?} {error_message:?}", operation_id.fmt_short());
+                                 yield GatewayExtPayStates::Fail{ error, error_message };
+                             },
+                             GatewayPayStates::FederationUnreachable => {
+                                 warn!(
+                                     operation_id = %operation_id.fmt_short(),
+                                     "Gateway could not communicate with the federation while paying"
+                                 );
+                                 yield GatewayExtPayStates::FederationUnreachable;
+                                 return;
+                             }
                             GatewayPayStates::PayInvoice(_) => {
                                 debug!("Got initial state PayInvoice while awaiting for output of {}", operation_id.fmt_short());
                             }

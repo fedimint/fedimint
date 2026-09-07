@@ -1,4 +1,5 @@
 use fedimint_core::PeerId;
+use fedimint_core::module::{GatewayErrorResponse, serde_json};
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::LOG_CLIENT_NET_API;
 use thiserror::Error;
@@ -46,6 +47,13 @@ pub enum ServerError {
     #[error("Invalid request")]
     InvalidRequest(anyhow::Error),
 
+    /// A recognized, sanitized error returned by a gateway.
+    #[error("Gateway request failed with status {status}")]
+    GatewayResponse {
+        status: u16,
+        response: GatewayErrorResponse,
+    },
+
     /// Something about the response was wrong, should not typically happen
     #[error("Invalid response: {0}")]
     InvalidResponse(anyhow::Error),
@@ -70,6 +78,17 @@ pub enum ServerError {
 }
 
 impl ServerError {
+    /// Decode a recognized, versioned public gateway error response.
+    ///
+    /// Unknown versions, unknown codes, and malformed bodies return `None` so
+    /// callers retain their legacy generic-error behavior.
+    pub(crate) fn from_gateway_response(status: u16, body: serde_json::Value) -> Option<Self> {
+        let response = serde_json::from_value::<GatewayErrorResponse>(body).ok()?;
+        response
+            .recognized_error()
+            .map(|_| Self::GatewayResponse { status, response })
+    }
+
     pub fn is_unusual(&self) -> bool {
         match self {
             ServerError::ResponseDeserialization(_)
@@ -78,6 +97,7 @@ impl ServerError {
             | ServerError::InvalidResponse(_)
             | ServerError::InvalidRpcId(_)
             | ServerError::InvalidRequest(_)
+            | ServerError::GatewayResponse { .. }
             | ServerError::InternalClientError(_)
             | ServerError::InvalidEndpoint(_)
             | ServerError::ServerError(_) => true,
