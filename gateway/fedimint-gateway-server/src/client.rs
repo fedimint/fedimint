@@ -111,7 +111,7 @@ impl GatewayClientBuilder {
         client
             .wait_for_all_recoveries()
             .await
-            .map_err(AdminGatewayError::ClientCreationError)?;
+            .map_err(|err| AdminGatewayError::ClientCreationError(err.into()))?;
         Ok(())
     }
 

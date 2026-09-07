@@ -98,3 +98,33 @@ impl From<ClientConfigDownloadError> for ClientBuildError {
         Self::ConfigDownload(Box::new(source))
     }
 }
+
+/// A failure to wait for a module recovery to finish.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum RecoveryError {
+    /// A module's recovery gave up.
+    ///
+    /// The failure is in-memory only and is never persisted: reopening the
+    /// client retries the recovery from its last persisted progress.
+    // `error` is the module's already-stringified failure; it becomes a typed
+    // `ClientModuleError` in #8821 part E.
+    #[error("Recovery of module {module_instance_id} failed: {error}")]
+    Failed {
+        /// The module whose recovery failed.
+        module_instance_id: ModuleInstanceId,
+        /// What the module reported.
+        error: String,
+    },
+
+    /// The client shut down before the recovery reached an outcome.
+    #[error("The client shut down before the recovery finished")]
+    ClientStopped,
+}
+
+#[cfg(feature = "uniffi")]
+impl From<RecoveryError> for fedimint_core::util::ffi::UniffiError {
+    fn from(e: RecoveryError) -> Self {
+        Self::General(e.to_string())
+    }
+}

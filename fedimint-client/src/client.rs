@@ -6,7 +6,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use anyhow::{Context as _, anyhow};
 use async_stream::try_stream;
 use bitcoin::key::Secp256k1;
 use bitcoin::key::rand::thread_rng;
@@ -92,7 +91,7 @@ use crate::db::{
 };
 use crate::error::{
     ClientSecretError, ModuleLookupError, OperationAlreadyExistsError, OperationNotFoundError,
-    TransactionSubmitError,
+    RecoveryError, TransactionSubmitError,
 };
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
@@ -1983,19 +1982,18 @@ impl Client {
     /// Returns `Ok(())` once every module recovery completed, or an error as
     /// soon as any one of them fails terminally.
     ///
-    /// An error does not mean the recovery task is done: the failed module's
-    /// progress stays pending forever (so [`Self::has_pending_recoveries`]
-    /// keeps returning `true`) and the recovery task stays parked. The
-    /// failure is in-memory only and is not persisted, so reopening the
-    /// client retries the recovery from its last persisted, non-terminal
-    /// progress.
+    /// A [`RecoveryError::Failed`] does not mean the recovery task is done: the
+    /// failed module's progress stays pending forever (so
+    /// [`Self::has_pending_recoveries`] keeps returning `true`) and the
+    /// recovery task stays parked. The failure is in-memory only and is not
+    /// persisted, so reopening the client retries the recovery from its last
+    /// persisted, non-terminal progress.
     ///
     /// A bit of a heavy approach.
-    pub async fn wait_for_all_recoveries(&self) -> anyhow::Result<()> {
+    pub async fn wait_for_all_recoveries(&self) -> Result<(), RecoveryError> {
         Self::wait_for_recoveries(
             self.client_recovery_status_receiver.clone(),
             |_module_instance_id| true,
-            "Recovery task completed and update receiver disconnected, but some modules failed to recover",
         )
         .await
     }
@@ -2011,8 +2009,7 @@ impl Client {
     async fn wait_for_recoveries(
         mut status_receiver: watch::Receiver<BTreeMap<ModuleInstanceId, RecoveryStatus>>,
         module_filter: impl Fn(ModuleInstanceId) -> bool,
-        disconnected_context: &'static str,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), RecoveryError> {
         let failure = status_receiver
             .wait_for(|statuses| {
                 let matching = || {
@@ -2029,7 +2026,7 @@ impl Client {
                     || matching().all(RecoveryStatus::is_successfully_done)
             })
             .await
-            .context(disconnected_context)?
+            .map_err(|_closed| RecoveryError::ClientStopped)?
             // Classified from the woken-up snapshot before anything else, so a
             // failure of one module still wins over another one completing.
             .iter()
@@ -2041,9 +2038,10 @@ impl Client {
             });
 
         match failure {
-            Some((module_instance_id, error)) => Err(anyhow!(
-                "Module recovery failed: module_instance_id={module_instance_id}, error={error}"
-            )),
+            Some((module_instance_id, error)) => Err(RecoveryError::Failed {
+                module_instance_id,
+                error,
+            }),
             None => Ok(()),
         }
     }
@@ -2080,7 +2078,7 @@ impl Client {
     pub async fn wait_for_module_kind_recovery(
         &self,
         module_kind: ModuleKind,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), RecoveryError> {
         let config = self.config().await;
         Self::wait_for_recoveries(
             self.client_recovery_status_receiver.clone(),
@@ -2090,7 +2088,6 @@ impl Client {
                     .get(&module_instance_id)
                     .is_some_and(|module| module.kind == module_kind)
             },
-            "Recovery task completed and update receiver disconnected, but the desired modules are still unavailable or failed to recover",
         )
         .await
     }

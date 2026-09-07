@@ -34,6 +34,7 @@ use tokio::task::yield_now;
 use super::{Client, ModuleRecoveryFuture, RecoveryStatus};
 use crate::ClientHandle;
 use crate::db::ClientModuleRecovery;
+use crate::error::RecoveryError;
 use crate::meta::MetaService;
 use crate::oplog::OperationLog;
 use crate::sm::executor::Executor;
@@ -307,6 +308,21 @@ async fn persisted_recovery_progress(db: &Database) -> Option<RecoveryProgress> 
         .map(|state| state.progress)
 }
 
+/// Asserts that `err` is the terminal failure of `module_instance_id`,
+/// carrying the message the module's recovery failed with.
+fn assert_module_recovery_failed(err: &RecoveryError, module_instance_id: ModuleInstanceId) {
+    match err {
+        RecoveryError::Failed {
+            module_instance_id: failed,
+            error,
+        } => {
+            assert_eq!(*failed, module_instance_id, "{err:?}");
+            assert!(error.contains(RECOVERY_ERROR), "{error}");
+        }
+        other => panic!("Expected a failed module recovery, got {other:?}"),
+    }
+}
+
 #[tokio::test]
 async fn forged_done_recovery_progress_does_not_mask_a_later_failure() {
     // `ClientModuleRecoverArgs::progress_tx` is public, so a module can report a
@@ -381,14 +397,9 @@ async fn forged_done_recovery_progress_does_not_mask_a_later_failure() {
     })
     .await
     .expect("Waiting on a failed module recovery must not block forever")
-    .expect_err("A failure after a forged done progress must still be reported as an error")
-    .to_string();
+    .expect_err("A failure after a forged done progress must still be reported as an error");
 
-    assert!(error.contains(RECOVERY_ERROR), "{error}");
-    assert!(
-        error.contains(&format!("module_instance_id={FAILING_MODULE_INSTANCE_ID}")),
-        "{error}"
-    );
+    assert_module_recovery_failed(&error, FAILING_MODULE_INSTANCE_ID);
 }
 
 #[tokio::test]
@@ -496,15 +507,9 @@ async fn wait_for_all_recoveries_reports_failed_module_recovery() {
     })
     .await
     .expect("Waiting on a failed module recovery must not block forever");
-    let error = result
-        .expect_err("Failed module recovery must be reported as an error")
-        .to_string();
+    let error = result.expect_err("Failed module recovery must be reported as an error");
 
-    assert!(error.contains(RECOVERY_ERROR), "{error}");
-    assert!(
-        error.contains(&format!("module_instance_id={FAILING_MODULE_INSTANCE_ID}")),
-        "{error}"
-    );
+    assert_module_recovery_failed(&error, FAILING_MODULE_INSTANCE_ID);
     // Reporting the failure doesn't finish the recovery: the failed module's
     // progress stays pending, which is what the progress-based observers keep
     // reporting.
@@ -552,13 +557,11 @@ async fn wait_for_all_recoveries_reports_a_recovery_task_that_went_away() {
     let error = timeout(WAIT_TIMEOUT, client.wait_for_all_recoveries())
         .await
         .expect("A recovery task that went away must not block the wait forever")
-        .expect_err("An unfinished recovery whose task went away must be reported as an error")
-        .to_string();
+        .expect_err("An unfinished recovery whose task went away must be reported as an error");
 
-    assert!(error.contains("disconnected"), "{error}");
     assert!(
-        !error.contains("module_instance_id="),
-        "A closed status channel must not be reported as a module failure: {error}"
+        matches!(error, RecoveryError::ClientStopped),
+        "A closed status channel must not be reported as a module failure: {error:?}"
     );
 }
 
@@ -639,14 +642,9 @@ async fn recovery_failure_wins_if_completion_is_also_observable() {
     let error = timeout(WAIT_TIMEOUT, client.wait_for_all_recoveries())
         .await
         .expect("Recovery outcome must be determinate")
-        .expect_err("A recovery failure must take precedence over a completed recovery")
-        .to_string();
+        .expect_err("A recovery failure must take precedence over a completed recovery");
 
-    assert!(error.contains(RECOVERY_ERROR), "{error}");
-    assert!(
-        error.contains(&format!("module_instance_id={FAILING_MODULE_INSTANCE_ID}")),
-        "{error}"
-    );
+    assert_module_recovery_failed(&error, FAILING_MODULE_INSTANCE_ID);
 }
 
 #[tokio::test]
@@ -739,14 +737,9 @@ async fn failed_status_is_not_overwritten_by_late_module_progress() {
     })
     .await
     .expect("A late waiter on a failed module recovery must not block forever")
-    .expect_err("A late waiter must still be told about the failed module recovery")
-    .to_string();
+    .expect_err("A late waiter must still be told about the failed module recovery");
 
-    assert!(error.contains(RECOVERY_ERROR), "{error}");
-    assert!(
-        error.contains(&format!("module_instance_id={FAILING_MODULE_INSTANCE_ID}")),
-        "{error}"
-    );
+    assert_module_recovery_failed(&error, FAILING_MODULE_INSTANCE_ID);
 }
 
 #[tokio::test]
@@ -820,14 +813,9 @@ async fn wait_for_module_kind_recovery_reports_failure_despite_other_kind_failin
     )
     .await
     .expect("Waiting on a failed module recovery must not block forever")
-    .expect_err("Failure of the requested kind must be reported despite an unrelated failure")
-    .to_string();
+    .expect_err("Failure of the requested kind must be reported despite an unrelated failure");
 
-    assert!(error.contains(RECOVERY_ERROR), "{error}");
-    assert!(
-        error.contains(&format!("module_instance_id={FAILING_MODULE_INSTANCE_ID}")),
-        "{error}"
-    );
+    assert_module_recovery_failed(&error, FAILING_MODULE_INSTANCE_ID);
 }
 
 /// The last [`ClientHandle`] may get dropped on a thread without a tokio
