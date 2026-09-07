@@ -63,7 +63,7 @@ use fedimint_core::secp256k1::{
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, timeout};
 use fedimint_core::util::update_merge::UpdateMerge;
-use fedimint_core::util::{BoxStream, FmtCompactAnyhow as _, backoff_util, retry};
+use fedimint_core::util::{BoxStream, FmtCompact as _, FmtCompactAnyhow as _, backoff_util, retry};
 use fedimint_core::{
     Amount, OutPoint, apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1,
 };
@@ -1591,7 +1591,7 @@ impl LightningClientModule {
                             IncomingSmStates::RefundSubmitted{ out_points, error } => {
                                 match client_ctx.await_primary_module_outputs(operation_id, out_points.clone()).await {
                                     Ok(()) => break InternalPayState::RefundSuccess { out_points, error },
-                                    Err(e) => break InternalPayState::RefundError{ error_message: e.to_string(), error },
+                                    Err(e) => break InternalPayState::RefundError{ error_message: e.fmt_compact().to_string(), error },
                                 }
                             },
                             IncomingSmStates::FundingFailed { error } => break InternalPayState::FundingFailed{ error },

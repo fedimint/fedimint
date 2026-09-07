@@ -805,7 +805,7 @@ impl GatewayClientModule {
                                     },
                                     Err(e) => {
                                         warn!(?operation_id, "Got failure {e:?} while awaiting for refund outputs {out_points:?}");
-                                        break GatewayExtReceiveStates::RefundError{ error_message: e.to_string(), error }
+                                        break GatewayExtReceiveStates::RefundError{ error_message: e.fmt_compact().to_string(), error }
                                     },
                                 }
                             },

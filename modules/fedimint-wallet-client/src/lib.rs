@@ -1609,7 +1609,7 @@ impl WalletClientModule {
                         btc_deposited,
                         btc_out_point
                     },
-                    Err(e) => yield DepositStateV2::Failed(e.to_string())
+                    Err(e) => yield DepositStateV2::Failed(e.fmt_compact().to_string())
                 }
             }
         }}))
