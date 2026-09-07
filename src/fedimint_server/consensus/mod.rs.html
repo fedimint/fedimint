@@ -273,7 +273,7 @@
 <a href=#273 id=273 data-nosnippet>273</a>            .map(|(<span class="kw-2">&amp;</span>peer_id, url)| (peer_id, url.url.clone()))
 <a href=#274 id=274 data-nosnippet>274</a>            .collect(),
 <a href=#275 id=275 data-nosnippet>275</a>        <span class="prelude-val">None</span>,
-<a href=#276 id=276 data-nosnippet>276</a>    )<span class="question-mark">?</span>;
+<a href=#276 id=276 data-nosnippet>276</a>    );
 <a href=#277 id=277 data-nosnippet>277</a>
 <a href=#278 id=278 data-nosnippet>278</a>    <span class="kw">let </span>bitcoin_rpc_connection = ServerBitcoinRpcMonitor::new(
 <a href=#279 id=279 data-nosnippet>279</a>        dyn_server_bitcoin_rpc,
@@ -484,7 +484,7 @@
 <a href=#484 id=484 data-nosnippet>484</a>            connectors,
 <a href=#485 id=485 data-nosnippet>485</a>            api_urls,
 <a href=#486 id=486 data-nosnippet>486</a>            force_api_secrets.get_active().as_deref(),
-<a href=#487 id=487 data-nosnippet>487</a>        )<span class="question-mark">?</span>,
+<a href=#487 id=487 data-nosnippet>487</a>        ),
 <a href=#488 id=488 data-nosnippet>488</a>        cfg: cfg.clone(),
 <a href=#489 id=489 data-nosnippet>489</a>        connections,
 <a href=#490 id=490 data-nosnippet>490</a>        ord_latency_sender,

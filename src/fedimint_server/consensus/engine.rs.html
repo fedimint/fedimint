@@ -1162,7 +1162,7 @@
 <a href=#1162 id=1162 data-nosnippet>1162</a>        <span class="kw">let </span>filter_map = <span class="kw">move </span>|response: SerdeModuleEncoding&lt;SignedSessionOutcome&gt;| {
 <a href=#1163 id=1163 data-nosnippet>1163</a>            <span class="kw">let </span>signed_session_outcome = response
 <a href=#1164 id=1164 data-nosnippet>1164</a>                .try_into_inner(<span class="kw-2">&amp;</span>decoders)
-<a href=#1165 id=1165 data-nosnippet>1165</a>                .map_err(|x| ServerError::ResponseDeserialization(x.into()))<span class="question-mark">?</span>;
+<a href=#1165 id=1165 data-nosnippet>1165</a>                .map_err(|x| ServerError::ResponseDeserialization(Box::new(x)))<span class="question-mark">?</span>;
 <a href=#1166 id=1166 data-nosnippet>1166</a>            <span class="kw">let </span>header = signed_session_outcome.session_outcome.header(index);
 <a href=#1167 id=1167 data-nosnippet>1167</a>            <span class="kw">if </span>signed_session_outcome.signatures.len() == threshold
 <a href=#1168 id=1168 data-nosnippet>1168</a>                &amp;&amp; signed_session_outcome
@@ -1172,31 +1172,33 @@
 <a href=#1172 id=1172 data-nosnippet>1172</a>            {
 <a href=#1173 id=1173 data-nosnippet>1173</a>                <span class="prelude-val">Ok</span>(signed_session_outcome)
 <a href=#1174 id=1174 data-nosnippet>1174</a>            } <span class="kw">else </span>{
-<a href=#1175 id=1175 data-nosnippet>1175</a>                <span class="prelude-val">Err</span>(ServerError::InvalidResponse(<span class="macro">anyhow!</span>(<span class="string">"Invalid signatures"</span>)))
-<a href=#1176 id=1176 data-nosnippet>1176</a>            }
-<a href=#1177 id=1177 data-nosnippet>1177</a>        };
-<a href=#1178 id=1178 data-nosnippet>1178</a>
-<a href=#1179 id=1179 data-nosnippet>1179</a>        federation_api
-<a href=#1180 id=1180 data-nosnippet>1180</a>            .request_with_strategy_retry(
-<a href=#1181 id=1181 data-nosnippet>1181</a>                FilterMap::new(filter_map.clone()),
-<a href=#1182 id=1182 data-nosnippet>1182</a>                AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT.to_string(),
-<a href=#1183 id=1183 data-nosnippet>1183</a>                ApiRequestErased::new(index),
-<a href=#1184 id=1184 data-nosnippet>1184</a>            )
-<a href=#1185 id=1185 data-nosnippet>1185</a>            .<span class="kw">await
-<a href=#1186 id=1186 data-nosnippet>1186</a>    </span>}
-<a href=#1187 id=1187 data-nosnippet>1187</a>
-<a href=#1188 id=1188 data-nosnippet>1188</a>    <span class="doccomment">/// Returns the number of sessions already saved in the database. This count
-<a href=#1189 id=1189 data-nosnippet>1189</a>    /// **does not** include the currently running session.
-<a href=#1190 id=1190 data-nosnippet>1190</a>    </span><span class="kw">async fn </span>get_finished_session_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
-<a href=#1191 id=1191 data-nosnippet>1191</a>        get_finished_session_count_static(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>).<span class="kw">await
-<a href=#1192 id=1192 data-nosnippet>1192</a>    </span>}
-<a href=#1193 id=1193 data-nosnippet>1193</a>}
-<a href=#1194 id=1194 data-nosnippet>1194</a>
-<a href=#1195 id=1195 data-nosnippet>1195</a><span class="kw">pub async fn </span>get_finished_session_count_static(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; u64 {
-<a href=#1196 id=1196 data-nosnippet>1196</a>    dbtx.find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>SignedSessionOutcomePrefix)
-<a href=#1197 id=1197 data-nosnippet>1197</a>        .<span class="kw">await
-<a href=#1198 id=1198 data-nosnippet>1198</a>        </span>.next()
+<a href=#1175 id=1175 data-nosnippet>1175</a>                <span class="prelude-val">Err</span>(ServerError::InvalidResponse(
+<a href=#1176 id=1176 data-nosnippet>1176</a>                    <span class="string">"Invalid signatures"</span>.to_string(),
+<a href=#1177 id=1177 data-nosnippet>1177</a>                ))
+<a href=#1178 id=1178 data-nosnippet>1178</a>            }
+<a href=#1179 id=1179 data-nosnippet>1179</a>        };
+<a href=#1180 id=1180 data-nosnippet>1180</a>
+<a href=#1181 id=1181 data-nosnippet>1181</a>        federation_api
+<a href=#1182 id=1182 data-nosnippet>1182</a>            .request_with_strategy_retry(
+<a href=#1183 id=1183 data-nosnippet>1183</a>                FilterMap::new(filter_map.clone()),
+<a href=#1184 id=1184 data-nosnippet>1184</a>                AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT.to_string(),
+<a href=#1185 id=1185 data-nosnippet>1185</a>                ApiRequestErased::new(index),
+<a href=#1186 id=1186 data-nosnippet>1186</a>            )
+<a href=#1187 id=1187 data-nosnippet>1187</a>            .<span class="kw">await
+<a href=#1188 id=1188 data-nosnippet>1188</a>    </span>}
+<a href=#1189 id=1189 data-nosnippet>1189</a>
+<a href=#1190 id=1190 data-nosnippet>1190</a>    <span class="doccomment">/// Returns the number of sessions already saved in the database. This count
+<a href=#1191 id=1191 data-nosnippet>1191</a>    /// **does not** include the currently running session.
+<a href=#1192 id=1192 data-nosnippet>1192</a>    </span><span class="kw">async fn </span>get_finished_session_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64 {
+<a href=#1193 id=1193 data-nosnippet>1193</a>        get_finished_session_count_static(<span class="kw-2">&amp;mut </span><span class="self">self</span>.db.begin_transaction_nc().<span class="kw">await</span>).<span class="kw">await
+<a href=#1194 id=1194 data-nosnippet>1194</a>    </span>}
+<a href=#1195 id=1195 data-nosnippet>1195</a>}
+<a href=#1196 id=1196 data-nosnippet>1196</a>
+<a href=#1197 id=1197 data-nosnippet>1197</a><span class="kw">pub async fn </span>get_finished_session_count_static(dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;) -&gt; u64 {
+<a href=#1198 id=1198 data-nosnippet>1198</a>    dbtx.find_by_prefix_sorted_descending(<span class="kw-2">&amp;</span>SignedSessionOutcomePrefix)
 <a href=#1199 id=1199 data-nosnippet>1199</a>        .<span class="kw">await
-<a href=#1200 id=1200 data-nosnippet>1200</a>        </span>.map_or(<span class="number">0</span>, |entry| (entry.<span class="number">0.0</span>) + <span class="number">1</span>)
-<a href=#1201 id=1201 data-nosnippet>1201</a>}
+<a href=#1200 id=1200 data-nosnippet>1200</a>        </span>.next()
+<a href=#1201 id=1201 data-nosnippet>1201</a>        .<span class="kw">await
+<a href=#1202 id=1202 data-nosnippet>1202</a>        </span>.map_or(<span class="number">0</span>, |entry| (entry.<span class="number">0.0</span>) + <span class="number">1</span>)
+<a href=#1203 id=1203 data-nosnippet>1203</a>}
 </code></pre></div></section></main></body></html>

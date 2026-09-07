@@ -163,7 +163,7 @@
 <a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">let </span>client_secret = Client::load_or_generate_client_secret(<span class="kw-2">&amp;</span>db).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#164 id=164 data-nosnippet>164</a>    <span class="kw">let </span>root_secret =
 <a href=#165 id=165 data-nosnippet>165</a>        RootSecret::StandardDoubleDerive(PlainRootSecretStrategy::to_root_secret(<span class="kw-2">&amp;</span>client_secret));
-<a href=#166 id=166 data-nosnippet>166</a>    <span class="kw">let </span>connectors = ConnectorRegistry::build_from_client_env()<span class="question-mark">?</span>.bind().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#166 id=166 data-nosnippet>166</a>    <span class="kw">let </span>connectors = ConnectorRegistry::build_from_client_env().bind().<span class="kw">await</span>;
 <a href=#167 id=167 data-nosnippet>167</a>
 <a href=#168 id=168 data-nosnippet>168</a>    <span class="kw">let </span>client = <span class="kw">if </span>Client::is_initialized(<span class="kw-2">&amp;</span>db).<span class="kw">await </span>{
 <a href=#169 id=169 data-nosnippet>169</a>        client_builder.open(connectors, db, root_secret).<span class="kw">await

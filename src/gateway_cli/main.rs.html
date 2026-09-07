@@ -271,43 +271,41 @@
 <a href=#271 id=271 data-nosnippet>271</a>    <span class="kw">let </span>cli = Cli::parse();
 <a href=#272 id=272 data-nosnippet>272</a>    <span class="kw">let </span>connector_registry = ConnectorRegistry::build_from_client_defaults()
 <a href=#273 id=273 data-nosnippet>273</a>        .with_env_var_overrides()
-<a href=#274 id=274 data-nosnippet>274</a>        .map_err(ServerError::InternalClientError)<span class="question-mark">?
-<a href=#275 id=275 data-nosnippet>275</a>        </span>.bind()
-<a href=#276 id=276 data-nosnippet>276</a>        .<span class="kw">await
-<a href=#277 id=277 data-nosnippet>277</a>        </span>.map_err(ServerError::InternalClientError)<span class="question-mark">?</span>;
-<a href=#278 id=278 data-nosnippet>278</a>    <span class="kw">let </span>client = GatewayApi::new(cli.rpcpassword, connector_registry);
-<a href=#279 id=279 data-nosnippet>279</a>
-<a href=#280 id=280 data-nosnippet>280</a>    <span class="kw">let </span>output = <span class="kw">match </span>cli.command {
-<a href=#281 id=281 data-nosnippet>281</a>        Commands::General(general_command) =&gt; general_command.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#282 id=282 data-nosnippet>282</a>        Commands::Lightning(lightning_command) =&gt; {
-<a href=#283 id=283 data-nosnippet>283</a>            lightning_command.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?
-<a href=#284 id=284 data-nosnippet>284</a>        </span>}
-<a href=#285 id=285 data-nosnippet>285</a>        Commands::Ecash(ecash_command) =&gt; ecash_command.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#286 id=286 data-nosnippet>286</a>        Commands::Onchain(onchain_command) =&gt; onchain_command.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#287 id=287 data-nosnippet>287</a>        Commands::Cfg(config_commands) =&gt; config_commands.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#288 id=288 data-nosnippet>288</a>        Commands::Completion { shell } =&gt; {
-<a href=#289 id=289 data-nosnippet>289</a>            clap_complete::generate(
-<a href=#290 id=290 data-nosnippet>290</a>                shell,
-<a href=#291 id=291 data-nosnippet>291</a>                <span class="kw-2">&amp;mut </span>Cli::command(),
-<a href=#292 id=292 data-nosnippet>292</a>                <span class="string">"gateway-cli"</span>,
-<a href=#293 id=293 data-nosnippet>293</a>                <span class="kw-2">&amp;mut </span>std::io::stdout(),
-<a href=#294 id=294 data-nosnippet>294</a>            );
-<a href=#295 id=295 data-nosnippet>295</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(CliOutput::Empty);
-<a href=#296 id=296 data-nosnippet>296</a>        }
-<a href=#297 id=297 data-nosnippet>297</a>    };
-<a href=#298 id=298 data-nosnippet>298</a>
-<a href=#299 id=299 data-nosnippet>299</a>    <span class="comment">// Only print output for non-empty results
-<a href=#300 id=300 data-nosnippet>300</a>    </span><span class="kw">if </span>!<span class="macro">matches!</span>(output, CliOutput::Empty) {
-<a href=#301 id=301 data-nosnippet>301</a>        print_response(<span class="kw-2">&amp;</span>output);
-<a href=#302 id=302 data-nosnippet>302</a>    }
-<a href=#303 id=303 data-nosnippet>303</a>
-<a href=#304 id=304 data-nosnippet>304</a>    <span class="prelude-val">Ok</span>(output)
-<a href=#305 id=305 data-nosnippet>305</a>}
-<a href=#306 id=306 data-nosnippet>306</a>
-<a href=#307 id=307 data-nosnippet>307</a><span class="kw">fn </span>print_response&lt;T: Serialize&gt;(val: T) {
-<a href=#308 id=308 data-nosnippet>308</a>    <span class="macro">println!</span>(
-<a href=#309 id=309 data-nosnippet>309</a>        <span class="string">"{}"</span>,
-<a href=#310 id=310 data-nosnippet>310</a>        serde_json::to_string_pretty(<span class="kw-2">&amp;</span>val).expect(<span class="string">"Cannot serialize"</span>)
-<a href=#311 id=311 data-nosnippet>311</a>    );
-<a href=#312 id=312 data-nosnippet>312</a>}
+<a href=#274 id=274 data-nosnippet>274</a>        .bind()
+<a href=#275 id=275 data-nosnippet>275</a>        .<span class="kw">await</span>;
+<a href=#276 id=276 data-nosnippet>276</a>    <span class="kw">let </span>client = GatewayApi::new(cli.rpcpassword, connector_registry);
+<a href=#277 id=277 data-nosnippet>277</a>
+<a href=#278 id=278 data-nosnippet>278</a>    <span class="kw">let </span>output = <span class="kw">match </span>cli.command {
+<a href=#279 id=279 data-nosnippet>279</a>        Commands::General(general_command) =&gt; general_command.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#280 id=280 data-nosnippet>280</a>        Commands::Lightning(lightning_command) =&gt; {
+<a href=#281 id=281 data-nosnippet>281</a>            lightning_command.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?
+<a href=#282 id=282 data-nosnippet>282</a>        </span>}
+<a href=#283 id=283 data-nosnippet>283</a>        Commands::Ecash(ecash_command) =&gt; ecash_command.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#284 id=284 data-nosnippet>284</a>        Commands::Onchain(onchain_command) =&gt; onchain_command.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#285 id=285 data-nosnippet>285</a>        Commands::Cfg(config_commands) =&gt; config_commands.handle(<span class="kw-2">&amp;</span>client, <span class="kw-2">&amp;</span>cli.address).<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#286 id=286 data-nosnippet>286</a>        Commands::Completion { shell } =&gt; {
+<a href=#287 id=287 data-nosnippet>287</a>            clap_complete::generate(
+<a href=#288 id=288 data-nosnippet>288</a>                shell,
+<a href=#289 id=289 data-nosnippet>289</a>                <span class="kw-2">&amp;mut </span>Cli::command(),
+<a href=#290 id=290 data-nosnippet>290</a>                <span class="string">"gateway-cli"</span>,
+<a href=#291 id=291 data-nosnippet>291</a>                <span class="kw-2">&amp;mut </span>std::io::stdout(),
+<a href=#292 id=292 data-nosnippet>292</a>            );
+<a href=#293 id=293 data-nosnippet>293</a>            <span class="kw">return </span><span class="prelude-val">Ok</span>(CliOutput::Empty);
+<a href=#294 id=294 data-nosnippet>294</a>        }
+<a href=#295 id=295 data-nosnippet>295</a>    };
+<a href=#296 id=296 data-nosnippet>296</a>
+<a href=#297 id=297 data-nosnippet>297</a>    <span class="comment">// Only print output for non-empty results
+<a href=#298 id=298 data-nosnippet>298</a>    </span><span class="kw">if </span>!<span class="macro">matches!</span>(output, CliOutput::Empty) {
+<a href=#299 id=299 data-nosnippet>299</a>        print_response(<span class="kw-2">&amp;</span>output);
+<a href=#300 id=300 data-nosnippet>300</a>    }
+<a href=#301 id=301 data-nosnippet>301</a>
+<a href=#302 id=302 data-nosnippet>302</a>    <span class="prelude-val">Ok</span>(output)
+<a href=#303 id=303 data-nosnippet>303</a>}
+<a href=#304 id=304 data-nosnippet>304</a>
+<a href=#305 id=305 data-nosnippet>305</a><span class="kw">fn </span>print_response&lt;T: Serialize&gt;(val: T) {
+<a href=#306 id=306 data-nosnippet>306</a>    <span class="macro">println!</span>(
+<a href=#307 id=307 data-nosnippet>307</a>        <span class="string">"{}"</span>,
+<a href=#308 id=308 data-nosnippet>308</a>        serde_json::to_string_pretty(<span class="kw-2">&amp;</span>val).expect(<span class="string">"Cannot serialize"</span>)
+<a href=#309 id=309 data-nosnippet>309</a>    );
+<a href=#310 id=310 data-nosnippet>310</a>}
 </code></pre></div></section></main></body></html>

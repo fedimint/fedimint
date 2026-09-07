@@ -15,7 +15,7 @@
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::session_outcome::{AcceptedItem, SessionStatus};
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync, ShuttingDownError, TaskGroup};
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_core::transaction::Transaction;
-<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_core::util::FmtCompactAnyhow <span class="kw">as _</span>;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_core::util::FmtCompact <span class="kw">as _</span>;
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>fedimint_core::{Amount, OutPoint, PeerId, apply, async_trait_maybe_send};
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>fedimint_logging::LOG_CLIENT_RECOVERY;
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>futures::{Stream, StreamExt <span class="kw">as _</span>};
@@ -309,7 +309,7 @@
 <a href=#309 id=309 data-nosnippet>309</a>                                    <span class="prelude-val">Err</span>(err) =&gt; {
 <a href=#310 id=310 data-nosnippet>310</a>                                        <span class="kw">const </span>MAX_SLEEP: Duration = Duration::from_mins(<span class="number">2</span>);
 <a href=#311 id=311 data-nosnippet>311</a>
-<a href=#312 id=312 data-nosnippet>312</a>                                        <span class="macro">warn!</span>(target: LOG_CLIENT_RECOVERY, err = %err.fmt_compact_anyhow(), session_idx, <span class="string">"Error trying to fetch signed block"</span>);
+<a href=#312 id=312 data-nosnippet>312</a>                                        <span class="macro">warn!</span>(target: LOG_CLIENT_RECOVERY, err = %err.fmt_compact(), session_idx, <span class="string">"Error trying to fetch signed block"</span>);
 <a href=#313 id=313 data-nosnippet>313</a>                                        <span class="comment">// We don't want PARALLELISM_LEVEL tasks hammering Federation
 <a href=#314 id=314 data-nosnippet>314</a>                                        // with requests, so max sleep is significant
 <a href=#315 id=315 data-nosnippet>315</a>                                        </span><span class="kw">if </span>retry_sleep &lt;= MAX_SLEEP {

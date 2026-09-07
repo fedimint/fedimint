@@ -1485,8 +1485,8 @@
 <a href=#1485 id=1485 data-nosnippet>1485</a>        .FM_API_URL
 <a href=#1486 id=1486 data-nosnippet>1486</a>        .parse()
 <a href=#1487 id=1487 data-nosnippet>1487</a>        .expect(<span class="string">"FM_API_URL must be a valid SafeUrl"</span>);
-<a href=#1488 id=1488 data-nosnippet>1488</a>    <span class="kw">let </span>connectors = ConnectorRegistry::build_from_testing_env()<span class="question-mark">?</span>.bind().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1489 id=1489 data-nosnippet>1489</a>    <span class="kw">let </span>admin_api = DynGlobalApi::new_admin(connectors, peer_id, peer0_real_url, <span class="prelude-val">None</span>)<span class="question-mark">?</span>;
+<a href=#1488 id=1488 data-nosnippet>1488</a>    <span class="kw">let </span>connectors = ConnectorRegistry::build_from_testing_env().bind().<span class="kw">await</span>;
+<a href=#1489 id=1489 data-nosnippet>1489</a>    <span class="kw">let </span>admin_api = DynGlobalApi::new_admin(connectors, peer_id, peer0_real_url, <span class="prelude-val">None</span>);
 <a href=#1490 id=1490 data-nosnippet>1490</a>    <span class="kw">let </span>invite: InviteCode = admin_api
 <a href=#1491 id=1491 data-nosnippet>1491</a>        .request_single_peer(
 <a href=#1492 id=1492 data-nosnippet>1492</a>            INVITE_CODE_ENDPOINT.to_string(),

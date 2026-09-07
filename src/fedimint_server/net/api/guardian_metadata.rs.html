@@ -72,11 +72,11 @@
 <a href=#72 id=72 data-nosnippet>72</a>    cfg: <span class="kw-2">&amp;</span>ServerConfig,
 <a href=#73 id=73 data-nosnippet>73</a>    api_secret: <span class="prelude-ty">Option</span>&lt;String&gt;,
 <a href=#74 id=74 data-nosnippet>74</a>) -&gt; anyhow::Result&lt;DynGlobalApi&gt; {
-<a href=#75 id=75 data-nosnippet>75</a>    DynGlobalApi::new(
-<a href=#76 id=76 data-nosnippet>76</a>        ConnectorRegistry::build_from_server_env()<span class="question-mark">?</span>.bind().<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#75 id=75 data-nosnippet>75</a>    <span class="prelude-val">Ok</span>(DynGlobalApi::new(
+<a href=#76 id=76 data-nosnippet>76</a>        ConnectorRegistry::build_from_server_env().bind().<span class="kw">await</span>,
 <a href=#77 id=77 data-nosnippet>77</a>        <span class="kw">super</span>::announcement::get_api_urls(db, <span class="kw-2">&amp;</span>cfg.consensus).<span class="kw">await</span>,
 <a href=#78 id=78 data-nosnippet>78</a>        api_secret.as_deref(),
-<a href=#79 id=79 data-nosnippet>79</a>    )
+<a href=#79 id=79 data-nosnippet>79</a>    ))
 <a href=#80 id=80 data-nosnippet>80</a>}
 <a href=#81 id=81 data-nosnippet>81</a>
 <a href=#82 id=82 data-nosnippet>82</a><span class="doccomment">/// Store and publish this guardian's current metadata.

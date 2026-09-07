@@ -310,7 +310,7 @@
 <a href=#310 id=310 data-nosnippet>310</a>            timeout_secs,
 <a href=#311 id=311 data-nosnippet>311</a>            limit_endpoints,
 <a href=#312 id=312 data-nosnippet>312</a>        } =&gt; {
-<a href=#313 id=313 data-nosnippet>313</a>            <span class="kw">let </span>connectors = ConnectorRegistry::build_from_client_env()<span class="question-mark">?</span>.bind().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#313 id=313 data-nosnippet>313</a>            <span class="kw">let </span>connectors = ConnectorRegistry::build_from_client_env().bind().<span class="kw">await</span>;
 <a href=#314 id=314 data-nosnippet>314</a>            <span class="kw">let </span>invite_code = InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code).context(<span class="string">"invalid invite code"</span>)<span class="question-mark">?</span>;
 <a href=#315 id=315 data-nosnippet>315</a>            test_connect_raw_client(
 <a href=#316 id=316 data-nosnippet>316</a>                <span class="kw-2">&amp;</span>connectors,
@@ -324,7 +324,7 @@
 <a href=#324 id=324 data-nosnippet>324</a>            .<span class="kw">await</span><span class="question-mark">?
 <a href=#325 id=325 data-nosnippet>325</a>        </span>}
 <a href=#326 id=326 data-nosnippet>326</a>        Command::TestDownload { invite_code } =&gt; {
-<a href=#327 id=327 data-nosnippet>327</a>            <span class="kw">let </span>connectors = ConnectorRegistry::build_from_client_env()<span class="question-mark">?</span>.bind().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#327 id=327 data-nosnippet>327</a>            <span class="kw">let </span>connectors = ConnectorRegistry::build_from_client_env().bind().<span class="kw">await</span>;
 <a href=#328 id=328 data-nosnippet>328</a>            <span class="kw">let </span>invite_code = InviteCode::from_str(<span class="kw-2">&amp;</span>invite_code).context(<span class="string">"invalid invite code"</span>)<span class="question-mark">?</span>;
 <a href=#329 id=329 data-nosnippet>329</a>            test_download_config(<span class="kw-2">&amp;</span>connectors, <span class="kw-2">&amp;</span>invite_code, opts.users, <span class="kw-2">&amp;</span>event_sender.clone())
 <a href=#330 id=330 data-nosnippet>330</a>        }

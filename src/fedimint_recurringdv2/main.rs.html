@@ -65,9 +65,9 @@
 <a href=#65 id=65 data-nosnippet>65</a>    <span class="kw">let </span>cli_opts = CliOpts::parse();
 <a href=#66 id=66 data-nosnippet>66</a>
 <a href=#67 id=67 data-nosnippet>67</a>    <span class="kw">let </span>connector_registry = ConnectorRegistry::build_from_client_defaults()
-<a href=#68 id=68 data-nosnippet>68</a>        .with_env_var_overrides()<span class="question-mark">?
-<a href=#69 id=69 data-nosnippet>69</a>        </span>.bind()
-<a href=#70 id=70 data-nosnippet>70</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#68 id=68 data-nosnippet>68</a>        .with_env_var_overrides()
+<a href=#69 id=69 data-nosnippet>69</a>        .bind()
+<a href=#70 id=70 data-nosnippet>70</a>        .<span class="kw">await</span>;
 <a href=#71 id=71 data-nosnippet>71</a>
 <a href=#72 id=72 data-nosnippet>72</a>    <span class="kw">if </span>cli_opts.api_address.scheme() != <span class="string">"https" </span>{
 <a href=#73 id=73 data-nosnippet>73</a>        <span class="macro">warn!</span>(

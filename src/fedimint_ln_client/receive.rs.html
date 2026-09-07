@@ -351,127 +351,129 @@
 <a href=#351 id=351 data-nosnippet>351</a>                <span class="prelude-val">Err</span>(fedimint_api_client::api::FederationError::general(
 <a href=#352 id=352 data-nosnippet>352</a>                    ACCOUNT_ENDPOINT,
 <a href=#353 id=353 data-nosnippet>353</a>                    contract_id,
-<a href=#354 id=354 data-nosnippet>354</a>                    <span class="macro">anyhow::anyhow!</span>(<span class="string">"Contract {contract_id} is not an incoming contract"</span>),
-<a href=#355 id=355 data-nosnippet>355</a>                ))
-<a href=#356 id=356 data-nosnippet>356</a>            }
-<a href=#357 id=357 data-nosnippet>357</a>        }
-<a href=#358 id=358 data-nosnippet>358</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
-<a href=#359 id=359 data-nosnippet>359</a>        <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(e),
-<a href=#360 id=360 data-nosnippet>360</a>    }
-<a href=#361 id=361 data-nosnippet>361</a>}
-<a href=#362 id=362 data-nosnippet>362</a>
-<a href=#363 id=363 data-nosnippet>363</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-<a href=#364 id=364 data-nosnippet>364</a></span><span class="kw">pub struct </span>LightningReceiveFunded {
-<a href=#365 id=365 data-nosnippet>365</a>    txid: TransactionId,
-<a href=#366 id=366 data-nosnippet>366</a>    out_points: Vec&lt;OutPoint&gt;,
-<a href=#367 id=367 data-nosnippet>367</a>}
-<a href=#368 id=368 data-nosnippet>368</a>
-<a href=#369 id=369 data-nosnippet>369</a><span class="kw">impl </span>LightningReceiveFunded {
-<a href=#370 id=370 data-nosnippet>370</a>    <span class="kw">fn </span>transitions(
-<a href=#371 id=371 data-nosnippet>371</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#372 id=372 data-nosnippet>372</a>        global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
-<a href=#373 id=373 data-nosnippet>373</a>    ) -&gt; Vec&lt;StateTransition&lt;LightningReceiveStateMachine&gt;&gt; {
-<a href=#374 id=374 data-nosnippet>374</a>        <span class="kw">let </span>out_points = <span class="self">self</span>.out_points.clone();
-<a href=#375 id=375 data-nosnippet>375</a>        <span class="macro">vec!</span>[StateTransition::new(
-<a href=#376 id=376 data-nosnippet>376</a>            <span class="self">Self</span>::await_claim_success(global_context.clone(), <span class="self">self</span>.txid),
-<a href=#377 id=377 data-nosnippet>377</a>            <span class="kw">move </span>|_dbtx, result, old_state| {
-<a href=#378 id=378 data-nosnippet>378</a>                <span class="kw">let </span>out_points = out_points.clone();
-<a href=#379 id=379 data-nosnippet>379</a>                Box::pin(
-<a href=#380 id=380 data-nosnippet>380</a>                    <span class="kw">async move </span>{ <span class="self">Self</span>::transition_claim_success(<span class="kw-2">&amp;</span>result, <span class="kw-2">&amp;</span>old_state, out_points) },
-<a href=#381 id=381 data-nosnippet>381</a>                )
-<a href=#382 id=382 data-nosnippet>382</a>            },
-<a href=#383 id=383 data-nosnippet>383</a>        )]
-<a href=#384 id=384 data-nosnippet>384</a>    }
-<a href=#385 id=385 data-nosnippet>385</a>
-<a href=#386 id=386 data-nosnippet>386</a>    <span class="kw">async fn </span>await_claim_success(
-<a href=#387 id=387 data-nosnippet>387</a>        global_context: DynGlobalClientContext,
-<a href=#388 id=388 data-nosnippet>388</a>        txid: TransactionId,
-<a href=#389 id=389 data-nosnippet>389</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
-<a href=#390 id=390 data-nosnippet>390</a>        <span class="comment">// No network calls are done here, we just await other state machines, so no
-<a href=#391 id=391 data-nosnippet>391</a>        // retry logic is needed
-<a href=#392 id=392 data-nosnippet>392</a>        </span>global_context.await_tx_accepted(txid).<span class="kw">await
-<a href=#393 id=393 data-nosnippet>393</a>    </span>}
-<a href=#394 id=394 data-nosnippet>394</a>
-<a href=#395 id=395 data-nosnippet>395</a>    <span class="kw">fn </span>transition_claim_success(
-<a href=#396 id=396 data-nosnippet>396</a>        result: <span class="kw-2">&amp;</span><span class="prelude-ty">Result</span>&lt;(), String&gt;,
-<a href=#397 id=397 data-nosnippet>397</a>        old_state: <span class="kw-2">&amp;</span>LightningReceiveStateMachine,
-<a href=#398 id=398 data-nosnippet>398</a>        out_points: Vec&lt;OutPoint&gt;,
-<a href=#399 id=399 data-nosnippet>399</a>    ) -&gt; LightningReceiveStateMachine {
-<a href=#400 id=400 data-nosnippet>400</a>        <span class="kw">match </span>result {
-<a href=#401 id=401 data-nosnippet>401</a>            <span class="prelude-val">Ok</span>(()) =&gt; {
-<a href=#402 id=402 data-nosnippet>402</a>                <span class="comment">// Claim successful
-<a href=#403 id=403 data-nosnippet>403</a>                </span>LightningReceiveStateMachine {
-<a href=#404 id=404 data-nosnippet>404</a>                    operation_id: old_state.operation_id,
-<a href=#405 id=405 data-nosnippet>405</a>                    state: LightningReceiveStates::Success(out_points),
-<a href=#406 id=406 data-nosnippet>406</a>                }
-<a href=#407 id=407 data-nosnippet>407</a>            }
-<a href=#408 id=408 data-nosnippet>408</a>            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
-<a href=#409 id=409 data-nosnippet>409</a>                <span class="comment">// Claim rejection
-<a href=#410 id=410 data-nosnippet>410</a>                </span>LightningReceiveStateMachine {
-<a href=#411 id=411 data-nosnippet>411</a>                    operation_id: old_state.operation_id,
-<a href=#412 id=412 data-nosnippet>412</a>                    state: LightningReceiveStates::Canceled(LightningReceiveError::ClaimRejected),
-<a href=#413 id=413 data-nosnippet>413</a>                }
-<a href=#414 id=414 data-nosnippet>414</a>            }
-<a href=#415 id=415 data-nosnippet>415</a>        }
-<a href=#416 id=416 data-nosnippet>416</a>    }
-<a href=#417 id=417 data-nosnippet>417</a>}
-<a href=#418 id=418 data-nosnippet>418</a>
-<a href=#419 id=419 data-nosnippet>419</a><span class="attr">#[cfg(test)]
-<a href=#420 id=420 data-nosnippet>420</a></span><span class="kw">mod </span>tests {
-<a href=#421 id=421 data-nosnippet>421</a>    <span class="kw">use </span>bitcoin::hashes::{Hash, sha256};
-<a href=#422 id=422 data-nosnippet>422</a>    <span class="kw">use </span>fedimint_core::secp256k1::{Secp256k1, SecretKey};
-<a href=#423 id=423 data-nosnippet>423</a>    <span class="kw">use </span>lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
-<a href=#424 id=424 data-nosnippet>424</a>
-<a href=#425 id=425 data-nosnippet>425</a>    <span class="kw">use </span>super::<span class="kw-2">*</span>;
+<a href=#354 id=354 data-nosnippet>354</a>                    fedimint_api_client::api::FederationGeneralError::UnexpectedResponse {
+<a href=#355 id=355 data-nosnippet>355</a>                        message: <span class="macro">format!</span>(<span class="string">"Contract {contract_id} is not an incoming contract"</span>),
+<a href=#356 id=356 data-nosnippet>356</a>                    },
+<a href=#357 id=357 data-nosnippet>357</a>                ))
+<a href=#358 id=358 data-nosnippet>358</a>            }
+<a href=#359 id=359 data-nosnippet>359</a>        }
+<a href=#360 id=360 data-nosnippet>360</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
+<a href=#361 id=361 data-nosnippet>361</a>        <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(e),
+<a href=#362 id=362 data-nosnippet>362</a>    }
+<a href=#363 id=363 data-nosnippet>363</a>}
+<a href=#364 id=364 data-nosnippet>364</a>
+<a href=#365 id=365 data-nosnippet>365</a><span class="attr">#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+<a href=#366 id=366 data-nosnippet>366</a></span><span class="kw">pub struct </span>LightningReceiveFunded {
+<a href=#367 id=367 data-nosnippet>367</a>    txid: TransactionId,
+<a href=#368 id=368 data-nosnippet>368</a>    out_points: Vec&lt;OutPoint&gt;,
+<a href=#369 id=369 data-nosnippet>369</a>}
+<a href=#370 id=370 data-nosnippet>370</a>
+<a href=#371 id=371 data-nosnippet>371</a><span class="kw">impl </span>LightningReceiveFunded {
+<a href=#372 id=372 data-nosnippet>372</a>    <span class="kw">fn </span>transitions(
+<a href=#373 id=373 data-nosnippet>373</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#374 id=374 data-nosnippet>374</a>        global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
+<a href=#375 id=375 data-nosnippet>375</a>    ) -&gt; Vec&lt;StateTransition&lt;LightningReceiveStateMachine&gt;&gt; {
+<a href=#376 id=376 data-nosnippet>376</a>        <span class="kw">let </span>out_points = <span class="self">self</span>.out_points.clone();
+<a href=#377 id=377 data-nosnippet>377</a>        <span class="macro">vec!</span>[StateTransition::new(
+<a href=#378 id=378 data-nosnippet>378</a>            <span class="self">Self</span>::await_claim_success(global_context.clone(), <span class="self">self</span>.txid),
+<a href=#379 id=379 data-nosnippet>379</a>            <span class="kw">move </span>|_dbtx, result, old_state| {
+<a href=#380 id=380 data-nosnippet>380</a>                <span class="kw">let </span>out_points = out_points.clone();
+<a href=#381 id=381 data-nosnippet>381</a>                Box::pin(
+<a href=#382 id=382 data-nosnippet>382</a>                    <span class="kw">async move </span>{ <span class="self">Self</span>::transition_claim_success(<span class="kw-2">&amp;</span>result, <span class="kw-2">&amp;</span>old_state, out_points) },
+<a href=#383 id=383 data-nosnippet>383</a>                )
+<a href=#384 id=384 data-nosnippet>384</a>            },
+<a href=#385 id=385 data-nosnippet>385</a>        )]
+<a href=#386 id=386 data-nosnippet>386</a>    }
+<a href=#387 id=387 data-nosnippet>387</a>
+<a href=#388 id=388 data-nosnippet>388</a>    <span class="kw">async fn </span>await_claim_success(
+<a href=#389 id=389 data-nosnippet>389</a>        global_context: DynGlobalClientContext,
+<a href=#390 id=390 data-nosnippet>390</a>        txid: TransactionId,
+<a href=#391 id=391 data-nosnippet>391</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
+<a href=#392 id=392 data-nosnippet>392</a>        <span class="comment">// No network calls are done here, we just await other state machines, so no
+<a href=#393 id=393 data-nosnippet>393</a>        // retry logic is needed
+<a href=#394 id=394 data-nosnippet>394</a>        </span>global_context.await_tx_accepted(txid).<span class="kw">await
+<a href=#395 id=395 data-nosnippet>395</a>    </span>}
+<a href=#396 id=396 data-nosnippet>396</a>
+<a href=#397 id=397 data-nosnippet>397</a>    <span class="kw">fn </span>transition_claim_success(
+<a href=#398 id=398 data-nosnippet>398</a>        result: <span class="kw-2">&amp;</span><span class="prelude-ty">Result</span>&lt;(), String&gt;,
+<a href=#399 id=399 data-nosnippet>399</a>        old_state: <span class="kw-2">&amp;</span>LightningReceiveStateMachine,
+<a href=#400 id=400 data-nosnippet>400</a>        out_points: Vec&lt;OutPoint&gt;,
+<a href=#401 id=401 data-nosnippet>401</a>    ) -&gt; LightningReceiveStateMachine {
+<a href=#402 id=402 data-nosnippet>402</a>        <span class="kw">match </span>result {
+<a href=#403 id=403 data-nosnippet>403</a>            <span class="prelude-val">Ok</span>(()) =&gt; {
+<a href=#404 id=404 data-nosnippet>404</a>                <span class="comment">// Claim successful
+<a href=#405 id=405 data-nosnippet>405</a>                </span>LightningReceiveStateMachine {
+<a href=#406 id=406 data-nosnippet>406</a>                    operation_id: old_state.operation_id,
+<a href=#407 id=407 data-nosnippet>407</a>                    state: LightningReceiveStates::Success(out_points),
+<a href=#408 id=408 data-nosnippet>408</a>                }
+<a href=#409 id=409 data-nosnippet>409</a>            }
+<a href=#410 id=410 data-nosnippet>410</a>            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; {
+<a href=#411 id=411 data-nosnippet>411</a>                <span class="comment">// Claim rejection
+<a href=#412 id=412 data-nosnippet>412</a>                </span>LightningReceiveStateMachine {
+<a href=#413 id=413 data-nosnippet>413</a>                    operation_id: old_state.operation_id,
+<a href=#414 id=414 data-nosnippet>414</a>                    state: LightningReceiveStates::Canceled(LightningReceiveError::ClaimRejected),
+<a href=#415 id=415 data-nosnippet>415</a>                }
+<a href=#416 id=416 data-nosnippet>416</a>            }
+<a href=#417 id=417 data-nosnippet>417</a>        }
+<a href=#418 id=418 data-nosnippet>418</a>    }
+<a href=#419 id=419 data-nosnippet>419</a>}
+<a href=#420 id=420 data-nosnippet>420</a>
+<a href=#421 id=421 data-nosnippet>421</a><span class="attr">#[cfg(test)]
+<a href=#422 id=422 data-nosnippet>422</a></span><span class="kw">mod </span>tests {
+<a href=#423 id=423 data-nosnippet>423</a>    <span class="kw">use </span>bitcoin::hashes::{Hash, sha256};
+<a href=#424 id=424 data-nosnippet>424</a>    <span class="kw">use </span>fedimint_core::secp256k1::{Secp256k1, SecretKey};
+<a href=#425 id=425 data-nosnippet>425</a>    <span class="kw">use </span>lightning_invoice::{Currency, InvoiceBuilder, PaymentSecret};
 <a href=#426 id=426 data-nosnippet>426</a>
-<a href=#427 id=427 data-nosnippet>427</a>    <span class="attr">#[test]
-<a href=#428 id=428 data-nosnippet>428</a>    </span><span class="kw">fn </span>test_invoice_expiration() -&gt; anyhow::Result&lt;()&gt; {
-<a href=#429 id=429 data-nosnippet>429</a>        <span class="kw">let </span>now = fedimint_core::time::duration_since_epoch();
-<a href=#430 id=430 data-nosnippet>430</a>        <span class="kw">let </span>one_second = Duration::from_secs(<span class="number">1</span>);
-<a href=#431 id=431 data-nosnippet>431</a>        <span class="kw">for </span>expiration <span class="kw">in </span>[one_second, Duration::from_hours(<span class="number">1</span>)] {
-<a href=#432 id=432 data-nosnippet>432</a>            <span class="kw">for </span>tolerance <span class="kw">in </span>[one_second, Duration::from_mins(<span class="number">1</span>)] {
-<a href=#433 id=433 data-nosnippet>433</a>                <span class="kw">let </span>invoice = invoice(now, expiration)<span class="question-mark">?</span>;
-<a href=#434 id=434 data-nosnippet>434</a>                <span class="macro">assert!</span>(!has_invoice_expired(
-<a href=#435 id=435 data-nosnippet>435</a>                    <span class="kw-2">&amp;</span>invoice,
-<a href=#436 id=436 data-nosnippet>436</a>                    now.checked_sub(one_second).unwrap(),
-<a href=#437 id=437 data-nosnippet>437</a>                    tolerance
-<a href=#438 id=438 data-nosnippet>438</a>                ));
-<a href=#439 id=439 data-nosnippet>439</a>                <span class="macro">assert!</span>(!has_invoice_expired(<span class="kw-2">&amp;</span>invoice, now, tolerance));
-<a href=#440 id=440 data-nosnippet>440</a>                <span class="macro">assert!</span>(!has_invoice_expired(<span class="kw-2">&amp;</span>invoice, now + expiration, tolerance));
-<a href=#441 id=441 data-nosnippet>441</a>                <span class="macro">assert!</span>(!has_invoice_expired(
-<a href=#442 id=442 data-nosnippet>442</a>                    <span class="kw-2">&amp;</span>invoice,
-<a href=#443 id=443 data-nosnippet>443</a>                    (now + expiration + tolerance)
-<a href=#444 id=444 data-nosnippet>444</a>                        .checked_sub(one_second)
-<a href=#445 id=445 data-nosnippet>445</a>                        .unwrap(),
-<a href=#446 id=446 data-nosnippet>446</a>                    tolerance
-<a href=#447 id=447 data-nosnippet>447</a>                ));
-<a href=#448 id=448 data-nosnippet>448</a>                <span class="macro">assert!</span>(has_invoice_expired(
-<a href=#449 id=449 data-nosnippet>449</a>                    <span class="kw-2">&amp;</span>invoice,
-<a href=#450 id=450 data-nosnippet>450</a>                    now + expiration + tolerance,
-<a href=#451 id=451 data-nosnippet>451</a>                    tolerance
-<a href=#452 id=452 data-nosnippet>452</a>                ));
-<a href=#453 id=453 data-nosnippet>453</a>                <span class="macro">assert!</span>(has_invoice_expired(
-<a href=#454 id=454 data-nosnippet>454</a>                    <span class="kw-2">&amp;</span>invoice,
-<a href=#455 id=455 data-nosnippet>455</a>                    now + expiration + tolerance + one_second,
-<a href=#456 id=456 data-nosnippet>456</a>                    tolerance
-<a href=#457 id=457 data-nosnippet>457</a>                ));
-<a href=#458 id=458 data-nosnippet>458</a>            }
-<a href=#459 id=459 data-nosnippet>459</a>        }
-<a href=#460 id=460 data-nosnippet>460</a>        <span class="prelude-val">Ok</span>(())
-<a href=#461 id=461 data-nosnippet>461</a>    }
-<a href=#462 id=462 data-nosnippet>462</a>
-<a href=#463 id=463 data-nosnippet>463</a>    <span class="kw">fn </span>invoice(now_epoch: Duration, expiry_time: Duration) -&gt; anyhow::Result&lt;Bolt11Invoice&gt; {
-<a href=#464 id=464 data-nosnippet>464</a>        <span class="kw">let </span>ctx = Secp256k1::new();
-<a href=#465 id=465 data-nosnippet>465</a>        <span class="kw">let </span>secret_key = SecretKey::new(<span class="kw-2">&amp;mut </span>rand::thread_rng());
-<a href=#466 id=466 data-nosnippet>466</a>        <span class="prelude-val">Ok</span>(InvoiceBuilder::new(Currency::Regtest)
-<a href=#467 id=467 data-nosnippet>467</a>            .description(String::new())
-<a href=#468 id=468 data-nosnippet>468</a>            .payment_hash(sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">0</span>; <span class="number">32</span>]))
-<a href=#469 id=469 data-nosnippet>469</a>            .duration_since_epoch(now_epoch)
-<a href=#470 id=470 data-nosnippet>470</a>            .min_final_cltv_expiry_delta(<span class="number">0</span>)
-<a href=#471 id=471 data-nosnippet>471</a>            .payment_secret(PaymentSecret([<span class="number">0</span>; <span class="number">32</span>]))
-<a href=#472 id=472 data-nosnippet>472</a>            .amount_milli_satoshis(<span class="number">1000</span>)
-<a href=#473 id=473 data-nosnippet>473</a>            .expiry_time(expiry_time)
-<a href=#474 id=474 data-nosnippet>474</a>            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>secret_key))<span class="question-mark">?</span>)
-<a href=#475 id=475 data-nosnippet>475</a>    }
-<a href=#476 id=476 data-nosnippet>476</a>}
+<a href=#427 id=427 data-nosnippet>427</a>    <span class="kw">use </span>super::<span class="kw-2">*</span>;
+<a href=#428 id=428 data-nosnippet>428</a>
+<a href=#429 id=429 data-nosnippet>429</a>    <span class="attr">#[test]
+<a href=#430 id=430 data-nosnippet>430</a>    </span><span class="kw">fn </span>test_invoice_expiration() -&gt; anyhow::Result&lt;()&gt; {
+<a href=#431 id=431 data-nosnippet>431</a>        <span class="kw">let </span>now = fedimint_core::time::duration_since_epoch();
+<a href=#432 id=432 data-nosnippet>432</a>        <span class="kw">let </span>one_second = Duration::from_secs(<span class="number">1</span>);
+<a href=#433 id=433 data-nosnippet>433</a>        <span class="kw">for </span>expiration <span class="kw">in </span>[one_second, Duration::from_hours(<span class="number">1</span>)] {
+<a href=#434 id=434 data-nosnippet>434</a>            <span class="kw">for </span>tolerance <span class="kw">in </span>[one_second, Duration::from_mins(<span class="number">1</span>)] {
+<a href=#435 id=435 data-nosnippet>435</a>                <span class="kw">let </span>invoice = invoice(now, expiration)<span class="question-mark">?</span>;
+<a href=#436 id=436 data-nosnippet>436</a>                <span class="macro">assert!</span>(!has_invoice_expired(
+<a href=#437 id=437 data-nosnippet>437</a>                    <span class="kw-2">&amp;</span>invoice,
+<a href=#438 id=438 data-nosnippet>438</a>                    now.checked_sub(one_second).unwrap(),
+<a href=#439 id=439 data-nosnippet>439</a>                    tolerance
+<a href=#440 id=440 data-nosnippet>440</a>                ));
+<a href=#441 id=441 data-nosnippet>441</a>                <span class="macro">assert!</span>(!has_invoice_expired(<span class="kw-2">&amp;</span>invoice, now, tolerance));
+<a href=#442 id=442 data-nosnippet>442</a>                <span class="macro">assert!</span>(!has_invoice_expired(<span class="kw-2">&amp;</span>invoice, now + expiration, tolerance));
+<a href=#443 id=443 data-nosnippet>443</a>                <span class="macro">assert!</span>(!has_invoice_expired(
+<a href=#444 id=444 data-nosnippet>444</a>                    <span class="kw-2">&amp;</span>invoice,
+<a href=#445 id=445 data-nosnippet>445</a>                    (now + expiration + tolerance)
+<a href=#446 id=446 data-nosnippet>446</a>                        .checked_sub(one_second)
+<a href=#447 id=447 data-nosnippet>447</a>                        .unwrap(),
+<a href=#448 id=448 data-nosnippet>448</a>                    tolerance
+<a href=#449 id=449 data-nosnippet>449</a>                ));
+<a href=#450 id=450 data-nosnippet>450</a>                <span class="macro">assert!</span>(has_invoice_expired(
+<a href=#451 id=451 data-nosnippet>451</a>                    <span class="kw-2">&amp;</span>invoice,
+<a href=#452 id=452 data-nosnippet>452</a>                    now + expiration + tolerance,
+<a href=#453 id=453 data-nosnippet>453</a>                    tolerance
+<a href=#454 id=454 data-nosnippet>454</a>                ));
+<a href=#455 id=455 data-nosnippet>455</a>                <span class="macro">assert!</span>(has_invoice_expired(
+<a href=#456 id=456 data-nosnippet>456</a>                    <span class="kw-2">&amp;</span>invoice,
+<a href=#457 id=457 data-nosnippet>457</a>                    now + expiration + tolerance + one_second,
+<a href=#458 id=458 data-nosnippet>458</a>                    tolerance
+<a href=#459 id=459 data-nosnippet>459</a>                ));
+<a href=#460 id=460 data-nosnippet>460</a>            }
+<a href=#461 id=461 data-nosnippet>461</a>        }
+<a href=#462 id=462 data-nosnippet>462</a>        <span class="prelude-val">Ok</span>(())
+<a href=#463 id=463 data-nosnippet>463</a>    }
+<a href=#464 id=464 data-nosnippet>464</a>
+<a href=#465 id=465 data-nosnippet>465</a>    <span class="kw">fn </span>invoice(now_epoch: Duration, expiry_time: Duration) -&gt; anyhow::Result&lt;Bolt11Invoice&gt; {
+<a href=#466 id=466 data-nosnippet>466</a>        <span class="kw">let </span>ctx = Secp256k1::new();
+<a href=#467 id=467 data-nosnippet>467</a>        <span class="kw">let </span>secret_key = SecretKey::new(<span class="kw-2">&amp;mut </span>rand::thread_rng());
+<a href=#468 id=468 data-nosnippet>468</a>        <span class="prelude-val">Ok</span>(InvoiceBuilder::new(Currency::Regtest)
+<a href=#469 id=469 data-nosnippet>469</a>            .description(String::new())
+<a href=#470 id=470 data-nosnippet>470</a>            .payment_hash(sha256::Hash::hash(<span class="kw-2">&amp;</span>[<span class="number">0</span>; <span class="number">32</span>]))
+<a href=#471 id=471 data-nosnippet>471</a>            .duration_since_epoch(now_epoch)
+<a href=#472 id=472 data-nosnippet>472</a>            .min_final_cltv_expiry_delta(<span class="number">0</span>)
+<a href=#473 id=473 data-nosnippet>473</a>            .payment_secret(PaymentSecret([<span class="number">0</span>; <span class="number">32</span>]))
+<a href=#474 id=474 data-nosnippet>474</a>            .amount_milli_satoshis(<span class="number">1000</span>)
+<a href=#475 id=475 data-nosnippet>475</a>            .expiry_time(expiry_time)
+<a href=#476 id=476 data-nosnippet>476</a>            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, <span class="kw-2">&amp;</span>secret_key))<span class="question-mark">?</span>)
+<a href=#477 id=477 data-nosnippet>477</a>    }
+<a href=#478 id=478 data-nosnippet>478</a>}
 </code></pre></div></section></main></body></html>

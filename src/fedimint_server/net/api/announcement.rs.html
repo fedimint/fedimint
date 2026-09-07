@@ -58,10 +58,10 @@
 <a href=#58 id=58 data-nosnippet>58</a>    <span class="comment">// FIXME: (@leonardo) how should we handle the connector here ?
 <a href=#59 id=59 data-nosnippet>59</a>    </span><span class="kw">let </span>api_client = DynGlobalApi::new(
 <a href=#60 id=60 data-nosnippet>60</a>        <span class="comment">// TODO: get from somewhere/unify?
-<a href=#61 id=61 data-nosnippet>61</a>        </span>ConnectorRegistry::build_from_server_env()<span class="question-mark">?</span>.bind().<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#61 id=61 data-nosnippet>61</a>        </span>ConnectorRegistry::build_from_server_env().bind().<span class="kw">await</span>,
 <a href=#62 id=62 data-nosnippet>62</a>        get_api_urls(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>cfg.consensus).<span class="kw">await</span>,
 <a href=#63 id=63 data-nosnippet>63</a>        api_secret.as_deref(),
-<a href=#64 id=64 data-nosnippet>64</a>    )<span class="question-mark">?</span>;
+<a href=#64 id=64 data-nosnippet>64</a>    );
 <a href=#65 id=65 data-nosnippet>65</a>
 <a href=#66 id=66 data-nosnippet>66</a>    <span class="kw">let </span>our_peer_id = cfg.local.identity;
 <a href=#67 id=67 data-nosnippet>67</a>    tg.spawn_cancellable(<span class="string">"submit-api-url-announcement"</span>, <span class="kw">async move </span>{

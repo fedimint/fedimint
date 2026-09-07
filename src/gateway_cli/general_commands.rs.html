@@ -166,7 +166,7 @@
 <a href=#166 id=166 data-nosnippet>166</a>                    .expect(<span class="string">"Before unix epoch"</span>)
 <a href=#167 id=167 data-nosnippet>167</a>                    .as_millis()
 <a href=#168 id=168 data-nosnippet>168</a>                    .try_into()
-<a href=#169 id=169 data-nosnippet>169</a>                    .map_err(|e| ServerError::InternalClientError(<span class="macro">anyhow::anyhow!</span>(<span class="string">"{e}"</span>)))<span class="question-mark">?</span>;
+<a href=#169 id=169 data-nosnippet>169</a>                    .map_err(|e| ServerError::InternalClientError(<span class="macro">format!</span>(<span class="string">"{e}"</span>)))<span class="question-mark">?</span>;
 <a href=#170 id=170 data-nosnippet>170</a>                <span class="kw">let </span>one_day_ago = now
 <a href=#171 id=171 data-nosnippet>171</a>                    .checked_sub(Duration::from_hours(<span class="number">24</span>))
 <a href=#172 id=172 data-nosnippet>172</a>                    .expect(<span class="string">"Before unix epoch"</span>);
@@ -175,7 +175,7 @@
 <a href=#175 id=175 data-nosnippet>175</a>                    .expect(<span class="string">"Before unix epoch"</span>)
 <a href=#176 id=176 data-nosnippet>176</a>                    .as_millis()
 <a href=#177 id=177 data-nosnippet>177</a>                    .try_into()
-<a href=#178 id=178 data-nosnippet>178</a>                    .map_err(|e| ServerError::InternalClientError(<span class="macro">anyhow::anyhow!</span>(<span class="string">"{e}"</span>)))<span class="question-mark">?</span>;
+<a href=#178 id=178 data-nosnippet>178</a>                    .map_err(|e| ServerError::InternalClientError(<span class="macro">format!</span>(<span class="string">"{e}"</span>)))<span class="question-mark">?</span>;
 <a href=#179 id=179 data-nosnippet>179</a>                <span class="kw">let </span>end_millis = end.unwrap_or(now_millis);
 <a href=#180 id=180 data-nosnippet>180</a>                <span class="kw">let </span>start_millis = start.unwrap_or(one_day_ago_millis);
 <a href=#181 id=181 data-nosnippet>181</a>                <span class="kw">let </span>payment_summary = payment_summary(

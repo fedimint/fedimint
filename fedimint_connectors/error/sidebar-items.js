@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["ServerError"]};
+window.SIDEBAR_ITEMS = {"enum":["ConnectorError","ServerError"]};
