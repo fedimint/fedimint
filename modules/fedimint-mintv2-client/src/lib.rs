@@ -1107,6 +1107,7 @@ impl MintClientModule {
                 },
             )
             .await
+            .map_err(anyhow::Error::from)
     }
 
     /// Computes the fee a `send(amount)` would incur given the client's current
@@ -1151,6 +1152,7 @@ impl MintClientModule {
                 },
             )
             .await
+            .map_err(anyhow::Error::from)
     }
 
     /// Returns whether the client's current notes can be handed out to cover

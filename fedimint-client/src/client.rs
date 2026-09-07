@@ -90,7 +90,7 @@ use crate::db::{
     PeerLastApiVersionsSummaryKey, PendingClientConfigKey, TransactionFeesKey,
     apply_migrations_core_client_dbtx, get_decoded_client_secret, verify_client_db_integrity_dbtx,
 };
-use crate::error::OperationNotFoundError;
+use crate::error::{OperationAlreadyExistsError, OperationNotFoundError, TransactionSubmitError};
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
 use crate::oplog::OperationLog;
@@ -742,7 +742,7 @@ impl Client {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
-    ) -> anyhow::Result<FinalizedTransaction> {
+    ) -> Result<FinalizedTransaction, TransactionSubmitError> {
         let (in_amounts, out_amounts) = self.transaction_builder_get_balance(&partial_transaction);
 
         let mut added_inputs_bundles = vec![];
@@ -766,7 +766,7 @@ impl Client {
             }
 
             let Some((module_id, module)) = self.primary_module_for_unit(*unit) else {
-                bail!("No module to balance a partial transaction (affected unit: {unit:?}");
+                return Err(TransactionSubmitError::NoPrimaryModule { unit: *unit });
             };
 
             let (added_input_bundle, added_output_bundle) = module
@@ -778,7 +778,8 @@ impl Client {
                     input_amount,
                     output_amount,
                 )
-                .await?;
+                .await
+                .map_err(|err| TransactionSubmitError::PrimaryModule(err.into()))?;
 
             added_inputs_bundles.push(added_input_bundle);
             added_outputs_bundles.push(added_output_bundle);
@@ -867,7 +868,7 @@ impl Client {
         &self,
         operation_id: OperationId,
         request: FeeQuoteRequest,
-    ) -> anyhow::Result<FeeQuote> {
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         let FeeQuoteRequest {
             input_amount,
             output_amount,
@@ -909,7 +910,7 @@ impl Client {
             }
 
             let Some((module_id, module)) = self.primary_module_for_unit(*unit) else {
-                bail!("No module to balance a partial transaction (affected unit: {unit:?}");
+                return Err(TransactionSubmitError::NoPrimaryModule { unit: *unit });
             };
 
             let (change_input, change_output) = module
@@ -921,7 +922,8 @@ impl Client {
                     balance_input_amount,
                     balance_output_amount,
                 )
-                .await?;
+                .await
+                .map_err(|err| TransactionSubmitError::PrimaryModule(err.into()))?;
 
             // Fold the change into the totals. These are a disjoint set of items
             // from the explicit ones (the primary module only sees the scalar
@@ -990,19 +992,16 @@ impl Client {
     ///
     /// ## Errors
     /// The function will return an error if the operation with given ID already
-    /// exists.
-    ///
-    /// ## Panics
-    /// The function will panic if the database transaction collides with
-    /// other and fails with others too often, this should not happen except for
-    /// excessively concurrent scenarios.
+    /// exists, or if the database transaction keeps colliding with others and
+    /// cannot be committed within its retry budget, which should not happen
+    /// except in excessively concurrent scenarios.
     pub async fn finalize_and_submit_transaction<F, M>(
         &self,
         operation_id: OperationId,
         operation_type: &str,
         operation_meta_gen: F,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange>
+    ) -> Result<OutPointRange, TransactionSubmitError>
     where
         F: Fn(OutPointRange) -> M + Clone + MaybeSend + MaybeSync,
         M: serde::Serialize + MaybeSend,
@@ -1034,12 +1033,9 @@ impl Client {
         match autocommit_res {
             Ok(txid) => Ok(txid),
             Err(AutocommitError::ClosureError { error, .. }) => Err(error),
-            Err(AutocommitError::CommitFailed {
-                attempts,
-                last_error,
-            }) => panic!(
-                "Failed to commit tx submission dbtx after {attempts} attempts: {last_error}"
-            ),
+            Err(AutocommitError::CommitFailed { last_error, .. }) => {
+                Err(TransactionSubmitError::Database(last_error))
+            }
         }
     }
 
@@ -1058,13 +1054,13 @@ impl Client {
         operation_type: &str,
         operation_meta_gen: F,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange>
+    ) -> Result<OutPointRange, TransactionSubmitError>
     where
         F: FnOnce(OutPointRange) -> M + MaybeSend,
         M: serde::Serialize + MaybeSend,
     {
         if Client::operation_exists_dbtx(dbtx, operation_id).await {
-            bail!("There already exists an operation with id {operation_id:?}")
+            return Err(OperationAlreadyExistsError { operation_id }.into());
         }
 
         let out_point_range = self
@@ -1088,7 +1084,7 @@ impl Client {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange> {
+    ) -> Result<OutPointRange, TransactionSubmitError> {
         let FinalizedTransaction {
             transaction,
             mut states,
@@ -1117,9 +1113,10 @@ impl Client {
                 "Transaction too large",
             );
             debug!(target: LOG_CLIENT_NET_API, ?transaction, "transaction details");
-            bail!(
-                "The generated transaction would be rejected by the federation for being too large."
-            );
+            return Err(TransactionSubmitError::TransactionTooLarge {
+                size: transaction.consensus_encode_to_vec().len(),
+                max: Transaction::MAX_TX_SIZE,
+            });
         }
 
         let txid = transaction.tx_hash();
@@ -1270,12 +1267,15 @@ impl Client {
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), TransactionSubmitError> {
         self.primary_module_for_unit(AmountUnit::BITCOIN)
-            .ok_or_else(|| anyhow!("No primary module available"))?
+            .ok_or(TransactionSubmitError::NoPrimaryModule {
+                unit: AmountUnit::BITCOIN,
+            })?
             .1
             .await_primary_module_output(operation_id, out_point)
             .await
+            .map_err(|err| TransactionSubmitError::PrimaryModule(err.into()))
     }
 
     /// Returns a reference to a typed module client instance by kind
@@ -1365,7 +1365,7 @@ impl Client {
         &self,
         operation_id: OperationId,
         outputs: Vec<OutPoint>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), TransactionSubmitError> {
         for out_point in outputs {
             self.await_primary_bitcoin_module_output(operation_id, out_point)
                 .await?;
@@ -2867,7 +2867,7 @@ impl ClientContextIface for Client {
         operation_type: &str,
         operation_meta_gen: Box<maybe_add_send_sync!(dyn Fn(OutPointRange) -> serde_json::Value)>,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange> {
+    ) -> Result<OutPointRange, TransactionSubmitError> {
         Client::finalize_and_submit_transaction(
             self,
             operation_id,
@@ -2886,7 +2886,7 @@ impl ClientContextIface for Client {
         operation_type: &str,
         operation_meta_gen: Box<maybe_add_send_sync!(dyn Fn(OutPointRange) -> serde_json::Value)>,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange> {
+    ) -> Result<OutPointRange, TransactionSubmitError> {
         Client::finalize_and_submit_transaction_dbtx(
             self,
             dbtx,
@@ -2903,7 +2903,7 @@ impl ClientContextIface for Client {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange> {
+    ) -> Result<OutPointRange, TransactionSubmitError> {
         Client::finalize_and_submit_transaction_inner(self, dbtx, operation_id, tx_builder).await
     }
 
@@ -2911,7 +2911,7 @@ impl ClientContextIface for Client {
         &self,
         operation_id: OperationId,
         request: FeeQuoteRequest,
-    ) -> anyhow::Result<FeeQuote> {
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         Client::fee_quote(self, operation_id, request).await
     }
 
@@ -2928,7 +2928,7 @@ impl ClientContextIface for Client {
         operation_id: OperationId,
         // TODO: make `impl Iterator<Item = ...>`
         outputs: Vec<OutPoint>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), TransactionSubmitError> {
         Client::await_primary_bitcoin_module_outputs(self, operation_id, outputs).await
     }
 

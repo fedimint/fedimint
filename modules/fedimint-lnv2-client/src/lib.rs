@@ -900,6 +900,7 @@ impl LightningClientModule {
                 },
             )
             .await
+            .map_err(anyhow::Error::from)
     }
 
     /// Whether an incoming contract worth `amount` is worth claiming, i.e.
@@ -946,6 +947,7 @@ impl LightningClientModule {
                 },
             )
             .await
+            .map_err(anyhow::Error::from)
     }
 
     /// Computes the largest invoice amount the client can pay in full out of

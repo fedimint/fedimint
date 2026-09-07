@@ -5,7 +5,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::Amounts;
 use fedimint_core::secp256k1::Keypair;
-use fedimint_core::util::FmtCompactAnyhow;
+use fedimint_core::util::FmtCompact;
 use fedimint_core::{Amount, OutPoint};
 use fedimint_lnv2_common::contracts::{IncomingContract, fee_from_expiration};
 use fedimint_lnv2_common::{LightningInput, LightningInputV0};
@@ -152,7 +152,7 @@ impl ReceiveStateMachine {
             Err(err) => {
                 warn!(
                     target: LOG_CLIENT_MODULE_LNV2,
-                    err = %err.fmt_compact_anyhow(),
+                    err = %err.fmt_compact(),
                     amount = %old_state.common.contract.commitment.amount,
                     "Not claiming incoming contract, its amount does not cover the claim fee"
                 );

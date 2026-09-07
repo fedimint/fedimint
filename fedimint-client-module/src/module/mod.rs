@@ -6,7 +6,7 @@ use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::{ffi, marker, ops};
 
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use bitcoin::secp256k1::PublicKey;
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::ClientConfig;
@@ -34,7 +34,10 @@ use serde::de::DeserializeOwned;
 use tracing::warn;
 
 use self::init::ClientModuleInit;
-use crate::error::{OperationLookupError, OperationNotFoundError};
+use crate::error::{
+    OperationAlreadyExistsError, OperationLookupError, OperationNotFoundError,
+    TransactionSubmitError,
+};
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::oplog::{IOperationLog, OperationLogEntry, UpdateStreamOrOutcome};
 use crate::sm::executor::{ActiveStateKey, IExecutor, InactiveStateKey};
@@ -68,7 +71,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         operation_type: &str,
         operation_meta_gen: Box<maybe_add_send_sync!(dyn Fn(OutPointRange) -> serde_json::Value)>,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange>;
+    ) -> Result<OutPointRange, TransactionSubmitError>;
 
     async fn finalize_and_submit_transaction_dbtx(
         &self,
@@ -77,7 +80,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         operation_type: &str,
         operation_meta_gen: Box<maybe_add_send_sync!(dyn Fn(OutPointRange) -> serde_json::Value)>,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange>;
+    ) -> Result<OutPointRange, TransactionSubmitError>;
 
     // TODO: unify
     async fn finalize_and_submit_transaction_inner(
@@ -85,7 +88,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange>;
+    ) -> Result<OutPointRange, TransactionSubmitError>;
 
     /// Computes the fee finalizing and submitting a transaction with the
     /// explicit items described by `request` would incur, without submitting
@@ -94,7 +97,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         &self,
         operation_id: OperationId,
         request: FeeQuoteRequest,
-    ) -> anyhow::Result<FeeQuote>;
+    ) -> Result<FeeQuote, TransactionSubmitError>;
 
     /// The client's balance for `unit`, held by the primary module. See
     /// `Client::get_balance_for_unit`.
@@ -107,7 +110,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         operation_id: OperationId,
         // TODO: make `impl Iterator<Item = ...>`
         outputs: Vec<OutPoint>,
-    ) -> anyhow::Result<()>;
+    ) -> Result<(), TransactionSubmitError>;
 
     fn operation_log(&self) -> &dyn IOperationLog;
 
@@ -380,7 +383,7 @@ where
         operation_type: &str,
         operation_meta_gen: F,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange>
+    ) -> Result<OutPointRange, TransactionSubmitError>
     where
         F: Fn(OutPointRange) -> Meta + Clone + MaybeSend + MaybeSync + 'static,
         Meta: serde::Serialize + MaybeSend,
@@ -405,7 +408,7 @@ where
         operation_type: &str,
         operation_meta_gen: F,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange>
+    ) -> Result<OutPointRange, TransactionSubmitError>
     where
         F: Fn(OutPointRange) -> Meta + MaybeSend + MaybeSync + 'static,
         Meta: serde::Serialize + MaybeSend,
@@ -436,7 +439,7 @@ where
         &self,
         operation_id: OperationId,
         request: FeeQuoteRequest,
-    ) -> anyhow::Result<FeeQuote> {
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         self.client.get().fee_quote(operation_id, request).await
     }
 
@@ -458,7 +461,7 @@ where
         operation_id: OperationId,
         // TODO: make `impl Iterator<Item = ...>`
         outputs: Vec<OutPoint>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), TransactionSubmitError> {
         self.client
             .get()
             .await_primary_module_outputs(operation_id, outputs)
@@ -638,7 +641,7 @@ where
         op_type: &str,
         operation_meta: impl serde::Serialize + Debug,
         sms: Vec<DynState>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), TransactionSubmitError> {
         let db = self.module_db();
         let mut dbtx = db.begin_transaction().await;
         {
@@ -654,12 +657,7 @@ where
             .await?;
         }
 
-        dbtx.commit_tx_result().await.map_err(|_| {
-            anyhow!(
-                "Operation with id {} already exists",
-                operation_id.fmt_short()
-            )
-        })?;
+        dbtx.commit_tx_result().await?;
 
         Ok(())
     }
@@ -671,7 +669,7 @@ where
         op_type: &str,
         operation_meta: impl serde::Serialize + Debug,
         sms: Vec<DynState>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), OperationAlreadyExistsError> {
         self.manual_operation_start_inner(
             &mut dbtx.global_dbtx(self.global_dbtx_access_token),
             operation_id,
@@ -691,7 +689,7 @@ where
         op_type: &str,
         operation_meta: impl serde::Serialize + Debug,
         sms: Vec<DynState>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), OperationAlreadyExistsError> {
         dbtx.ensure_global()
             .expect("Must deal with global dbtx here");
 
@@ -703,10 +701,7 @@ where
             .await
             .is_some()
         {
-            bail!(
-                "Operation with id {} already exists",
-                operation_id.fmt_short()
-            );
+            return Err(OperationAlreadyExistsError { operation_id });
         }
 
         self.client
@@ -807,7 +802,7 @@ where
         dbtx: &mut DatabaseTransaction<'_>,
         inputs: ClientInputBundle<I, S>,
         operation_id: OperationId,
-    ) -> anyhow::Result<OutPointRange>
+    ) -> Result<OutPointRange, TransactionSubmitError>
     where
         I: IInput + MaybeSend + MaybeSync + 'static,
         S: sm::IState + MaybeSend + MaybeSync + 'static,
@@ -821,7 +816,7 @@ where
         dbtx: &mut DatabaseTransaction<'_>,
         inputs: InstancelessDynClientInputBundle,
         operation_id: OperationId,
-    ) -> anyhow::Result<OutPointRange> {
+    ) -> Result<OutPointRange, TransactionSubmitError> {
         let tx_builder =
             TransactionBuilder::new().with_inputs(inputs.into_dyn(self.module_instance_id));
 

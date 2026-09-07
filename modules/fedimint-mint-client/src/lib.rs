@@ -1911,6 +1911,7 @@ impl MintClientModule {
                 },
             )
             .await
+            .map_err(anyhow::Error::from)
     }
 
     /// Computes the fee a `send_oob_notes(amount)` would incur given the
@@ -1972,6 +1973,7 @@ impl MintClientModule {
                 },
             )
             .await
+            .map_err(anyhow::Error::from)
     }
 
     /// Try to reissue e-cash notes received from a third party to receive them

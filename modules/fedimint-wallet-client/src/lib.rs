@@ -902,6 +902,7 @@ impl WalletClientModule {
                 },
             )
             .await
+            .map_err(anyhow::Error::from)
     }
 
     /// Finds the largest amount that can be withdrawn in full out of

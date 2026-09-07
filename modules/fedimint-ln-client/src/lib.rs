@@ -1855,6 +1855,7 @@ impl LightningClientModule {
                 },
             )
             .await
+            .map_err(anyhow::Error::from)
     }
 
     /// Computes the federation fee a `pay` funding an outgoing contract worth
@@ -1883,6 +1884,7 @@ impl LightningClientModule {
                 },
             )
             .await
+            .map_err(anyhow::Error::from)
     }
 
     /// Computes the largest invoice amount the client can pay in full out of

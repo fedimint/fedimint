@@ -880,3 +880,35 @@ async fn visualizing_a_missing_operation_is_reported_as_not_found() {
 
     assert_eq!(err.operation_id, operation_id);
 }
+
+#[tokio::test]
+async fn quoting_a_fee_without_a_primary_module_is_typed() {
+    use fedimint_client_module::error::TransactionSubmitError;
+    use fedimint_client_module::transaction::FeeQuoteRequest;
+    use fedimint_core::module::{AmountUnit, Amounts};
+
+    let client = client_for_lookup_test().await;
+
+    let err = client
+        .fee_quote(
+            OperationId::new_random(),
+            FeeQuoteRequest {
+                input_amount: Amounts::ZERO,
+                output_amount: Amounts::new_bitcoin(fedimint_core::Amount::from_sats(1)),
+                input_fee: Amounts::ZERO,
+                output_fee: Amounts::ZERO,
+            },
+        )
+        .await
+        .expect_err("A client without a primary module cannot balance a transaction");
+
+    assert!(
+        matches!(
+            err,
+            TransactionSubmitError::NoPrimaryModule {
+                unit: AmountUnit::BITCOIN
+            }
+        ),
+        "{err:?}"
+    );
+}

@@ -26,7 +26,7 @@ use fedimint_core::encoding::{
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::secp256k1::{Keypair, PublicKey};
 use fedimint_core::task::sleep;
-use fedimint_core::util::{BoxFuture, FmtCompact, FmtCompactAnyhow, SafeUrl};
+use fedimint_core::util::{BoxFuture, FmtCompact, SafeUrl};
 use fedimint_derive_secret::ChildId;
 use fedimint_eventlog::{Event, EventKind, EventPersistence};
 use futures::StreamExt;
@@ -348,10 +348,10 @@ impl LightningClientModule {
                 ?operation_id,
                 payment_code_key=?payment_code.root_keypair.public_key(),
                 invoice_index=%invoice_index,
-                err = %e.fmt_compact_anyhow(),
+                err = %e.fmt_compact(),
                 "Failed to create recurring receive operation"
             );
-            Err(e)
+            Err(e.into())
         } else {
             Ok(operation_id)
         }

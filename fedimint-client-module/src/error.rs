@@ -6,7 +6,11 @@
 //! not depend on.
 
 use fedimint_core::core::{ModuleKind, OperationId};
+use fedimint_core::db::DatabaseError;
+use fedimint_core::module::AmountUnit;
 use thiserror::Error;
+
+use crate::AddStateMachinesError;
 
 /// An operation with the same id already exists in the operation log.
 #[derive(Debug, Error)]
@@ -45,4 +49,50 @@ pub enum OperationLookupError {
         /// The kind of the module that started the operation.
         found: String,
     },
+}
+
+/// A failure to build, submit or complete a client transaction.
+///
+/// Covers the whole path a transaction takes on the client: balancing it with
+/// the primary module, recording its operation, registering its state machines,
+/// and waiting for the primary module's outputs to finalize. Submission to the
+/// federation itself is driven by a state machine and is not reported here.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum TransactionSubmitError {
+    /// The operation the transaction would be recorded under already exists.
+    #[error("The operation already exists")]
+    OperationAlreadyExists(#[from] OperationAlreadyExistsError),
+
+    /// The finalized transaction is larger than the federation accepts.
+    #[error("The transaction is {size} bytes, over the limit of {max}")]
+    TransactionTooLarge {
+        /// The size of the encoded transaction.
+        size: usize,
+        /// The largest transaction the federation accepts.
+        max: usize,
+    },
+
+    /// No primary module can hold funds of this unit, so the transaction
+    /// cannot be balanced.
+    #[error("No primary module for unit {unit:?}")]
+    NoPrimaryModule {
+        /// The unit that could not be balanced.
+        unit: AmountUnit,
+    },
+
+    /// The primary module failed to balance the transaction or to complete
+    /// its outputs.
+    // The boxed cause narrows to `ClientModuleError` once the module->client
+    // trait boundary is typed (#8821 part E).
+    #[error("The primary module failed")]
+    PrimaryModule(#[source] Box<dyn std::error::Error + Send + Sync>),
+
+    /// Writing the transaction to the database failed.
+    #[error("Database error")]
+    Database(#[from] DatabaseError),
+
+    /// The transaction's state machines could not be registered.
+    #[error("Failed to add the transaction's state machines")]
+    StateMachines(#[from] AddStateMachinesError),
 }
