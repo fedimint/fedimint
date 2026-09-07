@@ -85,12 +85,12 @@ impl FederationTest {
     pub async fn new_admin_api(&self, peer_id: PeerId) -> anyhow::Result<DynGlobalApi> {
         let config = self.configs.get(&peer_id).expect("peer to have config");
 
-        DynGlobalApi::new_admin(
-            ConnectorRegistry::build_from_testing_env()?.bind().await?,
+        Ok(DynGlobalApi::new_admin(
+            ConnectorRegistry::build_from_testing_env().bind().await,
             peer_id,
             config.consensus.api_endpoints()[&peer_id].url.clone(),
             None,
-        )
+        ))
     }
 
     /// Create a new admin client connected to this fed
@@ -376,11 +376,7 @@ impl FederationTestBuilder {
 
             task_group.spawn("fedimintd", move |_| async move {
                 Box::pin(consensus::run(
-                    ConnectorRegistry::build_from_testing_env()
-                        .unwrap()
-                        .bind()
-                        .await
-                        .unwrap(),
+                    ConnectorRegistry::build_from_testing_env().bind().await,
                     Some(ApiAuth::new("pass".to_string())),
                     Some(ApiAuth::new("pass".to_string())),
                     connections,
@@ -417,18 +413,13 @@ impl FederationTestBuilder {
                 continue;
             }
 
-            let connectors = ConnectorRegistry::build_from_testing_env()
-                .unwrap()
-                .bind()
-                .await
-                .unwrap();
+            let connectors = ConnectorRegistry::build_from_testing_env().bind().await;
             let api = DynGlobalApi::new_admin(
                 connectors,
                 peer_id,
                 config.consensus.api_endpoints()[&peer_id].url.clone(),
                 None,
-            )
-            .unwrap();
+            );
 
             while let Err(e) = api
                 .request_admin_no_auth::<u64>(SESSION_COUNT_ENDPOINT, ApiRequestErased::default())
@@ -449,11 +440,7 @@ impl FederationTestBuilder {
             _task: task_group,
             num_peers: self.num_peers,
             num_offline: self.num_offline,
-            connectors: ConnectorRegistry::build_from_testing_env()
-                .expect("Failed to initialize endpoints for testing (env)")
-                .bind()
-                .await
-                .expect("Failed to initialize endpoints for testing"),
+            connectors: ConnectorRegistry::build_from_testing_env().bind().await,
         }
     }
 }

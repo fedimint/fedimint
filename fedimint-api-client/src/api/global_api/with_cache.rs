@@ -3,7 +3,6 @@ use std::fmt::Debug;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
-use anyhow::{anyhow, format_err};
 use bitcoin::secp256k1;
 use fedimint_connectors::{DynGuaridianConnection, PeerStatus, ServerResult};
 use fedimint_core::admin_client::{GuardianConfigBackup, SetLocalParamsRequest, SetupStatus};
@@ -49,7 +48,7 @@ use tracing::{debug, trace};
 
 use super::super::{DynModuleApi, IGlobalFederationApi, IRawFederationApi, StatusResponse};
 use crate::api::{
-    FederationApiExt, FederationError, FederationResult,
+    FederationApiExt, FederationError, FederationGeneralError, FederationResult,
     VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2,
 };
 use crate::query::FilterMapThreshold;
@@ -124,19 +123,26 @@ where
         &self,
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
-    ) -> anyhow::Result<SessionOutcome> {
+    ) -> FederationResult<SessionOutcome> {
         if block_index.is_multiple_of(100) {
             debug!(target: LOG_CLIENT_NET_API, block_index, "Awaiting block's outcome from Federation");
         } else {
             trace!(target: LOG_CLIENT_NET_API, block_index, "Awaiting block's outcome from Federation");
         }
-        self.request_current_consensus::<SerdeModuleEncoding<SessionOutcome>>(
-            AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
-            ApiRequestErased::new(block_index),
-        )
-        .await?
-        .try_into_inner(decoders)
-        .map_err(|e| anyhow!(e.to_string()))
+        let response = self
+            .request_current_consensus::<SerdeModuleEncoding<SessionOutcome>>(
+                AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
+                ApiRequestErased::new(block_index),
+            )
+            .await?;
+
+        response.try_into_inner(decoders).map_err(|e| {
+            FederationError::general(
+                AWAIT_SESSION_OUTCOME_ENDPOINT.to_string(),
+                ApiRequestErased::new(block_index),
+                FederationGeneralError::Decode(e),
+            )
+        })
     }
 
     pub(crate) fn select_peers_for_status(&self) -> impl Iterator<Item = PeerId> + '_ {
@@ -150,7 +156,7 @@ where
         block_index: u64,
         broadcast_public_keys: &BTreeMap<PeerId, secp256k1::PublicKey>,
         decoders: &ModuleDecoderRegistry,
-    ) -> anyhow::Result<SessionStatus> {
+    ) -> FederationResult<SessionStatus> {
         if block_index.is_multiple_of(100) {
             debug!(target: LOG_CLIENT_NET_API, block_index, "Get session status raw v2");
         } else {
@@ -160,16 +166,24 @@ where
         let mut last_error = None;
         // fetch serially
         for peer_id in self.select_peers_for_status() {
-            match self
+            let decoded = self
                 .request_single_peer_federation::<SerdeModuleEncodingBase64<SessionStatusV2>>(
                     SESSION_STATUS_V2_ENDPOINT.to_string(),
                     params.clone(),
                     peer_id,
                 )
                 .await
-                .map_err(anyhow::Error::from)
-                .and_then(|s| Ok(s.try_into_inner(decoders)?))
-            {
+                .and_then(|s| {
+                    s.try_into_inner(decoders).map_err(|e| {
+                        FederationError::general(
+                            SESSION_STATUS_V2_ENDPOINT.to_string(),
+                            params.clone(),
+                            FederationGeneralError::Decode(e),
+                        )
+                    })
+                });
+
+            match decoded {
                 Ok(SessionStatusV2::Complete(signed_session_outcome)) => {
                     if signed_session_outcome.verify(broadcast_public_keys, block_index) {
                         // early return
@@ -177,7 +191,11 @@ where
                             signed_session_outcome.session_outcome,
                         ));
                     }
-                    last_error = Some(format_err!("Invalid signature"));
+                    last_error = Some(FederationError::general(
+                        SESSION_STATUS_V2_ENDPOINT.to_string(),
+                        params.clone(),
+                        FederationGeneralError::InvalidSignature,
+                    ));
                 }
                 Ok(SessionStatusV2::Initial | SessionStatusV2::Pending(..)) => {
                     // no signature: use fallback method
@@ -197,19 +215,28 @@ where
         &self,
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
-    ) -> anyhow::Result<SessionStatus> {
+    ) -> FederationResult<SessionStatus> {
         if block_index.is_multiple_of(100) {
             debug!(target: LOG_CLIENT_NET_API, block_index, "Get session status raw v1");
         } else {
             trace!(target: LOG_CLIENT_NET_API, block_index, "Get session status raw v1");
         }
-        self.request_current_consensus::<SerdeModuleEncoding<SessionStatus>>(
-            SESSION_STATUS_ENDPOINT.to_string(),
-            ApiRequestErased::new(block_index),
-        )
-        .await?
-        .try_into_inner(&decoders.clone().with_fallback())
-        .map_err(|e| anyhow!(e))
+        let response = self
+            .request_current_consensus::<SerdeModuleEncoding<SessionStatus>>(
+                SESSION_STATUS_ENDPOINT.to_string(),
+                ApiRequestErased::new(block_index),
+            )
+            .await?;
+
+        response
+            .try_into_inner(&decoders.clone().with_fallback())
+            .map_err(|e| {
+                FederationError::general(
+                    SESSION_STATUS_ENDPOINT.to_string(),
+                    ApiRequestErased::new(block_index),
+                    FederationGeneralError::Decode(e),
+                )
+            })
     }
 }
 
@@ -262,7 +289,7 @@ where
         &self,
         session_idx: u64,
         decoders: &ModuleDecoderRegistry,
-    ) -> anyhow::Result<SessionOutcome> {
+    ) -> FederationResult<SessionOutcome> {
         let mut lru_lock = self.await_session_lru.lock().await;
 
         let entry_arc = lru_lock
@@ -284,11 +311,11 @@ where
         decoders: &ModuleDecoderRegistry,
         core_api_version: ApiVersion,
         broadcast_public_keys: Option<&BTreeMap<PeerId, secp256k1::PublicKey>>,
-    ) -> anyhow::Result<SessionStatus> {
+    ) -> FederationResult<SessionStatus> {
         enum NoCacheErr {
             Initial,
             Pending(Vec<AcceptedItem>),
-            Err(anyhow::Error),
+            Err(FederationError),
         }
 
         let mut lru_lock = self.get_session_status_lru.lock().await;

@@ -1162,7 +1162,7 @@ impl ConsensusEngine {
         let filter_map = move |response: SerdeModuleEncoding<SignedSessionOutcome>| {
             let signed_session_outcome = response
                 .try_into_inner(&decoders)
-                .map_err(|x| ServerError::ResponseDeserialization(x.into()))?;
+                .map_err(|x| ServerError::ResponseDeserialization(Box::new(x)))?;
             let header = signed_session_outcome.session_outcome.header(index);
             if signed_session_outcome.signatures.len() == threshold
                 && signed_session_outcome
@@ -1172,7 +1172,9 @@ impl ConsensusEngine {
             {
                 Ok(signed_session_outcome)
             } else {
-                Err(ServerError::InvalidResponse(anyhow!("Invalid signatures")))
+                Err(ServerError::InvalidResponse(
+                    "Invalid signatures".to_string(),
+                ))
             }
         };
 

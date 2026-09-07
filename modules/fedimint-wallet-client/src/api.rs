@@ -1,7 +1,8 @@
 use anyhow::anyhow;
 use bitcoin::{Address, Amount};
 use fedimint_api_client::api::{
-    FederationApiExt, FederationError, FederationResult, IModuleFederationApi, ServerResult,
+    FederationApiExt, FederationError, FederationGeneralError, FederationResult,
+    IModuleFederationApi, ServerResult,
 };
 use fedimint_api_client::query::{FilterMapThreshold, ThresholdAgreement};
 use fedimint_core::envs::BitcoinRpcConfig;
@@ -117,7 +118,9 @@ where
             return Err(FederationError::general(
                 BLOCK_COUNT_LOCAL_ENDPOINT.to_string(),
                 ApiRequestErased::default(),
-                anyhow!("No valid block counts received"),
+                FederationGeneralError::ThresholdFailed {
+                    message: "No valid block counts received".to_string(),
+                },
             ));
         }
 
@@ -165,12 +168,14 @@ where
         Err(FederationError::general(
             PEG_OUT_FEES_ENDPOINT.to_string(),
             params,
-            anyhow!(
-                "Guardians disagree on peg-out fees ({detail}). The quote is consensus \
-                 state, so a guardian returning a different value has diverged - most \
-                 often because its Bitcoin backend is lagging. The same rate validates \
-                 the peg-out, so it cannot be accepted until the federation agrees."
-            ),
+            FederationGeneralError::ThresholdFailed {
+                message: format!(
+                    "Guardians disagree on peg-out fees ({detail}). The quote is consensus \
+                     state, so a guardian returning a different value has diverged - most \
+                     often because its Bitcoin backend is lagging. The same rate validates \
+                     the peg-out, so it cannot be accepted until the federation agrees."
+                ),
+            },
         ))
     }
 

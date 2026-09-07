@@ -20,7 +20,6 @@ name = "fedimint_bitcoind"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true, optional = true }
@@ -28,6 +27,7 @@ esplora-client = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-metrics = { workspace = true }
+thiserror = { workspace = true }
 tracing = { workspace = true }
 
 [lints]

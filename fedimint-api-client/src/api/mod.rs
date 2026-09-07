@@ -8,9 +8,11 @@ use std::pin::Pin;
 use std::result;
 use std::sync::Arc;
 
-use anyhow::{Context, anyhow};
+use anyhow::anyhow;
 use bitcoin::secp256k1;
-pub use error::{FederationError, OutputOutcomeError};
+pub use error::{
+    ClientConfigDownloadError, FederationError, FederationGeneralError, OutputOutcomeError,
+};
 pub use fedimint_connectors::ServerResult;
 pub use fedimint_connectors::error::ServerError;
 use fedimint_connectors::{
@@ -148,7 +150,7 @@ pub trait FederationApiExt: IRawFederationApi {
             .await
             .and_then(|v| {
                 serde_json::from_value(v)
-                    .map_err(|e| ServerError::ResponseDeserialization(e.into()))
+                    .map_err(|e| ServerError::ResponseDeserialization(Box::new(e)))
             })
     }
 
@@ -165,7 +167,7 @@ pub trait FederationApiExt: IRawFederationApi {
             .await
             .and_then(|v| {
                 serde_json::from_value(v)
-                    .map_err(|e| ServerError::ResponseDeserialization(e.into()))
+                    .map_err(|e| ServerError::ResponseDeserialization(Box::new(e)))
             })
             .map_err(|e| error::FederationError::new_one_peer(peer_id, method, params, e))
     }
@@ -391,7 +393,7 @@ pub trait FederationApiExt: IRawFederationApi {
             return Err(FederationError::general(
                 method,
                 params,
-                anyhow::format_err!("Admin peer_id not set"),
+                FederationGeneralError::AdminPeerIdNotSet,
             ));
         };
 
@@ -411,7 +413,7 @@ pub trait FederationApiExt: IRawFederationApi {
             return Err(FederationError::general(
                 method,
                 params,
-                anyhow::format_err!("Admin peer_id not set"),
+                FederationGeneralError::AdminPeerIdNotSet,
             ));
         };
 
@@ -447,28 +449,26 @@ impl DynGlobalApi {
         connectors: ConnectorRegistry,
         peers: BTreeMap<PeerId, SafeUrl>,
         api_secret: Option<&str>,
-    ) -> anyhow::Result<Self> {
-        Ok(GlobalFederationApiWithCache::new(FederationApi::new(
-            connectors, peers, None, api_secret,
-        ))
-        .into())
+    ) -> Self {
+        GlobalFederationApiWithCache::new(FederationApi::new(connectors, peers, None, api_secret))
+            .into()
     }
     pub fn new_admin(
         connectors: ConnectorRegistry,
         peer: PeerId,
         url: SafeUrl,
         api_secret: Option<&str>,
-    ) -> anyhow::Result<DynGlobalApi> {
-        Ok(GlobalFederationApiWithCache::new(FederationApi::new(
+    ) -> DynGlobalApi {
+        GlobalFederationApiWithCache::new(FederationApi::new(
             connectors,
             [(peer, url)].into(),
             Some(peer),
             api_secret,
         ))
-        .into())
+        .into()
     }
 
-    pub fn new_admin_setup(connectors: ConnectorRegistry, url: SafeUrl) -> anyhow::Result<Self> {
+    pub fn new_admin_setup(connectors: ConnectorRegistry, url: SafeUrl) -> Self {
         // PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
         Self::new_admin(
@@ -493,7 +493,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         &self,
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
-    ) -> anyhow::Result<SessionOutcome>;
+    ) -> FederationResult<SessionOutcome>;
 
     async fn get_session_status(
         &self,
@@ -501,7 +501,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         decoders: &ModuleDecoderRegistry,
         core_api_version: ApiVersion,
         broadcast_public_keys: Option<&BTreeMap<PeerId, secp256k1::PublicKey>>,
-    ) -> anyhow::Result<SessionStatus>;
+    ) -> FederationResult<SessionStatus>;
 
     async fn session_count(&self) -> FederationResult<u64>;
 
@@ -618,18 +618,18 @@ pub fn deserialize_outcome<R>(
 where
     R: OutputOutcome + MaybeSend,
 {
-    let dyn_outcome = outcome
-        .try_into_inner_known_module_kind(module_decoder)
-        .map_err(|e| OutputOutcomeError::ResponseDeserialization(e.into()))?;
+    let dyn_outcome = outcome.try_into_inner_known_module_kind(module_decoder)?;
 
-    let source_instance = dyn_outcome.module_instance_id();
+    let module_instance_id = dyn_outcome.module_instance_id();
 
-    dyn_outcome.as_any().downcast_ref().cloned().ok_or_else(|| {
-        let target_type = std::any::type_name::<R>();
-        OutputOutcomeError::ResponseDeserialization(anyhow!(
-            "Could not downcast output outcome with instance id {source_instance} to {target_type}"
-        ))
-    })
+    dyn_outcome
+        .as_any()
+        .downcast_ref()
+        .cloned()
+        .ok_or(OutputOutcomeError::WrongOutcomeType {
+            module_instance_id,
+            expected_type: std::any::type_name::<R>(),
+        })
 }
 
 /// Federation API client
@@ -703,9 +703,7 @@ impl FederationApi {
             .ok_or_else(|| ServerError::InvalidPeerId { peer_id: peer })?;
         let conn = self
             .get_or_create_connection(url, self.api_secret.as_deref())
-            .await
-            .context("Failed to connect to peer")
-            .map_err(ServerError::Connection)?;
+            .await?;
 
         let method_str = method.to_string();
         let peer_str = peer.to_string();

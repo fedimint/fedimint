@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use anyhow::anyhow;
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1::{SECP256K1, SecretKey};
 use fedimint_api_client::api::ServerError;
@@ -140,9 +139,9 @@ impl GatewayConnection for MockGatewayConnection {
         match invoice {
             LightningInvoice::Bolt11(invoice) => {
                 if *invoice.payment_secret() == PaymentSecret(GATEWAY_CRASH_PAYMENT_SECRET) {
-                    return Err(ServerError::InvalidRequest(anyhow!(
-                        "Gateway crash payment secret"
-                    )));
+                    return Err(ServerError::InvalidRequest(
+                        "Gateway crash payment secret".to_string(),
+                    ));
                 }
 
                 if *invoice.payment_secret() == PaymentSecret(UNPAYABLE_PAYMENT_SECRET) {

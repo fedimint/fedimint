@@ -15,6 +15,7 @@ use fedimint_core::module::{Amounts, ModuleConsensusVersion};
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::WalletInput;
@@ -115,7 +116,10 @@ async fn await_created_btc_transaction_submitted(
     loop {
         match context.rpc.watch_script_history(&script).await {
             Ok(()) => break,
-            Err(e) => warn!("Error while awaiting btc tx submitting: {e}"),
+            Err(e) => warn!(
+                "Error while awaiting btc tx submitting: {}",
+                e.fmt_compact()
+            ),
         }
         sleep(TRANSACTION_STATUS_FETCH_INTERVAL).await;
     }
@@ -226,7 +230,7 @@ async fn await_btc_transaction_confirmed(
             Ok(Some(confirmation_height)) => Some(confirmation_height + 1),
             Ok(None) => None,
             Err(e) => {
-                warn!("Failed to fetch confirmation height: {e:?}");
+                warn!("Failed to fetch confirmation height: {}", e.fmt_compact());
                 sleep(TRANSACTION_STATUS_FETCH_INTERVAL).await;
                 continue;
             }
@@ -255,7 +259,7 @@ async fn await_btc_transaction_confirmed(
         {
             Ok(txout_proof) => txout_proof,
             Err(e) => {
-                warn!("Failed to fetch transaction proof: {e:?}");
+                warn!("Failed to fetch transaction proof: {}", e.fmt_compact());
                 sleep(TRANSACTION_STATUS_FETCH_INTERVAL).await;
                 continue;
             }

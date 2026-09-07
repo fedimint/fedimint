@@ -3,7 +3,7 @@ use std::iter::repeat_n;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result, format_err};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use bitcoin::absolute::LockTime;
 use bitcoin::block::{Header as BlockHeader, Version};
@@ -14,7 +14,7 @@ use bitcoin::merkle_tree::PartialMerkleTree;
 use bitcoin::{
     Address, Block, BlockHash, CompactTarget, Network, OutPoint, ScriptBuf, Transaction, TxOut,
 };
-use fedimint_bitcoind::{BlockchainInfo, IBitcoindRpc};
+use fedimint_bitcoind::{BitcoinRpcError, BlockchainInfo, IBitcoindRpc};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::txoproof::TxOutProof;
@@ -295,7 +295,10 @@ impl BitcoinTest for FakeBitcoinTest {
 
 #[async_trait]
 impl IBitcoindRpc for FakeBitcoinTest {
-    async fn get_tx_block_height(&self, txid: &bitcoin::Txid) -> Result<Option<u64>> {
+    async fn get_tx_block_height(
+        &self,
+        txid: &bitcoin::Txid,
+    ) -> Result<Option<u64>, BitcoinRpcError> {
         for (height, block) in self.inner.read().unwrap().blocks.iter().enumerate() {
             if block.txdata.iter().any(|tx| &tx.compute_txid() == txid) {
                 return Ok(Some(height as u64));
@@ -304,25 +307,27 @@ impl IBitcoindRpc for FakeBitcoinTest {
         Ok(None)
     }
 
-    async fn watch_script_history(&self, _: &bitcoin::ScriptBuf) -> Result<()> {
+    async fn watch_script_history(&self, _: &bitcoin::ScriptBuf) -> Result<(), BitcoinRpcError> {
         Ok(())
     }
 
     async fn get_script_history(
         &self,
         script: &bitcoin::ScriptBuf,
-    ) -> Result<Vec<bitcoin::Transaction>> {
+    ) -> Result<Vec<bitcoin::Transaction>, BitcoinRpcError> {
         let inner = self.inner.read().unwrap();
         Ok(inner.scripts.get(script).cloned().unwrap_or_default())
     }
 
-    async fn get_txout_proof(&self, txid: bitcoin::Txid) -> Result<TxOutProof> {
+    async fn get_txout_proof(&self, txid: bitcoin::Txid) -> Result<TxOutProof, BitcoinRpcError> {
         let inner = self.inner.read().unwrap();
         let proof = inner.proofs.get(&txid);
-        Ok(proof.ok_or(format_err!("No proof stored"))?.clone())
+        Ok(proof
+            .ok_or(BitcoinRpcError::ProofNotFound { txid })?
+            .clone())
     }
 
-    async fn get_info(&self) -> Result<BlockchainInfo> {
+    async fn get_info(&self) -> Result<BlockchainInfo, BitcoinRpcError> {
         let inner = self.inner.read().unwrap();
         let count = inner.blocks.len() as u64;
         let synced = inner.pending.is_empty();

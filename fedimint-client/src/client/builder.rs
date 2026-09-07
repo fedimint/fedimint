@@ -1564,7 +1564,7 @@ impl ClientPreview {
                 .map(|(peer_id, peer_url)| (*peer_id, peer_url.url.clone()))
                 .collect(),
             self.api_secret.as_deref(),
-        )?;
+        );
 
         Client::download_backup_from_federation_static(
             &api,

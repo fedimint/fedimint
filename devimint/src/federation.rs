@@ -364,7 +364,7 @@ impl Federation {
         let mut admin_clients: BTreeMap<PeerId, DynGlobalApi> = BTreeMap::new();
         let mut api_endpoints: BTreeMap<PeerId, _> = BTreeMap::new();
 
-        let connectors = ConnectorRegistry::build_from_testing_env()?.bind().await?;
+        let connectors = ConnectorRegistry::build_from_testing_env().bind().await;
         for peer_id in num_peers.peer_ids() {
             let peer_env_vars = vars::Fedimintd::init(
                 &process_mgr.globals,
@@ -392,7 +392,7 @@ impl Federation {
                 SafeUrl::parse(&peer_env_vars.FM_API_URL)?,
                 // TODO: will need it somewhere
                 // &process_mgr.globals.FM_FORCE_API_SECRETS.get_active(),
-            )?;
+            );
             api_endpoints.insert(peer_id, peer_env_vars.FM_API_URL.clone());
             admin_clients.insert(peer_id, admin_client);
             peer_to_env_vars_map.insert(peer_id.to_usize(), peer_env_vars);

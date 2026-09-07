@@ -75,8 +75,7 @@ async fn http_client_sends_exact_public_scoped_request() {
     });
     let connectors = ConnectorRegistry::build_from_testing_defaults()
         .bind()
-        .await
-        .expect("test connectors build");
+        .await;
     let client = GatewayApi::new(None, connectors);
     let base_url = SafeUrl::parse(&format!("http://{address}/")).expect("valid test URL");
 

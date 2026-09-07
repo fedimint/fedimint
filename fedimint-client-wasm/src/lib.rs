@@ -59,8 +59,7 @@ impl RpcHandler {
         let database = Database::new(cursed_db, Default::default());
         let connectors = fedimint_connectors::ConnectorRegistry::build_from_client_defaults()
             .bind()
-            .await
-            .map_err(|err| JsError::new(&format!("Failed to bind client connectors: {err:#}")))?;
+            .await;
 
         let state = Arc::new(RpcGlobalState::new(connectors, database));
 
