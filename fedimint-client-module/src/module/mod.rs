@@ -126,7 +126,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
 
     async fn invite_code(&self, peer: PeerId) -> Option<InviteCode>;
 
-    fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)>;
+    fn get_internal_payment_markers(&self) -> Result<(PublicKey, u64), bitcoin::secp256k1::Error>;
 
     #[allow(clippy::too_many_arguments)]
     async fn log_event_json(
@@ -629,7 +629,9 @@ where
             .expect("The guardian we requested an invite code for exists")
     }
 
-    pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
+    pub fn get_internal_payment_markers(
+        &self,
+    ) -> Result<(PublicKey, u64), bitcoin::secp256k1::Error> {
         self.client.get().get_internal_payment_markers()
     }
 

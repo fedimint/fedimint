@@ -8,7 +8,9 @@ use fedimint_client_module::oplog::{
     IOperationLog, JsonStringed, OperationLogEntry, OperationOutcome, UpdateStreamOrOutcome,
 };
 use fedimint_core::core::OperationId;
-use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
+use fedimint_core::db::{
+    Database, DatabaseError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
+};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::time::now;
 use fedimint_core::util::{BoxStream, FmtCompact as _};
@@ -212,7 +214,7 @@ impl OperationLog {
         db: &Database,
         operation_id: OperationId,
         outcome: &(impl Serialize + Debug),
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), DatabaseError> {
         let outcome_json =
             JsonStringed(serde_json::to_value(outcome).expect("Outcome is not serializable"));
 
@@ -300,7 +302,8 @@ impl OperationLog {
         if let Err(e) = Self::set_operation_outcome(db, operation_id, outcome).await {
             warn!(
                 target: LOG_CLIENT,
-                "Error setting operation outcome: {e}"
+                err = %e.fmt_compact(),
+                "Error setting operation outcome"
             );
         }
     }

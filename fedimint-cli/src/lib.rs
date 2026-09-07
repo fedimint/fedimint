@@ -1508,10 +1508,7 @@ impl FedimintCli {
 
             Command::Dev(DevCmd::WaitComplete) => {
                 let client = self.client_open(&cli).await?;
-                client
-                    .wait_for_all_active_state_machines()
-                    .await
-                    .map_err_cli_msg("failed to wait for all active state machines")?;
+                client.wait_for_all_active_state_machines().await;
                 Ok(CliOutput::Raw(serde_json::Value::Null))
             }
             Command::Dev(DevCmd::Wait { seconds }) => {

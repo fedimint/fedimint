@@ -72,10 +72,14 @@ pub static AMOUNTS_BUCKETS_SATS: LazyLock<Vec<f64>> = LazyLock::new(|| {
 });
 
 /// Returns all registered metrics encoded in Prometheus text format.
-pub fn get_metrics() -> anyhow::Result<String> {
+///
+/// # Panics
+/// Never, in practice: the Prometheus text encoder only ever emits valid
+/// UTF-8.
+pub fn get_metrics() -> Result<String, prometheus::Error> {
     let metric_families = REGISTRY.gather();
     let mut buffer = Vec::new();
     let encoder = TextEncoder::new();
     encoder.encode(&metric_families, &mut buffer)?;
-    Ok(String::from_utf8(buffer)?)
+    Ok(String::from_utf8(buffer).expect("Prometheus text encoding is valid UTF-8"))
 }

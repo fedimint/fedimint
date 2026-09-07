@@ -283,7 +283,7 @@ async fn send_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
 
         // Settle any pending change from the previous iteration so the quote and
         // the send observe the same inventory.
-        client.wait_for_all_active_state_machines().await?;
+        client.wait_for_all_active_state_machines().await;
 
         let quote = mint.send_fee_quote(Amount::from_sats(1_000)).await?;
         let before = client.get_balance_for_btc().await?;
@@ -295,7 +295,7 @@ async fn send_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
 
         // A send may trigger an internal reissue whose change notes are credited
         // by output state machines; wait for them before reading the balance.
-        client.wait_for_all_active_state_machines().await?;
+        client.wait_for_all_active_state_machines().await;
         let after = client.get_balance_for_btc().await?;
 
         // Value conservation: the wallet loses exactly the sent value plus the fee.
@@ -354,7 +354,7 @@ async fn test_client_recovery(
     root_secret: RootSecret,
 ) -> anyhow::Result<()> {
     // Wait for state machines to complete
-    client.wait_for_all_active_state_machines().await?;
+    client.wait_for_all_active_state_machines().await;
 
     let expected_balance = client.get_balance_for_btc().await?;
 
@@ -387,9 +387,7 @@ async fn test_client_recovery(
 
     // The recovered notes are signed and land in the very client that ran the
     // recovery, without it having to be reopened first.
-    recovering_client
-        .wait_for_all_active_state_machines()
-        .await?;
+    recovering_client.wait_for_all_active_state_machines().await;
 
     let recovered_balance = recovering_client.get_balance_for_btc().await?;
 
@@ -404,7 +402,7 @@ async fn test_client_recovery(
         .open_client_with_db(recovering_client.db().clone(), root_secret)
         .await;
 
-    reopened_client.wait_for_all_active_state_machines().await?;
+    reopened_client.wait_for_all_active_state_machines().await;
 
     let reopened_balance = reopened_client.get_balance_for_btc().await?;
 

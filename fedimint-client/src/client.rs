@@ -12,7 +12,8 @@ use bitcoin::key::rand::thread_rng;
 use bitcoin::secp256k1::{self, PublicKey};
 use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
 use fedimint_api_client::api::{
-    ApiVersionSet, DynGlobalApi, FederationApiExt as _, FederationResult, IGlobalFederationApi,
+    ApiVersionSet, DynGlobalApi, FederationApiExt as _, FederationError, FederationResult,
+    IGlobalFederationApi,
 };
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client_module::module::recovery::RecoveryProgress;
@@ -449,7 +450,7 @@ impl Client {
     ///
     /// This can be used by downstream clients to expose metrics via their own
     /// HTTP server or print them for debugging purposes.
-    pub fn get_metrics() -> anyhow::Result<String> {
+    pub fn get_metrics() -> Result<String, fedimint_metrics::prometheus::Error> {
         fedimint_metrics::get_metrics()
     }
 
@@ -601,7 +602,7 @@ impl Client {
     /// This is cached in the database after the first successful fetch.
     /// The chain ID uniquely identifies which bitcoin network the federation
     /// operates on (mainnet, testnet, signet, regtest).
-    pub async fn chain_id(&self) -> anyhow::Result<ChainId> {
+    pub async fn chain_id(&self) -> Result<ChainId, FederationError> {
         // Check cache first
         if let Some(chain_id) = self
             .db
@@ -682,7 +683,9 @@ impl Client {
         (in_amounts, out_amounts)
     }
 
-    pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
+    pub fn get_internal_payment_markers(
+        &self,
+    ) -> Result<(PublicKey, u64), bitcoin::secp256k1::Error> {
         Ok((self.federation_id().to_fake_ln_pub_key(&self.secp_ctx)?, 0))
     }
 
@@ -2091,14 +2094,13 @@ impl Client {
         .await
     }
 
-    pub async fn wait_for_all_active_state_machines(&self) -> anyhow::Result<()> {
+    pub async fn wait_for_all_active_state_machines(&self) {
         loop {
             if self.executor.get_active_states().await.is_empty() {
                 break;
             }
             sleep(Duration::from_millis(100)).await;
         }
-        Ok(())
     }
 
     /// Set the client [`Metadata`]
@@ -2968,7 +2970,7 @@ impl ClientContextIface for Client {
         Client::invite_code(self, peer).await
     }
 
-    fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
+    fn get_internal_payment_markers(&self) -> Result<(PublicKey, u64), bitcoin::secp256k1::Error> {
         Client::get_internal_payment_markers(self)
     }
 

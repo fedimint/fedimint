@@ -346,7 +346,7 @@ impl ClientBuilder {
         preview_prefetch_api_version_set: Option<
             Jit<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
         >,
-        prefetch_chain_id: Option<JitTry<ChainId, anyhow::Error>>,
+        prefetch_chain_id: Option<JitTry<ChainId, FederationError>>,
     ) -> Result<ClientHandle, ClientBuildError> {
         if Client::is_initialized(&db_no_decoders).await {
             return Err(ClientBuildError::DatabaseAlreadyInitialized);
@@ -473,9 +473,8 @@ impl ClientBuilder {
             })
         });
 
-        let prefetch_chain_id = prefetch_api.map(|api| {
-            JitTry::new_try(|| async move { api.chain_id().await.map_err(anyhow::Error::from) })
-        });
+        let prefetch_chain_id =
+            prefetch_api.map(|api| JitTry::new_try(|| async move { api.chain_id().await }));
 
         ClientPreview {
             connectors,
@@ -568,7 +567,7 @@ impl ClientBuilder {
         preview_prefetch_api_version_set: Option<
             Jit<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
         >,
-        prefetch_chain_id: Option<JitTry<ChainId, anyhow::Error>>,
+        prefetch_chain_id: Option<JitTry<ChainId, FederationError>>,
     ) -> Result<ClientHandle, ClientBuildError> {
         let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
         let request_hook = self.request_hook.clone();
@@ -613,7 +612,7 @@ impl ClientBuilder {
         preview_prefetch_api_version_set: Option<
             Jit<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
         >,
-        prefetch_chain_id: Option<JitTry<ChainId, anyhow::Error>>,
+        prefetch_chain_id: Option<JitTry<ChainId, FederationError>>,
     ) -> Result<ClientHandle, ClientBuildError> {
         debug!(
             target: LOG_CLIENT,
@@ -1398,7 +1397,7 @@ pub struct ClientPreview {
     api_secret: Option<String>,
     prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
     preview_prefetch_api_version_set: Option<Jit<BTreeMap<PeerId, SupportedApiVersionsSummary>>>,
-    prefetch_chain_id: Option<JitTry<ChainId, anyhow::Error>>,
+    prefetch_chain_id: Option<JitTry<ChainId, FederationError>>,
 }
 
 impl ClientPreview {

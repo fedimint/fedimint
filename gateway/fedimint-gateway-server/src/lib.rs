@@ -2440,7 +2440,7 @@ impl IAdminGateway for Gateway {
             .await?;
 
         if recover {
-            client.wait_for_all_active_state_machines().await?;
+            client.wait_for_all_active_state_machines().await;
         }
 
         // Instead of using `FederationManager::federation_info`, we manually create
