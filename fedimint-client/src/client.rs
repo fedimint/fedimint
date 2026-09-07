@@ -6,7 +6,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use anyhow::{Context as _, anyhow, bail, format_err};
+use anyhow::{Context as _, anyhow, bail};
 use async_stream::try_stream;
 use bitcoin::key::Secp256k1;
 use bitcoin::key::rand::thread_rng;
@@ -90,7 +90,9 @@ use crate::db::{
     PeerLastApiVersionsSummaryKey, PendingClientConfigKey, TransactionFeesKey,
     apply_migrations_core_client_dbtx, get_decoded_client_secret, verify_client_db_integrity_dbtx,
 };
-use crate::error::{OperationAlreadyExistsError, OperationNotFoundError, TransactionSubmitError};
+use crate::error::{
+    ModuleLookupError, OperationAlreadyExistsError, OperationNotFoundError, TransactionSubmitError,
+};
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
 use crate::oplog::OperationLog;
@@ -1281,17 +1283,22 @@ impl Client {
     /// Returns a reference to a typed module client instance by kind
     pub fn get_first_module<M: ClientModule>(
         &'_ self,
-    ) -> anyhow::Result<ClientModuleInstance<'_, M>> {
+    ) -> Result<ClientModuleInstance<'_, M>, ModuleLookupError> {
         let module_kind = M::kind();
-        let id = self
-            .get_first_instance(&module_kind)
-            .ok_or_else(|| format_err!("No modules found of kind {module_kind}"))?;
+        let id = self.get_first_instance(&module_kind).ok_or_else(|| {
+            ModuleLookupError::NoModuleOfKind {
+                kind: module_kind.clone(),
+            }
+        })?;
         let module: &M = self
             .try_get_module(id)
-            .ok_or_else(|| format_err!("Unknown module instance {id}"))?
+            .ok_or(ModuleLookupError::UnknownInstance { instance_id: id })?
             .as_any()
             .downcast_ref::<M>()
-            .ok_or_else(|| format_err!("Module is not of type {}", std::any::type_name::<M>()))?;
+            .ok_or(ModuleLookupError::WrongModuleType {
+                instance_id: id,
+                expected: std::any::type_name::<M>(),
+            })?;
         let (db, _) = self.db().with_prefix_module_id(id);
         Ok(ClientModuleInstance {
             id,
@@ -1306,27 +1313,32 @@ impl Client {
     /// Unlike [`Self::get_first_module`], this hands out a cloned `Arc` so the
     /// caller can hold the module independently of the `Client`'s lifetime.
     #[cfg(not(target_family = "wasm"))]
-    pub fn get_first_module_arc<M: ClientModule>(&self) -> anyhow::Result<Arc<M>> {
+    pub fn get_first_module_arc<M: ClientModule>(&self) -> Result<Arc<M>, ModuleLookupError> {
         let module_kind = M::kind();
-        let id = self
-            .get_first_instance(&module_kind)
-            .ok_or_else(|| format_err!("No modules found of kind {module_kind}"))?;
+        let id = self.get_first_instance(&module_kind).ok_or_else(|| {
+            ModuleLookupError::NoModuleOfKind {
+                kind: module_kind.clone(),
+            }
+        })?;
         let dyn_module = self
             .modules
             .get(id)
-            .ok_or_else(|| format_err!("Unknown module instance {id}"))?;
+            .ok_or(ModuleLookupError::UnknownInstance { instance_id: id })?;
         dyn_module
             .as_any_arc()
             .downcast::<M>()
-            .map_err(|_| format_err!("Module is not of type {}", std::any::type_name::<M>()))
+            .map_err(|_| ModuleLookupError::WrongModuleType {
+                instance_id: id,
+                expected: std::any::type_name::<M>(),
+            })
     }
 
     pub fn get_module_client_dyn(
         &self,
         instance_id: ModuleInstanceId,
-    ) -> anyhow::Result<&maybe_add_send_sync!(dyn IClientModule)> {
+    ) -> Result<&maybe_add_send_sync!(dyn IClientModule), ModuleLookupError> {
         self.try_get_module(instance_id)
-            .ok_or(anyhow!("Unknown module instance {}", instance_id))
+            .ok_or(ModuleLookupError::UnknownInstance { instance_id })
     }
 
     pub fn db(&self) -> &Database {
@@ -1388,14 +1400,17 @@ impl Client {
     #[doc(hidden)]
     /// Like [`Self::get_balance`] but returns an error if primary module is not
     /// available
-    pub async fn get_balance_for_btc(&self) -> anyhow::Result<Amount> {
+    pub async fn get_balance_for_btc(&self) -> Result<Amount, ModuleLookupError> {
         self.get_balance_for_unit(AmountUnit::BITCOIN).await
     }
 
-    pub async fn get_balance_for_unit(&self, unit: AmountUnit) -> anyhow::Result<Amount> {
+    pub async fn get_balance_for_unit(
+        &self,
+        unit: AmountUnit,
+    ) -> Result<Amount, ModuleLookupError> {
         let (id, module) = self
             .primary_module_for_unit(unit)
-            .ok_or_else(|| anyhow!("Primary module not available"))?;
+            .ok_or(ModuleLookupError::NoPrimaryModule { unit })?;
         Ok(module
             .get_balance(id, &mut self.db().begin_transaction_nc().await, unit)
             .await)
@@ -2915,7 +2930,7 @@ impl ClientContextIface for Client {
         Client::fee_quote(self, operation_id, request).await
     }
 
-    async fn get_balance_for_unit(&self, unit: AmountUnit) -> anyhow::Result<Amount> {
+    async fn get_balance_for_unit(&self, unit: AmountUnit) -> Result<Amount, ModuleLookupError> {
         Client::get_balance_for_unit(self, unit).await
     }
 

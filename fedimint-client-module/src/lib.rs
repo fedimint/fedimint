@@ -42,7 +42,7 @@ use transaction::{
 };
 
 pub use crate::error::{
-    OperationAlreadyExistsError, OperationLookupError, OperationNotFoundError,
+    ModuleLookupError, OperationAlreadyExistsError, OperationLookupError, OperationNotFoundError,
     TransactionSubmitError,
 };
 pub use crate::module::{ClientModule, StateGenerator};

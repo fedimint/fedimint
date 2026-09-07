@@ -912,3 +912,42 @@ async fn quoting_a_fee_without_a_primary_module_is_typed() {
         "{err:?}"
     );
 }
+
+#[tokio::test]
+async fn an_unknown_module_instance_is_reported_as_such() {
+    use fedimint_client_module::error::ModuleLookupError;
+
+    let client = client_for_lookup_test().await;
+
+    let err = client
+        .get_module_client_dyn(7)
+        .expect_err("A client without modules has no instance 7");
+
+    assert!(
+        matches!(err, ModuleLookupError::UnknownInstance { instance_id: 7 }),
+        "{err:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_balance_without_a_primary_module_is_reported_as_such() {
+    use fedimint_client_module::error::ModuleLookupError;
+    use fedimint_core::module::AmountUnit;
+
+    let client = client_for_lookup_test().await;
+
+    let err = client
+        .get_balance_for_unit(AmountUnit::BITCOIN)
+        .await
+        .expect_err("A client without a primary module has no balance");
+
+    assert!(
+        matches!(
+            err,
+            ModuleLookupError::NoPrimaryModule {
+                unit: AmountUnit::BITCOIN
+            }
+        ),
+        "{err:?}"
+    );
+}

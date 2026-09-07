@@ -5,7 +5,7 @@
 //! sides; they live here rather than in `fedimint-client`, which the modules do
 //! not depend on.
 
-use fedimint_core::core::{ModuleKind, OperationId};
+use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::DatabaseError;
 use fedimint_core::module::AmountUnit;
 use thiserror::Error;
@@ -95,4 +95,47 @@ pub enum TransactionSubmitError {
     /// The transaction's state machines could not be registered.
     #[error("Failed to add the transaction's state machines")]
     StateMachines(#[from] AddStateMachinesError),
+}
+
+/// A failure to find a module able to serve a request.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ModuleLookupError {
+    /// The client was not built with a module of this kind, or the federation
+    /// does not offer one.
+    #[error("No module of kind {kind} found")]
+    NoModuleOfKind {
+        /// The kind that was asked for.
+        kind: ModuleKind,
+    },
+
+    /// The client has no module with this instance id.
+    #[error("Unknown module instance {instance_id}")]
+    UnknownInstance {
+        /// The instance id that was asked for.
+        instance_id: ModuleInstanceId,
+    },
+
+    /// The module instance exists, but is not of the requested type.
+    #[error("Module instance {instance_id} is not of type {expected}")]
+    WrongModuleType {
+        /// The instance that was asked for.
+        instance_id: ModuleInstanceId,
+        /// The Rust type the caller asked the instance to be.
+        expected: &'static str,
+    },
+
+    /// No primary module can hold funds of this unit.
+    #[error("No primary module for unit {unit:?}")]
+    NoPrimaryModule {
+        /// The unit that has no primary module.
+        unit: AmountUnit,
+    },
+}
+
+#[cfg(feature = "uniffi")]
+impl From<ModuleLookupError> for fedimint_core::util::ffi::UniffiError {
+    fn from(e: ModuleLookupError) -> Self {
+        Self::General(e.to_string())
+    }
 }

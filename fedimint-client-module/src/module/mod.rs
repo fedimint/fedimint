@@ -35,7 +35,7 @@ use tracing::warn;
 
 use self::init::ClientModuleInit;
 use crate::error::{
-    OperationAlreadyExistsError, OperationLookupError, OperationNotFoundError,
+    ModuleLookupError, OperationAlreadyExistsError, OperationLookupError, OperationNotFoundError,
     TransactionSubmitError,
 };
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
@@ -101,7 +101,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
 
     /// The client's balance for `unit`, held by the primary module. See
     /// `Client::get_balance_for_unit`.
-    async fn get_balance_for_unit(&self, unit: AmountUnit) -> anyhow::Result<Amount>;
+    async fn get_balance_for_unit(&self, unit: AmountUnit) -> Result<Amount, ModuleLookupError>;
 
     async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates;
 
@@ -445,7 +445,7 @@ where
 
     /// The client's Bitcoin balance, held by the primary module. See
     /// `Client::get_balance_for_btc`.
-    pub async fn get_balance_for_btc(&self) -> anyhow::Result<Amount> {
+    pub async fn get_balance_for_btc(&self) -> Result<Amount, ModuleLookupError> {
         self.client
             .get()
             .get_balance_for_unit(AmountUnit::BITCOIN)
