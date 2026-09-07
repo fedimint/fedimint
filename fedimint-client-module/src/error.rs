@@ -162,3 +162,12 @@ impl From<ModuleLookupError> for fedimint_core::util::ffi::UniffiError {
         Self::General(e.to_string())
     }
 }
+
+/// The client and the federation's peers share no core API version.
+///
+/// Module version mismatches are not an error: a module whose versions do not
+/// line up is left out of the negotiated set and stays unusable until one side
+/// is upgraded.
+#[derive(Debug, Error)]
+#[error("Could not find a common core API version")]
+pub struct ApiVersionDiscoveryError;

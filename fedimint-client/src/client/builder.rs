@@ -343,7 +343,7 @@ impl ClientBuilder {
         init_mode: InitMode,
         preview_prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
         preview_prefetch_api_version_set: Option<
-            JitTry<BTreeMap<PeerId, SupportedApiVersionsSummary>, anyhow::Error>,
+            Jit<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
         >,
         prefetch_chain_id: Option<JitTry<ChainId, anyhow::Error>>,
     ) -> Result<ClientHandle, ClientBuildError> {
@@ -465,7 +465,7 @@ impl ClientBuilder {
         prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
     ) -> ClientPreview {
         let preview_prefetch_api_version_set = prefetch_api.as_ref().map(|api| {
-            JitTry::new_try({
+            Jit::new({
                 let config = config.clone();
                 let api = api.clone();
                 || async move { Client::fetch_common_api_versions(&config, &api).await }
@@ -565,7 +565,7 @@ impl ClientBuilder {
         stopped: bool,
         preview_prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
         preview_prefetch_api_version_set: Option<
-            JitTry<BTreeMap<PeerId, SupportedApiVersionsSummary>, anyhow::Error>,
+            Jit<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
         >,
         prefetch_chain_id: Option<JitTry<ChainId, anyhow::Error>>,
     ) -> Result<ClientHandle, ClientBuildError> {
@@ -610,7 +610,7 @@ impl ClientBuilder {
         request_hook: ApiRequestHook,
         preview_prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
         preview_prefetch_api_version_set: Option<
-            JitTry<BTreeMap<PeerId, SupportedApiVersionsSummary>, anyhow::Error>,
+            Jit<BTreeMap<PeerId, SupportedApiVersionsSummary>>,
         >,
         prefetch_chain_id: Option<JitTry<ChainId, anyhow::Error>>,
     ) -> Result<ClientHandle, ClientBuildError> {
@@ -679,20 +679,13 @@ impl ClientBuilder {
         }
 
         if let Some(preview_prefetch_api_version_set) = preview_prefetch_api_version_set {
-            match preview_prefetch_api_version_set.get_try().await {
-                Ok(peer_api_versions) => {
-                    Client::store_prefetched_api_versions(
-                        &db,
-                        &config,
-                        &self.module_inits,
-                        peer_api_versions,
-                    )
-                    .await;
-                }
-                Err(err) => {
-                    debug!(target: LOG_CLIENT, err = %err.fmt_compact(), "Prefetching api version negotiation failed");
-                }
-            }
+            Client::store_prefetched_api_versions(
+                &db,
+                &config,
+                &self.module_inits,
+                preview_prefetch_api_version_set.get().await,
+            )
+            .await;
         }
 
         let common_api_versions = Client::load_and_refresh_common_api_version_static(
@@ -706,7 +699,7 @@ impl ClientBuilder {
         )
         .await
         .inspect_err(|err| {
-            warn!(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), "Failed to discover API version to use.");
+            warn!(target: LOG_CLIENT, err = %err.fmt_compact(), "Failed to discover API version to use.");
         })
         .unwrap_or(ApiVersionSet {
             core: ApiVersion::new(0, 0),
@@ -1403,8 +1396,7 @@ pub struct ClientPreview {
     connectors: ConnectorRegistry,
     api_secret: Option<String>,
     prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
-    preview_prefetch_api_version_set:
-        Option<JitTry<BTreeMap<PeerId, SupportedApiVersionsSummary>, anyhow::Error>>,
+    preview_prefetch_api_version_set: Option<Jit<BTreeMap<PeerId, SupportedApiVersionsSummary>>>,
     prefetch_chain_id: Option<JitTry<ChainId, anyhow::Error>>,
 }
 

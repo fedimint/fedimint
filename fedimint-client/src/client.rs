@@ -90,8 +90,8 @@ use crate::db::{
     apply_migrations_core_client_dbtx, verify_client_db_integrity_dbtx,
 };
 use crate::error::{
-    ClientSecretError, ModuleLookupError, OperationAlreadyExistsError, OperationNotFoundError,
-    RecoveryError, TransactionSubmitError,
+    ApiVersionDiscoveryError, ClientSecretError, ModuleLookupError, OperationAlreadyExistsError,
+    OperationNotFoundError, RecoveryError, TransactionSubmitError,
 };
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
@@ -1620,7 +1620,7 @@ impl Client {
     pub async fn fetch_common_api_versions(
         config: &ClientConfig,
         api: &DynGlobalApi,
-    ) -> anyhow::Result<BTreeMap<PeerId, SupportedApiVersionsSummary>> {
+    ) -> BTreeMap<PeerId, SupportedApiVersionsSummary> {
         debug!(
             target: LOG_CLIENT,
             "Fetching common api versions"
@@ -1628,10 +1628,7 @@ impl Client {
 
         let num_peers = NumPeers::from(config.global.api_endpoints.len());
 
-        let peer_api_version_sets =
-            Self::fetch_peers_api_versions_from_threshold_of_peers(num_peers, api.clone()).await;
-
-        Ok(peer_api_version_sets)
+        Self::fetch_peers_api_versions_from_threshold_of_peers(num_peers, api.clone()).await
     }
 
     /// Write API version set to database cache.
@@ -1684,7 +1681,7 @@ impl Client {
                 debug!(target: LOG_CLIENT, "Calculated and stored common API version set");
             }
             Err(err) => {
-                debug!(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), "Failed to calculate common API versions from prefetched data");
+                debug!(target: LOG_CLIENT, err = %err.fmt_compact(), "Failed to calculate common API versions from prefetched data");
             }
         }
 
@@ -1732,7 +1729,9 @@ impl Client {
         }
     }
 
-    pub async fn load_and_refresh_common_api_version(&self) -> anyhow::Result<ApiVersionSet> {
+    pub async fn load_and_refresh_common_api_version(
+        &self,
+    ) -> Result<ApiVersionSet, ApiVersionDiscoveryError> {
         Self::load_and_refresh_common_api_version_static(
             &self.config().await,
             &self.module_inits,
@@ -1750,7 +1749,7 @@ impl Client {
     /// This queries all peers for their supported API versions and calculates
     /// the common API version set to use. The result is stored in the database
     /// cache for future use.
-    pub async fn refresh_api_versions(&self) -> anyhow::Result<ApiVersionSet> {
+    pub async fn refresh_api_versions(&self) -> Result<ApiVersionSet, ApiVersionDiscoveryError> {
         Self::refresh_common_api_version_static(
             &self.config().await,
             &self.module_inits,
@@ -1776,7 +1775,7 @@ impl Client {
         db: &Database,
         task_group: &TaskGroup,
         client_span: &Span,
-    ) -> anyhow::Result<ApiVersionSet> {
+    ) -> Result<ApiVersionSet, ApiVersionDiscoveryError> {
         if let Some(v) = db
             .begin_transaction_nc()
             .await
@@ -1816,7 +1815,7 @@ impl Client {
                     {
                         warn!(
                             target: LOG_CLIENT,
-                            err = %error.fmt_compact_anyhow(), "Failed to discover common api versions"
+                            err = %error.fmt_compact(), "Failed to discover common api versions"
                         );
                     }
                 },
@@ -1849,7 +1848,7 @@ impl Client {
         task_group: TaskGroup,
         client_span: &Span,
         block_until_ok: bool,
-    ) -> anyhow::Result<ApiVersionSet> {
+    ) -> Result<ApiVersionSet, ApiVersionDiscoveryError> {
         debug!(
             target: LOG_CLIENT,
             "Refreshing common api versions"
@@ -1893,7 +1892,7 @@ impl Client {
                 Err(err) if block_until_ok => {
                     warn!(
                         target: LOG_CLIENT,
-                        err = %err.fmt_compact_anyhow(),
+                        err = %err.fmt_compact(),
                         "Failed to discover API version to use. Retrying..."
                     );
                     continue;

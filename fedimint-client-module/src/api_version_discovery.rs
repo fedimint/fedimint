@@ -1,11 +1,12 @@
 use std::collections::BTreeMap;
 
-use anyhow::format_err;
 use fedimint_api_client::api::ApiVersionSet;
 use fedimint_core::PeerId;
 use fedimint_core::module::{
     ApiVersion, SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
+
+use crate::error::ApiVersionDiscoveryError;
 
 pub fn discover_common_core_api_version(
     client_versions: &SupportedCoreApiVersions,
@@ -218,7 +219,7 @@ fn discover_common_module_api_version(
 pub fn discover_common_api_versions_set(
     client_versions: &SupportedApiVersionsSummary,
     peer_versions: &BTreeMap<PeerId, SupportedApiVersionsSummary>,
-) -> anyhow::Result<ApiVersionSet> {
+) -> Result<ApiVersionSet, ApiVersionDiscoveryError> {
     Ok(ApiVersionSet {
         core: discover_common_core_api_version(
             &client_versions.core,
@@ -229,7 +230,7 @@ pub fn discover_common_api_versions_set(
                 })
                 .collect(),
         )
-        .ok_or_else(|| format_err!("Could not find a common core API version"))?,
+        .ok_or(ApiVersionDiscoveryError)?,
         modules: client_versions
             .modules
             .iter()
