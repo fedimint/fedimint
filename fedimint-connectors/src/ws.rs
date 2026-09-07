@@ -93,9 +93,10 @@ impl WebsocketConnector {
                 url.set_password(Some(&api_secret))
                     .map_err(|_| ServerError::InvalidEndpoint("Invalid secret".into()))?;
 
-                let client = client.build(url.as_str()).await.map_err(|err| {
-                    ServerError::InternalClientError(err.fmt_compact().to_string())
-                })?;
+                let client = client
+                    .build(url.as_str())
+                    .await
+                    .map_err(jsonrpc_error_to_peer_error)?;
 
                 return Ok(Arc::new(client));
             }
@@ -104,7 +105,7 @@ impl WebsocketConnector {
         let client = client
             .build(url.as_str())
             .await
-            .map_err(|err| ServerError::InternalClientError(err.fmt_compact().to_string()))?;
+            .map_err(jsonrpc_error_to_peer_error)?;
 
         Ok(Arc::new(client))
     }
