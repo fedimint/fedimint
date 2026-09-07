@@ -864,6 +864,10 @@ pub enum EventHandlerError<E> {
     Tracker(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
 
+/// Feeds every entry of the event log, past and future, to `call_fn`.
+///
+/// `tracker` remembers how far the log has been read so a restart resumes where
+/// it left off; the loop stops when `call_fn` fails or the client shuts down.
 pub async fn handle_events<F, R, E>(
     db: Database,
     mut tracker: DynEventLogTracker,
@@ -910,6 +914,8 @@ where
     }
 }
 
+/// Like [`handle_events`], for the trimable part of the log: entries are handed
+/// to `call_fn` and the tracker's position drives when they can be trimmed.
 pub async fn handle_trimable_events<F, R, E>(
     db: Database,
     mut tracker: DynEventLogTrimableTracker,

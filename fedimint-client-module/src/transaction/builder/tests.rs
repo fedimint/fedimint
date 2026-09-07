@@ -331,6 +331,7 @@ async fn max_affordable_treats_quote_error_as_ceiling() {
         |invoice| invoice,
         move |contract: Amount| async move {
             if contract.msats > cap {
+                // The quote error is never inspected, so any type will do.
                 Err("insufficient funds")
             } else {
                 Ok(federation_fee(Amount::ZERO))

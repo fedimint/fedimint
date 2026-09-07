@@ -99,7 +99,7 @@ pub enum TransactionSubmitError {
 
     /// No primary module can hold funds of this unit, so the transaction
     /// cannot be balanced.
-    #[error("No primary module for unit {unit:?}")]
+    #[error("No primary module for unit {unit}")]
     NoPrimaryModule {
         /// The unit that could not be balanced.
         unit: AmountUnit,
@@ -150,7 +150,7 @@ pub enum ModuleLookupError {
     },
 
     /// No primary module can hold funds of this unit.
-    #[error("No primary module for unit {unit:?}")]
+    #[error("No primary module for unit {unit}")]
     NoPrimaryModule {
         /// The unit that has no primary module.
         unit: AmountUnit,
@@ -177,8 +177,8 @@ pub struct ApiVersionDiscoveryError;
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum MetaFetchError {
-    /// The meta override url could not be read from the client config.
-    #[error("Failed to read the meta override url from the client config")]
+    /// The meta override URL could not be read from the client config.
+    #[error("Failed to read the meta override URL from the client config")]
     Config(#[from] ModuleConfigError),
 
     /// The meta override source could not be reached, or did not answer with

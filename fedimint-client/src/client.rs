@@ -306,6 +306,8 @@ pub struct GetBalanceChangesRequest {
 impl Client {
     /// Initialize a client builder that can be configured to create a new
     /// client.
+    // Nothing here awaits; the function stays `async` so existing call sites
+    // keep their `.await`.
     pub async fn builder() -> ClientBuilder {
         ClientBuilder::new()
     }
