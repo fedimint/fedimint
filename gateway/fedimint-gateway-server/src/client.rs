@@ -79,10 +79,7 @@ impl GatewayClientBuilder {
             gateway: gateway.clone(),
         });
 
-        let mut client_builder = Client::builder()
-            .await
-            .map_err(AdminGatewayError::ClientCreationError)?
-            .with_iroh_enable_dht(true);
+        let mut client_builder = Client::builder().await.with_iroh_enable_dht(true);
         client_builder.with_module_inits(registry);
         Ok(client_builder)
     }
@@ -105,11 +102,12 @@ impl GatewayClientBuilder {
         );
         let client = client_builder
             .preview(self.connectors.clone(), &config.invite_code)
-            .await?
+            .await
+            .map_err(|err| AdminGatewayError::ClientCreationError(err.into()))?
             .recover(db, root_secret, None)
             .await
             .map(Arc::new)
-            .map_err(AdminGatewayError::ClientCreationError)?;
+            .map_err(|err| AdminGatewayError::ClientCreationError(err.into()))?;
         client
             .wait_for_all_recoveries()
             .await
@@ -167,12 +165,13 @@ impl GatewayClientBuilder {
         } else {
             client_builder
                 .preview(self.connectors.clone(), &invite_code)
-                .await?
+                .await
+                .map_err(|err| AdminGatewayError::ClientCreationError(err.into()))?
                 .join(db, root_secret)
                 .await
         }
         .map(Arc::new)
-        .map_err(AdminGatewayError::ClientCreationError)
+        .map_err(|err| AdminGatewayError::ClientCreationError(err.into()))
     }
 
     /// Verifies that the saved `ClientConfig` contains the expected

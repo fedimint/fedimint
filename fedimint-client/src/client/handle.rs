@@ -2,7 +2,6 @@ use std::ops;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::format_err;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::runtime;
 use fedimint_core::util::FmtCompact as _;
@@ -13,6 +12,7 @@ use tracing::{Instrument as _, debug, error, trace, warn};
 
 use super::Client;
 use crate::ClientBuilder;
+use crate::error::ClientBuildError;
 
 /// User handle to the [`Client`] instance
 ///
@@ -107,17 +107,17 @@ impl ClientHandle {
 
     /// Restart the client
     ///
-    /// Returns false if there are other clones of [`ClientHandle`], or starting
-    /// the client again failed for some reason.
+    /// Fails if there are other clones of [`ClientHandle`], or if starting the
+    /// client again failed for some reason.
     ///
     /// Notably it will re-use the original [`fedimint_core::db::Database`]
     /// handle, and not attempt to open it again.
-    pub async fn restart(self) -> anyhow::Result<ClientHandle> {
+    pub async fn restart(self) -> Result<ClientHandle, ClientBuildError> {
         let (builder, config, api_secret, root_secret, db, endpoints) = {
             let client = self
                 .inner
                 .as_ref()
-                .ok_or_else(|| format_err!("Already stopped"))?;
+                .ok_or(ClientBuildError::AlreadyStopped)?;
             let builder = ClientBuilder::from_existing(client);
             let config = client.config().await;
             let api_secret = client.api_secret.clone();

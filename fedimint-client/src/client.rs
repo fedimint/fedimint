@@ -39,7 +39,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::{DynInput, DynOutput, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseRecord, DatabaseTransaction,
+    AutocommitError, Database, DatabaseRecord, DatabaseTransaction, DbMigrationError,
     IDatabaseTransactionOpsCore as _, IDatabaseTransactionOpsCoreTyped as _, NonCommittable,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -305,8 +305,8 @@ pub struct GetBalanceChangesRequest {
 impl Client {
     /// Initialize a client builder that can be configured to create a new
     /// client.
-    pub async fn builder() -> anyhow::Result<ClientBuilder> {
-        Ok(ClientBuilder::new())
+    pub async fn builder() -> ClientBuilder {
+        ClientBuilder::new()
     }
 
     pub fn api(&self) -> &(dyn IGlobalFederationApi + 'static) {
@@ -2812,7 +2812,7 @@ impl Client {
 
     pub(crate) async fn run_core_migrations(
         db_no_decoders: &Database,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), DbMigrationError> {
         let mut dbtx = db_no_decoders.begin_transaction().await;
         apply_migrations_core_client_dbtx(&mut dbtx.to_ref_nc(), "fedimint-client".to_string())
             .await?;

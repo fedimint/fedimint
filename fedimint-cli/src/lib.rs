@@ -858,7 +858,6 @@ impl FedimintCli {
     async fn make_client_builder(&self, cli: &Opts) -> CliResult<(ClientBuilder, Database)> {
         let mut client_builder = Client::builder()
             .await
-            .map_err_cli()?
             .with_iroh_enable_dht(cli.iroh_enable_dht());
         client_builder.with_module_inits(self.module_inits.clone());
 

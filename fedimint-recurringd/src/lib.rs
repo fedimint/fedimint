@@ -74,7 +74,7 @@ impl RecurringInvoiceServer {
         let mut gateway_cache = HashMap::<FederationId, watch::Receiver<Vec<CachedGateway>>>::new();
 
         for (federation_id, db) in load_federation_client_databases(&db).await {
-            let mut client_builder = Client::builder().await?;
+            let mut client_builder = Client::builder().await;
             client_builder.with_meta_service(recurringd_meta_service());
             client_builder.with_module(LightningClientInit::default());
             client_builder.with_module(MintClientInit);
@@ -161,9 +161,7 @@ impl RecurringInvoiceServer {
         client_db: Database,
         invite_code: &InviteCode,
     ) -> Result<ClientHandleArc, RecurringPaymentError> {
-        let mut client_builder = Client::builder()
-            .await
-            .map_err(RecurringPaymentError::JoiningFederationFailed)?;
+        let mut client_builder = Client::builder().await;
 
         client_builder.with_meta_service(recurringd_meta_service());
         client_builder.with_module(LightningClientInit::default());
@@ -171,13 +169,18 @@ impl RecurringInvoiceServer {
 
         let client = client_builder
             .preview(connectors, invite_code)
-            .await?
+            .await
+            .map_err(|err| {
+                RecurringPaymentError::JoiningFederationFailed(anyhow!("{}", err.fmt_compact()))
+            })?
             .join(
                 client_db,
                 fedimint_client::RootSecret::StandardDoubleDerive(Self::default_secret()),
             )
             .await
-            .map_err(RecurringPaymentError::JoiningFederationFailed)?;
+            .map_err(|err| {
+                RecurringPaymentError::JoiningFederationFailed(anyhow!("{}", err.fmt_compact()))
+            })?;
         Ok(Arc::new(client))
     }
 

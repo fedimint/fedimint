@@ -3,13 +3,15 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context as _, bail, ensure};
+use anyhow::bail;
 use bitcoin::key::Secp256k1;
 use fedimint_api_client::api::global_api::with_cache::GlobalFederationApiWithCacheExt as _;
 use fedimint_api_client::api::global_api::with_request_hook::{
     ApiRequestHook, RawFederationApiWithRequestHookExt as _,
 };
-use fedimint_api_client::api::{ApiVersionSet, DynGlobalApi, FederationApi, FederationApiExt as _};
+use fedimint_api_client::api::{
+    ApiVersionSet, ClientConfigDownloadError, DynGlobalApi, FederationApi, FederationApiExt as _,
+};
 use fedimint_api_client::download_from_invite_code;
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client_module::api::ClientRawFederationApiExt as _;
@@ -62,6 +64,7 @@ use crate::db::{
     ClientModuleRecoveryState, ClientPreRootSecretHashKey, InitMode, InitState,
     PendingClientConfigKey, apply_migrations_client_module_dbtx,
 };
+use crate::error::ClientBuildError;
 use crate::guardian_metadata::run_guardian_metadata_refresh_task;
 use crate::meta::MetaService;
 use crate::module_init::ClientModuleInitRegistry;
@@ -281,7 +284,7 @@ impl ClientBuilder {
         &self,
         db: &Database,
         client_config: &ClientConfig,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ClientBuildError> {
         for (module_id, module_cfg) in &client_config.modules {
             let kind = module_cfg.kind.clone();
             let Some(init) = self.module_inits.get(&kind) else {
@@ -314,9 +317,12 @@ impl ClientBuilder {
         Ok(())
     }
 
-    pub async fn load_existing_config(&self, db: &Database) -> anyhow::Result<ClientConfig> {
+    pub async fn load_existing_config(
+        &self,
+        db: &Database,
+    ) -> Result<ClientConfig, ClientBuildError> {
         let Some(config) = Client::get_config_from_db(db).await else {
-            bail!("Client database not initialized")
+            return Err(ClientBuildError::DatabaseNotInitialized);
         };
 
         Ok(config)
@@ -340,9 +346,9 @@ impl ClientBuilder {
             JitTry<BTreeMap<PeerId, SupportedApiVersionsSummary>, anyhow::Error>,
         >,
         prefetch_chain_id: Option<JitTry<ChainId, anyhow::Error>>,
-    ) -> anyhow::Result<ClientHandle> {
+    ) -> Result<ClientHandle, ClientBuildError> {
         if Client::is_initialized(&db_no_decoders).await {
-            bail!("Client database already initialized")
+            return Err(ClientBuildError::DatabaseAlreadyInitialized);
         }
 
         Client::run_core_migrations(&db_no_decoders).await?;
@@ -397,7 +403,7 @@ impl ClientBuilder {
         self,
         connectors: ConnectorRegistry,
         invite_code: &InviteCode,
-    ) -> anyhow::Result<ClientPreview> {
+    ) -> Result<ClientPreview, ClientConfigDownloadError> {
         let (config, api) = download_from_invite_code(&connectors, invite_code).await?;
 
         let prefetch_api_announcements =
@@ -425,14 +431,15 @@ impl ClientBuilder {
                     })
                 });
 
-        self.preview_inner(
-            connectors,
-            config,
-            invite_code.api_secret(),
-            Some(api),
-            prefetch_api_announcements,
-        )
-        .await
+        Ok(self
+            .preview_inner(
+                connectors,
+                config,
+                invite_code.api_secret(),
+                Some(api),
+                prefetch_api_announcements,
+            )
+            .await)
     }
 
     /// Use [`Self::preview`] instead
@@ -444,7 +451,7 @@ impl ClientBuilder {
         connectors: ConnectorRegistry,
         config: ClientConfig,
         api_secret: Option<String>,
-    ) -> anyhow::Result<ClientPreview> {
+    ) -> ClientPreview {
         self.preview_inner(connectors, config, api_secret, None, None)
             .await
     }
@@ -456,7 +463,7 @@ impl ClientBuilder {
         api_secret: Option<String>,
         prefetch_api: Option<DynGlobalApi>,
         prefetch_api_announcements: Option<Jit<Vec<PeersSignedApiAnnouncements>>>,
-    ) -> anyhow::Result<ClientPreview> {
+    ) -> ClientPreview {
         let preview_prefetch_api_version_set = prefetch_api.as_ref().map(|api| {
             JitTry::new_try({
                 let config = config.clone();
@@ -469,7 +476,7 @@ impl ClientBuilder {
             JitTry::new_try(|| async move { api.chain_id().await.map_err(anyhow::Error::from) })
         });
 
-        Ok(ClientPreview {
+        ClientPreview {
             connectors,
             inner: self,
             config,
@@ -477,7 +484,7 @@ impl ClientBuilder {
             prefetch_api_announcements,
             preview_prefetch_api_version_set,
             prefetch_chain_id,
-        })
+        }
     }
 
     pub async fn open(
@@ -485,14 +492,14 @@ impl ClientBuilder {
         connectors: ConnectorRegistry,
         db_no_decoders: Database,
         pre_root_secret: RootSecret,
-    ) -> anyhow::Result<ClientHandle> {
+    ) -> Result<ClientHandle, ClientBuildError> {
         Client::run_core_migrations(&db_no_decoders).await?;
 
         // Check for pending config and migrate if present
         Self::migrate_pending_config_if_present(&db_no_decoders).await;
 
         let Some(config) = Client::get_config_from_db(&db_no_decoders).await else {
-            bail!("Client database not initialized")
+            return Err(ClientBuildError::DatabaseNotInitialized);
         };
 
         let pre_root_secret = pre_root_secret.to_inner(config.calculate_federation_id());
@@ -504,10 +511,9 @@ impl ClientBuilder {
             .await
         {
             Some(secret_hash) => {
-                ensure!(
-                    pre_root_secret.derive_pre_root_secret_hash() == secret_hash,
-                    "Secret hash does not match. Incorrect secret"
-                );
+                if pre_root_secret.derive_pre_root_secret_hash() != secret_hash {
+                    return Err(ClientBuildError::SecretMismatch);
+                }
             }
             _ => {
                 debug!(target: LOG_CLIENT, "Backfilling secret hash");
@@ -562,7 +568,7 @@ impl ClientBuilder {
             JitTry<BTreeMap<PeerId, SupportedApiVersionsSummary>, anyhow::Error>,
         >,
         prefetch_chain_id: Option<JitTry<ChainId, anyhow::Error>>,
-    ) -> anyhow::Result<ClientHandle> {
+    ) -> Result<ClientHandle, ClientBuildError> {
         let log_event_added_transient_tx = self.log_event_added_transient_tx.clone();
         let request_hook = self.request_hook.clone();
         let client = self
@@ -607,7 +613,7 @@ impl ClientBuilder {
             JitTry<BTreeMap<PeerId, SupportedApiVersionsSummary>, anyhow::Error>,
         >,
         prefetch_chain_id: Option<JitTry<ChainId, anyhow::Error>>,
-    ) -> anyhow::Result<ClientHandle> {
+    ) -> Result<ClientHandle, ClientBuildError> {
         debug!(
             target: LOG_CLIENT,
             version = %fedimint_build_code_version_env!(),
@@ -665,12 +671,11 @@ impl ClientBuilder {
         let notifier = Notifier::new();
 
         if let Some(p) = preview_prefetch_api_announcements {
-            // We want to fail if we were unable to figure out
-            // current addresses of peers in the federation, as it will potentially never
-            // fix itself, so it's better to fail the join explicitly.
+            // Wait for the prefetch so the join starts with the current
+            // addresses of the peers instead of the ones in the invite code.
             let announcements = p.get().await;
 
-            store_api_announcements_updates_from_peers(&db, announcements).await?
+            store_api_announcements_updates_from_peers(&db, announcements).await;
         }
 
         if let Some(preview_prefetch_api_version_set) = preview_prefetch_api_version_set {
@@ -882,8 +887,10 @@ impl ClientBuilder {
                     module_init
                         .prepare_recovery(db.clone(), module_instance_id, api.clone())
                         .await
-                        .with_context(|| {
-                            format!("Failed to prepare recovery of module {module_instance_id}")
+                        .map_err(|err| ClientBuildError::ModuleRecoveryPrepare {
+                            kind: kind.clone(),
+                            instance_id: module_instance_id,
+                            source: err.into(),
                         })?;
                 }
 
@@ -983,7 +990,12 @@ impl ClientBuilder {
                             user_bitcoind_rpc.clone(),
                             self.bitcoind_rpc_no_chain_id_factory.clone(),
                         )
-                        .await?;
+                        .await
+                        .map_err(|err| ClientBuildError::ModuleInit {
+                            kind: kind.clone(),
+                            instance_id: module_instance_id,
+                            source: err.into(),
+                        })?;
 
                     modules.register_module(module_instance_id, kind, module);
                 }
@@ -1463,8 +1475,7 @@ impl ClientPreview {
     ///     // .with_module(LightningClientInit)
     ///     // .with_module(MintClientInit)
     ///     // .with_module(WalletClientInit::default())
-    ///      .expect("Error building client")
-    ///      .preview(connectors, &invite_code).await?;
+    ///     .preview(connectors, &invite_code).await?;
     ///
     /// println!(
     ///     "The federation name is: {}",
@@ -1484,7 +1495,7 @@ impl ClientPreview {
         self,
         db_no_decoders: Database,
         pre_root_secret: RootSecret,
-    ) -> anyhow::Result<ClientHandle> {
+    ) -> Result<ClientHandle, ClientBuildError> {
         let pre_root_secret = pre_root_secret.to_inner(self.config.calculate_federation_id());
 
         let client = self
@@ -1521,7 +1532,7 @@ impl ClientPreview {
         db_no_decoders: Database,
         pre_root_secret: RootSecret,
         backup: Option<ClientBackup>,
-    ) -> anyhow::Result<ClientHandle> {
+    ) -> Result<ClientHandle, ClientBuildError> {
         let pre_root_secret = pre_root_secret.to_inner(self.config.calculate_federation_id());
 
         let client = self

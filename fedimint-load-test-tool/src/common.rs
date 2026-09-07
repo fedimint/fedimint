@@ -154,7 +154,7 @@ pub async fn build_client(
         fedimint_core::db::mem_impl::MemDatabase::new().into()
     };
     let mut client_builder = Client::builder()
-        .await?
+        .await
         .with_iroh_enable_dht(false)
         .with_iroh_enable_dht(false);
     client_builder.with_module(MintClientInit);

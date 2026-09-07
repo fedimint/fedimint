@@ -113,7 +113,7 @@ impl FederationTest {
         admin_creds: Option<AdminCreds>,
     ) -> ClientHandleArc {
         info!(target: LOG_TEST, "Setting new client with config");
-        let mut client_builder = Client::builder().await.expect("Failed to build client");
+        let mut client_builder = Client::builder().await;
         client_builder.with_module_inits(self.client_init.clone());
         if let Some(admin_creds) = admin_creds {
             client_builder.set_admin_creds(admin_creds);
@@ -122,7 +122,6 @@ impl FederationTest {
         client_builder
             .preview_with_existing_config(self.connectors.clone(), client_config, None)
             .await
-            .expect("Preview failed")
             .join(
                 db,
                 RootSecret::StandardDoubleDerive(PlainRootSecretStrategy::to_root_secret(
@@ -146,12 +145,11 @@ impl FederationTest {
             .unwrap();
 
         info!(target: LOG_TEST, "Joining client with existing db");
-        let mut client_builder = Client::builder().await.expect("Failed to build client");
+        let mut client_builder = Client::builder().await;
         client_builder.with_module_inits(self.client_init.clone());
         client_builder
             .preview_with_existing_config(self.connectors.clone(), client_config, None)
             .await
-            .expect("Preview failed")
             .join(db, root_secret)
             .await
             .map(Arc::new)
@@ -172,12 +170,11 @@ impl FederationTest {
             .unwrap();
 
         info!(target: LOG_TEST, "Recovering client with existing db");
-        let mut client_builder = Client::builder().await.expect("Failed to build client");
+        let mut client_builder = Client::builder().await;
         client_builder.with_module_inits(self.client_init.clone());
         client_builder
             .preview_with_existing_config(self.connectors.clone(), client_config, None)
             .await
-            .expect("Preview failed")
             .recover(db, root_secret, None)
             .await
             .map(Arc::new)
@@ -191,7 +188,7 @@ impl FederationTest {
         root_secret: RootSecret,
     ) -> ClientHandleArc {
         info!(target: LOG_TEST, "Opening client with existing db");
-        let mut client_builder = Client::builder().await.expect("Failed to build client");
+        let mut client_builder = Client::builder().await;
         client_builder.with_module_inits(self.client_init.clone());
         client_builder
             .open(self.connectors.clone(), db, root_secret)
