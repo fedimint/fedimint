@@ -197,10 +197,14 @@ impl OutputOutcomeError {
             OutputOutcomeError::Rejected(_) | OutputOutcomeError::Timeout(_) => false,
         };
 
-        trace!(target: LOG_CLIENT_NET_API, error = %self, "OutputOutcomeError");
+        trace!(target: LOG_CLIENT_NET_API, error = %self.fmt_compact(), "OutputOutcomeError");
 
         if important {
-            warn!(target: LOG_CLIENT_NET_API, error = %self, "Uncommon OutputOutcomeError");
+            warn!(
+                target: LOG_CLIENT_NET_API,
+                error = %self.fmt_compact(),
+                "Uncommon OutputOutcomeError"
+            );
         }
     }
 
