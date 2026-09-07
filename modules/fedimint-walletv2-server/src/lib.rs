@@ -464,12 +464,13 @@ impl ServerModule for Wallet {
 
             items.push(WalletConsensusItem::BlockCount(block_count_vote));
 
+            // `None` retracts our vote while the backend cannot estimate
+            // fees yet, e.g. while it is still syncing.
             let feerate_vote = status
                 .fee_rate
-                .sats_per_kvb
-                .max(MIN_FEERATE_VOTE_SATS_PER_KVB);
+                .map(|fee_rate| fee_rate.sats_per_kvb.max(MIN_FEERATE_VOTE_SATS_PER_KVB));
 
-            items.push(WalletConsensusItem::Feerate(Some(feerate_vote)));
+            items.push(WalletConsensusItem::Feerate(feerate_vote));
         } else {
             // Bitcoin backend not connected, retract fee rate vote
             items.push(WalletConsensusItem::Feerate(None));

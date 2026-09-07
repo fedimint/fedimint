@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Result, ensure};
 use fedimint_core::bitcoin::{Block, BlockHash, Network, Transaction};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::TaskGroup;
@@ -103,9 +103,9 @@ impl ServerBitcoinRpcMonitor {
         let sync_progress = rpc.get_sync_progress().await?;
 
         let fee_rate = if network == Network::Regtest {
-            Feerate { sats_per_kvb: 1000 }
+            Some(Feerate { sats_per_kvb: 1000 })
         } else {
-            rpc.get_feerate().await?.context("Feerate not available")?
+            rpc.get_feerate().await?
         };
 
         Ok(ServerBitcoinRpcStatus {
