@@ -63,6 +63,7 @@ pub fn local_config_gen_params(
                 federation_size: None,
                 network: bitcoin::Network::Regtest,
                 fedimint_version: fedimint_core::version::cargo_pkg_release().to_owned(),
+                descriptor_kind: None,
             };
             (*peer, params)
         })
@@ -81,6 +82,7 @@ pub fn local_config_gen_params(
                 disable_base_fees: !enable_mint_fees,
                 enabled_modules: enabled_modules.clone(),
                 network: bitcoin::Network::Regtest,
+                descriptor_kind: Default::default(),
             };
             Ok((*peer, params))
         })
