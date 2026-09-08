@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicU8;
 
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{
-    DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _, IRawDatabaseExt as _,
+    Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _, IRawDatabaseExt as _,
     NonCommittable,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -15,9 +15,9 @@ use tokio::try_join;
 use tracing::info;
 
 use super::{
-    DBTransactionEventLogExt as _, EventKind, EventLogEntry, EventLogId, EventLogTrimableId,
-    EventLogTrimableIdPrefixAll, TRIMABLE_EVENTLOG_MIN_ID_AGE, TRIMABLE_EVENTLOG_MIN_TS_AGE,
-    handle_events, run_event_log_ordering_task, trim_trimable_log,
+    DBTransactionEventLogExt as _, EventHandlerError, EventKind, EventLogEntry, EventLogId,
+    EventLogTrimableId, EventLogTrimableIdPrefixAll, TRIMABLE_EVENTLOG_MIN_ID_AGE,
+    TRIMABLE_EVENTLOG_MIN_TS_AGE, handle_events, run_event_log_ordering_task, trim_trimable_log,
 };
 use crate::EventLogNonTrimableTracker;
 
@@ -53,15 +53,56 @@ impl EventLogNonTrimableTracker for TestEventLogTracker {
     }
 }
 
+/// Which of [`FailingTracker`]'s methods should fail.
+#[derive(Debug, Clone, Copy)]
+enum FailOn {
+    Load,
+    Store,
+}
+
+/// Like [`TestEventLogTracker`], but the configured method always fails.
+///
+/// Used to verify that a failure while loading or storing the tracked
+/// position surfaces as [`EventHandlerError::Tracker`].
+struct FailingTracker {
+    fail_on: FailOn,
+}
+
+#[apply(async_trait_maybe_send!)]
+impl EventLogNonTrimableTracker for FailingTracker {
+    async fn store(
+        &mut self,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        pos: EventLogId,
+    ) -> anyhow::Result<()> {
+        if matches!(self.fail_on, FailOn::Store) {
+            return Err(anyhow::anyhow!("tracker failed"));
+        }
+        dbtx.insert_entry(&TestEventLogIdKey, &pos).await;
+        Ok(())
+    }
+
+    async fn load(
+        &mut self,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
+    ) -> anyhow::Result<Option<EventLogId>> {
+        if matches!(self.fail_on, FailOn::Load) {
+            return Err(anyhow::anyhow!("tracker failed"));
+        }
+        Ok(dbtx.get_value(&TestEventLogIdKey).await)
+    }
+}
+
 /// The error the test handler returns to stop handling events.
 #[derive(Debug, thiserror::Error)]
 #[error("Time to wrap up")]
 struct WrapUp;
 
-#[test_log::test(tokio::test)]
-async fn sanity_handle_events() {
+/// Spawns the event log ordering task and returns the pieces `handle_events`
+/// and the event-logging code need: the database, the receiver that wakes up
+/// once new events are ordered, and the sender used to request ordering.
+fn spawn_ordering_task(tg: &TaskGroup) -> (Database, watch::Receiver<()>, watch::Sender<()>) {
     let db = MemDatabase::new().into_database();
-    let tg = TaskGroup::new();
 
     let (log_event_added_tx, log_event_added_rx) = watch::channel(());
     let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
@@ -77,9 +118,17 @@ async fn sanity_handle_events() {
         ),
     );
 
+    (db, log_event_added_rx, log_ordering_wakeup_tx)
+}
+
+#[test_log::test(tokio::test)]
+async fn sanity_handle_events() {
+    let tg = TaskGroup::new();
+    let (db, log_event_added_rx, log_ordering_wakeup_tx) = spawn_ordering_task(&tg);
+
     let counter = Arc::new(AtomicU8::new(0));
 
-    let _ = try_join!(
+    let res = try_join!(
         handle_events(
             db.clone(),
             Box::new(TestEventLogTracker),
@@ -124,6 +173,52 @@ async fn sanity_handle_events() {
             Ok(())
         }
     );
+
+    // The handler stops the loop by returning `WrapUp` on the fifth event; make
+    // sure that error actually surfaces as `EventHandlerError::Handler` instead
+    // of being silently dropped.
+    let Err(err) = res else {
+        panic!("expected the handler's error to stop `handle_events`, got {res:?}");
+    };
+    assert!(matches!(err, EventHandlerError::Handler(WrapUp)));
+}
+
+#[test_log::test(tokio::test)]
+async fn handle_events_tracker_failure() {
+    for fail_on in [FailOn::Load, FailOn::Store] {
+        let tg = TaskGroup::new();
+        let (db, log_event_added_rx, log_ordering_wakeup_tx) = spawn_ordering_task(&tg);
+
+        // The `Store` case needs an event to reach the handler (and thus the
+        // tracker's `store`); the `Load` case fails before any event is needed.
+        if matches!(fail_on, FailOn::Store) {
+            let mut dbtx = db.begin_transaction().await;
+            dbtx.log_event_raw(
+                log_ordering_wakeup_tx.clone(),
+                EventKind::from("0"),
+                None,
+                None,
+                vec![],
+                crate::EventPersistence::Persistent,
+            )
+            .await;
+
+            dbtx.commit_tx().await;
+        }
+
+        let res = handle_events(
+            db.clone(),
+            Box::new(FailingTracker { fail_on }),
+            log_event_added_rx,
+            |_dbtx, _event| Box::pin(async { Ok::<(), WrapUp>(()) }),
+        )
+        .await;
+
+        let Err(EventHandlerError::Tracker(source)) = res else {
+            panic!("expected `EventHandlerError::Tracker` for {fail_on:?}, got {res:?}");
+        };
+        assert_eq!(source.to_string(), "tracker failed");
+    }
 }
 
 #[test_log::test(tokio::test)]
