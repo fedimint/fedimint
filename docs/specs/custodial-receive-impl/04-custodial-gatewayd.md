@@ -12,7 +12,7 @@ exactly-once funding via prepare/submit (spec 01), consensus-time observer, cont
 liabilities, unmatched settlements, pruning, metrics, liquidity alerts. **Non-goals for MVP:**
 dual-capable mode wiring inside legacy `gatewayd` (design mode 2 — specced here only as the shared
 registry interface it would need), `custodial_receive_status` endpoint, automated liquidity
-actions beyond pegin prompting, rich liability tooling (§14).
+actions beyond the operator deposit interface, rich liability tooling (§14).
 
 ## 2. Grounding in current code (verified)
 
@@ -41,7 +41,7 @@ actions beyond pegin prompting, rich liability tooling (§14).
 gateway/fedimint-custodial-gatewayd/
   src/lib.rs            // CustodialGateway struct, wiring
   src/bin/main.rs       // binary: config, backend, federations, serve
-  src/api.rs            // axum routes: /routing_info, /create_custodial_bolt11_invoice, /phoenixd_webhook (spec 03 §3.4), (/send_payment)
+  src/api.rs            // axum routes: /routing_info, /create_custodial_bolt11_invoice, /phoenixd_webhook (spec 03 §3.4), /send_payment
   src/db.rs             // record types + key prefixes (below)
   src/receive.rs        // create-invoice handler, lease, validation, quote signing
   src/observer.rs       // CustodialSettlementObserver (hints + ledger polling + reconciliation)
@@ -73,8 +73,18 @@ refuses a config that asks it to (§7.1 mode 1; assert at startup).
 - **`GatewayClientBuilder` is not reusable:** it takes the concrete `Arc<Gateway>`
   (`gateway/fedimint-gateway-server/src/client.rs:65-80`). This crate builds its own client init
   (mnemonic/`RootSecret` derivation, connectors, module registry) following that code as a
-  template. The module set attaches gwv2 + mint (+ core); the LNv1 gateway client module is NOT
-  attached (nothing here serves LNv1).
+  template. The module set attaches gwv2 + mint + wallet (+ core); the LNv1 gateway client module
+  is NOT attached (nothing here serves LNv1). Wallet is required for the MVP replenishment path:
+  expose proposed local operator commands `deposit-address <federation-id>` and
+  `deposit-status <federation-id> <operation-id>` over a permission-restricted local admin socket
+  served by the daemon (no second process opens the live DB, and no public HTTP route). The first
+  calls `WalletClientModule::safe_allocate_deposit_address(())`, returns address + operation id,
+  and errors if the federation does not support safe deposits; no silent expert-only fallback.
+  The second follows `subscribe_deposit(operation_id)` and reports recovery of spendable ecash,
+  not just detection of the Bitcoin transaction. The operator funds the address from an external
+  wallet; wallet/mint SMs persist and recover the deposit after restart. Balance notifications
+  wake waiting funding workers. No phoenixd on-chain withdrawal API is assumed. Validate wallet
+  module availability and safe-deposit support before serving a federation.
 - **Funding-output composition:** the funding tx uses a **bare**
   `ClientOutput { output: LightningOutput::V0(LightningOutputV0::Incoming(contract)), .. }` via
   the public `make_client_outputs` — explicitly NOT the full `relay_direct_swap` pattern, whose
@@ -91,9 +101,11 @@ refuses a config that asks it to (§7.1 mode 1; assert at startup).
   `RoutingInfo`'s **mandatory send fields** (`send_fee_minimum/default`,
   `expiration_delta_*` — non-optional in the wire struct, `gateway_api.rs:143-175`, so even a
   custodial-only `/routing_info` must return valid values); webhook public URL + secret (spec
-  03); metrics bind. The crate adopts a `DatabaseVersion` + migration registry for its root
+  03); metrics bind; backend-wide `absorbed_loss_budget_msat` and optional inbound-headroom
+  heuristic settings (design §8); local admin socket path for deposits and loss-budget reset.
+  The crate adopts a `DatabaseVersion` + migration registry for its root
   prefixes from day one (model: `get_gatewayd_database_migrations`,
-  `gateway-server-db/src/lib.rs:511-542`), so the 0x13–0x17 range is versioned like the rest of
+  `gateway-server-db/src/lib.rs:511-542`), so the 0x13–0x18 range is versioned like the rest of
   the gateway DB.
 
 ## 4. Database design
@@ -123,29 +135,33 @@ enum CustodialDbKeyPrefix {
     IssuanceDisabled        = 0x06, // () → DisabledReason — FEDERATION-scoped triggers only:
                                     // funding-deadline slack breach (§8), per-federation
                                     // reconciliation stall
+    ContractAudit           = 0x07, // ContractId → durable audit/refund progress (§7)
+    InputRecovery           = 0x08, // rejected funding operation → module refund progress (§6)
 }
 
 // Root-level custodial prefixes. 0x13-0x15 are REBUILDABLE indexes (never authoritative,
-// §7.3). 0x16-0x17 are AUTHORITATIVE backend-scoped state — the deliberate exception to
+// §7.3). 0x16-0x18 are AUTHORITATIVE backend-scoped state — the deliberate exception to
 // the rebuildable-only root rule: their subjects (backend health, settlements matching no
-// record in ANY federation) belong to no federation client prefix by definition, and their
+// record in ANY federation, aggregate loss accounting) belong to no single federation prefix, and their
 // loss is the same physical-DB-loss event that loses every prefix (§16).
 enum CustodialRootDbKeyPrefix {
     QuoteIdIndex          = 0x13, // quote_id → FederationId
     InvoiceHashIndex      = 0x14, // backend_invoice_hash → CustodialPendingIndexEntry
     CorrelationIdIndex    = 0x15, // backend_correlation_id → FederationId
-    BackendIssuanceHealth = 0x16, // () → DisabledReason — BACKEND-scoped triggers: duplicate
-                                  // externalId aliasing, retention-coverage failure, unmatched
-                                  // settlement, persistence failure. One phoenixd serving
+    BackendIssuanceHealth = 0x16, // () → set of DisabledReason, independently cleared; triggers:
+                                  // duplicate externalId aliasing, retention-coverage failure, unmatched
+                                  // settlement, persistence failure, absorbed-loss budget. One phoenixd serving
                                   // several federations is one blast radius: a backend known
                                   // to alias correlation ids must stop issuance for ALL
                                   // federations, not just the one that noticed (§7.3).
     UnmatchedSettlement   = 0x17, // backend_invoice_hash → UnmatchedSettlement (§7.3) — an
                                   // unmatched settlement matches no record in any federation,
                                   // so it cannot live in a federation prefix.
+    BackendLossAccounting = 0x18, // per-receive charged loss + cumulative total, budget,
+                                  // baseline and reset history; stop lives at 0x16 (§8)
 }
 // New issuance is allowed only when NEITHER the federation flag (0x06) NOR the backend
-// flag (0x16) is set. 0x13-0x17 must be added to gateway-server-db's DbKeyPrefix enum
+// flag (0x16) is set. 0x13-0x18 must be added to gateway-server-db's DbKeyPrefix enum
 // space check; collision with future gatewayd prefixes is avoided by reserving the range
 // in that enum's doc comment.
 ```
@@ -177,15 +193,19 @@ enum CustodialReceiveStatus {
 | settle confirm | record@`SettledAwaitingLiquidity` or `FundingReserved` (+ evidence fields) |
 | prepare | record@`FundingPrepared` + spec-01 `PreparedTransactionKey` (inputs consumed) |
 | submit | record@`FundingSubmitted` + spec-01 `submit_prepared_transaction_dbtx` (op-log + submission SMs) in one dbtx |
-| funded | record@`Funded(outpoint)`; input reservation naturally spent |
+| funded | record@`Funded(outpoint)` + `ContractAudit@AwaitingShares` (insert-if-absent/verify identity); input reservation naturally spent |
+| audit invalid | `ContractAudit@InvalidAwaitingRefund` + one open `InvalidContract` liability, even if refund preparation cannot yet succeed |
+| audit refund prepare | `ContractAudit@RefundPrepared` + exact prepared refund (inputs reserved); prior open liability retained |
+| audit refund submit | `ContractAudit@RefundSubmitted` + spec-01 submit-prepared op-log/SM writes |
+| loss accounting | settlement/fee evidence + per-receive loss contribution + root cumulative adjustment and budget-stop latch |
 | terminalize | record@terminal + (if applicable) `LiabilityRecord` in the same dbtx (§7.7) |
 
 ## 5. Request path (`create_custodial_bolt11_invoice`)
 
 Ordered validation (each rejection is a §7.9 `Rejected{reason}`). **Existing-record handling
 comes FIRST** — before any issuance/health gate — because a duplicate of a post-create record
-must never receive a strictly-pre-create reason (the client would delete provisional state while
-a backend invoice exists, violating the §7.9 pre-create invariant; the parent requires a
+with the same request fingerprint must never receive a strictly-pre-create reason (the client would
+delete provisional state while a backend invoice exists, violating the §7.9 pre-create invariant; the parent requires a
 persisted duplicate to get the stored invoice+quote back even while new issuance is disabled,
 §7.3 — answered from the stored `backend_invoice` field, never a backend fetch):
 
@@ -210,6 +230,8 @@ persisted duplicate to get the stored invoice+quote back even while new issuance
      `DeadlineTooNear` (pre-create is provable: maybe-sent was never set);
    - retained maybe-create / tombstone states (`InvoiceCreateInconclusive`,
      `BackendInvoiceRejected`, `InvoiceExpiredUnreturned`, `InvoiceExpiredUnpaid`) →
+     `BackendInvoiceUnreturnable`;
+   - same-fingerprint `UnresolvedLiability` → stored `Created` if a signed quote exists, else
      `BackendInvoiceUnreturnable`;
    - different fingerprint (any state) → `DuplicateContractConflict` (validated against the
      *stored draft*, §7.3).
@@ -274,8 +296,14 @@ outside custodial reconciliation.
   activity and are skipped without recording (§7.3).
   Advance a matched `AwaitingPayment` only after `get_settled_invoice_by_hash` /
   page-entry authenticated confirmation, capturing `received_msat`, `fees_msat`,
-  `completed_at_ms` as evidence. Skim within tolerance funds fully and records loss `F`; gross
-  mismatch ⇒ `BackendMismatch` liability (§8, §7.7).
+  `completed_at_ms` as evidence. Apply the direction-aware rule (design §7.3): first authenticate
+  the binding to this invoice/contract; non-amount inconsistencies open `BackendMismatch`.
+  For a valid binding, net credited amount at/above quoted face value always funds the original
+  contract, records surplus, and alerts if gross. A net shortfall explained by authenticated
+  backend skim still funds the full contract and records absorbed loss `F` (including abnormal
+  skim, which alerts and contributes to the budget stop); a gross unexplained shortfall opens
+  `BackendMismatch`. Never classify an otherwise valid overpayment as a liability instead of
+  funding. Persist raw requested/net/fee evidence for every branch, including unreturned invoices.
 - **Funding workers:** single worker per federation processing a queue ordered by
   minimum-funding-deadline-slack (§7.3). Per-`contract_id` serialization is guaranteed by
   worker-owns-record via the `FundingReserved` claim transition. Flow:
@@ -291,12 +319,19 @@ outside custodial reconciliation.
   dual mode).
 - **Startup reconciliation** (§10): re-drive by status exactly as the design table; the
   no-operation branch splits by state; only `FundingReserved` may prepare fresh; rejection ⇒
-  `UnresolvedLiability` with reason `FundingRejected` — inputs stay quarantined with the
-  liability for both `FundingRejected` and `FundingTxInconclusive` (the MVP has no re-credit,
-  §7.7/§14).
+  `UnresolvedLiability` with reason `FundingRejected`. Its installed mint input SMs retain their
+  existing automatic refund/reissue behavior (`fedimint-mint-client/src/input.rs`), potentially
+  including per-note fallback. Persist `InputRecovery` pending/recovered/failed evidence with the
+  rejected txid and refund operation/tx ids; observe module outputs to account actual recovered
+  ecash/fees, and resume observation on startup. Module terminality alone is not proof that all
+  refund output notes are spendable. Never manually re-credit or race those refunds, and never
+  resolve receiver liability merely because inputs recover. Unsubmitted prepared transactions
+  and `FundingTxInconclusive` retain reserved inputs until their exact transaction's outcome is
+  established; no generic unprepare is in MVP. The rejected-funding prepared record can only be
+  pruned once module input/output recovery is terminal with durable evidence.
 - **Liquidity:** `SettledAwaitingLiquidity` when the gwv2 client's spendable ecash <
   `commitment.amount + fee headroom`; recheck on balance-change notifications; alert + optional
-  pegin prompt (operator CLI hook, not automated).
+  deposit prompt using the local operator interface (§3.1); funding resumes on spendable ecash.
 
 ## 7. Consensus-time observer, audit, pruning
 
@@ -306,17 +341,29 @@ outside custodial reconciliation.
   (sort desc, `times[threshold-1]`). Freshness = votes seen within
   `consensus_time_observation_max_age_secs` of wall clock **and** observer task alive; stale ⇒
   quote creation disabled (`DeadlineTooNear` per §7.9 mapping). Metric: observer age (§7.8).
-- **`audit.rs`:** after `Funded`, spawn non-blocking audit per contract: await the federation's
-  decryption-share availability (same module API the gwv2 receive SM uses); if contract decrypts
-  → mark `Claimable`, done; if not → submit the refund spend to `refund_pk` via
-  `make_client_inputs` (§3.1 — the gwv2 crate's own refund path is not a public surface) and
-  open the `InvalidContract` liability in the same commit (§7.3.4, §7.7; the refund spend plus
-  the liability record ARE the durable outcome — there is no separate status variant).
-  Audit never delays marking `Funded`. Wait budget: configurable, default generous (§14.9).
+- **`audit.rs`:** every Funded transition also installs `ContractAudit@AwaitingShares` in that
+  dbtx; startup resumes every unfinished audit/refund, and a periodic scan retries stalled work.
+  Task spawning is only a wake-up hint, never durability. After valid threshold shares arrive,
+  successful decryption records `Claimable` without spending; verified decryption failure atomically
+  records `InvalidAwaitingRefund` plus one `InvalidContract` liability. Thus a local preparation
+  error or insufficient fee liquidity cannot suppress the liability. Build the refund input via
+  `make_client_inputs` (§3.1), then atomically prepare its exact refund tx with spec 01 and advance
+  to `RefundPrepared`; transient preparation failures retain `InvalidAwaitingRefund` and retry. Use deterministic
+  operation id `OperationId::from_encodable(&("custodial-audit-refund", outpoint))`; liability
+  inserts keyed by quote id are insert-if-absent/verify-equal. Submit-prepared + `RefundSubmitted`
+  commit together; restart resumes the exact transaction, never a second refund. Await acceptance
+  and mint-output recovery before `Refunded`, with recovered amount/outcome evidence. Rejection
+  alerts and retains an open liability; refund failure is not receipt of ecash. Timeouts or invalid/
+  unavailable shares keep `AwaitingShares` and alert/retry, never classify the contract as invalid.
+  Receive status stays `Funded`; audit progress is a separate durable record and never blocks
+  reporting accepted funding. Alternate payout waits for terminal refund evidence (§7.7).
 - **`prune.rs`:** a retained terminal record is prunable only when funding deadline passed in
   *observed consensus time* AND ledger/finality window closed (§7.3); pruning removes root
   indexes + registry hash reservation in the same dbtx. `UnresolvedLiability` and unresolved
-  `InvoiceCreateInconclusive`: never auto-pruned.
+  `InvoiceCreateInconclusive`: never auto-pruned. No receive, audit, prepared transaction, or
+  recovery record is prunable with unfinished audit/input/output recovery or an open liability.
+  Preserve compact loss contribution evidence after ordinary receive pruning so accounting and
+  dedup survive (§8).
 
 ## 8. API surface, metrics, health
 
@@ -326,8 +373,8 @@ outside custodial reconciliation.
   existing `/routing_info` client path unchanged (advertises `ReceiveCapabilities` with
   `custodial: Some(...)`, `trustless: None`) — `POST /create_custodial_bolt11_invoice`, and
   `POST /phoenixd_webhook` when webhooks are configured (raw body + signature forwarded to the
-  adapter's `verify_and_parse_webhook`, spec 03 §3.4; not mounted when the secret is absent). If
-  the binary also serves trustless **send**, mount `POST /send_payment` backed by the gwv2 send
+  adapter's `verify_and_parse_webhook`, spec 03 §3.4; not mounted when the secret is absent).
+  The binary MUST mount `POST /send_payment` backed by the gwv2 send
   SM; the `IGatewayClientV2::is_direct_swap` impl (§3.1) consults `registry.rs` first and labels
   custodial self-pay cancellations (§7.6) — outcome is the forfeit signature either way.
 - Reject `POST /create_bolt11_invoice` with a typed "custodial-only gateway" error (§7.1).
@@ -337,9 +384,19 @@ outside custodial reconciliation.
   failure, retention-coverage gate, duplicate-externalId aliasing, unmatched settlement;
   **federation-scoped** (prefix `IssuanceDisabled` flag): funding-deadline slack approaching the
   safety margin on any settled-unfunded record (§8 — a critical operational fault, not just a
-  metric), per-federation reconciliation stall. The optional §8 inbound-headroom /
-  splice-avoidance policy gate also lives here (surfaced as
-  `BackendInvoiceCreationUnavailable`).
+  metric), per-federation reconciliation stall. The optional §8 inbound-headroom
+  policy is an admission heuristic only, never a no-purchase guarantee. Required backend loss
+  accounting lives at root 0x18 (design §8): per-receive `F`, cumulative total, budget baseline,
+  reset history, plus the latched backend stop at 0x16. Settlement and fee updates atomically adjust that
+  receive's existing contribution by delta, not add it again; reserve conservative module-fee
+  estimates until actual fees/output recovery are known. Root loss rows survive record pruning.
+  Recompute/verify totals and preserve the stop on startup. Compare `max(0, total - baseline)`
+  against budget, including at startup/config changes. At the budget threshold, stop new
+  issuance on every federation with `BackendInvoiceCreationUnavailable`; keep existing invoices
+  and funding/audits running. A local authenticated admin command records a reason/timestamp and
+  new baseline/budget, then clears only the loss stop (and only if the new budget is positive). No automatic reset. Expose cumulative loss,
+  budget remainder and unpaid exposure. Several outstanding invoices may settle after the stop,
+  so it cannot bound total loss or prevent liquidity purchases (design §8).
 
 ## 9. Implementation order within this phase
 
@@ -365,11 +422,11 @@ enumerated concretely in 07-test-harness.md with crash-point IDs.
 - [ ] Startup with a populated DB reaches a fixpoint with no duplicate side effects (idempotent
       reconciliation test).
 - [ ] Binary refuses legacy-registration config; `/routing_info` never advertises trustless
-      receive.
+      receive. Mandatory `/send_payment` success/failure/restart paths pass; no receive-only MVP.
+- [ ] Wallet-backed operator deposit survives restart and wakes waiting funding after ecash recovery.
+- [ ] Loss-budget accounting is deduplicated, durable and backend-scoped; reset preserves other stops.
 
 ## 12. Open questions (non-blocking)
 
 - Session-outcome streaming API choice for the observer (reuse client recovery's session
   iterator vs a thin new helper in `fedimint-client`); decide at coding time, no protocol impact.
-- Whether `/send_payment` ships in the MVP binary or a fast follow (§7.1 mode-1 note); default:
-  ship it, it reuses gwv2 send unchanged.

@@ -24,18 +24,24 @@ pub struct FakeNotifyOnlyBackend {
 
 pub struct FakeBackendControls {
     // deterministic knobs (no wall-clock dependence; explicit test time):
-    pub fn create_delay_and_crash(&self, mode: CreateFailureMode); // NotSent | SentButNoResponse | DuplicateCreated
+    pub fn create_delay_and_crash(&self, mode: CreateFailureMode); // NotSent | SentButNoResponse | MaybeSentNotVisible | DuplicateCreated
     pub fn settle(&self, hash_or_external_id: ..., received_msat: Amount, fees_msat: Amount, completed_at_ms: u64);
     pub fn emit_hint(&self, hint: SettlementHint, authenticated: bool); // forged-hint testing
     pub fn set_ledger_offset_shift(&self, shift: usize);   // offset-pagination hazard
+    pub fn reveal_hidden_invoice(&self, external_id: &str); // MaybeSentNotVisible recovery
     pub fn inject_duplicate_external_id(&self, external_id: &str);
     pub fn set_retention_horizon_ms(&self, horizon: u64);  // coverage-gate testing
     pub fn advance_time_ms(&self, delta: u64);
 }
 ```
 
-`SentButNoResponse` is the maybe-sent crash: the invoice exists backend-side but the create call
-errors — driving `InvoiceCreateInconclusive` paths without real crashes.
+`SentButNoResponse` creates a backend invoice, loses the create response, and leaves it visible to
+lookup: recovery finds it and completes `AwaitingPayment` (or validates it into the appropriate
+unreturnable tombstone). It does not exercise an inconclusive lookup.
+`MaybeSentNotVisible` loses the response after the maybe-sent commit and returns no matching
+invoice from lookup/list until explicitly revealed. Recovery records `InvoiceCreateInconclusive`
+and never retries creation. Test both no later visibility and reveal+settle, which must reconcile
+through normal recovered validation and fund-on-settlement rules without a second invoice.
 
 ## 3. Crash-point framework
 
@@ -52,6 +58,11 @@ Durable transitions get stable IDs; tests run scenario × crash-point:
 | CP7 | after submit commit, before broadcast observed |
 | CP8 | after federation acceptance, before Funded commit |
 | CP9 | after terminalize+liability commit |
+| CP10 | after atomic Funded+AwaitingShares audit commit, before task spawn |
+| CP11 | while audit waits for shares (no terminal transition) |
+| CP12 | after invalid-audit+liability commit and after subsequent refund prepare commit (two subcases) |
+| CP13 | after audit refund submit commit, before broadcast |
+| CP14 | after refund acceptance, before/during mint-output recovery and final audit commit |
 
 Mechanism: the custodial service takes a test-only `CrashHooks` (feature-gated under
 `cfg(test)`/dev-dependency injection) with `async fn at(CrashPoint)` that a test can turn into a
@@ -71,8 +82,9 @@ federation via `fedimint-testing` fixtures), **C** = client test (lnv2-tests), *
 | operation-log divergence re-drive | `state_divergence_redrives_exact_tx` (delete the operation's active/inactive state entries between CP7/CP8 — `operation_exists` is state-based, spec 01 §3.4.8; variant with surviving fees/op-log rows exercises insert-if-absent re-drive, spec 01 §3.4.9; variant with ONLY the submission SM missing while module SMs survive asserts the typed invariant error, spec 01 §3.4.10 — never a silent wait) | G |
 | crash between create and AwaitingPayment; recovery signs from stored draft under changed config | `cp3_recovery_signs_stored_draft` (flip gateway fee config before restart) | G |
 | duplicate create while lease live | `duplicate_create_waits_on_lease` | G |
-| expired lease + maybe-sent ⇒ inconclusive, no second invoice | `maybe_sent_inconclusive_no_second_invoice` (`SentButNoResponse`) | G |
-| inconclusive stays in reconciliation; later settle follows fund_on_settlement | `inconclusive_settlement_funds_or_liability` | G |
+| expired lease + maybe-sent ⇒ inconclusive, no second invoice | `maybe_sent_inconclusive_no_second_invoice` (`MaybeSentNotVisible`, lookup returns empty) | G |
+| lost create response with visible invoice recovers normally | `lost_create_response_visible_lookup_recovers` (`SentButNoResponse`) | G |
+| inconclusive stays in reconciliation; later settle follows fund_on_settlement | `inconclusive_settlement_funds_or_liability` (`MaybeSentNotVisible`, then reveal+settle) | G |
 | stale draft: no create / unreturnable tombstone | `stale_draft_no_create`, `stale_invoice_tombstoned_unreturnable` | G |
 | rejected-but-retained client receive still claims | `retained_provisional_claims_after_unreturnable` | C+G |
 | backend invoice validation before signing | `invoice_validation_matrix` (each field mutated ⇒ `BackendInvoiceRejected`) | G |
@@ -86,7 +98,12 @@ federation via `fedimint-testing` fixtures), **C** = client test (lnv2-tests), *
 | legacy list excludes custodial-only; trustless selection skips | `legacy_list_and_selection_policy` | C |
 | non-payee-gateway send of custodial invoice; same-gateway forfeit | `custodial_invoice_lightning_path`, `same_gateway_selfpay_forfeit_refunds` | G |
 | CP-crash before hash-registry reassert | `registry_reasserted_before_return` (CP3/CP4) | G |
-| invalid contract audit ⇒ refund + liability | `invalid_contract_refund_liability` | G |
+| invalid contract audit ⇒ refund + liability; durable start/resume | `invalid_contract_refund_liability` (CP10–CP14 × duplicate wakeups; one refund txid, one open liability, ecash recovered once), `share_timeout_never_invalidates`, `invalid_refund_prepare_failure_retains_liability`, `unfinished_audit_blocks_prune` | G |
+| mixed legacy/prepared operation-id ownership and identity | `prepared_id_blocks_legacy_submit`, `legacy_prepare_race_one_winner`, `prepared_submit_identity_mismatch` (spec 01 §5.7) | U |
+| rejected funding uses module refunds while debt persists | `funding_rejected_tracks_module_refunds` (restart during bundle/per-note refund/output recovery; assert spendable recovered ecash, open liability, no manual re-credit), `inconclusive_inputs_stay_reserved` | G |
+| settlement mismatch direction | `settlement_amount_direction_matrix` (net overpay small/gross, authenticated skim normal/abnormal, unexplained shortfall, wrong binding; run on fresh + retained recovery records) | G |
+| economic threshold is issuance-only with durable accounting | `outstanding_invoices_overshoot_thresholds` (concurrent settlement exceeds inbound headroom, loss budget and max_in_flight; new issuance stops, existing debt proceeds), `loss_budget_durable_backend_scope` (duplicates, fee adjustments, restart, prune, reset with unrelated health stop) | G |
+| custodial URL mandatory send | `custodial_url_send_success_failure_restart` (out-of-band selection, actual endpoint succeeds, unsupported limits forfeit before pay, lost response resolves via outgoing lookup) | C+G |
 | offset-pagination overlap dedupe | `ledger_offset_shift_no_miss_no_double` | G |
 | duplicate create retry returns same invoice+quote; stale ⇒ unreturnable | `idempotent_duplicate_returns_stored` (run with the backend UNREACHABLE — the response is answered from the stored `backend_invoice` field, §7.3), `stale_duplicate_unreturnable` (pre-settlement only; a settled record returns stored `Created` unconditionally, covered by `settled_duplicate_returns_stored`) | G |
 | cross-path namespace collisions | `cross_path_namespace_matrix` — **DEFERRED with dual-capable mode** (the trustless-side rejections live in legacy gatewayd/gwv2 and have no MVP home, §7.3/§15); MVP coverage is `image_collision_rejects_without_halt`: intra-custodial image collision → `DuplicateContractConflict` + alarm, issuance stays **enabled** (client-reachable conditions never halt, §7.3) | G |
@@ -95,13 +112,13 @@ federation via `fedimint-testing` fixtures), **C** = client test (lnv2-tests), *
 | retained-settlement fund_on_settlement incl. after-deadline ⇒ liability | `late_settlement_before_deadline_funds`, `late_settlement_after_deadline_liability` | G |
 | client observed-time / deadline-rule quote rejection | `quote_stale_observed_time_rejected` (wall-clock reference) | C |
 | issued-unpaid never gates; internal throttling generic; actual limit typed | `unpaid_buildup_never_rejects`, `actual_liability_limit_typed` | G |
-| SettledAwaitingLiquidity wait + pegin resume | `short_float_waits_then_funds` (drain float, replenish, assert slack-priority order) | G |
+| SettledAwaitingLiquidity wait + pegin resume | `short_float_waits_then_funds` (drain float, allocate through local operator interface, deposit on-chain, restart while pending, await spendable ecash and assert slack-priority order) | G |
 | gauges recomputed from DB after restart | `metrics_recomputed_on_restart` | G |
 | non-sat amounts rejected | `non_satoshi_amount_rejected` | C+G |
 | saturation lower-bounds | `amount_saturation_rejected_both_sides` | C+G |
 | client sizing uses custodial fee; fee-mismatch typed | `custodial_fee_sizing_and_mismatch` (`FeeOrAmountBindingMismatch`) | C+G |
 | DeadlineTooFar bounds retention horizon | `deadline_too_far_rejected` | G |
-| pre-create invariant enforced | `precreate_invariant_no_reason_after_maybe_sent` (assert on every rejection path with maybe-sent set) | G |
+| pre-create invariant enforced | `precreate_invariant_same_fingerprint_after_maybe_sent` (all identical-retry rejection paths allow only CreateInProgress/BackendInvoiceUnreturnable), `different_fingerprint_conflicts_after_maybe_sent` (every retained state gives DuplicateContractConflict; client retains watcher/claim material) | G |
 | unmatched settlement records + halts | `unmatched_settlement_alerts_and_halts` | G |
 | pruning releases namespace only after deadline+finality; post-prune settle ⇒ unmatched | `prune_lifecycle_post_prune_unmatched` | G |
 | conservative client pruning under skew | `client_pruning_skew_safe` | C |
@@ -114,7 +131,9 @@ federation via `fedimint-testing` fixtures), **C** = client test (lnv2-tests), *
 ## 5. Smoke test
 
 One `devimint`-driven phoenixd-on-mutinynet smoke test (manual/nightly, not CI-blocking):
-create → pay externally → observe settle → fund → claim. Pins real API compatibility (§15);
+create → pay externally → observe settle → fund → claim, plus a send selected through the
+out-of-band custodial URL with success and bounded-payment refusal/recovery. Pins real API
+compatibility (§15);
 everything else runs on the fake.
 
 ## 6. Acceptance criteria
@@ -122,6 +141,7 @@ everything else runs on the fake.
 - [ ] Every design-§15 bullet appears in the §4 table and every named test exists and passes —
       except rows marked **DEFERRED with dual-capable mode**, which are excluded from the MVP
       gate and ship with mode 2 (matching the §15 dual-capable markers).
-- [ ] Crash-point tests cover CP1–CP9 for at least the happy path and the maybe-sent path.
+- [ ] Crash-point tests cover CP1–CP9 on applicable create/funding paths and CP10–CP14 on
+      valid/invalid-contract audit paths, including restarts before spawn and during output recovery.
 - [ ] `FakeNotifyOnlyBackend` has no wall-clock dependence (explicit test time only).
 - [ ] CI wiring: G-tests run in the standard test matrix; the mutinynet smoke test is opt-in.

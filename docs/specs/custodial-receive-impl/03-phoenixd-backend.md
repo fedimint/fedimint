@@ -210,10 +210,13 @@ by `custodial-gatewayd` (spec 04).
 - [ ] Trait object-safe; custodial-gatewayd consumes `Arc<dyn NotifyOnlyLightningClient>`.
 - [ ] Existing backends untouched; `just test` for gateway crates passes unchanged.
 - [ ] Startup invoice-payee self-check implemented and tested.
+- [ ] Mandatory send success, limit refusal, and idempotent lost-response recovery are tested.
 - [ ] All phoenixd endpoint/field names re-verified against the pinned version and recorded in §2.
 
 ## 7. Open questions (non-blocking)
 
-- Whether `pay` maps `max_fee`/`max_delay` onto phoenixd's pay options faithfully enough for the
-  trustless send companion (§13 is out of detailed scope; send ships best-effort behind the same
-  adapter).
+- Pinning the phoenixd version and mapping `max_fee`/`max_delay` is an implementation decision,
+  not permission for best-effort limits: mandatory send must enforce the requested bounds or
+  decline before any payment attempt and return the normal gwv2 failure/forfeit path. Record
+  which pinned endpoint/settings enforce each limit and test outgoing lookup after lost responses.
+  A backend version that cannot provide a functioning bounded send path is not MVP-compatible.

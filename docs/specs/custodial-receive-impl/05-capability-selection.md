@@ -76,7 +76,10 @@ is skipped instead of stranding the receive (§7.1). New `SelectGatewayError` va
 
 Send keeps `select_gateway(invoice)` semantics over the **union** candidate set (legacy list ∪
 stored custodial URLs): payee-match preference first (enables direct swap and the §7.6
-same-gateway forfeit path), then reachability. No pre-classification of invoices (§7.6).
+same-gateway forfeit path), then reachability. Every conforming MVP custodial URL MUST serve
+`/send_payment` with valid send routing terms (design §13, spec 04); receive-only deployments are
+not supported. This invariant is necessary because the client funds an outgoing contract before
+calling `/send_payment`. No pre-classification of invoices (§7.6).
 
 ### 3.3 Metadata
 

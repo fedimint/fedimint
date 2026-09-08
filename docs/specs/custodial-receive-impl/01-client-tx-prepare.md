@@ -11,9 +11,9 @@ installs and broadcasts that exact stored transaction idempotently. This is the 
 `FundingPrepared` / `FundingSubmitted` in the custodial gateway (design §7.3).
 
 **Non-goals:** a generic "unprepare" that re-credits consumed inputs (module-specific, deferred in
-parent §14; the custodial gateway quarantines inputs with the liability record on both
-inconclusive **and proven-dead** outcomes — a `FundingRejected` liability's inputs stay
-quarantined until a post-MVP re-credit mechanism or operator action, parent §7.7); changes to
+parent §14; unsubmitted or inconclusive prepared inputs remain reserved. Definitively rejected
+submitted transactions use the existing module input state machines to refund/reissue inputs;
+this does not discharge a custodial `FundingRejected` liability, parent §7.7); changes to
 transaction wire format or submission consensus semantics; RBF/replacement of prepared txs.
 
 ## 2. Grounding in current code (verified)
@@ -113,8 +113,9 @@ pub async fn prepare_transaction(
 /// TxCreatedEvent in ONE dbtx, then lets the executor broadcast. Refuses to build
 /// or accept a fresh transaction: if no PreparedTransaction is stored for this id
 /// and no operation exists, this is an error (never silently rebuild, §10).
-/// Idempotent: if the operation already exists, returns Ok with the stored
-/// outpoint range (derived from the retained PreparedTransaction record).
+/// Idempotent: if the operation already exists, first verifies its submission
+/// transaction identity against the retained prepared record; only then returns
+/// Ok with that record's outpoint range. A mismatch is an invariant error.
 pub async fn submit_prepared_transaction<F, M>(
     &self,
     operation_id: OperationId,
@@ -155,11 +156,17 @@ that is the state-machine *transition* context, whose methods take a
    "Prepare commits `FundingPrepared(prepared_tx)` together with the ecash-input reservation,
    atomically"). The caller embeds its own record (e.g. `PendingCustodialReceive`) in the same
    dbtx via the dbtx variant.
-2. **Prepare idempotency.** If `PreparedTransactionKey(operation_id)` exists, return it unchanged.
-   If `operation_exists` for the id, bail with a typed error (`AlreadySubmitted`) — the caller
-   should be in submit/await, not prepare.
+2. **Operation-id reservation across both APIs.** Prepare checks `operation_exists` first and
+   errors `AlreadySubmitted` if true; otherwise an existing `PreparedTransactionKey(operation_id)`
+   is returned unchanged without building. The prepared key reserves the id as well as inputs.
+   Both `finalize_and_submit_transaction` variants MUST check for that key in their existing
+   autocommit/dbtx, before finalization, and return typed `OperationIdReserved` without consuming
+   inputs. This check and prepare's operation/key checks participate in the same database conflict
+   detection: concurrent legacy-submit and prepare cannot both commit for the same id. Existing
+   callers using ids without a prepared reservation retain their behavior. A prepared caller
+   must use submit-prepared, even if its legacy builder would produce the same transaction.
 3. **Submit installs, never builds.** `submit_prepared_transaction` autocommits: if
-   `operation_exists` → return stored range (idempotent re-drive); else load
+   `operation_exists` → verify transaction identity (§3.4.10), then return stored range; else load
    `PreparedTransactionKey` → if absent, error `NothingPrepared` (the §10 rule: a missing prepared
    tx never builds a fresh replacement — that decision belongs to the caller's `FundingReserved`
    state, which uses the normal prepare→submit path); else perform exactly the tail of
@@ -216,9 +223,12 @@ that is the state-machine *transition* context, whose methods take a
    SM that is gone. Normal crashes cannot produce this (all states install in one dbtx), so it
    indicates DB corruption: when `submit_prepared_transaction(_dbtx)` takes the
    operation-exists branch, it MUST verify a `TxSubmissionStatesSM` exists (active or inactive)
-   for the operation and return a typed invariant error if not — the caller escalates
-   (unresolved-liability path in the custodial gateway), never a silent wait and never an
-   automatic reinstall.
+   for the operation **and matches the prepared transaction**: `Created` must contain identical
+   consensus-encoded transaction bytes and `Accepted`/`Rejected` must carry the prepared txid.
+   Verify the stored txid against the prepared bytes too. An absent, conflicting, or unverifiable
+   submission identity (including a legacy `NonRetryableError` without txid) returns a typed
+   invariant error — the caller escalates (unresolved-liability path in the custodial gateway),
+   never returns the prepared range as success, silently waits, or automatically reinstalls.
 
 ### 3.5 Crash matrix
 
@@ -254,12 +264,19 @@ Unit/integration in `fedimint-client` tests plus dedicated §15 cases:
    (assert module balance).
 5. concurrent unrelated operation cannot spend reserved inputs.
 6. submit with neither operation nor prepared record errors `NothingPrepared`.
-7. wasm build passes (API compiles for wasm even if unused there).
+7. prepare T1 → legacy-submit a different T2 with the same id errors `OperationIdReserved`,
+   consumes no additional inputs, and submit-prepared still broadcasts T1. Race both APIs: one
+   reservation/submission wins and the loser consumes no inputs; legacy-submit first makes prepare
+   fail `AlreadySubmitted`. Inject an existing submission for T2 alongside T1's prepared record:
+   submit-prepared errors on identity mismatch in Created/Accepted/Rejected, never returns T1's
+   outpoints. Also test the identity-less legacy error state.
+8. wasm build passes (API compiles for wasm even if unused there).
 
 ## 6. Acceptance criteria
 
 - [ ] All §3.4 invariants hold under the §5 tests.
-- [ ] No behavior change to existing `finalize_and_submit_transaction` callers.
+- [ ] Existing `finalize_and_submit_transaction` behavior is preserved for unreserved ids;
+      prepared ids are rejected atomically before finalization in both variants.
 - [ ] `PreparedTransaction` round-trips encode/decode through the client decoder registry.
 - [ ] Public docs on the API state the no-rebuild and retention rules verbatim.
 

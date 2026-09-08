@@ -136,7 +136,11 @@ is funded, the claim is fully trustless again.
   per-receive status machine, at most one backend invoice per contract (a single-flight create
   lease; if a create request *might* have reached the backend but can't be proven, the receive
   goes to operator review rather than risking a second invoice), settlement handling serialized
-  per contract, and a deterministic operation id that blocks resubmission across restarts.
+  per contract, and a deterministic operation id reserved atomically across both prepared and
+  legacy submit APIs. Retry success verifies transaction identity. Post-funding audits and refund
+  recovery are persisted with funding and resumed on restart, so crashes cannot lose the audit.
+  Rejected submitted funding uses existing mint input refunds to recover float while retaining
+  receiver debt; unsubmitted/inconclusive input reservations remain locked.
 - The funding transaction is finalized, its ecash inputs locked, and its exact bytes persisted
   **before** broadcast (the new `fedimint-client` prepare/submit split). Recovery re-drives that
   exact stored transaction — never rebuilds a fresh one — which is consensus-idempotent because
@@ -167,12 +171,17 @@ fronts `contract amount + federation module fees` from float and is reimbursed b
 receipt minus any backend fee skim. Note the structural gap: the fee cap sits below phoenixd's
 ~1%-plus-mining-fee cost for automatic inbound-liquidity purchases, so any receive that triggers
 one loses money by construction — and an attacker can deliberately force such purchases.
-Operators must pre-provision inbound capacity, and the gateway may refuse issuance that would
-force a liquidity purchase. Unpaid invoices are contingent exposure only: tracked and alerted,
+Operators pre-provision inbound capacity, but the MVP explicitly accepts that outstanding unpaid
+invoices or other backend activity may exhaust it and trigger purchases. A headroom check is only
+an issuance heuristic. A required backend-wide absorbed-loss budget durably stops new issuance at
+its threshold; existing invoices remain payable and losses can exceed that budget. Reset requires
+an authenticated operator acknowledgment, and restarts retain the accounting/stop. Unpaid invoices are contingent exposure only: tracked and alerted,
 but never reserved against float and never exposed as a public quota (a public quota would be a
 DoS lever — an attacker could fill it with unpaid requests). Actual settled/funding/unresolved
-obligations gate new issuance via a per-federation `max_in_flight` limit. If float runs short, a
-settled receive waits as explicit debt while the operator replenishes (e.g. a pegin); the long
+obligations gate new issuance via a per-federation `max_in_flight` threshold, which also cannot
+bound debt from already-issued invoices. If float runs short, a
+settled receive waits as explicit debt while the operator replenishes through the required wallet
+client module's local deposit-address/status interface; the long
 funding deadline exists so this resolves by funding the original contract.
 
 ## Deployment and discovery
@@ -188,6 +197,8 @@ funding deadline exists so this resolves by funding the original contract.
   explicit user entry), and that trusted source — not the network — is the authorization.
   Custodial receive is always an explicit opt-in with its own entry point; new clients'
   policy-driven selection also skips custodial-only gateways during normal trustless receive.
+- **Send is mandatory.** Every MVP custodial gateway serves the normal trustless `/send_payment`
+  path; new clients include its URL in send selection. “Custodial-only” refers to receive capability.
 - **Self-payment quirk.** If a sender in the same federation pays a custodial invoice through the
   *same* gateway, the gateway can neither swap it internally nor route Lightning to itself. The
   send fails cleanly with a forfeit signature and the sender is refunded immediately (this
