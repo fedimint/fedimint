@@ -1001,10 +1001,23 @@ impl Client {
     /// does not abort an already-committed submission.
     ///
     /// ## Errors
-    /// The function will return an error if the operation with given ID already
-    /// exists, or if the database transaction keeps colliding with others and
-    /// cannot be committed within its retry budget, which should not happen
-    /// except in excessively concurrent scenarios.
+    /// Every variant of [`TransactionSubmitError`] can come back from here:
+    /// [`OperationAlreadyExists`] if an operation with this id is already
+    /// recorded; [`NoPrimaryModule`] and [`PrimaryModule`] if the transaction
+    /// cannot be balanced, because no primary module holds the unit or because
+    /// the one that does fails to fund it; [`TransactionTooLarge`] if the
+    /// finalized transaction exceeds the federation's size limit;
+    /// [`StateMachines`] if the transaction's state machines cannot be
+    /// registered; and [`Database`] if the transaction keeps colliding with
+    /// others and cannot be committed within its retry budget, which should not
+    /// happen except in excessively concurrent scenarios.
+    ///
+    /// [`OperationAlreadyExists`]: TransactionSubmitError::OperationAlreadyExists
+    /// [`NoPrimaryModule`]: TransactionSubmitError::NoPrimaryModule
+    /// [`PrimaryModule`]: TransactionSubmitError::PrimaryModule
+    /// [`TransactionTooLarge`]: TransactionSubmitError::TransactionTooLarge
+    /// [`StateMachines`]: TransactionSubmitError::StateMachines
+    /// [`Database`]: TransactionSubmitError::Database
     pub async fn finalize_and_submit_transaction<F, M>(
         &self,
         operation_id: OperationId,
