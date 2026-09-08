@@ -1,14 +1,17 @@
 # Impl Spec 01: Client-Core Transaction Prepare/Submit Split
 
 > Parent: design §7.3 ("Fund via a new client-core prepare-then-submit API"), §7.5, §10, §14.10.
-> Crates: `fedimint-client`, `fedimint-client-module`. Highest-risk phase; gates phase 4.
+> Crates: `fedimint-client`, `fedimint-client-module`, `modules/fedimint-mint-client`
+> (recovery evidence API). Highest-risk phase; gates phase 4.
 
 ## 1. Scope & non-goals
 
 **In scope:** a generic `fedimint-client` API that (a) finalizes a transaction and durably locks
 its inputs *without* creating an operation-log entry or submission state machine, and (b) later
 installs and broadcasts that exact stored transaction idempotently. This is the mechanism behind
-`FundingPrepared` / `FundingSubmitted` in the custodial gateway (design §7.3).
+`FundingPrepared` / `FundingSubmitted` in the custodial gateway (design §7.3). Also in scope:
+the mint-owned input-recovery evidence API (§3.6) needed to observe rejected funding without
+exposing private mint state or taking ownership of its existing refund execution.
 
 **Non-goals:** a generic "unprepare" that re-credits consumed inputs (module-specific, deferred in
 parent §14; unsubmitted or inconclusive prepared inputs remain reserved. Definitively rejected
@@ -225,7 +228,11 @@ that is the state-machine *transition* context, whose methods take a
    operation-exists branch, it MUST verify a `TxSubmissionStatesSM` exists (active or inactive)
    for the operation **and matches the prepared transaction**: `Created` must contain identical
    consensus-encoded transaction bytes and `Accepted`/`Rejected` must carry the prepared txid.
-   Verify the stored txid against the prepared bytes too. An absent, conflicting, or unverifiable
+   Search the operation's submission states for **this prepared txid**, rather than choosing an
+   arbitrary row: mint refund/reissue can legitimately add other submission transactions under
+   the same operation id. Those extra transactions alone are not an identity mismatch, and they
+   cannot substitute for the original transaction's identity evidence. Verify the stored txid
+   against the prepared bytes too. An absent, conflicting, or unverifiable
    submission identity (including a legacy `NonRetryableError` without txid) returns a typed
    invariant error — the caller escalates (unresolved-liability path in the custodial gateway),
    never returns the prepared range as success, silently waits, or automatically reinstalls.
@@ -238,6 +245,99 @@ that is the state-machine *transition* context, whose methods take a
 | After prepare commit, before submit | inputs consumed, `PreparedTransactionKey`, caller record | caller calls `submit_prepared_transaction` (installs + broadcasts exact tx) |
 | After submit commit, before broadcast | operation + `Created(tx)` SM exist | executor resumes the submission SM; no API call needed; `submit_prepared_transaction` is a safe no-op |
 | Operation log diverged but key survives | `PreparedTransactionKey` present, `operation_exists` false (state entries lost; fees/op-log rows may survive) | `submit_prepared_transaction` re-installs the exact tx with insert-if-absent semantics (§3.4.9; consensus-idempotent on pinned inputs) |
+
+### 3.6 Mint-owned input-recovery evidence (phase 1)
+
+`modules/fedimint-mint-client` owns these new APIs, types, and durable journal. Existing mint
+input state/correlation fields are private (`input.rs:71-73`); OOB refund subscriptions do not
+cover arbitrary rejected funding. The daemon must not decode those states or infer recovery
+from a terminal input state. This is client-module work, with no mint consensus/API changes.
+
+Proposed public methods on `MintClientModule` (Rust signatures, shared types omitted for brevity):
+
+```rust
+// root client dbtx; implementation scopes it to this mint instance internally.
+// Called atomically with installation of the original submission and its input SMs.
+pub async fn track_input_recovery_dbtx(
+    &self,
+    dbtx: &mut DatabaseTransaction<'_>,
+    operation_id: OperationId,
+    original_transaction: &Transaction,
+) -> anyhow::Result<()>;
+
+pub async fn input_recovery(
+    &self,
+    operation_id: OperationId,
+    original_txid: TransactionId,
+) -> anyhow::Result<MintInputRecovery>;
+
+// Immediately emits the current durable snapshot, then snapshots after every revision.
+// Startup/reconnect uses the same method; correctness does not depend on receiving a wakeup.
+pub async fn subscribe_input_recovery(
+    &self,
+    operation_id: OperationId,
+    original_txid: TransactionId,
+) -> anyhow::Result<BoxStream<'static, anyhow::Result<MintInputRecovery>>>;
+
+pub struct MintInputRecovery {
+    pub operation_id: OperationId,
+    pub original_txid: TransactionId,
+    pub input_indices: Vec<u64>, // all inputs owned by this mint instance in original tx
+    pub revision: u64,
+    pub outcome: MintRecoveryOutcome, // AwaitingOriginal | NotRequired (accepted)
+                                    // | Recovering | Recovered | Failed | PartiallyRecovered
+    pub refunds: Vec<MintRefundEvidence>,
+    pub recovered_msat: Amount, // only notes actually inserted into spendable storage
+}
+
+pub struct MintRefundEvidence {
+    pub txid: TransactionId,
+    pub input_indices: Vec<u64>, // original-input lineage, including bundle→per-note fallback
+    pub outcome: MintRefundTxOutcome, // Pending | Accepted | Rejected { reason }
+    pub outputs: Vec<MintRecoveryOutput>,
+}
+
+pub struct MintRecoveryOutput {
+    pub outpoint: OutPoint,
+    pub amount_msat: Amount,
+    pub outcome: MintRecoveryOutputOutcome, // Pending | Spendable | Failed { reason }
+}
+```
+
+`track_input_recovery_dbtx` derives the txid and exact mint-input set from the transaction using
+this module's decoder/instance id. It verifies correspondence to its installed input SMs in the
+same dbtx, then inserts an `AwaitingOriginal` journal under `(operation_id, original_txid)`.
+Repeat registration verifies the immutable identity/input set and leaves existing progress alone;
+missing/mismatched SMs or inputs are errors. It creates no refund and changes no spend behavior.
+The daemon calls it in the funding submit dbtx, before the executor can run. An untracked query
+returns typed `RecoveryNotTracked`, never empty-success; phase 4 treats this as an invariant error.
+
+Mint owns new non-colliding DB prefixes for the journal and its reverse transaction/output
+indexes, with encode/decode and dump support. Its existing input SM transitions write journal
+updates **in the same dbtx** as the state change and any `claim_inputs` call: record original
+acceptance/rejection, each bundle/per-note refund txid, its original-input lineage, and the full
+returned change-output range (currently reduced to txid in `input.rs`). The mint output creation
+path records concrete output amounts; output SMs mark `Spendable` atomically with insertion of
+those notes into the mint's spendable keyspace. Output failure and refund rejection preserve
+reason/identity evidence. Reverse indexes propagate child updates to the original journal even
+when original bundle input states have become inactive; note secrets never enter this API.
+
+All writers increment the revision and recompute aggregate recovery from unique output identities,
+never add the same recovered amount twice. `Recovered`, `Failed`, or `PartiallyRecovered` is
+terminal only when all original input groups, their fallback branches, and resulting output SMs
+are terminal; an input SM's per-note-fallback terminal state alone cannot complete the journal.
+Amounts reflect notes obtained, not refund acceptance alone. `NotRequired` records original
+acceptance with zero recovered amount. Refund execution/retries stay entirely in existing mint
+SMs. The journal and reverse indexes survive restarts and remain retained for this MVP; no new
+pruning API is introduced. Subscribers register for revision notifications before reading a
+snapshot and re-read durable revisions after wake/reconnect, preventing missed-update races.
+
+Phase 4 reads/subscribes to this API and stores only its returned evidence/revision in
+`InputRecovery`. It never reads private input/output state or initiates a competing reissue.
+Integration coverage in phase 7 must force bundle rejection and per-note fallback, restart across
+refund creation/acceptance/output recovery, and assert that query/subscription agree on identities,
+terminality, actual recovered amounts, and unchanged receiver debt. Include duplicate registration,
+missing-journal error, and unrelated transactions sharing the operation id.
 
 ## 4. Edge cases
 
@@ -279,6 +379,8 @@ Unit/integration in `fedimint-client` tests plus dedicated §15 cases:
       prepared ids are rejected atomically before finalization in both variants.
 - [ ] `PreparedTransaction` round-trips encode/decode through the client decoder registry.
 - [ ] Public docs on the API state the no-rebuild and retention rules verbatim.
+- [ ] Mint recovery journal/API and atomic writer obligations in §3.6 pass phase-7 integration
+      coverage; no daemon dependency on private mint state is required.
 
 ## 7. Open questions (non-blocking)
 

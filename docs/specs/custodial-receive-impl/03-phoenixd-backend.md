@@ -136,8 +136,12 @@ pub struct LedgerCursor {
 ```
 
 `list_settled_invoices` queries `from = watermark - overlap` to now, pages by offset *within one
-poll*, and the **consumer** dedupes by `payment_hash` (spec 04 keeps the dedup set implicitly via
-record status — a settlement already applied is a no-op). Offsets never persist. The cursor is
+poll*, and the **consumer** dedupes funding by `payment_hash` plus authoritative receive status:
+an already-applied settlement never triggers another funding transaction. Identical accounting
+evidence is also a no-op, but changed authenticated settlement/fee evidence updates that receive's
+existing loss contribution by delta (spec 04 §8), including after `Funded`. Funding status must not
+suppress this accounting update. Conflicting identity evidence retains the mismatch/alert rules;
+it never rebinds the record. Offsets never persist. The cursor is
 rebuildable: on loss, spec 04 point-looks-up every nonterminal record and retained tombstone by
 `external_id`/hash instead of trusting any window (§7.2).
 

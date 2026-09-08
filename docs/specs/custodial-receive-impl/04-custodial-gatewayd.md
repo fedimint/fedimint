@@ -192,7 +192,7 @@ enum CustodialReceiveStatus {
 | quote commit | record@`AwaitingPayment` (full bolt11 invoice, invoice hash, signed_quote — the stored invoice is what answers every later duplicate, §7.3) + `InvoiceHashIndex` + `CustodialPending` registry entry |
 | settle confirm | record@`SettledAwaitingLiquidity` or `FundingReserved` (+ evidence fields) |
 | prepare | record@`FundingPrepared` + spec-01 `PreparedTransactionKey` (inputs consumed) |
-| submit | record@`FundingSubmitted` + spec-01 `submit_prepared_transaction_dbtx` (op-log + submission SMs) in one dbtx |
+| submit | record@`FundingSubmitted` + spec-01 `submit_prepared_transaction_dbtx` (op-log + submission SMs) + mint `track_input_recovery_dbtx` registration (spec 01 §3.6) in one dbtx |
 | funded | record@`Funded(outpoint)` + `ContractAudit@AwaitingShares` (insert-if-absent/verify identity); input reservation naturally spent |
 | audit invalid | `ContractAudit@InvalidAwaitingRefund` + one open `InvalidContract` liability, even if refund preparation cannot yet succeed |
 | audit refund prepare | `ContractAudit@RefundPrepared` + exact prepared refund (inputs reserved); prior open liability retained |
@@ -321,10 +321,14 @@ outside custodial reconciliation.
   no-operation branch splits by state; only `FundingReserved` may prepare fresh; rejection ⇒
   `UnresolvedLiability` with reason `FundingRejected`. Its installed mint input SMs retain their
   existing automatic refund/reissue behavior (`fedimint-mint-client/src/input.rs`), potentially
-  including per-note fallback. Persist `InputRecovery` pending/recovered/failed evidence with the
-  rejected txid and refund operation/tx ids; observe module outputs to account actual recovered
-  ecash/fees, and resume observation on startup. Module terminality alone is not proof that all
-  refund output notes are spendable. Never manually re-credit or race those refunds, and never
+  including per-note fallback. Phase 1 supplies the concrete mint-owned journal/query/subscription
+  API in spec 01 §3.6. Atomically call `track_input_recovery_dbtx` when installing the funding
+  submission; persist `InputRecovery` from `input_recovery` / `subscribe_input_recovery` snapshots
+  (original/recovery txids, output identities/outcomes, revision and actual recovered amount),
+  resubscribing on startup. `RecoveryNotTracked` after submission is an invariant error. The daemon
+  never reads private mint input/output states, assumes OOB subscriptions cover this operation,
+  or deduces recovered ecash from input terminality. The mint journal owns correlation and only
+  reports recovered amounts after notes become spendable. Never manually re-credit or race those refunds, and never
   resolve receiver liability merely because inputs recover. Unsubmitted prepared transactions
   and `FundingTxInconclusive` retain reserved inputs until their exact transaction's outcome is
   established; no generic unprepare is in MVP. The rejected-funding prepared record can only be

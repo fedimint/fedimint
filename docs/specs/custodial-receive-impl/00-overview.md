@@ -14,7 +14,7 @@ most risk and gate everything else.
 
 | # | Doc | Crates touched | Depends on |
 |---|-----|----------------|------------|
-| 1 | [`01-client-tx-prepare.md`](./01-client-tx-prepare.md) | `fedimint-client`, `fedimint-client-module` | — |
+| 1 | [`01-client-tx-prepare.md`](./01-client-tx-prepare.md) | `fedimint-client`, `fedimint-client-module`, `modules/fedimint-mint-client` (recovery evidence) | — |
 | 2 | [`02-public-api.md`](./02-public-api.md) | `fedimint-lnv2-common` | — |
 | 3 | [`03-phoenixd-backend.md`](./03-phoenixd-backend.md) | `gateway/fedimint-lightning`, `gateway/fedimint-gateway-common` | 2 (types only) |
 | 4 | [`04-custodial-gatewayd.md`](./04-custodial-gatewayd.md) | new `gateway/fedimint-custodial-gatewayd`, `gateway/fedimint-gateway-server-db`, `modules/fedimint-gwv2-client` | 1, 2, 3 |
@@ -27,7 +27,8 @@ compile. Phases 5 and 6 are client-side and independent of 3–4 except for inte
 
 ## Shared conventions
 
-- **No consensus-module changes.** Nothing in these specs touches `fedimint-lnv2-server` semantics,
+- **No consensus-module changes.** The mint client recovery journal/API is phase-1 client work;
+  it changes neither mint consensus nor existing refund execution. Nothing in these specs touches `fedimint-lnv2-server` semantics,
   wire encodings, or spend rules (§7.5). Any spec change that would require one is a design bug —
   stop and escalate.
 - **Naming.** Rust items use the names from the design spec verbatim where one is given
@@ -44,9 +45,9 @@ compile. Phases 5 and 6 are client-side and independent of 3–4 except for inte
   receive logs `quote_id`, `contract_id` (never in metric labels, §7.8).
 - **Atomicity.** Every "commit X together with Y" in the design spec means one database
   transaction. Specs call out each such commit explicitly; implementers must not split them.
-- **Wasm.** Changes to `fedimint-client`, `fedimint-client-module`, `fedimint-lnv2-common`, and
-  `modules/fedimint-lnv2-client` must keep compiling for wasm (`just check-wasm`). Gateway-side
-  crates are native-only.
+- **Wasm.** Changes to `fedimint-client`, `fedimint-client-module`, `fedimint-lnv2-common`,
+  `modules/fedimint-lnv2-client`, and `modules/fedimint-mint-client` must keep compiling for wasm
+  (`just check-wasm`). Gateway-side crates are native-only.
 - **Feature flags.** None. All additions are additive API on existing crates plus new crates.
 
 ## What "buildable" means here

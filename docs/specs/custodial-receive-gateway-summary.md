@@ -214,7 +214,8 @@ funding deadline exists so this resolves by funding the original contract.
 Seven phases, each with a buildable spec in `custodial-receive-impl/`:
 
 1. **`fedimint-client` prepare/submit split** (spec 01) — finalize + lock inputs + persist the
-   exact transaction before broadcast; the exactly-once foundation and the riskiest piece.
+   exact transaction before broadcast; the exactly-once foundation and the riskiest piece. Also
+   owns the mint client recovery-evidence journal/API, keeping refund execution inside the mint.
 2. **Public API semantics** (spec 02) — capability advertisement in `RoutingInfo`, the create
    endpoint, the signed quote/terms encoding, typed rejection reasons, the same-gateway
    forfeit-signature send outcome, and the rule that the legacy gateway list stays

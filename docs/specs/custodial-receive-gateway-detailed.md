@@ -95,8 +95,8 @@ Because the receiver encrypted its own valid preimage, the funded contract route
 the receiver's `claim_pk` and the receiver's existing claim machinery works unchanged.
 
 **No fedimint consensus-module change is required**. The required changes are in the gateway,
-gateway API, LNv2 client, and generic `fedimint-client` transaction-preparation APIs (§7). The
-federation's server module is untouched.
+gateway API, LNv2 client, generic `fedimint-client` transaction-preparation APIs, and the mint
+client recovery-evidence journal/API (§7). Federation server modules are untouched.
 
 **Economic model (unchanged from trustless):** the gateway funds the contract from
 its **federation ecash float** and is reimbursed by the Lightning receipt in its
@@ -645,7 +645,8 @@ New `custodial-gatewayd` logic, per connected federation:
    the `IncomingContract` for its **full `commitment.amount`** (the amount is fixed, partial
    funding is impossible, §8) from gateway ecash. A record already past `AwaitingPayment` starts no
    new funding and routes by state: `SettledAwaitingLiquidity` waits for float, `FundingReserved` /
-   `FundingPrepared` / `FundingSubmitted` wait or re-drive (§10), `Funded` is a no-op, a settlement
+   `FundingPrepared` / `FundingSubmitted` wait or re-drive (§10), `Funded` is a no-op **for funding**
+   (changed authenticated accounting evidence still adjusts the existing loss contribution, §8), a settlement
    matching an `InvoiceExpiredUnpaid`, `BackendInvoiceRejected`, or `InvoiceExpiredUnreturned`
    tombstone follows the retained record's `fund_on_settlement` policy, and a settlement matching no
    record at all is handled by the `UnmatchedSettlement` rule below (recording and halting are in
@@ -766,7 +767,11 @@ New `custodial-gatewayd` logic, per connected federation:
    (`modules/fedimint-mint-client/src/input.rs`); recovered notes become spendable normally. The
    liability retains the rejected txid and tracks input recovery as pending, recovered (actual
    amount/fees), or failed, including bundle/per-note refund outcomes. Recovery of gateway ecash
-   never resolves receiver debt. Never manually re-credit those inputs or start a competing refund.
+   never resolves receiver debt. Phase 1 adds the mint-owned tracked-recovery journal and public
+   query/subscription (impl spec 01 §3.6), registered in the original submission dbtx. The mint's
+   input/output SMs atomically journal refund lineage, tx/output identities and spendable amounts;
+   the daemon consumes those snapshots and never private mint state. Never manually re-credit
+   those inputs or start a competing refund.
    Unsubmitted prepared inputs have no installed refund SM and remain reserved; their generic
    abandonment/re-credit API remains deferred (§14). A
    `FundingTxInconclusive` liability **quarantines** the inputs (never released, never reused) until
@@ -1823,7 +1828,9 @@ those come first.
 1. **Client-core transaction preparation**: a generic `fedimint-client` prepare/submit split with
    durable input reservations and exact-tx replay (finalize + lock inputs + return bytes and a
    reservation token without an op-log entry or submission SM, then install a stored exact tx as a
-   submission SM in one autocommit dbtx, §7.3). Highest-risk, and it gates the rest.
+   submission SM in one autocommit dbtx, §7.3). This phase also owns the mint client recovery
+   journal/query/subscription and atomic SM evidence writers (impl spec 01 §3.6) consumed by
+   phase 4. Existing mint refund execution stays in the mint module. Highest-risk, and gates the rest.
 2. **Public API semantics**: `RoutingInfo` receive capabilities, the custodial-receive result enums
    including `ActualLiabilityLimitExceeded` but no public resource-quota rejection, and the
    same-gateway send **forfeit-signature** outcome that rides successful domain responses (§7.6,
@@ -1924,19 +1931,25 @@ those come first.
    - an **invalid contract opening a liability after the gateway refund audit** (§7.3, §7.7)
    - `Funded` and pending audit commit atomically; crashes before task spawn, during share wait,
      after refund prepare/submit/acceptance, and during mint-output recovery resume to one refund
-     and one liability. Share timeout never proves invalidity; pruning retains unfinished work
+     and one liability. Share timeout never proves invalidity; pruning retains unfinished work.
+     Refund rejection plus restart preserves an open liability, alerts, reports no recovered refund
+     ecash, retains rejection/transaction evidence, and never submits a replacement refund
    - mixed prepare and legacy-submit APIs serialize operation-id ownership; conflicting stored
      submission identities fail rather than report another transaction's prepared outpoints
    - definitive funding rejection resumes existing module refunds across restart, including bundle
      fallback; recovered ecash becomes spendable while the receiver liability remains open.
-     Unsubmitted/inconclusive reservations are not manually re-credited
+     Unsubmitted/inconclusive reservations are not manually re-credited. Exercise the mint-owned
+     recovery query/subscription (impl spec 01 §3.6): atomic registration, original-input→refund→
+     output correlation, bundle/per-note fallback, restart, and actual spendable amounts without
+     daemon access to private mint states
    - authenticated overpayments (small or gross) fund the quoted contract once and record surplus;
      authenticated skim funds fully and records loss; unexplained shortfall/non-amount mismatch
      retains liability. Exercise each direction on fresh and recovered settlement paths
    - multiple outstanding invoices may exhaust inbound capacity and exceed both actual-obligation
      and loss-budget thresholds; issuance stops at the thresholds without abandoning existing debt.
      Loss dedup, cross-federation scope, restart, fee adjustments, pruning, and operator reset preserve
-     accounting; reset must not clear unrelated health stops
+     accounting; changed authenticated evidence adjusts a previously funded receive's contribution
+     without a second funding. Reset must not clear unrelated health stops
    - select an out-of-band custodial URL for send, complete a normal payment through its mandatory
      endpoint, and verify pre-payment limit refusal/forfeit and lost-response recovery
    - lost create response with a visible backend invoice recovers `AwaitingPayment`; a maybe-sent
