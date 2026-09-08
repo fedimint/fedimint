@@ -107,10 +107,10 @@
 <a href=#107 id=107 data-nosnippet>107</a>    PayInvoiceResponse, PaymentAction, RouteHtlcStream, ldk,
 <a href=#108 id=108 data-nosnippet>108</a>};
 <a href=#109 id=109 data-nosnippet>109</a><span class="kw">use </span>fedimint_ln_client::pay::PaymentData;
-<a href=#110 id=110 data-nosnippet>110</a><span class="kw">use </span>fedimint_ln_common::LightningCommonInit;
-<a href=#111 id=111 data-nosnippet>111</a><span class="kw">use </span>fedimint_ln_common::config::LightningClientConfig;
-<a href=#112 id=112 data-nosnippet>112</a><span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
-<a href=#113 id=113 data-nosnippet>113</a><span class="kw">use </span>fedimint_ln_common::contracts::{IdentifiableContract, Preimage};
+<a href=#110 id=110 data-nosnippet>110</a><span class="kw">use </span>fedimint_ln_common::config::LightningClientConfig;
+<a href=#111 id=111 data-nosnippet>111</a><span class="kw">use </span>fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
+<a href=#112 id=112 data-nosnippet>112</a><span class="kw">use </span>fedimint_ln_common::contracts::{IdentifiableContract, Preimage};
+<a href=#113 id=113 data-nosnippet>113</a><span class="kw">use </span>fedimint_ln_common::{LightningCommonInit, PreimageAuth};
 <a href=#114 id=114 data-nosnippet>114</a><span class="kw">use </span>fedimint_lnurl::VerifyResponse;
 <a href=#115 id=115 data-nosnippet>115</a><span class="kw">use </span>fedimint_lnv2_common::Bolt11InvoiceDescription;
 <a href=#116 id=116 data-nosnippet>116</a><span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -3832,7 +3832,7 @@
 <a href=#3832 id=3832 data-nosnippet>3832</a>    ) -&gt; std::result::Result&lt;(), OutgoingPaymentError&gt; {
 <a href=#3833 id=3833 data-nosnippet>3833</a>        <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.gateway_db.begin_transaction().<span class="kw">await</span>;
 <a href=#3834 id=3834 data-nosnippet>3834</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(secret_hash) = dbtx.load_preimage_authentication(payment_hash).<span class="kw">await </span>{
-<a href=#3835 id=3835 data-nosnippet>3835</a>            <span class="kw">if </span><span class="macro">secret_hash !</span>= preimage_auth {
+<a href=#3835 id=3835 data-nosnippet>3835</a>            <span class="kw">if </span>!PreimageAuth::new(secret_hash).verifies(preimage_auth) {
 <a href=#3836 id=3836 data-nosnippet>3836</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(OutgoingPaymentError {
 <a href=#3837 id=3837 data-nosnippet>3837</a>                    error_type: OutgoingPaymentErrorType::InvalidInvoicePreimage,
 <a href=#3838 id=3838 data-nosnippet>3838</a>                    contract_id: contract.contract.contract_id(),
