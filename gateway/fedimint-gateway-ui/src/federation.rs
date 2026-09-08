@@ -1142,7 +1142,7 @@ pub async fn receive_ecash_handler<E: Display>(
             let balance_btc = updated_balance.msats as f64 / 100_000_000_000.0;
 
             html! {
-                div class=(balance_class) {
+                div class="alert alert-success" {
                     div class="d-flex justify-content-between align-items-center" {
                         span { "Ecash received successfully!" }
                         span class="badge bg-success" { (response.amount) }
