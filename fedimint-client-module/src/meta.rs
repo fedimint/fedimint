@@ -172,9 +172,9 @@ pub async fn fetch_meta_overrides(
         });
     }
 
-    let mut federation_map = response
-        .json::<BTreeMap<String, BTreeMap<String, serde_json::Value>>>()
-        .await?;
+    let body = response.bytes().await?;
+    let mut federation_map =
+        serde_json::from_slice::<BTreeMap<String, BTreeMap<String, serde_json::Value>>>(&body)?;
 
     let federation_id = client_config.calculate_federation_id();
     let meta_fields = federation_map

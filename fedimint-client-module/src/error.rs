@@ -174,6 +174,13 @@ impl From<ModuleLookupError> for fedimint_core::util::ffi::UniffiError {
 pub struct ApiVersionDiscoveryError;
 
 /// A failure to fetch the federation's meta fields.
+///
+/// The built-in sources produce the specific variants. A [`MetaSource`]
+/// implemented elsewhere reports anything they do not describe through
+/// [`Custom`].
+///
+/// [`MetaSource`]: crate::meta::MetaSource
+/// [`Custom`]: MetaFetchError::Custom
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum MetaFetchError {
@@ -181,8 +188,8 @@ pub enum MetaFetchError {
     #[error("Failed to read the meta override URL from the client config")]
     Config(#[from] ModuleConfigError),
 
-    /// The meta override source could not be reached, or did not answer with
-    /// the expected body.
+    /// The meta override source could not be reached, or its body could not
+    /// be read.
     #[error("The meta override source could not be fetched")]
     Http(#[from] reqwest::Error),
 
@@ -203,4 +210,9 @@ pub enum MetaFetchError {
         /// The federation that was looked up.
         federation_id: FederationId,
     },
+
+    /// A meta source implemented outside this crate failed in a way the other
+    /// variants do not describe.
+    #[error("The meta source failed")]
+    Custom(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
