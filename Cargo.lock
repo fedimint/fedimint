@@ -3409,6 +3409,7 @@ dependencies = [
  "rand 0.8.5",
  "scopeguard",
  "secp256k1",
+ "semver",
  "serde",
  "serde_json",
  "serdect 0.2.0",
