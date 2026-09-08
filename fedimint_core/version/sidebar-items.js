@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["cargo_pkg","cargo_pkg_release","git_hash","non_zero_version_hash","release_version"]};
+window.SIDEBAR_ITEMS = {"fn":["cargo_pkg","cargo_pkg_release","git_hash","non_zero_version_hash","release_version"],"struct":["DkgVersion","DkgVersionCompatibility"]};

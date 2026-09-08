@@ -120,39 +120,52 @@
 <a href=#120 id=120 data-nosnippet>120</a><span class="doccomment">/// Force devimint to run a test with a deprecated configuration
 <a href=#121 id=121 data-nosnippet>121</a></span><span class="kw">pub const </span>FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEVIMINT_RUN_DEPRECATED_TESTS"</span>;
 <a href=#122 id=122 data-nosnippet>122</a>
-<a href=#123 id=123 data-nosnippet>123</a><span class="doccomment">/// Devimint's "data dir" (think `/usr/devimint/`).
+<a href=#123 id=123 data-nosnippet>123</a><span class="doccomment">/// Expected vendor when devimint compares `fedimintd --version` with DKG/setup.
 <a href=#124 id=124 data-nosnippet>124</a>///
-<a href=#125 id=125 data-nosnippet>125</a>/// "Static" because we use "data dir" for the directory `devimint` puts all the
-<a href=#126 id=126 data-nosnippet>126</a>/// runtime state in, which is typically a per-invocation temporary directory.
-<a href=#127 id=127 data-nosnippet>127</a>///
-<a href=#128 id=128 data-nosnippet>128</a>/// Can be set during `cargo build` to force the default one, then available in
-<a href=#129 id=129 data-nosnippet>129</a>/// Rust code during building, and also checked at runtime to allow
-<a href=#130 id=130 data-nosnippet>130</a>/// overwriting.
-<a href=#131 id=131 data-nosnippet>131</a></span><span class="kw">pub const </span>FM_DEVIMINT_STATIC_DATA_DIR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEVIMINT_STATIC_DATA_DIR"</span>;
-<a href=#132 id=132 data-nosnippet>132</a>
-<a href=#133 id=133 data-nosnippet>133</a><span class="doccomment">/// Override LDK's Lightning port
-<a href=#134 id=134 data-nosnippet>134</a></span><span class="kw">pub const </span>FM_PORT_LDK_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_PORT_LDK"</span>;
+<a href=#125 id=125 data-nosnippet>125</a>/// `fedimintd --version` is its Cargo package version, so it does not include
+<a href=#126 id=126 data-nosnippet>126</a>/// the optional vendor passed to `fedimintd::run` at runtime. DKG/setup reports
+<a href=#127 id=127 data-nosnippet>127</a>/// the normalized version with `+vendor`; set this environment variable so
+<a href=#128 id=128 data-nosnippet>128</a>/// devimint can reconstruct and compare that semantic version exactly. This
+<a href=#129 id=129 data-nosnippet>129</a>/// preserves testing of exact vendor identity instead of stripping SemVer build
+<a href=#130 id=130 data-nosnippet>130</a>/// metadata.
+<a href=#131 id=131 data-nosnippet>131</a>///
+<a href=#132 id=132 data-nosnippet>132</a>/// `_ENV` names this Rust constant; the environment variable is
+<a href=#133 id=133 data-nosnippet>133</a>/// `FM_EXPECTED_FEDIMINTD_VENDOR`.
+<a href=#134 id=134 data-nosnippet>134</a></span><span class="kw">pub const </span>FM_EXPECTED_FEDIMINTD_VENDOR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_EXPECTED_FEDIMINTD_VENDOR"</span>;
 <a href=#135 id=135 data-nosnippet>135</a>
-<a href=#136 id=136 data-nosnippet>136</a><span class="comment">// recurringd.rs
-<a href=#137 id=137 data-nosnippet>137</a>
-<a href=#138 id=138 data-nosnippet>138</a>// Env variable for recurringd bind address
-<a href=#139 id=139 data-nosnippet>139</a></span><span class="kw">pub const </span>FM_RECURRING_BIND_ADDRESS_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_RECURRING_BIND_ADDRESS"</span>;
-<a href=#140 id=140 data-nosnippet>140</a>
-<a href=#141 id=141 data-nosnippet>141</a><span class="comment">// Env variable for recurringd API address
-<a href=#142 id=142 data-nosnippet>142</a></span><span class="kw">pub const </span>FM_RECURRING_API_ADDRESS_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_RECURRING_API_ADDRESS"</span>;
-<a href=#143 id=143 data-nosnippet>143</a>
-<a href=#144 id=144 data-nosnippet>144</a><span class="comment">// Env variable for recurringd data directory
-<a href=#145 id=145 data-nosnippet>145</a></span><span class="kw">pub const </span>FM_RECURRING_DATA_DIR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_RECURRING_DATA_DIR"</span>;
-<a href=#146 id=146 data-nosnippet>146</a>
-<a href=#147 id=147 data-nosnippet>147</a><span class="comment">// Env variable for recurringd API bearer token
-<a href=#148 id=148 data-nosnippet>148</a></span><span class="kw">pub const </span>FM_RECURRING_API_BEARER_TOKEN_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_RECURRING_API_BEARER_TOKEN"</span>;
-<a href=#149 id=149 data-nosnippet>149</a>
-<a href=#150 id=150 data-nosnippet>150</a><span class="comment">// Env variable to override recurringd binary set:
-<a href=#151 id=151 data-nosnippet>151</a></span><span class="kw">pub const </span>FM_RECURRINGD_BASE_EXECUTABLE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_RECURRINGD_BASE_EXECUTABLE"</span>;
-<a href=#152 id=152 data-nosnippet>152</a>
-<a href=#153 id=153 data-nosnippet>153</a><span class="comment">// Env variable to override the iroh listen addr for the gateway
-<a href=#154 id=154 data-nosnippet>154</a></span><span class="kw">pub const </span>FM_GATEWAY_IROH_LISTEN_ADDR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_IROH_LISTEN_ADDR"</span>;
-<a href=#155 id=155 data-nosnippet>155</a>
-<a href=#156 id=156 data-nosnippet>156</a><span class="comment">// Env variable to set the metrics listen addr for the gateway
-<a href=#157 id=157 data-nosnippet>157</a></span><span class="kw">pub const </span>FM_GATEWAY_METRICS_LISTEN_ADDR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_METRICS_LISTEN_ADDR"</span>;
+<a href=#136 id=136 data-nosnippet>136</a><span class="doccomment">/// Devimint's "data dir" (think `/usr/devimint/`).
+<a href=#137 id=137 data-nosnippet>137</a>///
+<a href=#138 id=138 data-nosnippet>138</a>/// "Static" because we use "data dir" for the directory `devimint` puts all the
+<a href=#139 id=139 data-nosnippet>139</a>/// runtime state in, which is typically a per-invocation temporary directory.
+<a href=#140 id=140 data-nosnippet>140</a>///
+<a href=#141 id=141 data-nosnippet>141</a>/// Can be set during `cargo build` to force the default one, then available in
+<a href=#142 id=142 data-nosnippet>142</a>/// Rust code during building, and also checked at runtime to allow
+<a href=#143 id=143 data-nosnippet>143</a>/// overwriting.
+<a href=#144 id=144 data-nosnippet>144</a></span><span class="kw">pub const </span>FM_DEVIMINT_STATIC_DATA_DIR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_DEVIMINT_STATIC_DATA_DIR"</span>;
+<a href=#145 id=145 data-nosnippet>145</a>
+<a href=#146 id=146 data-nosnippet>146</a><span class="doccomment">/// Override LDK's Lightning port
+<a href=#147 id=147 data-nosnippet>147</a></span><span class="kw">pub const </span>FM_PORT_LDK_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_PORT_LDK"</span>;
+<a href=#148 id=148 data-nosnippet>148</a>
+<a href=#149 id=149 data-nosnippet>149</a><span class="comment">// recurringd.rs
+<a href=#150 id=150 data-nosnippet>150</a>
+<a href=#151 id=151 data-nosnippet>151</a>// Env variable for recurringd bind address
+<a href=#152 id=152 data-nosnippet>152</a></span><span class="kw">pub const </span>FM_RECURRING_BIND_ADDRESS_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_RECURRING_BIND_ADDRESS"</span>;
+<a href=#153 id=153 data-nosnippet>153</a>
+<a href=#154 id=154 data-nosnippet>154</a><span class="comment">// Env variable for recurringd API address
+<a href=#155 id=155 data-nosnippet>155</a></span><span class="kw">pub const </span>FM_RECURRING_API_ADDRESS_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_RECURRING_API_ADDRESS"</span>;
+<a href=#156 id=156 data-nosnippet>156</a>
+<a href=#157 id=157 data-nosnippet>157</a><span class="comment">// Env variable for recurringd data directory
+<a href=#158 id=158 data-nosnippet>158</a></span><span class="kw">pub const </span>FM_RECURRING_DATA_DIR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_RECURRING_DATA_DIR"</span>;
+<a href=#159 id=159 data-nosnippet>159</a>
+<a href=#160 id=160 data-nosnippet>160</a><span class="comment">// Env variable for recurringd API bearer token
+<a href=#161 id=161 data-nosnippet>161</a></span><span class="kw">pub const </span>FM_RECURRING_API_BEARER_TOKEN_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_RECURRING_API_BEARER_TOKEN"</span>;
+<a href=#162 id=162 data-nosnippet>162</a>
+<a href=#163 id=163 data-nosnippet>163</a><span class="comment">// Env variable to override recurringd binary set:
+<a href=#164 id=164 data-nosnippet>164</a></span><span class="kw">pub const </span>FM_RECURRINGD_BASE_EXECUTABLE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_RECURRINGD_BASE_EXECUTABLE"</span>;
+<a href=#165 id=165 data-nosnippet>165</a>
+<a href=#166 id=166 data-nosnippet>166</a><span class="comment">// Env variable to override the iroh listen addr for the gateway
+<a href=#167 id=167 data-nosnippet>167</a></span><span class="kw">pub const </span>FM_GATEWAY_IROH_LISTEN_ADDR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_IROH_LISTEN_ADDR"</span>;
+<a href=#168 id=168 data-nosnippet>168</a>
+<a href=#169 id=169 data-nosnippet>169</a><span class="comment">// Env variable to set the metrics listen addr for the gateway
+<a href=#170 id=170 data-nosnippet>170</a></span><span class="kw">pub const </span>FM_GATEWAY_METRICS_LISTEN_ADDR_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_GATEWAY_METRICS_LISTEN_ADDR"</span>;
 </code></pre></div></section></main></body></html>
