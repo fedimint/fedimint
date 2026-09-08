@@ -107,10 +107,10 @@ use fedimint_lightning::{
     PayInvoiceResponse, PaymentAction, RouteHtlcStream, ldk,
 };
 use fedimint_ln_client::pay::PaymentData;
-use fedimint_ln_common::LightningCommonInit;
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{IdentifiableContract, Preimage};
+use fedimint_ln_common::{LightningCommonInit, PreimageAuth};
 use fedimint_lnurl::VerifyResponse;
 use fedimint_lnv2_common::Bolt11InvoiceDescription;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -3832,7 +3832,7 @@ impl IGatewayClientV1 for Gateway {
     ) -> std::result::Result<(), OutgoingPaymentError> {
         let mut dbtx = self.gateway_db.begin_transaction().await;
         if let Some(secret_hash) = dbtx.load_preimage_authentication(payment_hash).await {
-            if secret_hash != preimage_auth {
+            if !PreimageAuth::new(secret_hash).verifies(preimage_auth) {
                 return Err(OutgoingPaymentError {
                     error_type: OutgoingPaymentErrorType::InvalidInvoicePreimage,
                     contract_id: contract.contract.contract_id(),

@@ -22,6 +22,7 @@ pub mod config;
 pub mod contracts;
 pub mod federation_endpoint_constants;
 pub mod gateway_endpoint_constants;
+mod preimage_auth;
 
 /// Exclusive remaining-CLTV safety margin for funding LNv1 incoming contracts.
 ///
@@ -59,6 +60,7 @@ use fedimint_core::{
     extensible_associated_module_type, plugin_types_trait_impl_common, secp256k1,
 };
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
+pub use preimage_auth::PreimageAuth;
 pub use reqwest::Method;
 use secp256k1::schnorr::Signature;
 use serde::{Deserialize, Serialize};
