@@ -1308,8 +1308,13 @@ pub enum ReissueExternalNotesError {
     ZeroAmount,
 
     /// The notes were issued by a different federation.
-    #[error("Federation ID does not match")]
-    WrongFederationId,
+    #[error("The notes were issued by federation {found}, not {expected}")]
+    WrongFederationId {
+        /// The federation this client belongs to.
+        expected: FederationIdPrefix,
+        /// The federation the notes name.
+        found: FederationIdPrefix,
+    },
 
     /// An operation for these exact notes already exists, so they were already
     /// handed to this federation.
@@ -2051,7 +2056,10 @@ impl MintClientModule {
         }
 
         if federation_id_prefix != self.federation_id.to_prefix() {
-            return Err(ReissueExternalNotesError::WrongFederationId);
+            return Err(ReissueExternalNotesError::WrongFederationId {
+                expected: self.federation_id.to_prefix(),
+                found: federation_id_prefix,
+            });
         }
 
         let operation_id = OperationId(
