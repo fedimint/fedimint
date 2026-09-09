@@ -16,7 +16,8 @@ use fedimint_walletv2_client::events::{
     SendPaymentUpdateEvent,
 };
 use fedimint_walletv2_client::{
-    FinalSendOperationState, ReceiveProgress, SendError, WalletClientInit, WalletClientModule,
+    FinalReceiveOperationState, FinalSendOperationState, ReceiveProgress, SendError,
+    WalletClientInit, WalletClientModule,
 };
 use fedimint_walletv2_common::KIND;
 use fedimint_walletv2_server::{CONFIRMATION_FINALITY_DELAY, WalletInit};
@@ -289,26 +290,17 @@ async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
     )
     .await?;
 
-    let mut progress = pin!(
-        module
-            .subscribe_receive_progress(&address, position)
-            .await?
-    );
+    // The advisory view cannot tell a claimed deposit from a reorged one, and
+    // keeps reporting an output for a while after it turns final, so the receive
+    // operations themselves settle it. Only these two deposits exist, so waiting
+    // for two successful receives covers both.
+    let (state, position) = module.await_receive(position).await?;
 
-    loop {
-        match progress.next().await {
-            Some(states)
-                if states.len() == 2
-                    && states
-                        .iter()
-                        .all(|(_, state)| *state == ReceiveProgress::Claimed) =>
-            {
-                break;
-            }
-            Some(states) => info!("Receive progress: {states:?}"),
-            None => panic!("Progress stream ended before both peg-ins were claimed"),
-        }
-    }
+    assert_eq!(state, FinalReceiveOperationState::Success);
+
+    let (state, _) = module.await_receive(position).await?;
+
+    assert_eq!(state, FinalReceiveOperationState::Success);
 
     Ok(())
 }

@@ -132,8 +132,17 @@ pub struct PendingOutput {
     pub height: Option<u64>,
 }
 
-/// A guardian's local view of the mined-but-not-yet-final receive outputs,
-/// together with the block count that view was derived from.
+/// A guardian's local, advisory view of the receive outputs it can see but the
+/// federation has not recorded yet, together with the block count that view was
+/// derived from.
+///
+/// Two kinds of output land here: candidates sitting in the guardian's mempool,
+/// and the receive outputs of the handful of blocks below its local chain tip.
+/// That block window is measured against the guardian's own tip rather than the
+/// consensus block count, so an output keeps being reported for a while *after*
+/// it becomes final - deliberately, so that a progress display does not blank
+/// out in the gap between finality and the claim landing. Presence here
+/// therefore does not mean a deposit is still unclaimed.
 ///
 /// The block count is returned alongside the outputs so that a client computes
 /// confirmations against a single consistent view rather than mixing a height

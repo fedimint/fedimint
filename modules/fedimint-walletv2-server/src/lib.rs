@@ -1132,8 +1132,10 @@ pub struct Wallet {
     cfg: WalletConfig,
     db: Database,
     btc_rpc: ServerBitcoinRpcMonitor,
-    /// Local, non-consensus view of receive outputs that have been mined but
-    /// are not yet deep enough to enter the consensus output log.
+    /// Local, non-consensus view of the receive outputs this guardian can see
+    /// ahead of the consensus output log: mempool candidates plus the receive
+    /// outputs of the last [`MAX_PENDING_DEPTH`] blocks, the latter retained
+    /// past finality so that clients see continuous progress.
     ///
     /// Maintained by the `scan_pending_receives` background task and read by
     /// the pending outputs endpoint. This is intentionally in-memory only: it
@@ -1169,8 +1171,8 @@ impl Wallet {
         }
     }
 
-    /// Maintains [`Wallet::pending_outputs`] by scanning the blocks just below
-    /// the guardian's local chain tip.
+    /// Maintains [`Wallet::pending_outputs`] by scanning both the blocks just
+    /// below the guardian's local chain tip and its mempool.
     ///
     /// This deliberately runs outside of consensus. Most of this window sits
     /// above the consensus block count precisely because the federation does
