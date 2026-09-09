@@ -120,8 +120,8 @@ use crate::client_db::{
     NextECashNoteIndexKeyPrefix, NoteKey,
 };
 pub use crate::error::{
-    AwaitOutputFinalizedError, OOBNotesParseError, SelectNotesError, SendOOBNotesError,
-    SpendOOBError, SubscribeReissueExternalNotesError, SubscribeSpendNotesError,
+    AwaitOutputFinalizedError, FetchRecoverySliceError, OOBNotesParseError, SelectNotesError,
+    SendOOBNotesError, SpendOOBError, SubscribeReissueExternalNotesError, SubscribeSpendNotesError,
     ValidateNotesError,
 };
 use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStates};
@@ -192,12 +192,9 @@ async fn download_slice_with_hash(
         let peer = peer_selector.choose_peer();
         let start_time = fedimint_core::time::now();
 
-        match tokio::time::timeout(TIMEOUT, module_api.fetch_recovery_slice(peer, start, end))
-            .await
-            .map_err(Into::into)
-            .and_then(|r| r)
+        match tokio::time::timeout(TIMEOUT, module_api.fetch_recovery_slice(peer, start, end)).await
         {
-            Ok(data) => {
+            Ok(Ok(data)) => {
                 let elapsed = fedimint_core::time::now()
                     .duration_since(start_time)
                     .unwrap_or(Duration::ZERO);
@@ -210,7 +207,7 @@ async fn download_slice_with_hash(
 
                 peer_selector.remove(peer);
             }
-            Err(..) => {
+            Ok(Err(..)) | Err(..) => {
                 peer_selector.report(peer, TIMEOUT);
             }
         }

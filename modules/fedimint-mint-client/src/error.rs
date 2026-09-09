@@ -4,7 +4,7 @@
 //! the two types that predate this module and are re-exported from it, so
 //! there is one place to look.
 
-use fedimint_api_client::api::FederationError;
+use fedimint_api_client::api::{FederationError, ServerError};
 use fedimint_client_module::error::{
     AddStateMachinesError, OperationLookupError, TransactionSubmitError,
 };
@@ -247,4 +247,17 @@ pub enum OOBNotesParseError {
     /// The string decodes, but carries no notes.
     #[error("The e-cash notes are empty")]
     Empty,
+}
+
+/// A failure to fetch a slice of the federation's recovery log from one peer.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum FetchRecoverySliceError {
+    /// The peer did not answer, or answered with an error.
+    #[error("The peer did not serve the recovery slice")]
+    Peer(#[from] ServerError),
+
+    /// The peer's answer is not a decodable recovery slice.
+    #[error("The recovery slice could not be decoded")]
+    Decode(#[from] DecodeError),
 }

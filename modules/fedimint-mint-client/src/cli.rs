@@ -7,6 +7,7 @@ use anyhow::{Context, bail};
 use clap::{Parser, Subcommand};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, PeerId, TieredMulti};
 use futures::StreamExt;
 use futures::future::join_all;
@@ -111,7 +112,7 @@ async fn check_nonce_spent(
         async move {
             let result = match api.check_note_spent_single_peer(peer, nonce).await {
                 Ok(spent) => PeerCheckResult::Answer(spent),
-                Err(e) => PeerCheckResult::Error(format!("error: {e}")),
+                Err(e) => PeerCheckResult::Error(format!("error: {}", e.fmt_compact())),
             };
             (peer, result)
         }
@@ -136,7 +137,7 @@ async fn check_blind_nonce_used(
                 .await
             {
                 Ok(used) => PeerCheckResult::Answer(used),
-                Err(e) => PeerCheckResult::Error(format!("error: {e}")),
+                Err(e) => PeerCheckResult::Error(format!("error: {}", e.fmt_compact())),
             };
             (peer, result)
         }
