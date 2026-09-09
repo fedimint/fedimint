@@ -1054,7 +1054,7 @@ impl MintClientModule {
                 }
                 TransactionSubmitError::NoPrimaryModule { .. }
                 | TransactionSubmitError::PrimaryModule(..) => ReceiveECashError::InsufficientFunds,
-                _ => ReceiveECashError::Failed,
+                other => ReceiveECashError::Failed(other),
             })?;
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
@@ -1361,7 +1361,7 @@ pub enum SendECashError {
 }
 
 /// A failure to receive e-cash by reissuing it.
-#[derive(Error, Debug, Clone, Eq, PartialEq)]
+#[derive(Error, Debug)]
 #[non_exhaustive]
 pub enum ReceiveECashError {
     /// The e-cash was issued by a different federation.
@@ -1381,10 +1381,10 @@ pub enum ReceiveECashError {
     #[error("The ECash was already received")]
     AlreadyReceived,
 
-    /// The reissue transaction could not be submitted for a reason that is
-    /// not about funding.
+    /// The reissue transaction could not be submitted for a reason unrelated
+    /// to funding.
     #[error("The reissue transaction could not be submitted")]
-    Failed,
+    Failed(#[source] TransactionSubmitError),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]

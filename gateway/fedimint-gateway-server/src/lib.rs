@@ -1757,7 +1757,7 @@ impl Gateway {
                 .receive(ecash, serde_json::Value::Null)
                 .await
                 .map_err(|e| PublicGatewayError::ReceiveEcashError {
-                    failure_reason: e.to_string(),
+                    failure_reason: e.fmt_compact().to_string(),
                 })?;
 
             let final_state = mint
