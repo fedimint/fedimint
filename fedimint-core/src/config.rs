@@ -964,6 +964,20 @@ pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> Result<T, ConfigFileE
     })
 }
 
+/// A module's configured relative fee is above what the module accepts.
+///
+/// Every module that charges a relative fee validates it the same way in its
+/// own `FeeConsensus::new`, so the failure is named once here rather than once
+/// per module.
+#[derive(Debug, Error)]
+#[error("The relative fee of {parts_per_million} parts per million is over the limit of {max}")]
+pub struct ExcessiveRelativeFeeError {
+    /// The fee that was asked for.
+    pub parts_per_million: u64,
+    /// The largest relative fee the module accepts.
+    pub max: u64,
+}
+
 /// Failure to look up or cast a module configuration.
 #[derive(Debug, Error)]
 #[non_exhaustive]

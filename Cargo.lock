@@ -4390,7 +4390,6 @@ dependencies = [
 name = "fedimint-mint-common"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "bitcoin_hashes",
  "fedimint-core",
  "fedimint-tbs",
@@ -4505,7 +4504,6 @@ dependencies = [
 name = "fedimint-mintv2-common"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "bitcoin_hashes",
  "fedimint-core",
  "fedimint-tbs",

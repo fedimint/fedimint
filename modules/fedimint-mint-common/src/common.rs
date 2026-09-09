@@ -55,14 +55,14 @@ impl BackupRequest {
         self.consensus_hash()
     }
 
-    pub fn sign(self, keypair: &Keypair) -> anyhow::Result<SignedBackupRequest> {
+    pub fn sign(self, keypair: &Keypair) -> SignedBackupRequest {
         let signature =
             SECP256K1.sign_schnorr(&Message::from_digest(*self.hash().as_ref()), keypair);
 
-        Ok(SignedBackupRequest {
+        SignedBackupRequest {
             request: self,
             signature,
-        })
+        }
     }
 }
 

@@ -20,6 +20,7 @@ use tbs::{BlindedMessage, Message};
 use thiserror::Error;
 
 pub mod config;
+pub use fedimint_core::config::ExcessiveRelativeFeeError;
 pub mod endpoint_constants;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("mintv2");

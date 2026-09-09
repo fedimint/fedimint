@@ -16,7 +16,6 @@ name = "fedimint_mintv2_common"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 bitcoin_hashes = { workspace = true }
 fedimint-core = { workspace = true }
 serde = { workspace = true }
