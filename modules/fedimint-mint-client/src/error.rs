@@ -4,14 +4,14 @@
 //! the two types that predate this module and are re-exported from it, so
 //! there is one place to look.
 
-use fedimint_api_client::api::{FederationError, ServerError};
+use fedimint_api_client::api::{FederationError, OutputOutcomeError, ServerError};
 use fedimint_client_module::error::{
     AddStateMachinesError, OperationLookupError, TransactionSubmitError,
 };
-use fedimint_core::Amount;
 use fedimint_core::config::FederationIdPrefix;
 use fedimint_core::db::DatabaseError;
 use fedimint_core::encoding::DecodeError;
+use fedimint_core::{Amount, PeerId};
 use thiserror::Error;
 
 pub use crate::{InsufficientBalanceError, ReissueExternalNotesError};
@@ -298,5 +298,38 @@ pub enum RepairWalletError {
 impl From<FederationError> for RepairWalletError {
     fn from(source: FederationError) -> Self {
         Self::Federation(Box::new(source))
+    }
+}
+
+/// A guardian's blind signature share that cannot be used.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum VerifyBlindShareError {
+    /// The guardian's answer is not a decodable output outcome.
+    #[error("The output outcome could not be read")]
+    Outcome(#[source] Box<OutputOutcomeError>),
+
+    /// The share came from a peer this client holds no key for.
+    #[error("No public key share is known for peer {peer}")]
+    UnknownPeer {
+        /// The peer that answered.
+        peer: PeerId,
+    },
+
+    /// The federation does not issue notes of this denomination.
+    #[error("The federation issues no notes of the amount tier {amount}")]
+    InvalidAmountTier {
+        /// The tier the outcome claims.
+        amount: Amount,
+    },
+
+    /// The share does not verify against the peer's public key share.
+    #[error("The blind signature share does not verify")]
+    InvalidSignature,
+}
+
+impl From<OutputOutcomeError> for VerifyBlindShareError {
+    fn from(source: OutputOutcomeError) -> Self {
+        Self::Outcome(Box::new(source))
     }
 }

@@ -123,6 +123,7 @@ pub use crate::error::{
     AwaitOutputFinalizedError, FetchRecoverySliceError, OOBNotesParseError,
     PrepareEcashBackupError, RepairWalletError, SelectNotesError, SendOOBNotesError, SpendOOBError,
     SubscribeReissueExternalNotesError, SubscribeSpendNotesError, ValidateNotesError,
+    VerifyBlindShareError,
 };
 use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStates};
 use crate::oob::{MintOOBStateMachine, MintOOBStates, MintOOBStatesCreatedMulti};
@@ -3744,5 +3745,37 @@ mod tests {
             err.fmt_compact().to_string().contains("guardian refused"),
             "the reason the state machine recorded has to survive into the Failed state"
         );
+    }
+
+    #[test]
+    fn a_share_from_a_peer_we_have_no_key_for_names_the_peer() {
+        use std::collections::BTreeMap;
+
+        use bls12_381::G1Affine;
+        use fedimint_api_client::api::SerdeOutputOutcome;
+        use fedimint_core::core::DynOutputOutcome;
+        use fedimint_core::module::CommonModuleInit;
+        use fedimint_mint_common::{MintCommonInit, MintOutputOutcome};
+        use tbs::{BlindedMessage, BlindedSignatureShare};
+
+        use crate::error::VerifyBlindShareError;
+        use crate::output::verify_blind_share;
+
+        let peer = PeerId::from(7);
+        let decoder = MintCommonInit::decoder();
+        let outcome = MintOutputOutcome::new_v0(BlindedSignatureShare(G1Affine::identity()));
+        let serde_outcome = SerdeOutputOutcome::from(&DynOutputOutcome::from_typed(0, outcome));
+
+        let err = verify_blind_share(
+            peer,
+            &serde_outcome,
+            Amount::from_sats(1),
+            BlindedMessage(G1Affine::identity()),
+            &decoder,
+            &BTreeMap::new(),
+        )
+        .expect_err("no peer keys are known, so no key can be found for the peer");
+
+        assert_matches!(err, VerifyBlindShareError::UnknownPeer { peer: p } if p == peer);
     }
 }
