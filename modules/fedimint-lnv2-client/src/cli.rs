@@ -52,10 +52,6 @@ enum LnurlOpts {
 
 #[derive(Clone, Subcommand, Serialize)]
 enum GatewaysOpts {
-    /// Update the mapping from lightning node public keys to gateway api
-    /// endpoints maintained in the module database to optimise gateway
-    /// selection for a given invoice; this command is intended for testing.
-    Map,
     /// Select an online vetted gateway; this command is intended for testing.
     Select {
         #[arg(long)]
@@ -110,9 +106,13 @@ pub(crate) async fn handle_cli_command(
             } => json(lightning.generate_lnurl(recurringd, gateway).await?),
         },
         Opts::Gateways(gateway_opts) => match gateway_opts {
-            #[allow(clippy::unit_arg)]
-            GatewaysOpts::Map => json(lightning.update_gateway_map().await),
-            GatewaysOpts::Select { invoice } => json(lightning.select_gateway(invoice).await?.0),
+            GatewaysOpts::Select { invoice } => {
+                // The client is short-lived, so the in-memory gateway cache
+                // starts empty; populate it before selecting.
+                lightning.update_gateway_map().await;
+
+                json(lightning.select_gateway(invoice)?.0)
+            }
             GatewaysOpts::List { peer } => json(lightning.list_gateways(peer).await?),
             GatewaysOpts::Add { gateway } => {
                 let auth = lightning
