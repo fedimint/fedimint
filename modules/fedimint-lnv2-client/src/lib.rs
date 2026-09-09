@@ -57,7 +57,7 @@ use fedimint_lnv2_common::{
 use fedimint_logging::LOG_CLIENT_MODULE_LNV2;
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
-use secp256k1::{Keypair, PublicKey, Scalar, SecretKey, ecdh};
+use secp256k1::{Keypair, Scalar, SecretKey, ecdh};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum::IntoEnumIterator as _;
@@ -942,15 +942,128 @@ impl LightningClientModule {
         gateway: Option<SafeUrl>,
         custom_meta: Value,
     ) -> Result<(Bolt11Invoice, OperationId), ReceiveError> {
-        let (gateway, contract, invoice) = self
-            .create_contract_and_fetch_invoice(
-                self.keypair.public_key(),
-                amount,
-                expiry_secs,
-                description,
-                gateway,
+        if expiry_secs > MAX_INVOICE_EXPIRY_SECS {
+            return Err(ReceiveError::InvoiceExpiryTooLong);
+        }
+
+        let (gateway, routing_info) = self.resolve_receive_gateway(gateway).await?;
+
+        self.receive_with_routing_info(
+            amount,
+            expiry_secs,
+            description,
+            gateway,
+            routing_info,
+            custom_meta,
+        )
+        .await
+    }
+
+    /// Resolves the gateway to request an invoice from and its current
+    /// routing info: the given one, or an automatically selected one when
+    /// `None`.
+    async fn resolve_receive_gateway(
+        &self,
+        gateway: Option<SafeUrl>,
+    ) -> Result<(SafeUrl, RoutingInfo), ReceiveError> {
+        match gateway {
+            Some(gateway) => Ok((
+                gateway.clone(),
+                self.routing_info(&gateway)
+                    .await
+                    .map_err(|e| ReceiveError::FailedToConnectToGateway(e.to_string()))?
+                    .ok_or(ReceiveError::FederationNotSupported)?,
+            )),
+            None => self
+                .select_gateway(None)
+                .await
+                .map_err(ReceiveError::SelectGateway),
+        }
+    }
+
+    /// Creates the incoming contract locked to a public key derived from our
+    /// static module public key, fetches its invoice from `gateway` at the
+    /// terms in `routing_info`, then starts the receive operation.
+    async fn receive_with_routing_info(
+        &self,
+        amount: Amount,
+        expiry_secs: u32,
+        description: Bolt11InvoiceDescription,
+        gateway: SafeUrl,
+        routing_info: RoutingInfo,
+        custom_meta: Value,
+    ) -> Result<(Bolt11Invoice, OperationId), ReceiveError> {
+        let recipient_static_pk = self.keypair.public_key();
+
+        let (ephemeral_tweak, ephemeral_pk) = tweak::generate(recipient_static_pk);
+
+        let encryption_seed = ephemeral_tweak
+            .consensus_hash::<sha256::Hash>()
+            .to_byte_array();
+
+        let preimage = encryption_seed
+            .consensus_hash::<sha256::Hash>()
+            .to_byte_array();
+
+        if !routing_info
+            .receive_fee
+            .is_within(&PaymentFee::RECEIVE_FEE_LIMIT)
+        {
+            return Err(ReceiveError::GatewayFeeExceedsLimit);
+        }
+
+        let contract_amount = routing_info.receive_fee.subtract_from(amount.msats);
+
+        // Quoting the claim against this federation's fee consensus is exact, where a
+        // fixed floor is either too permissive or too strict depending on how the
+        // federation is configured.
+        if !self.is_worth_claiming(contract_amount).await {
+            return Err(ReceiveError::AmountTooSmall);
+        }
+
+        let expiration = duration_since_epoch()
+            .as_secs()
+            .saturating_add(u64::from(expiry_secs));
+
+        let claim_pk = recipient_static_pk
+            .mul_tweak(
+                secp256k1::SECP256K1,
+                &Scalar::from_be_bytes(ephemeral_tweak).expect("Within curve order"),
             )
-            .await?;
+            .expect("Tweak is valid");
+
+        let contract = IncomingContract::new(
+            self.cfg.tpe_agg_pk,
+            encryption_seed,
+            preimage,
+            PaymentImage::Hash(preimage.consensus_hash()),
+            contract_amount,
+            expiration,
+            claim_pk,
+            routing_info.module_public_key,
+            ephemeral_pk,
+        );
+
+        let invoice = self
+            .gateway_conn
+            .bolt11_invoice(
+                gateway.clone(),
+                self.federation_id,
+                contract.clone(),
+                amount,
+                description,
+                expiry_secs,
+            )
+            .await
+            .map_err(|e| ReceiveError::FailedToConnectToGateway(e.to_string()))?;
+
+        if invoice.payment_hash() != &preimage.consensus_hash() {
+            return Err(ReceiveError::InvalidInvoice);
+        }
+
+        if invoice.amount_milli_satoshis() != Some(amount.msats) {
+            return Err(ReceiveError::IncorrectInvoiceAmount);
+        }
 
         let operation_id = self
             .receive_incoming_contract(
@@ -1110,108 +1223,6 @@ impl LightningClientModule {
         )
         .await
         .ok_or_else(|| anyhow::anyhow!("Balance is too low to send any amount after fees"))
-    }
-
-    /// Create an incoming contract locked to a public key derived from the
-    /// recipient's static module public key and fetches the corresponding
-    /// invoice.
-    async fn create_contract_and_fetch_invoice(
-        &self,
-        recipient_static_pk: PublicKey,
-        amount: Amount,
-        expiry_secs: u32,
-        description: Bolt11InvoiceDescription,
-        gateway: Option<SafeUrl>,
-    ) -> Result<(SafeUrl, IncomingContract, Bolt11Invoice), ReceiveError> {
-        if expiry_secs > MAX_INVOICE_EXPIRY_SECS {
-            return Err(ReceiveError::InvoiceExpiryTooLong);
-        }
-
-        let (ephemeral_tweak, ephemeral_pk) = tweak::generate(recipient_static_pk);
-
-        let encryption_seed = ephemeral_tweak
-            .consensus_hash::<sha256::Hash>()
-            .to_byte_array();
-
-        let preimage = encryption_seed
-            .consensus_hash::<sha256::Hash>()
-            .to_byte_array();
-
-        let (gateway, routing_info) = match gateway {
-            Some(gateway) => (
-                gateway.clone(),
-                self.routing_info(&gateway)
-                    .await
-                    .map_err(|e| ReceiveError::FailedToConnectToGateway(e.to_string()))?
-                    .ok_or(ReceiveError::FederationNotSupported)?,
-            ),
-            None => self
-                .select_gateway(None)
-                .await
-                .map_err(ReceiveError::SelectGateway)?,
-        };
-
-        if !routing_info
-            .receive_fee
-            .is_within(&PaymentFee::RECEIVE_FEE_LIMIT)
-        {
-            return Err(ReceiveError::GatewayFeeExceedsLimit);
-        }
-
-        let contract_amount = routing_info.receive_fee.subtract_from(amount.msats);
-
-        // Quoting the claim against this federation's fee consensus is exact, where a
-        // fixed floor is either too permissive or too strict depending on how the
-        // federation is configured.
-        if !self.is_worth_claiming(contract_amount).await {
-            return Err(ReceiveError::AmountTooSmall);
-        }
-
-        let expiration = duration_since_epoch()
-            .as_secs()
-            .saturating_add(u64::from(expiry_secs));
-
-        let claim_pk = recipient_static_pk
-            .mul_tweak(
-                secp256k1::SECP256K1,
-                &Scalar::from_be_bytes(ephemeral_tweak).expect("Within curve order"),
-            )
-            .expect("Tweak is valid");
-
-        let contract = IncomingContract::new(
-            self.cfg.tpe_agg_pk,
-            encryption_seed,
-            preimage,
-            PaymentImage::Hash(preimage.consensus_hash()),
-            contract_amount,
-            expiration,
-            claim_pk,
-            routing_info.module_public_key,
-            ephemeral_pk,
-        );
-
-        let invoice = self
-            .gateway_conn
-            .bolt11_invoice(
-                gateway.clone(),
-                self.federation_id,
-                contract.clone(),
-                amount,
-                description,
-                expiry_secs,
-            )
-            .await
-            .map_err(|e| ReceiveError::FailedToConnectToGateway(e.to_string()))?;
-
-        if invoice.payment_hash() != &preimage.consensus_hash() {
-            return Err(ReceiveError::InvalidInvoice);
-        }
-
-        if invoice.amount_milli_satoshis() != Some(amount.msats) {
-            return Err(ReceiveError::IncorrectInvoiceAmount);
-        }
-
-        Ok((gateway, contract, invoice))
     }
 
     // Receive an incoming contract locked to a public key derived from our
