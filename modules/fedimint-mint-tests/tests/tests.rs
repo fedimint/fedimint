@@ -24,8 +24,8 @@ use fedimint_mint_client::api::MintFederationApi;
 use fedimint_mint_client::client_db::{NextECashNoteIndexKey, NoteKey};
 use fedimint_mint_client::{
     MintClientInit, MintClientModule, Note, OOBNotes, ReissueExternalNotesState,
-    SelectNotesWithAtleastAmount, SelectNotesWithExactAmount, SpendOOBState, SpendableNote,
-    SpendableNoteUndecoded, ValidateNotesError,
+    SelectNotesWithAtleastAmount, SelectNotesWithExactAmount, SpendOOBError, SpendOOBState,
+    SpendableNote, SpendableNoteUndecoded, ValidateNotesError,
 };
 use fedimint_mint_common::{MintInput, MintInputV0, Nonce};
 use fedimint_mint_server::MintInit;
@@ -844,7 +844,7 @@ async fn error_zero_value_oob_spend() -> anyhow::Result<()> {
         .await?;
 
     // Spend from client1 to client2
-    let err_msg = client1
+    let err = client1
         .get_first_module::<MintClientModule>()?
         .spend_notes_with_selector(
             &SelectNotesWithAtleastAmount,
@@ -854,9 +854,8 @@ async fn error_zero_value_oob_spend() -> anyhow::Result<()> {
             (),
         )
         .await
-        .expect_err("Zero-amount spends should be forbidden")
-        .to_string();
-    assert!(err_msg.contains("zero-amount"));
+        .expect_err("Zero-amount spends should be forbidden");
+    assert_matches!(err, SpendOOBError::ZeroAmount);
 
     Ok(())
 }

@@ -4,8 +4,10 @@
 //! the two types that predate this module and are re-exported from it, so
 //! there is one place to look.
 
+use fedimint_client_module::error::AddStateMachinesError;
 use fedimint_core::Amount;
 use fedimint_core::config::FederationIdPrefix;
+use fedimint_core::db::DatabaseError;
 use fedimint_core::encoding::DecodeError;
 use thiserror::Error;
 
@@ -37,6 +39,27 @@ pub enum SelectNotesError {
     /// other variants do not describe.
     #[error("The note selector failed")]
     Custom(#[source] Box<dyn std::error::Error + Send + Sync>),
+}
+
+/// A failure to hand e-cash notes out of band.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum SpendOOBError {
+    /// A spend of zero has nothing to hand out.
+    #[error("Zero-amount out-of-band spends are not supported")]
+    ZeroAmount,
+
+    /// The notes to hand out could not be picked.
+    #[error("The notes to spend could not be selected")]
+    NoteSelection(#[from] SelectNotesError),
+
+    /// The state machines that watch for a refund could not be registered.
+    #[error("Failed to add the spend's state machines")]
+    StateMachines(#[from] AddStateMachinesError),
+
+    /// The spend could not be written to the database.
+    #[error("Database error")]
+    Database(#[from] DatabaseError),
 }
 
 /// A note that cannot be spent.
@@ -86,6 +109,15 @@ pub enum ValidateNotesError {
 #[cfg(feature = "uniffi")]
 impl From<ValidateNotesError> for fedimint_core::util::ffi::UniffiError {
     fn from(e: ValidateNotesError) -> Self {
+        use fedimint_core::util::FmtCompact as _;
+
+        Self::General(e.fmt_compact().to_string())
+    }
+}
+
+#[cfg(feature = "uniffi")]
+impl From<SpendOOBError> for fedimint_core::util::ffi::UniffiError {
+    fn from(e: SpendOOBError) -> Self {
         use fedimint_core::util::FmtCompact as _;
 
         Self::General(e.fmt_compact().to_string())

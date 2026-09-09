@@ -118,7 +118,7 @@ use crate::client_db::{
     CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
     NextECashNoteIndexKeyPrefix, NoteKey,
 };
-pub use crate::error::{OOBNotesParseError, SelectNotesError, ValidateNotesError};
+pub use crate::error::{OOBNotesParseError, SelectNotesError, SpendOOBError, ValidateNotesError};
 use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStates};
 use crate::oob::{MintOOBStateMachine, MintOOBStates, MintOOBStatesCreatedMulti};
 use crate::output::{
@@ -1697,15 +1697,17 @@ impl MintClientModule {
         notes_selector: &impl NotesSelector,
         amount: Amount,
         try_cancel_after: Option<Duration>,
-    ) -> anyhow::Result<(
-        OperationId,
-        Vec<MintClientStateMachines>,
-        TieredMulti<SpendableNote>,
-    )> {
-        ensure!(
-            amount > Amount::ZERO,
-            "zero-amount out-of-band spends are not supported"
-        );
+    ) -> Result<
+        (
+            OperationId,
+            Vec<MintClientStateMachines>,
+            TieredMulti<SpendableNote>,
+        ),
+        SpendOOBError,
+    > {
+        if amount == Amount::ZERO {
+            return Err(SpendOOBError::ZeroAmount);
+        }
 
         let selected_notes =
             Self::select_notes(dbtx, notes_selector, amount, FeeConsensus::zero()).await?;
@@ -2163,7 +2165,7 @@ impl MintClientModule {
         try_cancel_after: Option<Duration>,
         include_invite: bool,
         extra_meta: M,
-    ) -> anyhow::Result<(OperationId, OOBNotes)> {
+    ) -> Result<(OperationId, OOBNotes), SpendOOBError> {
         self.spend_notes_with_selector(
             &SelectNotesWithAtleastAmount,
             min_amount,
@@ -2197,7 +2199,7 @@ impl MintClientModule {
         try_cancel_after: Option<Duration>,
         include_invite: bool,
         extra_meta: M,
-    ) -> anyhow::Result<(OperationId, OOBNotes)> {
+    ) -> Result<(OperationId, OOBNotes), SpendOOBError> {
         let federation_id_prefix = self.federation_id.to_prefix();
         let extra_meta = serde_json::to_value(extra_meta)
             .expect("MintClientModule::spend_notes extra_meta is serializable");
@@ -2272,7 +2274,7 @@ impl MintClientModule {
                             )
                             .await;
 
-                        Ok((operation_id, oob_notes))
+                        Ok::<_, SpendOOBError>((operation_id, oob_notes))
                     })
                 },
                 Some(100),
@@ -2281,7 +2283,7 @@ impl MintClientModule {
             .map_err(|e| match e {
                 AutocommitError::ClosureError { error, .. } => error,
                 AutocommitError::CommitFailed { last_error, .. } => {
-                    anyhow!("Commit to DB failed: {last_error}")
+                    SpendOOBError::Database(last_error)
                 }
             })
     }
