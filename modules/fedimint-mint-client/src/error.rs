@@ -11,6 +11,34 @@ use thiserror::Error;
 
 pub use crate::{InsufficientBalanceError, ReissueExternalNotesError};
 
+/// A failure to pick notes out of the wallet for a spend.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum SelectNotesError {
+    /// The wallet does not hold enough notes to cover the request.
+    #[error("The wallet does not hold enough notes")]
+    InsufficientBalance(#[from] InsufficientBalanceError),
+
+    /// The requested amount cannot be made exactly from the denominations the
+    /// wallet holds. This does not mean the balance is too low.
+    #[error("The amount {requested} cannot be made exactly; the closest selection is {selected}")]
+    NoExactAmount {
+        /// The amount that was asked for.
+        requested: Amount,
+        /// The total the greedy selection arrived at instead.
+        selected: Amount,
+    },
+
+    /// A note held in the wallet could not be decoded.
+    #[error("A stored note could not be decoded")]
+    Decode(#[from] DecodeError),
+
+    /// A note selector implemented outside this crate failed in a way the
+    /// other variants do not describe.
+    #[error("The note selector failed")]
+    Custom(#[source] Box<dyn std::error::Error + Send + Sync>),
+}
+
 /// A note that cannot be spent.
 ///
 /// Reported both for notes received out of band and for notes already held in

@@ -118,7 +118,7 @@ use crate::client_db::{
     CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
     NextECashNoteIndexKeyPrefix, NoteKey,
 };
-pub use crate::error::{OOBNotesParseError, ValidateNotesError};
+pub use crate::error::{OOBNotesParseError, SelectNotesError, ValidateNotesError};
 use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStates};
 use crate::oob::{MintOOBStateMachine, MintOOBStates, MintOOBStatesCreatedMulti};
 use crate::output::{
@@ -1795,7 +1795,7 @@ impl MintClientModule {
         notes_selector: &impl NotesSelector,
         requested_amount: Amount,
         fee_consensus: FeeConsensus,
-    ) -> anyhow::Result<TieredMulti<SpendableNote>> {
+    ) -> Result<TieredMulti<SpendableNote>, SelectNotesError> {
         let note_stream = dbtx
             .find_by_prefix_sorted_descending(&NoteKeyPrefix)
             .await
@@ -1806,7 +1806,7 @@ impl MintClientModule {
             .await?
             .into_iter_items()
             .map(|(amt, snote)| Ok((amt, snote.decode()?)))
-            .collect::<anyhow::Result<TieredMulti<_>>>()
+            .collect::<Result<TieredMulti<_>, SelectNotesError>>()
     }
 
     async fn get_all_spendable_notes(
@@ -2764,7 +2764,7 @@ pub trait NotesSelector<Note = SpendableNoteUndecoded>: Send + Sync {
         #[cfg(target_family = "wasm")] stream: impl futures::Stream<Item = (Amount, Note)>,
         requested_amount: Amount,
         fee_consensus: FeeConsensus,
-    ) -> anyhow::Result<TieredMulti<Note>>;
+    ) -> Result<TieredMulti<Note>, SelectNotesError>;
 }
 
 /// Select notes with total amount of *at least* `request_amount`. If more than
@@ -2782,7 +2782,7 @@ impl<Note: Send> NotesSelector<Note> for SelectNotesWithAtleastAmount {
         #[cfg(target_family = "wasm")] stream: impl futures::Stream<Item = (Amount, Note)>,
         requested_amount: Amount,
         fee_consensus: FeeConsensus,
-    ) -> anyhow::Result<TieredMulti<Note>> {
+    ) -> Result<TieredMulti<Note>, SelectNotesError> {
         Ok(select_notes_from_stream(stream, requested_amount, fee_consensus).await?)
     }
 }
@@ -2800,15 +2800,15 @@ impl<Note: Send> NotesSelector<Note> for SelectNotesWithExactAmount {
         #[cfg(target_family = "wasm")] stream: impl futures::Stream<Item = (Amount, Note)>,
         requested_amount: Amount,
         fee_consensus: FeeConsensus,
-    ) -> anyhow::Result<TieredMulti<Note>> {
+    ) -> Result<TieredMulti<Note>, SelectNotesError> {
         let notes = select_notes_from_stream(stream, requested_amount, fee_consensus).await?;
 
-        if notes.total_amount() != requested_amount {
-            bail!(
-                "Could not select notes with exact amount. Requested amount: {}. Selected amount: {}",
-                requested_amount,
-                notes.total_amount()
-            );
+        let selected = notes.total_amount();
+        if selected != requested_amount {
+            return Err(SelectNotesError::NoExactAmount {
+                requested: requested_amount,
+                selected,
+            });
         }
 
         Ok(notes)
@@ -3287,10 +3287,11 @@ mod tests {
     use itertools::Itertools;
     use serde_json::json;
 
-    use crate::error::OOBNotesParseError;
+    use crate::error::{OOBNotesParseError, SelectNotesError};
     use crate::{
-        MintOperationMetaVariant, OOBNotes, OOBNotesPart, SpendableNote, SpendableNoteUndecoded,
-        represent_amount, select_notes_from_stream,
+        MintOperationMetaVariant, NotesSelector, OOBNotes, OOBNotesPart,
+        SelectNotesWithExactAmount, SpendableNote, SpendableNoteUndecoded, represent_amount,
+        select_notes_from_stream,
     };
 
     #[test]
@@ -3425,6 +3426,22 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(error.total_amount, Amount::from_sats(10));
+    }
+
+    #[tokio::test]
+    async fn selecting_an_unrepresentable_exact_amount_reports_what_was_selected() {
+        let notes = reverse_sorted_note_stream(vec![(Amount::from_msats(4), 1)]);
+
+        let err = SelectNotesWithExactAmount
+            .select_notes(notes, Amount::from_msats(3), FeeConsensus::zero())
+            .await
+            .expect_err("Three msats cannot be made from a single four-msat note");
+
+        assert_matches!(
+            err,
+            SelectNotesError::NoExactAmount { requested, selected }
+                if requested == Amount::from_msats(3) && selected == Amount::from_msats(4)
+        );
     }
 
     fn reverse_sorted_note_stream(
