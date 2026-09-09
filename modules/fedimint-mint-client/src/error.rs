@@ -11,6 +11,8 @@ use fedimint_client_module::error::{
 use fedimint_core::config::FederationIdPrefix;
 use fedimint_core::db::DatabaseError;
 use fedimint_core::encoding::DecodeError;
+#[cfg(feature = "uniffi")]
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, PeerId};
 use thiserror::Error;
 
@@ -185,8 +187,6 @@ pub enum ValidateNotesError {
 #[cfg(feature = "uniffi")]
 impl From<ValidateNotesError> for fedimint_core::util::ffi::UniffiError {
     fn from(e: ValidateNotesError) -> Self {
-        use fedimint_core::util::FmtCompact as _;
-
         Self::General(e.fmt_compact().to_string())
     }
 }
@@ -194,8 +194,6 @@ impl From<ValidateNotesError> for fedimint_core::util::ffi::UniffiError {
 #[cfg(feature = "uniffi")]
 impl From<SpendOOBError> for fedimint_core::util::ffi::UniffiError {
     fn from(e: SpendOOBError) -> Self {
-        use fedimint_core::util::FmtCompact as _;
-
         Self::General(e.fmt_compact().to_string())
     }
 }
@@ -203,8 +201,6 @@ impl From<SpendOOBError> for fedimint_core::util::ffi::UniffiError {
 #[cfg(feature = "uniffi")]
 impl From<ReissueExternalNotesError> for fedimint_core::util::ffi::UniffiError {
     fn from(e: ReissueExternalNotesError) -> Self {
-        use fedimint_core::util::FmtCompact as _;
-
         Self::General(e.fmt_compact().to_string())
     }
 }
@@ -212,8 +208,6 @@ impl From<ReissueExternalNotesError> for fedimint_core::util::ffi::UniffiError {
 #[cfg(feature = "uniffi")]
 impl From<SubscribeReissueExternalNotesError> for fedimint_core::util::ffi::UniffiError {
     fn from(e: SubscribeReissueExternalNotesError) -> Self {
-        use fedimint_core::util::FmtCompact as _;
-
         Self::General(e.fmt_compact().to_string())
     }
 }
@@ -221,8 +215,6 @@ impl From<SubscribeReissueExternalNotesError> for fedimint_core::util::ffi::Unif
 #[cfg(feature = "uniffi")]
 impl From<SubscribeSpendNotesError> for fedimint_core::util::ffi::UniffiError {
     fn from(e: SubscribeSpendNotesError) -> Self {
-        use fedimint_core::util::FmtCompact as _;
-
         Self::General(e.fmt_compact().to_string())
     }
 }

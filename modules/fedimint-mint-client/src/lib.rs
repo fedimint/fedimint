@@ -16,6 +16,8 @@ pub mod backup;
 mod cli;
 /// Database keys used throughout the mint client module
 pub mod client_db;
+/// Error types of the mint client
+pub mod error;
 /// FFI for the mint client module
 #[cfg(feature = "uniffi")]
 pub mod ffi;
@@ -25,9 +27,6 @@ mod input;
 mod oob;
 /// State machines for mint outputs
 pub mod output;
-
-/// Error types of the mint client
-pub mod error;
 
 pub mod events;
 
@@ -1772,12 +1771,15 @@ impl MintClientModule {
         Ok((operation_id, state_machines, selected_notes))
     }
 
-    async fn is_no_timeout_oob_spend(&self, operation_id: OperationId) -> anyhow::Result<bool> {
+    async fn is_no_timeout_oob_spend(
+        &self,
+        operation_id: OperationId,
+    ) -> Result<bool, SubscribeSpendNotesError> {
         let operation = self.mint_operation(operation_id).await?;
         let MintOperationMetaVariant::SpendOOB { no_timeout, .. } =
             operation.meta::<MintOperationMeta>().variant
         else {
-            bail!("Operation is not a out-of-band spend");
+            return Err(SubscribeSpendNotesError::NotAnOutOfBandSpend);
         };
 
         Ok(no_timeout)
@@ -3486,7 +3488,7 @@ mod tests {
         assert_eq!(error.total_amount, Amount::from_sats(10));
     }
 
-    #[tokio::test]
+    #[test_log::test(tokio::test)]
     async fn selecting_an_unrepresentable_exact_amount_reports_what_was_selected() {
         let notes = reverse_sorted_note_stream(vec![(Amount::from_msats(4), 1)]);
 
