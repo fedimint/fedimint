@@ -542,13 +542,34 @@ impl LightningClientModule {
     ///
     /// The absolute fee for a payment can be calculated from the operation meta
     /// to be shown to the user in the transaction history.
-    #[allow(clippy::too_many_lines)]
     pub async fn send(
         &self,
         invoice: Bolt11Invoice,
         gateway: Option<SafeUrl>,
         custom_meta: Value,
     ) -> Result<OperationId, SendPaymentError> {
+        let (amount, operation_id) = self.validate_send_invoice(&invoice).await?;
+
+        let (gateway_api, routing_info) = self.resolve_send_gateway(&invoice, gateway).await?;
+
+        self.fund_outgoing_contract(
+            invoice,
+            amount,
+            operation_id,
+            gateway_api,
+            routing_info,
+            custom_meta,
+        )
+        .await
+    }
+
+    /// Checks that `invoice` is payable by this client and has not been
+    /// attempted before, returning its amount in millisatoshis and the
+    /// operation id a payment of it uses.
+    async fn validate_send_invoice(
+        &self,
+        invoice: &Bolt11Invoice,
+    ) -> Result<(u64, OperationId), SendPaymentError> {
         let amount = invoice
             .amount_milli_satoshis()
             .ok_or(SendPaymentError::InvoiceMissingAmount)?;
@@ -573,25 +594,48 @@ impl LightningClientModule {
             return Err(SendPaymentError::DuplicatePaymentAttempt(operation_id));
         }
 
-        let (ephemeral_tweak, ephemeral_pk) = tweak::generate(self.keypair.public_key());
+        Ok((amount, operation_id))
+    }
 
-        let refund_keypair = SecretKey::from_slice(&ephemeral_tweak)
-            .expect("32 bytes, within curve order")
-            .keypair(secp256k1::SECP256K1);
-
-        let (gateway_api, routing_info) = match gateway {
-            Some(gateway_api) => (
+    /// Resolves the gateway to pay `invoice` through and its current routing
+    /// info: the given one, or an automatically selected one when `None`.
+    async fn resolve_send_gateway(
+        &self,
+        invoice: &Bolt11Invoice,
+        gateway: Option<SafeUrl>,
+    ) -> Result<(SafeUrl, RoutingInfo), SendPaymentError> {
+        match gateway {
+            Some(gateway_api) => Ok((
                 gateway_api.clone(),
                 self.routing_info(&gateway_api)
                     .await
                     .map_err(|e| SendPaymentError::FailedToConnectToGateway(e.to_string()))?
                     .ok_or(SendPaymentError::FederationNotSupported)?,
-            ),
+            )),
             None => self
                 .select_gateway(Some(invoice.clone()))
                 .await
-                .map_err(SendPaymentError::SelectGateway)?,
-        };
+                .map_err(SendPaymentError::SelectGateway),
+        }
+    }
+
+    /// Funds an outgoing contract for `invoice` at the terms in `routing_info`
+    /// and starts the state machine that hands it to `gateway_api`.
+    #[allow(clippy::too_many_lines)]
+    async fn fund_outgoing_contract(
+        &self,
+        invoice: Bolt11Invoice,
+        amount: u64,
+        operation_id: OperationId,
+        gateway_api: SafeUrl,
+        routing_info: RoutingInfo,
+        custom_meta: Value,
+    ) -> Result<OperationId, SendPaymentError> {
+        let (ephemeral_tweak, ephemeral_pk) = tweak::generate(self.keypair.public_key());
+
+        let refund_keypair = SecretKey::from_slice(&ephemeral_tweak)
+            .expect("32 bytes, within curve order")
+            .keypair(secp256k1::SECP256K1);
 
         let (send_fee, expiration_delta) = routing_info.send_parameters(&invoice);
 
