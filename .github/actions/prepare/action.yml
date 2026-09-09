@@ -1,6 +1,6 @@
 # https://stackoverflow.com/a/74887073/134409
 name: 'Preparation'
-description: ''
+description: 'Expose the triggering commit SHA to subsequent workflow steps'
 runs:
   using: "composite"
   steps:
