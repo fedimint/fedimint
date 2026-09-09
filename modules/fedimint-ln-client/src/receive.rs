@@ -316,8 +316,8 @@ impl LightningReceiveConfirmedInvoice {
 
         global_context
             .claim_inputs(
-                dbtx,
-                // The input of the refund tx is managed by this state machine, so no new state
+                dbtx, /* The input of the refund tx is managed by this state machine, so no new
+                       * state */
                 // machines need to be created
                 ClientInputBundle::new_no_sm(vec![client_input]),
             )

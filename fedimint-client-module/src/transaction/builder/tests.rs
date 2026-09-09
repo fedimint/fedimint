@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use bitcoin::key::Secp256k1;
 use fedimint_core::Amount;
-use fedimint_core::core::{Input, IntoDynInstance, ModuleKind, Output};
+use fedimint_core::core::{Account, Input, IntoDynInstance, ModuleKind, Output};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::Amounts;
 
@@ -110,7 +110,7 @@ fn tx_builder_empty_bundles() {
 
     // This is ugly due to repetition, but the more manual, the better, and in real
     // code some of these conversions are hidden in the generics. Oh well.
-    TransactionBuilder::new()
+    TransactionBuilder::new(Account::Primary)
         .with_inputs(
             ClientInputBundle::<NoopInput>::new(vec![], vec![no_call_input_sm.clone()])
                 .into_instanceless()

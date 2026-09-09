@@ -53,6 +53,7 @@ impl State for MintOutputStateMachine {
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         let context = context.clone();
+        let global_context = global_context.clone();
 
         match &self.state {
             OutputSMState::Pending => {
@@ -70,6 +71,7 @@ impl State for MintOutputStateMachine {
                             .on_commit(move || balance_update_sender.send_replace(()));
 
                         Box::pin(Self::transition_outcome_ready(
+                            global_context.clone(),
                             dbtx,
                             signature_shares,
                             old_state,
@@ -116,6 +118,7 @@ impl MintOutputStateMachine {
     }
 
     async fn transition_outcome_ready(
+        global_context: DynGlobalClientContext,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         signature_shares: Result<BTreeMap<PeerId, Vec<BlindedSignatureShare>>, String>,
         old_state: MintOutputStateMachine,
@@ -127,6 +130,9 @@ impl MintOutputStateMachine {
                 state: OutputSMState::Aborted,
             };
         };
+
+        // The notes land in the operation's account, whichever that is.
+        let account = global_context.account(dbtx).await;
 
         for (i, request) in old_state.common.issuance_requests.iter().enumerate() {
             let agg_blind_signature = aggregate_signature_shares(
@@ -150,7 +156,7 @@ impl MintOutputStateMachine {
             }
 
             dbtx.module_tx()
-                .insert_new_entry(&SpendableNoteKey(spendable_note), &())
+                .insert_new_entry(&SpendableNoteKey(account, spendable_note), &())
                 .await;
         }
 

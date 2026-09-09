@@ -13,14 +13,15 @@ use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{
-    ClientContext, ClientModule, OutPointRange, PrimaryModulePriority, PrimaryModuleSupport,
+    AccountSupport, ClientContext, ClientModule, OutPointRange, PrimaryModulePriority,
+    PrimaryModuleSupport,
 };
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle, ClientOutputSM,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{Account, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
     Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
@@ -154,6 +155,7 @@ impl ClientModule for DummyClientModule {
     fn supports_being_primary(&self) -> PrimaryModuleSupport {
         PrimaryModuleSupport::Any {
             priority: PrimaryModulePriority::LOW,
+            accounts: AccountSupport::PrimaryOnly,
         }
     }
 
@@ -164,6 +166,7 @@ impl ClientModule for DummyClientModule {
         unit: AmountUnit,
         input_amount: Amount,
         output_amount: Amount,
+        _account: Account,
     ) -> anyhow::Result<(
         ClientInputBundle<DummyInput, DummyStateMachine>,
         ClientOutputBundle<DummyOutput, DummyStateMachine>,
@@ -297,7 +300,12 @@ impl ClientModule for DummyClientModule {
         }
     }
 
-    async fn get_balance(&self, dbtc: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
+    async fn get_balance(
+        &self,
+        dbtc: &mut DatabaseTransaction<'_>,
+        unit: AmountUnit,
+        _account: Account,
+    ) -> Amount {
         get_funds(dbtc, unit).await
     }
 

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use fedimint_client_module::OperationId;
 use fedimint_client_module::oplog::OperationLogEntry;
 use fedimint_core::config::{ClientConfig, FederationId};
+use fedimint_core::core::Account;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::AmountUnit;
 use fedimint_core::util::ffi::UniffiError;
@@ -23,21 +24,22 @@ pub struct ListOperationsResponse {
 
 #[uniffi::export(async_runtime = "tokio")]
 impl ClientHandle {
-    pub async fn get_balance(&self) -> Result<Amount> {
+    pub async fn get_balance(&self, account: Account) -> Result<Amount> {
         let client = client_for_handle(self)?;
-        Ok(client.get_balance_for_btc().await?)
+        Ok(client.get_balance_for_btc(account).await?)
     }
 
     #[uniffi::method(name = "subscribe_balance_changes")]
     pub fn subscribe_balance_changes_uniffi(
         &self,
         unit: AmountUnit,
+        account: Account,
         callback: Box<dyn BalanceChangeCallback>,
     ) -> Result<()> {
         let client = client_for_handle(self)?;
         let task_client = client.clone();
         let _ = client.spawn_cancellable("uniffi-subscribe-balance-changes", async move {
-            let mut stream = task_client.subscribe_balance_changes(unit).await;
+            let mut stream = task_client.subscribe_balance_changes(unit, account).await;
             while let Some(balance) = stream.next().await {
                 callback.on_balance_change(balance);
             }

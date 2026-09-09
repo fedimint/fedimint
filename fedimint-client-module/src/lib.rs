@@ -20,7 +20,9 @@ use std::sync::Arc;
 
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::ClientConfig;
-pub use fedimint_core::core::{IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId};
+pub use fedimint_core::core::{
+    Account, IInput, IOutput, ModuleInstanceId, ModuleKind, OperationId,
+};
 use fedimint_core::db::Database;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiAuth, ApiVersion};
@@ -71,6 +73,15 @@ pub mod api_version_discovery;
 pub struct TxCreatedEvent {
     pub txid: TransactionId,
     pub operation_id: OperationId,
+    /// Balance the primary module funded the transaction from and credits its
+    /// change to. Tagged here because not every transaction belongs to an
+    /// operation that emits an account-tagged module event: an internal
+    /// reissue runs under its own operation id and emits none. The later
+    /// tx-accepted and tx-rejected events share this event's txid, so they
+    /// need no tag of their own. Defaulted so entries written before accounts
+    /// existed still decode.
+    #[serde(default = "Account::primary")]
+    pub account: Account,
 }
 
 impl Event for TxCreatedEvent {
@@ -232,6 +243,13 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
 
     fn decoders(&self) -> &ModuleDecoderRegistry;
 
+    /// The account the state machine's operation acts on: the balance the
+    /// primary module funds its transactions from and credits its change,
+    /// claims and refunds to. Read from the operation's record rather than
+    /// carried by the state machine, so no machine's persisted shape depends
+    /// on it.
+    async fn account(&self, dbtx: &mut ClientSMDatabaseTransaction<'_, '_>) -> Account;
+
     /// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::claim_inputs`].
     /// Returns transaction id of the funding transaction and an optional
@@ -303,6 +321,10 @@ impl IGlobalClientContext for () {
     }
 
     fn decoders(&self) -> &ModuleDecoderRegistry {
+        unimplemented!("fake implementation, only for tests");
+    }
+
+    async fn account(&self, _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>) -> Account {
         unimplemented!("fake implementation, only for tests");
     }
 
@@ -388,6 +410,8 @@ impl DynGlobalClientContext {
             .await
     }
 
+    /// The claim is credited to the operation's account, and any change the
+    /// primary module adds comes back to the same one.
     pub async fn claim_inputs<I, S>(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
@@ -409,6 +433,7 @@ impl DynGlobalClientContext {
     /// for the funding inputs are generated automatically. The caller is
     /// responsible for the output's state machines, should there be any
     /// required.
+    /// The primary module funds the output from the operation's account.
     pub async fn fund_output<O, S>(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,

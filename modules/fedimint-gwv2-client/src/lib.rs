@@ -25,7 +25,9 @@ use fedimint_client_module::transaction::{
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{
+    Account, Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
+};
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -465,6 +467,7 @@ impl GatewayClientModuleV2 {
             .manual_operation_start_dbtx(
                 &mut dbtx.to_ref_nc(),
                 operation_id,
+                Account::Primary,
                 LightningCommonInit::KIND.as_str(),
                 GatewayOperationMetaV2::role(GatewayOperationRoleV2::Send),
                 vec![self.client_ctx.make_dyn_state(send_sm)],
@@ -598,7 +601,7 @@ impl GatewayClientModuleV2 {
                 vec![client_output],
                 vec![client_output_sm],
             ));
-            let transaction = TransactionBuilder::new().with_outputs(client_output);
+            let transaction = TransactionBuilder::new(Account::Primary).with_outputs(client_output);
 
             let creation_result = self
                 .client_ctx
@@ -644,6 +647,7 @@ impl GatewayClientModuleV2 {
             .client_ctx
             .manual_operation_start(
                 completion_operation_id,
+                Account::Primary,
                 LightningCommonInit::KIND.as_str(),
                 GatewayOperationMetaV2::role(GatewayOperationRoleV2::CircuitCompletion),
                 vec![self.client_ctx.make_dyn_state(completion)],
@@ -703,7 +707,7 @@ impl GatewayClientModuleV2 {
             vec![client_output_sm],
         ));
 
-        let transaction = TransactionBuilder::new().with_outputs(client_output);
+        let transaction = TransactionBuilder::new(Account::Primary).with_outputs(client_output);
 
         self.client_ctx
             .finalize_and_submit_transaction(

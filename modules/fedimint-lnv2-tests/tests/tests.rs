@@ -12,7 +12,7 @@ use fedimint_client::transaction::{
 };
 use fedimint_client_module::module::ClientModule;
 use fedimint_core::base32::{FEDIMINT_PREFIX, decode_prefixed};
-use fedimint_core::core::{IntoDynInstance, OperationId};
+use fedimint_core::core::{Account, IntoDynInstance, OperationId};
 use fedimint_core::encoding::Encodable as _;
 use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::secp256k1::{PublicKey, Scalar};
@@ -27,8 +27,9 @@ use fedimint_lnv2_client::events::{
     ReceivePaymentEvent, SendPaymentEvent, SendPaymentStatus, SendPaymentUpdateEvent,
 };
 use fedimint_lnv2_client::{
-    FinalReceiveOperationState, InvoiceSendStatus, LightningClientInit, LightningClientModule,
-    LightningOperationMeta, ReceiveOperationState, SendOperationState, SendPaymentError,
+    FinalReceiveOperationState, GenerateLnurlError, InvoiceSendStatus, LightningClientInit,
+    LightningClientModule, LightningOperationMeta, ReceiveError, ReceiveOperationState,
+    SendOperationState, SendPaymentError,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::lnurl::LnurlRequest;
@@ -138,7 +139,12 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 
     let operation_id = client
         .get_first_module::<LightningClientModule>()?
-        .send(invoice.clone(), Some(gateway_api.clone()), Value::Null)
+        .send(
+            Account::Primary,
+            invoice.clone(),
+            Some(gateway_api.clone()),
+            Value::Null,
+        )
         .await?;
 
     let Some(LnEvent::Send(send)) = events.next().await else {
@@ -149,7 +155,12 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<LightningClientModule>()?
-            .send(invoice.clone(), Some(gateway_api.clone()), Value::Null)
+            .send(
+                Account::Primary,
+                invoice.clone(),
+                Some(gateway_api.clone()),
+                Value::Null
+            )
             .await,
         Err(SendPaymentError::DuplicatePaymentAttempt(operation_id)),
     );
@@ -179,7 +190,12 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<LightningClientModule>()?
-            .send(invoice.clone(), Some(gateway_api), Value::Null)
+            .send(
+                Account::Primary,
+                invoice.clone(),
+                Some(gateway_api),
+                Value::Null
+            )
             .await,
         Err(SendPaymentError::DuplicatePaymentAttempt(operation_id)),
     );
@@ -213,7 +229,12 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
 
     let operation_id = client
         .get_first_module::<LightningClientModule>()?
-        .send(invoice.clone(), Some(mock::gateway()), Value::Null)
+        .send(
+            Account::Primary,
+            invoice.clone(),
+            Some(mock::gateway()),
+            Value::Null,
+        )
         .await?;
 
     let Some(LnEvent::Send(send)) = events.next().await else {
@@ -275,7 +296,12 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
 
     let operation_id = client
         .get_first_module::<LightningClientModule>()?
-        .send(invoice.clone(), Some(mock::gateway()), Value::Null)
+        .send(
+            Account::Primary,
+            invoice.clone(),
+            Some(mock::gateway()),
+            Value::Null,
+        )
         .await?;
 
     let Some(LnEvent::Send(send)) = events.next().await else {
@@ -337,7 +363,12 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
 
     let operation_id = client
         .get_first_module::<LightningClientModule>()?
-        .send(mock::crash_invoice(), Some(mock::gateway()), Value::Null)
+        .send(
+            Account::Primary,
+            mock::crash_invoice(),
+            Some(mock::gateway()),
+            Value::Null,
+        )
         .await?;
 
     let Some(LnEvent::Send(send)) = events.next().await else {
@@ -386,7 +417,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
             OperationId::new_random(),
             "Claiming Outgoing Contract",
             |_| (),
-            TransactionBuilder::new().with_inputs(
+            TransactionBuilder::new(Account::Primary).with_inputs(
                 ClientInputBundle::new_no_sm(vec![client_input]).into_dyn(lnv2_module_id),
             ),
         )
@@ -419,6 +450,7 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
     let op = client
         .get_first_module::<LightningClientModule>()?
         .receive(
+            Account::Primary,
             Amount::from_sats(1000),
             5, // receive operation expires in 5 seconds
             Bolt11InvoiceDescription::Direct(String::new()),
@@ -494,7 +526,7 @@ async fn fund_incoming_contract(
             OperationId::new_random(),
             "Funding an incoming contract",
             |_| (),
-            TransactionBuilder::new().with_outputs(
+            TransactionBuilder::new(Account::Primary).with_outputs(
                 ClientOutputBundle::new_no_sm(vec![ClientOutput {
                     output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
                     amounts: Amounts::new_bitcoin(contract.commitment.amount),
@@ -535,6 +567,7 @@ async fn unsolicited_dust_contract_does_not_wedge_the_client() -> anyhow::Result
     let lnurl = victim
         .get_first_module::<LightningClientModule>()?
         .generate_lnurl(
+            Account::Primary,
             SafeUrl::parse("https://recurring.xyz/").expect("Valid Url"),
             Some(mock::gateway()),
         )
@@ -593,6 +626,57 @@ async fn unsolicited_dust_contract_does_not_wedge_the_client() -> anyhow::Result
 }
 
 #[tokio::test(flavor = "multi_thread")]
+/// The test fixture's primary module is the dummy module, which holds a single
+/// balance. Every entry point that binds money to an account has to refuse
+/// the others up front, before a gateway or a payer is involved.
+async fn primary_only_mint_rejects_other_accounts() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+
+    assert_eq!(
+        lightning
+            .send(
+                Account::Secondary,
+                mock::payable_invoice(),
+                Some(mock::gateway()),
+                Value::Null,
+            )
+            .await,
+        Err(SendPaymentError::AccountNotSupported),
+    );
+
+    assert_eq!(
+        lightning
+            .receive(
+                Account::Secondary,
+                Amount::from_sats(1_000),
+                3600,
+                Bolt11InvoiceDescription::Direct(String::new()),
+                Some(mock::gateway()),
+                Value::Null,
+            )
+            .await
+            .map(|(invoice, _)| invoice),
+        Err(ReceiveError::AccountNotSupported),
+    );
+
+    assert_eq!(
+        lightning
+            .generate_lnurl(
+                Account::Secondary,
+                SafeUrl::parse("https://recurring.xyz/").expect("Valid Url"),
+                Some(mock::gateway()),
+            )
+            .await,
+        Err(GenerateLnurlError::AccountNotSupported),
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
@@ -602,6 +686,7 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
         client
             .get_first_module::<LightningClientModule>()?
             .send(
+                Account::Primary,
                 mock::signet_bolt_11_invoice(),
                 Some(mock::gateway()),
                 Value::Null

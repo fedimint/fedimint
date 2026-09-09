@@ -25,6 +25,7 @@ use fedimint_api_client::download_from_invite_code;
 use fedimint_client::ClientHandleArc;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::Amount;
+use fedimint_core::core::Account;
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiRequestErased;
@@ -568,7 +569,7 @@ async fn get_required_notes(
     minimum_amount_required: Amount,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
-    let current_balance = coordinator.get_balance_for_btc().await?;
+    let current_balance = coordinator.get_balance_for_btc(Account::Primary).await?;
 
     if current_balance < minimum_amount_required {
         let diff = minimum_amount_required.saturating_sub(current_balance);

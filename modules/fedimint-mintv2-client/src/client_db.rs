@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use bitcoin_hashes::hash160;
+use fedimint_core::core::Account;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use fedimint_mintv2_common::Denomination;
@@ -17,14 +18,19 @@ pub enum DbKeyPrefix {
     RecoveryState = 0x21,
 }
 
+/// Every account's notes share one table, split by the key's leading
+/// [`Account`]. Nonces derive from per-account secrets, so two accounts can
+/// never produce the same note.
 #[derive(Debug, Clone, Encodable, Decodable)]
-pub struct SpendableNoteKey(pub SpendableNote);
+pub struct SpendableNoteKey(pub Account, pub SpendableNote);
 
 #[derive(Debug, Clone, Encodable, Decodable)]
-pub struct SpendableNotePrefix;
+pub struct SpendableNotePrefix(pub Account);
 
+/// Relies on [`SpendableNote`] encoding its denomination first, so an account
+/// and a denomination are a prefix of the whole key.
 #[derive(Debug, Clone, Encodable, Decodable)]
-pub struct SpendableNoteAmountPrefix(pub Denomination);
+pub struct SpendableNoteAmountPrefix(pub Account, pub Denomination);
 
 impl_db_record!(
     key = SpendableNoteKey,
@@ -51,8 +57,9 @@ pub struct RecoveryState {
     /// Total items (for progress calculation)
     pub total_items: u64,
     /// Already recovered note requests, keyed by `nonce_hash` (for efficient
-    /// removal when inputs are seen)
-    pub requests: BTreeMap<hash160::Hash, NoteIssuanceRequest>,
+    /// removal when inputs are seen), each with the account whose subtree
+    /// re-derived it.
+    pub requests: BTreeMap<hash160::Hash, (Account, NoteIssuanceRequest)>,
     /// Nonces seen (to detect duplicates)
     pub nonces: BTreeSet<hash160::Hash>,
 }

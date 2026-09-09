@@ -56,7 +56,7 @@ use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::base32::{self, FEDIMINT_PREFIX};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::db::{Committable, Database, DatabaseTransaction, apply_migrations};
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::invite_code::InviteCode;
@@ -436,19 +436,22 @@ async fn withdraw_v2(
 
     let withdraw_amount = match amount {
         BitcoinAmountOrAll::All => {
-            let balance = client.get_balance_for_btc().await.map_err(|err| {
-                AdminGatewayError::Unexpected(anyhow!(
-                    "Balance not available: {}",
-                    err.fmt_compact_anyhow()
-                ))
-            })?;
+            let balance = client
+                .get_balance_for_btc(Account::Primary)
+                .await
+                .map_err(|err| {
+                    AdminGatewayError::Unexpected(anyhow!(
+                        "Balance not available: {}",
+                        err.fmt_compact_anyhow()
+                    ))
+                })?;
 
             // The on-chain fee is only part of the cost: funding the wallet
             // output also incurs the federation's per-note fees. `fee` is
             // passed on to `send` below so both are computed against the same
             // on-chain fee.
             wallet_module
-                .max_sendable_amount(balance, fee)
+                .max_sendable_amount(Account::Primary, balance, fee)
                 .await
                 .map_err(|err| AdminGatewayError::WithdrawError {
                     failure_reason: format!(
@@ -462,6 +465,7 @@ async fn withdraw_v2(
 
     let operation_id = wallet_module
         .send(
+            Account::Primary,
             address.as_unchecked().clone(),
             withdraw_amount,
             Some(fee),
@@ -504,12 +508,15 @@ async fn calculate_max_withdrawable(
     client: &ClientHandleArc,
     address: &Address,
 ) -> AdminResult<WithdrawDetails> {
-    let balance = client.get_balance_for_btc().await.map_err(|err| {
-        AdminGatewayError::Unexpected(anyhow!(
-            "Balance not available: {}",
-            err.fmt_compact_anyhow()
-        ))
-    })?;
+    let balance = client
+        .get_balance_for_btc(Account::Primary)
+        .await
+        .map_err(|err| {
+            AdminGatewayError::Unexpected(anyhow!(
+                "Balance not available: {}",
+                err.fmt_compact_anyhow()
+            ))
+        })?;
 
     if let Ok(wallet_module) =
         client.get_first_module::<fedimint_walletv2_client::WalletClientModule>()
@@ -522,7 +529,7 @@ async fn calculate_max_withdrawable(
             })?;
 
         let max_withdrawable = wallet_module
-            .max_sendable_amount(balance, fee)
+            .max_sendable_amount(Account::Primary, balance, fee)
             .await
             .map_err(|err| AdminGatewayError::WithdrawError {
                 failure_reason: err.fmt_compact_anyhow().to_string(),
@@ -1535,7 +1542,10 @@ impl Gateway {
             .value()
             .get_first_module::<fedimint_walletv2_client::WalletClientModule>()
         {
-            Ok(wallet_module.receive().await)
+            wallet_module
+                .receive(Account::Primary)
+                .await
+                .map_err(|e| AdminGatewayError::Unexpected(e.into()))
         } else {
             Err(AdminGatewayError::Unexpected(anyhow!(
                 "No wallet module found"
@@ -1750,7 +1760,7 @@ impl Gateway {
             let amount = ecash.amount();
 
             let operation_id = mint
-                .receive(ecash, serde_json::Value::Null)
+                .receive(Account::Primary, ecash, serde_json::Value::Null)
                 .await
                 .map_err(|e| PublicGatewayError::ReceiveEcashError {
                     failure_reason: e.to_string(),
@@ -2450,15 +2460,18 @@ impl IAdminGateway for Gateway {
         let federation_info = FederationInfo {
             federation_id,
             federation_name: federation_manager.federation_name(&client).await,
-            balance_msat: client.get_balance_for_btc().await.unwrap_or_else(|err| {
-                warn!(
-                    target: LOG_GATEWAY,
-                    err = %err.fmt_compact_anyhow(),
-                    %federation_id,
-                    "Balance not immediately available after joining/recovering."
-                );
-                Amount::default()
-            }),
+            balance_msat: client
+                .get_balance_for_btc(Account::Primary)
+                .await
+                .unwrap_or_else(|err| {
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %err.fmt_compact_anyhow(),
+                        %federation_id,
+                        "Balance not immediately available after joining/recovering."
+                    );
+                    Amount::default()
+                }),
             config: federation_config.clone(),
             last_backup_time: None,
         };
@@ -2876,7 +2889,12 @@ impl IAdminGateway for Gateway {
             })
         } else if let Ok(mint_module) = client.get_first_module::<MintV2ClientModule>() {
             let (_, ecash) = mint_module
-                .send(payload.amount, serde_json::Value::Null, true)
+                .send(
+                    Account::Primary,
+                    payload.amount,
+                    serde_json::Value::Null,
+                    true,
+                )
                 .await
                 .map_err(|e| AdminGatewayError::Unexpected(e.into()))?;
 
@@ -2990,12 +3008,16 @@ impl IAdminGateway for Gateway {
                 // federation's per-note fees. The returned fees are quoted at
                 // the returned amount, so they must be used together.
                 BitcoinAmountOrAll::All => {
-                    let balance = client.value().get_balance_for_btc().await.map_err(|err| {
-                        AdminGatewayError::Unexpected(anyhow!(
-                            "Balance not available: {}",
-                            err.fmt_compact_anyhow()
-                        ))
-                    })?;
+                    let balance = client
+                        .value()
+                        .get_balance_for_btc(Account::Primary)
+                        .await
+                        .map_err(|err| {
+                            AdminGatewayError::Unexpected(anyhow!(
+                                "Balance not available: {}",
+                                err.fmt_compact_anyhow()
+                            ))
+                        })?;
 
                     wallet_module
                         .max_withdrawable_amount(&address, balance)

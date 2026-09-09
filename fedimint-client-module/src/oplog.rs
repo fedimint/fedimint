@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::future;
 use std::time::SystemTime;
 
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{
     Decodable, DecodeError, Encodable, decode_field_from_finite_reader,
@@ -62,6 +62,7 @@ pub trait IOperationLog {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
+        account: Account,
         operation_type: &str,
         operation_meta: serde_json::Value,
     );

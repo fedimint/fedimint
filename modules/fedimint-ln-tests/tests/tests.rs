@@ -10,7 +10,7 @@ use fedimint_client::transaction::{
 };
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_client_module::oplog::OperationLogEntry;
-use fedimint_core::core::{IntoDynInstance, OperationId};
+use fedimint_core::core::{Account, IntoDynInstance, OperationId};
 use fedimint_core::module::{AmountUnit, Amounts, CommonModuleInit as _};
 use fedimint_core::util::backoff_util::aggressive_backoff_long;
 use fedimint_core::util::{BoxStream, NextOrPending, retry};
@@ -265,7 +265,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
 
     // Pay the invoice again and verify that it does not deduct the balance, but it
     // does return the preimage
-    let prev_balance = client2.get_balance_for_btc().await?;
+    let prev_balance = client2.get_balance_for_btc(Account::Primary).await?;
     let OutgoingLightningPayment {
         payment_type,
         contract_id: _,
@@ -284,7 +284,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
         _ => panic!("Expected internal payment!"),
     }
 
-    let same_balance = client2.get_balance_for_btc().await?;
+    let same_balance = client2.get_balance_for_btc(Account::Primary).await?;
     assert_eq!(prev_balance, same_balance);
 
     Ok(())
@@ -386,7 +386,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         _ => panic!("Expected lightning payment!"),
     }
 
-    let prev_balance = client.get_balance_for_btc().await?;
+    let prev_balance = client.get_balance_for_btc(Account::Primary).await?;
 
     // Pay the invoice again and verify that it does not deduct the balance, but it
     // does return the preimage
@@ -410,7 +410,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
         _ => panic!("Expected lightning payment!"),
     }
 
-    let same_balance = client.get_balance_for_btc().await?;
+    let same_balance = client.get_balance_for_btc(Account::Primary).await?;
     assert_eq!(prev_balance, same_balance);
 
     drop(gw);
@@ -585,7 +585,10 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
         .into_stream();
     assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
     assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
-    assert_eq!(new_client.get_balance_for_btc().await?, sats(250));
+    assert_eq!(
+        new_client.get_balance_for_btc(Account::Primary).await?,
+        sats(250)
+    );
 
     // TEST internal payment when there is a registered gateway
     let gw = gateway(&fixtures, &fed).await;
@@ -644,7 +647,10 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
         .into_stream();
     assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
     assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
-    assert_eq!(new_client.get_balance_for_btc().await?, sats(250));
+    assert_eq!(
+        new_client.get_balance_for_btc(Account::Primary).await?,
+        sats(250)
+    );
 
     Ok(())
 }
@@ -722,7 +728,10 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
         assert_eq!(sub3.ok().await?, LnReceiveState::AwaitingFunds);
         assert_eq!(sub3.ok().await?, LnReceiveState::Claimed);
     }
-    assert_eq!(new_client.get_balance_for_btc().await?, sats(250));
+    assert_eq!(
+        new_client.get_balance_for_btc(Account::Primary).await?,
+        sats(250)
+    );
 
     Ok(())
 }
@@ -875,7 +884,7 @@ async fn returns_completed_payment_for_expired_invoice_already_paid() -> anyhow:
     // returned — not an "Invoice has expired" error, which would mask the
     // successful payment and push the caller toward paying again through a
     // fresh invoice.
-    let prev_balance = client2.get_balance_for_btc().await?;
+    let prev_balance = client2.get_balance_for_btc(Account::Primary).await?;
     let OutgoingLightningPayment {
         payment_type,
         contract_id: _,
@@ -886,7 +895,7 @@ async fn returns_completed_payment_for_expired_invoice_already_paid() -> anyhow:
         first_payment_type.operation_id(),
         "the completed payment is returned; no new attempt is started"
     );
-    let same_balance = client2.get_balance_for_btc().await?;
+    let same_balance = client2.get_balance_for_btc(Account::Primary).await?;
     assert_eq!(prev_balance, same_balance);
 
     Ok(())
@@ -941,7 +950,7 @@ async fn can_reclaim_receive_funded_after_invoice_expiry() -> anyhow::Result<()>
         expiry_time: Some(1),
     });
     let sm_invoice = invoice.clone();
-    let transaction_builder = TransactionBuilder::new().with_outputs(
+    let transaction_builder = TransactionBuilder::new(Account::Primary).with_outputs(
         ClientOutputBundle::new(
             vec![ClientOutput {
                 output: offer_output,
@@ -1004,7 +1013,7 @@ async fn can_reclaim_receive_funded_after_invoice_expiry() -> anyhow::Result<()>
         create_incoming_contract_output(&ln_module.api, payment_hash, amount, &gateway_redeem_key)
             .await?;
     let funding_operation_id = OperationId::new_random();
-    let funding_tx = TransactionBuilder::new().with_outputs(
+    let funding_tx = TransactionBuilder::new(Account::Primary).with_outputs(
         ClientOutputBundle::new_no_sm(vec![ClientOutput {
             output: LightningOutput::V0(incoming_output),
             amounts: Amounts::new_bitcoin(funded_amount),
@@ -1040,7 +1049,7 @@ async fn can_reclaim_receive_funded_after_invoice_expiry() -> anyhow::Result<()>
         }
     }
 
-    assert_eq!(client1.get_balance_for_btc().await?, amount);
+    assert_eq!(client1.get_balance_for_btc(Account::Primary).await?, amount);
 
     Ok(())
 }
@@ -1084,7 +1093,7 @@ async fn funder_refuses_to_fund_an_already_funded_payment_hash() -> anyhow::Resu
                 operation_id,
                 "",
                 |_| (),
-                TransactionBuilder::new().with_outputs(
+                TransactionBuilder::new(Account::Primary).with_outputs(
                     ClientOutputBundle::new_no_sm(vec![ClientOutput {
                         output: offer_output,
                         amounts: Amounts::ZERO,
@@ -1115,7 +1124,7 @@ async fn funder_refuses_to_fund_an_already_funded_payment_hash() -> anyhow::Resu
             operation_id,
             LightningCommonInit::KIND.as_str(),
             |_| (),
-            TransactionBuilder::new().with_outputs(
+            TransactionBuilder::new(Account::Primary).with_outputs(
                 ClientOutputBundle::new_no_sm(vec![ClientOutput {
                     output: LightningOutput::V0(incoming_output),
                     amounts: Amounts::new_bitcoin(funded_amount),
@@ -1173,7 +1182,7 @@ async fn server_rejects_duplicate_offer() -> anyhow::Result<()> {
         encrypted_preimage: encrypted_preimage_1.clone(),
         expiry_time: None,
     });
-    let transaction_builder_1 = TransactionBuilder::new().with_outputs(
+    let transaction_builder_1 = TransactionBuilder::new(Account::Primary).with_outputs(
         ClientOutputBundle::new_no_sm(vec![ClientOutput {
             output: offer_output_1,
             amounts: Amounts::ZERO,
@@ -1189,7 +1198,7 @@ async fn server_rejects_duplicate_offer() -> anyhow::Result<()> {
         encrypted_preimage: encrypted_preimage_2.clone(),
         expiry_time: None,
     });
-    let transaction_builder_2 = TransactionBuilder::new().with_outputs(
+    let transaction_builder_2 = TransactionBuilder::new(Account::Primary).with_outputs(
         ClientOutputBundle::new_no_sm(vec![ClientOutput {
             output: offer_output_2,
             amounts: Amounts::ZERO,

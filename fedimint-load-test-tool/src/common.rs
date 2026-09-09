@@ -11,7 +11,7 @@ use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
 use fedimint_client::{Client, ClientHandleArc, RootSecret};
 use fedimint_connectors::ConnectorRegistry;
-use fedimint_core::core::{IntoDynInstance, OperationId};
+use fedimint_core::core::{Account, IntoDynInstance, OperationId};
 use fedimint_core::db::Database;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::CommonModuleInit;
@@ -394,7 +394,7 @@ pub async fn try_remint_denomination(
     let mint_client = client.get_first_module::<MintClientModule>()?;
     let mut dbtx = client.db().begin_transaction().await;
     let mut module_transaction = dbtx.to_ref_with_prefix_module_id(mint_client.id).0;
-    let mut tx = TransactionBuilder::new();
+    let mut tx = TransactionBuilder::new(Account::Primary);
     let operation_id = OperationId::new_random();
     for _ in 0..quantity {
         let outputs = mint_client

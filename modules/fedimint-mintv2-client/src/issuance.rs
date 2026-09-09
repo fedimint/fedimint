@@ -1,4 +1,6 @@
 use bitcoin_hashes::{Hash, hash160, sha256};
+use fedimint_client_module::secret::DeriveableSecretClientExt;
+use fedimint_core::core::Account;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::secp256k1::rand::Rng;
 use fedimint_core::secp256k1::{Keypair, PublicKey, SECP256K1};
@@ -17,8 +19,13 @@ pub struct NoteIssuanceRequest {
 }
 
 impl NoteIssuanceRequest {
-    pub fn new(denomination: Denomination, tweak: [u8; 16], root_secret: &DerivableSecret) -> Self {
-        let secret = output_secret(denomination, tweak, root_secret);
+    pub fn new(
+        account: Account,
+        denomination: Denomination,
+        tweak: [u8; 16],
+        root_secret: &DerivableSecret,
+    ) -> Self {
+        let secret = output_secret(account, denomination, tweak, root_secret);
 
         Self {
             denomination,
@@ -47,6 +54,14 @@ impl NoteIssuanceRequest {
 
 // ============ Grinding Functions ============
 
+/// Deliberately derived from the module root rather than from an account's
+/// subtree, so every account grinds against the same filter.
+///
+/// One pre-grinder therefore serves the whole wallet instead of one per
+/// account, and a recovery still runs a single [`check_tweak`] per output —
+/// only the ~1/65536 that pass it are then tried against each account's
+/// nonces. It also leaves the filter of a wallet that predates accounts
+/// byte-for-byte what it was.
 pub fn tweak_filter(root_secret: &DerivableSecret) -> [u8; 32] {
     root_secret.to_random_bytes()
 }
@@ -83,12 +98,14 @@ pub fn check_nonce(secret: &OutputSecret, nonce_hash: hash160::Hash) -> bool {
 pub struct OutputSecret(DerivableSecret);
 
 pub fn output_secret(
+    account: Account,
     denomination: Denomination,
     tweak: [u8; 16],
     root: &DerivableSecret,
 ) -> OutputSecret {
     OutputSecret(
-        root.child_key(ChildId(u64::from(denomination.0)))
+        root.derive_account_secret(account)
+            .child_key(ChildId(u64::from(denomination.0)))
             .tweak(&tweak),
     )
 }
