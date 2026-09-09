@@ -53,8 +53,12 @@ pub trait WalletFederationApi {
 
     async fn tx_id(&self, outpoint: OutPoint) -> Option<bitcoin::Txid>;
 
-    /// Fetches the guardians' local views of mined but not yet final receive
-    /// outputs, merged into a single view.
+    /// Fetches the guardians' local views of the receive outputs they can see
+    /// but the federation has not recorded yet - mempool candidates plus the
+    /// recent-block window - merged into a single view.
+    ///
+    /// Entries are retained for a short while past finality, so an outpoint
+    /// appearing here does not mean the deposit is still unclaimed.
     ///
     /// This is advisory data used to display peg-in progress. It is
     /// deliberately not requested via threshold consensus: guardians observe
