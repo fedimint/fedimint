@@ -204,6 +204,10 @@ async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
 
     bitcoin.mine_blocks(1).await;
 
+    // The tip is the block that just mined the deposit, and `get_block_count`
+    // returns a count rather than a height.
+    let mined_height = bitcoin.get_block_count().await - 1;
+
     // The deposit is now mined but still short of the finality delay, so the
     // federation has not recorded it and only the advisory view can see it.
     let confirmations = await_receive_confirmations(&client, &address, 1).await?;
@@ -243,6 +247,7 @@ async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
     match mined {
         ReceiveProgress::Confirming {
             value,
+            height,
             confirmations,
             required,
         } => {
@@ -254,6 +259,10 @@ async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
             assert!(
                 (1..required).contains(&confirmations),
                 "The mined deposit is confirming, got {confirmations} of {required}"
+            );
+            assert_eq!(
+                height, mined_height,
+                "The deposit must report the height of the block that mined it"
             );
         }
         state => panic!("The mined deposit should still be confirming, got {state:?}"),
@@ -404,6 +413,7 @@ async fn await_receive_confirmations(
                         value,
                         confirmations,
                         required,
+                        ..
                     },
                 ),
             ] => {
