@@ -1722,9 +1722,9 @@ async fn test_send_oob_notes() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// A syntactically valid note. Its signature is never checked in the tests
-/// that use it below: both the cross-federation and unissued-tier checks in
-/// `validate_notes` return before a note's signature is verified.
+/// A syntactically valid note. Its signature is never checked here: both the
+/// cross-federation and unissued-tier checks in `validate_notes` return
+/// before a note's signature is verified.
 fn dummy_spendable_note() -> SpendableNote {
     const NOTE_HEX: &str = "a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f317\
         8fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553\
@@ -1794,6 +1794,26 @@ async fn subscribing_to_an_unknown_operation_reports_not_found() -> anyhow::Resu
         Err(SubscribeSpendNotesError::Operation(
             OperationLookupError::NotFound(_)
         ))
+    );
+
+    issue_ecash(&client, sats(1000)).await?;
+
+    let (spend_op, notes) = mint
+        .spend_notes_with_selector(&SelectNotesWithAtleastAmount, sats(500), None, false, ())
+        .await?;
+
+    // A spend operation is not a reissuance.
+    assert_matches!(
+        mint.subscribe_reissue_external_notes(spend_op).await,
+        Err(SubscribeReissueExternalNotesError::NotAReissuance)
+    );
+
+    let reissue_op = mint.reissue_external_notes(notes, ()).await?;
+
+    // A reissue operation is not an out-of-band spend.
+    assert_matches!(
+        mint.subscribe_spend_notes(reissue_op).await,
+        Err(SubscribeSpendNotesError::NotAnOutOfBandSpend)
     );
 
     Ok(())
