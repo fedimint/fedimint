@@ -3949,10 +3949,32 @@ impl IGatewayClientV1 for Gateway {
         &self,
         htlc: InterceptPaymentResponse,
     ) -> std::result::Result<(), LightningRpcError> {
-        // Wait until the lightning node is online to complete the HTLC.
-        let lightning_context = self.await_lightning_context().await;
+        // Retry transient failures so the already-funded incoming contract is
+        // not stranded; return only on a permanent outcome. See the trait doc.
+        loop {
+            let lightning_context = self.await_lightning_context().await;
 
-        lightning_context.lnrpc.complete_htlc(htlc).await
+            match lightning_context.lnrpc.complete_htlc(htlc.clone()).await {
+                Ok(()) => return Ok(()),
+                Err(err @ LightningRpcError::HtlcCompletionRejected { .. }) => {
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %err.fmt_compact(),
+                        "Lightning cannot reach the requested terminal HTLC outcome",
+                    );
+                    return Err(err);
+                }
+                Err(err) => {
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %err.fmt_compact(),
+                        "Failure trying to complete HTLC, retrying",
+                    );
+                }
+            }
+
+            sleep(LIGHTNING_CONTEXT_RETRY_INTERVAL).await;
+        }
     }
 
     async fn is_lnv2_direct_swap(

@@ -1278,7 +1278,17 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
         max_fee: Amount,
     ) -> Result<PayInvoiceResponse, LightningRpcError>;
 
-    /// Use the gateway's lightning node to send a complete HTLC response.
+    /// Uses the gateway's lightning node to complete (settle or cancel) a
+    /// previously intercepted HTLC.
+    ///
+    /// By the time the gateway settles the upstream HTLC it has already funded
+    /// the incoming contract, so a transient failure here must not strand it
+    /// out of pocket. Implementations must absorb and retry every transient
+    /// node or connectivity failure, returning `Err` only when Lightning has
+    /// reached a permanent state that makes the requested outcome impossible.
+    /// The future may block while retrying and must remain cancellation-safe.
+    /// The completion state machine persists any returned error as a terminal
+    /// failure.
     async fn complete_htlc(
         &self,
         htlc_response: InterceptPaymentResponse,
