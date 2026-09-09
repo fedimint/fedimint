@@ -20,7 +20,7 @@ use tokio_util::codec::LengthDelimitedCodec;
 
 use super::IP2PConnector;
 use super::iroh::parse_p2p;
-use crate::net::p2p_connection::{DynP2PConnection, IP2PConnection as _};
+use crate::net::p2p_connection::{DynP2PConnection, IP2PConnection as _, TlsP2PConnection};
 
 #[derive(Debug, Clone)]
 pub struct TlsConfig {
@@ -148,7 +148,7 @@ where
             .length_field_type::<u64>()
             .new_framed(TlsStream::Client(tls));
 
-        Ok(framed.into_dyn())
+        Ok(TlsP2PConnection::new(framed).into_dyn())
     }
 
     async fn accept(&self) -> anyhow::Result<(PeerId, DynP2PConnection<M>)> {
@@ -176,7 +176,7 @@ where
             .length_field_type::<u64>()
             .new_framed(TlsStream::Server(tls));
 
-        Ok((auth_peer, framed.into_dyn()))
+        Ok((auth_peer, TlsP2PConnection::new(framed).into_dyn()))
     }
 
     fn connection_type(&self, _peer: PeerId) -> Option<ConnectionType> {

@@ -24,7 +24,8 @@ use fedimint_server_core::dashboard_ui::P2PConnectionStatus;
 use futures::future::select_all;
 use futures::{FutureExt, StreamExt};
 use tokio::sync::watch;
-use tokio::time::{Instant, sleep_until};
+use tokio::time::{Instant, sleep_until, timeout};
+use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, info_span, warn};
 
 use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
@@ -270,6 +271,19 @@ enum P2PConnectionSMState<M> {
     Connected(DynP2PConnection<M>),
 }
 
+/// How often live connection metadata (currently only the round-trip time) is
+/// re-published while a connection stays up.
+const METADATA_REFRESH_INTERVAL: Duration = Duration::from_secs(10);
+
+/// Bound graceful retirement even when a transport stays alive but stops
+/// making progress. This is a grace period, not a delivery guarantee.
+const CONNECTION_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
+
+enum ConnectionRetirement<M> {
+    Replaced(DynP2PConnection<M>),
+    MaxAge,
+}
+
 impl<M: Send + 'static> P2PConnectionStateMachine<M> {
     async fn state_transition(mut self) -> Option<Self> {
         match self.state {
@@ -288,17 +302,8 @@ impl<M: Send + 'static> P2PConnectionStateMachine<M> {
                 // Subscribe before taking the snapshot so an update racing with
                 // the snapshot remains queued for the connected transition.
                 let status_updates = connection.connection_status_updates();
-                let status = P2PConnectionStatus {
-                    conn_type: connection
-                        .connection_type()
-                        .or_else(|| self.common.connector.connection_type(self.common.peer_id)),
-                    rtt: connection.rtt(),
-                };
 
-                self.common.status_sender.send_replace(P2PConnectionState {
-                    connected: Some(status),
-                    last_error: None,
-                });
+                self.common.refresh_status(&connection);
 
                 self.common
                     .transition_connected(connection, status_updates)
@@ -315,58 +320,168 @@ impl<M: Send + 'static> P2PConnectionStateMachine<M> {
 impl<M: Send + 'static> P2PConnectionSMCommon<M> {
     async fn transition_connected(
         &mut self,
-        mut connection: DynP2PConnection<M>,
+        connection: DynP2PConnection<M>,
         mut status_updates: Option<DynConnectionStatusUpdates>,
     ) -> Option<P2PConnectionSMState<M>> {
-        tokio::select! {
-            Some(()) = async {
-                match status_updates.as_mut() {
-                    Some(status_updates) => status_updates.next().await,
-                    None => std::future::pending().await,
-                }
-            } => {
-                Some(P2PConnectionSMState::Connected(connection))
-            },
-            () = async {
-                match self.connection_deadline {
-                    Some(deadline) => sleep_until(deadline).await,
-                    None => std::future::pending().await,
-                }
-            } => {
-                Some(self.disconnect(anyhow!("Connection exceeded the maximum age")))
-            },
-            message = self.outgoing_receiver.recv() => {
-                Some(self.send_message(connection, message.ok()?).await)
-            },
-            connection = self.incoming_connections.recv() => {
-                info!(target: LOG_NET_PEER, "Connected to peer");
+        // Keep both halves alive across metadata updates: a write parked on
+        // flow control must not prevent reads (or cancel an in-flight frame).
+        // These futures belong to the state machine, including on shutdown.
+        let retiring = CancellationToken::new();
+        let send_loop = Self::send_loop(
+            &connection,
+            &self.outgoing_receiver,
+            &retiring,
+            &self.our_id_str,
+            &self.peer_id_str,
+        );
+        let receive_loop = Self::receive_loop(
+            &connection,
+            &self.incoming_sender,
+            &retiring,
+            &self.our_id_str,
+            &self.peer_id_str,
+        );
+        tokio::pin!(send_loop, receive_loop);
 
-                self.connection_deadline = self.max_connection_age.map(|age| Instant::now() + age);
+        let retirement = loop {
+            tokio::select! {
+                result = &mut send_loop => {
+                    return result.err().map(|e| self.disconnect(e));
+                },
+                result = &mut receive_loop => {
+                    return result.err().map(|e| self.disconnect(e));
+                },
+                connection = self.incoming_connections.recv() => {
+                    break ConnectionRetirement::Replaced(connection.ok()?);
+                },
+                () = async {
+                    match self.connection_deadline {
+                        Some(deadline) => sleep_until(deadline).await,
+                        None => std::future::pending().await,
+                    }
+                } => break ConnectionRetirement::MaxAge,
+                Some(()) = async {
+                    match status_updates.as_mut() {
+                        Some(status_updates) => status_updates.next().await,
+                        None => std::future::pending().await,
+                    }
+                } => {
+                    self.refresh_status(&connection);
+                },
+                () = sleep(METADATA_REFRESH_INTERVAL) => {
+                    self.refresh_status(&connection);
+                },
+            }
+        };
 
-                Some(P2PConnectionSMState::Connected(connection.ok()?))
-            },
-            message = connection.receive() => {
-                let mut message = match message {
-                    Ok(message) => message,
-                    Err(e) => return Some(self.disconnect(e)),
-                };
-
-                match message.read_to_end().await {
-                    Ok(message) => {
-                        PEER_MESSAGES_COUNT
-                            .with_label_values(&[self.our_id_str.as_str(), self.peer_id_str.as_str(), "incoming"])
-                            .inc();
-
-                        if self.incoming_sender.try_send(message).is_err() {
-                            debug!(target: LOG_NET_PEER, "Incoming message channel is full");
-                        }
-                    },
-                    Err(e) => return Some(self.disconnect(e)),
-                }
-
-                Some(P2PConnectionSMState::Connected(connection))
-            },
+        // Stop accepting new messages on the old connection, but finish the
+        // non-cancel-safe send/read_to_end already in flight. A stalled peer
+        // must not prevent replacement or max-age recovery indefinitely.
+        // On timeout or transport failure, abandon both halves and never reuse
+        // this connection. Delivery of the in-flight messages is unknown; do
+        // not replay them here since that could duplicate delivery. Consensus
+        // tolerates loss, but a one-shot DKG may need to be restarted. Even a
+        // completed send is not an acknowledgement by the remote application.
+        // Shutdown cancels both halves immediately via the owning task group.
+        retiring.cancel();
+        match timeout(CONNECTION_DRAIN_TIMEOUT, async {
+            tokio::try_join!(&mut send_loop, &mut receive_loop)
+        })
+        .await
+        {
+            Ok(Ok(_)) => {}
+            Ok(Err(error)) => {
+                warn!(target: LOG_NET_PEER, error = %error.fmt_compact_anyhow(),
+                    "Retiring connection failed; in-flight delivery is unknown");
+            }
+            Err(_) => {
+                warn!(target: LOG_NET_PEER,
+                    "Connection drain timed out; in-flight delivery is unknown");
+            }
         }
+
+        match retirement {
+            ConnectionRetirement::Replaced(connection) => {
+                info!(target: LOG_NET_PEER, "Connected to peer");
+                self.connection_deadline = self.max_connection_age.map(|age| Instant::now() + age);
+                Some(P2PConnectionSMState::Connected(connection))
+            }
+            ConnectionRetirement::MaxAge => {
+                Some(self.disconnect(anyhow!("Connection exceeded the maximum age")))
+            }
+        }
+    }
+
+    async fn send_loop(
+        connection: &DynP2PConnection<M>,
+        outgoing_receiver: &Receiver<M>,
+        retiring: &CancellationToken,
+        our_id_str: &str,
+        peer_id_str: &str,
+    ) -> anyhow::Result<()> {
+        loop {
+            let message = tokio::select! {
+                // Both branches are cancel-safe. Prioritize retirement so a
+                // ready queue cannot start another send during draining.
+                biased;
+                () = retiring.cancelled() => return Ok(()),
+                message = outgoing_receiver.recv() => match message {
+                    Ok(message) => message,
+                    Err(_) => return Ok(()),
+                },
+            };
+
+            PEER_MESSAGES_COUNT
+                .with_label_values(&[our_id_str, peer_id_str, "outgoing"])
+                .inc();
+
+            connection.send(message).await?;
+        }
+    }
+
+    async fn receive_loop(
+        connection: &DynP2PConnection<M>,
+        incoming_sender: &Sender<M>,
+        retiring: &CancellationToken,
+        our_id_str: &str,
+        peer_id_str: &str,
+    ) -> anyhow::Result<()> {
+        loop {
+            let mut frame = tokio::select! {
+                // `receive` is cancel-safe; `read_to_end` below is not.
+                // Retirement must win over another ready frame.
+                biased;
+                () = retiring.cancelled() => return Ok(()),
+                frame = connection.receive() => frame?,
+            };
+
+            let message = frame.read_to_end().await?;
+            PEER_MESSAGES_COUNT
+                .with_label_values(&[our_id_str, peer_id_str, "incoming"])
+                .inc();
+
+            if incoming_sender.try_send(message).is_err() {
+                debug!(target: LOG_NET_PEER, "Incoming message channel is full");
+            }
+        }
+    }
+
+    /// Publishes a fresh metadata snapshot for the live connection.
+    ///
+    /// Refreshing in place rather than re-entering the connected state means a
+    /// send already in flight is never cancelled by a status event.
+    fn refresh_status(&self, connection: &DynP2PConnection<M>) {
+        let status = P2PConnectionStatus {
+            conn_type: connection
+                .connection_type()
+                .or_else(|| self.connector.connection_type(self.peer_id)),
+            rtt: connection.rtt(),
+        };
+
+        self.status_sender.send_replace(P2PConnectionState {
+            connected: Some(status),
+            last_error: None,
+        });
     }
 
     fn disconnect(&self, error: anyhow::Error) -> P2PConnectionSMState<M> {
@@ -386,26 +501,6 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
             backoff: api_networking_backoff(),
             last_error: Some(last_error),
         }
-    }
-
-    async fn send_message(
-        &mut self,
-        mut connection: DynP2PConnection<M>,
-        peer_message: M,
-    ) -> P2PConnectionSMState<M> {
-        PEER_MESSAGES_COUNT
-            .with_label_values(&[
-                self.our_id_str.as_str(),
-                self.peer_id_str.as_str(),
-                "outgoing",
-            ])
-            .inc();
-
-        if let Err(e) = connection.send(peer_message).await {
-            return self.disconnect(e);
-        }
-
-        P2PConnectionSMState::Connected(connection)
     }
 
     async fn transition_disconnected(
