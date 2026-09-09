@@ -959,6 +959,53 @@ impl LightningClientModule {
         .await
     }
 
+    /// Requests an invoice from `gateway` at the receive fee the caller
+    /// already checked.
+    ///
+    /// [`Self::receive`] reads the gateway's fee itself, so a caller that
+    /// showed the user a fee has no guarantee the incoming contract is
+    /// created at that fee: the gateway may change its schedule between the
+    /// two reads. This variant takes the `receive_fee` the caller obtained
+    /// from [`RoutingInfo::receive_fee`] and refuses with
+    /// [`ReceiveWithTermsError::TermsChanged`], before creating anything, if
+    /// the gateway currently reports a different fee. A cheaper fee counts as
+    /// changed too, so the contract always matches what was approved; the
+    /// error carries the current fee for re-quoting.
+    pub async fn receive_with_terms(
+        &self,
+        amount: Amount,
+        expiry_secs: u32,
+        description: Bolt11InvoiceDescription,
+        gateway: SafeUrl,
+        receive_fee: PaymentFee,
+        custom_meta: Value,
+    ) -> Result<(Bolt11Invoice, OperationId), ReceiveWithTermsError> {
+        if expiry_secs > MAX_INVOICE_EXPIRY_SECS {
+            return Err(ReceiveError::InvoiceExpiryTooLong.into());
+        }
+
+        let (gateway, routing_info) = self.resolve_receive_gateway(Some(gateway)).await?;
+
+        if routing_info.receive_fee != receive_fee {
+            return Err(ReceiveWithTermsError::TermsChanged {
+                receive_fee: routing_info.receive_fee,
+            });
+        }
+
+        let (invoice, operation_id) = self
+            .receive_with_routing_info(
+                amount,
+                expiry_secs,
+                description,
+                gateway,
+                routing_info,
+                custom_meta,
+            )
+            .await?;
+
+        Ok((invoice, operation_id))
+    }
+
     /// Resolves the gateway to request an invoice from and its current
     /// routing info: the given one, or an automatically selected one when
     /// `None`.
@@ -1602,6 +1649,19 @@ pub enum ReceiveError {
     IncorrectInvoiceAmount,
     #[error("Requested invoice expiry exceeds the maximum of one day")]
     InvoiceExpiryTooLong,
+}
+
+/// A failure of [`LightningClientModule::receive_with_terms`].
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum ReceiveWithTermsError {
+    /// The gateway's current receive fee differs from the one the caller
+    /// checked. Carries the current fee so the caller can re-quote.
+    #[error("Gateway's receive fee changed since it was checked")]
+    TermsChanged { receive_fee: PaymentFee },
+    /// Any failure [`LightningClientModule::receive`] can report.
+    #[error(transparent)]
+    Receive(#[from] ReceiveError),
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]

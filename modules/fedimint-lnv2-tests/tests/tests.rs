@@ -28,8 +28,8 @@ use fedimint_lnv2_client::events::{
 };
 use fedimint_lnv2_client::{
     FinalReceiveOperationState, InvoiceSendStatus, LightningClientInit, LightningClientModule,
-    LightningOperationMeta, ReceiveOperationState, SendOperationState, SendPaymentError,
-    SendWithTermsError,
+    LightningOperationMeta, ReceiveOperationState, ReceiveWithTermsError, SendOperationState,
+    SendPaymentError, SendWithTermsError,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::PaymentFee;
@@ -570,6 +570,100 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
 
     assert_eq!(sub.ok().await?, ReceiveOperationState::Pending);
     assert_eq!(sub.ok().await?, ReceiveOperationState::Expired);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receive_with_terms_creates_the_contract_at_the_checked_fee() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+    let gateway = mock::gateway();
+    let amount = Amount::from_sats(1000);
+
+    let receive_fee = lightning
+        .routing_info(&gateway)
+        .await?
+        .expect("Mock gateway supports the federation")
+        .receive_fee;
+
+    let (invoice, operation_id) = lightning
+        .receive_with_terms(
+            amount,
+            60,
+            Bolt11InvoiceDescription::Direct(String::new()),
+            gateway,
+            receive_fee,
+            Value::Null,
+        )
+        .await?;
+
+    assert_eq!(invoice.amount_milli_satoshis(), Some(amount.msats));
+
+    let meta = client
+        .operation_log()
+        .get_operation(operation_id)
+        .await
+        .expect("Operation exists")
+        .meta::<LightningOperationMeta>();
+    let LightningOperationMeta::Receive(meta) = meta else {
+        panic!("Expected a receive operation");
+    };
+    // The created contract carries exactly the approved fee.
+    assert_eq!(
+        meta.contract.commitment.amount,
+        receive_fee.subtract_from(amount.msats)
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receive_with_terms_refuses_when_the_gateway_fee_changed() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+    let gateway = mock::gateway();
+
+    let receive_fee = lightning
+        .routing_info(&gateway)
+        .await?
+        .expect("Mock gateway supports the federation")
+        .receive_fee;
+
+    let stale_fee = PaymentFee {
+        base: Amount::from_sats(1),
+        parts_per_million: 1,
+    };
+    assert_ne!(stale_fee, receive_fee);
+
+    assert_eq!(
+        lightning
+            .receive_with_terms(
+                Amount::from_sats(1000),
+                60,
+                Bolt11InvoiceDescription::Direct(String::new()),
+                gateway,
+                stale_fee,
+                Value::Null,
+            )
+            .await,
+        Err(ReceiveWithTermsError::TermsChanged { receive_fee }),
+    );
+
+    // Nothing was created.
+    assert!(
+        client
+            .operation_log()
+            .paginate_operations_rev(10, None)
+            .await
+            .is_empty()
+    );
 
     Ok(())
 }
