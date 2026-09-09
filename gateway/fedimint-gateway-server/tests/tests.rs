@@ -10,6 +10,7 @@ use assert_matches::assert_matches;
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_api_client::api::ServerError;
 use fedimint_client::ClientHandleArc;
+use fedimint_client::error::TransactionSubmitError;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
@@ -908,7 +909,15 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
             .await
         {
             Ok(_) => panic!("Expected incoming offer validation to fail due to lack of funds"),
-            Err(e) => assert_eq!(e.to_string(), "Insufficient funds".to_string()),
+            Err(e) => {
+                let TransactionSubmitError::PrimaryModule(cause) = e
+                    .downcast::<TransactionSubmitError>()
+                    .expect("funding the HTLC fails at transaction submission")
+                else {
+                    panic!("Expected the primary module to reject the funding");
+                };
+                assert_eq!(cause.to_string(), "Insufficient funds");
+            }
         }
 
         Ok(())

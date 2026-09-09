@@ -6,7 +6,7 @@ use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::Amounts;
-use fedimint_core::util::FmtCompactAnyhow;
+use fedimint_core::util::FmtCompact;
 use fedimint_core::{Amount, TransactionId};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 use fedimint_mint_common::MintInput;
@@ -464,7 +464,7 @@ impl MintInputStateRefundedBundle {
                 Err(err) => {
                     warn!(
                         target: LOG_CLIENT_MODULE_MINT,
-                        err = %err.fmt_compact_anyhow(),
+                        err = %err.fmt_compact(),
                         refund_input_amounts = ?refund_input.amounts,
                         input = %refund_input.input,
                         "Failed to remint a single note"

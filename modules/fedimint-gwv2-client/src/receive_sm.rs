@@ -10,7 +10,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiRequestErased};
 use fedimint_core::secp256k1::Keypair;
-use fedimint_core::util::FmtCompactAnyhow;
+use fedimint_core::util::FmtCompact;
 use fedimint_core::{NumPeersExt, OutPoint, PeerId};
 use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::endpoint_constants::DECRYPTION_KEY_SHARE_ENDPOINT;
@@ -292,7 +292,7 @@ impl ReceiveStateMachine {
             Err(err) => {
                 warn!(
                     target: LOG_CLIENT_MODULE_GW,
-                    err = %err.fmt_compact_anyhow(),
+                    err = %err.fmt_compact(),
                     amount = %old_state.common.contract.commitment.amount,
                     "Not refunding incoming contract, its amount does not cover the refund fee"
                 );

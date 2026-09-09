@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
+use fedimint_client_module::error::TransactionSubmitError;
 use fedimint_client_module::module::OutPointRange;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, DynState, IState};
 use fedimint_client_module::transaction::{TransactionBuilder, TxSubmissionStatesSM};
@@ -49,7 +50,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         inputs: InstancelessDynClientInputBundle,
-    ) -> anyhow::Result<OutPointRange> {
+    ) -> Result<OutPointRange, TransactionSubmitError> {
         let tx_builder =
             TransactionBuilder::new().with_inputs(inputs.into_dyn(self.module_instance_id));
 
@@ -66,7 +67,7 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         outputs: InstancelessDynClientOutputBundle,
-    ) -> anyhow::Result<OutPointRange> {
+    ) -> Result<OutPointRange, TransactionSubmitError> {
         let tx_builder =
             TransactionBuilder::new().with_outputs(outputs.into_dyn(self.module_instance_id));
 

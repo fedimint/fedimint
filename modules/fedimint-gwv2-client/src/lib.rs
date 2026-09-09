@@ -612,7 +612,7 @@ impl GatewayClientModuleV2 {
             if let Err(error) = creation_result {
                 let operation_exists = self.client_ctx.operation_exists(receive_operation_id).await;
                 if operation_creation_failed_permanently(true, operation_exists) {
-                    return Err(error);
+                    return Err(error.into());
                 }
             } else {
                 let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
@@ -655,7 +655,7 @@ impl GatewayClientModuleV2 {
                 .operation_exists(completion_operation_id)
                 .await;
             if operation_creation_failed_permanently(true, operation_exists) {
-                return Err(error);
+                return Err(error.into());
             }
         }
 

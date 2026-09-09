@@ -31,7 +31,7 @@ async fn load_or_generate_mnemonic(db: &Database) -> anyhow::Result<[u8; 64]> {
 
 async fn make_client_builder() -> Result<(fedimint_client::ClientBuilder, Database)> {
     let mem_database = MemDatabase::default();
-    let mut builder = fedimint_client::Client::builder().await?;
+    let mut builder = fedimint_client::Client::builder().await;
     builder.with_module(LightningClientInit::default());
     builder.with_module(MintClientInit);
     builder.with_module(WalletClientInit::default());

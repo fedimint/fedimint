@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::SystemTime;
 
-use anyhow::{Context as _, bail};
 use bitcoin::hex::DisplayHex as _;
 use fedimint_api_client::api::ApiVersionSet;
 use fedimint_client_module::db::ClientModuleMigrationFn;
@@ -33,6 +32,7 @@ use strum_macros::EnumIter;
 use tracing::{debug, info, trace, warn};
 
 use crate::backup::{ClientBackup, Metadata};
+use crate::error::ClientSecretError;
 use crate::sm::executor::{
     ActiveStateKeyBytes, ActiveStateKeyPrefixBytes, ExecutorDbPrefixes, InactiveStateKeyBytes,
     InactiveStateKeyPrefixBytes,
@@ -1057,16 +1057,18 @@ pub async fn remove_old_and_persist_new_inactive_states(
 /// Fetches the encoded client secret from the database and decodes it.
 /// If an encoded client secret is not present in the database, or if
 /// decoding fails, an error is returned.
-pub async fn get_decoded_client_secret<T: Decodable>(db: &Database) -> anyhow::Result<T> {
+pub async fn get_decoded_client_secret<T: Decodable>(
+    db: &Database,
+) -> Result<T, ClientSecretError> {
     let mut tx = db.begin_transaction_nc().await;
     let client_secret = tx.get_value(&EncodedClientSecretKey).await;
 
     match client_secret {
-        Some(client_secret) => {
-            T::consensus_decode_whole(&client_secret, &ModuleRegistry::default())
-                .context("Decoding failed")
-        }
-        None => bail!("Encoded client secret not present in DB"),
+        Some(client_secret) => Ok(T::consensus_decode_whole(
+            &client_secret,
+            &ModuleRegistry::default(),
+        )?),
+        None => Err(ClientSecretError::NotPresent),
     }
 }
 

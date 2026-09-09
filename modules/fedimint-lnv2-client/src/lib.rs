@@ -42,7 +42,7 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::duration_since_epoch;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_lnv2_common::config::LightningClientConfig;
@@ -666,7 +666,7 @@ impl LightningClientModule {
                 transaction,
             )
             .await
-            .map_err(|e| SendPaymentError::FailedToFundPayment(e.to_string()))?;
+            .map_err(|e| SendPaymentError::FailedToFundPayment(e.fmt_compact().to_string()))?;
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
@@ -900,6 +900,7 @@ impl LightningClientModule {
                 },
             )
             .await
+            .map_err(anyhow::Error::from)
     }
 
     /// Whether an incoming contract worth `amount` is worth claiming, i.e.
@@ -946,6 +947,7 @@ impl LightningClientModule {
                 },
             )
             .await
+            .map_err(anyhow::Error::from)
     }
 
     /// Computes the largest invoice amount the client can pay in full out of

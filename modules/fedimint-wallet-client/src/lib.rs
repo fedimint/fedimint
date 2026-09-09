@@ -902,6 +902,7 @@ impl WalletClientModule {
                 },
             )
             .await
+            .map_err(anyhow::Error::from)
     }
 
     /// Finds the largest amount that can be withdrawn in full out of
@@ -1608,7 +1609,7 @@ impl WalletClientModule {
                         btc_deposited,
                         btc_out_point
                     },
-                    Err(e) => yield DepositStateV2::Failed(e.to_string())
+                    Err(e) => yield DepositStateV2::Failed(e.fmt_compact().to_string())
                 }
             }
         }}))

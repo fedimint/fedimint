@@ -8,6 +8,8 @@ use anyhow::anyhow;
 use bitcoin::key::Secp256k1;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
+use fedimint_client_module::OperationId;
+use fedimint_client_module::error::OperationNotFoundError;
 use fedimint_client_module::meta::LegacyMetaSource;
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{ClientModuleRegistry, FinalClientIface};
@@ -32,6 +34,7 @@ use tokio::task::yield_now;
 use super::{Client, ModuleRecoveryFuture, RecoveryStatus};
 use crate::ClientHandle;
 use crate::db::ClientModuleRecovery;
+use crate::error::RecoveryError;
 use crate::meta::MetaService;
 use crate::oplog::OperationLog;
 use crate::sm::executor::Executor;
@@ -305,6 +308,21 @@ async fn persisted_recovery_progress(db: &Database) -> Option<RecoveryProgress> 
         .map(|state| state.progress)
 }
 
+/// Asserts that `err` is the terminal failure of `module_instance_id`,
+/// carrying the message the module's recovery failed with.
+fn assert_module_recovery_failed(err: &RecoveryError, module_instance_id: ModuleInstanceId) {
+    match err {
+        RecoveryError::Failed {
+            module_instance_id: failed,
+            error,
+        } => {
+            assert_eq!(*failed, module_instance_id, "{err:?}");
+            assert!(error.contains(RECOVERY_ERROR), "{error}");
+        }
+        other => panic!("Expected a failed module recovery, got {other:?}"),
+    }
+}
+
 #[tokio::test]
 async fn forged_done_recovery_progress_does_not_mask_a_later_failure() {
     // `ClientModuleRecoverArgs::progress_tx` is public, so a module can report a
@@ -379,14 +397,9 @@ async fn forged_done_recovery_progress_does_not_mask_a_later_failure() {
     })
     .await
     .expect("Waiting on a failed module recovery must not block forever")
-    .expect_err("A failure after a forged done progress must still be reported as an error")
-    .to_string();
+    .expect_err("A failure after a forged done progress must still be reported as an error");
 
-    assert!(error.contains(RECOVERY_ERROR), "{error}");
-    assert!(
-        error.contains(&format!("module_instance_id={FAILING_MODULE_INSTANCE_ID}")),
-        "{error}"
-    );
+    assert_module_recovery_failed(&error, FAILING_MODULE_INSTANCE_ID);
 }
 
 #[tokio::test]
@@ -494,15 +507,9 @@ async fn wait_for_all_recoveries_reports_failed_module_recovery() {
     })
     .await
     .expect("Waiting on a failed module recovery must not block forever");
-    let error = result
-        .expect_err("Failed module recovery must be reported as an error")
-        .to_string();
+    let error = result.expect_err("Failed module recovery must be reported as an error");
 
-    assert!(error.contains(RECOVERY_ERROR), "{error}");
-    assert!(
-        error.contains(&format!("module_instance_id={FAILING_MODULE_INSTANCE_ID}")),
-        "{error}"
-    );
+    assert_module_recovery_failed(&error, FAILING_MODULE_INSTANCE_ID);
     // Reporting the failure doesn't finish the recovery: the failed module's
     // progress stays pending, which is what the progress-based observers keep
     // reporting.
@@ -550,13 +557,11 @@ async fn wait_for_all_recoveries_reports_a_recovery_task_that_went_away() {
     let error = timeout(WAIT_TIMEOUT, client.wait_for_all_recoveries())
         .await
         .expect("A recovery task that went away must not block the wait forever")
-        .expect_err("An unfinished recovery whose task went away must be reported as an error")
-        .to_string();
+        .expect_err("An unfinished recovery whose task went away must be reported as an error");
 
-    assert!(error.contains("disconnected"), "{error}");
     assert!(
-        !error.contains("module_instance_id="),
-        "A closed status channel must not be reported as a module failure: {error}"
+        matches!(error, RecoveryError::ClientStopped),
+        "A closed status channel must not be reported as a module failure: {error:?}"
     );
 }
 
@@ -637,14 +642,9 @@ async fn recovery_failure_wins_if_completion_is_also_observable() {
     let error = timeout(WAIT_TIMEOUT, client.wait_for_all_recoveries())
         .await
         .expect("Recovery outcome must be determinate")
-        .expect_err("A recovery failure must take precedence over a completed recovery")
-        .to_string();
+        .expect_err("A recovery failure must take precedence over a completed recovery");
 
-    assert!(error.contains(RECOVERY_ERROR), "{error}");
-    assert!(
-        error.contains(&format!("module_instance_id={FAILING_MODULE_INSTANCE_ID}")),
-        "{error}"
-    );
+    assert_module_recovery_failed(&error, FAILING_MODULE_INSTANCE_ID);
 }
 
 #[tokio::test]
@@ -737,14 +737,9 @@ async fn failed_status_is_not_overwritten_by_late_module_progress() {
     })
     .await
     .expect("A late waiter on a failed module recovery must not block forever")
-    .expect_err("A late waiter must still be told about the failed module recovery")
-    .to_string();
+    .expect_err("A late waiter must still be told about the failed module recovery");
 
-    assert!(error.contains(RECOVERY_ERROR), "{error}");
-    assert!(
-        error.contains(&format!("module_instance_id={FAILING_MODULE_INSTANCE_ID}")),
-        "{error}"
-    );
+    assert_module_recovery_failed(&error, FAILING_MODULE_INSTANCE_ID);
 }
 
 #[tokio::test]
@@ -818,14 +813,9 @@ async fn wait_for_module_kind_recovery_reports_failure_despite_other_kind_failin
     )
     .await
     .expect("Waiting on a failed module recovery must not block forever")
-    .expect_err("Failure of the requested kind must be reported despite an unrelated failure")
-    .to_string();
+    .expect_err("Failure of the requested kind must be reported despite an unrelated failure");
 
-    assert!(error.contains(RECOVERY_ERROR), "{error}");
-    assert!(
-        error.contains(&format!("module_instance_id={FAILING_MODULE_INSTANCE_ID}")),
-        "{error}"
-    );
+    assert_module_recovery_failed(&error, FAILING_MODULE_INSTANCE_ID);
 }
 
 /// The last [`ClientHandle`] may get dropped on a thread without a tokio
@@ -843,4 +833,138 @@ async fn client_handle_drop_outside_runtime_does_not_panic() {
     std::thread::spawn(move || drop(handle))
         .join()
         .expect("Dropping a ClientHandle outside a runtime must not panic");
+}
+
+/// A client with no modules and an empty database, enough to exercise the
+/// lookups that only read the operation log.
+async fn client_for_lookup_test() -> Client {
+    let (_status_sender, status_receiver) = watch::channel(BTreeMap::new());
+    client_for_recovery_test(status_receiver, BTreeMap::new()).await
+}
+
+#[tokio::test]
+async fn operation_fees_of_a_missing_operation_are_reported_as_not_found() {
+    let client = client_for_lookup_test().await;
+    let operation_id = OperationId::new_random();
+
+    let err = client
+        .get_operation_fees(operation_id)
+        .await
+        .expect_err("An operation that was never started has no fees");
+
+    assert_eq!(err.operation_id, operation_id);
+}
+
+#[tokio::test]
+async fn visualizing_a_missing_operation_is_reported_as_not_found() {
+    let client = client_for_lookup_test().await;
+    let operation_id = OperationId::new_random();
+
+    // `OperationVisData` is not `Debug`, so `expect_err` is not available here.
+    let Err(err) = client.get_operations_vis(Some(operation_id), None).await else {
+        panic!("An operation that was never started cannot be visualized");
+    };
+    let err: OperationNotFoundError = err;
+
+    assert_eq!(err.operation_id, operation_id);
+}
+
+#[tokio::test]
+async fn quoting_a_fee_without_a_primary_module_is_typed() {
+    use fedimint_client_module::error::TransactionSubmitError;
+    use fedimint_client_module::transaction::FeeQuoteRequest;
+    use fedimint_core::module::{AmountUnit, Amounts};
+
+    let client = client_for_lookup_test().await;
+
+    let err = client
+        .fee_quote(
+            OperationId::new_random(),
+            FeeQuoteRequest {
+                input_amount: Amounts::ZERO,
+                output_amount: Amounts::new_bitcoin(fedimint_core::Amount::from_sats(1)),
+                input_fee: Amounts::ZERO,
+                output_fee: Amounts::ZERO,
+            },
+        )
+        .await
+        .expect_err("A client without a primary module cannot balance a transaction");
+
+    assert!(
+        matches!(
+            err,
+            TransactionSubmitError::NoPrimaryModule {
+                unit: AmountUnit::BITCOIN
+            }
+        ),
+        "{err:?}"
+    );
+}
+
+#[tokio::test]
+async fn an_unknown_module_instance_is_reported_as_such() {
+    use fedimint_client_module::error::ModuleLookupError;
+
+    let client = client_for_lookup_test().await;
+
+    let err = client
+        .get_module_client_dyn(7)
+        .expect_err("A client without modules has no instance 7");
+
+    assert!(
+        matches!(err, ModuleLookupError::UnknownInstance { instance_id: 7 }),
+        "{err:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_balance_without_a_primary_module_is_reported_as_such() {
+    use fedimint_client_module::error::ModuleLookupError;
+    use fedimint_core::module::AmountUnit;
+
+    let client = client_for_lookup_test().await;
+
+    let err = client
+        .get_balance_for_unit(AmountUnit::BITCOIN)
+        .await
+        .expect_err("A client without a primary module has no balance");
+
+    assert!(
+        matches!(
+            err,
+            ModuleLookupError::NoPrimaryModule {
+                unit: AmountUnit::BITCOIN
+            }
+        ),
+        "{err:?}"
+    );
+}
+
+#[tokio::test]
+async fn loading_a_client_secret_that_was_never_stored_is_typed() {
+    use crate::error::ClientSecretError;
+
+    let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+
+    let err = Client::load_decodable_client_secret::<[u8; 64]>(&db)
+        .await
+        .expect_err("Nothing was ever stored");
+
+    assert!(matches!(err, ClientSecretError::NotPresent), "{err:?}");
+}
+
+#[tokio::test]
+async fn storing_a_second_client_secret_is_typed() {
+    use crate::error::ClientSecretError;
+
+    let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+
+    Client::store_encodable_client_secret(&db, [0u8; 64])
+        .await
+        .expect("The first secret must be stored");
+    let err = Client::store_encodable_client_secret(&db, [1u8; 64])
+        .await
+        .expect_err("A stored secret must not be overwritten");
+
+    assert!(matches!(err, ClientSecretError::AlreadyExists), "{err:?}");
 }

@@ -258,7 +258,7 @@ async fn send_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
 
         // Settle any pending change from the previous iteration so the quote and
         // the send observe the same inventory.
-        client.wait_for_all_active_state_machines().await?;
+        client.wait_for_all_active_state_machines().await;
 
         let quote = mint.send_fee_quote(sats(1_000)).await?;
         let before = client.get_balance_for_btc().await?;
@@ -268,7 +268,7 @@ async fn send_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
 
         // A send may trigger an internal reissue whose change notes are credited
         // by output state machines; wait for them before reading the balance.
-        client.wait_for_all_active_state_machines().await?;
+        client.wait_for_all_active_state_machines().await;
         let after = client.get_balance_for_btc().await?;
 
         // Value conservation: the wallet loses exactly the sent value plus the fee.

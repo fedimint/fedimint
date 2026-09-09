@@ -6,14 +6,14 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use anyhow::{Context as _, anyhow, bail, format_err};
 use async_stream::try_stream;
 use bitcoin::key::Secp256k1;
 use bitcoin::key::rand::thread_rng;
 use bitcoin::secp256k1::{self, PublicKey};
 use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
 use fedimint_api_client::api::{
-    ApiVersionSet, DynGlobalApi, FederationApiExt as _, FederationResult, IGlobalFederationApi,
+    ApiVersionSet, DynGlobalApi, FederationApiExt as _, FederationError, FederationResult,
+    IGlobalFederationApi,
 };
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client_module::module::recovery::RecoveryProgress;
@@ -39,7 +39,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::{DynInput, DynOutput, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseRecord, DatabaseTransaction,
+    AutocommitError, Database, DatabaseRecord, DatabaseTransaction, DbMigrationError,
     IDatabaseTransactionOpsCore as _, IDatabaseTransactionOpsCoreTyped as _, NonCommittable,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -67,8 +67,9 @@ use fedimint_core::{
 };
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
-    DBTransactionEventLogExt as _, DynEventLogTrimableTracker, Event, EventKind, EventLogEntry,
-    EventLogId, EventLogTrimableId, EventLogTrimableTracker, EventPersistence, PersistedLogEntry,
+    DBTransactionEventLogExt as _, DynEventLogTrimableTracker, Event, EventHandlerError, EventKind,
+    EventLogEntry, EventLogId, EventLogTrimableId, EventLogTrimableTracker, EventPersistence,
+    PersistedLogEntry,
 };
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
 use futures::stream::FuturesUnordered;
@@ -88,7 +89,11 @@ use crate::db::{
     ChronologicalOperationLogKey, ClientConfigKey, ClientMetadataKey, ClientModuleRecovery,
     ClientModuleRecoveryState, EncodedClientSecretKey, OperationLogKey, PeerLastApiVersionsSummary,
     PeerLastApiVersionsSummaryKey, PendingClientConfigKey, TransactionFeesKey,
-    apply_migrations_core_client_dbtx, get_decoded_client_secret, verify_client_db_integrity_dbtx,
+    apply_migrations_core_client_dbtx, verify_client_db_integrity_dbtx,
+};
+use crate::error::{
+    ApiVersionDiscoveryError, ClientSecretError, ModuleLookupError, OperationAlreadyExistsError,
+    OperationNotFoundError, RecoveryError, TransactionSubmitError,
 };
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
@@ -301,8 +306,10 @@ pub struct GetBalanceChangesRequest {
 impl Client {
     /// Initialize a client builder that can be configured to create a new
     /// client.
-    pub async fn builder() -> anyhow::Result<ClientBuilder> {
-        Ok(ClientBuilder::new())
+    // Nothing here awaits; the function stays `async` so existing call sites
+    // keep their `.await`.
+    pub async fn builder() -> ClientBuilder {
+        ClientBuilder::new()
     }
 
     pub fn api(&self) -> &(dyn IGlobalFederationApi + 'static) {
@@ -446,7 +453,7 @@ impl Client {
     ///
     /// This can be used by downstream clients to expose metrics via their own
     /// HTTP server or print them for debugging purposes.
-    pub fn get_metrics() -> anyhow::Result<String> {
+    pub fn get_metrics() -> Result<String, fedimint_metrics::prometheus::Error> {
         fedimint_metrics::get_metrics()
     }
 
@@ -474,12 +481,12 @@ impl Client {
     pub async fn store_encodable_client_secret<T: Encodable>(
         db: &Database,
         secret: T,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ClientSecretError> {
         let mut dbtx = db.begin_transaction().await;
 
         // Don't overwrite an existing secret
         if dbtx.get_value(&EncodedClientSecretKey).await.is_some() {
-            bail!("Encoded client secret already exists, cannot overwrite")
+            return Err(ClientSecretError::AlreadyExists);
         }
 
         let encoded_secret = T::consensus_encode_to_vec(&secret);
@@ -489,31 +496,34 @@ impl Client {
         Ok(())
     }
 
-    pub async fn load_decodable_client_secret<T: Decodable>(db: &Database) -> anyhow::Result<T> {
+    pub async fn load_decodable_client_secret<T: Decodable>(
+        db: &Database,
+    ) -> Result<T, ClientSecretError> {
         let Some(secret) = Self::load_decodable_client_secret_opt(db).await? else {
-            bail!("Encoded client secret not present in DB")
+            return Err(ClientSecretError::NotPresent);
         };
 
         Ok(secret)
     }
+
     pub async fn load_decodable_client_secret_opt<T: Decodable>(
         db: &Database,
-    ) -> anyhow::Result<Option<T>> {
+    ) -> Result<Option<T>, ClientSecretError> {
         let mut dbtx = db.begin_transaction_nc().await;
 
         let client_secret = dbtx.get_value(&EncodedClientSecretKey).await;
 
         Ok(match client_secret {
-            Some(client_secret) => Some(
-                T::consensus_decode_whole(&client_secret, &ModuleRegistry::default())
-                    .context("Decoding failed")?,
-            ),
+            Some(client_secret) => Some(T::consensus_decode_whole(
+                &client_secret,
+                &ModuleRegistry::default(),
+            )?),
             None => None,
         })
     }
 
-    pub async fn load_or_generate_client_secret(db: &Database) -> anyhow::Result<[u8; 64]> {
-        let client_secret = match Self::load_decodable_client_secret::<[u8; 64]>(db).await {
+    pub async fn load_or_generate_client_secret(db: &Database) -> [u8; 64] {
+        match Self::load_decodable_client_secret::<[u8; 64]>(db).await {
             Ok(secret) => secret,
             _ => {
                 let secret = PlainRootSecretStrategy::random(&mut thread_rng());
@@ -522,8 +532,7 @@ impl Client {
                     .expect("Storing client secret must work");
                 secret
             }
-        };
-        Ok(client_secret)
+        }
     }
 
     pub async fn is_initialized(db: &Database) -> bool {
@@ -596,7 +605,7 @@ impl Client {
     /// This is cached in the database after the first successful fetch.
     /// The chain ID uniquely identifies which bitcoin network the federation
     /// operates on (mainnet, testnet, signet, regtest).
-    pub async fn chain_id(&self) -> anyhow::Result<ChainId> {
+    pub async fn chain_id(&self) -> Result<ChainId, FederationError> {
         // Check cache first
         if let Some(chain_id) = self
             .db
@@ -677,7 +686,9 @@ impl Client {
         (in_amounts, out_amounts)
     }
 
-    pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
+    pub fn get_internal_payment_markers(
+        &self,
+    ) -> Result<(PublicKey, u64), bitcoin::secp256k1::Error> {
         Ok((self.federation_id().to_fake_ln_pub_key(&self.secp_ctx)?, 0))
     }
 
@@ -741,7 +752,7 @@ impl Client {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
-    ) -> anyhow::Result<FinalizedTransaction> {
+    ) -> Result<FinalizedTransaction, TransactionSubmitError> {
         let (in_amounts, out_amounts) = self.transaction_builder_get_balance(&partial_transaction);
 
         let mut added_inputs_bundles = vec![];
@@ -765,7 +776,7 @@ impl Client {
             }
 
             let Some((module_id, module)) = self.primary_module_for_unit(*unit) else {
-                bail!("No module to balance a partial transaction (affected unit: {unit:?}");
+                return Err(TransactionSubmitError::NoPrimaryModule { unit: *unit });
             };
 
             let (added_input_bundle, added_output_bundle) = module
@@ -777,7 +788,8 @@ impl Client {
                     input_amount,
                     output_amount,
                 )
-                .await?;
+                .await
+                .map_err(|err| TransactionSubmitError::PrimaryModule(err.into()))?;
 
             added_inputs_bundles.push(added_input_bundle);
             added_outputs_bundles.push(added_output_bundle);
@@ -866,7 +878,7 @@ impl Client {
         &self,
         operation_id: OperationId,
         request: FeeQuoteRequest,
-    ) -> anyhow::Result<FeeQuote> {
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         let FeeQuoteRequest {
             input_amount,
             output_amount,
@@ -908,7 +920,7 @@ impl Client {
             }
 
             let Some((module_id, module)) = self.primary_module_for_unit(*unit) else {
-                bail!("No module to balance a partial transaction (affected unit: {unit:?}");
+                return Err(TransactionSubmitError::NoPrimaryModule { unit: *unit });
             };
 
             let (change_input, change_output) = module
@@ -920,7 +932,8 @@ impl Client {
                     balance_input_amount,
                     balance_output_amount,
                 )
-                .await?;
+                .await
+                .map_err(|err| TransactionSubmitError::PrimaryModule(err.into()))?;
 
             // Fold the change into the totals. These are a disjoint set of items
             // from the explicit ones (the primary module only sees the scalar
@@ -988,20 +1001,30 @@ impl Client {
     /// does not abort an already-committed submission.
     ///
     /// ## Errors
-    /// The function will return an error if the operation with given ID already
-    /// exists.
+    /// Every variant of [`TransactionSubmitError`] can come back from here:
+    /// [`OperationAlreadyExists`] if an operation with this id is already
+    /// recorded; [`NoPrimaryModule`] and [`PrimaryModule`] if the transaction
+    /// cannot be balanced, because no primary module holds the unit or because
+    /// the one that does fails to fund it; [`TransactionTooLarge`] if the
+    /// finalized transaction exceeds the federation's size limit;
+    /// [`StateMachines`] if the transaction's state machines cannot be
+    /// registered; and [`Database`] if the transaction keeps colliding with
+    /// others and cannot be committed within its retry budget, which should not
+    /// happen except in excessively concurrent scenarios.
     ///
-    /// ## Panics
-    /// The function will panic if the database transaction collides with
-    /// other and fails with others too often, this should not happen except for
-    /// excessively concurrent scenarios.
+    /// [`OperationAlreadyExists`]: TransactionSubmitError::OperationAlreadyExists
+    /// [`NoPrimaryModule`]: TransactionSubmitError::NoPrimaryModule
+    /// [`PrimaryModule`]: TransactionSubmitError::PrimaryModule
+    /// [`TransactionTooLarge`]: TransactionSubmitError::TransactionTooLarge
+    /// [`StateMachines`]: TransactionSubmitError::StateMachines
+    /// [`Database`]: TransactionSubmitError::Database
     pub async fn finalize_and_submit_transaction<F, M>(
         &self,
         operation_id: OperationId,
         operation_type: &str,
         operation_meta_gen: F,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange>
+    ) -> Result<OutPointRange, TransactionSubmitError>
     where
         F: Fn(OutPointRange) -> M + Clone + MaybeSend + MaybeSync,
         M: serde::Serialize + MaybeSend,
@@ -1033,12 +1056,9 @@ impl Client {
         match autocommit_res {
             Ok(txid) => Ok(txid),
             Err(AutocommitError::ClosureError { error, .. }) => Err(error),
-            Err(AutocommitError::CommitFailed {
-                attempts,
-                last_error,
-            }) => panic!(
-                "Failed to commit tx submission dbtx after {attempts} attempts: {last_error}"
-            ),
+            Err(AutocommitError::CommitFailed { last_error, .. }) => {
+                Err(TransactionSubmitError::Database(last_error))
+            }
         }
     }
 
@@ -1057,13 +1077,13 @@ impl Client {
         operation_type: &str,
         operation_meta_gen: F,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange>
+    ) -> Result<OutPointRange, TransactionSubmitError>
     where
         F: FnOnce(OutPointRange) -> M + MaybeSend,
         M: serde::Serialize + MaybeSend,
     {
         if Client::operation_exists_dbtx(dbtx, operation_id).await {
-            bail!("There already exists an operation with id {operation_id:?}")
+            return Err(OperationAlreadyExistsError { operation_id }.into());
         }
 
         let out_point_range = self
@@ -1087,7 +1107,7 @@ impl Client {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange> {
+    ) -> Result<OutPointRange, TransactionSubmitError> {
         let FinalizedTransaction {
             transaction,
             mut states,
@@ -1116,9 +1136,10 @@ impl Client {
                 "Transaction too large",
             );
             debug!(target: LOG_CLIENT_NET_API, ?transaction, "transaction details");
-            bail!(
-                "The generated transaction would be rejected by the federation for being too large."
-            );
+            return Err(TransactionSubmitError::TransactionTooLarge {
+                size: transaction.consensus_encode_to_vec().len(),
+                max: Transaction::MAX_TX_SIZE,
+            });
         }
 
         let txid = transaction.tx_hash();
@@ -1224,9 +1245,9 @@ impl Client {
     pub async fn get_operation_fees(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<Option<Amounts>> {
+    ) -> Result<Option<Amounts>, OperationNotFoundError> {
         if !self.operation_exists(operation_id).await {
-            bail!("Operation does not exist");
+            return Err(OperationNotFoundError { operation_id });
         }
 
         let (active_states, inactive_states) =
@@ -1269,28 +1290,36 @@ impl Client {
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), TransactionSubmitError> {
         self.primary_module_for_unit(AmountUnit::BITCOIN)
-            .ok_or_else(|| anyhow!("No primary module available"))?
+            .ok_or(TransactionSubmitError::NoPrimaryModule {
+                unit: AmountUnit::BITCOIN,
+            })?
             .1
             .await_primary_module_output(operation_id, out_point)
             .await
+            .map_err(|err| TransactionSubmitError::PrimaryModule(err.into()))
     }
 
     /// Returns a reference to a typed module client instance by kind
     pub fn get_first_module<M: ClientModule>(
         &'_ self,
-    ) -> anyhow::Result<ClientModuleInstance<'_, M>> {
+    ) -> Result<ClientModuleInstance<'_, M>, ModuleLookupError> {
         let module_kind = M::kind();
-        let id = self
-            .get_first_instance(&module_kind)
-            .ok_or_else(|| format_err!("No modules found of kind {module_kind}"))?;
+        let id = self.get_first_instance(&module_kind).ok_or_else(|| {
+            ModuleLookupError::NoModuleOfKind {
+                kind: module_kind.clone(),
+            }
+        })?;
         let module: &M = self
             .try_get_module(id)
-            .ok_or_else(|| format_err!("Unknown module instance {id}"))?
+            .ok_or(ModuleLookupError::UnknownInstance { instance_id: id })?
             .as_any()
             .downcast_ref::<M>()
-            .ok_or_else(|| format_err!("Module is not of type {}", std::any::type_name::<M>()))?;
+            .ok_or(ModuleLookupError::WrongModuleType {
+                instance_id: id,
+                expected: std::any::type_name::<M>(),
+            })?;
         let (db, _) = self.db().with_prefix_module_id(id);
         Ok(ClientModuleInstance {
             id,
@@ -1305,27 +1334,32 @@ impl Client {
     /// Unlike [`Self::get_first_module`], this hands out a cloned `Arc` so the
     /// caller can hold the module independently of the `Client`'s lifetime.
     #[cfg(not(target_family = "wasm"))]
-    pub fn get_first_module_arc<M: ClientModule>(&self) -> anyhow::Result<Arc<M>> {
+    pub fn get_first_module_arc<M: ClientModule>(&self) -> Result<Arc<M>, ModuleLookupError> {
         let module_kind = M::kind();
-        let id = self
-            .get_first_instance(&module_kind)
-            .ok_or_else(|| format_err!("No modules found of kind {module_kind}"))?;
+        let id = self.get_first_instance(&module_kind).ok_or_else(|| {
+            ModuleLookupError::NoModuleOfKind {
+                kind: module_kind.clone(),
+            }
+        })?;
         let dyn_module = self
             .modules
             .get(id)
-            .ok_or_else(|| format_err!("Unknown module instance {id}"))?;
+            .ok_or(ModuleLookupError::UnknownInstance { instance_id: id })?;
         dyn_module
             .as_any_arc()
             .downcast::<M>()
-            .map_err(|_| format_err!("Module is not of type {}", std::any::type_name::<M>()))
+            .map_err(|_| ModuleLookupError::WrongModuleType {
+                instance_id: id,
+                expected: std::any::type_name::<M>(),
+            })
     }
 
     pub fn get_module_client_dyn(
         &self,
         instance_id: ModuleInstanceId,
-    ) -> anyhow::Result<&maybe_add_send_sync!(dyn IClientModule)> {
+    ) -> Result<&maybe_add_send_sync!(dyn IClientModule), ModuleLookupError> {
         self.try_get_module(instance_id)
-            .ok_or(anyhow!("Unknown module instance {}", instance_id))
+            .ok_or(ModuleLookupError::UnknownInstance { instance_id })
     }
 
     pub fn db(&self) -> &Database {
@@ -1352,19 +1386,13 @@ impl Client {
             .map(|(instance_id, _, _)| instance_id)
     }
 
-    /// Returns the data from which the client's root secret is derived (e.g.
-    /// BIP39 seed phrase struct).
-    pub async fn root_secret_encoding<T: Decodable>(&self) -> anyhow::Result<T> {
-        get_decoded_client_secret::<T>(self.db()).await
-    }
-
     /// Waits for outputs from the primary module to reach its final
     /// state.
     pub async fn await_primary_bitcoin_module_outputs(
         &self,
         operation_id: OperationId,
         outputs: Vec<OutPoint>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), TransactionSubmitError> {
         for out_point in outputs {
             self.await_primary_bitcoin_module_output(operation_id, out_point)
                 .await?;
@@ -1387,14 +1415,17 @@ impl Client {
     #[doc(hidden)]
     /// Like [`Self::get_balance`] but returns an error if primary module is not
     /// available
-    pub async fn get_balance_for_btc(&self) -> anyhow::Result<Amount> {
+    pub async fn get_balance_for_btc(&self) -> Result<Amount, ModuleLookupError> {
         self.get_balance_for_unit(AmountUnit::BITCOIN).await
     }
 
-    pub async fn get_balance_for_unit(&self, unit: AmountUnit) -> anyhow::Result<Amount> {
+    pub async fn get_balance_for_unit(
+        &self,
+        unit: AmountUnit,
+    ) -> Result<Amount, ModuleLookupError> {
         let (id, module) = self
             .primary_module_for_unit(unit)
-            .ok_or_else(|| anyhow!("Primary module not available"))?;
+            .ok_or(ModuleLookupError::NoPrimaryModule { unit })?;
         Ok(module
             .get_balance(id, &mut self.db().begin_transaction_nc().await, unit)
             .await)
@@ -1608,7 +1639,7 @@ impl Client {
     pub async fn fetch_common_api_versions(
         config: &ClientConfig,
         api: &DynGlobalApi,
-    ) -> anyhow::Result<BTreeMap<PeerId, SupportedApiVersionsSummary>> {
+    ) -> BTreeMap<PeerId, SupportedApiVersionsSummary> {
         debug!(
             target: LOG_CLIENT,
             "Fetching common api versions"
@@ -1616,10 +1647,7 @@ impl Client {
 
         let num_peers = NumPeers::from(config.global.api_endpoints.len());
 
-        let peer_api_version_sets =
-            Self::fetch_peers_api_versions_from_threshold_of_peers(num_peers, api.clone()).await;
-
-        Ok(peer_api_version_sets)
+        Self::fetch_peers_api_versions_from_threshold_of_peers(num_peers, api.clone()).await
     }
 
     /// Write API version set to database cache.
@@ -1672,7 +1700,7 @@ impl Client {
                 debug!(target: LOG_CLIENT, "Calculated and stored common API version set");
             }
             Err(err) => {
-                debug!(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), "Failed to calculate common API versions from prefetched data");
+                debug!(target: LOG_CLIENT, err = %err.fmt_compact(), "Failed to calculate common API versions from prefetched data");
             }
         }
 
@@ -1720,7 +1748,9 @@ impl Client {
         }
     }
 
-    pub async fn load_and_refresh_common_api_version(&self) -> anyhow::Result<ApiVersionSet> {
+    pub async fn load_and_refresh_common_api_version(
+        &self,
+    ) -> Result<ApiVersionSet, ApiVersionDiscoveryError> {
         Self::load_and_refresh_common_api_version_static(
             &self.config().await,
             &self.module_inits,
@@ -1738,7 +1768,7 @@ impl Client {
     /// This queries all peers for their supported API versions and calculates
     /// the common API version set to use. The result is stored in the database
     /// cache for future use.
-    pub async fn refresh_api_versions(&self) -> anyhow::Result<ApiVersionSet> {
+    pub async fn refresh_api_versions(&self) -> Result<ApiVersionSet, ApiVersionDiscoveryError> {
         Self::refresh_common_api_version_static(
             &self.config().await,
             &self.module_inits,
@@ -1764,7 +1794,7 @@ impl Client {
         db: &Database,
         task_group: &TaskGroup,
         client_span: &Span,
-    ) -> anyhow::Result<ApiVersionSet> {
+    ) -> Result<ApiVersionSet, ApiVersionDiscoveryError> {
         if let Some(v) = db
             .begin_transaction_nc()
             .await
@@ -1804,7 +1834,7 @@ impl Client {
                     {
                         warn!(
                             target: LOG_CLIENT,
-                            err = %error.fmt_compact_anyhow(), "Failed to discover common api versions"
+                            err = %error.fmt_compact(), "Failed to discover common api versions"
                         );
                     }
                 },
@@ -1837,7 +1867,7 @@ impl Client {
         task_group: TaskGroup,
         client_span: &Span,
         block_until_ok: bool,
-    ) -> anyhow::Result<ApiVersionSet> {
+    ) -> Result<ApiVersionSet, ApiVersionDiscoveryError> {
         debug!(
             target: LOG_CLIENT,
             "Refreshing common api versions"
@@ -1881,7 +1911,7 @@ impl Client {
                 Err(err) if block_until_ok => {
                     warn!(
                         target: LOG_CLIENT,
-                        err = %err.fmt_compact_anyhow(),
+                        err = %err.fmt_compact(),
                         "Failed to discover API version to use. Retrying..."
                     );
                     continue;
@@ -1970,19 +2000,18 @@ impl Client {
     /// Returns `Ok(())` once every module recovery completed, or an error as
     /// soon as any one of them fails terminally.
     ///
-    /// An error does not mean the recovery task is done: the failed module's
-    /// progress stays pending forever (so [`Self::has_pending_recoveries`]
-    /// keeps returning `true`) and the recovery task stays parked. The
-    /// failure is in-memory only and is not persisted, so reopening the
-    /// client retries the recovery from its last persisted, non-terminal
-    /// progress.
+    /// A [`RecoveryError::Failed`] does not mean the recovery task is done: the
+    /// failed module's progress stays pending forever (so
+    /// [`Self::has_pending_recoveries`] keeps returning `true`) and the
+    /// recovery task stays parked. The failure is in-memory only and is not
+    /// persisted, so reopening the client retries the recovery from its last
+    /// persisted, non-terminal progress.
     ///
     /// A bit of a heavy approach.
-    pub async fn wait_for_all_recoveries(&self) -> anyhow::Result<()> {
+    pub async fn wait_for_all_recoveries(&self) -> Result<(), RecoveryError> {
         Self::wait_for_recoveries(
             self.client_recovery_status_receiver.clone(),
             |_module_instance_id| true,
-            "Recovery task completed and update receiver disconnected, but some modules failed to recover",
         )
         .await
     }
@@ -1998,8 +2027,7 @@ impl Client {
     async fn wait_for_recoveries(
         mut status_receiver: watch::Receiver<BTreeMap<ModuleInstanceId, RecoveryStatus>>,
         module_filter: impl Fn(ModuleInstanceId) -> bool,
-        disconnected_context: &'static str,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), RecoveryError> {
         let failure = status_receiver
             .wait_for(|statuses| {
                 let matching = || {
@@ -2016,7 +2044,7 @@ impl Client {
                     || matching().all(RecoveryStatus::is_successfully_done)
             })
             .await
-            .context(disconnected_context)?
+            .map_err(|_closed| RecoveryError::ClientStopped)?
             // Classified from the woken-up snapshot before anything else, so a
             // failure of one module still wins over another one completing.
             .iter()
@@ -2028,9 +2056,10 @@ impl Client {
             });
 
         match failure {
-            Some((module_instance_id, error)) => Err(anyhow!(
-                "Module recovery failed: module_instance_id={module_instance_id}, error={error}"
-            )),
+            Some((module_instance_id, error)) => Err(RecoveryError::Failed {
+                module_instance_id,
+                error,
+            }),
             None => Ok(()),
         }
     }
@@ -2067,7 +2096,7 @@ impl Client {
     pub async fn wait_for_module_kind_recovery(
         &self,
         module_kind: ModuleKind,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), RecoveryError> {
         let config = self.config().await;
         Self::wait_for_recoveries(
             self.client_recovery_status_receiver.clone(),
@@ -2077,19 +2106,17 @@ impl Client {
                     .get(&module_instance_id)
                     .is_some_and(|module| module.kind == module_kind)
             },
-            "Recovery task completed and update receiver disconnected, but the desired modules are still unavailable or failed to recover",
         )
         .await
     }
 
-    pub async fn wait_for_all_active_state_machines(&self) -> anyhow::Result<()> {
+    pub async fn wait_for_all_active_state_machines(&self) {
         loop {
             if self.executor.get_active_states().await.is_empty() {
                 break;
             }
             sleep(Duration::from_millis(100)).await;
         }
-        Ok(())
     }
 
     /// Set the client [`Metadata`]
@@ -2671,14 +2698,15 @@ impl Client {
     /// that is infrequent and important enough to be persisted
     /// forever. Most applications should prefer to use [`Self::handle_events`]
     /// which emits *all* events.
-    pub async fn handle_historical_events<F, R>(
+    pub async fn handle_historical_events<F, R, E>(
         &self,
         tracker: fedimint_eventlog::DynEventLogTracker,
         handler_fn: F,
-    ) -> anyhow::Result<()>
+    ) -> Result<(), EventHandlerError<E>>
     where
         F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
-        R: Future<Output = anyhow::Result<()>>,
+        R: Future<Output = Result<(), E>>,
+        E: std::error::Error + 'static,
     {
         fedimint_eventlog::handle_events(
             self.db.clone(),
@@ -2707,14 +2735,15 @@ impl Client {
     /// This method returns only when client is shutting down or on internal
     /// error, so typically should be called in a background task dedicated
     /// to handling events.
-    pub async fn handle_events<F, R>(
+    pub async fn handle_events<F, R, E>(
         &self,
         tracker: fedimint_eventlog::DynEventLogTrimableTracker,
         handler_fn: F,
-    ) -> anyhow::Result<()>
+    ) -> Result<(), EventHandlerError<E>>
     where
         F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
-        R: Future<Output = anyhow::Result<()>>,
+        R: Future<Output = Result<(), E>>,
+        E: std::error::Error + 'static,
     {
         fedimint_eventlog::handle_trimable_events(
             self.db.clone(),
@@ -2799,7 +2828,7 @@ impl Client {
 
     pub(crate) async fn run_core_migrations(
         db_no_decoders: &Database,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), DbMigrationError> {
         let mut dbtx = db_no_decoders.begin_transaction().await;
         apply_migrations_core_client_dbtx(&mut dbtx.to_ref_nc(), "fedimint-client".to_string())
             .await?;
@@ -2866,7 +2895,7 @@ impl ClientContextIface for Client {
         operation_type: &str,
         operation_meta_gen: Box<maybe_add_send_sync!(dyn Fn(OutPointRange) -> serde_json::Value)>,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange> {
+    ) -> Result<OutPointRange, TransactionSubmitError> {
         Client::finalize_and_submit_transaction(
             self,
             operation_id,
@@ -2885,7 +2914,7 @@ impl ClientContextIface for Client {
         operation_type: &str,
         operation_meta_gen: Box<maybe_add_send_sync!(dyn Fn(OutPointRange) -> serde_json::Value)>,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange> {
+    ) -> Result<OutPointRange, TransactionSubmitError> {
         Client::finalize_and_submit_transaction_dbtx(
             self,
             dbtx,
@@ -2902,7 +2931,7 @@ impl ClientContextIface for Client {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange> {
+    ) -> Result<OutPointRange, TransactionSubmitError> {
         Client::finalize_and_submit_transaction_inner(self, dbtx, operation_id, tx_builder).await
     }
 
@@ -2910,11 +2939,11 @@ impl ClientContextIface for Client {
         &self,
         operation_id: OperationId,
         request: FeeQuoteRequest,
-    ) -> anyhow::Result<FeeQuote> {
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         Client::fee_quote(self, operation_id, request).await
     }
 
-    async fn get_balance_for_unit(&self, unit: AmountUnit) -> anyhow::Result<Amount> {
+    async fn get_balance_for_unit(&self, unit: AmountUnit) -> Result<Amount, ModuleLookupError> {
         Client::get_balance_for_unit(self, unit).await
     }
 
@@ -2927,7 +2956,7 @@ impl ClientContextIface for Client {
         operation_id: OperationId,
         // TODO: make `impl Iterator<Item = ...>`
         outputs: Vec<OutPoint>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), TransactionSubmitError> {
         Client::await_primary_bitcoin_module_outputs(self, operation_id, outputs).await
     }
 
@@ -2959,7 +2988,7 @@ impl ClientContextIface for Client {
         Client::invite_code(self, peer).await
     }
 
-    fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
+    fn get_internal_payment_markers(&self) -> Result<(PublicKey, u64), bitcoin::secp256k1::Error> {
         Client::get_internal_payment_markers(self)
     }
 

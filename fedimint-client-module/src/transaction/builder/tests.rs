@@ -1,4 +1,5 @@
 use core::fmt;
+use std::convert::Infallible;
 use std::fmt::Write as _;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -203,7 +204,7 @@ async fn max_affordable_no_fees_spends_whole_balance() {
         Amount::from_msats(1),
         balance,
         |invoice| invoice, // no gateway fee
-        |_contract| async { Ok(federation_fee(Amount::ZERO)) },
+        |_contract| async { Ok::<_, Infallible>(federation_fee(Amount::ZERO)) },
     )
     .await;
 
@@ -221,7 +222,7 @@ async fn max_affordable_leaves_room_for_gateway_fee() {
         Amount::from_msats(1),
         balance,
         gross_up,
-        |_contract| async { Ok(federation_fee(Amount::ZERO)) },
+        |_contract| async { Ok::<_, Infallible>(federation_fee(Amount::ZERO)) },
     )
     .await
     .expect("balance covers a payment")
@@ -243,7 +244,7 @@ async fn max_affordable_leaves_room_for_module_fee() {
         Amount::from_msats(1),
         balance,
         |invoice| invoice, // no gateway fee, so contract == invoice
-        move |contract| async move { Ok(federation_fee(module_fee(contract))) },
+        move |contract| async move { Ok::<_, Infallible>(federation_fee(module_fee(contract))) },
     )
     .await
     .expect("balance covers a payment")
@@ -273,7 +274,7 @@ async fn max_affordable_handles_stepwise_fee() {
         Amount::from_msats(1),
         balance,
         |invoice| invoice,
-        move |contract| async move { Ok(federation_fee(module_fee(contract))) },
+        move |contract| async move { Ok::<_, Infallible>(federation_fee(module_fee(contract))) },
     )
     .await;
 
@@ -291,7 +292,7 @@ async fn max_affordable_respects_max_bound() {
         Amount::from_msats(1),
         Amount::from_msats(100), // cap well below the balance
         |invoice| invoice,
-        |_contract| async { Ok(federation_fee(Amount::ZERO)) },
+        |_contract| async { Ok::<_, Infallible>(federation_fee(Amount::ZERO)) },
     )
     .await;
 
@@ -308,7 +309,7 @@ async fn max_affordable_none_when_min_unaffordable() {
         Amount::from_msats(1),
         balance,
         |invoice: Amount| Amount::from_msats(invoice.msats + 1000), // 1000 msat base fee
-        |_contract| async { Ok(federation_fee(Amount::ZERO)) },
+        |_contract| async { Ok::<_, Infallible>(federation_fee(Amount::ZERO)) },
     )
     .await;
 
@@ -330,7 +331,8 @@ async fn max_affordable_treats_quote_error_as_ceiling() {
         |invoice| invoice,
         move |contract: Amount| async move {
             if contract.msats > cap {
-                Err(anyhow::anyhow!("insufficient funds"))
+                // The quote error is never inspected, so any type will do.
+                Err("insufficient funds")
             } else {
                 Ok(federation_fee(Amount::ZERO))
             }
@@ -362,7 +364,7 @@ async fn max_affordable_seeds_search_near_the_top() {
         gross_up,
         |contract| {
             quote_calls.fetch_add(1, Ordering::Relaxed);
-            async move { Ok(federation_fee(fed_fee(contract))) }
+            async move { Ok::<_, Infallible>(federation_fee(fed_fee(contract))) }
         },
     )
     .await

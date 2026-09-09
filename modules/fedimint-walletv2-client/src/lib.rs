@@ -294,6 +294,7 @@ impl WalletClientModule {
                 },
             )
             .await
+            .map_err(anyhow::Error::from)
     }
 
     /// Finds the largest value that can be sent on chain in full out of

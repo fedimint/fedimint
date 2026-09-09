@@ -35,12 +35,16 @@ use fedimint_logging::LOG_CLIENT;
 use futures::StreamExt;
 use module::OutPointRange;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 use tracing::debug;
 use transaction::{
     ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputSM, TxSubmissionStatesSM,
 };
 
+pub use crate::error::{
+    AddStateMachinesError, ApiVersionDiscoveryError, MetaFetchError, ModuleLookupError,
+    OperationAlreadyExistsError, OperationLookupError, OperationNotFoundError,
+    TransactionSubmitError,
+};
 pub use crate::module::{ClientModule, StateGenerator};
 use crate::sm::executor::ContextGen;
 use crate::sm::{ClientSMDatabaseTransaction, DynState, IState, State};
@@ -49,6 +53,9 @@ use crate::transaction::{ClientInput, ClientOutputBundle, TxSubmissionStates};
 pub mod api;
 
 pub mod db;
+
+/// Error types shared between the client and its modules
+pub mod error;
 
 pub mod backup;
 /// Environment variables
@@ -204,14 +211,6 @@ pub type InstancelessDynClientOutputBundle = ClientOutputBundle<
     Box<maybe_add_send_sync!(dyn IState + 'static)>,
 >;
 
-#[derive(Debug, Error)]
-pub enum AddStateMachinesError {
-    #[error("State already exists in database")]
-    StateAlreadyExists,
-    #[error("Got {0}")]
-    Other(#[from] anyhow::Error),
-}
-
 pub type AddStateMachinesResult = Result<(), AddStateMachinesError>;
 
 #[apply(async_trait_maybe_send!)]
@@ -240,7 +239,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         inputs: InstancelessDynClientInputBundle,
-    ) -> anyhow::Result<OutPointRange>;
+    ) -> Result<OutPointRange, TransactionSubmitError>;
 
     /// This function is mostly meant for internal use, you are probably looking
     /// for [`DynGlobalClientContext::fund_output`].
@@ -250,7 +249,7 @@ pub trait IGlobalClientContext: Debug + MaybeSend + MaybeSync + 'static {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         outputs: InstancelessDynClientOutputBundle,
-    ) -> anyhow::Result<OutPointRange>;
+    ) -> Result<OutPointRange, TransactionSubmitError>;
 
     /// Adds a state machine to the executor.
     async fn add_state_machine_dyn(
@@ -310,7 +309,7 @@ impl IGlobalClientContext for () {
         &self,
         _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         _input: InstancelessDynClientInputBundle,
-    ) -> anyhow::Result<OutPointRange> {
+    ) -> Result<OutPointRange, TransactionSubmitError> {
         unimplemented!("fake implementation, only for tests");
     }
 
@@ -318,7 +317,7 @@ impl IGlobalClientContext for () {
         &self,
         _dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         _outputs: InstancelessDynClientOutputBundle,
-    ) -> anyhow::Result<OutPointRange> {
+    ) -> Result<OutPointRange, TransactionSubmitError> {
         unimplemented!("fake implementation, only for tests");
     }
 
@@ -392,7 +391,7 @@ impl DynGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         inputs: ClientInputBundle<I, S>,
-    ) -> anyhow::Result<OutPointRange>
+    ) -> Result<OutPointRange, TransactionSubmitError>
     where
         I: IInput + MaybeSend + MaybeSync + 'static,
         S: IState + MaybeSend + MaybeSync + 'static,
@@ -413,7 +412,7 @@ impl DynGlobalClientContext {
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         outputs: ClientOutputBundle<O, S>,
-    ) -> anyhow::Result<OutPointRange>
+    ) -> Result<OutPointRange, TransactionSubmitError>
     where
         O: IOutput + MaybeSend + MaybeSync + 'static,
         S: IState + MaybeSend + MaybeSync + 'static,

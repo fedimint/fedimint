@@ -439,7 +439,7 @@ async fn withdraw_v2(
             let balance = client.get_balance_for_btc().await.map_err(|err| {
                 AdminGatewayError::Unexpected(anyhow!(
                     "Balance not available: {}",
-                    err.fmt_compact_anyhow()
+                    err.fmt_compact()
                 ))
             })?;
 
@@ -505,10 +505,7 @@ async fn calculate_max_withdrawable(
     address: &Address,
 ) -> AdminResult<WithdrawDetails> {
     let balance = client.get_balance_for_btc().await.map_err(|err| {
-        AdminGatewayError::Unexpected(anyhow!(
-            "Balance not available: {}",
-            err.fmt_compact_anyhow()
-        ))
+        AdminGatewayError::Unexpected(anyhow!("Balance not available: {}", err.fmt_compact()))
     })?;
 
     if let Ok(wallet_module) =
@@ -701,7 +698,7 @@ impl Gateway {
 
                 Client::store_encodable_client_secret(&gateway_db, mnemonic.to_entropy())
                     .await
-                    .map_err(AdminGatewayError::MnemonicError)?;
+                    .map_err(|err| AdminGatewayError::MnemonicError(err.into()))?;
                 GatewayState::Disconnected
             } else {
                 GatewayState::NotConfigured { mnemonic_sender }
@@ -1561,7 +1558,7 @@ impl Gateway {
         let gateway_module = &client
             .value()
             .get_first_module::<GatewayClientModule>()
-            .map_err(LNv1Error::OutgoingPayment)
+            .map_err(|err| LNv1Error::OutgoingPayment(err.into()))
             .map_err(PublicGatewayError::LNv1)?;
         let operation_id = gateway_module
             .gateway_pay_bolt11_invoice(payload)
@@ -1632,7 +1629,8 @@ impl Gateway {
             .backup_to_federation(fedimint_client::backup::Metadata::from_json_serialized(
                 metadata,
             ))
-            .await?;
+            .await
+            .map_err(anyhow::Error::from)?;
         Ok(())
     }
 
@@ -2442,7 +2440,7 @@ impl IAdminGateway for Gateway {
             .await?;
 
         if recover {
-            client.wait_for_all_active_state_machines().await?;
+            client.wait_for_all_active_state_machines().await;
         }
 
         // Instead of using `FederationManager::federation_info`, we manually create
@@ -2453,7 +2451,7 @@ impl IAdminGateway for Gateway {
             balance_msat: client.get_balance_for_btc().await.unwrap_or_else(|err| {
                 warn!(
                     target: LOG_GATEWAY,
-                    err = %err.fmt_compact_anyhow(),
+                    err = %err.fmt_compact(),
                     %federation_id,
                     "Balance not immediately available after joining/recovering."
                 );
@@ -2963,7 +2961,10 @@ impl IAdminGateway for Gateway {
             return withdraw_v2(client.value(), &wallet_module, &address, amount).await;
         }
 
-        let wallet_module = client.value().get_first_module::<WalletClientModule>()?;
+        let wallet_module = client
+            .value()
+            .get_first_module::<WalletClientModule>()
+            .map_err(anyhow::Error::from)?;
 
         // If fees are provided (from UI preview flow), use them directly
         // Otherwise fetch fees (CLI backwards compatibility)
@@ -2993,7 +2994,7 @@ impl IAdminGateway for Gateway {
                     let balance = client.value().get_balance_for_btc().await.map_err(|err| {
                         AdminGatewayError::Unexpected(anyhow!(
                             "Balance not available: {}",
-                            err.fmt_compact_anyhow()
+                            err.fmt_compact()
                         ))
                     })?;
 
@@ -3212,7 +3213,7 @@ impl IAdminGateway for Gateway {
 
         Client::store_encodable_client_secret(&self.gateway_db, mnemonic.to_entropy())
             .await
-            .map_err(AdminGatewayError::MnemonicError)?;
+            .map_err(|err| AdminGatewayError::MnemonicError(err.into()))?;
 
         *state_guard = GatewayState::Disconnected;
         drop(state_guard);
@@ -3378,7 +3379,7 @@ impl Gateway {
         let module = client
             .value()
             .get_first_module::<GatewayClientModuleV2>()
-            .map_err(|err| PublicGatewayError::LNv2(LNv2Error::OutgoingPayment(err)))?;
+            .map_err(|err| PublicGatewayError::LNv2(LNv2Error::OutgoingPayment(err.into())))?;
 
         module
             .send_payment(payload)

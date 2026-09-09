@@ -858,7 +858,6 @@ impl FedimintCli {
     async fn make_client_builder(&self, cli: &Opts) -> CliResult<(ClientBuilder, Database)> {
         let mut client_builder = Client::builder()
             .await
-            .map_err_cli()?
             .with_iroh_enable_dht(cli.iroh_enable_dht());
         client_builder.with_module_inits(self.module_inits.clone());
 
@@ -1509,10 +1508,7 @@ impl FedimintCli {
 
             Command::Dev(DevCmd::WaitComplete) => {
                 let client = self.client_open(&cli).await?;
-                client
-                    .wait_for_all_active_state_machines()
-                    .await
-                    .map_err_cli_msg("failed to wait for all active state machines")?;
+                client.wait_for_all_active_state_machines().await;
                 Ok(CliOutput::Raw(serde_json::Value::Null))
             }
             Command::Dev(DevCmd::Wait { seconds }) => {
@@ -1830,7 +1826,7 @@ impl FedimintCli {
                             Box::pin(async move {
                                 info!(target: LOG_CLIENT, "{event:?}");
 
-                                Ok(())
+                                Ok::<(), std::convert::Infallible>(())
                             })
                         },
                     )

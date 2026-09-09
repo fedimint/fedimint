@@ -98,6 +98,16 @@ impl AmountUnit {
     }
 }
 
+impl fmt::Display for AmountUnit {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.is_bitcoin() {
+            f.write_str("bitcoin")
+        } else {
+            write!(f, "{}", self.0)
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct AmountWithUnit {
     amounts: Amount,

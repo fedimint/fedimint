@@ -18,7 +18,7 @@ rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
 tor = ["fedimint-api-client/tor"]
-uniffi = ["dep:uniffi"]
+uniffi = ["dep:uniffi", "fedimint-core/uniffi"]
 
 [lib]
 name = "fedimint_client_module"

@@ -6,7 +6,6 @@ use std::mem;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::anyhow;
 use fedimint_client_module::sm::executor::{
     ActiveStateKey, ContextGen, IExecutor, InactiveStateKey,
 };
@@ -186,7 +185,10 @@ impl Executor {
     ///
     /// **Attention**: do not use before background task is started!
     // TODO: remove warning once finality is an inherent state attribute
-    pub async fn add_state_machines(&self, states: Vec<DynState>) -> anyhow::Result<()> {
+    pub async fn add_state_machines(
+        &self,
+        states: Vec<DynState>,
+    ) -> Result<(), AddStateMachinesError> {
         self.inner
             .db
             .autocommit(
@@ -195,11 +197,10 @@ impl Executor {
             )
             .await
             .map_err(|e| match e {
-                AutocommitError::CommitFailed {
-                    last_error,
-                    attempts,
-                } => anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
-                AutocommitError::ClosureError { error, .. } => anyhow!("{error:?}"),
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    AddStateMachinesError::Database(last_error)
+                }
+                AutocommitError::ClosureError { error, .. } => error,
             })?;
 
         // TODO: notify subscribers to state changes?
@@ -226,7 +227,9 @@ impl Executor {
                 .valid_module_ids
                 .contains(&state.module_instance_id())
             {
-                return Err(AddStateMachinesError::Other(anyhow!("Unknown module")));
+                return Err(AddStateMachinesError::UnknownModule {
+                    module_instance_id: state.module_instance_id(),
+                });
             }
 
             let is_active_state = dbtx
@@ -260,9 +263,7 @@ impl Executor {
                 {
                     Some(context) => {
                         if state.is_terminal(module_context, &context) {
-                            return Err(AddStateMachinesError::Other(anyhow!(
-                                "State is already terminal, adding it to the executor doesn't make sense."
-                            )));
+                            return Err(AddStateMachinesError::StateAlreadyTerminal);
                         }
                     }
                     _ => {
