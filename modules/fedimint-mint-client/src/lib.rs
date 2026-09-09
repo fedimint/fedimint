@@ -92,7 +92,7 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::rand::prelude::IteratorRandom;
 use fedimint_core::secp256k1::rand::thread_rng;
 use fedimint_core::secp256k1::{All, Keypair, Secp256k1};
-use fedimint_core::util::{BoxFuture, BoxStream, NextOrPending, SafeUrl};
+use fedimint_core::util::{BoxFuture, BoxStream, FmtCompact as _, NextOrPending, SafeUrl};
 use fedimint_core::{
     Amount, IdxRange, OutPoint, PeerId, Tiered, TieredCounts, TieredMulti, TransactionId, apply,
     async_trait_maybe_send, base32, push_db_pair_items,
@@ -119,7 +119,10 @@ use crate::client_db::{
     CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
     NextECashNoteIndexKeyPrefix, NoteKey,
 };
-pub use crate::error::{OOBNotesParseError, SelectNotesError, SpendOOBError, ValidateNotesError};
+pub use crate::error::{
+    AwaitOutputFinalizedError, OOBNotesParseError, SelectNotesError, SendOOBNotesError,
+    SpendOOBError, ValidateNotesError,
+};
 use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStates};
 use crate::oob::{MintOOBStateMachine, MintOOBStates, MintOOBStatesCreatedMulti};
 use crate::output::{
@@ -1127,7 +1130,8 @@ impl ClientModule for MintClientModule {
         operation_id: OperationId,
         out_point: OutPoint,
     ) -> anyhow::Result<()> {
-        self.await_output_finalized(operation_id, out_point).await
+        self.await_output_finalized(operation_id, out_point).await?;
+        Ok(())
     }
 
     async fn get_balance(&self, dbtx: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
@@ -1567,7 +1571,7 @@ impl MintClientModule {
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), AwaitOutputFinalizedError> {
         let stream = self
             .notifier
             .subscribe(operation_id)
@@ -1589,11 +1593,14 @@ impl MintClientModule {
 
                 match state.state {
                     MintOutputStates::Succeeded(_) => Some(Ok(())),
-                    MintOutputStates::Aborted(_) => Some(Err(anyhow!("Transaction was rejected"))),
-                    MintOutputStates::Failed(failed) => Some(Err(anyhow!(
-                        "Failed to finalize transaction: {}",
-                        failed.error
-                    ))),
+                    MintOutputStates::Aborted(_) => {
+                        Some(Err(AwaitOutputFinalizedError::TransactionRejected))
+                    }
+                    MintOutputStates::Failed(failed) => {
+                        Some(Err(AwaitOutputFinalizedError::Failed {
+                            reason: failed.error,
+                        }))
+                    }
                     MintOutputStates::Created(_) | MintOutputStates::CreatedMulti(_) => None,
                 }
             });
@@ -2169,7 +2176,7 @@ impl MintClientModule {
 
                 for out_point in out_points {
                     if let Err(e) = client_ctx.self_ref().await_output_finalized(operation_id, out_point).await {
-                        yield ReissueExternalNotesState::Failed(e.to_string());
+                        yield ReissueExternalNotesState::Failed(e.fmt_compact().to_string());
                         return;
                     }
                 }
@@ -2353,7 +2360,7 @@ impl MintClientModule {
         &self,
         amount: Amount,
         extra_meta: M,
-    ) -> anyhow::Result<OOBNotes> {
+    ) -> Result<OOBNotes, SendOOBNotesError> {
         let amount = self.cfg.fee_consensus.round_up(amount);
 
         let extra_meta = serde_json::to_value(extra_meta)
@@ -2367,32 +2374,33 @@ impl MintClientModule {
                 |dbtx, _| {
                     let extra_meta = extra_meta.clone();
                     Box::pin(async {
-                        self.try_spend_exact_notes_dbtx(
-                            dbtx,
-                            amount,
-                            self.federation_id,
-                            extra_meta,
+                        Ok::<Option<OOBNotes>, SendOOBNotesError>(
+                            self.try_spend_exact_notes_dbtx(
+                                dbtx,
+                                amount,
+                                self.federation_id,
+                                extra_meta,
+                            )
+                            .await,
                         )
-                        .await
-                        .map(Ok::<OOBNotes, anyhow::Error>)
-                        .transpose()
                     })
                 },
                 Some(100),
             )
             .await
-            .expect("Failed to commit dbtx after 100 retries");
+            .map_err(|e| match e {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    SendOOBNotesError::Database(last_error)
+                }
+            })?;
 
         if let Some(oob_notes) = oob_notes {
             return Ok(oob_notes);
         }
 
         // Verify we're online
-        self.client_ctx
-            .global_api()
-            .session_count()
-            .await
-            .context("Cannot reach federation to reissue notes")?;
+        self.client_ctx.global_api().session_count().await?;
 
         let operation_id = OperationId::new_random();
 
@@ -2408,7 +2416,7 @@ impl MintClientModule {
             .autocommit(
                 |dbtx, _| {
                     Box::pin(async {
-                        Ok::<_, anyhow::Error>(
+                        Ok::<_, SendOOBNotesError>(
                             self.create_exact_output(dbtx, operation_id, amount).await,
                         )
                     })
@@ -2416,7 +2424,12 @@ impl MintClientModule {
                 Some(100),
             )
             .await
-            .expect("Failed to commit output creation after 100 retries");
+            .map_err(|e| match e {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    SendOOBNotesError::Database(last_error)
+                }
+            })?;
 
         // The explicit outputs we just minted (worth exactly `amount`) occupy the
         // first `explicit_output_count` out points of the transaction; the
@@ -2455,8 +2468,7 @@ impl MintClientModule {
                 },
                 TransactionBuilder::new().with_outputs(outputs),
             )
-            .await
-            .context("Failed to submit reissuance transaction")?;
+            .await?;
 
         // Wait for *all* of the transaction's outputs to be finalized — both the
         // change (returned in `out_point_range`) and the explicit exact-amount
@@ -2469,8 +2481,7 @@ impl MintClientModule {
         let all_outputs = OutPointRange::new(txid, IdxRange::from(0..total_output_count));
         self.client_ctx
             .await_primary_module_outputs(operation_id, all_outputs.into_iter().collect())
-            .await
-            .context("Failed to await output finalization")?;
+            .await?;
 
         // Recursively call send_oob_notes to try again with the reissued notes
         Box::pin(self.send_oob_notes(amount, extra_meta)).await
@@ -3324,7 +3335,7 @@ mod tests {
     use itertools::Itertools;
     use serde_json::json;
 
-    use crate::error::{OOBNotesParseError, SelectNotesError};
+    use crate::error::{AwaitOutputFinalizedError, OOBNotesParseError, SelectNotesError};
     use crate::{
         MintOperationMetaVariant, NotesSelector, OOBNotes, OOBNotesPart,
         SelectNotesWithExactAmount, SpendableNote, SpendableNoteUndecoded, represent_amount,
@@ -3717,6 +3728,20 @@ mod tests {
         assert!(
             err.to_string().contains("no notes here"),
             "clap and serde print only Display, so the cause has to be in the message"
+        );
+    }
+
+    #[test]
+    fn a_finalization_failure_carries_the_state_machines_reason() {
+        use fedimint_core::util::FmtCompact as _;
+
+        let err = AwaitOutputFinalizedError::Failed {
+            reason: "guardian refused the blind signature".to_owned(),
+        };
+
+        assert!(
+            err.fmt_compact().to_string().contains("guardian refused"),
+            "the reason the state machine recorded has to survive into the Failed state"
         );
     }
 }

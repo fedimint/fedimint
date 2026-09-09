@@ -4,7 +4,8 @@
 //! the two types that predate this module and are re-exported from it, so
 //! there is one place to look.
 
-use fedimint_client_module::error::AddStateMachinesError;
+use fedimint_api_client::api::FederationError;
+use fedimint_client_module::error::{AddStateMachinesError, TransactionSubmitError};
 use fedimint_core::Amount;
 use fedimint_core::config::FederationIdPrefix;
 use fedimint_core::db::DatabaseError;
@@ -60,6 +61,49 @@ pub enum SpendOOBError {
     /// The spend could not be written to the database.
     #[error("Database error")]
     Database(#[from] DatabaseError),
+}
+
+/// A transaction's e-cash outputs did not become spendable.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum AwaitOutputFinalizedError {
+    /// The federation rejected the transaction, so its outputs never existed.
+    #[error("The transaction was rejected")]
+    TransactionRejected,
+
+    /// The issuance state machine gave up.
+    ///
+    /// `reason` is the text the state machine recorded in the client database
+    /// when it failed; it is read back here, never rewritten.
+    #[error("The notes could not be issued: {reason}")]
+    Failed {
+        /// What the issuance state machine recorded.
+        reason: String,
+    },
+}
+
+/// A failure to hand out e-cash for a requested amount.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum SendOOBNotesError {
+    /// The federation could not be reached, so the wallet cannot mint itself
+    /// the denominations it is missing.
+    #[error("The federation could not be reached")]
+    Federation(#[source] Box<FederationError>),
+
+    /// The self-reissue that makes the right denominations failed.
+    #[error("The reissue that would make the right denominations failed")]
+    Transaction(#[from] TransactionSubmitError),
+
+    /// The spend could not be written to the database.
+    #[error("Database error")]
+    Database(#[from] DatabaseError),
+}
+
+impl From<FederationError> for SendOOBNotesError {
+    fn from(source: FederationError) -> Self {
+        Self::Federation(Box::new(source))
+    }
 }
 
 /// A note that cannot be spent.

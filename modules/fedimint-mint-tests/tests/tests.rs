@@ -15,7 +15,7 @@ use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::backoff_util::aggressive_backoff;
-use fedimint_core::util::{NextOrPending, retry};
+use fedimint_core::util::{FmtCompact as _, NextOrPending, retry};
 use fedimint_core::{Amount, TieredMulti, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
@@ -309,7 +309,9 @@ async fn send_oob_notes_reissue_without_settling() -> anyhow::Result<()> {
         mint.send_fee_quote(Amount::from_msats(5_000_000)).await?;
         mint.send_oob_notes(Amount::from_msats(5_000_000), ())
             .await
-            .map_err(|e| anyhow::anyhow!("iteration {i}: send_oob_notes failed: {e:#}"))?;
+            .map_err(|e| {
+                anyhow::anyhow!("iteration {i}: send_oob_notes failed: {}", e.fmt_compact())
+            })?;
     }
 
     Ok(())

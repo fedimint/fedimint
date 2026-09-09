@@ -2870,7 +2870,10 @@ impl IAdminGateway for Gateway {
             .into_value();
 
         if let Ok(mint_module) = client.get_first_module::<MintClientModule>() {
-            let notes = mint_module.send_oob_notes(payload.amount, ()).await?;
+            let notes = mint_module
+                .send_oob_notes(payload.amount, ())
+                .await
+                .map_err(|e| AdminGatewayError::Unexpected(e.into()))?;
             debug!(target: LOG_GATEWAY, ?notes, "Spend ecash notes");
             Ok(SpendEcashResponse {
                 notes: notes.to_string(),
