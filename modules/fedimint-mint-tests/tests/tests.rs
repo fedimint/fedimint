@@ -23,9 +23,9 @@ use fedimint_logging::LOG_TEST;
 use fedimint_mint_client::api::MintFederationApi;
 use fedimint_mint_client::client_db::{NextECashNoteIndexKey, NoteKey};
 use fedimint_mint_client::{
-    MintClientInit, MintClientModule, Note, OOBNotes, ReissueExternalNotesState,
-    SelectNotesWithAtleastAmount, SelectNotesWithExactAmount, SpendOOBError, SpendOOBState,
-    SpendableNote, SpendableNoteUndecoded, ValidateNotesError,
+    MintClientInit, MintClientModule, Note, OOBNotes, ReissueExternalNotesError,
+    ReissueExternalNotesState, SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
+    SpendOOBError, SpendOOBState, SpendableNote, SpendableNoteUndecoded, ValidateNotesError,
 };
 use fedimint_mint_common::{MintInput, MintInputV0, Nonce};
 use fedimint_mint_server::MintInit;
@@ -871,16 +871,49 @@ async fn error_zero_value_oob_receive() -> anyhow::Result<()> {
         .await?;
 
     // Spend from client1 to client2
-    let err_msg = client1
+    let err = client1
         .get_first_module::<MintClientModule>()?
         .reissue_external_notes(
             OOBNotes::new(client1.federation_id().to_prefix(), Default::default()),
             (),
         )
         .await
-        .expect_err("Zero-amount receives should be forbidden")
-        .to_string();
-    assert!(err_msg.contains("zero-amount"));
+        .expect_err("Zero-amount receives should be forbidden");
+    assert_matches!(err, ReissueExternalNotesError::ZeroAmount);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reissuing_the_same_notes_twice_reports_already_reissued() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let (client1, client2) = fed.two_clients().await;
+    issue_ecash(&client1, sats(1000)).await?;
+
+    let (_op, notes) = client1
+        .get_first_module::<MintClientModule>()?
+        .spend_notes_with_selector(&SelectNotesWithAtleastAmount, sats(500), None, false, ())
+        .await?;
+
+    let client2_mint = client2.get_first_module::<MintClientModule>()?;
+    let op = client2_mint
+        .reissue_external_notes(notes.clone(), ())
+        .await?;
+    assert_matches!(
+        client2_mint
+            .subscribe_reissue_external_notes(op)
+            .await?
+            .await_outcome()
+            .await,
+        Some(ReissueExternalNotesState::Done)
+    );
+
+    // The operation id is the hash of the notes, so a second reissue of the
+    // same notes finds the existing operation instead of submitting again.
+    assert_matches!(
+        client2_mint.reissue_external_notes(notes, ()).await,
+        Err(ReissueExternalNotesError::AlreadyReissued)
+    );
 
     Ok(())
 }

@@ -47,7 +47,7 @@ use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use anyhow::{Context as _, anyhow, bail, ensure};
+use anyhow::{Context as _, anyhow, bail};
 use api::MintFederationApi;
 use async_stream::{stream, try_stream};
 use backup::recovery::{MintRecovery, RecoveryStateV2};
@@ -60,6 +60,7 @@ use client_db::{
 use events::{NoteSpent, OOBNotesReissued, OOBNotesSpent, ReceivePaymentEvent, SendPaymentEvent};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
+use fedimint_client_module::error::TransactionSubmitError;
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs, RecoveryMode,
 };
@@ -1291,12 +1292,30 @@ struct AwaitSpendOobRefundRequest {
     operation_id: OperationId,
 }
 
-#[derive(thiserror::Error, Debug, Clone)]
+/// A failure to reissue e-cash notes received from a third party.
+#[derive(thiserror::Error, Debug)]
+#[non_exhaustive]
 pub enum ReissueExternalNotesError {
+    /// The notes are worth nothing, so there is nothing to reissue.
+    #[error("Reissuing zero-amount e-cash is not supported")]
+    ZeroAmount,
+
+    /// The notes were issued by a different federation.
     #[error("Federation ID does not match")]
     WrongFederationId,
+
+    /// An operation for these exact notes already exists, so they were already
+    /// handed to this federation.
     #[error("We already reissued these notes")]
     AlreadyReissued,
+
+    /// The notes cannot be spent.
+    #[error("The notes could not be validated")]
+    Notes(#[from] ValidateNotesError),
+
+    /// The reissue transaction could not be built or submitted.
+    #[error("The reissue transaction could not be submitted")]
+    Transaction(#[source] TransactionSubmitError),
 }
 
 impl MintClientModule {
@@ -1896,7 +1915,10 @@ impl MintClientModule {
     /// committed, so the wallet's notes are read but left untouched. The
     /// quote is point-in-time: it depends on the current inventory and can
     /// move as notes change.
-    pub async fn reissue_fee_quote(&self, oob_notes: &OOBNotes) -> anyhow::Result<FeeQuote> {
+    pub async fn reissue_fee_quote(
+        &self,
+        oob_notes: &OOBNotes,
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         // A reissue submits the external notes as explicit inputs and no explicit
         // outputs; the shared, module-agnostic fee quote runs the primary-module
         // balancing (note consolidation + minting change) over the real
@@ -1919,7 +1941,6 @@ impl MintClientModule {
                 },
             )
             .await
-            .map_err(anyhow::Error::from)
     }
 
     /// Computes the fee a `send_oob_notes(amount)` would incur given the
@@ -1935,7 +1956,7 @@ impl MintClientModule {
     /// via the shared, module-agnostic fee quote over the real inventory. The
     /// quote is point-in-time: it depends on the current inventory and can move
     /// as notes change.
-    pub async fn send_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+    pub async fn send_fee_quote(&self, amount: Amount) -> Result<FeeQuote, TransactionSubmitError> {
         let amount = self.cfg.fee_consensus.round_up(amount);
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
@@ -1981,18 +2002,28 @@ impl MintClientModule {
                 },
             )
             .await
-            .map_err(anyhow::Error::from)
     }
 
     /// Try to reissue e-cash notes received from a third party to receive them
     /// in our wallet. The progress and outcome can be observed using
     /// [`MintClientModule::subscribe_reissue_external_notes`].
-    /// Can return error of type [`ReissueExternalNotesError`]
+    ///
+    /// ## Errors
+    ///
+    /// - [`ReissueExternalNotesError::ZeroAmount`] if the notes are worth
+    ///   nothing.
+    /// - [`ReissueExternalNotesError::WrongFederationId`] if the notes were
+    ///   issued by a different federation.
+    /// - [`ReissueExternalNotesError::AlreadyReissued`] if these exact notes
+    ///   were already reissued.
+    /// - [`ReissueExternalNotesError::Notes`] if the notes cannot be validated.
+    /// - [`ReissueExternalNotesError::Transaction`] if the reissue transaction
+    ///   could not be built or submitted.
     pub async fn reissue_external_notes<M: Serialize + Send>(
         &self,
         oob_notes: OOBNotes,
         extra_meta: M,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, ReissueExternalNotesError> {
         let notes = oob_notes.notes().clone();
         let federation_id_prefix = oob_notes.federation_id_prefix();
 
@@ -2005,13 +2036,12 @@ impl MintClientModule {
             "Reissuing external notes"
         );
 
-        ensure!(
-            notes.total_amount() > Amount::ZERO,
-            "Reissuing zero-amount e-cash isn't supported"
-        );
+        if notes.total_amount() == Amount::ZERO {
+            return Err(ReissueExternalNotesError::ZeroAmount);
+        }
 
         if federation_id_prefix != self.federation_id.to_prefix() {
-            bail!(ReissueExternalNotesError::WrongFederationId);
+            return Err(ReissueExternalNotesError::WrongFederationId);
         }
 
         let operation_id = OperationId(
@@ -2051,7 +2081,12 @@ impl MintClientModule {
                 tx,
             )
             .await
-            .context(ReissueExternalNotesError::AlreadyReissued)?;
+            .map_err(|error| match error {
+                TransactionSubmitError::OperationAlreadyExists(_) => {
+                    ReissueExternalNotesError::AlreadyReissued
+                }
+                error => ReissueExternalNotesError::Transaction(error),
+            })?;
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 

@@ -1706,7 +1706,7 @@ impl Gateway {
 
             let operation_id = mint.reissue_external_notes(notes, ()).await.map_err(|e| {
                 PublicGatewayError::ReceiveEcashError {
-                    failure_reason: e.to_string(),
+                    failure_reason: e.fmt_compact().to_string(),
                 }
             })?;
 

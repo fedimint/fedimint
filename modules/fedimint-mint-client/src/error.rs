@@ -124,6 +124,15 @@ impl From<SpendOOBError> for fedimint_core::util::ffi::UniffiError {
     }
 }
 
+#[cfg(feature = "uniffi")]
+impl From<ReissueExternalNotesError> for fedimint_core::util::ffi::UniffiError {
+    fn from(e: ReissueExternalNotesError) -> Self {
+        use fedimint_core::util::FmtCompact as _;
+
+        Self::General(e.fmt_compact().to_string())
+    }
+}
+
 /// A string that is not a valid serialization of out-of-band e-cash notes.
 ///
 /// Unlike the other errors in this module this one interpolates its cause into
