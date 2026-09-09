@@ -806,7 +806,7 @@
 <a href=#806 id=806 data-nosnippet>806</a>                                    },
 <a href=#807 id=807 data-nosnippet>807</a>                                    <span class="prelude-val">Err</span>(e) =&gt; {
 <a href=#808 id=808 data-nosnippet>808</a>                                        <span class="macro">warn!</span>(<span class="question-mark">?</span>operation_id, <span class="string">"Got failure {e:?} while awaiting for refund outputs {out_points:?}"</span>);
-<a href=#809 id=809 data-nosnippet>809</a>                                        <span class="kw">break </span>GatewayExtReceiveStates::RefundError{ error_message: e.to_string(), error }
+<a href=#809 id=809 data-nosnippet>809</a>                                        <span class="kw">break </span>GatewayExtReceiveStates::RefundError{ error_message: e.fmt_compact().to_string(), error }
 <a href=#810 id=810 data-nosnippet>810</a>                                    },
 <a href=#811 id=811 data-nosnippet>811</a>                                }
 <a href=#812 id=812 data-nosnippet>812</a>                            },

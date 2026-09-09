@@ -517,7 +517,7 @@
 <a href=#517 id=517 data-nosnippet>517</a>///
 <a href=#518 id=518 data-nosnippet>518</a>/// The LNv2 and LNv1 send-all flows share this solver; they differ only in
 <a href=#519 id=519 data-nosnippet>519</a>/// `gross_up` (the gateway fee model) and which `fee_quote` they pass.
-<a href=#520 id=520 data-nosnippet>520</a></span><span class="kw">pub async fn </span>max_affordable_send_amount&lt;GrossUp, Quote, Fut&gt;(
+<a href=#520 id=520 data-nosnippet>520</a></span><span class="kw">pub async fn </span>max_affordable_send_amount&lt;GrossUp, Quote, Fut, E&gt;(
 <a href=#521 id=521 data-nosnippet>521</a>    balance: Amount,
 <a href=#522 id=522 data-nosnippet>522</a>    min_amount: Amount,
 <a href=#523 id=523 data-nosnippet>523</a>    max_amount: Amount,
@@ -527,7 +527,7 @@
 <a href=#527 id=527 data-nosnippet>527</a><span class="kw">where
 <a href=#528 id=528 data-nosnippet>528</a>    </span>GrossUp: Fn(Amount) -&gt; Amount,
 <a href=#529 id=529 data-nosnippet>529</a>    Quote: Fn(Amount) -&gt; Fut,
-<a href=#530 id=530 data-nosnippet>530</a>    Fut: Future&lt;Output = anyhow::Result&lt;FeeQuote&gt;&gt;,
+<a href=#530 id=530 data-nosnippet>530</a>    Fut: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;FeeQuote, E&gt;&gt;,
 <a href=#531 id=531 data-nosnippet>531</a>{
 <a href=#532 id=532 data-nosnippet>532</a>    <span class="comment">// Nothing above the balance can ever be funded, so cap the upper bound.
 <a href=#533 id=533 data-nosnippet>533</a>    </span><span class="kw">let </span>hi_bound = max_amount.msats.min(balance.msats);
@@ -621,7 +621,7 @@
 <a href=#621 id=621 data-nosnippet>621</a>/// balance. A quote error (the balance cannot fund a value this large) counts
 <a href=#622 id=622 data-nosnippet>622</a>/// as unaffordable, making this safe as the monotone predicate for
 <a href=#623 id=623 data-nosnippet>623</a>/// [`max_affordable_send_amount`].
-<a href=#624 id=624 data-nosnippet>624</a></span><span class="kw">async fn </span>send_amount_affordable&lt;GrossUp, Quote, Fut&gt;(
+<a href=#624 id=624 data-nosnippet>624</a></span><span class="kw">async fn </span>send_amount_affordable&lt;GrossUp, Quote, Fut, E&gt;(
 <a href=#625 id=625 data-nosnippet>625</a>    amount: Amount,
 <a href=#626 id=626 data-nosnippet>626</a>    balance: Amount,
 <a href=#627 id=627 data-nosnippet>627</a>    gross_up: <span class="kw-2">&amp;</span>GrossUp,
@@ -630,7 +630,7 @@
 <a href=#630 id=630 data-nosnippet>630</a><span class="kw">where
 <a href=#631 id=631 data-nosnippet>631</a>    </span>GrossUp: Fn(Amount) -&gt; Amount,
 <a href=#632 id=632 data-nosnippet>632</a>    Quote: Fn(Amount) -&gt; Fut,
-<a href=#633 id=633 data-nosnippet>633</a>    Fut: Future&lt;Output = anyhow::Result&lt;FeeQuote&gt;&gt;,
+<a href=#633 id=633 data-nosnippet>633</a>    Fut: Future&lt;Output = <span class="prelude-ty">Result</span>&lt;FeeQuote, E&gt;&gt;,
 <a href=#634 id=634 data-nosnippet>634</a>{
 <a href=#635 id=635 data-nosnippet>635</a>    <span class="kw">let </span>funded_amount = gross_up(amount);
 <a href=#636 id=636 data-nosnippet>636</a>

@@ -5,7 +5,7 @@
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_core::module::Amounts;
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_core::secp256k1::Keypair;
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::util::FmtCompactAnyhow;
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::util::FmtCompact;
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_core::{Amount, OutPoint};
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_lnv2_common::contracts::{IncomingContract, fee_from_expiration};
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_lnv2_common::{LightningInput, LightningInputV0};
@@ -152,7 +152,7 @@
 <a href=#152 id=152 data-nosnippet>152</a>            </span><span class="prelude-val">Err</span>(err) =&gt; {
 <a href=#153 id=153 data-nosnippet>153</a>                <span class="macro">warn!</span>(
 <a href=#154 id=154 data-nosnippet>154</a>                    target: LOG_CLIENT_MODULE_LNV2,
-<a href=#155 id=155 data-nosnippet>155</a>                    err = %err.fmt_compact_anyhow(),
+<a href=#155 id=155 data-nosnippet>155</a>                    err = %err.fmt_compact(),
 <a href=#156 id=156 data-nosnippet>156</a>                    amount = %old_state.common.contract.commitment.amount,
 <a href=#157 id=157 data-nosnippet>157</a>                    <span class="string">"Not claiming incoming contract, its amount does not cover the claim fee"
 <a href=#158 id=158 data-nosnippet>158</a>                </span>);

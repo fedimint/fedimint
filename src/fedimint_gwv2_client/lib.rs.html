@@ -612,7 +612,7 @@
 <a href=#612 id=612 data-nosnippet>612</a>            <span class="kw">if let </span><span class="prelude-val">Err</span>(error) = creation_result {
 <a href=#613 id=613 data-nosnippet>613</a>                <span class="kw">let </span>operation_exists = <span class="self">self</span>.client_ctx.operation_exists(receive_operation_id).<span class="kw">await</span>;
 <a href=#614 id=614 data-nosnippet>614</a>                <span class="kw">if </span>operation_creation_failed_permanently(<span class="bool-val">true</span>, operation_exists) {
-<a href=#615 id=615 data-nosnippet>615</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(error);
+<a href=#615 id=615 data-nosnippet>615</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(error.into());
 <a href=#616 id=616 data-nosnippet>616</a>                }
 <a href=#617 id=617 data-nosnippet>617</a>            } <span class="kw">else </span>{
 <a href=#618 id=618 data-nosnippet>618</a>                <span class="kw">let </span><span class="kw-2">mut </span>dbtx = <span class="self">self</span>.client_ctx.module_db().begin_transaction().<span class="kw">await</span>;
@@ -655,7 +655,7 @@
 <a href=#655 id=655 data-nosnippet>655</a>                .operation_exists(completion_operation_id)
 <a href=#656 id=656 data-nosnippet>656</a>                .<span class="kw">await</span>;
 <a href=#657 id=657 data-nosnippet>657</a>            <span class="kw">if </span>operation_creation_failed_permanently(<span class="bool-val">true</span>, operation_exists) {
-<a href=#658 id=658 data-nosnippet>658</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(error);
+<a href=#658 id=658 data-nosnippet>658</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(error.into());
 <a href=#659 id=659 data-nosnippet>659</a>            }
 <a href=#660 id=660 data-nosnippet>660</a>        }
 <a href=#661 id=661 data-nosnippet>661</a>

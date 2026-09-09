@@ -72,11 +72,15 @@
 <a href=#72 id=72 data-nosnippet>72</a>});
 <a href=#73 id=73 data-nosnippet>73</a>
 <a href=#74 id=74 data-nosnippet>74</a><span class="doccomment">/// Returns all registered metrics encoded in Prometheus text format.
-<a href=#75 id=75 data-nosnippet>75</a></span><span class="kw">pub fn </span>get_metrics() -&gt; anyhow::Result&lt;String&gt; {
-<a href=#76 id=76 data-nosnippet>76</a>    <span class="kw">let </span>metric_families = REGISTRY.gather();
-<a href=#77 id=77 data-nosnippet>77</a>    <span class="kw">let </span><span class="kw-2">mut </span>buffer = Vec::new();
-<a href=#78 id=78 data-nosnippet>78</a>    <span class="kw">let </span>encoder = TextEncoder::new();
-<a href=#79 id=79 data-nosnippet>79</a>    encoder.encode(<span class="kw-2">&amp;</span>metric_families, <span class="kw-2">&amp;mut </span>buffer)<span class="question-mark">?</span>;
-<a href=#80 id=80 data-nosnippet>80</a>    <span class="prelude-val">Ok</span>(String::from_utf8(buffer)<span class="question-mark">?</span>)
-<a href=#81 id=81 data-nosnippet>81</a>}
+<a href=#75 id=75 data-nosnippet>75</a>///
+<a href=#76 id=76 data-nosnippet>76</a>/// # Panics
+<a href=#77 id=77 data-nosnippet>77</a>/// Never, in practice: the Prometheus text encoder only ever emits valid
+<a href=#78 id=78 data-nosnippet>78</a>/// UTF-8.
+<a href=#79 id=79 data-nosnippet>79</a></span><span class="kw">pub fn </span>get_metrics() -&gt; <span class="prelude-ty">Result</span>&lt;String, prometheus::Error&gt; {
+<a href=#80 id=80 data-nosnippet>80</a>    <span class="kw">let </span>metric_families = REGISTRY.gather();
+<a href=#81 id=81 data-nosnippet>81</a>    <span class="kw">let </span><span class="kw-2">mut </span>buffer = Vec::new();
+<a href=#82 id=82 data-nosnippet>82</a>    <span class="kw">let </span>encoder = TextEncoder::new();
+<a href=#83 id=83 data-nosnippet>83</a>    encoder.encode(<span class="kw-2">&amp;</span>metric_families, <span class="kw-2">&amp;mut </span>buffer)<span class="question-mark">?</span>;
+<a href=#84 id=84 data-nosnippet>84</a>    <span class="prelude-val">Ok</span>(String::from_utf8(buffer).expect(<span class="string">"Prometheus text encoding is valid UTF-8"</span>))
+<a href=#85 id=85 data-nosnippet>85</a>}
 </code></pre></div></section></main></body></html>

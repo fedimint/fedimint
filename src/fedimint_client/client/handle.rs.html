@@ -2,17 +2,17 @@
 <a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>std::sync::Arc;
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>std::time::Duration;
 <a href=#4 id=4 data-nosnippet>4</a>
-<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>anyhow::format_err;
-<a href=#6 id=6 data-nosnippet>6</a><span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
-<a href=#7 id=7 data-nosnippet>7</a></span><span class="kw">use </span>fedimint_core::runtime;
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::util::FmtCompact <span class="kw">as _</span>;
-<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_logging::LOG_CLIENT;
-<a href=#10 id=10 data-nosnippet>10</a><span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
-<a href=#11 id=11 data-nosnippet>11</a></span><span class="kw">use </span>tokio::runtime::{Handle <span class="kw">as </span>RuntimeHandle, RuntimeFlavor};
-<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>tracing::{Instrument <span class="kw">as _</span>, debug, error, trace, warn};
-<a href=#13 id=13 data-nosnippet>13</a>
-<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span><span class="kw">super</span>::Client;
-<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span><span class="kw">crate</span>::ClientBuilder;
+<a href=#5 id=5 data-nosnippet>5</a><span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+<a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">use </span>fedimint_core::runtime;
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_core::util::FmtCompact <span class="kw">as _</span>;
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_logging::LOG_CLIENT;
+<a href=#9 id=9 data-nosnippet>9</a><span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
+<a href=#10 id=10 data-nosnippet>10</a></span><span class="kw">use </span>tokio::runtime::{Handle <span class="kw">as </span>RuntimeHandle, RuntimeFlavor};
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>tracing::{Instrument <span class="kw">as _</span>, debug, error, trace, warn};
+<a href=#12 id=12 data-nosnippet>12</a>
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span><span class="kw">super</span>::Client;
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span><span class="kw">crate</span>::ClientBuilder;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span><span class="kw">crate</span>::error::ClientBuildError;
 <a href=#16 id=16 data-nosnippet>16</a>
 <a href=#17 id=17 data-nosnippet>17</a><span class="doccomment">/// User handle to the [`Client`] instance
 <a href=#18 id=18 data-nosnippet>18</a>///
@@ -107,17 +107,17 @@
 <a href=#107 id=107 data-nosnippet>107</a>
 <a href=#108 id=108 data-nosnippet>108</a>    <span class="doccomment">/// Restart the client
 <a href=#109 id=109 data-nosnippet>109</a>    ///
-<a href=#110 id=110 data-nosnippet>110</a>    /// Returns false if there are other clones of [`ClientHandle`], or starting
-<a href=#111 id=111 data-nosnippet>111</a>    /// the client again failed for some reason.
+<a href=#110 id=110 data-nosnippet>110</a>    /// Fails if there are other clones of [`ClientHandle`], or if starting the
+<a href=#111 id=111 data-nosnippet>111</a>    /// client again failed for some reason.
 <a href=#112 id=112 data-nosnippet>112</a>    ///
 <a href=#113 id=113 data-nosnippet>113</a>    /// Notably it will re-use the original [`fedimint_core::db::Database`]
 <a href=#114 id=114 data-nosnippet>114</a>    /// handle, and not attempt to open it again.
-<a href=#115 id=115 data-nosnippet>115</a>    </span><span class="kw">pub async fn </span>restart(<span class="self">self</span>) -&gt; anyhow::Result&lt;ClientHandle&gt; {
+<a href=#115 id=115 data-nosnippet>115</a>    </span><span class="kw">pub async fn </span>restart(<span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;ClientHandle, ClientBuildError&gt; {
 <a href=#116 id=116 data-nosnippet>116</a>        <span class="kw">let </span>(builder, config, api_secret, root_secret, db, endpoints) = {
 <a href=#117 id=117 data-nosnippet>117</a>            <span class="kw">let </span>client = <span class="self">self
 <a href=#118 id=118 data-nosnippet>118</a>                </span>.inner
 <a href=#119 id=119 data-nosnippet>119</a>                .as_ref()
-<a href=#120 id=120 data-nosnippet>120</a>                .ok_or_else(|| <span class="macro">format_err!</span>(<span class="string">"Already stopped"</span>))<span class="question-mark">?</span>;
+<a href=#120 id=120 data-nosnippet>120</a>                .ok_or(ClientBuildError::AlreadyStopped)<span class="question-mark">?</span>;
 <a href=#121 id=121 data-nosnippet>121</a>            <span class="kw">let </span>builder = ClientBuilder::from_existing(client);
 <a href=#122 id=122 data-nosnippet>122</a>            <span class="kw">let </span>config = client.config().<span class="kw">await</span>;
 <a href=#123 id=123 data-nosnippet>123</a>            <span class="kw">let </span>api_secret = client.api_secret.clone();

@@ -15,7 +15,7 @@
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_core::invite_code::InviteCode;
 <a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_core::task::{MaybeSend, MaybeSync};
-<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_core::util::{BoxFuture, BoxStream};
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_core::util::{BoxFuture, BoxStream, FmtCompactAnyhow <span class="kw">as _</span>};
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>fedimint_core::{Amount, TieredCounts, impl_db_record};
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>fedimint_derive_secret::{ChildId, DerivableSecret};
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_ln_client::{LightningClientInit, LightningClientModule};
@@ -185,7 +185,7 @@
 <a href=#185 id=185 data-nosnippet>185</a>    }
 <a href=#186 id=186 data-nosnippet>186</a>
 <a href=#187 id=187 data-nosnippet>187</a>    <span class="kw">async fn </span>client_builder() -&gt; <span class="prelude-ty">Result</span>&lt;fedimint_client::ClientBuilder, anyhow::Error&gt; {
-<a href=#188 id=188 data-nosnippet>188</a>        <span class="kw">let </span><span class="kw-2">mut </span>builder = fedimint_client::Client::builder().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#188 id=188 data-nosnippet>188</a>        <span class="kw">let </span><span class="kw-2">mut </span>builder = fedimint_client::Client::builder().<span class="kw">await</span>;
 <a href=#189 id=189 data-nosnippet>189</a>        builder.with_module(MintClientInit);
 <a href=#190 id=190 data-nosnippet>190</a>        builder.with_module(LightningClientInit::default());
 <a href=#191 id=191 data-nosnippet>191</a>        builder.with_module(WalletClientInit(<span class="prelude-val">None</span>));
@@ -534,7 +534,7 @@
 <a href=#534 id=534 data-nosnippet>534</a>                    <span class="prelude-val">Err</span>(e) =&gt; RpcResponse {
 <a href=#535 id=535 data-nosnippet>535</a>                        request_id,
 <a href=#536 id=536 data-nosnippet>536</a>                        kind: RpcResponseKind::Error {
-<a href=#537 id=537 data-nosnippet>537</a>                            error: e.to_string(),
+<a href=#537 id=537 data-nosnippet>537</a>                            error: e.fmt_compact_anyhow().to_string(),
 <a href=#538 id=538 data-nosnippet>538</a>                        },
 <a href=#539 id=539 data-nosnippet>539</a>                    },
 <a href=#540 id=540 data-nosnippet>540</a>                };

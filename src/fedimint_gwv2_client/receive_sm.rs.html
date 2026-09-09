@@ -10,7 +10,7 @@
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_core::module::{Amounts, ApiRequestErased};
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_core::secp256k1::Keypair;
-<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::util::FmtCompactAnyhow;
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::util::FmtCompact;
 <a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_core::{NumPeersExt, OutPoint, PeerId};
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_lnv2_common::contracts::IncomingContract;
 <a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_lnv2_common::endpoint_constants::DECRYPTION_KEY_SHARE_ENDPOINT;
@@ -292,7 +292,7 @@
 <a href=#292 id=292 data-nosnippet>292</a>            </span><span class="prelude-val">Err</span>(err) =&gt; {
 <a href=#293 id=293 data-nosnippet>293</a>                <span class="macro">warn!</span>(
 <a href=#294 id=294 data-nosnippet>294</a>                    target: LOG_CLIENT_MODULE_GW,
-<a href=#295 id=295 data-nosnippet>295</a>                    err = %err.fmt_compact_anyhow(),
+<a href=#295 id=295 data-nosnippet>295</a>                    err = %err.fmt_compact(),
 <a href=#296 id=296 data-nosnippet>296</a>                    amount = %old_state.common.contract.commitment.amount,
 <a href=#297 id=297 data-nosnippet>297</a>                    <span class="string">"Not refunding incoming contract, its amount does not cover the refund fee"
 <a href=#298 id=298 data-nosnippet>298</a>                </span>);

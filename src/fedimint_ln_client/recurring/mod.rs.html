@@ -26,7 +26,7 @@
 <a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
 <a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>fedimint_core::secp256k1::{Keypair, PublicKey};
 <a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>fedimint_core::task::sleep;
-<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>fedimint_core::util::{BoxFuture, FmtCompact, FmtCompactAnyhow, SafeUrl};
+<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>fedimint_core::util::{BoxFuture, FmtCompact, SafeUrl};
 <a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span>fedimint_derive_secret::ChildId;
 <a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>fedimint_eventlog::{Event, EventKind, EventPersistence};
 <a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span>futures::StreamExt;
@@ -348,10 +348,10 @@
 <a href=#348 id=348 data-nosnippet>348</a>                <span class="question-mark">?</span>operation_id,
 <a href=#349 id=349 data-nosnippet>349</a>                payment_code_key=<span class="question-mark">?</span>payment_code.root_keypair.public_key(),
 <a href=#350 id=350 data-nosnippet>350</a>                invoice_index=%invoice_index,
-<a href=#351 id=351 data-nosnippet>351</a>                err = %e.fmt_compact_anyhow(),
+<a href=#351 id=351 data-nosnippet>351</a>                err = %e.fmt_compact(),
 <a href=#352 id=352 data-nosnippet>352</a>                <span class="string">"Failed to create recurring receive operation"
 <a href=#353 id=353 data-nosnippet>353</a>            </span>);
-<a href=#354 id=354 data-nosnippet>354</a>            <span class="prelude-val">Err</span>(e)
+<a href=#354 id=354 data-nosnippet>354</a>            <span class="prelude-val">Err</span>(e.into())
 <a href=#355 id=355 data-nosnippet>355</a>        } <span class="kw">else </span>{
 <a href=#356 id=356 data-nosnippet>356</a>            <span class="prelude-val">Ok</span>(operation_id)
 <a href=#357 id=357 data-nosnippet>357</a>        }

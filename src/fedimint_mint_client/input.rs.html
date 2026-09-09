@@ -6,7 +6,7 @@
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_core::core::OperationId;
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::module::Amounts;
-<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_core::util::FmtCompactAnyhow;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_core::util::FmtCompact;
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_core::{Amount, TransactionId};
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_logging::LOG_CLIENT_MODULE_MINT;
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_mint_common::MintInput;
@@ -464,7 +464,7 @@
 <a href=#464 id=464 data-nosnippet>464</a>                <span class="prelude-val">Err</span>(err) =&gt; {
 <a href=#465 id=465 data-nosnippet>465</a>                    <span class="macro">warn!</span>(
 <a href=#466 id=466 data-nosnippet>466</a>                        target: LOG_CLIENT_MODULE_MINT,
-<a href=#467 id=467 data-nosnippet>467</a>                        err = %err.fmt_compact_anyhow(),
+<a href=#467 id=467 data-nosnippet>467</a>                        err = %err.fmt_compact(),
 <a href=#468 id=468 data-nosnippet>468</a>                        refund_input_amounts = <span class="question-mark">?</span>refund_input.amounts,
 <a href=#469 id=469 data-nosnippet>469</a>                        input = %refund_input.input,
 <a href=#470 id=470 data-nosnippet>470</a>                        <span class="string">"Failed to remint a single note"
