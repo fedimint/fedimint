@@ -63,3 +63,25 @@ impl From<ValidateNotesError> for fedimint_core::util::ffi::UniffiError {
         Self::General(e.fmt_compact().to_string())
     }
 }
+
+/// A string that is not a valid serialization of out-of-band e-cash notes.
+///
+/// Unlike the other errors in this module this one interpolates its cause into
+/// its message: `clap` renders a `FromStr` failure with `Display` alone, and
+/// `OOBNotes`' `Deserialize` impl hands it to `serde::de::Error::custom`, which
+/// keeps only the message. A cause behind `source()` would be dropped by both.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum OOBNotesParseError {
+    /// The string is neither base32 with the fedimint prefix nor base64.
+    #[error("The e-cash notes are not a well-formed base32 or base64 string")]
+    Encoding,
+
+    /// The decoded bytes are not a valid `OOBNotes` encoding.
+    #[error("The e-cash notes could not be decoded: {0}")]
+    Decode(#[from] DecodeError),
+
+    /// The string decodes, but carries no notes.
+    #[error("The e-cash notes are empty")]
+    Empty,
+}

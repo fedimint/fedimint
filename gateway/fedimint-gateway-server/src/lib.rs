@@ -1696,7 +1696,10 @@ impl Gateway {
         if let Ok(mint) = client.value().get_first_module::<MintClientModule>() {
             let notes = OOBNotes::from_str(&payload.notes).map_err(|e| {
                 PublicGatewayError::ReceiveEcashError {
-                    failure_reason: format!("Expected OOBNotes for MintV1 federation: {e}"),
+                    failure_reason: format!(
+                        "Expected OOBNotes for MintV1 federation: {}",
+                        e.fmt_compact()
+                    ),
                 }
             })?;
             let amount = notes.total_amount();

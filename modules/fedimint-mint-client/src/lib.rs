@@ -118,7 +118,7 @@ use crate::client_db::{
     CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
     NextECashNoteIndexKeyPrefix, NoteKey,
 };
-pub use crate::error::ValidateNotesError;
+pub use crate::error::{OOBNotesParseError, ValidateNotesError};
 use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStates};
 use crate::oob::{MintOOBStateMachine, MintOOBStates, MintOOBStatesCreatedMulti};
 use crate::output::{
@@ -225,7 +225,7 @@ pub struct OOBNotes(Vec<OOBNotesPart>);
 #[cfg(feature = "uniffi")]
 uniffi::custom_type!(OOBNotes, String, {
     lower: |n| n.to_string(),
-    try_lift: |s| OOBNotes::from_str(&s),
+    try_lift: |s| Ok(OOBNotes::from_str(&s)?),
 });
 
 /// For extendability [`OOBNotes`] consists of parts, where client can ignore
@@ -456,7 +456,7 @@ const BASE64_URL_SAFE: base64::engine::GeneralPurpose = base64::engine::GeneralP
 );
 
 impl FromStr for OOBNotes {
-    type Err = anyhow::Error;
+    type Err = OOBNotesParseError;
 
     /// Decode a set of out-of-band e-cash notes from a base64 or base32 string.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -471,13 +471,15 @@ impl FromStr for OOBNotes {
         } else if let Ok(oob_notes_bytes) = base64::engine::general_purpose::STANDARD.decode(&s) {
             oob_notes_bytes
         } else {
-            bail!("OOBNotes were not a well-formed base64(URL-safe) or base32 string");
+            return Err(OOBNotesParseError::Encoding);
         };
 
         let oob_notes =
             OOBNotes::consensus_decode_whole(&oob_notes_bytes, &ModuleDecoderRegistry::default())?;
 
-        ensure!(!oob_notes.notes().is_empty(), "OOBNotes cannot be empty");
+        if oob_notes.notes().is_empty() {
+            return Err(OOBNotesParseError::Empty);
+        }
 
         Ok(oob_notes)
     }
@@ -3271,10 +3273,11 @@ mod tests {
     use std::fmt::Display;
     use std::str::FromStr;
 
+    use assert_matches::assert_matches;
     use bitcoin_hashes::Hash;
     use fedimint_core::base32::FEDIMINT_PREFIX;
     use fedimint_core::config::FederationId;
-    use fedimint_core::encoding::Decodable;
+    use fedimint_core::encoding::{Decodable, DecodeError};
     use fedimint_core::invite_code::InviteCode;
     use fedimint_core::module::registry::ModuleRegistry;
     use fedimint_core::{
@@ -3284,6 +3287,7 @@ mod tests {
     use itertools::Itertools;
     use serde_json::json;
 
+    use crate::error::OOBNotesParseError;
     use crate::{
         MintOperationMetaVariant, OOBNotes, OOBNotesPart, SpendableNote, SpendableNoteUndecoded,
         represent_amount, select_notes_from_stream,
@@ -3641,6 +3645,24 @@ mod tests {
                 oob_notes,
                 no_timeout: false,
             }
+        );
+    }
+
+    #[test]
+    fn parsing_a_non_encoded_string_names_the_encoding() {
+        let err = OOBNotes::from_str("not base32 or base64 $$$")
+            .expect_err("A string that is neither base32 nor base64 cannot be notes");
+
+        assert_matches!(err, OOBNotesParseError::Encoding);
+    }
+
+    #[test]
+    fn the_parse_error_prints_its_cause_because_clap_only_shows_display() {
+        let err = OOBNotesParseError::Decode(DecodeError::from_str("no notes here"));
+
+        assert!(
+            err.to_string().contains("no notes here"),
+            "clap and serde print only Display, so the cause has to be in the message"
         );
     }
 }
