@@ -32,6 +32,9 @@ enum Opts {
     },
     /// Await the final state of the receive operation.
     AwaitReceive { operation_id: OperationId },
+    /// Retry claiming a receive operation whose claim transaction was
+    /// rejected. Returns the new operation id to await.
+    ReclaimReceive { operation_id: OperationId },
     /// Lnurl subcommands
     #[command(subcommand)]
     Lnurl(LnurlOpts),
@@ -103,6 +106,9 @@ pub(crate) async fn handle_cli_command(
                 .await_final_receive_operation_state(operation_id)
                 .await?,
         ),
+        Opts::ReclaimReceive { operation_id } => {
+            json(lightning.reclaim_receive(operation_id).await?)
+        }
         Opts::Lnurl(lnurl_opts) => match lnurl_opts {
             LnurlOpts::Generate {
                 recurringd,

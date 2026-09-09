@@ -39,8 +39,10 @@ impl Event for SendPaymentUpdateEvent {
     const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
 
-/// Event emitted when a receive operation successfully completes and
-/// transitions to the claiming state.
+/// Event emitted when a receive operation's claim transaction is accepted by
+/// the federation. Clients from before the claim transaction was watched for
+/// rejection emitted it when the claim was submitted, i.e. even when the
+/// claim was later rejected.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ReceivePaymentEvent {
     pub operation_id: OperationId,
