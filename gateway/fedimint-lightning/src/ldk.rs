@@ -18,7 +18,9 @@ use fedimint_ln_common::contracts::Preimage;
 use fedimint_logging::LOG_LIGHTNING;
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::routing::gossip::{NodeAlias, NodeId};
-use ldk_node::payment::{PaymentDirection, PaymentKind, PaymentStatus, SendingParameters};
+use ldk_node::payment::{
+    PaymentDetails, PaymentDirection, PaymentKind, PaymentStatus, SendingParameters,
+};
 use lightning::ln::channelmanager::PaymentId;
 use lightning::offers::offer::{Offer, OfferId};
 use lightning::types::payment::{PaymentHash, PaymentPreimage};
@@ -266,6 +268,21 @@ impl GatewayLdkClient {
             warn!(err = %err.fmt_compact(), "LDK could not mark event handled");
         }
     }
+
+    /// Returns the node's payment record for `payment_id`, but only when it is
+    /// one of our own outbound attempts.
+    ///
+    /// LDK keys BOLT11 payments by `PaymentId(payment_hash)` in both
+    /// directions, so a registered invoice or a claimed inbound payment for the
+    /// same hash shares a slot with our outbound send. Without this direction
+    /// check such an inbound record could be mistaken for the result of our
+    /// `pay()`: reported as a spurious success (a preimage we never sent for),
+    /// a spurious failure, or -- while still pending -- block `pay()` forever.
+    fn outbound_payment(&self, payment_id: PaymentId) -> Option<PaymentDetails> {
+        self.node
+            .payment(&payment_id)
+            .filter(|details| details.direction == PaymentDirection::Outbound)
+    }
 }
 
 impl Drop for GatewayLdkClient {
@@ -340,13 +357,17 @@ impl ILnRpcClient for GatewayLdkClient {
             .async_lock(payment_id)
             .await;
 
-        // If a payment is not known to the node we can initiate it, and if it is known
-        // we can skip calling `ldk-node::Bolt11Payment::send()` and wait for the
-        // payment to complete. The lock guard above guarantees that this block is only
-        // executed once at a time for a given payment hash, ensuring that there is no
-        // race condition between checking if a payment is known and initiating a new
+        // If no outbound attempt of ours is known to the node we can initiate
+        // it, and if one is known we can skip calling
+        // `ldk-node::Bolt11Payment::send()` and wait for the payment to
+        // complete. Checking specifically for an outbound record matters because
+        // an inbound payment shares `PaymentId(payment_hash)` with our send: a
+        // registered invoice for the same hash must not make us skip `send()`.
+        // The lock guard above guarantees that this block is only executed once
+        // at a time for a given payment hash, ensuring that there is no race
+        // condition between checking if a payment is known and initiating a new
         // payment if it isn't.
-        if self.node.payment(&payment_id).is_none() {
+        if self.outbound_payment(payment_id).is_none() {
             assert_eq!(
                 self.node
                     .bolt11_payment()
@@ -373,7 +394,7 @@ impl ILnRpcClient for GatewayLdkClient {
         // events, but interacting with the node event queue here isn't
         // straightforward.
         loop {
-            if let Some(payment_details) = self.node.payment(&payment_id) {
+            if let Some(payment_details) = self.outbound_payment(payment_id) {
                 match payment_details.status {
                     PaymentStatus::Pending => {}
                     PaymentStatus::Succeeded => {
