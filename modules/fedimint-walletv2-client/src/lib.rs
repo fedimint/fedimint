@@ -124,7 +124,7 @@ pub enum FinalReceiveOperationState {
 ///
 /// There is no "nothing has arrived" variant: a deposit no guardian has seen
 /// has no outpoint to describe it, so absence is expressed by
-/// [`WalletClientModule::address_receive_progress`] returning an empty list.
+/// [`WalletClientModule::address_receive_progress`] reporting no deposits.
 ///
 /// Every variant is derived from advisory, non-consensus data reported by
 /// individual guardians, so none of them is authoritative and progress may move
@@ -159,6 +159,30 @@ pub enum ReceiveProgress {
         /// Confirmations needed before the federation records the output.
         required: u64,
     },
+}
+
+/// What the federation currently reports about the deposits to one address.
+///
+/// Returned by [`WalletClientModule::address_receive_progress`]. The two fields
+/// are only meaningful together: they come from a single query, so the
+/// visibility flag describes exactly the view the deposits were read from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddressReceiveProgress {
+    /// One entry per deposit the guardians can see, ordered by outpoint.
+    pub deposits: Vec<(bitcoin::OutPoint, ReceiveProgress)>,
+    /// Whether any guardian could enumerate a mempool for this query.
+    ///
+    /// When this is false nobody can report an unmined deposit, so empty
+    /// `deposits` are not evidence that nothing was sent - the federation is
+    /// simply blind to the payment until it is mined. A guardian reports false
+    /// if its bitcoin backend is esplora, if it has turned its mempool scan
+    /// off, or if it could not read its mempool this round; one guardian that
+    /// can see a mempool is enough to make this true for everyone.
+    ///
+    /// A wallet showing a receive screen wants this to choose between "we have
+    /// not seen your payment yet" and "waiting for the first confirmation",
+    /// which are very different things to tell a user who has just paid.
+    pub mempool_visibility: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -655,15 +679,16 @@ impl WalletClientModule {
     /// The progress of every deposit to `address` the federation has seen,
     /// ordered by outpoint.
     ///
-    /// An empty list means no guardian has reported a payment to the address
-    /// yet. That is not proof nothing was sent: an unmined deposit is only
-    /// visible to guardians whose bitcoin backend can enumerate a mempool.
+    /// Empty deposits mean no guardian has reported a payment to the address
+    /// yet. That is only proof nothing was sent if
+    /// [`AddressReceiveProgress::mempool_visibility`] is true, since an unmined
+    /// deposit is invisible to a federation that cannot read a mempool.
     ///
     /// Errors if `address` was not handed out by [`Self::receive`].
     pub async fn address_receive_progress(
         &self,
         address: &Address,
-    ) -> anyhow::Result<Vec<(bitcoin::OutPoint, ReceiveProgress)>> {
+    ) -> anyhow::Result<AddressReceiveProgress> {
         self.address_index(address)
             .await
             .context("Address was not derived by this client")?;
@@ -672,10 +697,7 @@ impl WalletClientModule {
     }
 
     /// Every deposit the federation currently reports against `script`.
-    async fn deposits_paying(
-        &self,
-        script: &ScriptBuf,
-    ) -> Vec<(bitcoin::OutPoint, ReceiveProgress)> {
+    async fn deposits_paying(&self, script: &ScriptBuf) -> AddressReceiveProgress {
         let pending = self.module_api.pending_outputs().await;
 
         let mut deposits: Vec<(bitcoin::OutPoint, ReceiveProgress)> = pending
@@ -692,7 +714,10 @@ impl WalletClientModule {
 
         deposits.sort_by_key(|(outpoint, _)| *outpoint);
 
-        deposits
+        AddressReceiveProgress {
+            deposits,
+            mempool_visibility: pending.mempool_visibility,
+        }
     }
 
     /// The scripts of every receive address derived so far, by index.

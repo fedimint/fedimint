@@ -9,6 +9,7 @@ use fedimint_core::task::sleep_in_test;
 use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
+use fedimint_logging::LOG_TEST;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_walletv2_client::events::{
@@ -22,7 +23,7 @@ use fedimint_walletv2_client::{
 use fedimint_walletv2_common::KIND;
 use fedimint_walletv2_server::{CONFIRMATION_FINALITY_DELAY, WalletInit};
 use futures::StreamExt;
-use tracing::info;
+use tracing::{info, warn};
 
 #[derive(Debug)]
 enum WalletEvent {
@@ -181,7 +182,11 @@ async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
     let address = module.receive().await;
 
     assert!(
-        module.address_receive_progress(&address).await?.is_empty(),
+        module
+            .address_receive_progress(&address)
+            .await?
+            .deposits
+            .is_empty(),
         "An address with nothing sent to it has no deposits to report"
     );
 
@@ -232,7 +237,7 @@ async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
         .expect("The second deposit must be reported against its own transaction");
 
     // The two deposits sit at different stages, so neither may mask the other.
-    let progress = module.address_receive_progress(&address).await?;
+    let progress = module.address_receive_progress(&address).await?.deposits;
 
     let mined = lookup_progress(&progress, mined_outpoint);
     let unmined = lookup_progress(&progress, unmined_outpoint);
@@ -305,6 +310,120 @@ async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// A guardian whose backend starts failing partway through a mempool scan must
+/// keep reporting the deposits it had already cached.
+///
+/// The scan caches one transaction per mempool entry it has never seen, so
+/// discarding the cache on a transient error would both hide deposits the
+/// guardian can still account for and force the whole mempool to be refetched
+/// on the next pass. A pass that fails is reported as far as it got instead: an
+/// unfetched deposit is indistinguishable to a client from one that has not
+/// been broadcast yet, so the federation keeps its mempool visibility.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_failed_mempool_fetch_keeps_the_deposits_already_seen() -> anyhow::Result<()> {
+    if Fixtures::is_real_test() {
+        warn!(
+            target: LOG_TEST,
+            "Skipping test as only the mock bitcoin backend can fail a mempool fetch"
+        );
+
+        return Ok(());
+    }
+
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+
+    initialize_consensus(&client, &bitcoin).await?;
+
+    let module = client.get_first_module::<WalletClientModule>()?;
+
+    let address = module.receive().await;
+
+    info!("Broadcast a deposit and wait for the guardians to cache it...");
+
+    let cached = bitcoin
+        .send_without_mining(&address, Amount::from_int_btc(1))
+        .await;
+
+    let cached_outpoint = await_receive_mempool(&client, &address, cached.compute_txid()).await?;
+
+    info!("Break every mempool fetch, then broadcast a second deposit...");
+
+    // Listing the mempool keeps working, so from here each scan sees both
+    // transactions, keeps the one it has already cached and fails to fetch the
+    // new one.
+    bitcoin.fail_mempool_tx_fetches(true);
+
+    let unfetchable = bitcoin
+        .send_without_mining(&address, Amount::from_int_btc(2))
+        .await;
+
+    // The guardians rescan on their bitcoin monitor's interval, which is 100ms
+    // under test, so this covers many failing passes rather than a single one.
+    for _ in 0..20 {
+        let progress = module.address_receive_progress(&address).await?;
+
+        assert_eq!(
+            lookup_progress(&progress.deposits, cached_outpoint),
+            ReceiveProgress::Mempool {
+                value: Amount::from_int_btc(1)
+            },
+            "A failing scan must not drop the deposit the guardians had already cached"
+        );
+
+        assert!(
+            progress.mempool_visibility,
+            "A scan that fails partway through still saw a mempool, so it must keep reporting one"
+        );
+
+        assert!(
+            !progress
+                .deposits
+                .iter()
+                .any(|(outpoint, _)| outpoint.txid == unfetchable.compute_txid()),
+            "The deposit whose transaction could not be fetched must not be reported"
+        );
+
+        sleep_in_test(
+            "Letting the guardians run failing mempool scans",
+            Duration::from_millis(100),
+        )
+        .await;
+    }
+
+    info!("Let fetches succeed again and confirm the second deposit is picked up...");
+
+    bitcoin.fail_mempool_tx_fetches(false);
+
+    let deposits = await_deposit_count(&client, &address, 2).await?;
+
+    assert_eq!(
+        lookup_progress(&deposits, cached_outpoint),
+        ReceiveProgress::Mempool {
+            value: Amount::from_int_btc(1)
+        },
+        "The recovered scan must still report the originally cached deposit"
+    );
+
+    let recovered = deposits
+        .iter()
+        .find_map(|(outpoint, state)| {
+            (outpoint.txid == unfetchable.compute_txid()).then(|| state.clone())
+        })
+        .expect("The second deposit is reported once its transaction can be fetched");
+
+    assert_eq!(
+        recovered,
+        ReceiveProgress::Mempool {
+            value: Amount::from_int_btc(2)
+        }
+    );
+
+    Ok(())
+}
+
 /// Returns the progress reported for `outpoint`, panicking if it is absent.
 fn lookup_progress(
     progress: &[(bitcoin::OutPoint, ReceiveProgress)],
@@ -330,12 +449,12 @@ async fn await_deposit_count(
             .await?;
 
         assert!(
-            progress.len() <= count,
+            progress.deposits.len() <= count,
             "More deposits reported than were sent: {progress:?}"
         );
 
-        if progress.len() == count {
-            return Ok(progress);
+        if progress.deposits.len() == count {
+            return Ok(progress.deposits);
         }
 
         sleep_in_test(
@@ -362,7 +481,12 @@ async fn await_receive_mempool(
             .address_receive_progress(address)
             .await?;
 
-        match progress.as_slice() {
+        assert!(
+            progress.mempool_visibility,
+            "The mock backend can enumerate its mempool, so the federation must see one"
+        );
+
+        match progress.deposits.as_slice() {
             [(outpoint, ReceiveProgress::Mempool { value })] => {
                 assert_eq!(*value, Amount::from_int_btc(1));
                 assert_eq!(outpoint.txid, txid);
@@ -397,7 +521,7 @@ async fn await_receive_confirmations(
             .address_receive_progress(address)
             .await?;
 
-        match progress.as_slice() {
+        match progress.deposits.as_slice() {
             [
                 (
                     _,

@@ -62,4 +62,21 @@ pub trait BitcoinTest {
 
     /// Returns a transaction with the provided txid if it exists in the mempool
     async fn get_mempool_tx(&self, txid: &Txid) -> Option<bitcoin::Transaction>;
+
+    /// Makes every subsequent mempool transaction fetch by a guardian fail,
+    /// until called again with `false`.
+    ///
+    /// Lets a test drive a guardian's mempool scan into failing partway
+    /// through, which is otherwise only reachable by breaking a real node.
+    /// Listing the mempool keeps working, so the guardian still learns which
+    /// transactions exist and only the fetches fail.
+    ///
+    /// Only the mock backend can do this, so a test that calls it must skip
+    /// itself on real daemons via `Fixtures::is_real_test`.
+    fn fail_mempool_tx_fetches(&self, _failing: bool) {
+        panic!(
+            "Only the mock bitcoin backend can fail mempool fetches; \
+             guard this test with `Fixtures::is_real_test`"
+        );
+    }
 }
