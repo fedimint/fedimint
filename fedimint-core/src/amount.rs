@@ -50,6 +50,14 @@ uniffi::custom_type!(Amount, u64, {
 impl Amount {
     pub const ZERO: Self = Self { msats: 0 };
 
+    /// The largest amount that can ever exist, in millisatoshis: the
+    /// 21,000,000 BTC supply cap. No valid payment can exceed this, so callers
+    /// that accept externally-supplied amounts should reject anything larger to
+    /// keep subsequent fee and total arithmetic from overflowing `u64`.
+    pub const MAX_BITCOIN_SUPPLY: Self = Self {
+        msats: 21_000_000 * SATS_PER_BITCOIN * 1000,
+    };
+
     /// Create an amount from a number of millisatoshis.
     pub const fn from_msats(msats: u64) -> Self {
         Self { msats }
