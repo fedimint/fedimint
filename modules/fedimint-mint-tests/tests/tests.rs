@@ -7,8 +7,11 @@ use fedimint_client::ClientHandleArc;
 use fedimint_client::backup::{ClientBackup, Metadata};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
 use fedimint_client_module::ClientModule;
+use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::encoding::Decodable;
+use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::backoff_util::aggressive_backoff;
@@ -21,8 +24,8 @@ use fedimint_mint_client::api::MintFederationApi;
 use fedimint_mint_client::client_db::{NextECashNoteIndexKey, NoteKey};
 use fedimint_mint_client::{
     MintClientInit, MintClientModule, Note, OOBNotes, ReissueExternalNotesState,
-    SelectNotesWithAtleastAmount, SelectNotesWithExactAmount, SpendOOBState,
-    SpendableNoteUndecoded,
+    SelectNotesWithAtleastAmount, SelectNotesWithExactAmount, SpendOOBState, SpendableNote,
+    SpendableNoteUndecoded, ValidateNotesError,
 };
 use fedimint_mint_common::{MintInput, MintInputV0, Nonce};
 use fedimint_mint_server::MintInit;
@@ -1679,6 +1682,60 @@ async fn test_send_oob_notes() -> anyhow::Result<()> {
             .send_oob_notes(Amount::from_sats(100), ())
             .await?;
     }
+
+    Ok(())
+}
+
+/// A syntactically valid note. Its signature is never checked in the tests
+/// that use it below: both the cross-federation and unissued-tier checks in
+/// `validate_notes` return before a note's signature is verified.
+fn dummy_spendable_note() -> SpendableNote {
+    const NOTE_HEX: &str = "a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f317\
+        8fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553\
+        207c8bd";
+
+    SpendableNote::consensus_decode_hex(NOTE_HEX, &ModuleRegistry::default())
+        .expect("hex note is well-formed")
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn validating_notes_from_another_federation_names_both_ids() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let mint_module = client.get_first_module::<MintClientModule>()?;
+
+    let other = FederationId::dummy().to_prefix();
+    let notes = OOBNotes::new(other, TieredMulti::default());
+
+    let err = mint_module
+        .validate_notes(&notes)
+        .expect_err("Notes from another federation are not valid here");
+
+    assert_matches!(err, ValidateNotesError::WrongFederationId { found, .. } if found == other);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn validating_a_note_of_an_unissued_tier_reports_the_tier() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let mint_module = client.get_first_module::<MintClientModule>()?;
+
+    let amount = Amount::from_msats(7);
+    let notes = OOBNotes::new(
+        client.federation_id().to_prefix(),
+        [(amount, dummy_spendable_note())].into_iter().collect(),
+    );
+
+    let err = mint_module
+        .validate_notes(&notes)
+        .expect_err("The federation does not issue this tier");
+
+    assert_matches!(
+        err,
+        ValidateNotesError::InvalidAmountTier { amount: a, .. } if a == amount
+    );
 
     Ok(())
 }

@@ -26,6 +26,9 @@ mod oob;
 /// State machines for mint outputs
 pub mod output;
 
+/// Error types of the mint client
+pub mod error;
+
 pub mod events;
 
 /// API client impl for mint-specific requests
@@ -115,6 +118,7 @@ use crate::client_db::{
     CancelledOOBSpendKey, CancelledOOBSpendKeyPrefix, NextECashNoteIndexKey,
     NextECashNoteIndexKeyPrefix, NoteKey,
 };
+pub use crate::error::ValidateNotesError;
 use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStates};
 use crate::oob::{MintOOBStateMachine, MintOOBStates, MintOOBStatesCreatedMulti};
 use crate::output::{
@@ -1586,7 +1590,7 @@ impl MintClientModule {
     pub async fn consolidate_notes(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> anyhow::Result<Vec<(ClientInput<MintInput>, SpendableNote)>> {
+    ) -> Result<Vec<(ClientInput<MintInput>, SpendableNote)>, ValidateNotesError> {
         /// At how many notes of the same denomination should we try to
         /// consolidate
         const MAX_NOTES_PER_TIER_TRIGGER: usize = 8;
@@ -1656,20 +1660,20 @@ impl MintClientModule {
     pub fn create_input_from_notes(
         &self,
         notes: TieredMulti<SpendableNote>,
-    ) -> anyhow::Result<Vec<(ClientInput<MintInput>, SpendableNote)>> {
+    ) -> Result<Vec<(ClientInput<MintInput>, SpendableNote)>, ValidateNotesError> {
         let mut inputs_and_notes = Vec::new();
 
-        for (amount, spendable_note) in notes.into_iter_items() {
+        for (index, (amount, spendable_note)) in notes.into_iter_items().enumerate() {
             let key = self
                 .cfg
                 .tbs_pks
                 .get(amount)
-                .ok_or(anyhow!("Invalid amount tier: {amount}"))?;
+                .ok_or(ValidateNotesError::InvalidAmountTier { index, amount })?;
 
             let note = spendable_note.note();
 
             if !note.verify(*key) {
-                bail!("Invalid note");
+                return Err(ValidateNotesError::InvalidSignature { index });
             }
 
             inputs_and_notes.push((
@@ -2501,29 +2505,33 @@ impl MintClientModule {
     /// - the federation ID is correct
     /// - the note has a valid signature
     /// - the spend key is correct.
-    pub fn validate_notes(&self, oob_notes: &OOBNotes) -> anyhow::Result<Amount> {
+    pub fn validate_notes(&self, oob_notes: &OOBNotes) -> Result<Amount, ValidateNotesError> {
         let federation_id_prefix = oob_notes.federation_id_prefix();
         let notes = oob_notes.notes().clone();
 
-        if federation_id_prefix != self.federation_id.to_prefix() {
-            bail!("Federation ID does not match");
+        let expected = self.federation_id.to_prefix();
+        if federation_id_prefix != expected {
+            return Err(ValidateNotesError::WrongFederationId {
+                expected,
+                found: federation_id_prefix,
+            });
         }
 
         let tbs_pks = &self.cfg.tbs_pks;
 
-        for (idx, (amt, snote)) in notes.iter_items().enumerate() {
+        for (index, (amt, snote)) in notes.iter_items().enumerate() {
             let key = tbs_pks
                 .get(amt)
-                .ok_or_else(|| anyhow!("Note {idx} uses an invalid amount tier {amt}"))?;
+                .ok_or(ValidateNotesError::InvalidAmountTier { index, amount: amt })?;
 
             let note = snote.note();
             if !note.verify(*key) {
-                bail!("Note {idx} has an invalid federation signature");
+                return Err(ValidateNotesError::InvalidSignature { index });
             }
 
             let expected_nonce = Nonce(snote.spend_key.public_key());
             if note.nonce != expected_nonce {
-                bail!("Note {idx} cannot be spent using the supplied spend key");
+                return Err(ValidateNotesError::WrongSpendKey { index });
             }
         }
 
@@ -3093,7 +3101,7 @@ impl SpendableNoteUndecoded {
         Nonce(self.spend_key.public_key())
     }
 
-    pub fn decode(self) -> anyhow::Result<SpendableNote> {
+    pub fn decode(self) -> Result<SpendableNote, DecodeError> {
         Ok(SpendableNote {
             signature: Decodable::consensus_decode_partial_from_finite_reader(
                 &mut self.signature.as_slice(),
