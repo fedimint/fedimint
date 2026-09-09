@@ -658,12 +658,15 @@ impl GatewayPayInvoice {
             ));
         }
 
+        // `max_delay` becomes the lightning node's CLTV limit, and LND treats
+        // a limit of zero as "unset", enforcing its `--max-cltv-expiry`
+        // default instead. That would let the HTLC outlive the contract
+        // timelock, so zero must fail closed just like the underflow case.
         let max_delay = u64::from(account.contract.timelock)
             .checked_sub(consensus_block_count.saturating_sub(1))
-            .and_then(|delta| delta.checked_sub(TIMELOCK_DELTA));
-        if max_delay.is_none() {
-            return Err(OutgoingContractError::TimeoutTooClose);
-        }
+            .and_then(|delta| delta.checked_sub(TIMELOCK_DELTA))
+            .filter(|max_delay| *max_delay > 0)
+            .ok_or(OutgoingContractError::TimeoutTooClose)?;
 
         if payment_data.is_expired() {
             return Err(OutgoingContractError::InvoiceExpired(
@@ -672,7 +675,7 @@ impl GatewayPayInvoice {
         }
 
         Ok(PaymentParameters {
-            max_delay: max_delay.unwrap(),
+            max_delay,
             max_send_amount: account.amount,
             payment_data: payment_data.clone(),
         })
@@ -998,7 +1001,7 @@ mod tests {
     use fedimint_ln_common::contracts::outgoing::{OutgoingContract, OutgoingContractAccount};
     use lightning_invoice::RoutingFees;
 
-    use super::{GatewayPayInvoice, OutgoingContractError};
+    use super::{GatewayPayInvoice, OutgoingContractError, TIMELOCK_DELTA};
 
     const CONSENSUS_BLOCK_COUNT: u64 = 1;
     const INVOICE_AMOUNT: Amount = Amount::from_msats(1000);
@@ -1013,6 +1016,14 @@ mod tests {
     /// An account that is valid in every respect other than the payment hash,
     /// which the caller chooses so a mismatch can be tested in isolation.
     fn contract_account(hash: sha256::Hash) -> OutgoingContractAccount {
+        // Comfortably beyond `CONSENSUS_BLOCK_COUNT + TIMELOCK_DELTA`
+        contract_account_with_timelock(hash, 100)
+    }
+
+    fn contract_account_with_timelock(
+        hash: sha256::Hash,
+        timelock: u32,
+    ) -> OutgoingContractAccount {
         let gateway_key = secp256k1::PublicKey::from_keypair(&gateway_keypair());
 
         OutgoingContractAccount {
@@ -1020,8 +1031,7 @@ mod tests {
             contract: OutgoingContract {
                 hash,
                 gateway_key,
-                // Comfortably beyond `CONSENSUS_BLOCK_COUNT + TIMELOCK_DELTA`
-                timelock: 100,
+                timelock,
                 user_key: gateway_key,
                 cancelled: false,
             },
@@ -1045,8 +1055,15 @@ mod tests {
         contract_hash: sha256::Hash,
         invoice_hash: sha256::Hash,
     ) -> Result<(), OutgoingContractError> {
+        validate_account(&contract_account(contract_hash), invoice_hash)
+    }
+
+    fn validate_account(
+        account: &OutgoingContractAccount,
+        invoice_hash: sha256::Hash,
+    ) -> Result<(), OutgoingContractError> {
         GatewayPayInvoice::validate_outgoing_account(
-            &contract_account(contract_hash),
+            account,
             gateway_keypair(),
             CONSENSUS_BLOCK_COUNT,
             &payment_data(invoice_hash),
@@ -1065,6 +1082,35 @@ mod tests {
         let hash = sha256::Hash::hash(b"preimage");
 
         assert_eq!(validate(hash, hash), Ok(()));
+    }
+
+    /// A timelock close enough to the consensus height that `max_delay`
+    /// computes to zero must be rejected: LND treats a CLTV limit of zero as
+    /// "unset" and substitutes its `--max-cltv-expiry` default, which would
+    /// let the HTLC outlive the contract timelock and the user refund the
+    /// contract while the payment is still in flight.
+    #[test]
+    fn rejects_timelock_yielding_a_max_delay_of_zero() {
+        let hash = sha256::Hash::hash(b"preimage");
+        let zero_delay_timelock =
+            u32::try_from(CONSENSUS_BLOCK_COUNT - 1 + TIMELOCK_DELTA).expect("small constant");
+
+        let validate_with_timelock =
+            |timelock| validate_account(&contract_account_with_timelock(hash, timelock), hash);
+
+        // The smallest acceptable timelock, asserted so this test pins the
+        // boundary rather than passing against a check that rejects
+        // everything.
+        assert_eq!(validate_with_timelock(zero_delay_timelock + 1), Ok(()));
+
+        assert_eq!(
+            validate_with_timelock(zero_delay_timelock),
+            Err(OutgoingContractError::TimeoutTooClose)
+        );
+        assert_eq!(
+            validate_with_timelock(zero_delay_timelock - 1),
+            Err(OutgoingContractError::TimeoutTooClose)
+        );
     }
 
     #[test]

@@ -1112,6 +1112,15 @@ impl ILnRpcClient for GatewayLndClient {
                             ),
                         }
                     })?;
+                // LND reads a `cltv_limit` of zero as "no limit set" and
+                // enforces its `--max-cltv-expiry` default instead, silently
+                // lifting the caller's timelock cap.
+                if max_delay == 0 {
+                    return Err(LightningRpcError::FailedPayment {
+                        failure_reason: "a max delay of zero would disable LND's CLTV limit"
+                            .to_string(),
+                    });
+                }
                 let cltv_limit =
                     max_delay
                         .try_into()
