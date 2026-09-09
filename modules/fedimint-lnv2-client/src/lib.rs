@@ -563,6 +563,57 @@ impl LightningClientModule {
         .await
     }
 
+    /// Pays `invoice` through `gateway` at the terms the caller already
+    /// checked.
+    ///
+    /// [`Self::send`] reads the gateway's terms itself, so a caller that showed
+    /// the user a fee and asked for approval has no guarantee the funded
+    /// contract carries that fee: the gateway may change its schedule between
+    /// the two reads. This variant takes the `send_fee` and `expiration_delta`
+    /// the caller obtained from [`RoutingInfo::send_parameters`] and refuses
+    /// with [`SendWithTermsError::TermsChanged`], before funding anything, if
+    /// the gateway currently reports different terms. A cheaper fee counts
+    /// as changed too, so the funded contract always matches what was
+    /// approved. This binds the funded contract to the approved terms, not
+    /// the gateway's acceptance: a gateway that raises its schedule after the
+    /// check can still refuse the contract, in which case the payment is
+    /// refunded. The error carries the current terms for re-quoting.
+    pub async fn send_with_terms(
+        &self,
+        invoice: Bolt11Invoice,
+        gateway: SafeUrl,
+        send_fee: PaymentFee,
+        expiration_delta: u64,
+        custom_meta: Value,
+    ) -> Result<OperationId, SendWithTermsError> {
+        let (amount, operation_id) = self.validate_send_invoice(&invoice).await?;
+
+        let (gateway_api, routing_info) =
+            self.resolve_send_gateway(&invoice, Some(gateway)).await?;
+
+        let current = routing_info.send_parameters(&invoice);
+
+        if current != (send_fee, expiration_delta) {
+            return Err(SendWithTermsError::TermsChanged {
+                send_fee: current.0,
+                expiration_delta: current.1,
+            });
+        }
+
+        let operation_id = self
+            .fund_outgoing_contract(
+                invoice,
+                amount,
+                operation_id,
+                gateway_api,
+                routing_info,
+                custom_meta,
+            )
+            .await?;
+
+        Ok(operation_id)
+    }
+
     /// Checks that `invoice` is payable by this client and has not been
     /// attempted before, returning its amount in millisatoshis and the
     /// operation id a payment of it uses.
@@ -1504,6 +1555,22 @@ pub enum SendPaymentError {
         invoice_currency: Currency,
         federation_currency: Currency,
     },
+}
+
+/// A failure of [`LightningClientModule::send_with_terms`].
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum SendWithTermsError {
+    /// The gateway's current send terms differ from the ones the caller
+    /// checked. Carries the current terms so the caller can re-quote.
+    #[error("Gateway's send terms changed since they were checked")]
+    TermsChanged {
+        send_fee: PaymentFee,
+        expiration_delta: u64,
+    },
+    /// Any failure [`LightningClientModule::send`] can report.
+    #[error(transparent)]
+    Send(#[from] SendPaymentError),
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
