@@ -65,7 +65,7 @@ use fedimint_mintv2_common::config::{FeeConsensus, MintClientConfig, client_deno
 use fedimint_mintv2_common::{
     Denomination, KIND, MintCommonInit, MintInput, MintModuleTypes, MintOutput, Note, RecoveryItem,
 };
-use futures::{StreamExt, TryFutureExt, pin_mut};
+use futures::{StreamExt, pin_mut};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -1019,10 +1019,6 @@ impl MintClientModule {
     ) -> Result<OperationId, ReceiveECashError> {
         let operation_id = OperationId::from_encodable(&ecash);
 
-        if self.client_ctx.operation_exists(operation_id).await {
-            return Err(ReceiveECashError::AlreadyReceived);
-        }
-
         if ecash.mint() != Some(self.federation_id) {
             return Err(ReceiveECashError::WrongFederation);
         }
@@ -1051,14 +1047,15 @@ impl MintClientModule {
                 },
                 TransactionBuilder::new().with_inputs(input),
             )
-            .or_else(|_| async {
-                if self.client_ctx.operation_exists(operation_id).await {
-                    Err(ReceiveECashError::AlreadyReceived)
-                } else {
-                    Err(ReceiveECashError::InsufficientFunds)
+            .await
+            .map_err(|error| match error {
+                TransactionSubmitError::OperationAlreadyExists(_) => {
+                    ReceiveECashError::AlreadyReceived
                 }
-            })
-            .await?;
+                TransactionSubmitError::NoPrimaryModule { .. }
+                | TransactionSubmitError::PrimaryModule(..) => ReceiveECashError::InsufficientFunds,
+                _ => ReceiveECashError::Failed,
+            })?;
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
@@ -1346,26 +1343,48 @@ async fn download_slice(
     }
 }
 
+/// A failure to send e-cash by preparing notes to hand to the recipient.
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum SendECashError {
+    /// The client needs to reissue notes to make change, but has no
+    /// connection to the federation to do so.
     #[error("We need to reissue notes but the client is offline")]
     Offline,
+    /// The client's balance cannot cover the amount requested.
     #[error("The clients balance is insufficient")]
     InsufficientBalance,
+    /// The client failed to prepare the notes for a reason it cannot
+    /// recover from.
     #[error("A non-recoverable error has occurred")]
     Failure,
 }
 
+/// A failure to receive e-cash by reissuing it.
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum ReceiveECashError {
+    /// The e-cash was issued by a different federation.
     #[error("The ECash is from a different federation")]
     WrongFederation,
+
+    /// One of the notes is worth no more than the fee to reissue it.
     #[error("ECash contains an uneconomical denomination")]
     UneconomicalDenomination,
+
+    /// The client cannot cover the fee the reissue costs.
     #[error("Receiving ecash requires additional funds")]
     InsufficientFunds,
+
+    /// An operation for this exact e-cash already exists, so it was already
+    /// received.
     #[error("The ECash was already received")]
     AlreadyReceived,
+
+    /// The reissue transaction could not be submitted for a reason that is
+    /// not about funding.
+    #[error("The reissue transaction could not be submitted")]
+    Failed,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
