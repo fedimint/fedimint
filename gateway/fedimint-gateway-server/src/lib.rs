@@ -1714,7 +1714,10 @@ impl Gateway {
                 .subscribe_reissue_external_notes(operation_id)
                 .await
                 .map_err(|e| PublicGatewayError::ReceiveEcashError {
-                    failure_reason: format!("Could not subscribe to reissue operation: {e}"),
+                    failure_reason: format!(
+                        "Could not subscribe to reissue operation: {}",
+                        e.fmt_compact()
+                    ),
                 })?
                 .into_stream();
 

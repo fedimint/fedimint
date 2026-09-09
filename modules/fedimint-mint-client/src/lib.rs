@@ -60,7 +60,7 @@ use client_db::{
 use events::{NoteSpent, OOBNotesReissued, OOBNotesSpent, ReceivePaymentEvent, SendPaymentEvent};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
-use fedimint_client_module::error::TransactionSubmitError;
+use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs, RecoveryMode,
 };
@@ -121,7 +121,8 @@ use crate::client_db::{
 };
 pub use crate::error::{
     AwaitOutputFinalizedError, OOBNotesParseError, SelectNotesError, SendOOBNotesError,
-    SpendOOBError, ValidateNotesError,
+    SpendOOBError, SubscribeReissueExternalNotesError, SubscribeSpendNotesError,
+    ValidateNotesError,
 };
 use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStates};
 use crate::oob::{MintOOBStateMachine, MintOOBStates, MintOOBStatesCreatedMulti};
@@ -539,6 +540,10 @@ pub enum ReissueExternalNotesState {
     /// Some error happened and the operation failed.
     Failed(String),
 }
+
+/// The result of [`MintClientModule::subscribe_reissue_external_notes`].
+pub type SubscribeReissueExternalNotesResult =
+    Result<UpdateStreamOrOutcome<ReissueExternalNotesState>, SubscribeReissueExternalNotesError>;
 
 /// The high-level state of a raw e-cash spend operation started with
 /// [`MintClientModule::spend_notes_with_selector`].
@@ -2121,7 +2126,7 @@ impl MintClientModule {
     pub async fn subscribe_reissue_external_notes(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<ReissueExternalNotesState>> {
+    ) -> SubscribeReissueExternalNotesResult {
         let operation = self.mint_operation(operation_id).await?;
         let (txid, out_points) = match operation.meta::<MintOperationMeta>().variant {
             MintOperationMetaVariant::Reissuance {
@@ -2133,7 +2138,7 @@ impl MintClientModule {
                 // have a source for the txid
                 let txid = txid
                     .or(legacy_out_point.map(|out_point| out_point.txid))
-                    .context("Empty reissuance not permitted, this should never happen")?;
+                    .ok_or(SubscribeReissueExternalNotesError::NoTransaction)?;
 
                 let out_points = out_point_indices
                     .into_iter()
@@ -2143,7 +2148,9 @@ impl MintClientModule {
 
                 (txid, out_points)
             }
-            MintOperationMetaVariant::SpendOOB { .. } => bail!("Operation is not a reissuance"),
+            MintOperationMetaVariant::SpendOOB { .. } => {
+                return Err(SubscribeReissueExternalNotesError::NotAReissuance);
+            }
         };
 
         let client_ctx = self.client_ctx.clone();
@@ -2627,12 +2634,12 @@ impl MintClientModule {
     pub async fn subscribe_spend_notes(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<SpendOOBState>> {
+    ) -> Result<UpdateStreamOrOutcome<SpendOOBState>, SubscribeSpendNotesError> {
         let operation = self.mint_operation(operation_id).await?;
         let MintOperationMetaVariant::SpendOOB { no_timeout, .. } =
             operation.meta::<MintOperationMeta>().variant
         else {
-            bail!("Operation is not a out-of-band spend");
+            return Err(SubscribeSpendNotesError::NotAnOutOfBandSpend);
         };
 
         let client_ctx = self.client_ctx.clone();
@@ -2710,14 +2717,11 @@ impl MintClientModule {
         ))
     }
 
-    async fn mint_operation(&self, operation_id: OperationId) -> anyhow::Result<OperationLogEntry> {
-        let operation = self.client_ctx.get_operation(operation_id).await?;
-
-        if operation.operation_module_kind() != MintCommonInit::KIND.as_str() {
-            bail!("Operation is not a mint operation");
-        }
-
-        Ok(operation)
+    async fn mint_operation(
+        &self,
+        operation_id: OperationId,
+    ) -> Result<OperationLogEntry, OperationLookupError> {
+        self.client_ctx.get_operation(operation_id).await
     }
 
     async fn delete_spendable_note(

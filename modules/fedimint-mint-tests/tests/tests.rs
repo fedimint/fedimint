@@ -7,6 +7,7 @@ use fedimint_client::ClientHandleArc;
 use fedimint_client::backup::{ClientBackup, Metadata};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
 use fedimint_client_module::ClientModule;
+use fedimint_client_module::error::OperationLookupError;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
@@ -25,7 +26,8 @@ use fedimint_mint_client::client_db::{NextECashNoteIndexKey, NoteKey};
 use fedimint_mint_client::{
     MintClientInit, MintClientModule, Note, OOBNotes, ReissueExternalNotesError,
     ReissueExternalNotesState, SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
-    SpendOOBError, SpendOOBState, SpendableNote, SpendableNoteUndecoded, ValidateNotesError,
+    SpendOOBError, SpendOOBState, SpendableNote, SpendableNoteUndecoded,
+    SubscribeReissueExternalNotesError, SubscribeSpendNotesError, ValidateNotesError,
 };
 use fedimint_mint_common::{MintInput, MintInputV0, Nonce};
 use fedimint_mint_server::MintInit;
@@ -1769,6 +1771,29 @@ async fn validating_a_note_of_an_unissued_tier_reports_the_tier() -> anyhow::Res
     assert_matches!(
         err,
         ValidateNotesError::InvalidAmountTier { amount: a, .. } if a == amount
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn subscribing_to_an_unknown_operation_reports_not_found() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let mint = client.get_first_module::<MintClientModule>()?;
+    let operation_id = OperationId::new_random();
+
+    assert_matches!(
+        mint.subscribe_reissue_external_notes(operation_id).await,
+        Err(SubscribeReissueExternalNotesError::Operation(
+            OperationLookupError::NotFound(_)
+        ))
+    );
+    assert_matches!(
+        mint.subscribe_spend_notes(operation_id).await,
+        Err(SubscribeSpendNotesError::Operation(
+            OperationLookupError::NotFound(_)
+        ))
     );
 
     Ok(())

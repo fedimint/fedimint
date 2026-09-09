@@ -5,7 +5,9 @@
 //! there is one place to look.
 
 use fedimint_api_client::api::FederationError;
-use fedimint_client_module::error::{AddStateMachinesError, TransactionSubmitError};
+use fedimint_client_module::error::{
+    AddStateMachinesError, OperationLookupError, TransactionSubmitError,
+};
 use fedimint_core::Amount;
 use fedimint_core::config::FederationIdPrefix;
 use fedimint_core::db::DatabaseError;
@@ -106,6 +108,36 @@ impl From<FederationError> for SendOOBNotesError {
     }
 }
 
+/// A failure to follow a reissue operation.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum SubscribeReissueExternalNotesError {
+    /// No mint operation with this id exists.
+    #[error("The operation could not be looked up")]
+    Operation(#[from] OperationLookupError),
+
+    /// The operation exists, but it is an out-of-band spend.
+    #[error("The operation is an out-of-band spend, not a reissuance")]
+    NotAReissuance,
+
+    /// The operation records no transaction, which a reissuance always has.
+    #[error("The reissue operation records no transaction")]
+    NoTransaction,
+}
+
+/// A failure to follow an out-of-band spend operation.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum SubscribeSpendNotesError {
+    /// No mint operation with this id exists.
+    #[error("The operation could not be looked up")]
+    Operation(#[from] OperationLookupError),
+
+    /// The operation exists, but it is a reissuance.
+    #[error("The operation is a reissuance, not an out-of-band spend")]
+    NotAnOutOfBandSpend,
+}
+
 /// A note that cannot be spent.
 ///
 /// Reported both for notes received out of band and for notes already held in
@@ -171,6 +203,24 @@ impl From<SpendOOBError> for fedimint_core::util::ffi::UniffiError {
 #[cfg(feature = "uniffi")]
 impl From<ReissueExternalNotesError> for fedimint_core::util::ffi::UniffiError {
     fn from(e: ReissueExternalNotesError) -> Self {
+        use fedimint_core::util::FmtCompact as _;
+
+        Self::General(e.fmt_compact().to_string())
+    }
+}
+
+#[cfg(feature = "uniffi")]
+impl From<SubscribeReissueExternalNotesError> for fedimint_core::util::ffi::UniffiError {
+    fn from(e: SubscribeReissueExternalNotesError) -> Self {
+        use fedimint_core::util::FmtCompact as _;
+
+        Self::General(e.fmt_compact().to_string())
+    }
+}
+
+#[cfg(feature = "uniffi")]
+impl From<SubscribeSpendNotesError> for fedimint_core::util::ffi::UniffiError {
+    fn from(e: SubscribeSpendNotesError) -> Self {
         use fedimint_core::util::FmtCompact as _;
 
         Self::General(e.fmt_compact().to_string())
