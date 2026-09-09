@@ -1,7 +1,9 @@
 use std::pin::pin;
 
 use anyhow::ensure;
+use assert_matches::assert_matches;
 use async_stream::stream;
+use fedimint_client::error::OperationLookupError;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
 use fedimint_client::{ClientHandleArc, ModuleRecoveryCompleted, RootSecret};
@@ -186,6 +188,24 @@ async fn send_and_receive() -> anyhow::Result<()> {
     }
 
     ensure!(client_receive.get_balance_for_btc().await? >= Amount::from_sats(9900));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn awaiting_an_unknown_receive_operation_reports_not_found() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+    let operation_id = OperationId::new_random();
+
+    assert_matches!(
+        client
+            .get_first_module::<MintClientModule>()?
+            .await_final_receive_operation_state(operation_id)
+            .await,
+        Err(OperationLookupError::NotFound(_))
+    );
 
     Ok(())
 }

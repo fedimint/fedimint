@@ -36,6 +36,7 @@ use fedimint_client::transaction::{
     ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
 };
 use fedimint_client_module::db::ClientModuleMigrationFn;
+use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
     ClientModuleRecoveryPrepareArgs, RecoveryMode,
@@ -1085,7 +1086,10 @@ impl MintClientModule {
     /// rather than committed, so the client's notes are read but left
     /// untouched. The quote is point-in-time: it depends on the current
     /// inventory and can move as notes change.
-    pub async fn receive_fee_quote(&self, ecash: &ECash) -> anyhow::Result<FeeQuote> {
+    pub async fn receive_fee_quote(
+        &self,
+        ecash: &ECash,
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         // A receive submits the ecash notes as explicit inputs and no explicit
         // outputs; the shared, module-agnostic fee quote runs the primary-module
         // balancing (rebalancing + minting change) over the real inventory.
@@ -1107,7 +1111,6 @@ impl MintClientModule {
                 },
             )
             .await
-            .map_err(anyhow::Error::from)
     }
 
     /// Computes the fee a `send(amount)` would incur given the client's current
@@ -1123,7 +1126,7 @@ impl MintClientModule {
     /// inputs) via the shared, module-agnostic fee quote over the real
     /// inventory. The quote is point-in-time: it depends on the current
     /// inventory and can move as notes change.
-    pub async fn send_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+    pub async fn send_fee_quote(&self, amount: Amount) -> Result<FeeQuote, TransactionSubmitError> {
         let amount = round_to_multiple(amount, client_denominations().next().unwrap().amount());
 
         // Exact-change path: handing out existing notes never costs a fee.
@@ -1152,7 +1155,6 @@ impl MintClientModule {
                 },
             )
             .await
-            .map_err(anyhow::Error::from)
     }
 
     /// Returns whether the client's current notes can be handed out to cover
@@ -1203,7 +1205,7 @@ impl MintClientModule {
     pub async fn await_final_receive_operation_state(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<FinalReceiveOperationState> {
+    ) -> Result<FinalReceiveOperationState, OperationLookupError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
 

@@ -1764,7 +1764,7 @@ impl Gateway {
                 .await_final_receive_operation_state(operation_id)
                 .await
                 .map_err(|e| PublicGatewayError::ReceiveEcashError {
-                    failure_reason: e.to_string(),
+                    failure_reason: e.fmt_compact().to_string(),
                 })?;
             match final_state {
                 fedimint_mintv2_client::FinalReceiveOperationState::Success => {}

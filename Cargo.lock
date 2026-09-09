@@ -4542,6 +4542,7 @@ name = "fedimint-mintv2-tests"
 version = "0.13.0-alpha"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "async-stream",
  "bitcoin_hashes",
  "bls12_381",
