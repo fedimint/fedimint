@@ -261,3 +261,42 @@ pub enum FetchRecoverySliceError {
     #[error("The recovery slice could not be decoded")]
     Decode(#[from] DecodeError),
 }
+
+/// A failure to assemble the wallet's e-cash backup.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum PrepareEcashBackupError {
+    /// The federation could not be asked how far consensus has got, which the
+    /// backup records so a restore knows where to resume scanning.
+    #[error("The federation could not be reached")]
+    Federation(#[source] Box<FederationError>),
+
+    /// A note held in the wallet could not be decoded.
+    #[error("A stored note could not be decoded")]
+    Decode(#[from] DecodeError),
+}
+
+impl From<FederationError> for PrepareEcashBackupError {
+    fn from(source: FederationError) -> Self {
+        Self::Federation(Box::new(source))
+    }
+}
+
+/// A failure to repair an inconsistent wallet.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum RepairWalletError {
+    /// The federation could not be asked whether a note or a nonce was used.
+    #[error("The federation could not be reached")]
+    Federation(#[source] Box<FederationError>),
+
+    /// The repaired wallet could not be written back.
+    #[error("Database error")]
+    Database(#[from] DatabaseError),
+}
+
+impl From<FederationError> for RepairWalletError {
+    fn from(source: FederationError) -> Self {
+        Self::Federation(Box::new(source))
+    }
+}

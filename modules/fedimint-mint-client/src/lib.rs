@@ -58,7 +58,7 @@ use client_db::{
     ReusedNoteIndices, migrate_state_to_v2, migrate_to_v1,
 };
 use events::{NoteSpent, OOBNotesReissued, OOBNotesSpent, ReceivePaymentEvent, SendPaymentEvent};
-use fedimint_api_client::api::DynModuleApi;
+use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
 use fedimint_client_module::module::init::{
@@ -120,9 +120,9 @@ use crate::client_db::{
     NextECashNoteIndexKeyPrefix, NoteKey,
 };
 pub use crate::error::{
-    AwaitOutputFinalizedError, FetchRecoverySliceError, OOBNotesParseError, SelectNotesError,
-    SendOOBNotesError, SpendOOBError, SubscribeReissueExternalNotesError, SubscribeSpendNotesError,
-    ValidateNotesError,
+    AwaitOutputFinalizedError, FetchRecoverySliceError, OOBNotesParseError,
+    PrepareEcashBackupError, RepairWalletError, SelectNotesError, SendOOBNotesError, SpendOOBError,
+    SubscribeReissueExternalNotesError, SubscribeSpendNotesError, ValidateNotesError,
 };
 use crate::input::{MintInputCommon, MintInputStateMachine, MintInputStates};
 use crate::oob::{MintOOBStateMachine, MintOOBStates, MintOOBStatesCreatedMulti};
@@ -1057,7 +1057,7 @@ impl ClientModule for MintClientModule {
             )
             .await
             .map_err(|e| match e {
-                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::ClosureError { error, .. } => anyhow::Error::from(error),
                 AutocommitError::CommitFailed { last_error, .. } => {
                     anyhow!("Commit to DB failed: {last_error}")
                 }
@@ -2597,7 +2597,7 @@ impl MintClientModule {
     /// **Caution:** This reduces privacy and can lead to race conditions. **DO
     /// NOT** rely on it for receiving funds unless you really know what you are
     /// doing.
-    pub async fn check_note_spent(&self, oob_notes: &OOBNotes) -> anyhow::Result<bool> {
+    pub async fn check_note_spent(&self, oob_notes: &OOBNotes) -> FederationResult<bool> {
         use crate::api::MintFederationApi;
 
         let api_client = self.client_ctx.module_api();
@@ -2743,21 +2743,21 @@ impl MintClientModule {
         .expect("Must deleted existing spendable note");
     }
 
-    pub async fn advance_note_idx(&self, amount: Amount) -> anyhow::Result<DerivableSecret> {
+    pub async fn advance_note_idx(&self, amount: Amount) -> DerivableSecret {
         let db = self.client_ctx.module_db().clone();
 
-        Ok(db
-            .autocommit(
-                |dbtx, _| {
-                    Box::pin(async {
-                        Ok::<DerivableSecret, anyhow::Error>(
-                            self.new_note_secret(amount, dbtx).await,
-                        )
-                    })
-                },
-                None,
-            )
-            .await?)
+        db.autocommit(
+            |dbtx, _| {
+                Box::pin(async {
+                    Ok::<DerivableSecret, std::convert::Infallible>(
+                        self.new_note_secret(amount, dbtx).await,
+                    )
+                })
+            },
+            None,
+        )
+        .await
+        .expect("The commit is retried until it succeeds and the closure cannot fail")
     }
 
     /// Returns secrets for the note indices that were reused by previous
