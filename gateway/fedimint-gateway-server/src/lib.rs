@@ -550,7 +550,7 @@ async fn calculate_max_withdrawable(
         .max_withdrawable_amount(address, balance)
         .await
         .map_err(|err| AdminGatewayError::WithdrawError {
-            failure_reason: err.fmt_compact_anyhow().to_string(),
+            failure_reason: err.fmt_compact().to_string(),
         })?;
 
     // Everything the balance does not become an on-chain payment or miner fee
@@ -3015,13 +3015,16 @@ impl IAdminGateway for Gateway {
                         .map_err(|err| AdminGatewayError::WithdrawError {
                             failure_reason: format!(
                                 "Insufficient funds. Balance: {balance}: {}",
-                                err.fmt_compact_anyhow()
+                                err.fmt_compact()
                             ),
                         })?
                 }
                 BitcoinAmountOrAll::Amount(amount) => (
                     amount,
-                    wallet_module.get_withdraw_fees(&address, amount).await?,
+                    wallet_module
+                        .get_withdraw_fees(&address, amount)
+                        .await
+                        .map_err(|e| AdminGatewayError::Unexpected(e.into()))?,
                 ),
             },
         };
@@ -3084,7 +3087,8 @@ impl IAdminGateway for Gateway {
                         mint_fees: None,
                         peg_out_fees: wallet_module
                             .get_withdraw_fees(&address_checked, btc_amount)
-                            .await?,
+                            .await
+                            .map_err(|e| AdminGatewayError::Unexpected(e.into()))?,
                     }
                 } else if let Ok(wallet_module) = client
                     .value()

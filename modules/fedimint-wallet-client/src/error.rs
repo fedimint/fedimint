@@ -4,6 +4,7 @@
 //! one place for an integrator to look.
 
 use bitcoin::Network;
+use fedimint_api_client::api::FederationError;
 use fedimint_bitcoind::BitcoinRpcError;
 use fedimint_client_module::error::{OperationAlreadyExistsError, OperationLookupError};
 use fedimint_core::core::OperationId;
@@ -149,4 +150,39 @@ impl From<SubscribeDepositError> for fedimint_core::util::ffi::UniffiError {
 
         Self::General(e.fmt_compact().to_string())
     }
+}
+
+/// A failure to quote the on-chain fees of a peg-out.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum WithdrawFeesError {
+    /// The federation could not be asked, or its guardians disagreed.
+    #[error("The peg-out fees could not be fetched")]
+    Federation(#[source] Box<FederationError>),
+
+    /// The federation was reached and agreed, but it has no quote to give for
+    /// this amount.
+    #[error("The federation did not quote peg-out fees")]
+    NoQuote,
+}
+
+impl From<FederationError> for WithdrawFeesError {
+    fn from(source: FederationError) -> Self {
+        Self::Federation(Box::new(source))
+    }
+}
+
+/// A failure to work out the largest amount a "withdraw everything" sweep can
+/// send.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum MaxWithdrawableAmountError {
+    /// The on-chain fees the answer is computed against could not be quoted.
+    #[error("The peg-out fees could not be quoted")]
+    Fees(#[from] WithdrawFeesError),
+
+    /// The balance cannot cover the destination's dust limit plus the fees, so
+    /// there is no amount to withdraw.
+    #[error("The balance is too low to withdraw any amount after fees")]
+    BalanceTooLow,
 }

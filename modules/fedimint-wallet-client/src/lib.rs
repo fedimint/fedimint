@@ -42,6 +42,7 @@ use bitcoin::{Address, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, SupportsSafeDepositKey, TweakIdx};
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_bitcoind::{BitcoindTracked, DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
+use fedimint_client_module::error::TransactionSubmitError;
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs, RecoveryMode,
 };
@@ -94,7 +95,10 @@ use crate::client_db::{
     RecoveryStateKey, SupportsSafeDepositPrefix,
 };
 use crate::deposit::DepositStateMachine;
-pub use crate::error::{DepositAddressError, PegInError, SubscribeDepositError};
+pub use crate::error::{
+    DepositAddressError, MaxWithdrawableAmountError, PegInError, SubscribeDepositError,
+    WithdrawFeesError,
+};
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
 
 const WALLET_TWEAK_CHILD_ID: ChildId = ChildId(0);
@@ -871,11 +875,11 @@ impl WalletClientModule {
         &self,
         address: &bitcoin::Address,
         amount: bitcoin::Amount,
-    ) -> anyhow::Result<PegOutFees> {
+    ) -> Result<PegOutFees, WithdrawFeesError> {
         self.module_api
             .fetch_peg_out_fees(address, amount)
             .await?
-            .context("Federation didn't return peg-out fees")
+            .ok_or(WithdrawFeesError::NoQuote)
     }
 
     /// Computes the federation fee a peg-out of an on-chain output worth
@@ -892,7 +896,10 @@ impl WalletClientModule {
     /// The on-chain Bitcoin miner fee is deliberately excluded: it is part of
     /// the output `amount` (see [`Self::get_withdraw_fees`]), not the
     /// on-federation transaction fee.
-    pub async fn send_fee_quote(&self, amount: bitcoin::Amount) -> anyhow::Result<FeeQuote> {
+    pub async fn send_fee_quote(
+        &self,
+        amount: bitcoin::Amount,
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         let amount = fedimint_core::Amount::from_sats(amount.to_sat());
         self.client_ctx
             .fee_quote(
@@ -905,7 +912,6 @@ impl WalletClientModule {
                 },
             )
             .await
-            .map_err(anyhow::Error::from)
     }
 
     /// Finds the largest amount that can be withdrawn in full out of
@@ -945,7 +951,7 @@ impl WalletClientModule {
         &self,
         address: &bitcoin::Address,
         balance: fedimint_core::Amount,
-    ) -> anyhow::Result<(bitcoin::Amount, PegOutFees)> {
+    ) -> Result<(bitcoin::Amount, PegOutFees), MaxWithdrawableAmountError> {
         // Upper bound on the miner fee: the weight only grows as the federation
         // has to reach for more UTXOs, so no smaller withdrawal costs more.
         let max_fees = self
@@ -971,7 +977,7 @@ impl WalletClientModule {
             },
         )
         .await
-        .ok_or_else(|| anyhow!("Balance is too low to withdraw any amount after fees"))?;
+        .ok_or(MaxWithdrawableAmountError::BalanceTooLow)?;
 
         // `gross_up` rounded up to whole satoshis, so the largest affordable
         // amount already sits on a satoshi boundary; no value is lost here.

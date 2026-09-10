@@ -33,7 +33,7 @@ use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::client_db::{SupportsSafeDepositKey, TweakIdx};
 use fedimint_wallet_client::{
     AllocateDepositOutcome, DepositStateV2, MaybeNewAddress, PegInError, SubscribeDepositError,
-    WalletClientInit, WalletClientModule, WithdrawState,
+    WalletClientInit, WalletClientModule, WithdrawFeesError, WithdrawState,
 };
 use fedimint_wallet_common::config::WalletConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -681,10 +681,11 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     // See: https://github.com/fedimint/fedimint/issues/3604
     let address = bitcoin.get_new_address().await;
     let peg_out2 = PEG_OUT_AMOUNT_SATS;
-    let fees2 = wallet_module
+    // Must fail because change UTXOs are still being confirmed, and the caller
+    // gets the wallet's own fee-quote error rather than an opaque one.
+    let fees2: Result<PegOutFees, WithdrawFeesError> = wallet_module
         .get_withdraw_fees(&address, bsats(peg_out2))
         .await;
-    // Must fail because change UTXOs are still being confirmed
     assert!(fees2.is_err());
 
     let current_block = dyn_bitcoin_rpc.get_block_count().await?;
