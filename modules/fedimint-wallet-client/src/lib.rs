@@ -18,6 +18,8 @@ pub mod client_db;
 /// Legacy, state-machine based peg-ins, replaced by `pegin_monitor`
 /// but retained for time being to ensure existing peg-ins complete.
 mod deposit;
+/// Error types of the wallet client.
+pub mod error;
 pub mod events;
 use events::SendPaymentEvent;
 #[cfg(feature = "uniffi")]
@@ -92,6 +94,7 @@ use crate::client_db::{
     RecoveryStateKey, SupportsSafeDepositPrefix,
 };
 use crate::deposit::DepositStateMachine;
+pub use crate::error::PegInError;
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
 
 const WALLET_TWEAK_CHILD_ID: ChildId = ChildId(0);
@@ -1631,7 +1634,7 @@ impl WalletClientModule {
     pub async fn find_tweak_idx_by_address(
         &self,
         address: bitcoin::Address<NetworkUnchecked>,
-    ) -> anyhow::Result<TweakIdx> {
+    ) -> Result<TweakIdx, PegInError> {
         let data = self.data.clone();
         let Some((tweak_idx, _)) = self
             .db
@@ -1646,7 +1649,7 @@ impl WalletClientModule {
             .next()
             .await
         else {
-            bail!("Address not found in the list of derived keys");
+            return Err(PegInError::AddressNotDerived);
         };
 
         Ok(tweak_idx.0)
@@ -1654,7 +1657,7 @@ impl WalletClientModule {
     pub async fn find_tweak_idx_by_operation_id(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<TweakIdx> {
+    ) -> Result<TweakIdx, PegInError> {
         Ok(self
             .client_ctx
             .module_db()
@@ -1666,7 +1669,7 @@ impl WalletClientModule {
             .filter(|(_k, v)| future::ready(v.operation_id == operation_id))
             .next()
             .await
-            .ok_or_else(|| anyhow::format_err!("OperationId not found"))?
+            .ok_or(PegInError::OperationNotFound { operation_id })?
             .0
             .0)
     }
@@ -1674,7 +1677,7 @@ impl WalletClientModule {
     pub async fn get_pegin_tweak_idx(
         &self,
         tweak_idx: TweakIdx,
-    ) -> anyhow::Result<PegInTweakIndexData> {
+    ) -> Result<PegInTweakIndexData, PegInError> {
         self.client_ctx
             .module_db()
             .clone()
@@ -1682,7 +1685,7 @@ impl WalletClientModule {
             .await
             .get_value(&PegInTweakIndexKey(tweak_idx))
             .await
-            .ok_or_else(|| anyhow::format_err!("TweakIdx not found"))
+            .ok_or(PegInError::TweakIdxNotFound { tweak_idx })
     }
 
     pub async fn get_claimed_pegins(
@@ -1724,7 +1727,7 @@ impl WalletClientModule {
     pub async fn recheck_pegin_address_by_op_id(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), PegInError> {
         let tweak_idx = self.find_tweak_idx_by_operation_id(operation_id).await?;
 
         self.recheck_pegin_address(tweak_idx).await
@@ -1734,13 +1737,13 @@ impl WalletClientModule {
     pub async fn recheck_pegin_address_by_address(
         &self,
         address: bitcoin::Address<NetworkUnchecked>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), PegInError> {
         self.recheck_pegin_address(self.find_tweak_idx_by_address(address).await?)
             .await
     }
 
     /// Schedule given address for immediate re-check for deposits
-    pub async fn recheck_pegin_address(&self, tweak_idx: TweakIdx) -> anyhow::Result<()> {
+    pub async fn recheck_pegin_address(&self, tweak_idx: TweakIdx) -> Result<(), PegInError> {
         self.db
             .autocommit(
                 |dbtx, _| {
@@ -1749,7 +1752,7 @@ impl WalletClientModule {
                         let db_val = dbtx
                             .get_value(&db_key)
                             .await
-                            .ok_or_else(|| anyhow::format_err!("DBKey not found"))?;
+                            .ok_or(PegInError::TweakIdxNotFound { tweak_idx })?;
 
                         dbtx.insert_entry(
                             &db_key,
@@ -1765,12 +1768,18 @@ impl WalletClientModule {
                             sender.send_replace(());
                         });
 
-                        Ok::<_, anyhow::Error>(())
+                        Ok::<_, PegInError>(())
                     })
                 },
                 Some(100),
             )
-            .await?;
+            .await
+            .map_err(|e| match e {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    PegInError::Database(last_error)
+                }
+            })?;
 
         Ok(())
     }
@@ -1780,7 +1789,7 @@ impl WalletClientModule {
         &self,
         operation_id: OperationId,
         num_deposits: usize,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), PegInError> {
         let tweak_idx = self.find_tweak_idx_by_operation_id(operation_id).await?;
         self.await_num_deposits(tweak_idx, num_deposits).await
     }
@@ -1789,7 +1798,7 @@ impl WalletClientModule {
         &self,
         address: bitcoin::Address<NetworkUnchecked>,
         num_deposits: usize,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), PegInError> {
         self.await_num_deposits(self.find_tweak_idx_by_address(address).await?, num_deposits)
             .await
     }
@@ -1799,7 +1808,7 @@ impl WalletClientModule {
         &self,
         tweak_idx: TweakIdx,
         num_deposits: usize,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), PegInError> {
         let operation_id = self.get_pegin_tweak_idx(tweak_idx).await?.operation_id;
 
         let mut receiver = self.pegin_claimed_receiver.clone();
@@ -1817,7 +1826,10 @@ impl WalletClientModule {
                 debug!(target: LOG_CLIENT_MODULE_WALLET, has=pegins.len(), "Not enough deposits");
                 self.recheck_pegin_address(tweak_idx).await?;
                 runtime::sleep(backoff.next().unwrap_or_default()).await;
-                receiver.changed().await?;
+                receiver
+                    .changed()
+                    .await
+                    .map_err(|_| PegInError::MonitorStopped)?;
                 continue;
             }
 
@@ -1832,8 +1844,8 @@ impl WalletClientModule {
                 debug!(target: LOG_CLIENT_MODULE_WALLET, out_points=?change, "Ensuring deposists claimed");
                 let tx_subscriber = self.client_ctx.transaction_updates(operation_id).await;
 
-                if let Err(e) = tx_subscriber.await_tx_accepted(transaction_id).await {
-                    bail!("{e}");
+                if let Err(reason) = tx_subscriber.await_tx_accepted(transaction_id).await {
+                    return Err(PegInError::TransactionRejected { reason });
                 }
 
                 debug!(target: LOG_CLIENT_MODULE_WALLET, out_points=?change, "Ensuring outputs claimed");

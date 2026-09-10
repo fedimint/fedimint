@@ -10,6 +10,7 @@ use fedimint_api_client::api::DynGlobalApi;
 use fedimint_client::ClientHandleArc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_connectors::ConnectorRegistry;
+use fedimint_core::core::OperationId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{
     DatabaseError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt,
@@ -28,10 +29,10 @@ use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing_core::config::API_AUTH;
 use fedimint_wallet_client::api::WalletFederationApi;
-use fedimint_wallet_client::client_db::SupportsSafeDepositKey;
+use fedimint_wallet_client::client_db::{SupportsSafeDepositKey, TweakIdx};
 use fedimint_wallet_client::{
-    AllocateDepositOutcome, DepositStateV2, MaybeNewAddress, WalletClientInit, WalletClientModule,
-    WithdrawState,
+    AllocateDepositOutcome, DepositStateV2, MaybeNewAddress, PegInError, WalletClientInit,
+    WalletClientModule, WithdrawState,
 };
 use fedimint_wallet_common::config::WalletConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -2519,4 +2520,31 @@ fn verify_bitcoind_backend() {
             "mock_kind".into()
         }
     )
+}
+
+/// The three peg-in lookups each say which thing was not found, instead of
+/// three interchangeable strings.
+#[tokio::test(flavor = "multi_thread")]
+async fn peg_in_lookups_name_what_was_not_found() -> anyhow::Result<()> {
+    skip_if_not_wallet_test_group!("1");
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
+
+    let operation_id = OperationId::new_random();
+    assert_matches!(
+        wallet_module
+            .find_tweak_idx_by_operation_id(operation_id)
+            .await,
+        Err(PegInError::OperationNotFound { operation_id: found }) if found == operation_id
+    );
+
+    let tweak_idx = TweakIdx(u64::MAX);
+    assert_matches!(
+        wallet_module.get_pegin_tweak_idx(tweak_idx).await,
+        Err(PegInError::TweakIdxNotFound { tweak_idx: found }) if found == tweak_idx
+    );
+
+    Ok(())
 }

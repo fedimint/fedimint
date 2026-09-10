@@ -1644,7 +1644,8 @@ impl Gateway {
         if let Ok(wallet_module) = client.value().get_first_module::<WalletClientModule>() {
             wallet_module
                 .recheck_pegin_address_by_address(payload.address)
-                .await?;
+                .await
+                .map_err(|e| AdminGatewayError::Unexpected(e.into()))?;
             Ok(())
         } else if client
             .value()
