@@ -288,6 +288,59 @@ impl GatewayLdkClient {
     }
 }
 
+/// Why an invoice must not be registered for a payment hash on the node.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InboundRegistrationRefusal {
+    /// `pay()` holds the per-hash lock, so an outbound payment for the hash
+    /// is being dispatched or awaited right now.
+    OutboundInFlight,
+    /// The node holds an outbound record for the hash, pending or terminal.
+    OutboundRecorded,
+}
+
+impl std::fmt::Display for InboundRegistrationRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::OutboundInFlight => {
+                write!(f, "an outbound payment for this hash is in flight")
+            }
+            Self::OutboundRecorded => {
+                write!(f, "the node holds an outbound payment for this hash")
+            }
+        }
+    }
+}
+
+/// Decides whether an invoice may be registered for a payment hash the node
+/// may already know as one of our outbound payments.
+///
+/// `ldk-node` keys BOLT11 payments by `PaymentId(payment_hash)` in both
+/// directions, and registering an invoice overwrites whatever record shares
+/// the key. Registering one for a hash we pay would erase the outbound record
+/// `pay()` reads its result from, so a settled payment would be reported as
+/// failed and the outgoing contract forfeited while the payee keeps the funds.
+///
+/// `outbound_lock_acquired` is whether the caller took the per-hash lock
+/// `pay()` holds for the whole life of a payment, and `existing_direction` is
+/// the direction of the node's record for the hash, if any. A terminal
+/// outbound record is refused as well: a restarted state machine re-runs
+/// `pay()` and needs that record to recover the payment's result instead of
+/// re-dispatching. An existing inbound record is left to the caller, whose
+/// own reservation already rejects duplicate registrations.
+fn check_inbound_registration(
+    outbound_lock_acquired: bool,
+    existing_direction: Option<PaymentDirection>,
+) -> Result<(), InboundRegistrationRefusal> {
+    if !outbound_lock_acquired {
+        return Err(InboundRegistrationRefusal::OutboundInFlight);
+    }
+
+    match existing_direction {
+        Some(PaymentDirection::Outbound) => Err(InboundRegistrationRefusal::OutboundRecorded),
+        Some(PaymentDirection::Inbound) | None => Ok(()),
+    }
+}
+
 impl Drop for GatewayLdkClient {
     fn drop(&mut self) {
         self.task_group.shutdown();
@@ -511,12 +564,44 @@ impl ILnRpcClient for GatewayLdkClient {
         };
 
         let invoice = match payment_hash_or {
-            Some(payment_hash) => self.node.bolt11_payment().receive_for_hash(
-                create_invoice_request.amount_msat,
-                &description,
-                create_invoice_request.expiry_secs,
-                payment_hash,
-            ),
+            Some(payment_hash) => {
+                // `pay()` holds this lock for the whole life of an outbound
+                // payment, so failing to take it means a payment for this hash
+                // is in flight right now. Keeping it until `receive_for_hash()`
+                // has run means `pay()` cannot write its outbound record between
+                // our check and the registration's insert, which would
+                // overwrite it.
+                let payment_id = PaymentId(payment_hash.0);
+                let outbound_lock_guard = self
+                    .outbound_lightning_payment_lock_pool
+                    .try_lock(payment_id);
+                let existing_direction = self
+                    .node
+                    .payment(&payment_id)
+                    .map(|details| details.direction);
+                if let Err(refusal) =
+                    check_inbound_registration(outbound_lock_guard.is_some(), existing_direction)
+                {
+                    warn!(
+                        target: LOG_LIGHTNING,
+                        payment_hash = %hex::encode(payment_hash.0),
+                        %refusal,
+                        "Refusing to register an invoice for a payment hash we pay outbound"
+                    );
+                    return Err(LightningRpcError::FailedToGetInvoice {
+                        failure_reason: format!(
+                            "Payment hash cannot be registered for an invoice: {refusal}"
+                        ),
+                    });
+                }
+
+                self.node.bolt11_payment().receive_for_hash(
+                    create_invoice_request.amount_msat,
+                    &description,
+                    create_invoice_request.expiry_secs,
+                    payment_hash,
+                )
+            }
             None => self.node.bolt11_payment().receive(
                 create_invoice_request.amount_msat,
                 &description,
