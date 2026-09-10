@@ -294,7 +294,10 @@ impl GatewayLdkClient {
                     .send(InterceptPaymentRequest {
                         payment_hash: Hash::from_slice(&payment_hash.0)
                             .expect("Failed to create Hash"),
+                        // LDK reports the real claimable amount, so the two
+                        // amounts coincide here.
                         amount_msat: claimable_amount_msat,
+                        incoming_amount_msat: claimable_amount_msat,
                         expiry: claim_deadline.unwrap_or_default(),
                         short_channel_id: None,
                         // LDK claims payments through its own payment store,

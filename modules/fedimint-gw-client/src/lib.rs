@@ -344,10 +344,18 @@ impl GatewayClientModule {
         IncomingSmError,
     > {
         let operation_id = OperationId(htlc.payment_hash.to_byte_array());
+        // The amount passed here only guards solvency: the contract is always
+        // funded at the offer amount, and `create_incoming_contract_output`
+        // rejects the HTLC if this value falls short of it. It must therefore
+        // be the amount actually locked in the incoming HTLC, never the
+        // sender-controlled onion forward amount -- otherwise a sender could
+        // lock a token amount while declaring a large `amt_to_forward`, pass
+        // the check, and have the gateway fund the full offer amount from its
+        // own ecash against a near-worthless HTLC.
         let (incoming_output, amount, contract_id) = create_incoming_contract_output(
             &self.module_api,
             htlc.payment_hash,
-            htlc.outgoing_amount_msat,
+            htlc.incoming_amount_msat,
             &self.redeem_key,
         )
         .await?;
@@ -646,7 +654,7 @@ impl GatewayClientModule {
                 IncomingPaymentStarted {
                     contract_id,
                     payment_hash: htlc.payment_hash,
-                    invoice_amount: htlc.outgoing_amount_msat,
+                    invoice_amount: htlc.incoming_amount_msat,
                     contract_amount: amount,
                     operation_id,
                 },
@@ -1199,7 +1207,11 @@ impl TryFrom<InterceptPaymentRequest> for Htlc {
     fn try_from(s: InterceptPaymentRequest) -> Result<Self, Self::Error> {
         Ok(Self {
             payment_hash: s.payment_hash,
-            incoming_amount_msat: Amount::from_msats(s.amount_msat),
+            // Keep the two amounts distinct: `incoming_amount_msat` is the real
+            // value locked in the HTLC, while `amount_msat` is the sender-written
+            // onion forward amount. Collapsing them lets a sender forge the
+            // amount the gateway funds against.
+            incoming_amount_msat: Amount::from_msats(s.incoming_amount_msat),
             outgoing_amount_msat: Amount::from_msats(s.amount_msat),
             incoming_expiry: s.expiry,
             short_channel_id: s.short_channel_id,
