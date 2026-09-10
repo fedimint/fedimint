@@ -33,8 +33,8 @@ use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::client_db::{SupportsSafeDepositKey, TweakIdx};
 use fedimint_wallet_client::{
     AllocateDepositOutcome, DepositStateV2, MaybeNewAddress, PegInError, PegOutError,
-    PegOutRequest, SubscribeDepositError, WalletClientInit, WalletClientModule, WithdrawFeesError,
-    WithdrawState,
+    PegOutRequest, SubscribeDepositError, SubscribeWithdrawError, WalletClientInit,
+    WalletClientModule, WithdrawFeesError, WithdrawState,
 };
 use fedimint_wallet_common::config::WalletConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -2607,6 +2607,28 @@ async fn peg_out_to_a_mainnet_address_is_rejected() -> anyhow::Result<()> {
             })
             .await,
         Err(PegOutError::WrongNetwork { .. })
+    );
+
+    Ok(())
+}
+
+/// Subscribing to a withdrawal that does not exist says so, and says it with
+/// the shared operation-lookup error rather than a local string.
+#[tokio::test(flavor = "multi_thread")]
+async fn subscribing_to_an_unknown_withdrawal_reports_not_found() -> anyhow::Result<()> {
+    skip_if_not_wallet_test_group!("1");
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    assert_matches!(
+        client
+            .get_first_module::<WalletClientModule>()?
+            .subscribe_withdraw_updates(OperationId::new_random())
+            .await,
+        Err(SubscribeWithdrawError::Operation(
+            OperationLookupError::NotFound(_)
+        ))
     );
 
     Ok(())

@@ -3035,7 +3035,8 @@ impl IAdminGateway for Gateway {
             .map_err(|e| AdminGatewayError::Unexpected(e.into()))?;
         let mut updates = wallet_module
             .subscribe_withdraw_updates(operation_id)
-            .await?
+            .await
+            .map_err(|e| AdminGatewayError::Unexpected(e.into()))?
             .into_stream();
 
         while let Some(update) = updates.next().await {

@@ -33,7 +33,9 @@ use std::future;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use anyhow::{Context as AnyhowContext, anyhow, bail};
+use anyhow::Context as AnyhowContext;
+#[cfg(feature = "uniffi")]
+use anyhow::anyhow;
 use async_stream::{stream, try_stream};
 use backup::WalletModuleBackup;
 use bitcoin::address::NetworkUnchecked;
@@ -97,7 +99,7 @@ use crate::client_db::{
 use crate::deposit::DepositStateMachine;
 pub use crate::error::{
     DepositAddressError, MaxWithdrawableAmountError, PegInError, PegOutError,
-    SubscribeDepositError, WithdrawFeesError,
+    SubscribeDepositError, SubscribeWithdrawError, WithdrawFeesError,
 };
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
 
@@ -1950,23 +1952,15 @@ impl WalletClientModule {
     pub async fn subscribe_withdraw_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<WithdrawState>> {
-        let operation = self
-            .client_ctx
-            .get_operation(operation_id)
-            .await
-            .with_context(|| anyhow!("Operation not found: {}", operation_id.fmt_short()))?;
-
-        if operation.operation_module_kind() != WalletCommonInit::KIND.as_str() {
-            bail!("Operation is not a wallet operation");
-        }
+    ) -> Result<UpdateStreamOrOutcome<WithdrawState>, SubscribeWithdrawError> {
+        let operation = self.client_ctx.get_operation(operation_id).await?;
 
         let operation_meta = operation.meta::<WalletOperationMeta>();
 
         let (WalletOperationMetaVariant::Withdraw { change, .. }
         | WalletOperationMetaVariant::RbfWithdraw { change, .. }) = operation_meta.variant
         else {
-            bail!("Operation is not a withdraw operation");
+            return Err(SubscribeWithdrawError::NotAWithdrawal);
         };
 
         let mut operation_stream = self.notifier.subscribe(operation_id).await;

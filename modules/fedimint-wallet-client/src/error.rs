@@ -218,3 +218,26 @@ impl From<PegOutError> for fedimint_core::util::ffi::UniffiError {
         Self::General(e.fmt_compact().to_string())
     }
 }
+
+/// A failure to follow a withdrawal operation.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum SubscribeWithdrawError {
+    /// The operation could not be looked up, or belongs to another module.
+    #[error("The withdrawal operation could not be looked up")]
+    Operation(#[from] OperationLookupError),
+
+    /// The operation exists and belongs to the wallet, but it is a deposit
+    /// rather than a withdrawal.
+    #[error("The operation is not a withdrawal")]
+    NotAWithdrawal,
+}
+
+#[cfg(feature = "uniffi")]
+impl From<SubscribeWithdrawError> for fedimint_core::util::ffi::UniffiError {
+    fn from(e: SubscribeWithdrawError) -> Self {
+        use fedimint_core::util::FmtCompact as _;
+
+        Self::General(e.fmt_compact().to_string())
+    }
+}
