@@ -1161,10 +1161,14 @@ impl Gateway {
         // using the LNv2 protocol. If the `payment_hash` is not registered,
         // this payment is either a legacy Lightning payment or the end destination is
         // not a Fedimint.
+        // Match and fund against the amount actually locked in the incoming
+        // HTLC, not the sender-controlled onion forward amount, so a forged
+        // `amt_to_forward` cannot satisfy the registered contract's amount
+        // check while only a token amount is really locked.
         let (contract, client) = self
             .get_registered_incoming_contract_and_client_v2(
                 PaymentImage::Hash(htlc_request.payment_hash),
-                htlc_request.amount_msat,
+                htlc_request.incoming_amount_msat,
             )
             .await?;
 
@@ -1176,7 +1180,7 @@ impl Gateway {
                 htlc_request.incoming_chan_id,
                 htlc_request.htlc_id,
                 contract,
-                htlc_request.amount_msat,
+                htlc_request.incoming_amount_msat,
             )
             .await
         {

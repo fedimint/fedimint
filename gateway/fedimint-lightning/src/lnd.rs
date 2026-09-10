@@ -274,7 +274,10 @@ impl GatewayLndClient {
                     let intercept = InterceptPaymentRequest {
                         payment_hash: Hash::from_slice(&hold.r_hash.clone())
                             .expect("Failed to convert to Hash"),
+                        // A HOLD invoice reports the real paid amount, so the
+                        // two amounts coincide here.
                         amount_msat: hold.amt_paid_msat as u64,
+                        incoming_amount_msat: hold.amt_paid_msat as u64,
                         // The rest of the fields are not used in LNv2 and can be removed once LNv1
                         // support is over
                         expiry: hold.expiry as u32,
@@ -537,7 +540,12 @@ impl GatewayLndClient {
                     // Forward all HTLCs to gatewayd, gatewayd will filter them based on scid
                     let intercept = InterceptPaymentRequest {
                         payment_hash: Hash::from_slice(&htlc.payment_hash).expect("Failed to convert payment Hash"),
+                        // `outgoing_amount_msat` is the sender-written onion
+                        // `amt_to_forward`; `incoming_amount_msat` is the amount
+                        // actually locked in the incoming HTLC. Carry both so
+                        // downstream funding is decided against the real value.
                         amount_msat: htlc.outgoing_amount_msat,
+                        incoming_amount_msat: htlc.incoming_amount_msat,
                         expiry: htlc.incoming_expiry,
                         short_channel_id: Some(htlc.outgoing_requested_chan_id),
                         incoming_chan_id: chan_id,
