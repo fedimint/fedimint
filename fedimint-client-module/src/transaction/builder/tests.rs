@@ -1,19 +1,20 @@
 use core::fmt;
-use std::convert::Infallible;
 use std::fmt::Write as _;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use assert_matches::assert_matches;
 use bitcoin::key::Secp256k1;
 use fedimint_core::Amount;
 use fedimint_core::core::{Input, IntoDynInstance, ModuleKind, Output};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::Amounts;
+use fedimint_core::module::{AmountUnit, Amounts};
 
 use super::{
     ClientInputBundle, ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote,
     TransactionBuilder, max_affordable_send_amount,
 };
+use crate::error::{InsufficientBalanceError, TransactionSubmitError};
 use crate::module::OutPointRange;
 use crate::transaction::{ClientInput, ClientInputSM};
 
@@ -204,9 +205,10 @@ async fn max_affordable_no_fees_spends_whole_balance() {
         Amount::from_msats(1),
         balance,
         |invoice| invoice, // no gateway fee
-        |_contract| async { Ok::<_, Infallible>(federation_fee(Amount::ZERO)) },
+        |_contract| async { Ok::<_, TransactionSubmitError>(federation_fee(Amount::ZERO)) },
     )
-    .await;
+    .await
+    .expect("no fatal quote failure");
 
     assert_eq!(result, Some(balance));
 }
@@ -222,9 +224,10 @@ async fn max_affordable_leaves_room_for_gateway_fee() {
         Amount::from_msats(1),
         balance,
         gross_up,
-        |_contract| async { Ok::<_, Infallible>(federation_fee(Amount::ZERO)) },
+        |_contract| async { Ok::<_, TransactionSubmitError>(federation_fee(Amount::ZERO)) },
     )
     .await
+    .expect("no fatal quote failure")
     .expect("balance covers a payment")
     .msats;
 
@@ -244,9 +247,12 @@ async fn max_affordable_leaves_room_for_module_fee() {
         Amount::from_msats(1),
         balance,
         |invoice| invoice, // no gateway fee, so contract == invoice
-        move |contract| async move { Ok::<_, Infallible>(federation_fee(module_fee(contract))) },
+        move |contract| async move {
+            Ok::<_, TransactionSubmitError>(federation_fee(module_fee(contract)))
+        },
     )
     .await
+    .expect("no fatal quote failure")
     .expect("balance covers a payment")
     .msats;
 
@@ -274,9 +280,12 @@ async fn max_affordable_handles_stepwise_fee() {
         Amount::from_msats(1),
         balance,
         |invoice| invoice,
-        move |contract| async move { Ok::<_, Infallible>(federation_fee(module_fee(contract))) },
+        move |contract| async move {
+            Ok::<_, TransactionSubmitError>(federation_fee(module_fee(contract)))
+        },
     )
-    .await;
+    .await
+    .expect("no fatal quote failure");
 
     // Above 500_000 the fee jump pushes the total over the balance, so the
     // maximum spendable amount sits exactly at the step.
@@ -292,9 +301,10 @@ async fn max_affordable_respects_max_bound() {
         Amount::from_msats(1),
         Amount::from_msats(100), // cap well below the balance
         |invoice| invoice,
-        |_contract| async { Ok::<_, Infallible>(federation_fee(Amount::ZERO)) },
+        |_contract| async { Ok::<_, TransactionSubmitError>(federation_fee(Amount::ZERO)) },
     )
-    .await;
+    .await
+    .expect("no fatal quote failure");
 
     assert_eq!(result, Some(Amount::from_msats(100)));
 }
@@ -309,18 +319,19 @@ async fn max_affordable_none_when_min_unaffordable() {
         Amount::from_msats(1),
         balance,
         |invoice: Amount| Amount::from_msats(invoice.msats + 1000), // 1000 msat base fee
-        |_contract| async { Ok::<_, Infallible>(federation_fee(Amount::ZERO)) },
+        |_contract| async { Ok::<_, TransactionSubmitError>(federation_fee(Amount::ZERO)) },
     )
-    .await;
+    .await
+    .expect("no fatal quote failure");
 
     assert_eq!(result, None);
 }
 
 #[tokio::test]
 async fn max_affordable_treats_quote_error_as_ceiling() {
-    // The fee quote errors once the contract exceeds what the balance can fund,
-    // exactly as real note selection does. The solver must treat that as the
-    // ceiling rather than overestimating.
+    // The fee quote reports `InsufficientFunds` once the contract exceeds what
+    // the balance can fund, exactly as real note selection does. The solver
+    // must treat that as the ceiling rather than overestimating.
     let cap = 400_000;
     let balance = Amount::from_msats(1_000_000);
 
@@ -331,16 +342,44 @@ async fn max_affordable_treats_quote_error_as_ceiling() {
         |invoice| invoice,
         move |contract: Amount| async move {
             if contract.msats > cap {
-                // The quote error is never inspected, so any type will do.
-                Err("insufficient funds")
+                Err(TransactionSubmitError::InsufficientFunds(
+                    InsufficientBalanceError {
+                        requested_amount: contract,
+                        total_amount: Amount::from_msats(cap),
+                    },
+                ))
             } else {
                 Ok(federation_fee(Amount::ZERO))
             }
         },
     )
-    .await;
+    .await
+    .expect("no fatal quote failure");
 
     assert_eq!(result, Some(Amount::from_msats(cap)));
+}
+
+#[tokio::test]
+async fn max_affordable_surfaces_fatal_quote_failure() {
+    // A quote failure unrelated to the balance (e.g. a database or federation
+    // error) cannot get better by probing a smaller amount, so the solver must
+    // surface it to the caller instead of treating it as unaffordable.
+    let balance = Amount::from_msats(1_000_000);
+
+    let result = max_affordable_send_amount(
+        balance,
+        Amount::from_msats(1),
+        balance,
+        |invoice| invoice,
+        |_contract| async {
+            Err(TransactionSubmitError::NoPrimaryModule {
+                unit: AmountUnit::BITCOIN,
+            })
+        },
+    )
+    .await;
+
+    assert_matches!(result, Err(TransactionSubmitError::NoPrimaryModule { .. }));
 }
 
 #[tokio::test]
@@ -364,10 +403,11 @@ async fn max_affordable_seeds_search_near_the_top() {
         gross_up,
         |contract| {
             quote_calls.fetch_add(1, Ordering::Relaxed);
-            async move { Ok::<_, Infallible>(federation_fee(fed_fee(contract))) }
+            async move { Ok::<_, TransactionSubmitError>(federation_fee(fed_fee(contract))) }
         },
     )
     .await
+    .expect("no fatal quote failure")
     .expect("balance covers a payment")
     .msats;
 

@@ -208,6 +208,10 @@ pub enum MaxWithdrawableAmountError {
         /// The destination's dust limit, the smallest output it can receive.
         dust_limit: bitcoin::Amount,
     },
+
+    /// The fee probe failed for a reason unrelated to the balance.
+    #[error("The fee quote for the withdrawal failed")]
+    Quote(#[source] TransactionSubmitError),
 }
 
 /// A failure to start an on-chain withdrawal from a peg-out request.

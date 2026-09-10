@@ -3253,6 +3253,7 @@ version = "0.13.0-alpha"
 dependencies = [
  "anyhow",
  "aquamarine",
+ "assert_matches",
  "async-stream",
  "async-trait",
  "bitcoin",

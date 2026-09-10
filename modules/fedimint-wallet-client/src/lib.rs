@@ -945,8 +945,9 @@ impl WalletClientModule {
     /// set or feerate moves before the peg-out is processed it is rejected, and
     /// the caller should retry with a fresh quote.
     ///
-    /// Returns an error if the balance cannot cover the destination's dust
-    /// limit plus fees.
+    /// Returns [`MaxWithdrawableAmountError::BalanceTooLow`] if the balance
+    /// cannot cover the destination's dust limit plus fees, or
+    /// [`MaxWithdrawableAmountError::Quote`] if the fee probe itself failed.
     pub async fn max_withdrawable_amount(
         &self,
         address: &bitcoin::Address,
@@ -978,6 +979,7 @@ impl WalletClientModule {
             },
         )
         .await
+        .map_err(MaxWithdrawableAmountError::Quote)?
         .ok_or(MaxWithdrawableAmountError::BalanceTooLow {
             balance,
             dust_limit,

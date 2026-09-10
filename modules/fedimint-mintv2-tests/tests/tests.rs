@@ -689,13 +689,13 @@ async fn send_without_funds_reports_insufficient_balance() -> anyhow::Result<()>
     // Deliberately no `issue_ecash` call: the wallet is empty.
     let client = fed.new_client().await;
 
-    assert_eq!(
+    assert_matches!(
         client
             .get_first_module::<MintClientModule>()?
             .send(Amount::from_sats(1_000), Value::Null, false)
             .await
             .map(|(_operation_id, ecash)| ecash.amount()),
-        Err(SendECashError::InsufficientBalance),
+        Err(SendECashError::InsufficientBalance)
     );
 
     Ok(())

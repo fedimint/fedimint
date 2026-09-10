@@ -59,6 +59,7 @@ use client_db::{
 use events::{NoteSpent, OOBNotesReissued, OOBNotesSpent, ReceivePaymentEvent, SendPaymentEvent};
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
+pub use fedimint_client_module::error::InsufficientBalanceError;
 use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs, RecoveryMode,
@@ -110,7 +111,6 @@ use output::MintOutputStatesCreatedMulti;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tbs::AggregatePublicKey;
-use thiserror::Error;
 use tracing::{debug, warn};
 
 use crate::backup::EcashBackup;
@@ -2973,22 +2973,6 @@ async fn select_notes_from_stream<Note>(
                 total_amount,
             });
         }
-    }
-}
-
-#[derive(Debug, Clone, Error)]
-pub struct InsufficientBalanceError {
-    pub requested_amount: Amount,
-    pub total_amount: Amount,
-}
-
-impl std::fmt::Display for InsufficientBalanceError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Insufficient balance: requested {} but only {} available",
-            self.requested_amount, self.total_amount
-        )
     }
 }
 

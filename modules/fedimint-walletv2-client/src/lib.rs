@@ -333,7 +333,8 @@ impl WalletClientModule {
     /// fall below the dust limit is still rejected by the guardians.
     ///
     /// Returns [`SendError::InsufficientFunds`] if the balance cannot cover
-    /// the dust limit plus fees.
+    /// the dust limit plus fees, or [`SendError::Failed`] if the fee probe
+    /// itself failed.
     pub async fn max_sendable_amount(
         &self,
         balance: Amount,
@@ -353,6 +354,7 @@ impl WalletClientModule {
             |funded: Amount| self.send_fee_quote(bitcoin::Amount::from_sat(funded.msats / 1000)),
         )
         .await
+        .map_err(SendError::Failed)?
         .ok_or(SendError::InsufficientFunds)?;
 
         // `gross_up` rounded up to whole satoshis, so the largest affordable
@@ -450,8 +452,7 @@ impl WalletClientModule {
             )
             .await
             .map_err(|error| match error {
-                TransactionSubmitError::NoPrimaryModule { .. }
-                | TransactionSubmitError::PrimaryModule(..) => SendError::InsufficientFunds,
+                TransactionSubmitError::InsufficientFunds(_) => SendError::InsufficientFunds,
                 error => SendError::Failed(error),
             })?;
 

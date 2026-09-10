@@ -19,6 +19,7 @@ use rand::{CryptoRng, Rng, RngCore};
 use secp256k1::Secp256k1;
 use tracing::warn;
 
+use crate::error::TransactionSubmitError;
 use crate::module::{IdxRange, OutPointRange, StateGenerator};
 use crate::sm::{self, DynState};
 use crate::{
@@ -498,7 +499,7 @@ impl FeeQuote {
 /// gross_up(x) + fee_quote(gross_up(x)).total().get_bitcoin() <= balance
 /// ```
 ///
-/// or `None` if even `min_amount` is unaffordable.
+/// or `Ok(None)` if even `min_amount` is unaffordable.
 ///
 /// The cost is not a closed form of `x`: the federation fee is charged per
 /// note, so note selection, denomination rounding, change and dust move it in
@@ -506,8 +507,10 @@ impl FeeQuote {
 /// evaluates the real quote via a monotonic binary search — each step a single,
 /// non-committing `fee_quote` dry-run over the current inventory — and only
 /// ever advances the lower bound to a verified-affordable amount, so the result
-/// never overestimates. A `fee_quote` error (e.g. the balance cannot fund a
-/// value that large) is treated as unaffordable.
+/// never overestimates. An `InsufficientFunds` quote counts as unaffordable;
+/// any other quote failure is returned to the caller (a database or federation
+/// failure will not get better by probing a smaller amount, so the search
+/// aborts on the first one instead).
 ///
 /// To keep those dry-runs cheap the search is *seeded near the top*: a first
 /// pass binary-searches `gross_up` alone (pure arithmetic, no quotes) for the
@@ -517,24 +520,24 @@ impl FeeQuote {
 ///
 /// The LNv2 and LNv1 send-all flows share this solver; they differ only in
 /// `gross_up` (the gateway fee model) and which `fee_quote` they pass.
-pub async fn max_affordable_send_amount<GrossUp, Quote, Fut, E>(
+pub async fn max_affordable_send_amount<GrossUp, Quote, Fut>(
     balance: Amount,
     min_amount: Amount,
     max_amount: Amount,
     gross_up: GrossUp,
     fee_quote: Quote,
-) -> Option<Amount>
+) -> Result<Option<Amount>, TransactionSubmitError>
 where
     GrossUp: Fn(Amount) -> Amount,
     Quote: Fn(Amount) -> Fut,
-    Fut: Future<Output = Result<FeeQuote, E>>,
+    Fut: Future<Output = Result<FeeQuote, TransactionSubmitError>>,
 {
     // Nothing above the balance can ever be funded, so cap the upper bound.
     let hi_bound = max_amount.msats.min(balance.msats);
     let lo_bound = min_amount.msats;
 
     if lo_bound > hi_bound {
-        return None;
+        return Ok(None);
     }
 
     // The maximum is never near the bottom of `[lo_bound, hi_bound]`: it sits
@@ -546,7 +549,7 @@ where
     // the small window the federation fee opens up, instead of the whole balance.
     if gross_up(Amount::from_msats(lo_bound)).msats > balance.msats {
         // The balance can't even fund the smallest amount's gross-up.
-        return None;
+        return Ok(None);
     }
     let fundable_max = {
         let mut lo = lo_bound;
@@ -570,35 +573,42 @@ where
     // the federation fee, less the amount) is monotone non-decreasing, so the
     // overhead here is an upper bound on the overhead at the true maximum, and
     // `balance - overhead` is therefore a proven-affordable, tight lower bound.
-    // If the quote errors — real note selection can't fund a value this large —
-    // the seed is skipped and the search falls back to the full bracket below.
+    // If the quote reports `InsufficientFunds` — real note selection can't fund
+    // a value this large — the seed is skipped and the search falls back to the
+    // full bracket below. Any other failure is fatal and returned immediately.
     let funded = gross_up(Amount::from_msats(fundable_max));
-    if let Ok(quote) = fee_quote(funded).await {
-        let total = funded
-            .msats
-            .saturating_add(quote.total().get_bitcoin().msats);
-        if total <= balance.msats {
-            // Even the largest fundable amount fits once the fee is included.
-            return Some(Amount::from_msats(fundable_max));
+    match fee_quote(funded).await {
+        Ok(quote) => {
+            let total = funded
+                .msats
+                .saturating_add(quote.total().get_bitcoin().msats);
+            if total <= balance.msats {
+                // Even the largest fundable amount fits once the fee is included.
+                return Ok(Some(Amount::from_msats(fundable_max)));
+            }
+            let overhead = total.saturating_sub(fundable_max);
+            let seed = balance
+                .msats
+                .saturating_sub(overhead)
+                .clamp(lo_bound, fundable_max);
+            if send_amount_affordable(Amount::from_msats(seed), balance, &gross_up, &fee_quote)
+                .await?
+            {
+                lo = seed;
+                lo_affordable = true;
+            }
         }
-        let overhead = total.saturating_sub(fundable_max);
-        let seed = balance
-            .msats
-            .saturating_sub(overhead)
-            .clamp(lo_bound, fundable_max);
-        if send_amount_affordable(Amount::from_msats(seed), balance, &gross_up, &fee_quote).await {
-            lo = seed;
-            lo_affordable = true;
-        }
+        Err(e) if e.is_insufficient_funds() => {}
+        Err(e) => return Err(e),
     }
 
     // Without a usable seed the search must still start from a verified
     // affordable lower bound, or give up if even `lo_bound` is unaffordable.
     if !lo_affordable
         && !send_amount_affordable(Amount::from_msats(lo_bound), balance, &gross_up, &fee_quote)
-            .await
+            .await?
     {
-        return None;
+        return Ok(None);
     }
 
     // Exact maximum within the (now tight) `[lo, hi]` bracket.
@@ -606,41 +616,43 @@ where
         // Bias the midpoint up so the search converges toward `hi`.
         let mid = lo + (hi - lo).div_ceil(2);
 
-        if send_amount_affordable(Amount::from_msats(mid), balance, &gross_up, &fee_quote).await {
+        if send_amount_affordable(Amount::from_msats(mid), balance, &gross_up, &fee_quote).await? {
             lo = mid;
         } else {
             hi = mid - 1;
         }
     }
 
-    Some(Amount::from_msats(lo))
+    Ok(Some(Amount::from_msats(lo)))
 }
 
 /// Whether sending `amount` is payable in full out of `balance`: the funded
 /// value `gross_up(amount)` plus its federation `fee_quote` must fit within the
-/// balance. A quote error (the balance cannot fund a value this large) counts
-/// as unaffordable, making this safe as the monotone predicate for
-/// [`max_affordable_send_amount`].
-async fn send_amount_affordable<GrossUp, Quote, Fut, E>(
+/// balance. An `InsufficientFunds` quote counts as unaffordable, making this
+/// safe as the monotone predicate for [`max_affordable_send_amount`]; any other
+/// quote failure is propagated, since it will not get better by probing a
+/// smaller amount.
+async fn send_amount_affordable<GrossUp, Quote, Fut>(
     amount: Amount,
     balance: Amount,
     gross_up: &GrossUp,
     fee_quote: &Quote,
-) -> bool
+) -> Result<bool, TransactionSubmitError>
 where
     GrossUp: Fn(Amount) -> Amount,
     Quote: Fn(Amount) -> Fut,
-    Fut: Future<Output = Result<FeeQuote, E>>,
+    Fut: Future<Output = Result<FeeQuote, TransactionSubmitError>>,
 {
     let funded_amount = gross_up(amount);
 
     if funded_amount > balance {
-        return false;
+        return Ok(false);
     }
 
     match fee_quote(funded_amount).await {
-        Ok(quote) => funded_amount + quote.total().get_bitcoin() <= balance,
-        Err(_) => false,
+        Ok(quote) => Ok(funded_amount + quote.total().get_bitcoin() <= balance),
+        Err(e) if e.is_insufficient_funds() => Ok(false),
+        Err(e) => Err(e),
     }
 }
 
