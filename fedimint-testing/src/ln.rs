@@ -1,5 +1,6 @@
-use std::sync::Arc;
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_stream::stream;
@@ -40,6 +41,11 @@ pub struct FakeLightningTest {
     pub gateway_node_pub_key: secp256k1::PublicKey,
     gateway_node_sec_key: secp256k1::SecretKey,
     amount_sent: AtomicU64,
+    /// Payment hashes this node has dispatched, mirroring a real node's
+    /// outbound payment store so `outbound_payment_exists` can distinguish a
+    /// payment sent before a state machine restart from one that never left
+    /// the gateway.
+    outbound_payments: Mutex<HashSet<sha256::Hash>>,
 }
 
 impl FakeLightningTest {
@@ -53,7 +59,15 @@ impl FakeLightningTest {
             gateway_node_sec_key: SecretKey::from_keypair(&kp),
             gateway_node_pub_key: PublicKey::from_keypair(&kp),
             amount_sent,
+            outbound_payments: Mutex::new(HashSet::new()),
         }
+    }
+
+    fn record_outbound_payment(&self, payment_hash: sha256::Hash) {
+        self.outbound_payments
+            .lock()
+            .expect("Not poisoned")
+            .insert(payment_hash);
     }
 }
 
@@ -158,6 +172,8 @@ impl ILnRpcClient for FakeLightningTest {
             });
         }
 
+        self.record_outbound_payment(*invoice.payment_hash());
+
         Ok(PayInvoiceResponse {
             preimage: Preimage(MOCK_INVOICE_PREIMAGE),
         })
@@ -169,11 +185,13 @@ impl ILnRpcClient for FakeLightningTest {
 
     async fn outbound_payment_exists(
         &self,
-        _payment_hash: sha256::Hash,
+        payment_hash: sha256::Hash,
     ) -> Result<bool, LightningRpcError> {
-        // Fake payments complete inline, so a restarted state machine never
-        // has an in-flight payment to resume.
-        Ok(false)
+        Ok(self
+            .outbound_payments
+            .lock()
+            .expect("Not poisoned")
+            .contains(&payment_hash))
     }
 
     async fn pay_private(
@@ -190,6 +208,8 @@ impl ILnRpcClient for FakeLightningTest {
                 failure_reason: "Invoice was invalid".to_string(),
             });
         }
+
+        self.record_outbound_payment(invoice.payment_hash);
 
         Ok(PayInvoiceResponse {
             preimage: Preimage(MOCK_INVOICE_PREIMAGE),
@@ -353,5 +373,48 @@ impl ILnRpcClient for FakeLightningTest {
 
     fn sync_wallet(&self) -> Result<(), LightningRpcError> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The fake's outbound record backs `outbound_payment_exists`, which the
+    /// gateway state machines use to distinguish a payment dispatched before
+    /// a restart from one that never left the gateway. A record that answered
+    /// wrongly would make the resume-past-expiry tests pass or fail for the
+    /// wrong reason.
+    #[tokio::test]
+    async fn outbound_record_tracks_dispatched_payments() {
+        let ln = FakeLightningTest::new();
+        let invoice = ln
+            .invoice(Amount::from_sats(1000), None)
+            .expect("can create invoice");
+        let payment_hash = *invoice.payment_hash();
+
+        assert!(
+            !ln.outbound_payment_exists(payment_hash)
+                .await
+                .expect("fake lookup cannot fail"),
+            "no payment has been dispatched yet"
+        );
+
+        ln.pay(invoice, 0, Amount::ZERO)
+            .await
+            .expect("fake payment succeeds");
+
+        assert!(
+            ln.outbound_payment_exists(payment_hash)
+                .await
+                .expect("fake lookup cannot fail"),
+            "the dispatched payment must be on record"
+        );
+        assert!(
+            !ln.outbound_payment_exists(sha256::Hash::hash(b"never dispatched"))
+                .await
+                .expect("fake lookup cannot fail"),
+            "an unrelated hash must not be reported as dispatched"
+        );
     }
 }
