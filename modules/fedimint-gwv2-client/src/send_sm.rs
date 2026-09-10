@@ -158,13 +158,11 @@ impl SendStateMachine {
     ) -> Result<PaymentResponse, Cancelled> {
         let LightningInvoice::Bolt11(invoice) = invoice;
 
-        // The following two checks may fail in edge cases since they have inherent
-        // timing assumptions. Therefore, they may only be checked after we have created
-        // the state machine such that we can cancel the contract.
-        if invoice.is_expired() {
-            return Err(Cancelled::InvoiceExpired);
-        }
-
+        // `max_delay` is computed once when the state machine is created and
+        // persisted, so this check cannot drift across a restart. It guards
+        // every rail, not just Lightning: after paying out, a swap races the
+        // outgoing contract's expiration to claim it, the same race an HTLC
+        // runs against the contract timelock.
         if max_delay == 0 {
             return Err(Cancelled::TimeoutTooClose);
         }
@@ -173,6 +171,16 @@ impl SendStateMachine {
             return Err(Cancelled::Underfunded);
         };
 
+        // Invoice expiry, by contrast, reads the wall clock, and this state
+        // machine re-runs from scratch on every restart: the invoice can
+        // expire while a payment dispatched before a crash is still in
+        // flight, and that payment settles or fails regardless of invoice
+        // expiry. Cancelling on expiry alone would forfeit a contract the
+        // in-flight payment can still claim. Each rail below therefore
+        // resumes anything it already started unconditionally and consults
+        // this verdict only before dispatching fresh.
+        let allow_fresh_dispatch = !invoice.is_expired();
+
         // To make gateway operation easier, we check if the invoice was created using
         // the LNv1 protocol and if the gateway supports the target federation.
         // If it does, we can fund an LNv1 incoming contract to satisfy the LNv2
@@ -180,10 +188,10 @@ impl SendStateMachine {
         if let Some(client) = context.gateway.is_lnv1_invoice(&invoice).await {
             let final_state = context
                 .gateway
-                .relay_lnv1_swap(client.value(), &invoice)
+                .relay_lnv1_swap(client.value(), &invoice, allow_fresh_dispatch)
                 .await;
             return match final_state {
-                Ok(final_receive_state) => match final_receive_state {
+                Ok(Some(final_receive_state)) => match final_receive_state {
                     FinalReceiveState::Rejected => Err(Cancelled::Rejected),
                     FinalReceiveState::Success(preimage) => Ok(PaymentResponse {
                         preimage,
@@ -192,6 +200,7 @@ impl SendStateMachine {
                     FinalReceiveState::Refunded => Err(Cancelled::Refunded),
                     FinalReceiveState::Failure => Err(Cancelled::Failure),
                 },
+                Ok(None) => Err(Cancelled::InvoiceExpired),
                 Err(e) => Err(Cancelled::FinalizationError(e.to_string())),
             };
         }
@@ -211,10 +220,11 @@ impl SendStateMachine {
                         invoice
                             .amount_milli_satoshis()
                             .expect("amountless invoices are not supported"),
+                        allow_fresh_dispatch,
                     )
                     .await
                 {
-                    Ok(final_receive_state) => match final_receive_state {
+                    Ok(Some(final_receive_state)) => match final_receive_state {
                         FinalReceiveState::Rejected => Err(Cancelled::Rejected),
                         FinalReceiveState::Success(preimage) => Ok(PaymentResponse {
                             preimage,
@@ -223,10 +233,23 @@ impl SendStateMachine {
                         FinalReceiveState::Refunded => Err(Cancelled::Refunded),
                         FinalReceiveState::Failure => Err(Cancelled::Failure),
                     },
+                    Ok(None) => Err(Cancelled::InvoiceExpired),
                     Err(e) => Err(Cancelled::FinalizationError(e.to_string())),
                 }
             }
             None => {
+                // A payment the node already knows resolves through `pay`'s
+                // idempotent resume path, so expiry only refuses a dispatch
+                // that never happened.
+                if !allow_fresh_dispatch
+                    && !context
+                        .gateway
+                        .outbound_payment_exists(*invoice.payment_hash())
+                        .await
+                {
+                    return Err(Cancelled::InvoiceExpired);
+                }
+
                 let preimage = context
                     .gateway
                     .pay(invoice, max_delay, max_fee)

@@ -3272,6 +3272,38 @@ impl Gateway {
 
         Ok((registered_incoming_contract.contract, client))
     }
+
+    /// Answers whether the connected Lightning node has any record of an
+    /// outbound payment for `payment_hash`, retrying transient lookup
+    /// failures until the node itself can answer.
+    ///
+    /// Serves [`IGatewayClientV1::outbound_payment_exists`] and
+    /// [`IGatewayClientV2::outbound_payment_exists`]: a wrong `false` lets a
+    /// resumed state machine cancel a contract whose payment is still in
+    /// flight, so no answer is synthesised from a failure.
+    async fn await_outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool {
+        loop {
+            let lightning_context = self.await_lightning_context().await;
+
+            match lightning_context
+                .lnrpc
+                .outbound_payment_exists(payment_hash)
+                .await
+            {
+                Ok(exists) => return exists,
+                Err(err) => {
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %err.fmt_compact(),
+                        %payment_hash,
+                        "Failed to check for a dispatched payment, retrying",
+                    );
+                }
+            }
+
+            sleep(LIGHTNING_CONTEXT_RETRY_INTERVAL).await;
+        }
+    }
 }
 
 #[async_trait]
@@ -3346,6 +3378,10 @@ impl IGatewayClientV2 for Gateway {
             .map(|response| response.preimage.0)
     }
 
+    async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool {
+        self.await_outbound_payment_exists(payment_hash).await
+    }
+
     async fn min_contract_amount(
         &self,
         federation_id: &FederationId,
@@ -3380,7 +3416,8 @@ impl IGatewayClientV2 for Gateway {
         &self,
         client: &ClientHandleArc,
         invoice: &Bolt11Invoice,
-    ) -> anyhow::Result<FinalReceiveState> {
+        allow_fresh_dispatch: bool,
+    ) -> anyhow::Result<Option<FinalReceiveState>> {
         let swap_params = SwapParameters {
             payment_hash: *invoice.payment_hash(),
             amount_msat: Amount::from_msats(
@@ -3392,7 +3429,12 @@ impl IGatewayClientV2 for Gateway {
         let lnv1 = client
             .get_first_module::<GatewayClientModule>()
             .expect("No LNv1 module");
-        let operation_id = lnv1.gateway_handle_direct_swap(swap_params).await?;
+        let Some(operation_id) = lnv1
+            .gateway_handle_direct_swap(swap_params, allow_fresh_dispatch)
+            .await?
+        else {
+            return Ok(None);
+        };
         let mut stream = lnv1
             .gateway_subscribe_ln_receive(operation_id)
             .await?
@@ -3422,7 +3464,7 @@ impl IGatewayClientV2 for Gateway {
             }
         }
 
-        Ok(final_state)
+        Ok(Some(final_state))
     }
 }
 
@@ -3534,6 +3576,10 @@ impl IGatewayClientV1 for Gateway {
                     .await
             }
         }
+    }
+
+    async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool {
+        self.await_outbound_payment_exists(payment_hash).await
     }
 
     async fn complete_htlc(

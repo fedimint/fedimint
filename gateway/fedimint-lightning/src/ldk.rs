@@ -422,6 +422,15 @@ impl ILnRpcClient for GatewayLdkClient {
         }
     }
 
+    async fn outbound_payment_exists(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<bool, LightningRpcError> {
+        Ok(self
+            .outbound_payment(PaymentId(payment_hash.to_byte_array()))
+            .is_some())
+    }
+
     async fn route_htlcs<'a>(
         mut self: Box<Self>,
         _task_group: &TaskGroup,
