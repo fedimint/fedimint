@@ -33,7 +33,7 @@ use std::future;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use anyhow::{Context as AnyhowContext, anyhow, bail, ensure};
+use anyhow::{Context as AnyhowContext, anyhow, bail};
 use async_stream::{stream, try_stream};
 use backup::WalletModuleBackup;
 use bitcoin::address::NetworkUnchecked;
@@ -94,7 +94,7 @@ use crate::client_db::{
     RecoveryStateKey, SupportsSafeDepositPrefix,
 };
 use crate::deposit::DepositStateMachine;
-pub use crate::error::PegInError;
+pub use crate::error::{DepositAddressError, PegInError};
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
 
 const WALLET_TWEAK_CHILD_ID: ChildId = ChildId(0);
@@ -700,7 +700,7 @@ impl ClientModule for WalletClientModule {
                     let req: PegInRequest = serde_json::from_value(request)?;
                     let response = self.peg_in(req)
                         .await
-                        .map_err(|e| anyhow::anyhow!("peg_in failed: {e}"))?;
+                        .map_err(|e| anyhow::anyhow!("peg_in failed: {}", e.fmt_compact()))?;
                     let result = serde_json::to_value(&response)?;
                     yield result;
                 },
@@ -1031,16 +1031,11 @@ impl WalletClientModule {
         ))
     }
 
-    pub async fn peg_in(&self, req: PegInRequest) -> anyhow::Result<PegInResponse> {
+    pub async fn peg_in(&self, req: PegInRequest) -> Result<PegInResponse, DepositAddressError> {
         let deposit_address = self.safe_allocate_deposit_address(req.extra_meta).await?;
 
         Ok(PegInResponse {
-            deposit_address: Address::from_script(
-                &deposit_address.address.script_pubkey(),
-                self.get_network(),
-            )?
-            .as_unchecked()
-            .clone(),
+            deposit_address: deposit_address.address.into_unchecked(),
             operation_id: deposit_address.operation_id,
         })
     }
@@ -1126,14 +1121,13 @@ impl WalletClientModule {
     pub async fn safe_allocate_deposit_address<M>(
         &self,
         extra_meta: M,
-    ) -> anyhow::Result<DepositAddressInfo>
+    ) -> Result<DepositAddressInfo, DepositAddressError>
     where
         M: Serialize + MaybeSend + MaybeSync,
     {
-        ensure!(
-            self.supports_safe_deposit().await,
-            "Could not verify that the wallet module consensus version supports safe deposits",
-        );
+        if !self.supports_safe_deposit().await {
+            return Err(DepositAddressError::SafeDepositUnverified);
+        }
 
         self.allocate_deposit_address_expert_only(extra_meta).await
     }
@@ -1158,7 +1152,7 @@ impl WalletClientModule {
     pub async fn allocate_deposit_address_expert_only<M>(
         &self,
         extra_meta: M,
-    ) -> anyhow::Result<DepositAddressInfo>
+    ) -> Result<DepositAddressInfo, DepositAddressError>
     where
         M: Serialize + MaybeSend + MaybeSync,
     {
@@ -1213,11 +1207,10 @@ impl WalletClientModule {
             )
             .await
             .map_err(|e| match e {
-                AutocommitError::CommitFailed {
-                    last_error,
-                    attempts,
-                } => anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
                 AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    DepositAddressError::Database(last_error)
+                }
             })?;
 
         Ok(deposit_address)
@@ -1263,7 +1256,7 @@ impl WalletClientModule {
     pub async fn allocate_deposit_address_pooled_stateless(
         &self,
         max_gap_size: usize,
-    ) -> anyhow::Result<MaybeNewAddress> {
+    ) -> Result<MaybeNewAddress, DepositAddressError> {
         let max_gap_size_u64 = u64::try_from(max_gap_size).unwrap_or(u64::MAX);
         let extra_meta_value = serde_json::Value::Null;
         let result = self
@@ -1291,7 +1284,7 @@ impl WalletClientModule {
                                 })
                                 .collect();
 
-                            return Ok::<_, anyhow::Error>(
+                            return Ok::<_, DepositAddressError>(
                                 MaybeNewAddress::TooManyUnusedAddresses(addresses),
                             );
                         }
@@ -1338,11 +1331,10 @@ impl WalletClientModule {
             )
             .await
             .map_err(|e| match e {
-                AutocommitError::CommitFailed {
-                    last_error,
-                    attempts,
-                } => anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
                 AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    DepositAddressError::Database(last_error)
+                }
             })?;
 
         Ok(result)
@@ -1396,7 +1388,7 @@ impl WalletClientModule {
     pub async fn allocate_deposit_address_pooled(
         &self,
         max_gap_size: usize,
-    ) -> anyhow::Result<(DepositAddressInfo, AllocateDepositOutcome)> {
+    ) -> Result<(DepositAddressInfo, AllocateDepositOutcome), DepositAddressError> {
         let stateless = self
             .allocate_deposit_address_pooled_stateless(max_gap_size)
             .await?;
@@ -1429,18 +1421,15 @@ impl WalletClientModule {
                         let existing = dbtx
                             .get_value(&PegInTweakIndexKey(reused_address.tweak_idx))
                             .await
-                            .with_context(|| {
-                                format!(
-                                    "Pooled address disappeared while reusing {}",
-                                    reused_address.tweak_idx
-                                )
+                            .ok_or(DepositAddressError::PooledAddressDisappeared {
+                                tweak_idx: reused_address.tweak_idx,
                             })?;
 
-                        ensure!(
-                            existing.claimed.is_empty(),
-                            "Pooled address was used while reusing {}",
-                            reused_address.tweak_idx
-                        );
+                        if !existing.claimed.is_empty() {
+                            return Err(DepositAddressError::PooledAddressUsed {
+                                tweak_idx: reused_address.tweak_idx,
+                            });
+                        }
 
                         dbtx.insert_entry(&PegInPoolCursorKey, &reused_address.tweak_idx.next())
                             .await;
@@ -1470,7 +1459,7 @@ impl WalletClientModule {
                             sender.send_replace(());
                         });
 
-                        Ok::<_, anyhow::Error>((
+                        Ok::<_, DepositAddressError>((
                             reused_address,
                             AllocateDepositOutcome::Reused {
                                 original_tweak_idx: existing_tweak_idx,
@@ -1482,11 +1471,10 @@ impl WalletClientModule {
             )
             .await
             .map_err(|e| match e {
-                AutocommitError::CommitFailed {
-                    last_error,
-                    attempts,
-                } => anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
                 AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    DepositAddressError::Database(last_error)
+                }
             })?;
 
         Ok(result)

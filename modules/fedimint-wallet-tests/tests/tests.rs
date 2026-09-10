@@ -1334,6 +1334,16 @@ async fn allocate_deposit_address_pooled_zero_gap_reuses_until_used() -> anyhow:
         assert_eq!(deposit_address.tweak_idx, tweak_idx0);
     }
 
+    // The pooled allocator reports its own failures, not an opaque string.
+    let typed: Result<_, fedimint_wallet_client::DepositAddressError> =
+        wallet_module.allocate_deposit_address_pooled(0).await;
+    let (deposit_address, outcome) = typed?;
+    assert_matches!(
+        outcome,
+        AllocateDepositOutcome::Reused { original_tweak_idx } if original_tweak_idx == tweak_idx0
+    );
+    assert_eq!(deposit_address.address, addr0);
+
     let operations = client
         .operation_log()
         .paginate_operations_rev(10, None)

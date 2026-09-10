@@ -3,6 +3,8 @@
 //! Every failure this module reports to its callers is named here, so there is
 //! one place for an integrator to look.
 
+use fedimint_bitcoind::BitcoinRpcError;
+use fedimint_client_module::error::OperationAlreadyExistsError;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::DatabaseError;
 use thiserror::Error;
@@ -54,4 +56,55 @@ pub enum PegInError {
     /// The peg-in monitor stopped, so no further deposit will ever be claimed.
     #[error("The peg-in monitor is no longer running")]
     MonitorStopped,
+}
+
+/// A failure to hand out a deposit address.
+///
+/// Covers both the plain allocation and the pooled one, which can also lose a
+/// race against a deposit landing on the address it was about to reuse.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum DepositAddressError {
+    /// The client has never been online to confirm that the federation's
+    /// wallet module handles every deposit safely.
+    #[error("The federation was not verified to support safe deposits")]
+    SafeDepositUnverified,
+
+    /// An operation for this deposit address already exists.
+    #[error("The deposit address's operation already exists")]
+    OperationAlreadyExists(#[from] OperationAlreadyExistsError),
+
+    /// The bitcoin backend would not start watching the address, so a deposit
+    /// to it would never be noticed.
+    #[error("The bitcoin backend could not watch the deposit address")]
+    BitcoinRpc(#[from] BitcoinRpcError),
+
+    /// The deposit address could not be written to the database.
+    #[error("Database error")]
+    Database(#[from] DatabaseError),
+
+    /// A pooled address vanished from the database between being offered for
+    /// reuse and being reused.
+    #[error("The pooled deposit address {tweak_idx} disappeared while it was being reused")]
+    PooledAddressDisappeared {
+        /// The address index that was being reused.
+        tweak_idx: TweakIdx,
+    },
+
+    /// A deposit landed on a pooled address between it being offered for reuse
+    /// and being reused, so it is no longer free.
+    #[error("The pooled deposit address {tweak_idx} was used while it was being reused")]
+    PooledAddressUsed {
+        /// The address index that was being reused.
+        tweak_idx: TweakIdx,
+    },
+}
+
+#[cfg(feature = "uniffi")]
+impl From<DepositAddressError> for fedimint_core::util::ffi::UniffiError {
+    fn from(e: DepositAddressError) -> Self {
+        use fedimint_core::util::FmtCompact as _;
+
+        Self::General(e.fmt_compact().to_string())
+    }
 }

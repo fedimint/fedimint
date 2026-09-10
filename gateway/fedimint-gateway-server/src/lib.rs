@@ -1525,7 +1525,8 @@ impl Gateway {
         if let Ok(wallet_module) = client.value().get_first_module::<WalletClientModule>() {
             let address = wallet_module
                 .allocate_deposit_address_expert_only(())
-                .await?
+                .await
+                .map_err(|e| AdminGatewayError::Unexpected(e.into()))?
                 .address;
             Ok(address)
         } else if let Ok(wallet_module) = client
