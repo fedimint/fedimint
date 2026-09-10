@@ -16,7 +16,6 @@ name = "fedimint_walletv2_common"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 bitcoin = { workspace = true }
 fedimint-core = { workspace = true }
 miniscript = { workspace = true, features = ["serde"] }
