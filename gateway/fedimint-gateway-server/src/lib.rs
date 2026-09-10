@@ -431,7 +431,7 @@ async fn withdraw_v2(
         .send_fee()
         .await
         .map_err(|e| AdminGatewayError::WithdrawError {
-            failure_reason: e.to_string(),
+            failure_reason: e.fmt_compact().to_string(),
         })?;
 
     let withdraw_amount = match amount {
@@ -469,7 +469,7 @@ async fn withdraw_v2(
         )
         .await
         .map_err(|e| AdminGatewayError::WithdrawError {
-            failure_reason: e.to_string(),
+            failure_reason: e.fmt_compact().to_string(),
         })?;
 
     let result = wallet_module
@@ -515,7 +515,7 @@ async fn calculate_max_withdrawable(
             .send_fee()
             .await
             .map_err(|e| AdminGatewayError::WithdrawError {
-                failure_reason: e.to_string(),
+                failure_reason: e.fmt_compact().to_string(),
             })?;
 
         let max_withdrawable = wallet_module
@@ -3098,7 +3098,7 @@ impl IAdminGateway for Gateway {
                 ) {
                     let fee = wallet_module.send_fee().await.map_err(|e| {
                         AdminGatewayError::WithdrawError {
-                            failure_reason: e.to_string(),
+                            failure_reason: e.fmt_compact().to_string(),
                         }
                     })?;
                     WithdrawDetails {

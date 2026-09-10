@@ -24,7 +24,7 @@ use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, ScriptBuf};
 use db::{NextOutputIndexKey, ValidAddressIndexKey, ValidAddressIndexPrefix};
 use events::{ReceivePaymentEvent, SendPaymentEvent};
-use fedimint_api_client::api::{DynModuleApi, FederationResult};
+use fedimint_api_client::api::{DynModuleApi, FederationError, FederationResult};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
@@ -264,7 +264,7 @@ impl WalletClientModule {
         self.module_api
             .send_fee()
             .await
-            .map_err(|e| SendError::FederationError(e.to_string()))?
+            .map_err(|e| SendError::Federation(Box::new(e)))?
             .ok_or(SendError::NoConsensusFeerateAvailable)
     }
 
@@ -365,7 +365,7 @@ impl WalletClientModule {
         self.module_api
             .receive_fee()
             .await
-            .map_err(|e| ReceiveError::FederationError(e.to_string()))?
+            .map_err(|e| ReceiveError::Federation(Box::new(e)))?
             .ok_or(ReceiveError::NoConsensusFeerateAvailable)
     }
 
@@ -391,7 +391,7 @@ impl WalletClientModule {
                 .module_api
                 .send_fee()
                 .await
-                .map_err(|e| SendError::FederationError(e.to_string()))?
+                .map_err(|e| SendError::Federation(Box::new(e)))?
                 .ok_or(SendError::NoConsensusFeerateAvailable)?,
         };
 
@@ -449,7 +449,11 @@ impl WalletClientModule {
                 TransactionBuilder::new().with_outputs(client_output_bundle),
             )
             .await
-            .map_err(|_| SendError::InsufficientFunds)?;
+            .map_err(|error| match error {
+                TransactionSubmitError::NoPrimaryModule { .. }
+                | TransactionSubmitError::PrimaryModule(..) => SendError::InsufficientFunds,
+                error => SendError::Failed(error),
+            })?;
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
@@ -1001,26 +1005,51 @@ impl WalletClientModule {
     }
 }
 
-#[derive(Error, Debug, Clone, Eq, PartialEq)]
+/// A failure to send an on-chain payment.
+#[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum SendError {
-    #[error("Address is from a different network than the federation.")]
+    /// The destination address is not valid on the federation's network.
+    #[error("Address is from a different network than the federation")]
     WrongNetwork,
+
+    /// The value to send is below the federation's dust limit.
     #[error("The value is too small")]
     DustValue,
-    #[error("Federation returned an error: {0}")]
-    FederationError(String),
+
+    /// The federation could not be asked for the current on-chain fee.
+    #[error("The federation returned an error")]
+    Federation(#[source] Box<FederationError>),
+
+    /// The guardians have not agreed a feerate yet, so no on-chain fee can be
+    /// quoted.
     #[error("No consensus feerate is available at this time")]
     NoConsensusFeerateAvailable,
+
+    /// The client cannot fund the wallet output this send needs.
     #[error("The client does not have sufficient funds to send the payment")]
     InsufficientFunds,
+
+    /// The destination is not an address type the federation can pay.
     #[error("Unsupported address type")]
     UnsupportedAddress,
+
+    /// The send transaction could not be submitted for a reason that is not
+    /// about funding.
+    #[error("The send transaction could not be submitted")]
+    Failed(#[source] TransactionSubmitError),
 }
 
-#[derive(Error, Debug, Clone, Eq, PartialEq)]
+/// A failure to quote the fee for claiming an on-chain deposit.
+#[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum ReceiveError {
-    #[error("Federation returned an error: {0}")]
-    FederationError(String),
+    /// The federation could not be asked for the current claim fee.
+    #[error("The federation returned an error")]
+    Federation(#[source] Box<FederationError>),
+
+    /// The guardians have not agreed a feerate yet, so no claim fee can be
+    /// quoted.
     #[error("No consensus feerate is available at this time")]
     NoConsensusFeerateAvailable,
 }

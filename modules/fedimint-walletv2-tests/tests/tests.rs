@@ -251,7 +251,7 @@ async fn send_to_a_mainnet_address_is_rejected() -> anyhow::Result<()> {
     let mainnet_address: bitcoin::Address<bitcoin::address::NetworkUnchecked> =
         "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2".parse()?;
 
-    assert_eq!(
+    assert_matches!(
         client
             .get_first_module::<WalletClientModule>()?
             .send(
@@ -260,9 +260,8 @@ async fn send_to_a_mainnet_address_is_rejected() -> anyhow::Result<()> {
                 None,
                 serde_json::Value::Null,
             )
-            .await
-            .err(),
-        Some(SendError::WrongNetwork),
+            .await,
+        Err(SendError::WrongNetwork)
     );
 
     Ok(())
@@ -277,13 +276,12 @@ async fn send_below_the_dust_limit_is_rejected() -> anyhow::Result<()> {
 
     let address = bitcoin.get_new_address().await.as_unchecked().clone();
 
-    assert_eq!(
+    assert_matches!(
         client
             .get_first_module::<WalletClientModule>()?
             .send(address, Amount::from_sat(1), None, serde_json::Value::Null)
-            .await
-            .err(),
-        Some(SendError::DustValue),
+            .await,
+        Err(SendError::DustValue)
     );
 
     Ok(())
