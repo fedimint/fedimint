@@ -1182,11 +1182,18 @@ mod tests {
         account: &OutgoingContractAccount,
         invoice_hash: sha256::Hash,
     ) -> Result<(), OutgoingContractError> {
+        validate_payment_data(account, &payment_data(invoice_hash))
+    }
+
+    fn validate_payment_data(
+        account: &OutgoingContractAccount,
+        payment_data: &PaymentData,
+    ) -> Result<(), OutgoingContractError> {
         GatewayPayInvoice::validate_outgoing_account(
             account,
             gateway_keypair(),
             CONSENSUS_BLOCK_COUNT,
-            &payment_data(invoice_hash),
+            payment_data,
             RoutingFees {
                 base_msat: 0,
                 proportional_millionths: 0,
@@ -1196,6 +1203,17 @@ mod tests {
             Some(refusal) => Err(refusal),
             None => Ok(()),
         })
+    }
+
+    /// Payment data whose invoice expired at the unix epoch.
+    fn expired_payment_data(payment_hash: sha256::Hash) -> PaymentData {
+        match payment_data(payment_hash) {
+            PaymentData::PrunedInvoice(mut invoice) => {
+                invoice.expiry_timestamp = 0;
+                PaymentData::PrunedInvoice(invoice)
+            }
+            PaymentData::Invoice(..) => unreachable!("the fixture builds a pruned invoice"),
+        }
     }
 
     /// Guards against the fixture being invalid for some unrelated reason,
@@ -1234,6 +1252,37 @@ mod tests {
         );
         assert_eq!(
             validate_with_timelock(zero_delay_timelock - 1),
+            Err(OutgoingContractError::TimeoutTooClose)
+        );
+    }
+
+    /// An expired invoice must refuse a fresh dispatch. Like the timelock
+    /// gate, the refusal is recorded rather than failing validation, so a
+    /// payment dispatched before a restart can still resume past it.
+    #[test]
+    fn records_refusal_for_an_expired_invoice() {
+        let hash = sha256::Hash::hash(b"preimage");
+
+        assert_eq!(
+            validate_payment_data(&contract_account(hash), &expired_payment_data(hash)),
+            Err(OutgoingContractError::InvoiceExpired(0))
+        );
+    }
+
+    /// When both drifting gates fail, the timelock refusal is reported: with
+    /// no timelock budget left the payment cannot be dispatched at all, so
+    /// expiry never gets a say. Pinned so error reporting stays stable.
+    #[test]
+    fn timelock_refusal_takes_precedence_over_expiry() {
+        let hash = sha256::Hash::hash(b"preimage");
+        let zero_delay_timelock =
+            u32::try_from(CONSENSUS_BLOCK_COUNT - 1 + TIMELOCK_DELTA).expect("small constant");
+
+        assert_eq!(
+            validate_payment_data(
+                &contract_account_with_timelock(hash, zero_delay_timelock),
+                &expired_payment_data(hash),
+            ),
             Err(OutgoingContractError::TimeoutTooClose)
         );
     }
