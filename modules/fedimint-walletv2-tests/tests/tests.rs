@@ -2,9 +2,12 @@ use std::pin::pin;
 use std::sync::Arc;
 use std::time::Duration;
 
+use assert_matches::assert_matches;
 use async_stream::stream;
 use bitcoin::Amount;
 use fedimint_client::ClientHandleArc;
+use fedimint_client::error::OperationLookupError;
+use fedimint_core::core::OperationId;
 use fedimint_core::task::sleep_in_test;
 use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_server::DummyInit;
@@ -751,4 +754,23 @@ mod db {
         )
         .await
     }
+}
+
+/// Awaiting an operation that was never started reports the shared
+/// operation-lookup error, not an opaque one.
+#[tokio::test(flavor = "multi_thread")]
+async fn awaiting_an_unknown_send_operation_reports_not_found() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+
+    assert_matches!(
+        client
+            .get_first_module::<WalletClientModule>()?
+            .await_final_send_operation_state(OperationId::new_random())
+            .await,
+        Err(OperationLookupError::NotFound(_))
+    );
+
+    Ok(())
 }

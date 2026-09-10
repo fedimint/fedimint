@@ -453,7 +453,7 @@ async fn withdraw_v2(
                 .map_err(|err| AdminGatewayError::WithdrawError {
                     failure_reason: format!(
                         "Insufficient funds. Balance: {balance} Fee: {fee}: {}",
-                        err.fmt_compact_anyhow()
+                        err.fmt_compact()
                     ),
                 })?
         }
@@ -476,7 +476,7 @@ async fn withdraw_v2(
         .await_final_send_operation_state(operation_id)
         .await
         .map_err(|e| AdminGatewayError::WithdrawError {
-            failure_reason: e.to_string(),
+            failure_reason: e.fmt_compact().to_string(),
         })?;
 
     let fees = PegOutFees::from_amount(fee);
@@ -522,7 +522,7 @@ async fn calculate_max_withdrawable(
             .max_sendable_amount(balance, fee)
             .await
             .map_err(|err| AdminGatewayError::WithdrawError {
-                failure_reason: err.fmt_compact_anyhow().to_string(),
+                failure_reason: err.fmt_compact().to_string(),
             })?;
 
         // Everything the balance does not become an on-chain payment or miner
