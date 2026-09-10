@@ -104,6 +104,11 @@ async fn peg_in<'a>(
     let op = deposit_address.operation_id;
     let address = deposit_address.address;
     info!(?address, "Peg-in address generated");
+
+    assert_matches!(
+        wallet_module.subscribe_withdraw_updates(op).await,
+        Err(SubscribeWithdrawError::NotAWithdrawal)
+    );
     let (_proof, tx) = bitcoin
         .send_and_mine_block(
             &address,
@@ -384,6 +389,11 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
         sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees.amount().to_sat());
     assert_eq!(client.get_balance_for_btc().await?, balance_after_peg_out);
     assert_eq!(balance_sub.ok().await?, balance_after_peg_out);
+
+    assert_matches!(
+        wallet_module.subscribe_deposit(op).await,
+        Err(SubscribeDepositError::NotADeposit)
+    );
 
     let sub = wallet_module.subscribe_withdraw_updates(op).await?;
     let mut sub = sub.into_stream();
@@ -687,7 +697,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     let fees2: Result<PegOutFees, WithdrawFeesError> = wallet_module
         .get_withdraw_fees(&address, bsats(peg_out2))
         .await;
-    assert!(fees2.is_err());
+    assert_matches!(fees2, Err(WithdrawFeesError::NoQuote));
 
     let current_block = dyn_bitcoin_rpc.get_block_count().await?;
     bitcoin.mine_blocks(finality_delay + 1).await;
@@ -2561,6 +2571,15 @@ async fn peg_in_lookups_name_what_was_not_found() -> anyhow::Result<()> {
     assert_matches!(
         wallet_module.get_pegin_tweak_idx(tweak_idx).await,
         Err(PegInError::TweakIdxNotFound { tweak_idx: found }) if found == tweak_idx
+    );
+
+    let foreign_address: bitcoin::Address<bitcoin::address::NetworkUnchecked> =
+        "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2".parse()?;
+    assert_matches!(
+        wallet_module
+            .find_tweak_idx_by_address(foreign_address)
+            .await,
+        Err(PegInError::AddressNotDerived)
     );
 
     Ok(())
