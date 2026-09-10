@@ -1631,7 +1631,11 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
 
         assert!(expected_available_utxos.insert(expected_available_utxo));
 
-        let wallet_summary = wallet_module.get_wallet_summary().await?;
+        // The summary is a plain federation request, so it reports the
+        // federation's own error rather than an opaque one.
+        let summary: fedimint_api_client::api::FederationResult<_> =
+            wallet_module.get_wallet_summary().await;
+        let wallet_summary = summary?;
         assert_eq!(
             sum_utxos(expected_available_utxos.iter()),
             wallet_summary.total_spendable_balance()

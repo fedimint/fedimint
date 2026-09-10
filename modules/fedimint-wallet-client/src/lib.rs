@@ -995,12 +995,12 @@ impl WalletClientModule {
     }
 
     /// Returns a summary of the wallet's coins
-    pub async fn get_wallet_summary(&self) -> anyhow::Result<WalletSummary> {
-        Ok(self.module_api.fetch_wallet_summary().await?)
+    pub async fn get_wallet_summary(&self) -> FederationResult<WalletSummary> {
+        self.module_api.fetch_wallet_summary().await
     }
 
-    pub async fn get_block_count_local(&self) -> anyhow::Result<u32> {
-        Ok(self.module_api.fetch_block_count_local().await?)
+    pub async fn get_block_count_local(&self) -> FederationResult<u32> {
+        self.module_api.fetch_block_count_local().await
     }
 
     pub fn create_withdraw_output(

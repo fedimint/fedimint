@@ -4,6 +4,7 @@ use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Amount, OutPoint, Txid};
 use fedimint_core::core::OperationId;
 use fedimint_core::runtime::ffi_spawn_subscription;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::util::ffi::UniffiError;
 use fedimint_wallet_common::WalletSummary;
 use futures::StreamExt as _;
@@ -48,12 +49,16 @@ uniffi::custom_type!(Txid, String, {
 impl WalletClientModule {
     #[uniffi::method(name = "get_wallet_summary")]
     pub async fn get_wallet_summary_uniffi(&self) -> Result<WalletSummary> {
-        Ok(self.get_wallet_summary().await?)
+        self.get_wallet_summary()
+            .await
+            .map_err(|e| UniffiError::General(e.fmt_compact().to_string()))
     }
 
     #[uniffi::method(name = "get_block_count_local")]
     pub async fn get_block_count_local_uniffi(&self) -> Result<u32> {
-        Ok(self.get_block_count_local().await?)
+        self.get_block_count_local()
+            .await
+            .map_err(|e| UniffiError::General(e.fmt_compact().to_string()))
     }
 
     #[uniffi::method(name = "peg_in")]

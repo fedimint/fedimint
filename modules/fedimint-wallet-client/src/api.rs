@@ -1,4 +1,3 @@
-use anyhow::anyhow;
 use bitcoin::{Address, Amount};
 use fedimint_api_client::api::{
     FederationApiExt, FederationError, FederationGeneralError, FederationResult,
@@ -42,11 +41,14 @@ pub trait WalletFederationApi {
     async fn activate_consensus_version_voting(&self, auth: ApiAuth) -> FederationResult<()>;
 
     /// Returns the total number of recovery items stored on the federation
-    async fn fetch_recovery_count(&self) -> anyhow::Result<u64>;
+    async fn fetch_recovery_count(&self) -> FederationResult<u64>;
 
     /// Fetches recovery items in the range `[start, end)` via consensus
-    async fn fetch_recovery_slice(&self, start: u64, end: u64)
-    -> anyhow::Result<Vec<RecoveryItem>>;
+    async fn fetch_recovery_slice(
+        &self,
+        start: u64,
+        end: u64,
+    ) -> FederationResult<Vec<RecoveryItem>>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -214,25 +216,23 @@ where
         .await
     }
 
-    async fn fetch_recovery_count(&self) -> anyhow::Result<u64> {
+    async fn fetch_recovery_count(&self) -> FederationResult<u64> {
         self.request_current_consensus::<u64>(
             RECOVERY_COUNT_ENDPOINT.to_string(),
             ApiRequestErased::default(),
         )
         .await
-        .map_err(|e| anyhow!("{e}"))
     }
 
     async fn fetch_recovery_slice(
         &self,
         start: u64,
         end: u64,
-    ) -> anyhow::Result<Vec<RecoveryItem>> {
+    ) -> FederationResult<Vec<RecoveryItem>> {
         self.request_current_consensus::<Vec<RecoveryItem>>(
             RECOVERY_SLICE_ENDPOINT.to_string(),
             ApiRequestErased::new((start, end)),
         )
         .await
-        .map_err(|e| anyhow!("{e}"))
     }
 }
