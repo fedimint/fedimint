@@ -1277,6 +1277,53 @@ impl ILnRpcClient for GatewayLndClient {
         true
     }
 
+    async fn outbound_payment_exists(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<bool, LightningRpcError> {
+        let payment_hash_bytes = payment_hash.to_byte_array().to_vec();
+        let mut client = self.connect().await?;
+
+        // Subscribe with in-flight updates enabled so any known payment,
+        // pending or terminal, yields an immediate first message instead of
+        // blocking until the payment resolves; an unknown hash fails with
+        // `NotFound`.
+        let stream = match client
+            .router()
+            .track_payment_v2(TrackPaymentRequest {
+                payment_hash: payment_hash_bytes.clone(),
+                no_inflight_updates: false,
+            })
+            .await
+        {
+            Ok(stream) => stream,
+            Err(status) if status.code() == Code::NotFound => return Ok(false),
+            Err(status) => {
+                return Err(LightningRpcError::FailedPayment {
+                    failure_reason: format!(
+                        "Failed to look up payment {}: {status:?}",
+                        PrettyPaymentHash(&payment_hash_bytes),
+                    ),
+                });
+            }
+        };
+
+        match stream.into_inner().message().await {
+            Ok(Some(_)) => Ok(true),
+            Err(status) if status.code() == Code::NotFound => Ok(false),
+            // A premature end of stream or a transport fault is not an
+            // answer. Report an error so the caller retries, rather than
+            // letting it mistake the payment for never having been
+            // dispatched.
+            outcome => Err(LightningRpcError::FailedPayment {
+                failure_reason: format!(
+                    "Payment lookup stream gave no answer for {}: {outcome:?}",
+                    PrettyPaymentHash(&payment_hash_bytes),
+                ),
+            }),
+        }
+    }
+
     async fn route_htlcs<'a>(
         self: Box<Self>,
         task_group: &TaskGroup,

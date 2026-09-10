@@ -168,6 +168,15 @@ impl ILnRpcClient for FakeLightningTest {
         true
     }
 
+    async fn outbound_payment_exists(
+        &self,
+        _payment_hash: sha256::Hash,
+    ) -> Result<bool, LightningRpcError> {
+        // Fake payments complete inline, so a restarted state machine never
+        // has an in-flight payment to resume.
+        Ok(false)
+    }
+
     async fn pay_private(
         &self,
         invoice: PrunedInvoice,

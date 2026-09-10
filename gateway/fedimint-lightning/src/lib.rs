@@ -175,6 +175,21 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         false
     }
 
+    /// Returns whether the node has any record of an outbound payment for
+    /// `payment_hash`, whatever its state: in-flight, succeeded, or failed.
+    ///
+    /// State machines call this when they resume after a restart to
+    /// distinguish a payment dispatched before the crash from one that never
+    /// left the gateway: pre-dispatch gates such as invoice expiry must not
+    /// cancel a payment the node may still settle. Implementations must
+    /// answer from the node's own payment store without waiting for the
+    /// payment to reach a terminal state, and must not count inbound records
+    /// for the same hash.
+    async fn outbound_payment_exists(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<bool, LightningRpcError>;
+
     /// Consumes the current client and returns a stream of intercepted HTLCs
     /// and a new client. `complete_htlc` must be called for all successfully
     /// intercepted HTLCs sent to the returned stream.
@@ -594,6 +609,17 @@ impl ILnRpcClient for LnRpcTracked {
 
     fn supports_private_payments(&self) -> bool {
         self.inner.supports_private_payments()
+    }
+
+    async fn outbound_payment_exists(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<bool, LightningRpcError> {
+        tracked_call!(
+            self,
+            "outbound_payment_exists",
+            self.inner.outbound_payment_exists(payment_hash).await
+        )
     }
 
     async fn route_htlcs<'a>(

@@ -662,17 +662,32 @@ impl GatewayClientModuleV2 {
         Ok(())
     }
 
+    /// Funds the incoming contract of a direct swap and waits for its final
+    /// state.
+    ///
+    /// A swap that was already started resumes unconditionally: its operation
+    /// is keyed on the contract, so a re-entrant call — a restarted state
+    /// machine, or a concurrent payer — joins the operation in progress
+    /// instead of funding twice. `allow_fresh_dispatch` is consulted only
+    /// when no such operation exists: callers pass `false` when a wall-clock
+    /// gate such as invoice expiry forbids starting a new swap, and receive
+    /// `Ok(None)` to signal that nothing was started.
     pub async fn relay_direct_swap(
         &self,
         contract: IncomingContract,
         amount_msat: u64,
-    ) -> anyhow::Result<FinalReceiveState> {
+        allow_fresh_dispatch: bool,
+    ) -> anyhow::Result<Option<FinalReceiveState>> {
         let operation_start = now();
 
         let operation_id = OperationId::from_encodable(&contract);
 
         if self.client_ctx.operation_exists(operation_id).await {
-            return Ok(self.await_receive(operation_id).await);
+            return Ok(Some(self.await_receive(operation_id).await));
+        }
+
+        if !allow_fresh_dispatch {
+            return Ok(None);
         }
 
         let refund_keypair = self.keypair;
@@ -727,7 +742,7 @@ impl GatewayClientModuleV2 {
             .await;
         dbtx.commit_tx().await;
 
-        Ok(self.await_receive(operation_id).await)
+        Ok(Some(self.await_receive(operation_id).await))
     }
 
     pub async fn await_receive(&self, operation_id: OperationId) -> FinalReceiveState {
@@ -849,6 +864,18 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
         max_fee: Amount,
     ) -> Result<[u8; 32], LightningRpcError>;
 
+    /// Returns whether the gateway's Lightning node has any record of an
+    /// outbound payment for `payment_hash`, whatever its state.
+    ///
+    /// The send state machine consults this when it resumes after a restart:
+    /// a payment the node already knows was dispatched before the crash and
+    /// must be resolved through [`IGatewayClientV2::pay`]'s idempotent resume
+    /// path rather than cancelled by pre-dispatch checks. A wrong `false`
+    /// forfeits a contract whose payment may still settle, so implementations
+    /// must absorb transient node failures and only answer once the node's
+    /// payment store could actually be consulted.
+    async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool;
+
     /// Computes the minimum contract amount necessary for making an outgoing
     /// payment.
     ///
@@ -867,12 +894,19 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
     async fn is_lnv1_invoice(&self, invoice: &Bolt11Invoice) -> Option<Spanned<ClientHandleArc>>;
 
     /// Perform a swap from an LNv2 `OutgoingContract` to an LNv1
-    /// `IncomingContract`
+    /// `IncomingContract`.
+    ///
+    /// A swap that was already started resumes unconditionally;
+    /// `allow_fresh_dispatch` is consulted only when no operation for this
+    /// swap exists yet. Callers pass `false` when a wall-clock gate such as
+    /// invoice expiry forbids starting a new swap, and receive `Ok(None)` to
+    /// signal that nothing was started.
     async fn relay_lnv1_swap(
         &self,
         client: &ClientHandleArc,
         invoice: &Bolt11Invoice,
-    ) -> anyhow::Result<FinalReceiveState>;
+        allow_fresh_dispatch: bool,
+    ) -> anyhow::Result<Option<FinalReceiveState>>;
 
     /// Claims the given payment image for `operation_id` in the gateway's
     /// global database, returning `true` if this operation may claim the
