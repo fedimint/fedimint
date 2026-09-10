@@ -57,8 +57,7 @@ use fedimint_client_module::transaction::{
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    AutocommitError, Committable, Database, DatabaseError, DatabaseTransaction,
-    IDatabaseTransactionOpsCoreTyped,
+    Committable, Database, DatabaseError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{BitcoinRpcConfig, is_running_in_test_env};
@@ -962,10 +961,11 @@ impl WalletClientModule {
             )
             .await?;
         let max_fee_msats = fedimint_core::Amount::from_sats(max_fees.amount().to_sat());
+        let dust_limit = address.script_pubkey().minimal_non_dust();
 
         let max = max_affordable_send_amount(
             balance,
-            fedimint_core::Amount::from_sats(address.script_pubkey().minimal_non_dust().to_sat()),
+            fedimint_core::Amount::from_sats(dust_limit.to_sat()),
             balance,
             // A peg-out funds a whole number of sats, so round the probe up to
             // the next sat before adding the miner fee; the solver searches
@@ -978,7 +978,10 @@ impl WalletClientModule {
             },
         )
         .await
-        .ok_or(MaxWithdrawableAmountError::BalanceTooLow)?;
+        .ok_or(MaxWithdrawableAmountError::BalanceTooLow {
+            balance,
+            dust_limit,
+        })?;
 
         // `gross_up` rounded up to whole satoshis, so the largest affordable
         // amount already sits on a satoshi boundary; no value is lost here.
@@ -1213,13 +1216,7 @@ impl WalletClientModule {
                 },
                 Some(100),
             )
-            .await
-            .map_err(|e| match e {
-                AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    DepositAddressError::Database(last_error)
-                }
-            })?;
+            .await?;
 
         Ok(deposit_address)
     }
@@ -1337,13 +1334,7 @@ impl WalletClientModule {
                 },
                 Some(100),
             )
-            .await
-            .map_err(|e| match e {
-                AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    DepositAddressError::Database(last_error)
-                }
-            })?;
+            .await?;
 
         Ok(result)
     }
@@ -1477,13 +1468,7 @@ impl WalletClientModule {
                 },
                 Some(100),
             )
-            .await
-            .map_err(|e| match e {
-                AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    DepositAddressError::Database(last_error)
-                }
-            })?;
+            .await?;
 
         Ok(result)
     }
@@ -1660,7 +1645,7 @@ impl WalletClientModule {
             .filter(|(_k, v)| future::ready(v.operation_id == operation_id))
             .next()
             .await
-            .ok_or(PegInError::OperationNotFound { operation_id })?
+            .ok_or(PegInError::NoAddressForOperation { operation_id })?
             .0
             .0)
     }
@@ -1764,13 +1749,7 @@ impl WalletClientModule {
                 },
                 Some(100),
             )
-            .await
-            .map_err(|e| match e {
-                AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    PegInError::Database(last_error)
-                }
-            })?;
+            .await?;
 
         Ok(())
     }

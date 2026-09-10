@@ -2554,7 +2554,7 @@ async fn peg_in_lookups_name_what_was_not_found() -> anyhow::Result<()> {
         wallet_module
             .find_tweak_idx_by_operation_id(operation_id)
             .await,
-        Err(PegInError::OperationNotFound { operation_id: found }) if found == operation_id
+        Err(PegInError::NoAddressForOperation { operation_id: found }) if found == operation_id
     );
 
     let tweak_idx = TweakIdx(u64::MAX);

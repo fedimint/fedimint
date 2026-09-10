@@ -10,7 +10,9 @@ use fedimint_client_module::error::{
     OperationAlreadyExistsError, OperationLookupError, TransactionSubmitError,
 };
 use fedimint_core::core::OperationId;
-use fedimint_core::db::DatabaseError;
+use fedimint_core::db::{AutocommitError, DatabaseError};
+#[cfg(feature = "uniffi")]
+use fedimint_core::util::FmtCompact as _;
 use thiserror::Error;
 
 use crate::client_db::TweakIdx;
@@ -30,7 +32,7 @@ pub enum PegInError {
 
     /// No deposit address was allocated under this operation.
     #[error("No deposit address belongs to operation {}", .operation_id.fmt_short())]
-    OperationNotFound {
+    NoAddressForOperation {
         /// The operation that was looked up.
         operation_id: OperationId,
     },
@@ -42,7 +44,7 @@ pub enum PegInError {
         tweak_idx: TweakIdx,
     },
 
-    /// The database write that schedules the re-check failed.
+    /// A database operation failed.
     #[error("Database error")]
     Database(#[from] DatabaseError),
 
@@ -60,6 +62,15 @@ pub enum PegInError {
     /// The peg-in monitor stopped, so no further deposit will ever be claimed.
     #[error("The peg-in monitor is no longer running")]
     MonitorStopped,
+}
+
+impl From<AutocommitError<PegInError>> for PegInError {
+    fn from(e: AutocommitError<Self>) -> Self {
+        match e {
+            AutocommitError::ClosureError { error, .. } => error,
+            AutocommitError::CommitFailed { last_error, .. } => Self::Database(last_error),
+        }
+    }
 }
 
 /// A failure to hand out a deposit address.
@@ -104,11 +115,18 @@ pub enum DepositAddressError {
     },
 }
 
+impl From<AutocommitError<DepositAddressError>> for DepositAddressError {
+    fn from(e: AutocommitError<Self>) -> Self {
+        match e {
+            AutocommitError::ClosureError { error, .. } => error,
+            AutocommitError::CommitFailed { last_error, .. } => Self::Database(last_error),
+        }
+    }
+}
+
 #[cfg(feature = "uniffi")]
 impl From<DepositAddressError> for fedimint_core::util::ffi::UniffiError {
     fn from(e: DepositAddressError) -> Self {
-        use fedimint_core::util::FmtCompact as _;
-
         Self::General(e.fmt_compact().to_string())
     }
 }
@@ -122,7 +140,7 @@ pub enum SubscribeDepositError {
     Operation(#[from] OperationLookupError),
 
     /// The operation exists and belongs to the wallet, but it is a withdrawal
-    /// rather than a deposit.
+    /// (or an RBF bump of one) rather than a deposit.
     #[error("The operation is not a deposit")]
     NotADeposit,
 
@@ -148,8 +166,6 @@ pub enum SubscribeDepositError {
 #[cfg(feature = "uniffi")]
 impl From<SubscribeDepositError> for fedimint_core::util::ffi::UniffiError {
     fn from(e: SubscribeDepositError) -> Self {
-        use fedimint_core::util::FmtCompact as _;
-
         Self::General(e.fmt_compact().to_string())
     }
 }
@@ -185,8 +201,13 @@ pub enum MaxWithdrawableAmountError {
 
     /// The balance cannot cover the destination's dust limit plus the fees, so
     /// there is no amount to withdraw.
-    #[error("The balance is too low to withdraw any amount after fees")]
-    BalanceTooLow,
+    #[error("The balance {balance} is too low to cover the dust limit {dust_limit} and fees")]
+    BalanceTooLow {
+        /// The balance the sweep was computed against.
+        balance: fedimint_core::Amount,
+        /// The destination's dust limit, the smallest output it can receive.
+        dust_limit: bitcoin::Amount,
+    },
 }
 
 /// A failure to start an on-chain withdrawal from a peg-out request.
@@ -213,8 +234,6 @@ pub enum PegOutError {
 #[cfg(feature = "uniffi")]
 impl From<PegOutError> for fedimint_core::util::ffi::UniffiError {
     fn from(e: PegOutError) -> Self {
-        use fedimint_core::util::FmtCompact as _;
-
         Self::General(e.fmt_compact().to_string())
     }
 }
@@ -236,8 +255,6 @@ pub enum SubscribeWithdrawError {
 #[cfg(feature = "uniffi")]
 impl From<SubscribeWithdrawError> for fedimint_core::util::ffi::UniffiError {
     fn from(e: SubscribeWithdrawError) -> Self {
-        use fedimint_core::util::FmtCompact as _;
-
         Self::General(e.fmt_compact().to_string())
     }
 }
