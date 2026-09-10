@@ -94,7 +94,7 @@ use crate::client_db::{
     RecoveryStateKey, SupportsSafeDepositPrefix,
 };
 use crate::deposit::DepositStateMachine;
-pub use crate::error::{DepositAddressError, PegInError};
+pub use crate::error::{DepositAddressError, PegInError, SubscribeDepositError};
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
 
 const WALLET_TWEAK_CHILD_ID: ChildId = ChildId(0);
@@ -1488,16 +1488,8 @@ impl WalletClientModule {
     pub async fn subscribe_deposit(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<DepositStateV2>> {
-        let operation = self
-            .client_ctx
-            .get_operation(operation_id)
-            .await
-            .with_context(|| anyhow!("Operation not found: {}", operation_id.fmt_short()))?;
-
-        if operation.operation_module_kind() != WalletCommonInit::KIND.as_str() {
-            bail!("Operation is not a wallet operation");
-        }
+    ) -> Result<UpdateStreamOrOutcome<DepositStateV2>, SubscribeDepositError> {
+        let operation = self.client_ctx.get_operation(operation_id).await?;
 
         let operation_meta = operation.meta::<WalletOperationMeta>();
 
@@ -1505,10 +1497,13 @@ impl WalletClientModule {
             address, tweak_idx, ..
         } = operation_meta.variant
         else {
-            bail!("Operation is not a deposit operation");
+            return Err(SubscribeDepositError::NotADeposit);
         };
 
-        let address = address.require_network(self.cfg().network.0)?;
+        let network = self.cfg().network.0;
+        let address = address
+            .require_network(network)
+            .map_err(|_| SubscribeDepositError::WrongNetwork { expected: network })?;
 
         // The old deposit operations don't have tweak_idx set
         let Some(tweak_idx) = tweak_idx else {
@@ -1517,7 +1512,7 @@ impl WalletClientModule {
             // the final state though if it reached any.
             let outcome_v1 = operation
                 .outcome::<DepositStateV1>()
-                .context("Old pending deposit, can't subscribe to updates")?;
+                .ok_or(SubscribeDepositError::OldPendingDeposit)?;
 
             let outcome_v2 = match outcome_v1 {
                 DepositStateV1::Claimed(tx_info) => DepositStateV2::Claimed {
@@ -1528,7 +1523,7 @@ impl WalletClientModule {
                     },
                 },
                 DepositStateV1::Failed(error) => DepositStateV2::Failed(error),
-                _ => bail!("Non-final outcome in operation log"),
+                _ => return Err(SubscribeDepositError::NonFinalOutcome),
             };
 
             return Ok(UpdateStreamOrOutcome::Outcome(outcome_v2));

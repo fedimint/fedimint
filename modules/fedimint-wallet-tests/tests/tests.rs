@@ -9,6 +9,7 @@ use bitcoin::secp256k1;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_client::ClientHandleArc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
+use fedimint_client_module::error::OperationLookupError;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::mem_impl::MemDatabase;
@@ -31,8 +32,8 @@ use fedimint_testing_core::config::API_AUTH;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::client_db::{SupportsSafeDepositKey, TweakIdx};
 use fedimint_wallet_client::{
-    AllocateDepositOutcome, DepositStateV2, MaybeNewAddress, PegInError, WalletClientInit,
-    WalletClientModule, WithdrawState,
+    AllocateDepositOutcome, DepositStateV2, MaybeNewAddress, PegInError, SubscribeDepositError,
+    WalletClientInit, WalletClientModule, WithdrawState,
 };
 use fedimint_wallet_common::config::WalletConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -2554,6 +2555,28 @@ async fn peg_in_lookups_name_what_was_not_found() -> anyhow::Result<()> {
     assert_matches!(
         wallet_module.get_pegin_tweak_idx(tweak_idx).await,
         Err(PegInError::TweakIdxNotFound { tweak_idx: found }) if found == tweak_idx
+    );
+
+    Ok(())
+}
+
+/// Subscribing to an operation that does not exist says so, instead of
+/// "Operation not found: <id>" glued in front of the real lookup error.
+#[tokio::test(flavor = "multi_thread")]
+async fn subscribing_to_an_unknown_deposit_reports_not_found() -> anyhow::Result<()> {
+    skip_if_not_wallet_test_group!("1");
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    assert_matches!(
+        client
+            .get_first_module::<WalletClientModule>()?
+            .subscribe_deposit(OperationId::new_random())
+            .await,
+        Err(SubscribeDepositError::Operation(
+            OperationLookupError::NotFound(_)
+        ))
     );
 
     Ok(())

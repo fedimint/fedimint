@@ -3,8 +3,9 @@
 //! Every failure this module reports to its callers is named here, so there is
 //! one place for an integrator to look.
 
+use bitcoin::Network;
 use fedimint_bitcoind::BitcoinRpcError;
-use fedimint_client_module::error::OperationAlreadyExistsError;
+use fedimint_client_module::error::{OperationAlreadyExistsError, OperationLookupError};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::DatabaseError;
 use thiserror::Error;
@@ -103,6 +104,47 @@ pub enum DepositAddressError {
 #[cfg(feature = "uniffi")]
 impl From<DepositAddressError> for fedimint_core::util::ffi::UniffiError {
     fn from(e: DepositAddressError) -> Self {
+        use fedimint_core::util::FmtCompact as _;
+
+        Self::General(e.fmt_compact().to_string())
+    }
+}
+
+/// A failure to follow a deposit operation.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum SubscribeDepositError {
+    /// The operation could not be looked up, or belongs to another module.
+    #[error("The deposit operation could not be looked up")]
+    Operation(#[from] OperationLookupError),
+
+    /// The operation exists and belongs to the wallet, but it is a withdrawal
+    /// rather than a deposit.
+    #[error("The operation is not a deposit")]
+    NotADeposit,
+
+    /// The deposit address recorded with the operation is not valid on the
+    /// network this client is configured for.
+    #[error("The deposit address is not valid on {expected}")]
+    WrongNetwork {
+        /// The network this client expects.
+        expected: Network,
+    },
+
+    /// The deposit predates the 0.4 release, is still pending, and has no
+    /// state machine left to report progress from.
+    #[error("An old pending deposit cannot be subscribed to")]
+    OldPendingDeposit,
+
+    /// The deposit predates the 0.4 release and the outcome recorded for it is
+    /// not one of the final ones.
+    #[error("The recorded outcome of an old deposit is not final")]
+    NonFinalOutcome,
+}
+
+#[cfg(feature = "uniffi")]
+impl From<SubscribeDepositError> for fedimint_core::util::ffi::UniffiError {
+    fn from(e: SubscribeDepositError) -> Self {
         use fedimint_core::util::FmtCompact as _;
 
         Self::General(e.fmt_compact().to_string())
