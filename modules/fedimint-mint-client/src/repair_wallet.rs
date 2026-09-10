@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use fedimint_api_client::api::DynModuleApi;
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_api_client::api::{DynModuleApi, FederationError, FederationResult};
+use fedimint_core::db::{AutocommitError, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::util::backoff_util::aggressive_backoff;
 use fedimint_core::util::retry;
 use fedimint_core::{Amount, TieredCounts};
@@ -11,6 +11,7 @@ use crate::api::MintFederationApi;
 use crate::client_db::{
     NextECashNoteIndexKey, NextECashNoteIndexKeyPrefix, NoteKey, NoteKeyPrefix,
 };
+use crate::error::RepairWalletError;
 use crate::output::NoteIssuanceRequest;
 use crate::{MintClientModule, NoteIndex};
 
@@ -42,7 +43,10 @@ impl MintClientModule {
     /// When invalid notes are found, they are removed from the wallet. Make
     /// sure that the user has a backup of their seed before running this
     /// function.
-    pub async fn try_repair_wallet(&self, gap_limit: u64) -> anyhow::Result<RepairSummary> {
+    pub async fn try_repair_wallet(
+        &self,
+        gap_limit: u64,
+    ) -> Result<RepairSummary, RepairWalletError> {
         let module_api = self.client_ctx.module_api();
 
         self.client_ctx
@@ -102,28 +106,33 @@ impl MintClientModule {
                                 .inc(amount, (next_index - old_index) as usize);
                         }
 
-                        Ok::<_, anyhow::Error>(summary)
+                        Ok::<_, RepairWalletError>(summary)
                     })
                 },
                 Some(100),
             )
             .await
-            .map_err(anyhow::Error::from)
+            .map_err(|e| match e {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    RepairWalletError::Database(last_error)
+                }
+            })
     }
 
     async fn find_spent_notes(
         module_api: &DynModuleApi,
         note_keys: Vec<NoteKey>,
-    ) -> anyhow::Result<Vec<NoteKey>> {
+    ) -> FederationResult<Vec<NoteKey>> {
         stream::iter(note_keys.into_iter())
             .map(|key| {
                 let module_api_inner = module_api.clone();
                 async move {
                     let spent = retry("fetch e-cash spentness", aggressive_backoff(), || async {
-                        anyhow::Ok(module_api_inner.check_note_spent(key.nonce).await?)
+                        module_api_inner.check_note_spent(key.nonce).await
                     })
                     .await?;
-                    anyhow::Ok(if spent { Some(key) } else { None })
+                    Ok(if spent { Some(key) } else { None })
                 }
             })
             .buffer_unordered(CHECK_PARALLELISM)
@@ -137,7 +146,7 @@ impl MintClientModule {
         module_api: &DynModuleApi,
         next_indices: BTreeMap<Amount, u64>,
         gap_limit: u64,
-    ) -> anyhow::Result<Vec<(Amount, u64)>> {
+    ) -> FederationResult<Vec<(Amount, u64)>> {
         stream::iter(next_indices.into_iter())
             .map(|(amount, original_next_index)| {
                 let module_api_inner = module_api.clone();
@@ -166,7 +175,7 @@ impl MintClientModule {
                         }
                     };
 
-                    Result::<_, anyhow::Error>::Ok(maybe_advanced_index)
+                    Result::<_, FederationError>::Ok(maybe_advanced_index)
                 }
             })
             .buffer_unordered(CHECK_PARALLELISM)
@@ -187,7 +196,7 @@ impl MintClientModule {
         amount: Amount,
         base_index: u64,
         gap_limit: u64,
-    ) -> anyhow::Result<Option<u64>> {
+    ) -> FederationResult<Option<u64>> {
         for gap in 0..gap_limit {
             let idx = base_index + gap;
             let note_secret = Self::new_note_secret_static(&self.secret, amount, NoteIndex(idx));
@@ -195,7 +204,7 @@ impl MintClientModule {
             let nonce_used = retry(
                 "checking if blind nonce was already used",
                 aggressive_backoff(),
-                || async { anyhow::Ok(module_api.check_blind_nonce_used(blind_nonce).await?) },
+                || async { module_api.check_blind_nonce_used(blind_nonce).await },
             )
             .await?;
             if nonce_used {

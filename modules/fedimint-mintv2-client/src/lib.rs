@@ -36,6 +36,7 @@ use fedimint_client::transaction::{
     ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
 };
 use fedimint_client_module::db::ClientModuleMigrationFn;
+use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
     ClientModuleRecoveryPrepareArgs, RecoveryMode,
@@ -64,7 +65,7 @@ use fedimint_mintv2_common::config::{FeeConsensus, MintClientConfig, client_deno
 use fedimint_mintv2_common::{
     Denomination, KIND, MintCommonInit, MintInput, MintModuleTypes, MintOutput, Note, RecoveryItem,
 };
-use futures::{StreamExt, TryFutureExt, pin_mut};
+use futures::{StreamExt, pin_mut};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -1018,10 +1019,6 @@ impl MintClientModule {
     ) -> Result<OperationId, ReceiveECashError> {
         let operation_id = OperationId::from_encodable(&ecash);
 
-        if self.client_ctx.operation_exists(operation_id).await {
-            return Err(ReceiveECashError::AlreadyReceived);
-        }
-
         if ecash.mint() != Some(self.federation_id) {
             return Err(ReceiveECashError::WrongFederation);
         }
@@ -1050,14 +1047,15 @@ impl MintClientModule {
                 },
                 TransactionBuilder::new().with_inputs(input),
             )
-            .or_else(|_| async {
-                if self.client_ctx.operation_exists(operation_id).await {
-                    Err(ReceiveECashError::AlreadyReceived)
-                } else {
-                    Err(ReceiveECashError::InsufficientFunds)
+            .await
+            .map_err(|error| match error {
+                TransactionSubmitError::OperationAlreadyExists(_) => {
+                    ReceiveECashError::AlreadyReceived
                 }
-            })
-            .await?;
+                TransactionSubmitError::NoPrimaryModule { .. }
+                | TransactionSubmitError::PrimaryModule(..) => ReceiveECashError::InsufficientFunds,
+                other => ReceiveECashError::Failed(other),
+            })?;
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
@@ -1085,7 +1083,10 @@ impl MintClientModule {
     /// rather than committed, so the client's notes are read but left
     /// untouched. The quote is point-in-time: it depends on the current
     /// inventory and can move as notes change.
-    pub async fn receive_fee_quote(&self, ecash: &ECash) -> anyhow::Result<FeeQuote> {
+    pub async fn receive_fee_quote(
+        &self,
+        ecash: &ECash,
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         // A receive submits the ecash notes as explicit inputs and no explicit
         // outputs; the shared, module-agnostic fee quote runs the primary-module
         // balancing (rebalancing + minting change) over the real inventory.
@@ -1107,7 +1108,6 @@ impl MintClientModule {
                 },
             )
             .await
-            .map_err(anyhow::Error::from)
     }
 
     /// Computes the fee a `send(amount)` would incur given the client's current
@@ -1123,7 +1123,7 @@ impl MintClientModule {
     /// inputs) via the shared, module-agnostic fee quote over the real
     /// inventory. The quote is point-in-time: it depends on the current
     /// inventory and can move as notes change.
-    pub async fn send_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+    pub async fn send_fee_quote(&self, amount: Amount) -> Result<FeeQuote, TransactionSubmitError> {
         let amount = round_to_multiple(amount, client_denominations().next().unwrap().amount());
 
         // Exact-change path: handing out existing notes never costs a fee.
@@ -1152,7 +1152,6 @@ impl MintClientModule {
                 },
             )
             .await
-            .map_err(anyhow::Error::from)
     }
 
     /// Returns whether the client's current notes can be handed out to cover
@@ -1203,7 +1202,7 @@ impl MintClientModule {
     pub async fn await_final_receive_operation_state(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<FinalReceiveOperationState> {
+    ) -> Result<FinalReceiveOperationState, OperationLookupError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
 
@@ -1344,26 +1343,48 @@ async fn download_slice(
     }
 }
 
+/// A failure to send e-cash by preparing notes to hand to the recipient.
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum SendECashError {
+    /// The client needs to reissue notes to make change, but has no
+    /// connection to the federation to do so.
     #[error("We need to reissue notes but the client is offline")]
     Offline,
+    /// The client's balance cannot cover the amount requested.
     #[error("The clients balance is insufficient")]
     InsufficientBalance,
+    /// The client failed to prepare the notes for a reason it cannot
+    /// recover from.
     #[error("A non-recoverable error has occurred")]
     Failure,
 }
 
-#[derive(Error, Debug, Clone, Eq, PartialEq)]
+/// A failure to receive e-cash by reissuing it.
+#[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum ReceiveECashError {
+    /// The e-cash was issued by a different federation.
     #[error("The ECash is from a different federation")]
     WrongFederation,
+
+    /// One of the notes is worth no more than the fee to reissue it.
     #[error("ECash contains an uneconomical denomination")]
     UneconomicalDenomination,
+
+    /// The client cannot cover the fee the reissue costs.
     #[error("Receiving ecash requires additional funds")]
     InsufficientFunds,
+
+    /// An operation for this exact e-cash already exists, so it was already
+    /// received.
     #[error("The ECash was already received")]
     AlreadyReceived,
+
+    /// The reissue transaction could not be submitted for a reason unrelated
+    /// to funding.
+    #[error("The reissue transaction could not be submitted")]
+    Failed(#[source] TransactionSubmitError),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]

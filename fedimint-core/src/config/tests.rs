@@ -262,3 +262,18 @@ fn dkg_message_deserialize_reports_the_whole_decode_chain() {
         "{err}"
     );
 }
+
+#[test]
+fn an_excessive_relative_fee_names_the_fee_and_the_limit() {
+    use crate::config::ExcessiveRelativeFeeError;
+
+    let err = ExcessiveRelativeFeeError {
+        parts_per_million: 1_001,
+        max: 1_000,
+    };
+
+    assert_eq!(
+        err.to_string(),
+        "The relative fee of 1001 parts per million is over the limit of 1000"
+    );
+}

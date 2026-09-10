@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::hash;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail};
 use assert_matches::assert_matches;
 use fedimint_api_client::api::{
     FederationApiExt, SerdeOutputOutcome, ServerError,
@@ -18,7 +17,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::endpoint_constants::AWAIT_OUTPUTS_OUTCOMES_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::secp256k1::{Keypair, Secp256k1, Signing};
-use fedimint_core::util::FmtCompactAnyhow as _;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered, TransactionId, crit};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
@@ -34,6 +33,7 @@ use tbs::{
 use tracing::{debug, warn};
 
 use crate::client_db::NoteKey;
+use crate::error::VerifyBlindShareError;
 use crate::events::{NoteCreated, ReceivePaymentStatus, ReceivePaymentUpdateEvent};
 use crate::{MintClientContext, MintClientModule, SpendableNote};
 
@@ -344,9 +344,7 @@ impl MintOutputStatesCreated {
                             &module_decoder,
                             &tbs_pks,
                         )
-                        .map_err(|err| {
-                            ServerError::InvalidResponse(err.fmt_compact_anyhow().to_string())
-                        })
+                        .map_err(|err| ServerError::InvalidResponse(err.fmt_compact().to_string()))
                     },
                     global_context.api().all_peers().to_num_peers(),
                 ),
@@ -621,12 +619,12 @@ impl MintOutputStatesCreatedMulti {
                                         tracing::warn!(
                                             target: LOG_CLIENT_MODULE_MINT,
                                             %peer,
-                                            err = %err.fmt_compact_anyhow(),
+                                            err = %err.fmt_compact(),
                                             out_point = %OutPoint { txid: common.txid(), out_idx},
                                             "Invalid signature share from peer"
                                         );
                                         return Err(ServerError::InvalidResponse(
-                                            err.fmt_compact_anyhow().to_string(),
+                                            err.fmt_compact().to_string(),
                                         ));
                                     }
                                 }
@@ -698,7 +696,7 @@ impl MintOutputStatesCreatedMulti {
                                 &tbs_pks,
                             )
                             .map_err(|err| {
-                                ServerError::InvalidResponse(err.fmt_compact_anyhow().to_string())
+                                ServerError::InvalidResponse(err.fmt_compact().to_string())
                             })
                         },
                         api.all_peers().to_num_peers(),
@@ -737,7 +735,7 @@ impl MintOutputStatesCreatedMulti {
                                         )
                                         .map_err(|err| {
                                             ServerError::InvalidResponse(
-                                                err.fmt_compact_anyhow().to_string(),
+                                                err.fmt_compact().to_string(),
                                             )
                                         })
                                     },
@@ -863,7 +861,7 @@ pub fn verify_blind_share(
     blinded_message: BlindedMessage,
     decoder: &Decoder,
     peer_tbs_pks: &BTreeMap<PeerId, Tiered<PublicKeyShare>>,
-) -> anyhow::Result<BlindedSignatureShare> {
+) -> Result<BlindedSignatureShare, VerifyBlindShareError> {
     let outcome = deserialize_outcome::<MintOutputOutcome>(outcome, decoder)?;
 
     let blinded_signature_share = outcome
@@ -873,12 +871,12 @@ pub fn verify_blind_share(
 
     let amount_key = peer_tbs_pks
         .get(&peer)
-        .ok_or(anyhow!("Unknown peer"))?
+        .ok_or(VerifyBlindShareError::UnknownPeer { peer })?
         .tier(&amount)
-        .map_err(|_| anyhow!("Invalid Amount Tier"))?;
+        .map_err(|_| VerifyBlindShareError::InvalidAmountTier { amount })?;
 
     if !tbs::verify_signature_share(blinded_message, blinded_signature_share, *amount_key) {
-        bail!("Invalid blind signature")
+        return Err(VerifyBlindShareError::InvalidSignature);
     }
 
     Ok(blinded_signature_share)

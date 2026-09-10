@@ -1696,14 +1696,17 @@ impl Gateway {
         if let Ok(mint) = client.value().get_first_module::<MintClientModule>() {
             let notes = OOBNotes::from_str(&payload.notes).map_err(|e| {
                 PublicGatewayError::ReceiveEcashError {
-                    failure_reason: format!("Expected OOBNotes for MintV1 federation: {e}"),
+                    failure_reason: format!(
+                        "Expected OOBNotes for MintV1 federation: {}",
+                        e.fmt_compact()
+                    ),
                 }
             })?;
             let amount = notes.total_amount();
 
             let operation_id = mint.reissue_external_notes(notes, ()).await.map_err(|e| {
                 PublicGatewayError::ReceiveEcashError {
-                    failure_reason: e.to_string(),
+                    failure_reason: e.fmt_compact().to_string(),
                 }
             })?;
 
@@ -1711,7 +1714,10 @@ impl Gateway {
                 .subscribe_reissue_external_notes(operation_id)
                 .await
                 .map_err(|e| PublicGatewayError::ReceiveEcashError {
-                    failure_reason: format!("Could not subscribe to reissue operation: {e}"),
+                    failure_reason: format!(
+                        "Could not subscribe to reissue operation: {}",
+                        e.fmt_compact()
+                    ),
                 })?
                 .into_stream();
 
@@ -1751,14 +1757,14 @@ impl Gateway {
                 .receive(ecash, serde_json::Value::Null)
                 .await
                 .map_err(|e| PublicGatewayError::ReceiveEcashError {
-                    failure_reason: e.to_string(),
+                    failure_reason: e.fmt_compact().to_string(),
                 })?;
 
             let final_state = mint
                 .await_final_receive_operation_state(operation_id)
                 .await
                 .map_err(|e| PublicGatewayError::ReceiveEcashError {
-                    failure_reason: e.to_string(),
+                    failure_reason: e.fmt_compact().to_string(),
                 })?;
             match final_state {
                 fedimint_mintv2_client::FinalReceiveOperationState::Success => {}
@@ -2867,7 +2873,10 @@ impl IAdminGateway for Gateway {
             .into_value();
 
         if let Ok(mint_module) = client.get_first_module::<MintClientModule>() {
-            let notes = mint_module.send_oob_notes(payload.amount, ()).await?;
+            let notes = mint_module
+                .send_oob_notes(payload.amount, ())
+                .await
+                .map_err(|e| AdminGatewayError::Unexpected(e.into()))?;
             debug!(target: LOG_GATEWAY, ?notes, "Spend ecash notes");
             Ok(SpendEcashResponse {
                 notes: notes.to_string(),

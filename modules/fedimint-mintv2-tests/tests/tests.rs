@@ -1,7 +1,9 @@
 use std::pin::pin;
 
 use anyhow::ensure;
+use assert_matches::assert_matches;
 use async_stream::stream;
+use fedimint_client::error::OperationLookupError;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
 use fedimint_client::{ClientHandleArc, ModuleRecoveryCompleted, RootSecret};
@@ -186,6 +188,24 @@ async fn send_and_receive() -> anyhow::Result<()> {
     }
 
     ensure!(client_receive.get_balance_for_btc().await? >= Amount::from_sats(9900));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn awaiting_an_unknown_receive_operation_reports_not_found() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+    let operation_id = OperationId::new_random();
+
+    assert_matches!(
+        client
+            .get_first_module::<MintClientModule>()?
+            .await_final_receive_operation_state(operation_id)
+            .await,
+        Err(OperationLookupError::NotFound(_))
+    );
 
     Ok(())
 }
@@ -582,12 +602,12 @@ async fn receive_rejects_ecash_from_another_federation() -> anyhow::Result<()> {
     // checks the mint id before submitting anything to consensus.
     let foreign_ecash = ECash::new(FederationId::dummy(), ecash.notes());
 
-    assert_eq!(
+    assert_matches!(
         client
             .get_first_module::<MintClientModule>()?
             .receive(foreign_ecash, Value::Null)
             .await,
-        Err(ReceiveECashError::WrongFederation),
+        Err(ReceiveECashError::WrongFederation)
     );
 
     Ok(())
@@ -622,12 +642,12 @@ async fn receiving_the_same_ecash_twice_is_rejected() -> anyhow::Result<()> {
     // The operation id is derived from the ecash itself, so a second receive of
     // the identical notes finds the existing operation and refuses rather than
     // submitting a duplicate transaction.
-    assert_eq!(
+    assert_matches!(
         client
             .get_first_module::<MintClientModule>()?
             .receive(ecash, Value::Null)
             .await,
-        Err(ReceiveECashError::AlreadyReceived),
+        Err(ReceiveECashError::AlreadyReceived)
     );
 
     Ok(())
@@ -650,12 +670,12 @@ async fn receive_rejects_notes_below_the_base_fee() -> anyhow::Result<()> {
 
     let dust_ecash = ECash::new(client.federation_id(), vec![dust_note]);
 
-    assert_eq!(
+    assert_matches!(
         client
             .get_first_module::<MintClientModule>()?
             .receive(dust_ecash, Value::Null)
             .await,
-        Err(ReceiveECashError::UneconomicalDenomination),
+        Err(ReceiveECashError::UneconomicalDenomination)
     );
 
     Ok(())

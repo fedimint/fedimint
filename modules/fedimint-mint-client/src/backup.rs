@@ -7,6 +7,7 @@ use fedimint_mint_common::KIND;
 use serde::{Deserialize, Serialize};
 
 use super::MintClientModule;
+use crate::error::PrepareEcashBackupError;
 use crate::output::{MintOutputStateMachine, NoteIssuanceRequest};
 use crate::{MintClientStateMachines, NoteIndex, SpendableNote};
 
@@ -78,7 +79,7 @@ impl MintClientModule {
     pub async fn prepare_plaintext_ecash_backup(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> anyhow::Result<EcashBackup> {
+    ) -> Result<EcashBackup, PrepareEcashBackupError> {
         // fetch consensus height first - so we dont miss anything when scanning
         let session_count = self.client_ctx.global_api().session_count().await?;
 
@@ -133,7 +134,7 @@ impl MintClientModule {
             notes
                 .into_iter_items()
                 .map(|(amt, spendable_note)| Ok((amt, spendable_note.decode()?)))
-                .collect::<anyhow::Result<TieredMulti<_>>>()?,
+                .collect::<Result<TieredMulti<_>, PrepareEcashBackupError>>()?,
             pending_notes,
             session_count,
             next_note_idx,

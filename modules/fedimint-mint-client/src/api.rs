@@ -1,4 +1,6 @@
-use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
+use fedimint_api_client::api::{
+    FederationApiExt, FederationResult, IModuleFederationApi, ServerResult,
+};
 use fedimint_core::bitcoin::hashes::sha256;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncodingBase64};
@@ -9,6 +11,8 @@ use fedimint_mint_common::endpoint_constants::{
     RECOVERY_COUNT_ENDPOINT, RECOVERY_SLICE_ENDPOINT, RECOVERY_SLICE_HASH_ENDPOINT,
 };
 use fedimint_mint_common::{BlindNonce, Nonce, RecoveryItem};
+
+use crate::error::FetchRecoverySliceError;
 
 #[apply(async_trait_maybe_send!)]
 pub trait MintFederationApi {
@@ -25,21 +29,17 @@ pub trait MintFederationApi {
         &self,
         peer: PeerId,
         blind_nonce: BlindNonce,
-    ) -> anyhow::Result<bool>;
+    ) -> ServerResult<bool>;
 
     /// Asks a single peer if the note identified by `nonce` was already spent.
     ///
     /// Unlike [`MintFederationApi::check_note_spent`] this does not wait for a
     /// threshold of peers to agree, which makes it possible to observe
     /// disagreement between peers.
-    async fn check_note_spent_single_peer(
-        &self,
-        peer: PeerId,
-        nonce: Nonce,
-    ) -> anyhow::Result<bool>;
+    async fn check_note_spent_single_peer(&self, peer: PeerId, nonce: Nonce) -> ServerResult<bool>;
 
     /// Returns the total number of recovery items stored on the federation.
-    async fn fetch_recovery_count(&self) -> anyhow::Result<u64>;
+    async fn fetch_recovery_count(&self) -> FederationResult<u64>;
 
     /// Returns the consensus hash of recovery items in the range `[start,
     /// end)`.
@@ -51,13 +51,13 @@ pub trait MintFederationApi {
         peer: PeerId,
         start: u64,
         end: u64,
-    ) -> anyhow::Result<Vec<RecoveryItem>>;
+    ) -> Result<Vec<RecoveryItem>, FetchRecoverySliceError>;
 
     /// Returns the outpoints where the given blind nonces were used.
     async fn fetch_blind_nonce_outpoints(
         &self,
         blind_nonces: Vec<BlindNonce>,
-    ) -> anyhow::Result<Vec<OutPoint>>;
+    ) -> FederationResult<Vec<OutPoint>>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -85,37 +85,30 @@ where
         &self,
         peer: PeerId,
         blind_nonce: BlindNonce,
-    ) -> anyhow::Result<bool> {
-        Ok(self
-            .request_single_peer::<bool>(
-                BLIND_NONCE_USED_ENDPOINT.to_string(),
-                ApiRequestErased::new(blind_nonce),
-                peer,
-            )
-            .await?)
+    ) -> ServerResult<bool> {
+        self.request_single_peer::<bool>(
+            BLIND_NONCE_USED_ENDPOINT.to_string(),
+            ApiRequestErased::new(blind_nonce),
+            peer,
+        )
+        .await
     }
 
-    async fn check_note_spent_single_peer(
-        &self,
-        peer: PeerId,
-        nonce: Nonce,
-    ) -> anyhow::Result<bool> {
-        Ok(self
-            .request_single_peer::<bool>(
-                NOTE_SPENT_ENDPOINT.to_string(),
-                ApiRequestErased::new(nonce),
-                peer,
-            )
-            .await?)
+    async fn check_note_spent_single_peer(&self, peer: PeerId, nonce: Nonce) -> ServerResult<bool> {
+        self.request_single_peer::<bool>(
+            NOTE_SPENT_ENDPOINT.to_string(),
+            ApiRequestErased::new(nonce),
+            peer,
+        )
+        .await
     }
 
-    async fn fetch_recovery_count(&self) -> anyhow::Result<u64> {
+    async fn fetch_recovery_count(&self) -> FederationResult<u64> {
         self.request_current_consensus::<u64>(
             RECOVERY_COUNT_ENDPOINT.to_string(),
             ApiRequestErased::default(),
         )
         .await
-        .map_err(|e| anyhow::anyhow!("{e}"))
     }
 
     async fn fetch_recovery_slice_hash(&self, start: u64, end: u64) -> sha256::Hash {
@@ -131,7 +124,7 @@ where
         peer: PeerId,
         start: u64,
         end: u64,
-    ) -> anyhow::Result<Vec<RecoveryItem>> {
+    ) -> Result<Vec<RecoveryItem>, FetchRecoverySliceError> {
         let result = self
             .request_single_peer::<SerdeModuleEncodingBase64<Vec<RecoveryItem>>>(
                 RECOVERY_SLICE_ENDPOINT.to_owned(),
@@ -146,12 +139,11 @@ where
     async fn fetch_blind_nonce_outpoints(
         &self,
         blind_nonces: Vec<BlindNonce>,
-    ) -> anyhow::Result<Vec<OutPoint>> {
+    ) -> FederationResult<Vec<OutPoint>> {
         self.request_current_consensus::<Vec<OutPoint>>(
             RECOVERY_BLIND_NONCE_OUTPOINTS_ENDPOINT.to_string(),
             ApiRequestErased::new(blind_nonces),
         )
         .await
-        .map_err(|e| anyhow::anyhow!("{e}"))
     }
 }

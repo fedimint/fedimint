@@ -10,6 +10,7 @@ use std::hash::Hash;
 
 use bitcoin_hashes::hash160;
 use config::MintClientConfig;
+pub use fedimint_core::config::ExcessiveRelativeFeeError;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};

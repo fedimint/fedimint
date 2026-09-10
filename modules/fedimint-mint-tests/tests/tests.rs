@@ -7,12 +7,16 @@ use fedimint_client::ClientHandleArc;
 use fedimint_client::backup::{ClientBackup, Metadata};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
 use fedimint_client_module::ClientModule;
+use fedimint_client_module::error::OperationLookupError;
+use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::encoding::Decodable;
+use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::backoff_util::aggressive_backoff;
-use fedimint_core::util::{NextOrPending, retry};
+use fedimint_core::util::{FmtCompact as _, NextOrPending, retry};
 use fedimint_core::{Amount, TieredMulti, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
@@ -20,9 +24,10 @@ use fedimint_logging::LOG_TEST;
 use fedimint_mint_client::api::MintFederationApi;
 use fedimint_mint_client::client_db::{NextECashNoteIndexKey, NoteKey};
 use fedimint_mint_client::{
-    MintClientInit, MintClientModule, Note, OOBNotes, ReissueExternalNotesState,
-    SelectNotesWithAtleastAmount, SelectNotesWithExactAmount, SpendOOBState,
-    SpendableNoteUndecoded,
+    MintClientInit, MintClientModule, Note, OOBNotes, ReissueExternalNotesError,
+    ReissueExternalNotesState, SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
+    SpendOOBError, SpendOOBState, SpendableNote, SpendableNoteUndecoded,
+    SubscribeReissueExternalNotesError, SubscribeSpendNotesError, ValidateNotesError,
 };
 use fedimint_mint_common::{MintInput, MintInputV0, Nonce};
 use fedimint_mint_server::MintInit;
@@ -306,7 +311,9 @@ async fn send_oob_notes_reissue_without_settling() -> anyhow::Result<()> {
         mint.send_fee_quote(Amount::from_msats(5_000_000)).await?;
         mint.send_oob_notes(Amount::from_msats(5_000_000), ())
             .await
-            .map_err(|e| anyhow::anyhow!("iteration {i}: send_oob_notes failed: {e:#}"))?;
+            .map_err(|e| {
+                anyhow::anyhow!("iteration {i}: send_oob_notes failed: {}", e.fmt_compact())
+            })?;
     }
 
     Ok(())
@@ -841,7 +848,7 @@ async fn error_zero_value_oob_spend() -> anyhow::Result<()> {
         .await?;
 
     // Spend from client1 to client2
-    let err_msg = client1
+    let err = client1
         .get_first_module::<MintClientModule>()?
         .spend_notes_with_selector(
             &SelectNotesWithAtleastAmount,
@@ -851,9 +858,8 @@ async fn error_zero_value_oob_spend() -> anyhow::Result<()> {
             (),
         )
         .await
-        .expect_err("Zero-amount spends should be forbidden")
-        .to_string();
-    assert!(err_msg.contains("zero-amount"));
+        .expect_err("Zero-amount spends should be forbidden");
+    assert_matches!(err, SpendOOBError::ZeroAmount);
 
     Ok(())
 }
@@ -869,16 +875,49 @@ async fn error_zero_value_oob_receive() -> anyhow::Result<()> {
         .await?;
 
     // Spend from client1 to client2
-    let err_msg = client1
+    let err = client1
         .get_first_module::<MintClientModule>()?
         .reissue_external_notes(
             OOBNotes::new(client1.federation_id().to_prefix(), Default::default()),
             (),
         )
         .await
-        .expect_err("Zero-amount receives should be forbidden")
-        .to_string();
-    assert!(err_msg.contains("zero-amount"));
+        .expect_err("Zero-amount receives should be forbidden");
+    assert_matches!(err, ReissueExternalNotesError::ZeroAmount);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reissuing_the_same_notes_twice_reports_already_reissued() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let (client1, client2) = fed.two_clients().await;
+    issue_ecash(&client1, sats(1000)).await?;
+
+    let (_op, notes) = client1
+        .get_first_module::<MintClientModule>()?
+        .spend_notes_with_selector(&SelectNotesWithAtleastAmount, sats(500), None, false, ())
+        .await?;
+
+    let client2_mint = client2.get_first_module::<MintClientModule>()?;
+    let op = client2_mint
+        .reissue_external_notes(notes.clone(), ())
+        .await?;
+    assert_matches!(
+        client2_mint
+            .subscribe_reissue_external_notes(op)
+            .await?
+            .await_outcome()
+            .await,
+        Some(ReissueExternalNotesState::Done)
+    );
+
+    // The operation id is the hash of the notes, so a second reissue of the
+    // same notes finds the existing operation instead of submitting again.
+    assert_matches!(
+        client2_mint.reissue_external_notes(notes, ()).await,
+        Err(ReissueExternalNotesError::AlreadyReissued)
+    );
 
     Ok(())
 }
@@ -1679,6 +1718,103 @@ async fn test_send_oob_notes() -> anyhow::Result<()> {
             .send_oob_notes(Amount::from_sats(100), ())
             .await?;
     }
+
+    Ok(())
+}
+
+/// A syntactically valid note. Its signature is never checked here: both the
+/// cross-federation and unissued-tier checks in `validate_notes` return
+/// before a note's signature is verified.
+fn dummy_spendable_note() -> SpendableNote {
+    const NOTE_HEX: &str = "a5dd3ebacad1bc48bd8718eed5a8da1d68f91323bef2848ac4fa2e6f8eed710f317\
+        8fd4aef047cc234e6b1127086f33cc408b39818781d9521475360de6b205f3328e490a6d99d5e2553a4553\
+        207c8bd";
+
+    SpendableNote::consensus_decode_hex(NOTE_HEX, &ModuleRegistry::default())
+        .expect("hex note is well-formed")
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn validating_notes_from_another_federation_names_both_ids() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let mint_module = client.get_first_module::<MintClientModule>()?;
+
+    let other = FederationId::dummy().to_prefix();
+    let notes = OOBNotes::new(other, TieredMulti::default());
+
+    let err = mint_module
+        .validate_notes(&notes)
+        .expect_err("Notes from another federation are not valid here");
+
+    assert_matches!(err, ValidateNotesError::WrongFederationId { found, .. } if found == other);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn validating_a_note_of_an_unissued_tier_reports_the_tier() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let mint_module = client.get_first_module::<MintClientModule>()?;
+
+    let amount = Amount::from_msats(7);
+    let notes = OOBNotes::new(
+        client.federation_id().to_prefix(),
+        [(amount, dummy_spendable_note())].into_iter().collect(),
+    );
+
+    let err = mint_module
+        .validate_notes(&notes)
+        .expect_err("The federation does not issue this tier");
+
+    assert_matches!(
+        err,
+        ValidateNotesError::InvalidAmountTier { amount: a, .. } if a == amount
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn subscribing_to_an_unknown_operation_reports_not_found() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let mint = client.get_first_module::<MintClientModule>()?;
+    let operation_id = OperationId::new_random();
+
+    assert_matches!(
+        mint.subscribe_reissue_external_notes(operation_id).await,
+        Err(SubscribeReissueExternalNotesError::Operation(
+            OperationLookupError::NotFound(_)
+        ))
+    );
+    assert_matches!(
+        mint.subscribe_spend_notes(operation_id).await,
+        Err(SubscribeSpendNotesError::Operation(
+            OperationLookupError::NotFound(_)
+        ))
+    );
+
+    issue_ecash(&client, sats(1000)).await?;
+
+    let (spend_op, notes) = mint
+        .spend_notes_with_selector(&SelectNotesWithAtleastAmount, sats(500), None, false, ())
+        .await?;
+
+    // A spend operation is not a reissuance.
+    assert_matches!(
+        mint.subscribe_reissue_external_notes(spend_op).await,
+        Err(SubscribeReissueExternalNotesError::NotAReissuance)
+    );
+
+    let reissue_op = mint.reissue_external_notes(notes, ()).await?;
+
+    // A reissue operation is not an out-of-band spend.
+    assert_matches!(
+        mint.subscribe_spend_notes(reissue_op).await,
+        Err(SubscribeSpendNotesError::NotAnOutOfBandSpend)
+    );
 
     Ok(())
 }

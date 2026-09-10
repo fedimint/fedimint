@@ -1459,9 +1459,7 @@ impl FedimintCli {
                     .map_err_cli_msg("can't get mint module")?;
 
                 for _ in 0..count {
-                    mint.advance_note_idx(amount)
-                        .await
-                        .map_err_cli_msg("failed to advance the note_idx")?;
+                    mint.advance_note_idx(amount).await;
                 }
 
                 Ok(CliOutput::Raw(serde_json::Value::Null))
