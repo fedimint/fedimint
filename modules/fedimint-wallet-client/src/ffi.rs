@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use anyhow::anyhow;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Amount, OutPoint, Txid};
 use fedimint_core::core::OperationId;
@@ -12,7 +13,7 @@ use serde_json::Value;
 
 use crate::{
     DepositStateV2, PegInRequest, PegInResponse, PegOutRequest, PegOutResponse, WalletClientModule,
-    WithdrawState, anyhow,
+    WithdrawState,
 };
 
 type Result<T> = std::result::Result<T, UniffiError>;

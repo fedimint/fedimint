@@ -34,8 +34,6 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context as AnyhowContext;
-#[cfg(feature = "uniffi")]
-use anyhow::anyhow;
 use async_stream::{stream, try_stream};
 use backup::WalletModuleBackup;
 use bitcoin::address::NetworkUnchecked;
@@ -98,8 +96,8 @@ use crate::client_db::{
 };
 use crate::deposit::DepositStateMachine;
 pub use crate::error::{
-    DepositAddressError, MaxWithdrawableAmountError, PegInError, PegOutError,
-    SubscribeDepositError, SubscribeWithdrawError, WithdrawFeesError,
+    ConsensusVersionVotingError, DepositAddressError, MaxWithdrawableAmountError, PegInError,
+    PegOutError, SubscribeDepositError, SubscribeWithdrawError, WithdrawFeesError,
 };
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
 
@@ -766,7 +764,8 @@ pub struct PegInRequest {
 #[cfg(feature = "uniffi")]
 uniffi::custom_type!(PegInRequest, String, {
     lower: |v| serde_json::to_string(&v).expect("PegInRequest serialization cannot fail"),
-    try_lift: |s| serde_json::from_str::<PegInRequest>(&s).map_err(|e| anyhow!("Failed to parse PegInRequest: {e}")),
+    try_lift: |s| serde_json::from_str::<PegInRequest>(&s)
+        .map_err(|e| anyhow::anyhow!("Failed to parse PegInRequest: {e}")),
 });
 
 #[derive(Deserialize)]
@@ -2011,13 +2010,15 @@ impl WalletClientModule {
         ))
     }
 
-    fn admin_auth(&self) -> anyhow::Result<ApiAuth> {
+    fn admin_auth(&self) -> Result<ApiAuth, ConsensusVersionVotingError> {
         self.admin_auth
             .clone()
-            .ok_or_else(|| anyhow::format_err!("Admin auth not set"))
+            .ok_or(ConsensusVersionVotingError::AdminAuthMissing)
     }
 
-    pub async fn activate_consensus_version_voting(&self) -> anyhow::Result<()> {
+    pub async fn activate_consensus_version_voting(
+        &self,
+    ) -> Result<(), ConsensusVersionVotingError> {
         self.module_api
             .activate_consensus_version_voting(self.admin_auth()?)
             .await?;

@@ -241,3 +241,23 @@ impl From<SubscribeWithdrawError> for fedimint_core::util::ffi::UniffiError {
         Self::General(e.fmt_compact().to_string())
     }
 }
+
+/// A failure to vote for activating the next wallet module consensus version.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ConsensusVersionVotingError {
+    /// Voting is a guardian action and this client holds no admin
+    /// credentials.
+    #[error("Admin auth is not set")]
+    AdminAuthMissing,
+
+    /// The vote could not be submitted to the federation.
+    #[error("The vote could not be submitted to the federation")]
+    Federation(#[source] Box<FederationError>),
+}
+
+impl From<FederationError> for ConsensusVersionVotingError {
+    fn from(source: FederationError) -> Self {
+        Self::Federation(Box::new(source))
+    }
+}

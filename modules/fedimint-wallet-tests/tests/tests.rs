@@ -32,9 +32,9 @@ use fedimint_testing_core::config::API_AUTH;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::client_db::{SupportsSafeDepositKey, TweakIdx};
 use fedimint_wallet_client::{
-    AllocateDepositOutcome, DepositStateV2, MaybeNewAddress, PegInError, PegOutError,
-    PegOutRequest, SubscribeDepositError, SubscribeWithdrawError, WalletClientInit,
-    WalletClientModule, WithdrawFeesError, WithdrawState,
+    AllocateDepositOutcome, ConsensusVersionVotingError, DepositStateV2, MaybeNewAddress,
+    PegInError, PegOutError, PegOutRequest, SubscribeDepositError, SubscribeWithdrawError,
+    WalletClientInit, WalletClientModule, WithdrawFeesError, WithdrawState,
 };
 use fedimint_wallet_common::config::WalletConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -2633,6 +2633,26 @@ async fn subscribing_to_an_unknown_withdrawal_reports_not_found() -> anyhow::Res
         Err(SubscribeWithdrawError::Operation(
             OperationLookupError::NotFound(_)
         ))
+    );
+
+    Ok(())
+}
+
+/// Voting is an admin action, and a client without admin credentials is told
+/// exactly that instead of being handed a generic failure.
+#[tokio::test(flavor = "multi_thread")]
+async fn voting_without_admin_auth_says_so() -> anyhow::Result<()> {
+    skip_if_not_wallet_test_group!("1");
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    assert_matches!(
+        client
+            .get_first_module::<WalletClientModule>()?
+            .activate_consensus_version_voting()
+            .await,
+        Err(ConsensusVersionVotingError::AdminAuthMissing)
     );
 
     Ok(())
