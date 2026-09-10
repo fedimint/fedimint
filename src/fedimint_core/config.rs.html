@@ -964,71 +964,85 @@
 <a href=#964 id=964 data-nosnippet>964</a>    })
 <a href=#965 id=965 data-nosnippet>965</a>}
 <a href=#966 id=966 data-nosnippet>966</a>
-<a href=#967 id=967 data-nosnippet>967</a><span class="doccomment">/// Failure to look up or cast a module configuration.
-<a href=#968 id=968 data-nosnippet>968</a></span><span class="attr">#[derive(Debug, Error)]
-<a href=#969 id=969 data-nosnippet>969</a>#[non_exhaustive]
-<a href=#970 id=970 data-nosnippet>970</a></span><span class="kw">pub enum </span>ModuleConfigError {
-<a href=#971 id=971 data-nosnippet>971</a>    <span class="doccomment">/// No module with this instance id exists in the config.
-<a href=#972 id=972 data-nosnippet>972</a>    </span><span class="attr">#[error(<span class="string">"Client config for module id {id} not found"</span>)]
-<a href=#973 id=973 data-nosnippet>973</a>    </span>ModuleNotFound { id: ModuleInstanceId },
-<a href=#974 id=974 data-nosnippet>974</a>    <span class="doccomment">/// No module of this kind exists in the config.
-<a href=#975 id=975 data-nosnippet>975</a>    </span><span class="attr">#[error(<span class="string">"Module kind {kind} not found"</span>)]
-<a href=#976 id=976 data-nosnippet>976</a>    </span>KindNotFound { kind: ModuleKind },
-<a href=#977 id=977 data-nosnippet>977</a>    <span class="doccomment">/// The decoded module config is not of the requested type.
-<a href=#978 id=978 data-nosnippet>978</a>    </span><span class="attr">#[error(<span class="string">"Client module config of kind {kind} is not a {expected}"</span>)]
-<a href=#979 id=979 data-nosnippet>979</a>    </span>WrongType {
-<a href=#980 id=980 data-nosnippet>980</a>        kind: ModuleKind,
-<a href=#981 id=981 data-nosnippet>981</a>        expected: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
-<a href=#982 id=982 data-nosnippet>982</a>    },
-<a href=#983 id=983 data-nosnippet>983</a>    <span class="doccomment">/// The module config is still in its raw, undecoded form because no
-<a href=#984 id=984 data-nosnippet>984</a>    /// decoder for its kind was available; see
-<a href=#985 id=985 data-nosnippet>985</a>    /// [`ClientModuleConfig::redecode_raw`].
-<a href=#986 id=986 data-nosnippet>986</a>    </span><span class="attr">#[error(<span class="string">"Client module config for module id {id} of kind {kind} has not been decoded"</span>)]
-<a href=#987 id=987 data-nosnippet>987</a>    </span>NotDecoded {
-<a href=#988 id=988 data-nosnippet>988</a>        id: ModuleInstanceId,
-<a href=#989 id=989 data-nosnippet>989</a>        kind: ModuleKind,
-<a href=#990 id=990 data-nosnippet>990</a>    },
-<a href=#991 id=991 data-nosnippet>991</a>    <span class="doccomment">/// The config references a module kind this build has no support for.
-<a href=#992 id=992 data-nosnippet>992</a>    </span><span class="attr">#[error(<span class="string">"Detected configuration for unsupported module id: {id}, kind: {kind}"</span>)]
-<a href=#993 id=993 data-nosnippet>993</a>    </span>UnsupportedModule {
-<a href=#994 id=994 data-nosnippet>994</a>        id: ModuleInstanceId,
-<a href=#995 id=995 data-nosnippet>995</a>        kind: ModuleKind,
+<a href=#967 id=967 data-nosnippet>967</a><span class="doccomment">/// A module's configured relative fee is above what the module accepts.
+<a href=#968 id=968 data-nosnippet>968</a>///
+<a href=#969 id=969 data-nosnippet>969</a>/// Every module that charges a relative fee validates it the same way in its
+<a href=#970 id=970 data-nosnippet>970</a>/// own `FeeConsensus::new`, so the failure is named once here rather than once
+<a href=#971 id=971 data-nosnippet>971</a>/// per module.
+<a href=#972 id=972 data-nosnippet>972</a></span><span class="attr">#[derive(Debug, Error)]
+<a href=#973 id=973 data-nosnippet>973</a>#[error(<span class="string">"The relative fee of {parts_per_million} parts per million is over the limit of {max}"</span>)]
+<a href=#974 id=974 data-nosnippet>974</a></span><span class="kw">pub struct </span>ExcessiveRelativeFeeError {
+<a href=#975 id=975 data-nosnippet>975</a>    <span class="doccomment">/// The fee that was asked for.
+<a href=#976 id=976 data-nosnippet>976</a>    </span><span class="kw">pub </span>parts_per_million: u64,
+<a href=#977 id=977 data-nosnippet>977</a>    <span class="doccomment">/// The largest relative fee the module accepts.
+<a href=#978 id=978 data-nosnippet>978</a>    </span><span class="kw">pub </span>max: u64,
+<a href=#979 id=979 data-nosnippet>979</a>}
+<a href=#980 id=980 data-nosnippet>980</a>
+<a href=#981 id=981 data-nosnippet>981</a><span class="doccomment">/// Failure to look up or cast a module configuration.
+<a href=#982 id=982 data-nosnippet>982</a></span><span class="attr">#[derive(Debug, Error)]
+<a href=#983 id=983 data-nosnippet>983</a>#[non_exhaustive]
+<a href=#984 id=984 data-nosnippet>984</a></span><span class="kw">pub enum </span>ModuleConfigError {
+<a href=#985 id=985 data-nosnippet>985</a>    <span class="doccomment">/// No module with this instance id exists in the config.
+<a href=#986 id=986 data-nosnippet>986</a>    </span><span class="attr">#[error(<span class="string">"Client config for module id {id} not found"</span>)]
+<a href=#987 id=987 data-nosnippet>987</a>    </span>ModuleNotFound { id: ModuleInstanceId },
+<a href=#988 id=988 data-nosnippet>988</a>    <span class="doccomment">/// No module of this kind exists in the config.
+<a href=#989 id=989 data-nosnippet>989</a>    </span><span class="attr">#[error(<span class="string">"Module kind {kind} not found"</span>)]
+<a href=#990 id=990 data-nosnippet>990</a>    </span>KindNotFound { kind: ModuleKind },
+<a href=#991 id=991 data-nosnippet>991</a>    <span class="doccomment">/// The decoded module config is not of the requested type.
+<a href=#992 id=992 data-nosnippet>992</a>    </span><span class="attr">#[error(<span class="string">"Client module config of kind {kind} is not a {expected}"</span>)]
+<a href=#993 id=993 data-nosnippet>993</a>    </span>WrongType {
+<a href=#994 id=994 data-nosnippet>994</a>        kind: ModuleKind,
+<a href=#995 id=995 data-nosnippet>995</a>        expected: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
 <a href=#996 id=996 data-nosnippet>996</a>    },
-<a href=#997 id=997 data-nosnippet>997</a>    <span class="doccomment">/// A meta field exists but does not deserialize to the requested type.
-<a href=#998 id=998 data-nosnippet>998</a>    </span><span class="attr">#[error(<span class="string">"Decoding meta field '{key}' failed"</span>)]
-<a href=#999 id=999 data-nosnippet>999</a>    </span>Meta {
-<a href=#1000 id=1000 data-nosnippet>1000</a>        key: String,
-<a href=#1001 id=1001 data-nosnippet>1001</a>        <span class="attr">#[source]
-<a href=#1002 id=1002 data-nosnippet>1002</a>        </span>source: serde_json::Error,
-<a href=#1003 id=1003 data-nosnippet>1003</a>    },
-<a href=#1004 id=1004 data-nosnippet>1004</a>    <span class="doccomment">/// A JSON part of the config failed to (de)serialize.
-<a href=#1005 id=1005 data-nosnippet>1005</a>    </span><span class="attr">#[error(<span class="string">"Invalid JSON in module config"</span>)]
-<a href=#1006 id=1006 data-nosnippet>1006</a>    </span>Json(<span class="attr">#[from] </span>serde_json::Error),
-<a href=#1007 id=1007 data-nosnippet>1007</a>    <span class="doccomment">/// A consensus-encoded part of the config failed to decode.
-<a href=#1008 id=1008 data-nosnippet>1008</a>    </span><span class="attr">#[error(<span class="string">"Invalid consensus encoding in module config"</span>)]
-<a href=#1009 id=1009 data-nosnippet>1009</a>    </span>Decode(<span class="attr">#[from] </span>DecodeError),
-<a href=#1010 id=1010 data-nosnippet>1010</a>}
-<a href=#1011 id=1011 data-nosnippet>1011</a>
-<a href=#1012 id=1012 data-nosnippet>1012</a><span class="doccomment">/// Failure to load a JSON config file.
-<a href=#1013 id=1013 data-nosnippet>1013</a></span><span class="attr">#[derive(Debug, Error)]
-<a href=#1014 id=1014 data-nosnippet>1014</a>#[non_exhaustive]
-<a href=#1015 id=1015 data-nosnippet>1015</a></span><span class="kw">pub enum </span>ConfigFileError {
-<a href=#1016 id=1016 data-nosnippet>1016</a>    <span class="doccomment">/// The file could not be opened or read.
-<a href=#1017 id=1017 data-nosnippet>1017</a>    </span><span class="attr">#[error(<span class="string">"Failed to read config file {}"</span>, path.display())]
-<a href=#1018 id=1018 data-nosnippet>1018</a>    </span>Io {
-<a href=#1019 id=1019 data-nosnippet>1019</a>        path: PathBuf,
-<a href=#1020 id=1020 data-nosnippet>1020</a>        <span class="attr">#[source]
-<a href=#1021 id=1021 data-nosnippet>1021</a>        </span>source: std::io::Error,
-<a href=#1022 id=1022 data-nosnippet>1022</a>    },
-<a href=#1023 id=1023 data-nosnippet>1023</a>    <span class="doccomment">/// The file is not valid JSON for the requested type.
-<a href=#1024 id=1024 data-nosnippet>1024</a>    </span><span class="attr">#[error(<span class="string">"Invalid JSON in config file {}"</span>, path.display())]
-<a href=#1025 id=1025 data-nosnippet>1025</a>    </span>Json {
-<a href=#1026 id=1026 data-nosnippet>1026</a>        path: PathBuf,
-<a href=#1027 id=1027 data-nosnippet>1027</a>        <span class="attr">#[source]
-<a href=#1028 id=1028 data-nosnippet>1028</a>        </span>source: serde_json::Error,
-<a href=#1029 id=1029 data-nosnippet>1029</a>    },
-<a href=#1030 id=1030 data-nosnippet>1030</a>}
-<a href=#1031 id=1031 data-nosnippet>1031</a>
-<a href=#1032 id=1032 data-nosnippet>1032</a><span class="attr">#[cfg(test)]
-<a href=#1033 id=1033 data-nosnippet>1033</a></span><span class="kw">mod </span>tests;
+<a href=#997 id=997 data-nosnippet>997</a>    <span class="doccomment">/// The module config is still in its raw, undecoded form because no
+<a href=#998 id=998 data-nosnippet>998</a>    /// decoder for its kind was available; see
+<a href=#999 id=999 data-nosnippet>999</a>    /// [`ClientModuleConfig::redecode_raw`].
+<a href=#1000 id=1000 data-nosnippet>1000</a>    </span><span class="attr">#[error(<span class="string">"Client module config for module id {id} of kind {kind} has not been decoded"</span>)]
+<a href=#1001 id=1001 data-nosnippet>1001</a>    </span>NotDecoded {
+<a href=#1002 id=1002 data-nosnippet>1002</a>        id: ModuleInstanceId,
+<a href=#1003 id=1003 data-nosnippet>1003</a>        kind: ModuleKind,
+<a href=#1004 id=1004 data-nosnippet>1004</a>    },
+<a href=#1005 id=1005 data-nosnippet>1005</a>    <span class="doccomment">/// The config references a module kind this build has no support for.
+<a href=#1006 id=1006 data-nosnippet>1006</a>    </span><span class="attr">#[error(<span class="string">"Detected configuration for unsupported module id: {id}, kind: {kind}"</span>)]
+<a href=#1007 id=1007 data-nosnippet>1007</a>    </span>UnsupportedModule {
+<a href=#1008 id=1008 data-nosnippet>1008</a>        id: ModuleInstanceId,
+<a href=#1009 id=1009 data-nosnippet>1009</a>        kind: ModuleKind,
+<a href=#1010 id=1010 data-nosnippet>1010</a>    },
+<a href=#1011 id=1011 data-nosnippet>1011</a>    <span class="doccomment">/// A meta field exists but does not deserialize to the requested type.
+<a href=#1012 id=1012 data-nosnippet>1012</a>    </span><span class="attr">#[error(<span class="string">"Decoding meta field '{key}' failed"</span>)]
+<a href=#1013 id=1013 data-nosnippet>1013</a>    </span>Meta {
+<a href=#1014 id=1014 data-nosnippet>1014</a>        key: String,
+<a href=#1015 id=1015 data-nosnippet>1015</a>        <span class="attr">#[source]
+<a href=#1016 id=1016 data-nosnippet>1016</a>        </span>source: serde_json::Error,
+<a href=#1017 id=1017 data-nosnippet>1017</a>    },
+<a href=#1018 id=1018 data-nosnippet>1018</a>    <span class="doccomment">/// A JSON part of the config failed to (de)serialize.
+<a href=#1019 id=1019 data-nosnippet>1019</a>    </span><span class="attr">#[error(<span class="string">"Invalid JSON in module config"</span>)]
+<a href=#1020 id=1020 data-nosnippet>1020</a>    </span>Json(<span class="attr">#[from] </span>serde_json::Error),
+<a href=#1021 id=1021 data-nosnippet>1021</a>    <span class="doccomment">/// A consensus-encoded part of the config failed to decode.
+<a href=#1022 id=1022 data-nosnippet>1022</a>    </span><span class="attr">#[error(<span class="string">"Invalid consensus encoding in module config"</span>)]
+<a href=#1023 id=1023 data-nosnippet>1023</a>    </span>Decode(<span class="attr">#[from] </span>DecodeError),
+<a href=#1024 id=1024 data-nosnippet>1024</a>}
+<a href=#1025 id=1025 data-nosnippet>1025</a>
+<a href=#1026 id=1026 data-nosnippet>1026</a><span class="doccomment">/// Failure to load a JSON config file.
+<a href=#1027 id=1027 data-nosnippet>1027</a></span><span class="attr">#[derive(Debug, Error)]
+<a href=#1028 id=1028 data-nosnippet>1028</a>#[non_exhaustive]
+<a href=#1029 id=1029 data-nosnippet>1029</a></span><span class="kw">pub enum </span>ConfigFileError {
+<a href=#1030 id=1030 data-nosnippet>1030</a>    <span class="doccomment">/// The file could not be opened or read.
+<a href=#1031 id=1031 data-nosnippet>1031</a>    </span><span class="attr">#[error(<span class="string">"Failed to read config file {}"</span>, path.display())]
+<a href=#1032 id=1032 data-nosnippet>1032</a>    </span>Io {
+<a href=#1033 id=1033 data-nosnippet>1033</a>        path: PathBuf,
+<a href=#1034 id=1034 data-nosnippet>1034</a>        <span class="attr">#[source]
+<a href=#1035 id=1035 data-nosnippet>1035</a>        </span>source: std::io::Error,
+<a href=#1036 id=1036 data-nosnippet>1036</a>    },
+<a href=#1037 id=1037 data-nosnippet>1037</a>    <span class="doccomment">/// The file is not valid JSON for the requested type.
+<a href=#1038 id=1038 data-nosnippet>1038</a>    </span><span class="attr">#[error(<span class="string">"Invalid JSON in config file {}"</span>, path.display())]
+<a href=#1039 id=1039 data-nosnippet>1039</a>    </span>Json {
+<a href=#1040 id=1040 data-nosnippet>1040</a>        path: PathBuf,
+<a href=#1041 id=1041 data-nosnippet>1041</a>        <span class="attr">#[source]
+<a href=#1042 id=1042 data-nosnippet>1042</a>        </span>source: serde_json::Error,
+<a href=#1043 id=1043 data-nosnippet>1043</a>    },
+<a href=#1044 id=1044 data-nosnippet>1044</a>}
+<a href=#1045 id=1045 data-nosnippet>1045</a>
+<a href=#1046 id=1046 data-nosnippet>1046</a><span class="attr">#[cfg(test)]
+<a href=#1047 id=1047 data-nosnippet>1047</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>

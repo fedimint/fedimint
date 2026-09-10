@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AwaitOutputFinalizedError","FetchRecoverySliceError","OOBNotesParseError","PrepareEcashBackupError","RepairWalletError","SelectNotesError","SendOOBNotesError","SpendOOBError","SubscribeReissueExternalNotesError","SubscribeSpendNotesError","ValidateNotesError","VerifyBlindShareError"]};
