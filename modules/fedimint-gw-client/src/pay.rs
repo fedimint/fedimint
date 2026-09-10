@@ -278,6 +278,7 @@ impl GatewayPayInvoice {
         contract: OutgoingContractAccount,
         swap_parameters: SwapParameters,
         common: GatewayPayCommon,
+        fresh_dispatch_refusal: Option<OutgoingContractError>,
     ) -> Option<GatewayPayStateMachine> {
         let amount = swap_parameters.amount_msat;
         if let Ok(Some((lnv2_incoming_contract, client))) = context
@@ -288,10 +289,14 @@ impl GatewayPayInvoice {
             let state = match client
                 .get_first_module::<fedimint_gwv2_client::GatewayClientModuleV2>()
                 .expect("Must have client module")
-                .relay_direct_swap(lnv2_incoming_contract, amount.msats)
+                .relay_direct_swap(
+                    lnv2_incoming_contract,
+                    amount.msats,
+                    fresh_dispatch_refusal.is_none(),
+                )
                 .await
             {
-                Ok(final_receive_state) => match final_receive_state {
+                Ok(Some(final_receive_state)) => match final_receive_state {
                     fedimint_gwv2_client::FinalReceiveState::Success(preimage) => {
                         GatewayPayStateMachine {
                             common,
@@ -321,6 +326,25 @@ impl GatewayPayInvoice {
                         )),
                     },
                 },
+                Ok(None) => {
+                    let error = fresh_dispatch_refusal
+                        .expect("the relay only refuses a fresh dispatch when one was denied");
+                    GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::CancelContract(Box::new(
+                            GatewayPayCancelContract {
+                                contract: contract.clone(),
+                                error: OutgoingPaymentError {
+                                    contract_id: contract.contract.contract_id(),
+                                    contract: Some(contract.clone()),
+                                    error_type: OutgoingPaymentErrorType::InvalidOutgoingContract {
+                                        error,
+                                    },
+                                },
+                            },
+                        )),
+                    }
+                }
                 Err(err) => GatewayPayStateMachine {
                     common,
                     state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
@@ -379,9 +403,14 @@ impl GatewayPayInvoice {
         let swap_parameters: anyhow::Result<SwapParameters> =
             payment_parameters.payment_data.clone().try_into();
         if let Ok(swap_parameters) = swap_parameters
-            && let Some(new_state) =
-                Self::buy_lnv2_preimage(&context, contract.clone(), swap_parameters, common.clone())
-                    .await
+            && let Some(new_state) = Self::buy_lnv2_preimage(
+                &context,
+                contract.clone(),
+                swap_parameters,
+                common.clone(),
+                payment_parameters.fresh_dispatch_refusal.clone(),
+            )
+            .await
         {
             return new_state;
         }
@@ -399,6 +428,7 @@ impl GatewayPayInvoice {
                             payment_parameters.payment_data.clone(),
                             contract.clone(),
                             common.clone(),
+                            payment_parameters.fresh_dispatch_refusal.clone(),
                         )
                     })
                     .await
@@ -504,6 +534,30 @@ impl GatewayPayInvoice {
     ) -> GatewayPayStateMachine {
         debug!("Buying preimage over lightning for contract {contract:?}");
 
+        // A payment the node already knows resolves through `pay`'s
+        // idempotent resume path -- which never re-dispatches and ignores
+        // `max_delay` -- so a drifted timelock or expiry gate only refuses a
+        // dispatch that never happened.
+        if let Some(error) = buy_preimage.fresh_dispatch_refusal.clone()
+            && !context
+                .lightning_manager
+                .outbound_payment_exists(buy_preimage.payment_data.payment_hash())
+                .await
+        {
+            warn!("Refusing fresh lightning dispatch for contract {contract:?}: {error:?}");
+            return GatewayPayStateMachine {
+                common,
+                state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
+                    contract: contract.clone(),
+                    error: OutgoingPaymentError {
+                        contract_id: contract.contract.contract_id(),
+                        contract: Some(contract),
+                        error_type: OutgoingPaymentErrorType::InvalidOutgoingContract { error },
+                    },
+                })),
+            };
+        }
+
         let max_delay = buy_preimage.max_delay;
         let max_fee = buy_preimage.max_send_amount.saturating_sub(
             buy_preimage
@@ -558,16 +612,17 @@ impl GatewayPayInvoice {
         payment_data: PaymentData,
         contract: OutgoingContractAccount,
         common: GatewayPayCommon,
+        fresh_dispatch_refusal: Option<OutgoingContractError>,
     ) -> GatewayPayStateMachine {
         debug!("Buying preimage via direct swap for contract {contract:?}");
         match payment_data.try_into() {
             Ok(swap_params) => match client
                 .get_first_module::<GatewayClientModule>()
                 .expect("Must have client module")
-                .gateway_handle_direct_swap(swap_params)
+                .gateway_handle_direct_swap(swap_params, fresh_dispatch_refusal.is_none())
                 .await
             {
-                Ok(operation_id) => {
+                Ok(Some(operation_id)) => {
                     debug!("Direct swap initiated for contract {contract:?}");
                     GatewayPayStateMachine {
                         common,
@@ -576,6 +631,25 @@ impl GatewayPayInvoice {
                                 contract,
                                 federation_id: client.federation_id(),
                                 operation_id,
+                            },
+                        )),
+                    }
+                }
+                Ok(None) => {
+                    let error = fresh_dispatch_refusal
+                        .expect("the relay only refuses a fresh dispatch when one was denied");
+                    GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::CancelContract(Box::new(
+                            GatewayPayCancelContract {
+                                contract: contract.clone(),
+                                error: OutgoingPaymentError {
+                                    contract_id: contract.contract.contract_id(),
+                                    contract: Some(contract.clone()),
+                                    error_type: OutgoingPaymentErrorType::InvalidOutgoingContract {
+                                        error,
+                                    },
+                                },
                             },
                         )),
                     }
@@ -677,19 +751,34 @@ impl GatewayPayInvoice {
         let max_delay = u64::from(account.contract.timelock)
             .checked_sub(consensus_block_count.saturating_sub(1))
             .and_then(|delta| delta.checked_sub(TIMELOCK_DELTA))
-            .filter(|max_delay| *max_delay > 0)
-            .ok_or(OutgoingContractError::TimeoutTooClose)?;
+            .filter(|max_delay| *max_delay > 0);
 
-        if payment_data.is_expired() {
-            return Err(OutgoingContractError::InvoiceExpired(
+        // The timelock budget and invoice expiry drift with the chain tip and
+        // the wall clock, and this validation re-runs from scratch whenever
+        // the state machine restarts. Failing validation outright would
+        // cancel a payment that may have been dispatched before a crash and
+        // still be in flight -- one that settles or fails regardless of
+        // either gate -- returning the escrow while the payment can still
+        // claim it. They are therefore recorded as a refusal that each rail
+        // consults only before dispatching fresh; anything already started
+        // resumes unconditionally.
+        let fresh_dispatch_refusal = if max_delay.is_none() {
+            Some(OutgoingContractError::TimeoutTooClose)
+        } else if payment_data.is_expired() {
+            Some(OutgoingContractError::InvoiceExpired(
                 payment_data.expiry_timestamp(),
-            ));
-        }
+            ))
+        } else {
+            None
+        };
 
         Ok(PaymentParameters {
-            max_delay,
+            // Zero is never dispatched: an exhausted budget records a refusal
+            // above, and the resume path never reads `max_delay`.
+            max_delay: max_delay.unwrap_or(0),
             max_send_amount: account.amount,
             payment_data: payment_data.clone(),
+            fresh_dispatch_refusal,
         })
     }
 }
@@ -699,6 +788,11 @@ struct PaymentParameters {
     max_delay: u64,
     max_send_amount: Amount,
     payment_data: PaymentData,
+    /// `Some` when a drifted pre-dispatch gate (timelock budget or invoice
+    /// expiry) forbids starting a fresh dispatch. Each rail consults this
+    /// only before initiating; a dispatch that already exists resumes
+    /// unconditionally.
+    fresh_dispatch_refusal: Option<OutgoingContractError>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
@@ -1082,6 +1176,8 @@ mod tests {
         validate_account(&contract_account(contract_hash), invoice_hash)
     }
 
+    /// Surfaces a recorded fresh-dispatch refusal as an error so tests can
+    /// assert on the drifting gates alongside the hard validation errors.
     fn validate_account(
         account: &OutgoingContractAccount,
         invoice_hash: sha256::Hash,
@@ -1096,7 +1192,10 @@ mod tests {
                 proportional_millionths: 0,
             },
         )
-        .map(|_| ())
+        .and_then(|parameters| match parameters.fresh_dispatch_refusal {
+            Some(refusal) => Err(refusal),
+            None => Ok(()),
+        })
     }
 
     /// Guards against the fixture being invalid for some unrelated reason,
@@ -1109,10 +1208,12 @@ mod tests {
     }
 
     /// A timelock close enough to the consensus height that `max_delay`
-    /// computes to zero must be rejected: LND treats a CLTV limit of zero as
-    /// "unset" and substitutes its `--max-cltv-expiry` default, which would
-    /// let the HTLC outlive the contract timelock and the user refund the
-    /// contract while the payment is still in flight.
+    /// computes to zero must refuse a fresh dispatch: LND treats a CLTV limit
+    /// of zero as "unset" and substitutes its `--max-cltv-expiry` default,
+    /// which would let the HTLC outlive the contract timelock and the user
+    /// refund the contract while the payment is still in flight. The refusal
+    /// is recorded rather than failing validation so a payment dispatched
+    /// before a restart can still resume.
     #[test]
     fn rejects_timelock_yielding_a_max_delay_of_zero() {
         let hash = sha256::Hash::hash(b"preimage");

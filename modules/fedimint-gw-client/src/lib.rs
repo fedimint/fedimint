@@ -676,10 +676,16 @@ impl GatewayClientModule {
     /// instead would cancel the outgoing contract that this swap is the other
     /// half of, refunding the sender while the recipient still gets paid out of
     /// the gateway's own funds.
+    ///
+    /// `allow_fresh_dispatch` is consulted only when no such operation exists:
+    /// callers pass `false` when a wall-clock gate such as invoice expiry
+    /// forbids starting a new swap, and receive `Ok(None)` to signal that
+    /// nothing was started.
     pub async fn gateway_handle_direct_swap(
         &self,
         swap_params: SwapParameters,
-    ) -> anyhow::Result<OperationId> {
+        allow_fresh_dispatch: bool,
+    ) -> anyhow::Result<Option<OperationId>> {
         debug!("Handling direct swap {swap_params:?}");
 
         let payment_hash = swap_params.payment_hash;
@@ -696,7 +702,11 @@ impl GatewayClientModule {
                 "Direct swap already in progress, returning the operation already funding it"
             );
 
-            return Ok(operation_id);
+            return Ok(Some(operation_id));
+        }
+
+        if !allow_fresh_dispatch {
+            return Ok(None);
         }
 
         let (op_id_from_funding, client_output, client_output_sm) = self
@@ -731,7 +741,7 @@ impl GatewayClientModule {
                                 "Concurrent direct swap won the race, returning the operation already funding it"
                             );
 
-                            return Ok(operation_id);
+                            return Ok(Some(operation_id));
                         }
 
                         let output = ClientOutput {
@@ -761,7 +771,7 @@ impl GatewayClientModule {
                             "Submitted funding transaction for direct swap"
                         );
 
-                        Ok(operation_id)
+                        Ok(Some(operation_id))
                     })
                 },
                 Some(100),
@@ -1289,6 +1299,18 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
         max_delay: u64,
         max_fee: Amount,
     ) -> Result<PayInvoiceResponse, LightningRpcError>;
+
+    /// Returns whether the gateway's Lightning node has any record of an
+    /// outbound payment for `payment_hash`, whatever its state.
+    ///
+    /// The pay state machine consults this when it resumes after a restart:
+    /// a payment the node already knows was dispatched before the crash and
+    /// must be resolved through [`IGatewayClientV1::pay`]'s idempotent resume
+    /// path rather than cancelled by pre-dispatch checks. A wrong `false`
+    /// cancels a contract whose payment may still settle, so implementations
+    /// must absorb transient node failures and only answer once the node's
+    /// payment store could actually be consulted.
+    async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool;
 
     /// Uses the gateway's lightning node to complete (settle or cancel) a
     /// previously intercepted HTLC.

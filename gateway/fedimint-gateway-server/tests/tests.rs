@@ -1438,9 +1438,9 @@ async fn lnv2_incoming_contract_with_invalid_preimage_is_refunded() -> anyhow::R
     assert_eq!(
         client
             .get_first_module::<GatewayClientModuleV2>()?
-            .relay_direct_swap(contract, 900)
+            .relay_direct_swap(contract, 900, true)
             .await?,
-        FinalReceiveState::Refunded
+        Some(FinalReceiveState::Refunded)
     );
 
     Ok(())
@@ -1597,9 +1597,9 @@ async fn lnv2_expired_incoming_contract_is_rejected() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<GatewayClientModuleV2>()?
-            .relay_direct_swap(contract, 900)
+            .relay_direct_swap(contract, 900, true)
             .await?,
-        FinalReceiveState::Rejected
+        Some(FinalReceiveState::Rejected)
     );
 
     Ok(())
@@ -1641,9 +1641,9 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<GatewayClientModuleV2>()?
-            .relay_direct_swap(contract.clone(), 900)
+            .relay_direct_swap(contract.clone(), 900, true)
             .await?,
-        FinalReceiveState::Success([0; 32])
+        Some(FinalReceiveState::Success([0; 32]))
     );
 
     contract.commitment.amount = Amount::from_sats(100);
@@ -1653,9 +1653,9 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<GatewayClientModuleV2>()?
-            .relay_direct_swap(contract, 900)
+            .relay_direct_swap(contract, 900, true)
             .await?,
-        FinalReceiveState::Rejected
+        Some(FinalReceiveState::Rejected)
     );
 
     Ok(())
@@ -2440,8 +2440,9 @@ async fn test_gateway_client_direct_swap_reentry_joins_the_funded_swap() -> anyh
         };
         let gateway_module = gateway_client.get_first_module::<GatewayClientModule>()?;
         let first = gateway_module
-            .gateway_handle_direct_swap(swap_params.clone())
-            .await?;
+            .gateway_handle_direct_swap(swap_params.clone(), true)
+            .await?
+            .expect("a permitted fresh dispatch starts the swap");
         let mut receive_sub = gateway_module
             .gateway_subscribe_ln_receive(first)
             .await?
@@ -2454,15 +2455,19 @@ async fn test_gateway_client_direct_swap_reentry_joins_the_funded_swap() -> anyh
 
         // The restart: the same swap is asked for again, with the offer that
         // funded it already consumed.
+        // A re-entrant call resumes even when a fresh dispatch is forbidden:
+        // this is the restart-after-invoice-expiry case, which must join the
+        // swap already in flight rather than cancel it.
         let second = fedimint_core::task::timeout(
             Duration::from_secs(30),
-            gateway_module.gateway_handle_direct_swap(swap_params),
+            gateway_module.gateway_handle_direct_swap(swap_params, false),
         )
         .await
         .expect("a re-entrant direct swap must not wait on the offer it already consumed")?;
 
         assert_eq!(
-            first, second,
+            Some(first),
+            second,
             "the re-entrant swap joins the operation already holding the preimage"
         );
         assert_eq!(
@@ -2487,8 +2492,8 @@ async fn test_gateway_client_direct_swap_reentry_joins_the_funded_swap() -> anyh
             amount_msat: invoice_amount,
         };
         let (left, right) = tokio::join!(
-            gateway_module.gateway_handle_direct_swap(concurrent_swap_params.clone()),
-            gateway_module.gateway_handle_direct_swap(concurrent_swap_params),
+            gateway_module.gateway_handle_direct_swap(concurrent_swap_params.clone(), true),
+            gateway_module.gateway_handle_direct_swap(concurrent_swap_params, true),
         );
         assert_eq!(
             left?, right?,
