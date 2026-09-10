@@ -96,8 +96,8 @@ use crate::client_db::{
 };
 use crate::deposit::DepositStateMachine;
 pub use crate::error::{
-    DepositAddressError, MaxWithdrawableAmountError, PegInError, SubscribeDepositError,
-    WithdrawFeesError,
+    DepositAddressError, MaxWithdrawableAmountError, PegInError, PegOutError,
+    SubscribeDepositError, WithdrawFeesError,
 };
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
 
@@ -712,7 +712,7 @@ impl ClientModule for WalletClientModule {
                     let req: PegOutRequest = serde_json::from_value(request)?;
                     let response = self.peg_out(req)
                         .await
-                        .map_err(|e| anyhow::anyhow!("peg_out failed: {e}"))?;
+                        .map_err(|e| anyhow::anyhow!("peg_out failed: {}", e.fmt_compact()))?;
                     let result = serde_json::to_value(&response)?;
                     yield result;
                 },
@@ -1007,7 +1007,7 @@ impl WalletClientModule {
         address: bitcoin::Address,
         amount: bitcoin::Amount,
         fees: PegOutFees,
-    ) -> anyhow::Result<ClientOutputBundle<WalletOutput, WalletClientStates>> {
+    ) -> ClientOutputBundle<WalletOutput, WalletClientStates> {
         let output = WalletOutput::new_v0_peg_out(address, amount, fees);
 
         let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
@@ -1026,7 +1026,7 @@ impl WalletClientModule {
             })]
         };
 
-        Ok(ClientOutputBundle::new(
+        ClientOutputBundle::new(
             vec![ClientOutput::<WalletOutput> {
                 output,
                 amounts: Amounts::new_bitcoin(amount),
@@ -1034,7 +1034,7 @@ impl WalletClientModule {
             vec![ClientOutputSM::<WalletClientStates> {
                 state_machines: Arc::new(sm_gen),
             }],
-        ))
+        )
     }
 
     pub async fn peg_in(&self, req: PegInRequest) -> Result<PegInResponse, DepositAddressError> {
@@ -1046,17 +1046,18 @@ impl WalletClientModule {
         })
     }
 
-    pub async fn peg_out(&self, req: PegOutRequest) -> anyhow::Result<PegOutResponse> {
+    pub async fn peg_out(&self, req: PegOutRequest) -> Result<PegOutResponse, PegOutError> {
         let amount = bitcoin::Amount::from_sat(req.amount_sat);
+        let network = self.get_network();
         let destination = req
             .destination_address
-            .require_network(self.get_network())?;
+            .require_network(network)
+            .map_err(|_| PegOutError::WrongNetwork { expected: network })?;
 
         let fees = self.get_withdraw_fees(&destination, amount).await?;
         let operation_id = self
             .withdraw(&destination, amount, fees, req.extra_meta)
-            .await
-            .context("Failed to initiate withdraw")?;
+            .await?;
 
         Ok(PegOutResponse { operation_id })
     }
@@ -1065,7 +1066,7 @@ impl WalletClientModule {
         &self,
         operation_id: OperationId,
         rbf: &Rbf,
-    ) -> anyhow::Result<ClientOutputBundle<WalletOutput, WalletClientStates>> {
+    ) -> ClientOutputBundle<WalletOutput, WalletClientStates> {
         let output = WalletOutput::new_v0_rbf(rbf.fees, rbf.txid);
 
         let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
@@ -1084,7 +1085,7 @@ impl WalletClientModule {
             })]
         };
 
-        Ok(ClientOutputBundle::new(
+        ClientOutputBundle::new(
             vec![ClientOutput::<WalletOutput> {
                 output,
                 amounts: Amounts::new_bitcoin(amount),
@@ -1092,7 +1093,7 @@ impl WalletClientModule {
             vec![ClientOutputSM::<WalletClientStates> {
                 state_machines: Arc::new(sm_gen),
             }],
-        ))
+        )
     }
 
     pub async fn btc_tx_has_no_size_limit(&self) -> FederationResult<bool> {
@@ -1858,12 +1859,12 @@ impl WalletClientModule {
         amount: bitcoin::Amount,
         fee: PegOutFees,
         extra_meta: M,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, TransactionSubmitError> {
         {
             let operation_id = OperationId(thread_rng().r#gen());
 
             let withdraw_output =
-                self.create_withdraw_output(operation_id, address.clone(), amount, fee)?;
+                self.create_withdraw_output(operation_id, address.clone(), amount, fee);
             let tx_builder = TransactionBuilder::new()
                 .with_outputs(self.client_ctx.make_client_outputs(withdraw_output));
 
@@ -1920,10 +1921,10 @@ impl WalletClientModule {
         &self,
         rbf: Rbf,
         extra_meta: M,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, TransactionSubmitError> {
         let operation_id = OperationId(thread_rng().r#gen());
 
-        let withdraw_output = self.create_rbf_withdraw_output(operation_id, &rbf)?;
+        let withdraw_output = self.create_rbf_withdraw_output(operation_id, &rbf);
         let tx_builder = TransactionBuilder::new()
             .with_outputs(self.client_ctx.make_client_outputs(withdraw_output));
 

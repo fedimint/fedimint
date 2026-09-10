@@ -6,7 +6,9 @@
 use bitcoin::Network;
 use fedimint_api_client::api::FederationError;
 use fedimint_bitcoind::BitcoinRpcError;
-use fedimint_client_module::error::{OperationAlreadyExistsError, OperationLookupError};
+use fedimint_client_module::error::{
+    OperationAlreadyExistsError, OperationLookupError, TransactionSubmitError,
+};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::DatabaseError;
 use thiserror::Error;
@@ -185,4 +187,34 @@ pub enum MaxWithdrawableAmountError {
     /// there is no amount to withdraw.
     #[error("The balance is too low to withdraw any amount after fees")]
     BalanceTooLow,
+}
+
+/// A failure to start an on-chain withdrawal from a peg-out request.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum PegOutError {
+    /// The destination address is not valid on the network this client is
+    /// configured for.
+    #[error("The destination address is not valid on {expected}")]
+    WrongNetwork {
+        /// The network this client expects.
+        expected: Network,
+    },
+
+    /// The on-chain fees of the withdrawal could not be quoted.
+    #[error("The peg-out fees could not be quoted")]
+    Fees(#[from] WithdrawFeesError),
+
+    /// The withdrawal transaction could not be built or submitted.
+    #[error("The withdrawal transaction could not be submitted")]
+    Transaction(#[from] TransactionSubmitError),
+}
+
+#[cfg(feature = "uniffi")]
+impl From<PegOutError> for fedimint_core::util::ffi::UniffiError {
+    fn from(e: PegOutError) -> Self {
+        use fedimint_core::util::FmtCompact as _;
+
+        Self::General(e.fmt_compact().to_string())
+    }
 }

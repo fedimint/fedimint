@@ -32,8 +32,9 @@ use fedimint_testing_core::config::API_AUTH;
 use fedimint_wallet_client::api::WalletFederationApi;
 use fedimint_wallet_client::client_db::{SupportsSafeDepositKey, TweakIdx};
 use fedimint_wallet_client::{
-    AllocateDepositOutcome, DepositStateV2, MaybeNewAddress, PegInError, SubscribeDepositError,
-    WalletClientInit, WalletClientModule, WithdrawFeesError, WithdrawState,
+    AllocateDepositOutcome, DepositStateV2, MaybeNewAddress, PegInError, PegOutError,
+    PegOutRequest, SubscribeDepositError, WalletClientInit, WalletClientModule, WithdrawFeesError,
+    WithdrawState,
 };
 use fedimint_wallet_common::config::WalletConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -2578,6 +2579,34 @@ async fn subscribing_to_an_unknown_deposit_reports_not_found() -> anyhow::Result
         Err(SubscribeDepositError::Operation(
             OperationLookupError::NotFound(_)
         ))
+    );
+
+    Ok(())
+}
+
+/// A peg-out to an address from another network is refused by name, before
+/// anything is asked of the federation.
+#[tokio::test(flavor = "multi_thread")]
+async fn peg_out_to_a_mainnet_address_is_rejected() -> anyhow::Result<()> {
+    skip_if_not_wallet_test_group!("1");
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
+
+    // A well-known mainnet P2PKH address. The federation runs on regtest.
+    let mainnet_address: bitcoin::Address<bitcoin::address::NetworkUnchecked> =
+        "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2".parse()?;
+
+    assert_matches!(
+        wallet_module
+            .peg_out(PegOutRequest {
+                amount_sat: 100_000,
+                destination_address: mainnet_address,
+                extra_meta: serde_json::Value::Null,
+            })
+            .await,
+        Err(PegOutError::WrongNetwork { .. })
     );
 
     Ok(())
