@@ -32,7 +32,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, anyhow, bail, ensure, format_err};
+use anyhow::{Context, anyhow, bail, ensure};
 use api::LnFederationApi;
 use async_stream::{stream, try_stream};
 use bitcoin::Network;
@@ -107,7 +107,9 @@ use tokio::sync::Notify;
 use tracing::{debug, error, info, warn};
 
 use crate::db::PaymentResultPrefix;
-pub use crate::error::{GatewaySelectionError, LnSubscribeError, SpendableAmountError};
+pub use crate::error::{
+    GatewaySelectionError, LnSubscribeError, PayBolt11InvoiceError, SpendableAmountError,
+};
 use crate::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
 };
@@ -733,17 +735,6 @@ pub enum GatewayStatus {
     OnlineNonVetted,
 }
 
-#[derive(thiserror::Error, Debug, Clone)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Error))]
-pub enum PayBolt11InvoiceError {
-    #[error("Previous payment attempt({}) still in progress", .operation_id.fmt_full())]
-    PreviousPaymentAttemptStillInProgress { operation_id: OperationId },
-    #[error("No LN gateway available")]
-    NoLnGatewayAvailable,
-    #[error("Funded contract already exists: {}", .contract_id)]
-    FundedContractAlreadyExists { contract_id: ContractId },
-}
-
 impl LightningClientModule {
     fn new(
         args: &ClientModuleInitArgs<LightningClientInit>,
@@ -830,29 +821,35 @@ impl LightningClientModule {
         gateway: LightningGateway,
         fed_id: FederationId,
         mut rng: impl RngCore + CryptoRng + 'a,
-    ) -> anyhow::Result<(
-        ClientOutput<LightningOutputV0>,
-        ClientOutputSM<LightningClientStateMachines>,
-        ContractId,
-    )> {
+    ) -> Result<
+        (
+            ClientOutput<LightningOutputV0>,
+            ClientOutputSM<LightningClientStateMachines>,
+            ContractId,
+        ),
+        PayBolt11InvoiceError,
+    > {
         let federation_currency: Currency = self.cfg.network.0.into();
         let invoice_currency = invoice.currency();
-        ensure!(
-            federation_currency == invoice_currency,
-            "Invalid invoice currency: expected={federation_currency:?}, got={invoice_currency:?}"
-        );
+        if federation_currency != invoice_currency {
+            return Err(PayBolt11InvoiceError::WrongCurrency {
+                expected: federation_currency,
+                found: invoice_currency,
+            });
+        }
 
         // Do not create the funding transaction if the gateway is not currently
         // available
         self.gateway_conn
             .verify_gateway_availability(&gateway)
-            .await?;
+            .await
+            .map_err(PayBolt11InvoiceError::GatewayUnavailable)?;
 
         let consensus_count = self
             .module_api
             .fetch_consensus_block_count()
             .await?
-            .ok_or(format_err!("Cannot get consensus block count"))?;
+            .ok_or(PayBolt11InvoiceError::NoConsensusBlockCount)?;
 
         // Add the timelock to the current block count and the invoice's
         // `min_cltv_delta`
@@ -864,7 +861,7 @@ impl LightningClientModule {
         let invoice_amount = Amount::from_msats(
             invoice
                 .amount_milli_satoshis()
-                .context("MissingInvoiceAmount")?,
+                .ok_or(PayBolt11InvoiceError::MissingInvoiceAmount)?,
         );
 
         let gateway_fee = gateway.fees.to_amount(&invoice_amount);
@@ -937,11 +934,14 @@ impl LightningClientModule {
         &self,
         operation_id: OperationId,
         invoice: Bolt11Invoice,
-    ) -> anyhow::Result<(
-        ClientOutput<LightningOutputV0>,
-        ClientOutputSM<LightningClientStateMachines>,
-        ContractId,
-    )> {
+    ) -> Result<
+        (
+            ClientOutput<LightningOutputV0>,
+            ClientOutputSM<LightningClientStateMachines>,
+            ContractId,
+        ),
+        IncomingSmError,
+    > {
         let payment_hash = *invoice.payment_hash();
         let invoice_amount = Amount {
             msats: invoice
@@ -1344,13 +1344,13 @@ impl LightningClientModule {
     /// The `gateway` can be acquired by calling
     /// [`LightningClientModule::select_gateway`].
     ///
-    /// Can return error of type [`PayBolt11InvoiceError`]
+    /// Fails with a [`PayBolt11InvoiceError`].
     pub async fn pay_bolt11_invoice<M: Serialize + MaybeSend + MaybeSync>(
         &self,
         maybe_gateway: Option<LightningGateway>,
         invoice: Bolt11Invoice,
         extra_meta: M,
-    ) -> anyhow::Result<OutgoingLightningPayment> {
+    ) -> Result<OutgoingLightningPayment, PayBolt11InvoiceError> {
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         let maybe_gateway_id = maybe_gateway.as_ref().map(|g| g.gateway_id);
         let prev_payment_result = self
@@ -1367,11 +1367,11 @@ impl LightningClientModule {
             prev_payment_result.index,
         );
         if self.client_ctx.has_active_states(prev_operation_id).await {
-            bail!(
+            return Err(
                 PayBolt11InvoiceError::PreviousPaymentAttemptStillInProgress {
-                    operation_id: prev_operation_id
-                }
-            )
+                    operation_id: prev_operation_id,
+                },
+            );
         }
 
         // Only a genuinely NEW payment attempt is refused for an expired invoice. This
@@ -1382,11 +1382,10 @@ impl LightningClientModule {
         // `PreviousPaymentAttemptStillInProgress` with its operation id.
         // Checking expiry first would mask both answers behind "Invoice has
         // expired".
-        if let Some(expires_at) = invoice.expires_at() {
-            ensure!(
-                expires_at.as_secs() > fedimint_core::time::duration_since_epoch().as_secs(),
-                "Invoice has expired"
-            );
+        if let Some(expires_at) = invoice.expires_at()
+            && expires_at.as_secs() <= fedimint_core::time::duration_since_epoch().as_secs()
+        {
+            return Err(PayBolt11InvoiceError::InvoiceExpired);
         }
 
         let next_index = prev_payment_result.index + 1;
@@ -1406,7 +1405,10 @@ impl LightningClientModule {
         )
         .await;
 
-        let markers = self.client_ctx.get_internal_payment_markers()?;
+        let markers = self
+            .client_ctx
+            .get_internal_payment_markers()
+            .map_err(PayBolt11InvoiceError::PaymentMarkers)?;
 
         let mut is_internal_payment = invoice_has_internal_payment_markers(&invoice, markers);
         if !is_internal_payment {
@@ -1422,7 +1424,8 @@ impl LightningClientModule {
         let (pay_type, client_output, client_output_sm, contract_id) = if is_internal_payment {
             let (output, output_sm, contract_id) = self
                 .create_incoming_output(operation_id, invoice.clone())
-                .await?;
+                .await
+                .map_err(PayBolt11InvoiceError::InternalContract)?;
             (
                 PayType::Internal(operation_id),
                 output,
@@ -1430,7 +1433,7 @@ impl LightningClientModule {
                 contract_id,
             )
         } else {
-            let gateway = maybe_gateway.context(PayBolt11InvoiceError::NoLnGatewayAvailable)?;
+            let gateway = maybe_gateway.ok_or(PayBolt11InvoiceError::NoLnGatewayAvailable)?;
             let (output, output_sm, contract_id) = self
                 .create_outgoing_output(
                     operation_id,
@@ -1456,12 +1459,12 @@ impl LightningClientModule {
         if let Ok(Some(contract)) = self.module_api.fetch_contract(contract_id).await
             && contract.amount.msats != 0
         {
-            bail!(PayBolt11InvoiceError::FundedContractAlreadyExists { contract_id });
+            return Err(PayBolt11InvoiceError::FundedContractAlreadyExists { contract_id });
         }
 
         let amount_msat = invoice
             .amount_milli_satoshis()
-            .ok_or(anyhow!("MissingInvoiceAmount"))?;
+            .ok_or(PayBolt11InvoiceError::MissingInvoiceAmount)?;
 
         // TODO: return fee from create_outgoing_output or even let user supply
         // it/bounds for it
@@ -1487,7 +1490,7 @@ impl LightningClientModule {
 
         let tx = TransactionBuilder::new().with_outputs(output);
         let extra_meta =
-            serde_json::to_value(extra_meta).context("Failed to serialize extra meta")?;
+            serde_json::to_value(extra_meta).map_err(PayBolt11InvoiceError::ExtraMeta)?;
         let operation_meta_gen = move |change_range: OutPointRange| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
                 out_point: OutPoint {

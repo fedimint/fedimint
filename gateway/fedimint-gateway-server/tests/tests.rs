@@ -90,7 +90,7 @@ async fn user_pay_invoice(
 ) -> anyhow::Result<OutgoingLightningPayment> {
     ln_module.update_gateway_cache().await?;
     let gateway = ln_module.select_gateway(gateway_id).await;
-    ln_module.pay_bolt11_invoice(gateway, invoice, ()).await
+    Ok(ln_module.pay_bolt11_invoice(gateway, invoice, ()).await?)
 }
 
 fn fixtures() -> Fixtures {
@@ -1068,8 +1068,8 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
                 .await
                 .expect_err("Payment of expired invoice should fail");
             assert!(
-                error.to_string().contains("Invoice has expired"),
-                "Expected 'Invoice has expired' error, got: {error}"
+                error.to_string().contains("The invoice has expired"),
+                "Expected 'The invoice has expired' error, got: {error}"
             );
 
             // Balance should be unchanged since no contract was created

@@ -3,12 +3,19 @@
 //! Every failure this module reports to its callers is named here, so there is
 //! one place for an integrator to look.
 
-use fedimint_api_client::api::FederationError;
+use fedimint_api_client::api::{FederationError, ServerError};
 use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
+use fedimint_core::core::OperationId;
+use fedimint_core::db::DatabaseError;
+use fedimint_core::secp256k1;
 use fedimint_core::secp256k1::PublicKey;
 #[cfg(feature = "uniffi")]
 use fedimint_core::util::FmtCompact as _;
+use fedimint_ln_common::contracts::ContractId;
+use lightning_invoice::Currency;
 use thiserror::Error;
+
+use crate::incoming::IncomingSmError;
 
 /// A failure to pick a Lightning gateway for an operation.
 ///
@@ -136,6 +143,108 @@ pub enum LnSubscribeError {
 #[cfg(feature = "uniffi")]
 impl From<LnSubscribeError> for fedimint_core::util::ffi::UniffiError {
     fn from(e: LnSubscribeError) -> Self {
+        Self::General(e.fmt_compact().to_string())
+    }
+}
+
+/// A failure to pay a BOLT11 invoice.
+///
+/// The first three variants predate this type's move into this module and are
+/// the conditions a caller most often has to react to: an attempt that is
+/// still running, no gateway to route through, and a contract that someone has
+/// already funded for this payment hash. The rest name what used to be folded
+/// into one opaque message: the invoice itself being unusable, the gateway or
+/// the federation refusing, and the transaction failing to submit.
+#[derive(Debug, Error)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Error))]
+#[cfg_attr(feature = "uniffi", uniffi(flat_error))]
+#[non_exhaustive]
+pub enum PayBolt11InvoiceError {
+    /// An earlier attempt to pay this same invoice has not finished.
+    #[error("Previous payment attempt({}) still in progress", .operation_id.fmt_full())]
+    PreviousPaymentAttemptStillInProgress {
+        /// The operation the earlier attempt runs under.
+        operation_id: OperationId,
+    },
+
+    /// The payment has to go out over Lightning and no gateway was supplied.
+    #[error("No LN gateway available")]
+    NoLnGatewayAvailable,
+
+    /// A contract for this payment hash is already funded, so funding another
+    /// would pay twice.
+    #[error("Funded contract already exists: {}", .contract_id)]
+    FundedContractAlreadyExists {
+        /// The contract that already holds funds.
+        contract_id: ContractId,
+    },
+
+    /// The invoice's expiry has passed, so the recipient will not accept the
+    /// payment.
+    #[error("The invoice has expired")]
+    InvoiceExpired,
+
+    /// The invoice is for a different chain than this federation runs on.
+    #[error("The invoice is for {found:?}, but this federation is on {expected:?}")]
+    WrongCurrency {
+        /// The currency this federation's network implies.
+        expected: Currency,
+        /// The currency the invoice names.
+        found: Currency,
+    },
+
+    /// The invoice carries no amount, so there is nothing to lock into a
+    /// contract.
+    #[error("The invoice does not specify an amount")]
+    MissingInvoiceAmount,
+
+    /// The chosen gateway did not answer, so funding a contract for it would
+    /// lock money up with nobody to claim it.
+    #[error("The gateway is not available")]
+    GatewayUnavailable(#[source] ServerError),
+
+    /// The federation did not report a consensus block count, so the
+    /// contract's timelock cannot be computed.
+    #[error("The federation did not report a consensus block count")]
+    NoConsensusBlockCount,
+
+    /// A request to the federation failed.
+    #[error("The federation request failed")]
+    Federation(#[source] Box<FederationError>),
+
+    /// The internal (federation-settled) contract for this payment could not
+    /// be built.
+    #[error("The internal payment contract could not be created")]
+    InternalContract(#[source] IncomingSmError),
+
+    /// This client's internal-payment markers could not be derived, so an
+    /// internal payment cannot be recognised.
+    #[error("The internal payment markers could not be derived")]
+    PaymentMarkers(#[source] secp256k1::Error),
+
+    /// The caller's extra metadata could not be serialized into the operation
+    /// log.
+    #[error("The extra metadata could not be serialized")]
+    ExtraMeta(#[source] serde_json::Error),
+
+    /// The payment attempt could not be written to the database.
+    #[error("Database error")]
+    Database(#[from] DatabaseError),
+
+    /// The transaction funding the payment could not be built or submitted.
+    #[error("The payment transaction could not be submitted")]
+    Transaction(#[from] TransactionSubmitError),
+}
+
+impl From<FederationError> for PayBolt11InvoiceError {
+    fn from(source: FederationError) -> Self {
+        Self::Federation(Box::new(source))
+    }
+}
+
+#[cfg(feature = "uniffi")]
+impl From<PayBolt11InvoiceError> for fedimint_core::util::ffi::UniffiError {
+    fn from(e: PayBolt11InvoiceError) -> Self {
         Self::General(e.fmt_compact().to_string())
     }
 }
