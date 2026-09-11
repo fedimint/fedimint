@@ -944,9 +944,9 @@ impl GatewayPayClaimOutgoingContractV2 {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
 pub struct GatewayPayWaitForSwapPreimage {
-    contract: OutgoingContractAccount,
-    federation_id: FederationId,
-    operation_id: OperationId,
+    pub(crate) contract: OutgoingContractAccount,
+    pub(crate) federation_id: FederationId,
+    pub(crate) operation_id: OperationId,
 }
 
 impl GatewayPayWaitForSwapPreimage {

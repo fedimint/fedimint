@@ -1,3 +1,4 @@
+pub mod audit;
 mod complete;
 mod db;
 pub mod events;
