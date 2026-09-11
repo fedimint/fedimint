@@ -28,8 +28,9 @@ use fedimint_ln_client::{
     ClaimIncomingContractError, GatewaySelectionError, InternalPayState, LightningClientInit,
     LightningClientModule, LightningClientStateMachines, LightningOperationMeta,
     LightningOperationMetaVariant, LnPayState, LnReceiveState, LnSubscribeError,
-    MockGatewayConnection, OutgoingLightningPayment, PayBolt11InvoiceError, PayType, ReceivingKey,
-    ReclaimLnReceiveError, SpendableAmountError, create_incoming_contract_output,
+    MockGatewayConnection, OutgoingLightningPayment, PayBolt11InvoiceError, PayType, PaymentInfo,
+    PaymentInfoError, ReceivingKey, ReclaimLnReceiveError, SpendableAmountError,
+    create_incoming_contract_output,
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::{EncryptedPreimage, PreimageKey};
@@ -2163,6 +2164,39 @@ async fn reclaiming_a_non_receive_reports_not_reclaimable() -> anyhow::Result<()
         Err(ReclaimLnReceiveError::Operation(
             OperationLookupError::NotFound(_)
         ))
+    );
+
+    Ok(())
+}
+
+/// Parsing a payment target and turning it into an invoice each name their
+/// own refusal, instead of returning one interchangeable string.
+#[tokio::test(flavor = "multi_thread")]
+async fn payment_info_names_its_refusals() -> anyhow::Result<()> {
+    assert_matches!(
+        PaymentInfo::parse("not an invoice and not an lnurl").await,
+        Err(PaymentInfoError::NotAnInvoiceOrLnurl(_))
+    );
+
+    let desc = Description::new("amount-in-both".to_string())?;
+    let ctx = secp256k1::Secp256k1::new();
+    let kp = Keypair::new(&ctx, &mut OsRng);
+    let invoice = InvoiceBuilder::new(Currency::Regtest)
+        .description(String::new())
+        .payment_hash(sha256::Hash::hash(&[0; 32]))
+        .current_timestamp()
+        .min_final_cltv_expiry_delta(0)
+        .payment_secret(PaymentSecret([0; 32]))
+        .amount_milli_satoshis(100_000)
+        .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &secp256k1::SecretKey::from_keypair(&kp)))
+        .expect("Failed to build invoice");
+    drop(desc);
+
+    assert_matches!(
+        PaymentInfo::Bolt11(invoice)
+            .get_invoice(Some(sats(100)), None)
+            .await,
+        Err(PaymentInfoError::AmountInInvoiceAndCommandLine)
     );
 
     Ok(())
