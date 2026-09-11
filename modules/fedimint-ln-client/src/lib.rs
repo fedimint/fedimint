@@ -107,7 +107,7 @@ use tokio::sync::Notify;
 use tracing::{debug, error, info, warn};
 
 use crate::db::PaymentResultPrefix;
-pub use crate::error::{GatewaySelectionError, SpendableAmountError};
+pub use crate::error::{GatewaySelectionError, LnSubscribeError, SpendableAmountError};
 use crate::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
 };
@@ -1542,12 +1542,12 @@ impl LightningClientModule {
     pub async fn get_ln_pay_details_for(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<LightningOperationMetaPay> {
+    ) -> Result<LightningOperationMetaPay, LnSubscribeError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let LightningOperationMetaVariant::Pay(pay) =
             operation.meta::<LightningOperationMeta>().variant
         else {
-            anyhow::bail!("Operation is not a lightning payment")
+            return Err(LnSubscribeError::NotAPayment);
         };
         Ok(pay)
     }
@@ -1555,7 +1555,7 @@ impl LightningClientModule {
     pub async fn subscribe_internal_pay(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<InternalPayState>> {
+    ) -> Result<UpdateStreamOrOutcome<InternalPayState>, LnSubscribeError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
 
         let LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
@@ -1566,13 +1566,12 @@ impl LightningClientModule {
             ..
         }) = operation.meta::<LightningOperationMeta>().variant
         else {
-            bail!("Operation is not a lightning payment")
+            return Err(LnSubscribeError::NotAPayment);
         };
 
-        ensure!(
-            is_internal_payment,
-            "Subscribing to an external LN payment, expected internal LN payment"
-        );
+        if !is_internal_payment {
+            return Err(LnSubscribeError::NotInternalPayment);
+        }
 
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
@@ -1615,7 +1614,7 @@ impl LightningClientModule {
     pub async fn subscribe_ln_pay(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<LnPayState>> {
+    ) -> Result<UpdateStreamOrOutcome<LnPayState>, LnSubscribeError> {
         async fn get_next_pay_state(
             stream: &mut BoxStream<'_, LightningClientStateMachines>,
         ) -> Option<LightningPayStates> {
@@ -1640,13 +1639,12 @@ impl LightningClientModule {
             ..
         }) = operation.meta::<LightningOperationMeta>().variant
         else {
-            bail!("Operation is not a lightning payment")
+            return Err(LnSubscribeError::NotAPayment);
         };
 
-        ensure!(
-            !is_internal_payment,
-            "Subscribing to an internal LN payment, expected external LN payment"
-        );
+        if is_internal_payment {
+            return Err(LnSubscribeError::NotExternalPayment);
+        }
 
         let client_ctx = self.client_ctx.clone();
 
@@ -2213,12 +2211,12 @@ impl LightningClientModule {
     pub async fn subscribe_ln_claim(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
+    ) -> Result<UpdateStreamOrOutcome<LnReceiveState>, LnSubscribeError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let LightningOperationMetaVariant::Claim { out_points } =
             operation.meta::<LightningOperationMeta>().variant
         else {
-            bail!("Operation is not a lightning claim")
+            return Err(LnSubscribeError::NotAClaim);
         };
 
         let client_ctx = self.client_ctx.clone();
@@ -2245,7 +2243,7 @@ impl LightningClientModule {
     pub async fn subscribe_ln_receive(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
+    ) -> Result<UpdateStreamOrOutcome<LnReceiveState>, LnSubscribeError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let (invoice, tx_accepted_future) = match operation.meta::<LightningOperationMeta>().variant
         {
@@ -2260,7 +2258,7 @@ impl LightningClientModule {
                 (invoice, Some(tx_accepted_future))
             }
             LightningOperationMetaVariant::ReceiveReclaim { invoice, .. } => (invoice, None),
-            _ => bail!("Operation is not a lightning receive"),
+            _ => return Err(LnSubscribeError::NotAReceive),
         };
 
         let client_ctx = self.client_ctx.clone();
@@ -2362,7 +2360,7 @@ impl LightningClientModule {
     pub async fn await_outgoing_payment(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<LightningPaymentOutcome> {
+    ) -> Result<LightningPaymentOutcome, LnSubscribeError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let variant = operation.meta::<LightningOperationMeta>().variant;
         let LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
@@ -2370,7 +2368,7 @@ impl LightningClientModule {
             ..
         }) = variant
         else {
-            bail!("Operation is not a lightning payment")
+            return Err(LnSubscribeError::NotAPayment);
         };
 
         let mut final_state = None;
@@ -2442,9 +2440,7 @@ impl LightningClientModule {
             }
         }
 
-        final_state.ok_or(anyhow!(
-            "Internal or external outgoing lightning payment did not reach a final state"
-        ))
+        final_state.ok_or(LnSubscribeError::NoFinalState)
     }
 }
 
