@@ -254,37 +254,42 @@
 <a href=#254 id=254 data-nosnippet>254</a>            htlc_id: common.htlc_id,
 <a href=#255 id=255 data-nosnippet>255</a>        };
 <a href=#256 id=256 data-nosnippet>256</a>
-<a href=#257 id=257 data-nosnippet>257</a>        context
-<a href=#258 id=258 data-nosnippet>258</a>            .lightning_manager
-<a href=#259 id=259 data-nosnippet>259</a>            .complete_htlc(htlc)
-<a href=#260 id=260 data-nosnippet>260</a>            .<span class="kw">await
-<a href=#261 id=261 data-nosnippet>261</a>            </span>.map_err(|<span class="kw">_</span>| CompleteHtlcError::FailedToCompleteHtlc)
-<a href=#262 id=262 data-nosnippet>262</a>    }
-<a href=#263 id=263 data-nosnippet>263</a>
-<a href=#264 id=264 data-nosnippet>264</a>    <span class="kw">async fn </span>transition_success(
-<a href=#265 id=265 data-nosnippet>265</a>        result: <span class="prelude-ty">Result</span>&lt;(), CompleteHtlcError&gt;,
-<a href=#266 id=266 data-nosnippet>266</a>        common: GatewayCompleteCommon,
-<a href=#267 id=267 data-nosnippet>267</a>        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-<a href=#268 id=268 data-nosnippet>268</a>        context: GatewayClientContext,
-<a href=#269 id=269 data-nosnippet>269</a>    ) -&gt; GatewayCompleteStateMachine {
-<a href=#270 id=270 data-nosnippet>270</a>        GatewayCompleteStateMachine {
-<a href=#271 id=271 data-nosnippet>271</a>            common: common.clone(),
-<a href=#272 id=272 data-nosnippet>272</a>            state: <span class="kw">match </span>result {
-<a href=#273 id=273 data-nosnippet>273</a>                <span class="prelude-val">Ok</span>(()) =&gt; {
-<a href=#274 id=274 data-nosnippet>274</a>                    context
-<a href=#275 id=275 data-nosnippet>275</a>                        .client_ctx
-<a href=#276 id=276 data-nosnippet>276</a>                        .log_event(
-<a href=#277 id=277 data-nosnippet>277</a>                            <span class="kw-2">&amp;mut </span>dbtx.module_tx(),
-<a href=#278 id=278 data-nosnippet>278</a>                            CompleteLightningPaymentSucceeded {
-<a href=#279 id=279 data-nosnippet>279</a>                                payment_hash: common.payment_hash,
-<a href=#280 id=280 data-nosnippet>280</a>                            },
-<a href=#281 id=281 data-nosnippet>281</a>                        )
-<a href=#282 id=282 data-nosnippet>282</a>                        .<span class="kw">await</span>;
-<a href=#283 id=283 data-nosnippet>283</a>                    GatewayCompleteStates::HtlcFinished
-<a href=#284 id=284 data-nosnippet>284</a>                }
-<a href=#285 id=285 data-nosnippet>285</a>                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; GatewayCompleteStates::Failure,
-<a href=#286 id=286 data-nosnippet>286</a>            },
-<a href=#287 id=287 data-nosnippet>287</a>        }
-<a href=#288 id=288 data-nosnippet>288</a>    }
-<a href=#289 id=289 data-nosnippet>289</a>}
+<a href=#257 id=257 data-nosnippet>257</a>        <span class="comment">// `IGatewayClientV1::complete_htlc` absorbs and retries transient node
+<a href=#258 id=258 data-nosnippet>258</a>        // and connectivity failures, so any error it returns is a permanent
+<a href=#259 id=259 data-nosnippet>259</a>        // outcome. Only then is failing terminally correct: the gateway has
+<a href=#260 id=260 data-nosnippet>260</a>        // already funded the incoming contract, so it must not give up while
+<a href=#261 id=261 data-nosnippet>261</a>        // settling the upstream HTLC could still succeed.
+<a href=#262 id=262 data-nosnippet>262</a>        </span>context
+<a href=#263 id=263 data-nosnippet>263</a>            .lightning_manager
+<a href=#264 id=264 data-nosnippet>264</a>            .complete_htlc(htlc)
+<a href=#265 id=265 data-nosnippet>265</a>            .<span class="kw">await
+<a href=#266 id=266 data-nosnippet>266</a>            </span>.map_err(|<span class="kw">_</span>| CompleteHtlcError::FailedToCompleteHtlc)
+<a href=#267 id=267 data-nosnippet>267</a>    }
+<a href=#268 id=268 data-nosnippet>268</a>
+<a href=#269 id=269 data-nosnippet>269</a>    <span class="kw">async fn </span>transition_success(
+<a href=#270 id=270 data-nosnippet>270</a>        result: <span class="prelude-ty">Result</span>&lt;(), CompleteHtlcError&gt;,
+<a href=#271 id=271 data-nosnippet>271</a>        common: GatewayCompleteCommon,
+<a href=#272 id=272 data-nosnippet>272</a>        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
+<a href=#273 id=273 data-nosnippet>273</a>        context: GatewayClientContext,
+<a href=#274 id=274 data-nosnippet>274</a>    ) -&gt; GatewayCompleteStateMachine {
+<a href=#275 id=275 data-nosnippet>275</a>        GatewayCompleteStateMachine {
+<a href=#276 id=276 data-nosnippet>276</a>            common: common.clone(),
+<a href=#277 id=277 data-nosnippet>277</a>            state: <span class="kw">match </span>result {
+<a href=#278 id=278 data-nosnippet>278</a>                <span class="prelude-val">Ok</span>(()) =&gt; {
+<a href=#279 id=279 data-nosnippet>279</a>                    context
+<a href=#280 id=280 data-nosnippet>280</a>                        .client_ctx
+<a href=#281 id=281 data-nosnippet>281</a>                        .log_event(
+<a href=#282 id=282 data-nosnippet>282</a>                            <span class="kw-2">&amp;mut </span>dbtx.module_tx(),
+<a href=#283 id=283 data-nosnippet>283</a>                            CompleteLightningPaymentSucceeded {
+<a href=#284 id=284 data-nosnippet>284</a>                                payment_hash: common.payment_hash,
+<a href=#285 id=285 data-nosnippet>285</a>                            },
+<a href=#286 id=286 data-nosnippet>286</a>                        )
+<a href=#287 id=287 data-nosnippet>287</a>                        .<span class="kw">await</span>;
+<a href=#288 id=288 data-nosnippet>288</a>                    GatewayCompleteStates::HtlcFinished
+<a href=#289 id=289 data-nosnippet>289</a>                }
+<a href=#290 id=290 data-nosnippet>290</a>                <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; GatewayCompleteStates::Failure,
+<a href=#291 id=291 data-nosnippet>291</a>            },
+<a href=#292 id=292 data-nosnippet>292</a>        }
+<a href=#293 id=293 data-nosnippet>293</a>    }
+<a href=#294 id=294 data-nosnippet>294</a>}
 </code></pre></div></section></main></body></html>

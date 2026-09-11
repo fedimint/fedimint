@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["PendingPaymentWakeup"],"fn":["get_esplora_url","get_preimage_and_payment_hash"],"struct":["GatewayLdkClient","LdkOfferId","LdkTracingLogger","UserChannelId"]};
+window.SIDEBAR_ITEMS = {"enum":["InboundRegistrationRefusal","PendingPaymentWakeup"],"fn":["check_inbound_registration","get_esplora_url","get_preimage_and_payment_hash","htlc_completion_error"],"struct":["GatewayLdkClient","LdkOfferId","LdkTracingLogger","UserChannelId"]};
