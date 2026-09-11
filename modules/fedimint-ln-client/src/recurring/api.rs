@@ -1,5 +1,5 @@
 use fedimint_core::config::FederationId;
-use fedimint_core::util::{FmtCompactErrorAnyhow, SafeUrl};
+use fedimint_core::util::SafeUrl;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -46,7 +46,7 @@ impl RecurringdClient {
         response
             .json::<ApiResult<RecurringPaymentRegistrationResponse>>()
             .await
-            .map_err(|e| RecurringdApiError::DecodingError(e.into()))?
+            .map_err(RecurringdApiError::DecodingError)?
             .into_result()
     }
 
@@ -70,7 +70,7 @@ impl RecurringdClient {
         response
             .json::<ApiResult<Bolt11Invoice>>()
             .await
-            .map_err(|e| RecurringdApiError::DecodingError(e.into()))?
+            .map_err(RecurringdApiError::DecodingError)?
             .into_result()
     }
 }
@@ -79,8 +79,8 @@ impl RecurringdClient {
 pub enum RecurringdApiError {
     #[error("Recurring payment server error: {0}")]
     ApiError(String),
-    #[error("Invalid response: {}", FmtCompactErrorAnyhow(.0))]
-    DecodingError(anyhow::Error),
+    #[error("Invalid response")]
+    DecodingError(#[source] reqwest::Error),
     #[error("Network error: {0}")]
     NetworkError(#[from] reqwest::Error),
 }

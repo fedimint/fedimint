@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::anyhow;
 use fedimint_client::meta::MetaService;
 use fedimint_client::{Client, ClientHandleArc, ClientModule, ClientModuleInstance};
 use fedimint_client_module::meta::LegacyMetaSource;
@@ -170,17 +169,13 @@ impl RecurringInvoiceServer {
         let client = client_builder
             .preview(connectors, invite_code)
             .await
-            .map_err(|err| {
-                RecurringPaymentError::JoiningFederationFailed(anyhow!("{}", err.fmt_compact()))
-            })?
+            .map_err(|err| RecurringPaymentError::JoiningFederationFailed(Box::new(err)))?
             .join(
                 client_db,
                 fedimint_client::RootSecret::StandardDoubleDerive(Self::default_secret()),
             )
             .await
-            .map_err(|err| {
-                RecurringPaymentError::JoiningFederationFailed(anyhow!("{}", err.fmt_compact()))
-            })?;
+            .map_err(|err| RecurringPaymentError::JoiningFederationFailed(Box::new(err)))?;
         Ok(Arc::new(client))
     }
 
@@ -237,7 +232,7 @@ impl RecurringInvoiceServer {
             &0,
         )
         .await;
-        dbtx.commit_tx_result().await.map_err(anyhow::Error::from)?;
+        dbtx.commit_tx_result().await?;
 
         Ok(payment_code)
     }
@@ -378,7 +373,8 @@ impl RecurringInvoiceServer {
                                 serde_json::Value::Null,
                                 Some(gateway),
                             )
-                            .await?;
+                            .await
+                            .map_err(RecurringPaymentError::InvoiceCreation)?;
 
                         self.save_bolt11_invoice(
                             dbtx,
@@ -389,7 +385,7 @@ impl RecurringInvoiceServer {
                         )
                         .await;
 
-                        Result::<_, anyhow::Error>::Ok((operation_id, invoice))
+                        Result::<_, RecurringPaymentError>::Ok((operation_id, invoice))
                     })
                 },
                 None,
@@ -675,7 +671,7 @@ async fn await_invoice_confirmed(
     let mut operation_updated = ln_module
         .subscribe_ln_receive(operation_id)
         .await
-        .map_err(|e| RecurringPaymentError::Other(e.into()))?
+        .map_err(RecurringPaymentError::Subscribe)?
         .into_stream();
 
     while let Some(update) = operation_updated.next().await {
@@ -684,9 +680,7 @@ async fn await_invoice_confirmed(
         }
     }
 
-    Err(RecurringPaymentError::Other(anyhow!(
-        "BOLT11 invoice not confirmed"
-    )))
+    Err(RecurringPaymentError::InvoiceNotConfirmed)
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
