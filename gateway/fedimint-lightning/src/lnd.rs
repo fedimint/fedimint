@@ -37,8 +37,8 @@ use tonic_lnd::lnrpc::{
     ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest,
     ConnectPeerRequest as LndConnectPeerRequest, FeeReportRequest, GetInfoRequest, Invoice,
     InvoiceSubscription, LightningAddress, ListChannelsRequest, ListInvoiceRequest,
-    ListPaymentsRequest, ListPeersRequest, OpenChannelRequest, PolicyUpdateRequest,
-    SendCoinsRequest, UpdateFailure, WalletBalanceRequest,
+    ListPaymentsRequest, ListPeersRequest, OpenChannelRequest, PendingChannelsRequest,
+    PolicyUpdateRequest, SendCoinsRequest, UpdateFailure, WalletBalanceRequest,
 };
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -951,6 +951,20 @@ impl fmt::Debug for GatewayLndClient {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "LndClient")
     }
+}
+
+/// LND reports balances as `i64`; a negative value is malformed and is
+/// reported as zero rather than wrapping into a huge number.
+fn non_negative_sats(value: i64, field: &'static str) -> u64 {
+    u64::try_from(value).unwrap_or_else(|_| {
+        warn!(
+            target: LOG_LIGHTNING,
+            field,
+            value,
+            "LND reported a negative balance; treating as zero",
+        );
+        0
+    })
 }
 
 #[async_trait]
@@ -2020,17 +2034,6 @@ impl ILnRpcClient for GatewayLndClient {
                 failure_reason: format!("Failed to get lightning balance {e:?}"),
             })?
             .into_inner();
-        let total_outbound = channel_balance_response.local_balance.unwrap_or_default();
-        let unsettled_outbound = channel_balance_response
-            .unsettled_local_balance
-            .unwrap_or_default();
-        let pending_outbound = channel_balance_response
-            .pending_open_local_balance
-            .unwrap_or_default();
-        let lightning_balance_msats = total_outbound
-            .msat
-            .saturating_sub(unsettled_outbound.msat)
-            .saturating_sub(pending_outbound.msat);
 
         let total_inbound = channel_balance_response.remote_balance.unwrap_or_default();
         let unsettled_inbound = channel_balance_response
@@ -2044,12 +2047,42 @@ impl ILnRpcClient for GatewayLndClient {
             .saturating_sub(unsettled_inbound.msat)
             .saturating_sub(pending_inbound.msat);
 
+        let pending_channels_response = client
+            .lightning()
+            .pending_channels(PendingChannelsRequest {
+                include_raw_tx: false,
+            })
+            .await
+            .map_err(|e| LightningRpcError::FailedToGetBalances {
+                failure_reason: format!("Failed to get pending channels {e:?}"),
+            })?
+            .into_inner();
+
+        let local = channel_balance_response.local_balance.unwrap_or_default();
+        let unsettled_local = channel_balance_response
+            .unsettled_local_balance
+            .unwrap_or_default();
+        let pending_open_local = channel_balance_response
+            .pending_open_local_balance
+            .unwrap_or_default();
+        let anchor_reserve_sats = non_negative_sats(
+            wallet_balance_response.reserved_balance_anchor_chan,
+            "reserved_balance_anchor_chan",
+        );
+        let total_onchain_sats =
+            non_negative_sats(wallet_balance_response.total_balance, "total_balance");
+
         Ok(GetBalancesResponse {
-            onchain_balance_sats: (wallet_balance_response.total_balance
-                + wallet_balance_response.reserved_balance_anchor_chan)
-                as u64,
-            lightning_balance_msats,
+            onchain_balance_sats: total_onchain_sats.saturating_sub(anchor_reserve_sats),
+            lightning_balance_msats: local.msat,
             inbound_lightning_liquidity_msats,
+            htlc_in_flight_msats: unsettled_local.msat,
+            pending_open_msats: pending_open_local.msat,
+            closing_limbo_sats: non_negative_sats(
+                pending_channels_response.total_limbo_balance,
+                "total_limbo_balance",
+            ),
+            anchor_reserve_sats,
         })
     }
 

@@ -10,7 +10,7 @@ use tokio::sync::{RwLock, oneshot};
 
 use super::{
     GatewayLdkClient, InboundRegistrationRefusal, PendingPaymentWakeup, check_inbound_registration,
-    get_esplora_url, htlc_completion_error,
+    get_esplora_url, htlc_completion_error, htlc_in_flight_msats,
 };
 use crate::LightningRpcError;
 
@@ -135,4 +135,78 @@ async fn registration_try_lock_is_refused_while_pay_holds_the_hash_lock() {
 
     drop(pay_guard);
     assert!(pool.try_lock(payment_id).is_some());
+}
+
+/// `total_lightning_balance_sats` counts zero for an outbound payment's
+/// `MaybeTimeoutClaimableHTLC`, so the in-flight bucket has to carry its full
+/// value or the sats vanish from the partition entirely.
+#[test]
+fn in_flight_bucket_carries_outbound_payment_htlcs_in_full() {
+    use ldk_node::LightningBalance;
+    use lightning::ln::types::ChannelId;
+    use lightning::types::payment::PaymentHash;
+
+    let counterparty_node_id = bitcoin::secp256k1::PublicKey::from_secret_key(
+        bitcoin::secp256k1::SECP256K1,
+        &bitcoin::secp256k1::SecretKey::from_slice(&[7; 32])
+            .expect("32 repeated non-zero bytes are a valid secret key"),
+    );
+    let timeout_claimable =
+        |amount_satoshis, outbound_payment| LightningBalance::MaybeTimeoutClaimableHTLC {
+            channel_id: ChannelId([1; 32]),
+            counterparty_node_id,
+            amount_satoshis,
+            claimable_height: 100,
+            payment_hash: PaymentHash([2; 32]),
+            outbound_payment,
+        };
+
+    // Ours, in flight: the whole amount, in msat.
+    assert_eq!(
+        htlc_in_flight_msats(&[timeout_claimable(1_500, true)]),
+        1_500_000
+    );
+
+    // Forwarded for someone else: `claimable_amount_satoshis()` returns its
+    // amount, so the channel-local bucket already holds it.
+    assert_eq!(htlc_in_flight_msats(&[timeout_claimable(1_500, false)]), 0);
+
+    // Inbound, preimage unknown: not the gateway's money.
+    assert_eq!(
+        htlc_in_flight_msats(&[LightningBalance::MaybePreimageClaimableHTLC {
+            channel_id: ChannelId([1; 32]),
+            counterparty_node_id,
+            amount_satoshis: 2_000,
+            expiry_height: 100,
+            payment_hash: PaymentHash([3; 32]),
+        }]),
+        0
+    );
+
+    // Dust and sub-satoshi remainders still come from the rounded fields.
+    let on_close = LightningBalance::ClaimableOnChannelClose {
+        channel_id: ChannelId([1; 32]),
+        counterparty_node_id,
+        amount_satoshis: 50_000,
+        transaction_fee_satoshis: 200,
+        outbound_payment_htlc_rounded_msat: 700,
+        outbound_forwarded_htlc_rounded_msat: 300,
+        inbound_claiming_htlc_rounded_msat: 11,
+        inbound_htlc_rounded_msat: 22,
+    };
+    assert_eq!(htlc_in_flight_msats(std::slice::from_ref(&on_close)), 1_000);
+
+    // A whole channel at once: two of our HTLCs in flight, one forwarded, plus
+    // the remainders.
+    assert_eq!(
+        htlc_in_flight_msats(&[
+            on_close,
+            timeout_claimable(1_500, true),
+            timeout_claimable(2_500, true),
+            timeout_claimable(9_000, false),
+        ]),
+        1_000 + 1_500_000 + 2_500_000
+    );
+
+    assert_eq!(htlc_in_flight_msats(&[]), 0);
 }

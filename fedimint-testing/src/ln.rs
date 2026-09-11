@@ -344,6 +344,10 @@ impl ILnRpcClient for FakeLightningTest {
             onchain_balance_sats: 0,
             lightning_balance_msats: 0,
             inbound_lightning_liquidity_msats: 0,
+            htlc_in_flight_msats: 0,
+            pending_open_msats: 0,
+            closing_limbo_sats: 0,
+            anchor_reserve_sats: 0,
         })
     }
 

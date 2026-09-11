@@ -44,6 +44,7 @@ enum GatewayTest {
     BackupRestoreTest,
     LiquidityTest,
     EsploraTest,
+    NodeFundsConservation,
 }
 
 #[tokio::main]
@@ -54,6 +55,7 @@ async fn main() -> anyhow::Result<()> {
         GatewayTest::BackupRestoreTest => Box::pin(backup_restore_test()).await,
         GatewayTest::LiquidityTest => Box::pin(liquidity_test()).await,
         GatewayTest::EsploraTest => esplora_test().await,
+        GatewayTest::NodeFundsConservation => Box::pin(node_funds_conservation_test()).await,
     }
 }
 
@@ -669,6 +671,42 @@ async fn esplora_test() -> anyhow::Result<()> {
     )
     .await?;
     Ok(())
+}
+
+/// A force close moves funds bucket-to-bucket; only the on-chain fee may
+/// leave. Guards against a partition that makes a peer's force close look
+/// like a multi-million-sat loss.
+async fn node_funds_conservation_test() -> anyhow::Result<()> {
+    Box::pin(
+        devimint::run_devfed_test().call(|dev_fed, _process_mgr| async move {
+            const MAX_FEE_MSATS: u64 = 50_000_000;
+
+            let gw = dev_fed.gw_ldk_connected().await?;
+            let before = gw.client().get_balances().await?;
+            info!(target: LOG_TEST, total = before.lightning_node_total_msats, "before force close");
+
+            gw.client()
+                .close_all_channels(true, Duration::from_secs(180))
+                .await?;
+
+            let after = gw.client().get_balances().await?;
+            info!(target: LOG_TEST, total = after.lightning_node_total_msats, "after force close");
+
+            let lost = before
+                .lightning_node_total_msats
+                .saturating_sub(after.lightning_node_total_msats);
+            anyhow::ensure!(
+                lost <= MAX_FEE_MSATS,
+                "force close lost {lost} msat from the partition, more than any plausible fee"
+            );
+            anyhow::ensure!(
+                after.lightning_node_total_msats <= before.lightning_node_total_msats,
+                "force close created funds"
+            );
+            Ok(())
+        }),
+    )
+    .await
 }
 
 async fn get_transaction(

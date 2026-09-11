@@ -2742,6 +2742,7 @@ impl IAdminGateway for Gateway {
             ecash_balances,
             inbound_lightning_liquidity_msats: lightning_node_balances
                 .inbound_lightning_liquidity_msats,
+            lightning_node_total_msats: lightning_node_balances.total_msats(),
         })
     }
 

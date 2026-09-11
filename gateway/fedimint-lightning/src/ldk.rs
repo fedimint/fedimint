@@ -25,6 +25,7 @@ use ldk_node::logger::{LogLevel, LogRecord, LogWriter};
 use ldk_node::payment::{
     PaymentDetails, PaymentDirection, PaymentKind, PaymentStatus, SendingParameters,
 };
+use ldk_node::{LightningBalance, PendingSweepBalance};
 use lightning::ln::channelmanager::PaymentId;
 use lightning::offers::offer::{Offer, OfferId};
 use lightning::types::payment::{PaymentHash, PaymentPreimage};
@@ -541,6 +542,64 @@ impl Drop for GatewayLdkClient {
             }
         }
     }
+}
+
+/// The share of the node's funds sitting in outbound HTLCs, which the
+/// channel-local bucket does not count.
+///
+/// ldk-node's `total_lightning_balance_sats` sums `claimable_amount_satoshis()`
+/// over these balances, and that is **0** for
+/// `MaybeTimeoutClaimableHTLC { outbound_payment: true }` and for every
+/// `MaybePreimageClaimableHTLC`. LDK emits one such `MaybeTimeoutClaimableHTLC`
+/// per non-dust outbound HTLC of an *open* channel, so counting only the
+/// rounded-msat remainders would drop the entire value of every payment the
+/// gateway has in flight -- and `SendSMState::Sending` is valued at zero
+/// precisely because the in-flight bucket is supposed to be holding it.
+///
+/// Per variant:
+/// - `MaybeTimeoutClaimableHTLC { outbound_payment: true }` -- the gateway's
+///   own in-flight payment, counted in no other bucket: the full amount.
+/// - `MaybeTimeoutClaimableHTLC { outbound_payment: false }` -- an HTLC
+///   forwarded on someone else's behalf; `claimable_amount_satoshis()` returns
+///   its amount, so it is already inside the channel-local bucket.
+/// - `MaybePreimageClaimableHTLC` -- inbound, preimage unknown: not the
+///   gateway's money.
+/// - `ClaimableOnChannelClose` -- the two rounded-msat fields are the
+///   sub-satoshi remainders of outbound HTLCs (dust HTLCs included) that
+///   `amount_satoshis` drops, so they belong here.
+/// - the remaining variants are closing-channel balances whose
+///   `amount_satoshis` is already inside `total_lightning_balance_sats`.
+///
+/// Matched exhaustively with no wildcard arm so that an ldk-node upgrade
+/// adding a `LightningBalance` variant fails to compile here rather than
+/// silently reporting zero for it.
+fn htlc_in_flight_msats(lightning_balances: &[LightningBalance]) -> u64 {
+    lightning_balances
+        .iter()
+        .map(|balance| match balance {
+            LightningBalance::ClaimableOnChannelClose {
+                outbound_payment_htlc_rounded_msat,
+                outbound_forwarded_htlc_rounded_msat,
+                ..
+            } => outbound_payment_htlc_rounded_msat
+                .saturating_add(*outbound_forwarded_htlc_rounded_msat),
+            LightningBalance::MaybeTimeoutClaimableHTLC {
+                amount_satoshis,
+                outbound_payment,
+                ..
+            } => {
+                if *outbound_payment {
+                    amount_satoshis.saturating_mul(1_000)
+                } else {
+                    0
+                }
+            }
+            LightningBalance::ClaimableAwaitingConfirmations { .. }
+            | LightningBalance::ContentiousClaimable { .. }
+            | LightningBalance::MaybePreimageClaimableHTLC { .. }
+            | LightningBalance::CounterpartyRevokedOutputClaimable { .. } => 0,
+        })
+        .fold(0u64, u64::saturating_add)
 }
 
 #[async_trait]
@@ -1126,10 +1185,41 @@ impl ILnRpcClient for GatewayLdkClient {
             .map(|channel| channel.inbound_capacity_msat)
             .sum();
 
+        let htlc_in_flight_msats = htlc_in_flight_msats(&balances.lightning_balances);
+        // ldk-node's docs on `pending_balances_from_channel_closures` note
+        // that, depending on the sync status of the on-chain and Lightning
+        // wallets, swept balances listed here might or might not already be
+        // accounted for in `total_onchain_balance_sats`. During that window
+        // the same sats can appear in both `closing_limbo_sats` and
+        // `onchain_balance_sats` — this is inherent to the upstream API and
+        // can only ever over-count the total, never under-count it.
+        let closing_limbo_sats: u64 = balances
+            .pending_balances_from_channel_closures
+            .iter()
+            .map(|pending| match pending {
+                PendingSweepBalance::PendingBroadcast {
+                    amount_satoshis, ..
+                }
+                | PendingSweepBalance::BroadcastAwaitingConfirmation {
+                    amount_satoshis, ..
+                }
+                | PendingSweepBalance::AwaitingThresholdConfirmations {
+                    amount_satoshis, ..
+                } => *amount_satoshis,
+            })
+            .sum();
+
         Ok(GetBalancesResponse {
-            onchain_balance_sats: balances.total_onchain_balance_sats,
+            onchain_balance_sats: balances
+                .total_onchain_balance_sats
+                .saturating_sub(balances.total_anchor_channels_reserve_sats),
             lightning_balance_msats: balances.total_lightning_balance_sats * 1000,
             inbound_lightning_liquidity_msats: total_inbound_liquidity_balance_msat,
+            htlc_in_flight_msats,
+            // LDK counts unconfirmed channels inside `total_lightning_balance_sats`.
+            pending_open_msats: 0,
+            closing_limbo_sats,
+            anchor_reserve_sats: balances.total_anchor_channels_reserve_sats,
         })
     }
 

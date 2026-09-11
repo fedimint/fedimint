@@ -548,11 +548,38 @@ pub struct ListChannelsResponse {
     pub channels: Vec<ChannelInfo>,
 }
 
+/// A partition of every sat the Lightning node controls. Each sat is in
+/// exactly one bucket, so `total_msats` is conserved across channel opens,
+/// closes and in-flight payments; only real fees change it.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GetBalancesResponse {
+    /// Spendable on-chain funds (confirmed and unconfirmed, net of reserve).
     pub onchain_balance_sats: u64,
+    /// Settled local balance in open channels.
     pub lightning_balance_msats: u64,
+    /// Remote balance in open channels — the counterparty's money.
     pub inbound_lightning_liquidity_msats: u64,
+    /// Local funds locked in outbound HTLCs not yet settled or failed.
+    pub htlc_in_flight_msats: u64,
+    /// Local funds in channels whose funding transaction is unconfirmed.
+    pub pending_open_msats: u64,
+    /// Funds in closed or closing channels not yet swept back on-chain.
+    pub closing_limbo_sats: u64,
+    /// On-chain funds the node keeps unspendable as anchor reserve.
+    pub anchor_reserve_sats: u64,
+}
+
+impl GetBalancesResponse {
+    /// Every sat the node controls, each counted once.
+    pub fn total_msats(&self) -> u64 {
+        self.onchain_balance_sats
+            .saturating_mul(1000)
+            .saturating_add(self.lightning_balance_msats)
+            .saturating_add(self.htlc_in_flight_msats)
+            .saturating_add(self.pending_open_msats)
+            .saturating_add(self.closing_limbo_sats.saturating_mul(1000))
+            .saturating_add(self.anchor_reserve_sats.saturating_mul(1000))
+    }
 }
 
 /// A wrapper around `Arc<dyn ILnRpcClient>` that tracks metrics for each RPC
@@ -916,6 +943,28 @@ mod cost_tests {
         assert_eq!(
             ldk_realized_cost(None, None, 1_000),
             (Amount::from_msats(1_000), None)
+        );
+    }
+}
+
+#[cfg(test)]
+mod partition_tests {
+    use super::GetBalancesResponse;
+
+    #[test]
+    fn total_counts_every_bucket_exactly_once() {
+        let balances = GetBalancesResponse {
+            onchain_balance_sats: 1,
+            lightning_balance_msats: 2_000,
+            inbound_lightning_liquidity_msats: 999_999, // not ours; excluded
+            htlc_in_flight_msats: 3_000,
+            pending_open_msats: 4_000,
+            closing_limbo_sats: 5,
+            anchor_reserve_sats: 6,
+        };
+        assert_eq!(
+            balances.total_msats(),
+            1_000 + 2_000 + 3_000 + 4_000 + 5_000 + 6_000
         );
     }
 }
