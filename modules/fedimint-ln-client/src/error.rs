@@ -284,3 +284,34 @@ impl From<CreateBolt11InvoiceError> for fedimint_core::util::ffi::UniffiError {
         Self::General(e.fmt_compact().to_string())
     }
 }
+
+/// A failure to claim an incoming contract the federation already holds.
+///
+/// This is the deprecated pre-recurring-payments receive path: a client that
+/// knows the key an invoice was issued against goes looking for the contract
+/// funded under it and spends it.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ClaimIncomingContractError {
+    /// The federation holds no funded contract under this id, so there is
+    /// nothing to claim.
+    #[error("No funded contract exists for {contract_id}")]
+    ContractNotFound {
+        /// The contract that was looked for.
+        contract_id: ContractId,
+    },
+
+    /// The contract could not be fetched from the federation.
+    #[error("The contract could not be fetched")]
+    Federation(#[source] Box<FederationError>),
+
+    /// The transaction claiming the contract could not be built or submitted.
+    #[error("The claim transaction could not be submitted")]
+    Transaction(#[from] TransactionSubmitError),
+}
+
+impl From<FederationError> for ClaimIncomingContractError {
+    fn from(source: FederationError) -> Self {
+        Self::Federation(Box::new(source))
+    }
+}
