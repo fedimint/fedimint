@@ -163,7 +163,7 @@ pub enum OutgoingContractError {
     MissingContractData,
     #[error("The invoice is expired. Expiry happened at timestamp: {0}")]
     InvoiceExpired(u64),
-    #[error("The invoice amount exceeds the total bitcoin supply")]
+    #[error("The invoice amount plus the gateway fee overflows")]
     InvoiceAmountTooLarge,
 }
 
@@ -725,14 +725,10 @@ impl GatewayPayInvoice {
             .amount()
             .ok_or(OutgoingContractError::InvoiceMissingAmount)?;
 
-        // A pruned invoice carries a raw, caller-controlled amount. Reject
-        // anything above the bitcoin supply cap, and add the fee with checked
-        // arithmetic, so a huge amount cannot overflow `u64` and wrap the
-        // underfunding check below into passing against a near-empty contract.
-        if payment_amount > Amount::MAX_BITCOIN_SUPPLY {
-            return Err(OutgoingContractError::InvoiceAmountTooLarge);
-        }
-
+        // A pruned invoice carries a raw, caller-controlled amount. Add the fee
+        // with checked arithmetic so a huge amount cannot overflow `u64` and
+        // wrap the underfunding check below into passing against a near-empty
+        // contract.
         let gateway_fee = routing_fees.to_amount(&payment_amount);
         let necessary_contract_amount = payment_amount
             .checked_add(gateway_fee)
@@ -1337,13 +1333,13 @@ mod tests {
             Err(OutgoingContractError::InvoiceAmountTooLarge)
         );
 
-        // The supply cap itself is a legitimate amount and is still accepted
-        // when the contract funds it plus the fee, so the guard rejects only
-        // genuinely invalid sizes rather than everything.
-        let cap = Amount::MAX_BITCOIN_SUPPLY;
-        let funded = cap
-            .checked_add(Amount::from_msats(u64::from(fees.base_msat)))
-            .expect("cap plus a tiny fee stays within u64");
-        assert_eq!(validate_amount(funded, cap), Ok(()));
+        // The largest amount whose sum with the fee still fits is accepted when
+        // the contract funds it, so the guard rejects exactly the overflow and
+        // nothing else.
+        let largest_representable = Amount::from_msats(u64::MAX - u64::from(fees.base_msat));
+        assert_eq!(
+            validate_amount(Amount::from_msats(u64::MAX), largest_representable),
+            Ok(())
+        );
     }
 }
