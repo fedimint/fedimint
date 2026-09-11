@@ -1203,27 +1203,33 @@ impl ILnRpcClient for GatewayLndClient {
                                     failure_reason: format!("Failed to convert preimage {error:?}"),
                                 })?;
                         }
-                        Ok(Some(payment)) if payment.status() == PaymentStatus::InFlight => {
-                            debug!(
-                                target: LOG_LIGHTNING,
-                                payment_hash = %PrettyPaymentHash(&payment_hash),
-                                "LND payment is inflight",
-                            );
-                            continue;
-                        }
-                        Ok(Some(payment)) => {
-                            // LND delivered a terminal, non-succeeded status: a
+                        Ok(Some(payment)) if payment.status() == PaymentStatus::Failed => {
+                            // The one terminal status besides `Succeeded`: a
                             // definitive failure that is safe to report.
                             warn!(
                                 target: LOG_LIGHTNING,
                                 payment_hash = %PrettyPaymentHash(&payment_hash),
-                                status = %payment.status,
+                                status = ?payment.status(),
                                 "LND payment failed",
                             );
                             let failure_reason = payment.failure_reason();
                             return Err(LightningRpcError::FailedPayment {
                                 failure_reason: format!("{failure_reason:?}"),
                             });
+                        }
+                        // `InFlight`, `Initiated` (delivered before the first HTLC
+                        // when `routerrpc.usestatusinitiated` is set) and any status
+                        // this build does not know, which prost decodes as `Unknown`,
+                        // are not outcomes. Keep waiting; a stream that ends without
+                        // a terminal status resumes through `lookup_payment` below.
+                        Ok(Some(payment)) => {
+                            debug!(
+                                target: LOG_LIGHTNING,
+                                payment_hash = %PrettyPaymentHash(&payment_hash),
+                                status = ?payment.status(),
+                                "LND payment is in flight",
+                            );
+                            continue;
                         }
                         // `Ok(None)` is a premature end of the update stream and `Err`
                         // is a tonic/HTTP2 transport fault. Neither is a payment
