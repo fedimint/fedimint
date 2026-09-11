@@ -29,7 +29,7 @@ use fedimint_ln_client::{
     LightningClientModule, LightningClientStateMachines, LightningOperationMeta,
     LightningOperationMetaVariant, LnPayState, LnReceiveState, LnSubscribeError,
     MockGatewayConnection, OutgoingLightningPayment, PayBolt11InvoiceError, PayType, ReceivingKey,
-    SpendableAmountError, create_incoming_contract_output,
+    ReclaimLnReceiveError, SpendableAmountError, create_incoming_contract_output,
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::{EncryptedPreimage, PreimageKey};
@@ -2142,6 +2142,27 @@ async fn claiming_an_unfunded_contract_reports_not_found() -> anyhow::Result<()>
     assert_matches!(
         ln_module.scan_receive_for_user(keypair, ()).await,
         Err(ClaimIncomingContractError::ContractNotFound { .. })
+    );
+
+    Ok(())
+}
+
+/// Reclaiming something that is not a reclaimable receive says which of the
+/// three refusals applies, instead of one of three interchangeable strings.
+#[tokio::test(flavor = "multi_thread")]
+async fn reclaiming_a_non_receive_reports_not_reclaimable() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let ln_module = client.get_first_module::<LightningClientModule>()?;
+
+    assert_matches!(
+        ln_module
+            .reclaim_ln_receive(OperationId::new_random())
+            .await,
+        Err(ReclaimLnReceiveError::Operation(
+            OperationLookupError::NotFound(_)
+        ))
     );
 
     Ok(())
