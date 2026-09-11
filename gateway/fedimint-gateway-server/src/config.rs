@@ -6,6 +6,7 @@ use anyhow::ensure;
 use bitcoin::Network;
 use clap::builder::BoolishValueParser;
 use clap::{ArgGroup, Parser};
+use fedimint_core::Amount;
 use fedimint_core::envs::{FM_IROH_DNS_ENV, FM_IROH_RELAY_ENV};
 use fedimint_core::util::SafeUrl;
 use fedimint_gateway_common::{LightningMode, V1_API_ENDPOINT};
@@ -16,6 +17,7 @@ use crate::envs::{
     FM_BITCOIND_PASSWORD_ENV, FM_BITCOIND_URL_ENV, FM_BITCOIND_USERNAME_ENV, FM_ESPLORA_URL_ENV,
     FM_GATEWAY_METRICS_LISTEN_ADDR_ENV, FM_GATEWAY_SKIP_SETUP_ENV,
 };
+use crate::solvency::DrawdownThresholds;
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum DatabaseBackend {
@@ -161,6 +163,21 @@ pub struct GatewayOpts {
         value_parser = clap::value_parser!(u32).range(1..)
     )]
     invoice_rate_limit_per_second: u32,
+
+    /// Drawdown from the peak cumulative forwarding margin, as a percent of
+    /// the assets held at that peak, at which the gateway warns
+    #[arg(long = "drawdown-warn-pct", env = envs::FM_GATEWAY_DRAWDOWN_WARN_PCT_ENV, default_value = "2")]
+    pub drawdown_warn_pct: f64,
+
+    /// Drawdown percent at which the gateway halts. Must exceed the warn
+    /// threshold
+    #[arg(long = "drawdown-halt-pct", env = envs::FM_GATEWAY_DRAWDOWN_HALT_PCT_ENV, default_value = "10")]
+    pub drawdown_halt_pct: f64,
+
+    /// Maximum ecash plus open positions the gateway will hold in any single
+    /// federation, in msat. Unset means unlimited
+    #[arg(long = "max-federation-exposure-msat", env = envs::FM_GATEWAY_MAX_FEDERATION_EXPOSURE_MSAT_ENV)]
+    pub max_federation_exposure_msat: Option<u64>,
 }
 
 impl GatewayOpts {
@@ -229,6 +246,11 @@ impl GatewayOpts {
             metrics_listen,
             invoice_rate_limit_burst: self.invoice_rate_limit_burst,
             invoice_rate_limit_per_second: self.invoice_rate_limit_per_second,
+            drawdown_thresholds: DrawdownThresholds::new(
+                self.drawdown_warn_pct,
+                self.drawdown_halt_pct,
+            )?,
+            max_federation_exposure: self.max_federation_exposure_msat.map(Amount::from_msats),
         })
     }
 }
@@ -256,4 +278,6 @@ pub struct GatewayParameters {
     pub metrics_listen: SocketAddr,
     pub invoice_rate_limit_burst: u32,
     pub invoice_rate_limit_per_second: u32,
+    pub drawdown_thresholds: DrawdownThresholds,
+    pub max_federation_exposure: Option<Amount>,
 }

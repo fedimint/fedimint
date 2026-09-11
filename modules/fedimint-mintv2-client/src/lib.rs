@@ -77,7 +77,12 @@ use crate::client_db::SpendableNoteKey;
 pub use crate::ecash::ECash;
 use crate::input::{InputSMCommon, InputSMState, InputStateMachine};
 use crate::issuance::NoteIssuanceRequest;
-use crate::output::{MintOutputStateMachine, OutputSMCommon, OutputSMState};
+use crate::output::OutputSMCommon;
+// The issuance state machine and its state are part of the audit surface: the
+// gateway's solvency ledger joins a claimed forward against the issuance of the
+// change it produced, which means reading these out of the client's state
+// machines. Re-exported for visibility only; `mod output` stays private.
+pub use crate::output::{MintOutputStateMachine, OutputSMState};
 use crate::receive::{ReceiveSMState, ReceiveStateMachine};
 
 const TARGET_PER_DENOMINATION: usize = 3;

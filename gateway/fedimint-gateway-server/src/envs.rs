@@ -85,3 +85,17 @@ pub const FM_GATEWAY_INVOICE_RATE_LIMIT_BURST_ENV: &str = "FM_GATEWAY_INVOICE_RA
 /// limiting kicks in.
 pub const FM_GATEWAY_INVOICE_RATE_LIMIT_PER_SECOND_ENV: &str =
     "FM_GATEWAY_INVOICE_RATE_LIMIT_PER_SECOND";
+
+/// Drawdown from the peak cumulative forwarding margin, as a percent of the
+/// assets held at that peak, at which the gateway logs a warning. Default 2.
+pub const FM_GATEWAY_DRAWDOWN_WARN_PCT_ENV: &str = "FM_GATEWAY_DRAWDOWN_WARN_PCT";
+
+/// Drawdown percent at which the gateway refuses to start (and exits if
+/// already running). Must exceed the warn threshold. Default 10. Raising it
+/// is the documented recovery procedure after reviewing the breakdown.
+pub const FM_GATEWAY_DRAWDOWN_HALT_PCT_ENV: &str = "FM_GATEWAY_DRAWDOWN_HALT_PCT";
+
+/// Maximum ecash plus open positions the gateway will hold in any single
+/// federation, in msat. Unset means unlimited.
+pub const FM_GATEWAY_MAX_FEDERATION_EXPOSURE_MSAT_ENV: &str =
+    "FM_GATEWAY_MAX_FEDERATION_EXPOSURE_MSAT";

@@ -26,6 +26,7 @@ mod metrics;
 mod rate_limit;
 mod registration_health;
 pub mod rpc_server;
+pub mod solvency;
 mod types;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -128,6 +129,9 @@ use fedimint_wallet_client::{PegOutFees, WalletClientInit, WalletClientModule, W
 use futures::stream::StreamExt;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::rngs::OsRng;
+// The solvency module itself stays private; these two are the shape of the
+// ledger `Gateway::solvency_ledger` hands back.
+pub use solvency::{FederationLedger, Ledger};
 use tokio::sync::RwLock;
 use tracing::{debug, info, info_span, warn};
 
@@ -137,6 +141,7 @@ use crate::events::get_events_for_duration;
 use crate::rate_limit::TokenBucketRateLimiter;
 use crate::registration_health::RegistrationHealthTracker;
 use crate::rpc_server::run_webserver;
+use crate::solvency::DrawdownThresholds;
 use crate::types::PrettyInterceptPaymentRequest;
 
 /// How long a gateway announcement stays valid
@@ -281,6 +286,8 @@ impl Gateway {
         iroh_dns: Option<SafeUrl>,
         #[builder(default)] iroh_relays: Vec<SafeUrl>,
         metrics_listen: Option<SocketAddr>,
+        #[builder(default)] drawdown_thresholds: DrawdownThresholds,
+        max_federation_exposure: Option<Amount>,
     ) -> anyhow::Result<Gateway> {
         let versioned_api = api_addr.map(|addr| {
             addr.join(V1_API_ENDPOINT)
@@ -312,6 +319,8 @@ impl Gateway {
                 metrics_listen,
                 invoice_rate_limit_burst: DEFAULT_INVOICE_RATE_LIMIT_BURST,
                 invoice_rate_limit_per_second: DEFAULT_INVOICE_RATE_LIMIT_PER_SECOND,
+                drawdown_thresholds,
+                max_federation_exposure,
             },
             gateway_db,
             client_builder,
@@ -399,6 +408,16 @@ pub struct Gateway {
 
     /// Rate limiter for the public invoice creation endpoint.
     invoice_rate_limiter: Arc<TokenBucketRateLimiter>,
+
+    /// Drawdown percentages at which the gateway warns and halts.
+    // The operator's settings are plumbed here ahead of the solvency monitor
+    // that reads them, so a misconfiguration is rejected at startup.
+    #[allow(dead_code)]
+    drawdown_thresholds: DrawdownThresholds,
+
+    /// Maximum ecash plus open positions to hold in a single federation.
+    #[allow(dead_code)]
+    max_federation_exposure: Option<Amount>,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -784,6 +803,8 @@ impl Gateway {
                 gateway_parameters.invoice_rate_limit_burst,
                 gateway_parameters.invoice_rate_limit_per_second,
             )),
+            drawdown_thresholds: gateway_parameters.drawdown_thresholds,
+            max_federation_exposure: gateway_parameters.max_federation_exposure,
         })
     }
 

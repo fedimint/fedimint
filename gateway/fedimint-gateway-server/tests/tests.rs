@@ -29,7 +29,7 @@ use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::Event;
 use fedimint_gateway_common::{PaymentLogPayload, SetFeesPayload};
-use fedimint_gateway_server::{Gateway, GatewayState};
+use fedimint_gateway_server::{FederationLedger, Gateway, GatewayState};
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_gw_client::pay::{
     GatewayPayStates, OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
@@ -67,6 +67,10 @@ use fedimint_lnv2_common::gateway_api::{
     GatewayConnection, PaymentFee, RoutingInfo, SendPaymentPayload,
 };
 use fedimint_logging::LOG_TEST;
+use fedimint_mint_client::MintClientInit;
+use fedimint_mint_server::MintInit;
+use fedimint_mintv2_client::MintClientInit as MintV2ClientInit;
+use fedimint_mintv2_server::MintInit as MintV2Init;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::db::BYTE_33;
 use fedimint_testing::federation::FederationTest;
@@ -2962,4 +2966,245 @@ async fn test_gateway_client_direct_swap_reentry_joins_the_funded_swap() -> anyh
         Ok(())
     })
     .await
+}
+
+/// The gateway's own forwarding ledger, for the federation under test.
+async fn gateway_federation_ledger(
+    gateway: &Gateway,
+    federation_id: FederationId,
+) -> anyhow::Result<FederationLedger> {
+    gateway
+        .solvency_ledger()
+        .await?
+        .federations
+        .into_iter()
+        .find(|fed| fed.federation_id == federation_id)
+        .context("the gateway serves this federation, so it must appear in the ledger")
+}
+
+/// Same as [`capturing_lnv2_fixtures`], but with a mint module as the client's
+/// primary. The gateway claims an outgoing contract by spending it into change
+/// issued by its primary module, so only a mint-primary gateway produces the
+/// issuance state machine the ledger joins a `Claimed` send against.
+fn capturing_lnv2_mint_fixtures(
+    gateway_conn: Arc<CapturingGatewayConnection>,
+    mint: MintPrimary,
+) -> Fixtures {
+    let fixtures = match mint {
+        MintPrimary::V1 => Fixtures::new_primary(MintClientInit, MintInit),
+        MintPrimary::V2 => Fixtures::new_primary(MintV2ClientInit, MintV2Init),
+    };
+
+    fixtures
+        .with_module(DummyClientInit, DummyInit)
+        .with_server_only_module(UnknownInit)
+        .with_module(
+            LightningClientInit {
+                gateway_conn: Some(Arc::new(MockGatewayConnection)),
+            },
+            LightningInit,
+        )
+        .with_module(
+            fedimint_lnv2_client::LightningClientInit {
+                gateway_conn: Some(gateway_conn),
+                ..Default::default()
+            },
+            fedimint_lnv2_server::LightningInit,
+        )
+}
+
+/// Which mint module issues the gateway's change. `mintv2` is what a federation
+/// generated with today's defaults runs (`fedimint-mintv2-server` is enabled by
+/// default, `fedimint-mint-server` is not), so both rails have to be pinned.
+#[derive(Debug, Clone, Copy)]
+enum MintPrimary {
+    V1,
+    V2,
+}
+
+/// Real e-cash out of thin air: the dummy server accepts any public key, so a
+/// dummy input with no outputs leaves the whole amount to the primary module
+/// to issue as change.
+async fn issue_ecash(client: &ClientHandleArc, amount: Amount) -> anyhow::Result<()> {
+    let dummy_input = client
+        .get_first_module::<DummyClientModule>()?
+        .create_input(amount);
+    let operation_id = OperationId::new_random();
+    let outpoint_range = client
+        .finalize_and_submit_transaction(
+            operation_id,
+            "Issue e-cash via dummy module",
+            |_| (),
+            TransactionBuilder::new().with_inputs(dummy_input),
+        )
+        .await?;
+    client
+        .await_primary_bitcoin_module_outputs(operation_id, outpoint_range.into_iter().collect())
+        .await?;
+    Ok(())
+}
+
+/// End-to-end check that a completed LNv2 outgoing forward is scored exactly
+/// once: the margin is the gateway's fee (the fake node charges no routing
+/// fee) and nothing is left sitting in an open position.
+///
+/// The claim's change is issued by whichever mint module is the gateway
+/// client's primary, and the ledger has to join the claim against that
+/// module's issuance state machine. Run against both rails: `mintv2` is what a
+/// federation generated with today's defaults uses, `mint` is what the
+/// federations already in the field use.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv2_ledger_scores_a_completed_outgoing_forward() -> anyhow::Result<()> {
+    lnv2_ledger_scores_a_completed_outgoing_forward_with(MintPrimary::V2).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv2_ledger_scores_a_completed_outgoing_forward_on_mint_v1() -> anyhow::Result<()> {
+    lnv2_ledger_scores_a_completed_outgoing_forward_with(MintPrimary::V1).await
+}
+
+async fn lnv2_ledger_scores_a_completed_outgoing_forward_with(
+    mint: MintPrimary,
+) -> anyhow::Result<()> {
+    let gateway_conn = Arc::new(CapturingGatewayConnection::default());
+    let fixtures = capturing_lnv2_mint_fixtures(gateway_conn.clone(), mint);
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+
+    let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+    gateway_conn.publish(
+        gateway_client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .keypair
+            .public_key(),
+    );
+
+    let user_client = fed.new_client().await;
+    issue_ecash(&user_client, sats(10_000)).await?;
+
+    let invoice_amount = sats(1000);
+    let invoice = FakeLightningTest::new().invoice(invoice_amount, None)?;
+    let sender = user_client.clone();
+    let sent_invoice = invoice.clone();
+    fedimint_core::runtime::spawn("lnv2-user-send", async move {
+        sender
+            .get_first_module::<fedimint_lnv2_client::LightningClientModule>()
+            .expect("The federation has an LNv2 module")
+            .send(
+                sent_invoice,
+                Some(SafeUrl::parse("http://capturing-gateway.test").expect("Valid url")),
+                serde_json::Value::Null,
+            )
+            .await
+    });
+
+    let payload = gateway_conn.captured().await;
+    let contract_amount = payload.contract.amount;
+    gateway
+        .send_payment_v2(payload)
+        .await?
+        .expect("The gateway pays the invoice and answers with its preimage");
+
+    // `C - (A + F)`: the fake node reports the invoice amount sent and a zero
+    // routing fee, so the margin is exactly the gateway's own fee.
+    let expected_margin =
+        i64::try_from(contract_amount.msats)? - i64::try_from(invoice_amount.msats)?;
+    assert!(
+        expected_margin > 0,
+        "the forward has to earn the gateway something for this test to mean anything"
+    );
+
+    // The claim's notes have to be issued before the margin is realized, so
+    // poll rather than assert once.
+    let ledger = retry(
+        "waiting for the outgoing forward's margin to be realized",
+        backoff_util::aggressive_backoff(),
+        || async {
+            let ledger = gateway_federation_ledger(&gateway, fed.id()).await?;
+            anyhow::ensure!(
+                ledger.realized_margin_msat == expected_margin,
+                "margin not realized yet: {ledger:?}"
+            );
+            Ok(ledger)
+        },
+    )
+    .await?;
+
+    assert_eq!(ledger.realized_margin_msat, expected_margin);
+    assert_eq!(
+        ledger.open_positions_msat, 0,
+        "a settled forward must leave no open position behind: {ledger:?}"
+    );
+    assert_eq!(
+        ledger.unknown_forwards, 0,
+        "the realized cost was recorded, so nothing is unknown: {ledger:?}"
+    );
+    assert_eq!(ledger.negative_forwards, vec![]);
+
+    Ok(())
+}
+
+/// End-to-end check for the incoming direction: margin is the settled HTLC
+/// minus the contract the gateway funded, and the states the receive machine
+/// passed through on its way to `Success` must not each read as another open
+/// position.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv2_ledger_scores_a_completed_incoming_forward() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+    send_msats_to_gateway(&gateway, fed.id(), 1_000_000_000).await;
+
+    let client = gateway.select_client(fed.id()).await?.into_value();
+    let module = client.get_first_module::<GatewayClientModuleV2>()?;
+    let preimage = [23; 32];
+    let payment_hash = preimage.consensus_hash();
+    let contract_amount = Amount::from_msats(990_000);
+    let htlc_amount_msat = 1_000_000;
+    let contract = IncomingContract::new(
+        module.cfg.tpe_agg_pk,
+        [42; 32],
+        preimage,
+        PaymentImage::Hash(payment_hash),
+        contract_amount,
+        u64::MAX,
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        module.keypair.public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+    );
+
+    module
+        .relay_incoming_htlc(payment_hash, 0, 0, contract, htlc_amount_msat)
+        .await?;
+
+    let expected_margin = i64::try_from(htlc_amount_msat)? - i64::try_from(contract_amount.msats)?;
+
+    let ledger = retry(
+        "waiting for the incoming forward's margin to be realized",
+        backoff_util::aggressive_backoff(),
+        || async {
+            let ledger = gateway_federation_ledger(&gateway, fed.id()).await?;
+            anyhow::ensure!(
+                ledger.realized_margin_msat == expected_margin,
+                "margin not realized yet: {ledger:?}"
+            );
+            Ok(ledger)
+        },
+    )
+    .await?;
+
+    assert_eq!(ledger.realized_margin_msat, expected_margin);
+    assert_eq!(
+        ledger.open_positions_msat, 0,
+        "the settled circuit must leave no open position behind: {ledger:?}"
+    );
+    assert_eq!(
+        ledger.unknown_forwards, 0,
+        "the locked HTLC amount was recorded, so nothing is unknown: {ledger:?}"
+    );
+    assert_eq!(ledger.negative_forwards, vec![]);
+
+    Ok(())
 }
