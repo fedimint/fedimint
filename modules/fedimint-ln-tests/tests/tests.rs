@@ -9,6 +9,7 @@ use fedimint_client::transaction::{
     TxSubmissionStatesSM,
 };
 use fedimint_client::{Client, ClientHandleArc};
+use fedimint_client_module::error::OperationLookupError;
 use fedimint_client_module::oplog::OperationLogEntry;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::module::{AmountUnit, Amounts, CommonModuleInit as _};
@@ -26,8 +27,8 @@ use fedimint_ln_client::receive::{
 use fedimint_ln_client::{
     GatewaySelectionError, InternalPayState, LightningClientInit, LightningClientModule,
     LightningClientStateMachines, LightningOperationMeta, LightningOperationMetaVariant,
-    LnPayState, LnReceiveState, MockGatewayConnection, OutgoingLightningPayment, PayType,
-    ReceivingKey, SpendableAmountError, create_incoming_contract_output,
+    LnPayState, LnReceiveState, LnSubscribeError, MockGatewayConnection, OutgoingLightningPayment,
+    PayType, ReceivingKey, SpendableAmountError, create_incoming_contract_output,
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::{EncryptedPreimage, PreimageKey};
@@ -2059,6 +2060,47 @@ async fn spendable_amount_without_a_gateway_names_the_reason() -> anyhow::Result
         Err(SpendableAmountError::Gateway(
             GatewaySelectionError::NoGatewaysRegistered
         ))
+    );
+
+    Ok(())
+}
+
+/// Subscribing with the wrong operation says which kind of lightning
+/// operation was expected, instead of one of five interchangeable strings.
+#[tokio::test(flavor = "multi_thread")]
+async fn subscribing_with_the_wrong_operation_names_the_kind() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let ln_module = client.get_first_module::<LightningClientModule>()?;
+
+    assert_matches!(
+        ln_module
+            .subscribe_ln_receive(OperationId::new_random())
+            .await,
+        Err(LnSubscribeError::Operation(OperationLookupError::NotFound(
+            _
+        )))
+    );
+
+    let desc = Description::new("wrong-kind".to_string())?;
+    let (receive_op, _invoice, _) = ln_module
+        .create_bolt11_invoice(
+            sats(100),
+            Bolt11InvoiceDescription::Direct(desc),
+            None,
+            (),
+            None,
+        )
+        .await?;
+
+    assert_matches!(
+        ln_module.subscribe_ln_pay(receive_op).await,
+        Err(LnSubscribeError::NotAPayment)
+    );
+    assert_matches!(
+        ln_module.get_ln_pay_details_for(receive_op).await,
+        Err(LnSubscribeError::NotAPayment)
     );
 
     Ok(())

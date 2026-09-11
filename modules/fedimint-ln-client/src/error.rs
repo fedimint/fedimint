@@ -4,7 +4,7 @@
 //! one place for an integrator to look.
 
 use fedimint_api_client::api::FederationError;
-use fedimint_client_module::error::TransactionSubmitError;
+use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
 use fedimint_core::secp256k1::PublicKey;
 #[cfg(feature = "uniffi")]
 use fedimint_core::util::FmtCompact as _;
@@ -82,4 +82,60 @@ pub enum SpendableAmountError {
     /// The fee probe failed for a reason unrelated to the balance.
     #[error("The fee quote for the payment failed")]
     Quote(#[source] TransactionSubmitError),
+}
+
+/// A failure to follow a lightning operation.
+///
+/// Every entry point that takes an operation id and reports on it, the pay,
+/// receive, claim and recurring-receive subscriptions, the payment-detail
+/// lookup and the outgoing-payment await, first has to find the operation and
+/// then check that it is the kind of lightning operation being asked about.
+/// Both halves are named here, so a caller can tell "I have never seen that
+/// operation" from "that operation is a receive, not a payment".
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum LnSubscribeError {
+    /// The operation could not be looked up, or belongs to another module.
+    #[error("The lightning operation could not be looked up")]
+    Operation(#[from] OperationLookupError),
+
+    /// The operation belongs to the lightning module, but it is not an
+    /// outgoing payment.
+    #[error("The operation is not a lightning payment")]
+    NotAPayment,
+
+    /// The operation belongs to the lightning module, but it is not a receive.
+    #[error("The operation is not a lightning receive")]
+    NotAReceive,
+
+    /// The operation belongs to the lightning module, but it is not a claim of
+    /// an already-funded incoming contract.
+    #[error("The operation is not a lightning claim")]
+    NotAClaim,
+
+    /// The operation belongs to the lightning module, but it is not a receive
+    /// against a recurring payment code.
+    #[error("The operation is not a recurring lightning receive")]
+    NotARecurringReceive,
+
+    /// The operation is a payment, but it is settled inside the federation
+    /// rather than over Lightning, so it has no external payment states.
+    #[error("The operation is an external lightning payment, not an internal one")]
+    NotInternalPayment,
+
+    /// The operation is a payment, but it is settled inside the federation, so
+    /// it has no Lightning payment states.
+    #[error("The operation is an internal lightning payment, not an external one")]
+    NotExternalPayment,
+
+    /// The payment's update stream ended without reaching a final state.
+    #[error("The outgoing lightning payment did not reach a final state")]
+    NoFinalState,
+}
+
+#[cfg(feature = "uniffi")]
+impl From<LnSubscribeError> for fedimint_core::util::ffi::UniffiError {
+    fn from(e: LnSubscribeError) -> Self {
+        Self::General(e.fmt_compact().to_string())
+    }
 }

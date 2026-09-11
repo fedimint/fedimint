@@ -674,7 +674,8 @@ async fn await_invoice_confirmed(
 ) -> Result<(), RecurringPaymentError> {
     let mut operation_updated = ln_module
         .subscribe_ln_receive(operation_id)
-        .await?
+        .await
+        .map_err(|e| RecurringPaymentError::Other(e.into()))?
         .into_stream();
 
     while let Some(update) = operation_updated.next().await {

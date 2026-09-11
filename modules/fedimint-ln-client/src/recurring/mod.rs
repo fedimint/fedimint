@@ -7,7 +7,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use anyhow::bail;
 use api::{RecurringdApiError, RecurringdClient};
 use async_stream::stream;
 use bitcoin::hashes::sha256;
@@ -42,7 +41,8 @@ use crate::db::{RecurringPaymentCodeKey, RecurringPaymentCodeKeyPrefix};
 use crate::receive::LightningReceiveError;
 use crate::{
     LightningClientModule, LightningClientStateMachines, LightningOperationMeta,
-    LightningOperationMetaVariant, LnReceiveState, tweak_user_key, tweak_user_secret_key,
+    LightningOperationMetaVariant, LnReceiveState, LnSubscribeError, tweak_user_key,
+    tweak_user_secret_key,
 };
 
 const LOG_CLIENT_RECURRING: &str = "fm::client::ln::recurring";
@@ -360,14 +360,14 @@ impl LightningClientModule {
     pub async fn subscribe_ln_recurring_receive(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
+    ) -> Result<UpdateStreamOrOutcome<LnReceiveState>, LnSubscribeError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let LightningOperationMetaVariant::RecurringPaymentReceive(ReurringPaymentReceiveMeta {
             invoice,
             ..
         }) = operation.meta::<LightningOperationMeta>().variant
         else {
-            bail!("Operation is not a recurring lightning receive")
+            return Err(LnSubscribeError::NotARecurringReceive);
         };
 
         let client_ctx = self.client_ctx.clone();
