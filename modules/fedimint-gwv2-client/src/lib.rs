@@ -504,6 +504,14 @@ impl GatewayClientModuleV2 {
                         // and finalizes in the background.
                         return Ok(claiming.preimage);
                     }
+                    SendSMState::Claimed(claimed) => {
+                        // The preimage is proof the payment succeeded, so return it to
+                        // the sender as soon as it is available rather than waiting for
+                        // an additional ordering. The gateway's claim of the outgoing
+                        // contract has already been submitted by the send state machine
+                        // and finalizes in the background.
+                        return Ok(claimed.preimage);
+                    }
                     SendSMState::Cancelled(cancelled) => {
                         warn!("Outgoing lightning payment is cancelled {:?}", cancelled);
 
@@ -823,6 +831,23 @@ impl GatewayClientModuleV2 {
     }
 }
 
+/// How relaying an LNv2 outgoing payment onto an LNv1 incoming contract in
+/// another federation ended.
+#[derive(Debug, Clone)]
+pub struct Lnv1SwapOutcome {
+    pub final_state: FinalReceiveState,
+    /// What the target federation's incoming contract was actually funded
+    /// with, read back from that federation's own record once the receive
+    /// succeeded.
+    ///
+    /// The invoice amount is *not* a stand-in: the LNv1 leg funds the invoice
+    /// amount minus that federation's incoming fee, so using the invoice
+    /// amount over-reports what every such swap cost. `None` means the record
+    /// is absent (pre-upgrade history), and the cost has to be recorded as
+    /// unknown rather than guessed.
+    pub funded: Option<Amount>,
+}
+
 /// An interface between module implementation and the general `Gateway`
 ///
 /// To abstract away and decouple the core gateway from the modules, the
@@ -906,7 +931,7 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
         client: &ClientHandleArc,
         invoice: &Bolt11Invoice,
         allow_fresh_dispatch: bool,
-    ) -> anyhow::Result<Option<FinalReceiveState>>;
+    ) -> anyhow::Result<Option<Lnv1SwapOutcome>>;
 
     /// Claims the given payment image for `operation_id` in the gateway's
     /// global database, returning `true` if this operation may claim the

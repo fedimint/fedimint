@@ -99,6 +99,7 @@ use fedimint_gw_client::{
 use fedimint_gwv2_client::events::compute_lnv2_stats;
 use fedimint_gwv2_client::{
     EXPIRATION_DELTA_MINIMUM_V2, FinalReceiveState, GatewayClientModuleV2, IGatewayClientV2,
+    Lnv1SwapOutcome,
 };
 use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
@@ -3816,7 +3817,7 @@ impl IGatewayClientV2 for Gateway {
         client: &ClientHandleArc,
         invoice: &Bolt11Invoice,
         allow_fresh_dispatch: bool,
-    ) -> anyhow::Result<Option<FinalReceiveState>> {
+    ) -> anyhow::Result<Option<Lnv1SwapOutcome>> {
         let swap_params = SwapParameters {
             payment_hash: *invoice.payment_hash(),
             amount_msat: Amount::from_msats(
@@ -3863,7 +3864,27 @@ impl IGatewayClientV2 for Gateway {
             }
         }
 
-        Ok(Some(final_state))
+        // What this swap actually cost is the amount the *target* federation's
+        // incoming contract was funded with -- the invoice amount minus that
+        // federation's incoming fee -- which no state machine carries, so read
+        // it back from the record `gateway_handle_direct_swap` wrote
+        // atomically with the funding transaction. `None` means the record
+        // predates this (or the swap never funded anything), and the caller
+        // records the cost as unknown instead of guessing it.
+        let funded = match final_state {
+            FinalReceiveState::Success(_) => lnv1
+                .incoming_amounts(operation_id)
+                .await
+                .map(|amounts| amounts.contract_amount),
+            FinalReceiveState::Rejected
+            | FinalReceiveState::Refunded
+            | FinalReceiveState::Failure => None,
+        };
+
+        Ok(Some(Lnv1SwapOutcome {
+            final_state,
+            funded,
+        }))
     }
 
     async fn claim_payment_image(
