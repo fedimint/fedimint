@@ -18,7 +18,9 @@ use fedimint_ln_common::contracts::Preimage;
 use fedimint_logging::LOG_LIGHTNING;
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::routing::gossip::{NodeAlias, NodeId};
-use ldk_node::payment::{PaymentDirection, PaymentKind, PaymentStatus, SendingParameters};
+use ldk_node::payment::{
+    PaymentDetails, PaymentDirection, PaymentKind, PaymentStatus, SendingParameters,
+};
 use lightning::ln::channelmanager::PaymentId;
 use lightning::offers::offer::{Offer, OfferId};
 use lightning::types::payment::{PaymentHash, PaymentPreimage};
@@ -204,7 +206,10 @@ impl GatewayLdkClient {
                     .send(InterceptPaymentRequest {
                         payment_hash: Hash::from_slice(&payment_hash.0)
                             .expect("Failed to create Hash"),
+                        // LDK reports the real claimable amount, so the two
+                        // amounts coincide here.
                         amount_msat: claimable_amount_msat,
+                        incoming_amount_msat: claimable_amount_msat,
                         expiry: claim_deadline.unwrap_or_default(),
                         short_channel_id: None,
                         // LDK claims payments through its own payment store,
@@ -265,6 +270,102 @@ impl GatewayLdkClient {
         if let Err(err) = node.event_handled() {
             warn!(err = %err.fmt_compact(), "LDK could not mark event handled");
         }
+    }
+
+    /// Returns the node's payment record for `payment_id`, but only when it is
+    /// one of our own outbound attempts.
+    ///
+    /// LDK keys BOLT11 payments by `PaymentId(payment_hash)` in both
+    /// directions, so a registered invoice or a claimed inbound payment for the
+    /// same hash shares a slot with our outbound send. Without this direction
+    /// check such an inbound record could be mistaken for the result of our
+    /// `pay()`: reported as a spurious success (a preimage we never sent for),
+    /// a spurious failure, or -- while still pending -- block `pay()` forever.
+    fn outbound_payment(&self, payment_id: PaymentId) -> Option<PaymentDetails> {
+        self.node
+            .payment(&payment_id)
+            .filter(|details| details.direction == PaymentDirection::Outbound)
+    }
+}
+
+/// Why an invoice must not be registered for a payment hash on the node.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InboundRegistrationRefusal {
+    /// `pay()` holds the per-hash lock, so an outbound payment for the hash
+    /// is being dispatched or awaited right now.
+    OutboundInFlight,
+    /// The node holds an outbound record for the hash, pending or terminal.
+    OutboundRecorded,
+}
+
+impl std::fmt::Display for InboundRegistrationRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::OutboundInFlight => {
+                write!(f, "an outbound payment for this hash is in flight")
+            }
+            Self::OutboundRecorded => {
+                write!(f, "the node holds an outbound payment for this hash")
+            }
+        }
+    }
+}
+
+/// Decides whether an invoice may be registered for a payment hash the node
+/// may already know as one of our outbound payments.
+///
+/// `ldk-node` keys BOLT11 payments by `PaymentId(payment_hash)` in both
+/// directions, and registering an invoice overwrites whatever record shares
+/// the key. Registering one for a hash we pay would erase the outbound record
+/// `pay()` reads its result from, so a settled payment would be reported as
+/// failed and the outgoing contract forfeited while the payee keeps the funds.
+///
+/// `outbound_lock_acquired` is whether the caller took the per-hash lock
+/// `pay()` holds for the whole life of a payment, and `existing_direction` is
+/// the direction of the node's record for the hash, if any. A terminal
+/// outbound record is refused as well: a restarted state machine re-runs
+/// `pay()` and needs that record to recover the payment's result instead of
+/// re-dispatching. An existing inbound record is left to the caller, whose
+/// own reservation already rejects duplicate registrations.
+fn check_inbound_registration(
+    outbound_lock_acquired: bool,
+    existing_direction: Option<PaymentDirection>,
+) -> Result<(), InboundRegistrationRefusal> {
+    if !outbound_lock_acquired {
+        return Err(InboundRegistrationRefusal::OutboundInFlight);
+    }
+
+    match existing_direction {
+        Some(PaymentDirection::Outbound) => Err(InboundRegistrationRefusal::OutboundRecorded),
+        Some(PaymentDirection::Inbound) | None => Ok(()),
+    }
+}
+
+/// Classifies an `ldk-node` claim or fail error for the gateway's completion
+/// retry loop.
+///
+/// `claim_for_hash` and `fail_for_hash` fail deterministically for an unknown
+/// payment hash, a preimage that does not hash to it, or an amount below the
+/// registered one. Retrying cannot change any of those, so they are reported
+/// as [`LightningRpcError::HtlcCompletionRejected`] and the completion state
+/// machine records the outcome instead of retrying forever. Everything else,
+/// today only a failed store write, is treated as transient: the incoming
+/// contract is already funded by the time this runs, so an error this list
+/// does not know must keep retrying rather than be recorded as final.
+fn htlc_completion_error(err: &ldk_node::NodeError, payment_hash: &str) -> LightningRpcError {
+    match err {
+        ldk_node::NodeError::InvalidPaymentHash
+        | ldk_node::NodeError::InvalidPaymentPreimage
+        | ldk_node::NodeError::InvalidAmount => LightningRpcError::HtlcCompletionRejected {
+            failure_reason: format!(
+                "LDK rejected completion of payment with hash {payment_hash}: {err}"
+            ),
+        },
+        _ => LightningRpcError::FailedToCompleteHtlc {
+            failure_reason: format!(
+                "Failed to complete LDK payment with hash {payment_hash}: {err}"
+            ),
+        },
     }
 }
 
@@ -340,13 +441,17 @@ impl ILnRpcClient for GatewayLdkClient {
             .async_lock(payment_id)
             .await;
 
-        // If a payment is not known to the node we can initiate it, and if it is known
-        // we can skip calling `ldk-node::Bolt11Payment::send()` and wait for the
-        // payment to complete. The lock guard above guarantees that this block is only
-        // executed once at a time for a given payment hash, ensuring that there is no
-        // race condition between checking if a payment is known and initiating a new
+        // If no outbound attempt of ours is known to the node we can initiate
+        // it, and if one is known we can skip calling
+        // `ldk-node::Bolt11Payment::send()` and wait for the payment to
+        // complete. Checking specifically for an outbound record matters because
+        // an inbound payment shares `PaymentId(payment_hash)` with our send: a
+        // registered invoice for the same hash must not make us skip `send()`.
+        // The lock guard above guarantees that this block is only executed once
+        // at a time for a given payment hash, ensuring that there is no race
+        // condition between checking if a payment is known and initiating a new
         // payment if it isn't.
-        if self.node.payment(&payment_id).is_none() {
+        if self.outbound_payment(payment_id).is_none() {
             assert_eq!(
                 self.node
                     .bolt11_payment()
@@ -373,7 +478,7 @@ impl ILnRpcClient for GatewayLdkClient {
         // events, but interacting with the node event queue here isn't
         // straightforward.
         loop {
-            if let Some(payment_details) = self.node.payment(&payment_id) {
+            if let Some(payment_details) = self.outbound_payment(payment_id) {
                 match payment_details.status {
                     PaymentStatus::Pending => {}
                     PaymentStatus::Succeeded => {
@@ -396,6 +501,15 @@ impl ILnRpcClient for GatewayLdkClient {
             }
             fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
         }
+    }
+
+    async fn outbound_payment_exists(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<bool, LightningRpcError> {
+        Ok(self
+            .outbound_payment(PaymentId(payment_hash.to_byte_array()))
+            .is_some())
     }
 
     async fn route_htlcs<'a>(
@@ -437,16 +551,13 @@ impl ILnRpcClient for GatewayLdkClient {
             self.node
                 .bolt11_payment()
                 .claim_for_hash(ph, claimable_amount_msat, PaymentPreimage(preimage.0))
-                .map_err(|_| LightningRpcError::FailedToCompleteHtlc {
-                    failure_reason: format!("Failed to claim LDK payment with hash {ph_hex_str}"),
-                })?;
+                .map_err(|err| htlc_completion_error(&err, &ph_hex_str))?;
         } else {
             warn!(target: LOG_LIGHTNING, payment_hash = %ph_hex_str, "Unwinding payment because the action was not `Settle`");
-            self.node.bolt11_payment().fail_for_hash(ph).map_err(|_| {
-                LightningRpcError::FailedToCompleteHtlc {
-                    failure_reason: format!("Failed to unwind LDK payment with hash {ph_hex_str}"),
-                }
-            })?;
+            self.node
+                .bolt11_payment()
+                .fail_for_hash(ph)
+                .map_err(|err| htlc_completion_error(&err, &ph_hex_str))?;
         }
 
         return Ok(());
@@ -478,12 +589,44 @@ impl ILnRpcClient for GatewayLdkClient {
         };
 
         let invoice = match payment_hash_or {
-            Some(payment_hash) => self.node.bolt11_payment().receive_for_hash(
-                create_invoice_request.amount_msat,
-                &description,
-                create_invoice_request.expiry_secs,
-                payment_hash,
-            ),
+            Some(payment_hash) => {
+                // `pay()` holds this lock for the whole life of an outbound
+                // payment, so failing to take it means a payment for this hash
+                // is in flight right now. Keeping it until `receive_for_hash()`
+                // has run means `pay()` cannot write its outbound record between
+                // our check and the registration's insert, which would
+                // overwrite it.
+                let payment_id = PaymentId(payment_hash.0);
+                let outbound_lock_guard = self
+                    .outbound_lightning_payment_lock_pool
+                    .try_lock(payment_id);
+                let existing_direction = self
+                    .node
+                    .payment(&payment_id)
+                    .map(|details| details.direction);
+                if let Err(refusal) =
+                    check_inbound_registration(outbound_lock_guard.is_some(), existing_direction)
+                {
+                    warn!(
+                        target: LOG_LIGHTNING,
+                        payment_hash = %hex::encode(payment_hash.0),
+                        %refusal,
+                        "Refusing to register an invoice for a payment hash we pay outbound"
+                    );
+                    return Err(LightningRpcError::FailedToGetInvoice {
+                        failure_reason: format!(
+                            "Payment hash cannot be registered for an invoice: {refusal}"
+                        ),
+                    });
+                }
+
+                self.node.bolt11_payment().receive_for_hash(
+                    create_invoice_request.amount_msat,
+                    &description,
+                    create_invoice_request.expiry_secs,
+                    payment_hash,
+                )
+            }
             None => self.node.bolt11_payment().receive(
                 create_invoice_request.amount_msat,
                 &description,
