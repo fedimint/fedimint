@@ -1,5 +1,6 @@
 mod api;
 mod complete_sm;
+mod db;
 pub mod events;
 mod receive_sm;
 mod send_sm;
@@ -26,7 +27,7 @@ use fedimint_client_module::transaction::{
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
@@ -56,6 +57,7 @@ pub use crate::complete_sm::IncomingCircuitKey;
 use crate::complete_sm::{
     CircuitCompleteSMCommon, CircuitCompleteStateMachine, CompleteSMState, CompleteStateMachine,
 };
+use crate::db::{IncomingAmountKey, IncomingAmountKeyPrefix};
 use crate::receive_sm::ReceiveSMCommon;
 use crate::send_sm::SendSMCommon;
 
@@ -182,10 +184,21 @@ impl ModuleInit for GatewayClientInitV2 {
 
     async fn dump_database(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
-        _prefix_names: Vec<String>,
+        dbtx: &mut DatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
-        Box::new(vec![].into_iter())
+        let mut items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
+        if prefix_names.is_empty() || prefix_names.iter().any(|p| p == "incomingamount") {
+            fedimint_core::push_db_pair_items!(
+                dbtx,
+                IncomingAmountKeyPrefix,
+                IncomingAmountKey,
+                Amount,
+                items,
+                "Incoming HTLC Amounts"
+            );
+        }
+        Box::new(items.into_iter())
     }
 }
 
@@ -638,6 +651,21 @@ impl GatewayClientModuleV2 {
             }
         }
 
+        // Record the value actually locked in the HTLC so the solvency audit
+        // can score this circuit once it completes. Written before the
+        // completion operation exists: a crash in between leaves an orphaned
+        // amount, which is harmless, whereas a completion without an amount is
+        // reported as unknown-cost.
+        {
+            let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+            dbtx.insert_entry(
+                &IncomingAmountKey(completion_operation_id),
+                &Amount::from_msats(amount_msat),
+            )
+            .await;
+            dbtx.commit_tx().await;
+        }
+
         let completion =
             GatewayClientStateMachinesV2::CircuitComplete(CircuitCompleteStateMachine {
                 common: CircuitCompleteSMCommon {
@@ -668,6 +696,17 @@ impl GatewayClientModuleV2 {
         }
 
         Ok(())
+    }
+
+    /// The value locked in the incoming HTLC behind a circuit completion
+    /// operation, if it was recorded.
+    pub async fn incoming_amount(&self, completion_operation_id: OperationId) -> Option<Amount> {
+        self.client_ctx
+            .module_db()
+            .begin_transaction_nc()
+            .await
+            .get_value(&IncomingAmountKey(completion_operation_id))
+            .await
     }
 
     /// Funds the incoming contract of a direct swap and waits for its final
