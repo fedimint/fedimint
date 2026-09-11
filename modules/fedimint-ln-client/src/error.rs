@@ -12,7 +12,7 @@ use fedimint_core::secp256k1::PublicKey;
 #[cfg(feature = "uniffi")]
 use fedimint_core::util::FmtCompact as _;
 use fedimint_ln_common::contracts::ContractId;
-use lightning_invoice::Currency;
+use lightning_invoice::{CreationError, Currency};
 use thiserror::Error;
 
 use crate::incoming::IncomingSmError;
@@ -245,6 +245,42 @@ impl From<FederationError> for PayBolt11InvoiceError {
 #[cfg(feature = "uniffi")]
 impl From<PayBolt11InvoiceError> for fedimint_core::util::ffi::UniffiError {
     fn from(e: PayBolt11InvoiceError) -> Self {
+        Self::General(e.fmt_compact().to_string())
+    }
+}
+
+/// A failure to create a BOLT11 invoice to be paid into this federation.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum CreateBolt11InvoiceError {
+    /// This client's internal-payment markers could not be derived, so the
+    /// invoice cannot be built for an internal payment.
+    #[error("The internal payment markers could not be derived")]
+    PaymentMarkers(#[source] secp256k1::Error),
+
+    /// The invoice could not be assembled from the parameters given.
+    #[error("The invoice could not be built")]
+    InvoiceCreation(#[source] CreationError),
+
+    /// The transaction publishing the offer could not be built or submitted.
+    #[error("The offer transaction could not be submitted")]
+    Transaction(#[from] TransactionSubmitError),
+
+    /// The federation rejected the transaction publishing the offer, so
+    /// nothing would be able to pay the invoice.
+    ///
+    /// The payload is the message the submission recorded rather than an error
+    /// value, so it is part of this error's own message.
+    #[error("The offer transaction was rejected: {reason}")]
+    OfferRejected {
+        /// What the submission reported.
+        reason: String,
+    },
+}
+
+#[cfg(feature = "uniffi")]
+impl From<CreateBolt11InvoiceError> for fedimint_core::util::ffi::UniffiError {
+    fn from(e: CreateBolt11InvoiceError) -> Self {
         Self::General(e.fmt_compact().to_string())
     }
 }

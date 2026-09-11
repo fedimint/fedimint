@@ -161,6 +161,19 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
         .mock_receive(sats(1000), AmountUnit::BITCOIN)
         .await?;
 
+    // Creating an invoice reports its own failures, not an opaque string.
+    let typed: Result<_, fedimint_ln_client::CreateBolt11InvoiceError> = client1
+        .get_first_module::<LightningClientModule>()?
+        .create_bolt11_invoice(
+            sats(100),
+            Bolt11InvoiceDescription::Direct(Description::new("typed".to_string())?),
+            None,
+            (),
+            None,
+        )
+        .await;
+    let (_op, _invoice, _preimage) = typed?;
+
     let extra_meta = "internal payment with no gateway registered".to_string();
     let desc = Description::new("with-markers".to_string())?;
     let (op, invoice, _) = client1
