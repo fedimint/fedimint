@@ -10,6 +10,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::Amounts;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, OutPoint, TransactionId, secp256k1};
 use fedimint_lightning::{LightningRpcError, PayInvoiceResponse};
 use fedimint_ln_client::api::LnFederationApi;
@@ -408,7 +409,7 @@ impl GatewayPayInvoice {
                 contract.clone(),
                 swap_parameters,
                 common.clone(),
-                payment_parameters.fresh_dispatch_refusal.clone(),
+                payment_parameters.fresh_dispatch.clone().err(),
             )
             .await
         {
@@ -428,7 +429,7 @@ impl GatewayPayInvoice {
                             payment_parameters.payment_data.clone(),
                             contract.clone(),
                             common.clone(),
-                            payment_parameters.fresh_dispatch_refusal.clone(),
+                            payment_parameters.fresh_dispatch.clone().err(),
                         )
                     })
                     .await
@@ -535,16 +536,19 @@ impl GatewayPayInvoice {
         debug!("Buying preimage over lightning for contract {contract:?}");
 
         // A payment the node already knows resolves through `pay`'s
-        // idempotent resume path -- which never re-dispatches and ignores
-        // `max_delay` -- so a drifted timelock or expiry gate only refuses a
-        // dispatch that never happened.
-        if let Some(error) = buy_preimage.fresh_dispatch_refusal.clone()
+        // idempotent resume path, which never re-dispatches, so a drifted
+        // timelock or expiry gate only refuses a dispatch that never happened.
+        if let Err(error) = &buy_preimage.fresh_dispatch
             && !context
                 .lightning_manager
                 .outbound_payment_exists(buy_preimage.payment_data.payment_hash())
                 .await
         {
-            warn!("Refusing fresh lightning dispatch for contract {contract:?}: {error:?}");
+            warn!(
+                ?contract,
+                err = %error.fmt_compact(),
+                "Refusing fresh lightning dispatch"
+            );
             return GatewayPayStateMachine {
                 common,
                 state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
@@ -552,13 +556,19 @@ impl GatewayPayInvoice {
                     error: OutgoingPaymentError {
                         contract_id: contract.contract.contract_id(),
                         contract: Some(contract),
-                        error_type: OutgoingPaymentErrorType::InvalidOutgoingContract { error },
+                        error_type: OutgoingPaymentErrorType::InvalidOutgoingContract {
+                            error: error.clone(),
+                        },
                     },
                 })),
             };
         }
 
-        let max_delay = buy_preimage.max_delay;
+        // On the resume path `pay` consults the node's own payment record
+        // before the budget, so `0` is a fail-closed sentinel: should that
+        // record have vanished in between, LND rejects a zero CLTV limit and
+        // LDK finds no route, rather than dispatching under a stale budget.
+        let max_delay = buy_preimage.fresh_dispatch.clone().unwrap_or(0);
         let max_fee = buy_preimage.max_send_amount.saturating_sub(
             buy_preimage
                 .payment_data
@@ -758,37 +768,31 @@ impl GatewayPayInvoice {
         // claim it. They are therefore recorded as a refusal that each rail
         // consults only before dispatching fresh; anything already started
         // resumes unconditionally.
-        let fresh_dispatch_refusal = if max_delay.is_none() {
-            Some(OutgoingContractError::TimeoutTooClose)
-        } else if payment_data.is_expired() {
-            Some(OutgoingContractError::InvoiceExpired(
+        let fresh_dispatch = match max_delay {
+            None => Err(OutgoingContractError::TimeoutTooClose),
+            Some(_) if payment_data.is_expired() => Err(OutgoingContractError::InvoiceExpired(
                 payment_data.expiry_timestamp(),
-            ))
-        } else {
-            None
+            )),
+            Some(max_delay) => Ok(max_delay),
         };
 
         Ok(PaymentParameters {
-            // Zero is never dispatched: an exhausted budget records a refusal
-            // above, and the resume path never reads `max_delay`.
-            max_delay: max_delay.unwrap_or(0),
+            fresh_dispatch,
             max_send_amount: account.amount,
             payment_data: payment_data.clone(),
-            fresh_dispatch_refusal,
         })
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 struct PaymentParameters {
-    max_delay: u64,
+    /// `Ok` carries the CLTV budget a fresh dispatch must respect. `Err` means
+    /// a drifted pre-dispatch gate (timelock budget or invoice expiry) forbids
+    /// starting one. Each rail consults this only before initiating; a
+    /// dispatch that already exists resumes unconditionally.
+    fresh_dispatch: Result<u64, OutgoingContractError>,
     max_send_amount: Amount,
     payment_data: PaymentData,
-    /// `Some` when a drifted pre-dispatch gate (timelock budget or invoice
-    /// expiry) forbids starting a fresh dispatch. Each rail consults this
-    /// only before initiating; a dispatch that already exists resumes
-    /// unconditionally.
-    fresh_dispatch_refusal: Option<OutgoingContractError>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
@@ -1195,10 +1199,7 @@ mod tests {
                 proportional_millionths: 0,
             },
         )
-        .and_then(|parameters| match parameters.fresh_dispatch_refusal {
-            Some(refusal) => Err(refusal),
-            None => Ok(()),
-        })
+        .and_then(|parameters| parameters.fresh_dispatch.map(|_| ()))
     }
 
     /// Payment data whose invoice expired at the unix epoch.
