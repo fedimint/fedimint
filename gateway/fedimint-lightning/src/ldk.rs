@@ -341,6 +341,34 @@ fn check_inbound_registration(
     }
 }
 
+/// Classifies an `ldk-node` claim or fail error for the gateway's completion
+/// retry loop.
+///
+/// `claim_for_hash` and `fail_for_hash` fail deterministically for an unknown
+/// payment hash, a preimage that does not hash to it, or an amount below the
+/// registered one. Retrying cannot change any of those, so they are reported
+/// as [`LightningRpcError::HtlcCompletionRejected`] and the completion state
+/// machine records the outcome instead of retrying forever. Everything else,
+/// today only a failed store write, is treated as transient: the incoming
+/// contract is already funded by the time this runs, so an error this list
+/// does not know must keep retrying rather than be recorded as final.
+fn htlc_completion_error(err: &ldk_node::NodeError, payment_hash: &str) -> LightningRpcError {
+    match err {
+        ldk_node::NodeError::InvalidPaymentHash
+        | ldk_node::NodeError::InvalidPaymentPreimage
+        | ldk_node::NodeError::InvalidAmount => LightningRpcError::HtlcCompletionRejected {
+            failure_reason: format!(
+                "LDK rejected completion of payment with hash {payment_hash}: {err}"
+            ),
+        },
+        _ => LightningRpcError::FailedToCompleteHtlc {
+            failure_reason: format!(
+                "Failed to complete LDK payment with hash {payment_hash}: {err}"
+            ),
+        },
+    }
+}
+
 impl Drop for GatewayLdkClient {
     fn drop(&mut self) {
         self.task_group.shutdown();
@@ -523,16 +551,13 @@ impl ILnRpcClient for GatewayLdkClient {
             self.node
                 .bolt11_payment()
                 .claim_for_hash(ph, claimable_amount_msat, PaymentPreimage(preimage.0))
-                .map_err(|_| LightningRpcError::FailedToCompleteHtlc {
-                    failure_reason: format!("Failed to claim LDK payment with hash {ph_hex_str}"),
-                })?;
+                .map_err(|err| htlc_completion_error(&err, &ph_hex_str))?;
         } else {
             warn!(target: LOG_LIGHTNING, payment_hash = %ph_hex_str, "Unwinding payment because the action was not `Settle`");
-            self.node.bolt11_payment().fail_for_hash(ph).map_err(|_| {
-                LightningRpcError::FailedToCompleteHtlc {
-                    failure_reason: format!("Failed to unwind LDK payment with hash {ph_hex_str}"),
-                }
-            })?;
+            self.node
+                .bolt11_payment()
+                .fail_for_hash(ph)
+                .map_err(|err| htlc_completion_error(&err, &ph_hex_str))?;
         }
 
         return Ok(());
