@@ -3,7 +3,7 @@
 //!
 //! See `docs/superpowers/specs/2026-09-11-gateway-solvency-design.md`.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::time::{Duration, SystemTime};
 
@@ -13,8 +13,9 @@ use fedimint_client::ClientHandleArc;
 use fedimint_client_module::sm::State as _;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
+use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _};
 use fedimint_core::{Amount, TransactionId};
-use fedimint_gateway_server_db::DrawdownPeak;
+use fedimint_gateway_server_db::{DrawdownPeak, GatewayDbtxNcExt};
 use fedimint_gw_client::GatewayClientModule;
 use fedimint_gwv2_client::GatewayClientModuleV2;
 use fedimint_gwv2_client::audit::{CircuitOutcome, ForwardFact, ReceiveOutcome, SendOutcome};
@@ -27,7 +28,7 @@ use fedimint_mintv2_client::{
 };
 use tracing::warn;
 
-use crate::Gateway;
+use crate::{Gateway, GatewayState};
 
 /// Positions older than this are no longer counted as assets.
 pub const STALE_POSITION_AGE: Duration = Duration::from_hours(24);
@@ -664,6 +665,22 @@ async fn federation_ledger(
     ))
 }
 
+/// A solvency evaluation: the ledger it was computed from, the peak it was
+/// measured against, the resulting drawdown, and the verdict.
+pub struct SolvencyReport {
+    // Only `verdict` is read by the boot gate and the periodic check today; the
+    // fields below document the full result of the evaluation for a future
+    // caller (e.g. an operator-facing diagnostics endpoint) rather than being
+    // recomputed from scratch.
+    #[allow(dead_code)]
+    pub ledger: Ledger,
+    #[allow(dead_code)]
+    pub peak: DrawdownPeak,
+    #[allow(dead_code)]
+    pub drawdown_pct: f64,
+    pub verdict: Verdict,
+}
+
 impl Gateway {
     /// The current forwarding ledger, computed against the gateway's live
     /// Lightning context. Exposed for tests and operator diagnostics; the
@@ -676,7 +693,7 @@ impl Gateway {
 
     /// Scores every federation and adds the node's funds. Fails, rather than
     /// guessing, if the node cannot report its balances.
-    pub async fn compute_ledger(&self, lnrpc: &dyn ILnRpcClient) -> anyhow::Result<Ledger> {
+    pub(crate) async fn compute_ledger(&self, lnrpc: &dyn ILnRpcClient) -> anyhow::Result<Ledger> {
         let node = lnrpc.get_balances().await?;
         let node_total = Amount::from_msats(node.total_msats());
         let now = fedimint_core::time::now();
@@ -703,14 +720,6 @@ impl Gateway {
                 .checked_add(f.ecash_balance)
                 .and_then(|t| t.checked_add(Amount::from_msats(f.open_positions_msat)))
                 .unwrap_or(total_assets);
-            if !f.stale_positions.is_empty() {
-                warn!(
-                    target: LOG_GATEWAY,
-                    federation_id = %f.federation_id,
-                    count = f.stale_positions.len(),
-                    "Open positions older than the stale threshold are no longer counted as assets"
-                );
-            }
         }
 
         Ok(Ledger {
@@ -719,6 +728,212 @@ impl Gateway {
             cumulative_margin_msat,
             total_assets,
         })
+    }
+
+    /// Computes the ledger, advances and persists the peak, evaluates the
+    /// thresholds and exports the metrics.
+    pub(crate) async fn solvency_report(
+        &self,
+        lnrpc: &dyn ILnRpcClient,
+    ) -> anyhow::Result<SolvencyReport> {
+        let ledger = self.compute_ledger(lnrpc).await?;
+
+        let mut dbtx = self.gateway_db.begin_transaction().await;
+        let previous = dbtx.load_drawdown_peak().await;
+        let peak = advance_peak(previous, ledger.cumulative_margin_msat, ledger.total_assets);
+        if previous != Some(peak) {
+            dbtx.save_drawdown_peak(&peak).await;
+        }
+        dbtx.commit_tx().await;
+
+        let drawdown_pct = drawdown_pct(&peak, ledger.cumulative_margin_msat);
+        let verdict = self.drawdown_thresholds.evaluate(drawdown_pct);
+
+        crate::metrics::GATEWAY_DRAWDOWN_PCT.set(drawdown_pct);
+        crate::metrics::GATEWAY_CUMULATIVE_MARGIN_MSAT.set(ledger.cumulative_margin_msat);
+
+        // A federation that has since left would otherwise keep exporting its
+        // last-known value forever; `reset` drops every label, and the loop
+        // below re-sets only the federations still present.
+        crate::metrics::GATEWAY_FEDERATION_REALIZED_MARGIN_MSAT.reset();
+        for fed in &ledger.federations {
+            crate::metrics::GATEWAY_FEDERATION_REALIZED_MARGIN_MSAT
+                .with_label_values(&[&fed.federation_id.to_string()])
+                .set(fed.realized_margin_msat);
+        }
+
+        // Stale positions are sticky (a position that goes stale does not become
+        // fresh again on its own), so logging this on every 60s tick would be
+        // permanent warn-level noise. Warn only when a federation's stale set
+        // changed since the last report; otherwise it's already-known information,
+        // logged at debug. The very first report (boot gate) has an empty previous
+        // set, so it always warns if there is anything stale to report.
+        {
+            let mut previous_stale = self
+                .stale_positions_last_report
+                .lock()
+                .expect("stale-position tracking mutex is never held across a panic");
+            let mut current_stale = BTreeSet::new();
+            for fed in &ledger.federations {
+                for op_id in &fed.stale_positions {
+                    current_stale.insert((fed.federation_id, *op_id));
+                }
+
+                if fed.stale_positions.is_empty() {
+                    continue;
+                }
+
+                let current_fed_stale: BTreeSet<OperationId> =
+                    fed.stale_positions.iter().copied().collect();
+                let previous_fed_stale: BTreeSet<OperationId> = previous_stale
+                    .iter()
+                    .filter(|(federation_id, _)| *federation_id == fed.federation_id)
+                    .map(|(_, op_id)| *op_id)
+                    .collect();
+
+                if current_fed_stale == previous_fed_stale {
+                    tracing::debug!(
+                        target: LOG_GATEWAY,
+                        federation_id = %fed.federation_id,
+                        count = fed.stale_positions.len(),
+                        "Open positions older than the stale threshold are no longer counted as assets"
+                    );
+                } else {
+                    warn!(
+                        target: LOG_GATEWAY,
+                        federation_id = %fed.federation_id,
+                        count = fed.stale_positions.len(),
+                        "Open positions older than the stale threshold are no longer counted as assets"
+                    );
+                }
+            }
+            *previous_stale = current_stale;
+        }
+
+        match verdict {
+            Verdict::Ok => {
+                tracing::debug!(target: LOG_GATEWAY, drawdown_pct, "Solvency check passed");
+            }
+            Verdict::Warn => warn!(
+                target: LOG_GATEWAY,
+                drawdown_pct,
+                breakdown = %ledger,
+                "Forwarding drawdown exceeds the warning threshold"
+            ),
+            Verdict::Halt => tracing::error!(
+                target: LOG_GATEWAY,
+                drawdown_pct,
+                halt_pct = self.drawdown_thresholds.halt_pct(),
+                breakdown = %ledger,
+                "Forwarding drawdown exceeds the halt threshold. Review the breakdown; to override, raise FM_GATEWAY_DRAWDOWN_HALT_PCT and restart"
+            ),
+        }
+
+        Ok(SolvencyReport {
+            ledger,
+            peak,
+            drawdown_pct,
+            verdict,
+        })
+    }
+
+    /// Re-evaluates solvency while running. A halt verdict at runtime moves
+    /// the gateway to `ShuttingDown` via `Gateway::shut_down_and_drain`
+    /// (exactly like an operator-initiated `/stop`), then unconditionally
+    /// awaits the in-flight drain itself, bounded by the same three-minute
+    /// deadline the operator path uses for its own shutdown join, before
+    /// exiting the process: the boot gate then holds the gateway down until
+    /// an operator intervenes, which is the behaviour the spec asks for.
+    ///
+    /// The unconditional await matters because `shut_down_and_drain` only
+    /// waits for the drain when *it* is the one making the
+    /// `Running -> ShuttingDown` transition. If an operator's `/stop`
+    /// landed during this tick's (multi-second) evaluation window, the
+    /// state is already `ShuttingDown` by the time this halt branch runs,
+    /// so `shut_down_and_drain` would return immediately without waiting
+    /// for that operator-initiated drain to finish — exiting mid-forward
+    /// would leave the gateway having spent ecash for a payment its sender
+    /// gets refunded, and the boot gate would then strand it at
+    /// `pending()` forever.
+    pub(crate) fn spawn_solvency_task(&self) {
+        let self_copy = self.clone();
+        self.task_group
+            .spawn_cancellable_silent("solvency check", async move {
+                const CHECK_INTERVAL: Duration = Duration::from_secs(60);
+                // Same deadline the operator `/stop` path uses for its shutdown join.
+                const DRAIN_TIMEOUT: Duration = Duration::from_mins(3);
+                let mut interval = tokio::time::interval(CHECK_INTERVAL);
+                loop {
+                    interval.tick().await;
+
+                    // `get_lightning_context` also accepts `ShuttingDown`, so check the
+                    // state explicitly: an operator-initiated shutdown is already
+                    // draining in-flight forwards, and a halt verdict firing mid-drain
+                    // would race that drain instead of deferring to it.
+                    if matches!(
+                        self_copy.get_state().await,
+                        GatewayState::ShuttingDown { .. }
+                    ) {
+                        continue;
+                    }
+
+                    let Ok(context) = self_copy.get_lightning_context().await else {
+                        continue;
+                    };
+                    match self_copy.solvency_report(context.lnrpc.as_ref()).await {
+                        Ok(report) if report.verdict == Verdict::Halt => {
+                            // `solvency_report` already logged the halt at `error!`.
+                            //
+                            // `shut_down_and_drain` performs the transition (and its own
+                            // drain) only when it makes the `Running -> ShuttingDown` move
+                            // itself; it must stay that way so a double `/stop` from
+                            // `handle_shutdown_msg` keeps returning immediately. Await the
+                            // drain ourselves, unconditionally, so an operator's `/stop`
+                            // landing mid-evaluation can never be cut short by this exit.
+                            if let Err(err) = self_copy.shut_down_and_drain().await {
+                                warn!(
+                                    target: LOG_GATEWAY,
+                                    err = %err.fmt_compact(),
+                                    "Error draining in-flight payments before halt exit"
+                                );
+                            }
+
+                            match tokio::time::timeout(DRAIN_TIMEOUT, async {
+                                self_copy
+                                    .federation_manager
+                                    .read()
+                                    .await
+                                    .wait_for_incoming_payments()
+                                    .await
+                            })
+                            .await
+                            {
+                                Ok(Ok(())) => {}
+                                Ok(Err(err)) => warn!(
+                                    target: LOG_GATEWAY,
+                                    err = %err.fmt_compact(),
+                                    "Error draining in-flight payments before halt exit"
+                                ),
+                                Err(_) => tracing::error!(
+                                    target: LOG_GATEWAY,
+                                    timeout_secs = DRAIN_TIMEOUT.as_secs(),
+                                    "Timed out draining in-flight payments before halt exit; \
+                                     in-flight forwards may be stranded. No new forwards were \
+                                     accepted while shutting down"
+                                ),
+                            }
+
+                            std::process::exit(1);
+                        }
+                        Ok(_) => {}
+                        Err(err) => warn!(
+                            target: LOG_GATEWAY,
+                            err = %err.fmt_compact_anyhow(),
+                            "Solvency check could not be evaluated"
+                        ),
+                    }
+                }
+            });
     }
 }
 

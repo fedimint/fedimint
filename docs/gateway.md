@@ -603,6 +603,36 @@ Use the payment log to:
 
 </details>
 
+<details>
+<summary><strong>Solvency Check</strong></summary>
+
+The gateway scores every forward it completes: what it received on one leg
+minus what it paid on the other, using the routing fee the node actually
+charged. It tracks the highest cumulative margin it has ever reached and the
+funds it held at that moment, and measures **drawdown** from there as a
+percent of those funds.
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `FM_GATEWAY_DRAWDOWN_WARN_PCT` | `2` | Log a warning with a per-federation breakdown. Also exported as `gateway_drawdown_pct`. |
+| `FM_GATEWAY_DRAWDOWN_HALT_PCT` | `10` | Refuse to start; if already running, stop accepting new forwards, wait for in-flight ones to settle (up to three minutes), then exit. |
+
+The warn threshold must be strictly below the halt threshold; the gateway
+refuses to start otherwise.
+
+**Recovery.** A gateway that has crossed the halt threshold logs the full
+breakdown and then waits forever without becoming ready. Read the breakdown,
+find the federation and forwards responsible (`gateway_federation_realized_margin_msat`
+per federation, and the `negative` count per federation in the log), fix the
+cause, then raise `FM_GATEWAY_DRAWDOWN_HALT_PCT` above the reported drawdown
+and restart. Raising the threshold is a deliberate operator decision; nothing
+resets the peak automatically.
+
+Forwards completed before this feature existed have no recorded cost and are
+excluded from the margin; they show up in the `unknown` count.
+
+</details>
+
 ---
 
 ## FAQ

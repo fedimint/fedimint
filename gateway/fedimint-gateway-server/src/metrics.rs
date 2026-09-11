@@ -1,7 +1,11 @@
 use std::sync::LazyLock;
 
-use fedimint_metrics::prometheus::{HistogramVec, register_histogram_vec_with_registry};
-use fedimint_metrics::{REGISTRY, histogram_opts};
+use fedimint_metrics::prometheus::{
+    Gauge, HistogramVec, IntGauge, IntGaugeVec, register_gauge_with_registry,
+    register_histogram_vec_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry,
+};
+use fedimint_metrics::{REGISTRY, histogram_opts, opts};
 
 /// Histogram of HTLC handling durations in seconds
 pub static HTLC_HANDLING_DURATION_SECONDS: LazyLock<HistogramVec> = LazyLock::new(|| {
@@ -37,6 +41,43 @@ pub static HTLC_LNV1_ATTEMPT_DURATION_SECONDS: LazyLock<HistogramVec> = LazyLock
             "Duration of LNv1 HTLC handling attempts in the gateway",
         ),
         &["outcome"],
+        REGISTRY
+    )
+    .expect("metric registration should not fail")
+});
+
+/// Percent of assets-at-peak lost since the peak cumulative margin.
+pub static GATEWAY_DRAWDOWN_PCT: LazyLock<Gauge> = LazyLock::new(|| {
+    register_gauge_with_registry!(
+        opts!(
+            "gateway_drawdown_pct",
+            "Forwarding drawdown from peak, percent of assets at peak"
+        ),
+        REGISTRY
+    )
+    .expect("metric registration should not fail")
+});
+
+/// Sum of realized forwarding margins across federations, in millisatoshis.
+pub static GATEWAY_CUMULATIVE_MARGIN_MSAT: LazyLock<IntGauge> = LazyLock::new(|| {
+    register_int_gauge_with_registry!(
+        opts!(
+            "gateway_cumulative_margin_msat",
+            "Sum of realized forwarding margins across federations"
+        ),
+        REGISTRY
+    )
+    .expect("metric registration should not fail")
+});
+
+/// Realized forwarding margin per federation, in millisatoshis.
+pub static GATEWAY_FEDERATION_REALIZED_MARGIN_MSAT: LazyLock<IntGaugeVec> = LazyLock::new(|| {
+    register_int_gauge_vec_with_registry!(
+        opts!(
+            "gateway_federation_realized_margin_msat",
+            "Realized forwarding margin per federation"
+        ),
+        &["federation_id"],
         REGISTRY
     )
     .expect("metric registration should not fail")

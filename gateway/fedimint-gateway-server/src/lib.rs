@@ -26,7 +26,7 @@ mod metrics;
 mod rate_limit;
 mod registration_health;
 pub mod rpc_server;
-pub mod solvency;
+mod solvency;
 mod types;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -34,7 +34,7 @@ use std::env;
 use std::fmt::Display;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::{Context, anyhow, ensure};
@@ -410,14 +410,20 @@ pub struct Gateway {
     invoice_rate_limiter: Arc<TokenBucketRateLimiter>,
 
     /// Drawdown percentages at which the gateway warns and halts.
-    // The operator's settings are plumbed here ahead of the solvency monitor
-    // that reads them, so a misconfiguration is rejected at startup.
-    #[allow(dead_code)]
     drawdown_thresholds: DrawdownThresholds,
 
     /// Maximum ecash plus open positions to hold in a single federation.
+    // Not yet read: enforcing this cap on outgoing payments is a follow-up
+    // task. The operator setting is validated and plumbed here already so
+    // that the enforcement task only has to read it.
     #[allow(dead_code)]
     max_federation_exposure: Option<Amount>,
+
+    /// The `(federation_id, operation_id)` stale positions observed in the
+    /// most recent solvency report, used to log the stale-position warning
+    /// only when a federation's stale set actually changes rather than on
+    /// every periodic check.
+    stale_positions_last_report: Arc<Mutex<BTreeSet<(FederationId, OperationId)>>>,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -805,6 +811,7 @@ impl Gateway {
             )),
             drawdown_thresholds: gateway_parameters.drawdown_thresholds,
             max_federation_exposure: gateway_parameters.max_federation_exposure,
+            stale_positions_last_report: Arc::new(Mutex::new(BTreeSet::new())),
         })
     }
 
@@ -861,6 +868,7 @@ impl Gateway {
         self.start_gateway(runtime, mnemonic_receiver.resubscribe());
         self.spawn_backup_task();
         self.spawn_prune_registered_contracts_task();
+        self.spawn_solvency_task();
         // start metrics server
         fedimint_metrics::spawn_api_server(self.metrics_listen, self.task_group.clone()).await?;
         // start webserver last to avoid handling requests before fully initialized
@@ -1086,6 +1094,31 @@ impl Gateway {
             info!(target: LOG_GATEWAY, "Waiting for chain sync");
             if let Err(err) = ln_client.wait_for_chain_sync().await {
                 warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failed to wait for chain sync");
+                return ReceivePaymentStreamAction::RetryAfterDelay;
+            }
+        }
+
+        // Refuse to serve if forwarding history shows an unacceptable drawdown.
+        // `pending()` rather than exit: an orchestrator sees a live, never-ready
+        // process instead of a crashloop that reads as transient. Routed through
+        // `handle.cancel_on_shutdown` (rather than a bare `.await`) so this task
+        // is still joinable on shutdown instead of hanging the task group and
+        // making `/stop` wait out its full timeout.
+        match self.solvency_report(ln_client.as_ref()).await {
+            Ok(report) if report.verdict == solvency::Verdict::Halt => {
+                let _ = handle
+                    .cancel_on_shutdown(std::future::pending::<()>())
+                    .await;
+                info!(target: LOG_GATEWAY, "Received shutdown signal");
+                return ReceivePaymentStreamAction::NoRetry;
+            }
+            Ok(_) => {}
+            Err(err) => {
+                warn!(
+                    target: LOG_GATEWAY,
+                    err = %err.fmt_compact_anyhow(),
+                    "Cannot evaluate solvency before starting"
+                );
                 return ReceivePaymentStreamAction::RetryAfterDelay;
             }
         }
@@ -2927,33 +2960,7 @@ impl IAdminGateway for Gateway {
     /// Instructs the gateway to shutdown, but only after all incoming payments
     /// have been handled.
     async fn handle_shutdown_msg(&self, task_group: TaskGroup) -> AdminResult<()> {
-        // Take the write lock on the state so that no additional payments are
-        // processed. `ShuttingDown` is terminal, so the state cannot move back to
-        // `Running` once this returns.
-        let was_running = {
-            let mut state_guard = self.state.write().await;
-            if let GatewayState::Running { lightning_context } = state_guard.clone() {
-                *state_guard = GatewayState::ShuttingDown { lightning_context };
-                true
-            } else {
-                false
-            }
-        };
-
-        // The guard has to be released before waiting. Finishing an incoming payment
-        // that already bought the preimage from the federation goes through
-        // `complete_htlc`, which loops on `get_lightning_context` and would block on
-        // the write guard forever. `/stop` would never return, the HTLC would expire,
-        // and the gateway would be left having spent ecash for a payment its sender
-        // gets refunded. `get_lightning_context` accepts `ShuttingDown`, so the
-        // in-flight payments can complete while the gateway drains.
-        if was_running {
-            self.federation_manager
-                .read()
-                .await
-                .wait_for_incoming_payments()
-                .await?;
-        }
+        self.shut_down_and_drain().await?;
 
         let tg = task_group.clone();
         tg.spawn("Kill Gateway", |_task_handle| async {
@@ -3338,6 +3345,51 @@ impl IAdminGateway for Gateway {
 
 // LNv2 Gateway implementation
 impl Gateway {
+    /// Moves the gateway to `ShuttingDown` (if it was `Running`) so no new
+    /// payments are accepted, then waits for whatever is already in flight
+    /// to finish.
+    ///
+    /// Shared by the operator-initiated `/stop` path
+    /// (`handle_shutdown_msg`) and the runtime solvency halt
+    /// (`solvency::spawn_solvency_task`), so a halt exit drains in-flight
+    /// forwards exactly like an operator-initiated shutdown does: skipping
+    /// this would let a hard exit strand a forward mid-flight, leaving the
+    /// gateway having spent ecash for a payment its sender gets refunded.
+    ///
+    /// Take the write lock on the state so that no additional payments are
+    /// processed. `ShuttingDown` is terminal, so the state cannot move back to
+    /// `Running` once this returns.
+    ///
+    /// The guard has to be released before waiting. Finishing an incoming
+    /// payment that already bought the preimage from the federation goes
+    /// through `complete_htlc`, which loops on `get_lightning_context` and
+    /// would block on the write guard forever. The caller would never
+    /// return, the HTLC would expire, and the gateway would be left having
+    /// spent ecash for a payment its sender gets refunded.
+    /// `get_lightning_context` accepts `ShuttingDown`, so the
+    /// in-flight payments can complete while the gateway drains.
+    pub(crate) async fn shut_down_and_drain(&self) -> AdminResult<()> {
+        let was_running = {
+            let mut state_guard = self.state.write().await;
+            if let GatewayState::Running { lightning_context } = state_guard.clone() {
+                *state_guard = GatewayState::ShuttingDown { lightning_context };
+                true
+            } else {
+                false
+            }
+        };
+
+        if was_running {
+            self.federation_manager
+                .read()
+                .await
+                .wait_for_incoming_payments()
+                .await?;
+        }
+
+        Ok(())
+    }
+
     /// Retrieves the `PublicKey` of the Gateway module for a given federation
     /// for LNv2. This is NOT the same as the `gateway_id`, it is different
     /// per-connected federation.
