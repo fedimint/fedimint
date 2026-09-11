@@ -135,6 +135,11 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     ///   as if it were the first call.
     /// * If the payment has already been attempted and failed, return an error.
     /// * If the payment has already succeeded, return a success response.
+    ///
+    /// Consult that record before enforcing `max_delay` or `max_fee`: a state
+    /// machine resuming a payment it dispatched before a restart may pass a
+    /// placeholder `max_delay` of `0`, which must only ever fail a dispatch
+    /// that would otherwise start fresh.
     async fn pay(
         &self,
         invoice: Bolt11Invoice,
