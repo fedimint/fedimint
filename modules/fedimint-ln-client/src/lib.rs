@@ -32,7 +32,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, anyhow, bail, ensure};
+use anyhow::{Context, bail, ensure};
 use api::LnFederationApi;
 use async_stream::{stream, try_stream};
 use bitcoin::Network;
@@ -110,7 +110,7 @@ use tracing::{debug, error, info, warn};
 use crate::db::PaymentResultPrefix;
 pub use crate::error::{
     ClaimIncomingContractError, CreateBolt11InvoiceError, GatewaySelectionError, LnSubscribeError,
-    PayBolt11InvoiceError, SpendableAmountError,
+    PayBolt11InvoiceError, ReclaimLnReceiveError, SpendableAmountError,
 };
 use crate::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
@@ -2119,20 +2119,20 @@ impl LightningClientModule {
     ///
     /// # Errors
     ///
-    /// Returns an error if the original operation is not a reclaimable
-    /// lightning receive, if it is still active, or if the original receiving
-    /// key cannot be recovered from state history.
+    /// Fails with a [`ReclaimLnReceiveError`] if the original operation is not
+    /// a reclaimable lightning receive, if it is still active, or if the
+    /// original receiving key cannot be recovered from state history.
     pub async fn reclaim_ln_receive(
         &self,
         original_operation_id: OperationId,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, ReclaimLnReceiveError> {
         let operation = self.client_ctx.get_operation(original_operation_id).await?;
         let LightningOperationMeta {
             variant,
             extra_meta,
         } = operation
             .try_meta::<LightningOperationMeta>()
-            .context("Invalid lightning operation metadata")?;
+            .map_err(ReclaimLnReceiveError::Meta)?;
 
         let (invoice, gateway_id) = match variant {
             LightningOperationMetaVariant::Receive {
@@ -2141,19 +2141,19 @@ impl LightningClientModule {
                 ..
             } => (invoice, gateway_id),
             LightningOperationMetaVariant::RecurringPaymentReceive(meta) => (meta.invoice, None),
-            _ => bail!("Operation is not a reclaimable lightning receive"),
+            _ => return Err(ReclaimLnReceiveError::NotReclaimable),
         };
 
         let active_states = self
             .client_ctx
             .get_own_operation_active_states(original_operation_id)
             .await;
-        ensure!(
-            !active_states
-                .iter()
-                .any(|(state, _)| matches!(state, LightningClientStateMachines::Receive(_))),
-            "Cannot reclaim an active lightning receive"
-        );
+        if active_states
+            .iter()
+            .any(|(state, _)| matches!(state, LightningClientStateMachines::Receive(_)))
+        {
+            return Err(ReclaimLnReceiveError::StillActive);
+        }
 
         let inactive_states = self
             .client_ctx
@@ -2163,9 +2163,7 @@ impl LightningClientModule {
         let receiving_key = inactive_states
             .iter()
             .find_map(|(state, _)| Self::ln_receive_key_from_state(state))
-            .ok_or_else(|| {
-                anyhow!("Cannot reclaim LN receive because the original receive key is unavailable")
-            })?;
+            .ok_or(ReclaimLnReceiveError::ReceiveKeyUnavailable)?;
         let db = self.client_ctx.module_db();
         let mut dbtx = db.begin_transaction().await;
         let reclaim_operation_id = OperationId::new_random();

@@ -4,7 +4,9 @@
 //! one place for an integrator to look.
 
 use fedimint_api_client::api::{FederationError, ServerError};
-use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
+use fedimint_client_module::error::{
+    OperationAlreadyExistsError, OperationLookupError, TransactionSubmitError,
+};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::DatabaseError;
 use fedimint_core::secp256k1;
@@ -314,4 +316,42 @@ impl From<FederationError> for ClaimIncomingContractError {
     fn from(source: FederationError) -> Self {
         Self::Federation(Box::new(source))
     }
+}
+
+/// A failure to restart the claim of an already-paid lightning invoice.
+///
+/// This is a break-glass recovery tool, so most of its refusals are about the
+/// original operation not being in a state that can be reclaimed.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ReclaimLnReceiveError {
+    /// The original operation could not be looked up, or belongs to another
+    /// module.
+    #[error("The original operation could not be looked up")]
+    Operation(#[from] OperationLookupError),
+
+    /// The original operation's metadata could not be read, which normally
+    /// means an earlier database migration left it in a shape this version
+    /// does not understand.
+    #[error("The lightning operation metadata could not be read")]
+    Meta(#[source] serde_json::Error),
+
+    /// The original operation is a lightning operation, but not one of the
+    /// receives a reclaim can restart.
+    #[error("The operation is not a reclaimable lightning receive")]
+    NotReclaimable,
+
+    /// The original receive still has running state machines, so it is
+    /// already trying to claim and a second attempt would race it.
+    #[error("The lightning receive is still active")]
+    StillActive,
+
+    /// The key the invoice was issued against is not in this client's state
+    /// history, so the contract cannot be spent.
+    #[error("The original receive key is not available in the local state history")]
+    ReceiveKeyUnavailable,
+
+    /// An operation for the reclaim attempt already exists.
+    #[error("The reclaim operation already exists")]
+    OperationAlreadyExists(#[from] OperationAlreadyExistsError),
 }
