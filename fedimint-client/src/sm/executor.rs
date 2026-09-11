@@ -180,6 +180,19 @@ impl Executor {
         self.inner.get_active_states().await
     }
 
+    /// Every state that is no longer the current state of its machine, with
+    /// when it was created and when it stopped being current.
+    ///
+    /// This is **not** a set of terminal states: a state is moved here on
+    /// every transition out of it, and a terminal state is written here too,
+    /// so one completed state machine leaves one entry per state it passed
+    /// through, and nothing is ever pruned. A consumer that wants the outcome
+    /// of each machine has to reduce these to one entry per machine itself;
+    /// one that wants a replayable history can read them as they are.
+    pub async fn get_inactive_states(&self) -> Vec<(DynState, InactiveStateMeta)> {
+        self.inner.get_inactive_states().await
+    }
+
     /// Adds a number of state machines to the executor atomically. They will be
     /// driven to completion automatically in the background.
     ///

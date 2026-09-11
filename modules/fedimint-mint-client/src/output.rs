@@ -112,6 +112,16 @@ impl MintOutputStateMachine {
         self.common.out_point_range.txid()
     }
 
+    /// Current issuance state.
+    pub fn state(&self) -> &MintOutputStates {
+        &self.state
+    }
+
+    /// Outpoints this issuance covers.
+    pub fn out_point_range(&self) -> OutPointRange {
+        self.common.out_point_range
+    }
+
     /// Returns `(out_idx, amount, nonce, blind_nonce)` for each note being
     /// created.
     ///

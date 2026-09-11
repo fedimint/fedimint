@@ -32,11 +32,11 @@ use fedimint_gateway_common::{PaymentLogPayload, SetFeesPayload};
 use fedimint_gateway_server::{Gateway, GatewayState};
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_gw_client::pay::{
-    OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
+    GatewayPayStates, OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
 };
 use fedimint_gw_client::{
-    GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, GatewayMeta, Htlc,
-    SwapParameters,
+    GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates, GatewayExtReceiveStates,
+    GatewayMeta, Htlc, SwapParameters,
 };
 use fedimint_gwv2_client::events::{
     CompleteLightningPaymentSucceeded, IncomingPaymentStarted, IncomingPaymentSucceeded,
@@ -46,6 +46,7 @@ use fedimint_gwv2_client::{
     FinalReceiveState, GatewayClientModuleV2, GatewayClientStateMachinesV2, GatewayOperationMetaV2,
     IncomingCircuitKey,
 };
+use fedimint_lightning::OutboundCost;
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
@@ -1505,6 +1506,37 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
             gateway_fed1_balance.msats,
             pre_balances[0] + invoice_amt.msats + fee
         );
+
+        // The gateway's LNv1 pay state machine on the paying federation (id1) must
+        // have recorded the outbound leg's cost as a swap funding the *target*
+        // federation's (id2) incoming contract with the invoice amount -- not the
+        // source contract's fee-inclusive amount.
+        let inactive_states = gateway_client.executor().get_inactive_states().await;
+        let swap_cost = inactive_states.iter().find_map(|(state, _meta)| {
+            let sm = state
+                .as_any()
+                .downcast_ref::<GatewayClientStateMachines>()?;
+            let GatewayClientStateMachines::Pay(pay_sm) = sm else {
+                return None;
+            };
+            match &pay_sm.state {
+                GatewayPayStates::Claimed {
+                    cost:
+                        OutboundCost::Swap {
+                            funded,
+                            target_federation,
+                        },
+                    ..
+                } => Some((*funded, *target_federation)),
+                _ => None,
+            }
+        });
+        let (funded, target_federation) = swap_cost.expect(
+            "expected a Claimed GatewayPayStates with OutboundCost::Swap among the paying \
+             federation's inactive states",
+        );
+        assert_eq!(funded, invoice_amt);
+        assert_eq!(target_federation, id2);
 
         Ok(())
     })
