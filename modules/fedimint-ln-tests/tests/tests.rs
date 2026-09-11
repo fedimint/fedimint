@@ -28,7 +28,8 @@ use fedimint_ln_client::{
     GatewaySelectionError, InternalPayState, LightningClientInit, LightningClientModule,
     LightningClientStateMachines, LightningOperationMeta, LightningOperationMetaVariant,
     LnPayState, LnReceiveState, LnSubscribeError, MockGatewayConnection, OutgoingLightningPayment,
-    PayType, ReceivingKey, SpendableAmountError, create_incoming_contract_output,
+    PayBolt11InvoiceError, PayType, ReceivingKey, SpendableAmountError,
+    create_incoming_contract_output,
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::{EncryptedPreimage, PreimageKey};
@@ -129,7 +130,7 @@ async fn pay_invoice(
     } else {
         None
     };
-    ln_module.pay_bolt11_invoice(gateway, invoice, ()).await
+    Ok(ln_module.pay_bolt11_invoice(gateway, invoice, ()).await?)
 }
 
 async fn await_client_tx_accepted(
@@ -747,12 +748,19 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
         .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &secp256k1::SecretKey::from_keypair(&kp)))
         .expect("Failed to build signet invoice");
 
-    let error = pay_invoice(&client1, signet_invoice, Some(gw.http_gateway_id().await))
+    let ln_module = client1.get_first_module::<LightningClientModule>()?;
+    ln_module.update_gateway_cache().await?;
+    let gateway = ln_module.select_gateway(&gw.http_gateway_id().await).await;
+    let error = ln_module
+        .pay_bolt11_invoice(gateway, signet_invoice, ())
         .await
-        .unwrap_err();
-    assert_eq!(
-        error.to_string(),
-        "Invalid invoice currency: expected=Regtest, got=Signet"
+        .expect_err("Payment of a signet invoice should fail");
+    assert_matches!(
+        error,
+        PayBolt11InvoiceError::WrongCurrency {
+            expected: Currency::Regtest,
+            found: Currency::Signet
+        }
     );
 
     Ok(())
@@ -792,13 +800,14 @@ async fn rejects_expired_invoice() -> anyhow::Result<()> {
 
     // client2 attempts to pay the expired invoice — the send-side check in
     // pay_bolt11_invoice() rejects it before reaching the federation.
-    let error = pay_invoice(&client2, invoice, None)
+    let ln_module = client2.get_first_module::<LightningClientModule>()?;
+    ln_module.update_gateway_cache().await?;
+    let gateway = None;
+    let error = ln_module
+        .pay_bolt11_invoice(gateway, invoice, ())
         .await
         .expect_err("Payment of expired invoice should fail");
-    assert!(
-        error.to_string().contains("Invoice has expired"),
-        "Expected 'Invoice has expired' error, got: {error}"
-    );
+    assert_matches!(error, PayBolt11InvoiceError::InvoiceExpired);
 
     Ok(())
 }
