@@ -631,6 +631,10 @@ resets the peak automatically.
 Forwards completed before this feature existed have no recorded cost and are
 excluded from the margin; they show up in the `unknown` count.
 
+`FM_GATEWAY_MAX_FEDERATION_EXPOSURE_MSAT` caps the ecash plus in-flight value
+the gateway will hold in any single federation; outgoing payments that would
+exceed it are refused.
+
 </details>
 
 ---

@@ -708,6 +708,65 @@ async fn federation_ledger(
     ))
 }
 
+/// Whether holding `ecash` plus `open_msat` in open positions plus
+/// `additional` (the value an about-to-be-submitted outgoing forward would
+/// add) in a federation would exceed `limit`. Overflowing the addition is
+/// treated as exceeding the limit rather than panicking or wrapping.
+pub fn exposure_exceeded(ecash: Amount, open_msat: u64, additional: Amount, limit: Amount) -> bool {
+    ecash
+        .checked_add(Amount::from_msats(open_msat))
+        .and_then(|e| e.checked_add(additional))
+        .is_none_or(|exposure| exposure > limit)
+}
+
+impl Gateway {
+    /// Refuses an outgoing forward that would push a federation's exposure
+    /// over the configured limit. Unlimited when no limit is configured.
+    ///
+    /// The open-positions half comes from the last solvency report rather than
+    /// a fresh ledger scan: rebuilding the ledger is O(history) (a full decode
+    /// pass plus per-record module-DB reads) and the routes this gates are
+    /// unauthenticated, so a per-request scan is a denial-of-service lever.
+    /// Open positions are therefore at most one report interval (60s) stale,
+    /// which the design documents. The ecash half is read live, since that is
+    /// a single cheap balance lookup and is the half an operator actually
+    /// watches.
+    pub(crate) async fn ensure_exposure_allows(
+        &self,
+        federation_id: FederationId,
+        client: &ClientHandleArc,
+        additional: Amount,
+    ) -> anyhow::Result<()> {
+        let Some(limit) = self.max_federation_exposure else {
+            return Ok(());
+        };
+        let open_positions_msat = {
+            let snapshot = self
+                .open_positions_last_report
+                .lock()
+                .expect("open-positions snapshot mutex is never held across an .await");
+            snapshot.get(&federation_id).copied()
+        };
+        let open_positions_msat = open_positions_msat.unwrap_or_else(|| {
+            // No report has run for this federation yet (the gateway just
+            // joined it, or the first tick has not landed). Nothing is known
+            // to be open, so gate on the ecash balance alone until it has.
+            tracing::debug!(
+                target: LOG_GATEWAY,
+                %federation_id,
+                "No solvency report yet for this federation; gating the exposure limit on its ecash balance alone"
+            );
+            0
+        });
+        let ecash_balance = client.get_balance_for_btc().await?;
+        anyhow::ensure!(
+            !exposure_exceeded(ecash_balance, open_positions_msat, additional, limit),
+            "federation {federation_id} exposure limit {limit} would be exceeded"
+        );
+        Ok(())
+    }
+}
+
 /// A solvency evaluation: the ledger it was computed from, the peak it was
 /// measured against, the resulting drawdown, and the verdict.
 pub struct SolvencyReport {
@@ -970,6 +1029,21 @@ impl Gateway {
             .federations
             .iter()
             .fold(0i64, |acc, f| acc.saturating_add(f.realized_margin_msat));
+
+        // What `ensure_exposure_allows` reads instead of rescanning per
+        // request. Replaced wholesale so a federation the gateway has left
+        // stops being remembered.
+        {
+            let mut snapshot = self
+                .open_positions_last_report
+                .lock()
+                .expect("open-positions snapshot mutex is never held across an .await");
+            *snapshot = ledger
+                .federations
+                .iter()
+                .map(|fed| (fed.federation_id, fed.open_positions_msat))
+                .collect();
+        }
 
         let mut dbtx = self.gateway_db.begin_transaction().await;
         let previous = dbtx.load_drawdown_peak().await;
@@ -2063,5 +2137,28 @@ mod tests {
             assets_at_peak_msat: 5_000,
         };
         assert_eq!(advance_peak(Some(real), 500, Amount::from_msats(1)), real);
+    }
+
+    #[test]
+    fn exposure_counts_ecash_open_positions_and_the_new_forward() {
+        let limit = Amount::from_msats(1_000);
+        assert!(!exposure_exceeded(
+            Amount::from_msats(500),
+            300,
+            Amount::from_msats(200),
+            limit
+        ));
+        assert!(exposure_exceeded(
+            Amount::from_msats(500),
+            300,
+            Amount::from_msats(201),
+            limit
+        ));
+        assert!(exposure_exceeded(
+            Amount::from_msats(u64::MAX),
+            1,
+            Amount::ZERO,
+            limit
+        ));
     }
 }

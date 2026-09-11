@@ -461,6 +461,14 @@ impl GatewayClientModuleV2 {
             .min_contract_amount(&payload.federation_id, amount)
             .await?;
 
+        // Everything above is validation of a payload anyone can post, so the
+        // exposure gate runs here: behind the auth signature, and behind the
+        // `operation_exists` join above, so re-requesting a forward already
+        // under way is never refused for exposure it is already counted in.
+        self.gateway
+            .ensure_exposure_allows(payload.federation_id, payload.contract.amount)
+            .await?;
+
         let send_sm = GatewayClientStateMachinesV2::Send(SendStateMachine {
             common: SendSMCommon {
                 operation_id,
@@ -972,6 +980,20 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
         invoice: &Bolt11Invoice,
         allow_fresh_dispatch: bool,
     ) -> anyhow::Result<Option<Lnv1SwapOutcome>>;
+
+    /// Refuses an outgoing forward that would push this federation's exposure
+    /// (ecash plus open positions) past the operator-configured limit.
+    /// `Ok(())` when no limit is configured.
+    ///
+    /// The gate lives behind this trait rather than at the request handler so
+    /// it can run *after* the contract's auth signature has been verified: the
+    /// route is unauthenticated, and refusing before that would let anyone
+    /// probe the limit.
+    async fn ensure_exposure_allows(
+        &self,
+        federation_id: FederationId,
+        additional: Amount,
+    ) -> anyhow::Result<()>;
 
     /// Claims the given payment image for `operation_id` in the gateway's
     /// global database, returning `true` if this operation may claim the

@@ -413,10 +413,6 @@ pub struct Gateway {
     drawdown_thresholds: DrawdownThresholds,
 
     /// Maximum ecash plus open positions to hold in a single federation.
-    // Not yet read: enforcing this cap on outgoing payments is a follow-up
-    // task. The operator setting is validated and plumbed here already so
-    // that the enforcement task only has to read it.
-    #[allow(dead_code)]
     max_federation_exposure: Option<Amount>,
 
     /// The `(federation_id, operation_id)` stale positions observed in the
@@ -432,6 +428,15 @@ pub struct Gateway {
     /// entries are the node genuinely having no record), so those are
     /// retried on the next tick.
     phantom_lookup_cache: Arc<Mutex<BTreeMap<OperationId, Option<OutboundPaymentStatus>>>>,
+
+    /// Per-federation open positions as of the most recent solvency report,
+    /// in msat. The exposure check reads this rather than rebuilding the
+    /// ledger per request: that scan is O(history) and the route it gates is
+    /// unauthenticated. Open positions are therefore at most one report
+    /// interval (60s) stale; the ecash half of the exposure is read live,
+    /// which is a single cheap balance lookup. A federation with no entry has
+    /// had no report yet and is treated as holding no open positions.
+    open_positions_last_report: Arc<Mutex<BTreeMap<FederationId, u64>>>,
 
     /// The `(federation_id, operation_id)` phantom failures already logged
     /// at `error!` in a previous solvency report, so a newly discovered
@@ -826,6 +831,7 @@ impl Gateway {
             drawdown_thresholds: gateway_parameters.drawdown_thresholds,
             max_federation_exposure: gateway_parameters.max_federation_exposure,
             stale_positions_last_report: Arc::new(Mutex::new(BTreeSet::new())),
+            open_positions_last_report: Arc::new(Mutex::new(BTreeMap::new())),
             phantom_lookup_cache: Arc::new(Mutex::new(BTreeMap::new())),
             phantom_failures_reported: Arc::new(Mutex::new(BTreeSet::new())),
         })
@@ -1635,6 +1641,10 @@ impl Gateway {
             .get_first_module::<GatewayClientModule>()
             .map_err(|err| LNv1Error::OutgoingPayment(err.into()))
             .map_err(PublicGatewayError::LNv1)?;
+        // The exposure gate runs inside `gateway_pay_bolt11_invoice`, behind
+        // its join of an operation already paying this contract, so a client
+        // retrying an in-flight payment is not refused for exposure it is
+        // already counted in.
         let operation_id = gateway_module
             .gateway_pay_bolt11_invoice(payload)
             .await
@@ -3485,6 +3495,8 @@ impl Gateway {
             .get_first_module::<GatewayClientModuleV2>()
             .map_err(|err| PublicGatewayError::LNv2(LNv2Error::OutgoingPayment(err.into())))?;
 
+        // The exposure gate runs inside `send_payment`, once the contract's
+        // auth signature has been checked: this route is unauthenticated.
         module
             .send_payment(payload)
             .await
@@ -3977,6 +3989,18 @@ impl IGatewayClientV2 for Gateway {
         }))
     }
 
+    async fn ensure_exposure_allows(
+        &self,
+        federation_id: FederationId,
+        additional: Amount,
+    ) -> anyhow::Result<()> {
+        let client = self
+            .select_client(federation_id)
+            .await
+            .map_err(|err| anyhow!("{err}"))?;
+        Gateway::ensure_exposure_allows(self, federation_id, client.value(), additional).await
+    }
+
     async fn claim_payment_image(
         &self,
         payment_image: &PaymentImage,
@@ -4005,6 +4029,18 @@ impl IGatewayClientV2 for Gateway {
 
 #[async_trait]
 impl IGatewayClientV1 for Gateway {
+    async fn ensure_exposure_allows(
+        &self,
+        federation_id: FederationId,
+        additional: Amount,
+    ) -> anyhow::Result<()> {
+        let client = self
+            .select_client(federation_id)
+            .await
+            .map_err(|err| anyhow!("{err}"))?;
+        Gateway::ensure_exposure_allows(self, federation_id, client.value(), additional).await
+    }
+
     async fn verify_preimage_authentication(
         &self,
         payment_hash: sha256::Hash,
