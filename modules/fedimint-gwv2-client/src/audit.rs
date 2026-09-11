@@ -2,7 +2,7 @@
 //!
 //! Every `match` here is exhaustive with no wildcard arm on purpose: adding a
 //! state without deciding what it means for the balance sheet must fail to
-//! compile, not silently mis-account.
+//! compile, not silently misaccount.
 
 use bitcoin::hashes::sha256;
 use fedimint_core::core::OperationId;
