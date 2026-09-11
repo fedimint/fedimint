@@ -106,7 +106,7 @@ use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
     CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse,
     InvoiceDescription, LightningContext, LightningRpcError, LnRpcTracked, Lnv2HoldInvoiceFilter,
-    PayInvoiceResponse, PaymentAction, RouteHtlcStream, ldk,
+    OutboundPaymentStatus, PayInvoiceResponse, PaymentAction, RouteHtlcStream, ldk,
 };
 use fedimint_ln_client::pay::PaymentData;
 use fedimint_ln_common::config::LightningClientConfig;
@@ -424,6 +424,20 @@ pub struct Gateway {
     /// only when a federation's stale set actually changes rather than on
     /// every periodic check.
     stale_positions_last_report: Arc<Mutex<BTreeSet<(FederationId, OperationId)>>>,
+
+    /// Terminal outbound-payment lookups from the node, cached by
+    /// operation ID so the phantom-failure reconciler does not re-query the
+    /// node every 60s tick for a cancelled send whose outcome is already
+    /// known. `Pending` results and lookup errors are never cached (`None`
+    /// entries are the node genuinely having no record), so those are
+    /// retried on the next tick.
+    phantom_lookup_cache: Arc<Mutex<BTreeMap<OperationId, Option<OutboundPaymentStatus>>>>,
+
+    /// The `(federation_id, operation_id)` phantom failures already logged
+    /// at `error!` in a previous solvency report, so a newly discovered
+    /// phantom is escalated once and every subsequent tick it is still
+    /// present logs at `debug!` instead.
+    phantom_failures_reported: Arc<Mutex<BTreeSet<(FederationId, OperationId)>>>,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -812,6 +826,8 @@ impl Gateway {
             drawdown_thresholds: gateway_parameters.drawdown_thresholds,
             max_federation_exposure: gateway_parameters.max_federation_exposure,
             stale_positions_last_report: Arc::new(Mutex::new(BTreeSet::new())),
+            phantom_lookup_cache: Arc::new(Mutex::new(BTreeMap::new())),
+            phantom_failures_reported: Arc::new(Mutex::new(BTreeSet::new())),
         })
     }
 

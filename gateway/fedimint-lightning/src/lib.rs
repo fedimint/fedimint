@@ -196,6 +196,14 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         payment_hash: sha256::Hash,
     ) -> Result<bool, LightningRpcError>;
 
+    /// Looks up an outbound payment by hash without blocking on it. Returns
+    /// `None` if the node has no outbound record for the hash. Must never
+    /// report an *inbound* payment for the same hash.
+    async fn lookup_outbound_payment(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<Option<OutboundPaymentStatus>, LightningRpcError>;
+
     /// Consumes the current client and returns a stream of intercepted HTLCs
     /// and a new client. `complete_htlc` must be called for all successfully
     /// intercepted HTLCs sent to the returned stream.
@@ -448,6 +456,17 @@ pub enum PaymentAction {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GetRouteHintsResponse {
     pub route_hints: Vec<RouteHint>,
+}
+
+/// State of one of *our own* outbound payments as the node records it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OutboundPaymentStatus {
+    Pending,
+    Succeeded {
+        amount_sent: Amount,
+        fee: Option<Amount>,
+    },
+    Failed,
 }
 
 /// What the gateway gave up to satisfy an outgoing contract, as realized by
@@ -712,6 +731,17 @@ impl ILnRpcClient for LnRpcTracked {
             self,
             "outbound_payment_exists",
             self.inner.outbound_payment_exists(payment_hash).await
+        )
+    }
+
+    async fn lookup_outbound_payment(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<Option<OutboundPaymentStatus>, LightningRpcError> {
+        tracked_call!(
+            self,
+            "lookup_outbound_payment",
+            self.inner.lookup_outbound_payment(payment_hash).await
         )
     }
 

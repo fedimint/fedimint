@@ -40,8 +40,8 @@ use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
     GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
-    NO_INCOMING_CIRCUIT, OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse,
-    PaymentAction, SendOnchainRequest, SendOnchainResponse, ldk_realized_cost,
+    NO_INCOMING_CIRCUIT, OpenChannelRequest, OpenChannelResponse, OutboundPaymentStatus,
+    PayInvoiceResponse, PaymentAction, SendOnchainRequest, SendOnchainResponse, ldk_realized_cost,
 };
 
 /// Forwards `ldk-node`'s log records into the gateway's `tracing` subscriber.
@@ -732,6 +732,24 @@ impl ILnRpcClient for GatewayLdkClient {
         Ok(self
             .outbound_payment(PaymentId(payment_hash.to_byte_array()))
             .is_some())
+    }
+
+    async fn lookup_outbound_payment(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<Option<OutboundPaymentStatus>, LightningRpcError> {
+        let Some(details) = self.outbound_payment(PaymentId(payment_hash.to_byte_array())) else {
+            return Ok(None);
+        };
+        Ok(Some(match details.status {
+            PaymentStatus::Pending => OutboundPaymentStatus::Pending,
+            PaymentStatus::Failed => OutboundPaymentStatus::Failed,
+            PaymentStatus::Succeeded => {
+                let (amount_sent, fee) =
+                    ldk_realized_cost(details.amount_msat, details.fee_paid_msat, 0);
+                OutboundPaymentStatus::Succeeded { amount_sent, fee }
+            }
+        }))
     }
 
     async fn route_htlcs<'a>(

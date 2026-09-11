@@ -5,6 +5,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime};
 
 use bitcoin::hashes::sha256;
@@ -19,7 +20,7 @@ use fedimint_gateway_server_db::{DrawdownPeak, GatewayDbtxNcExt};
 use fedimint_gw_client::GatewayClientModule;
 use fedimint_gwv2_client::GatewayClientModuleV2;
 use fedimint_gwv2_client::audit::{CircuitOutcome, ForwardFact, ReceiveOutcome, SendOutcome};
-use fedimint_lightning::ILnRpcClient;
+use fedimint_lightning::{ILnRpcClient, OutboundPaymentStatus};
 use fedimint_logging::LOG_GATEWAY;
 use fedimint_mint_client::MintClientStateMachines;
 use fedimint_mint_client::output::MintOutputStates;
@@ -504,6 +505,48 @@ pub fn score_federation(
     ledger
 }
 
+/// Cancelled sends whose payment the node reports as settled: the state
+/// machine refunded the contract while the money left anyway.
+pub fn phantom_losses(
+    statuses: &[(OperationId, Option<OutboundPaymentStatus>)],
+) -> Vec<(OperationId, i64)> {
+    statuses
+        .iter()
+        .filter_map(|(op, status)| match status {
+            Some(OutboundPaymentStatus::Succeeded { amount_sent, fee }) => {
+                let paid = fee
+                    .and_then(|fee| amount_sent.checked_add(fee))
+                    .unwrap_or(*amount_sent);
+                Some((*op, margin(Amount::ZERO, paid)))
+            }
+            Some(OutboundPaymentStatus::Pending | OutboundPaymentStatus::Failed) | None => None,
+        })
+        .collect()
+}
+
+/// How a phantom's computed loss (from `phantom_losses`) should be booked.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PhantomKind {
+    /// A realized loss of the given (non-zero, non-positive) amount.
+    Loss(i64),
+    /// The node settled the payment but reported no amount (for example
+    /// LDK's `amount_msat: None`), so `phantom_losses` computed a `0` that
+    /// is not a genuine zero loss and must not be booked as one.
+    UnknownAmount,
+}
+
+/// Classifies a `phantom_losses` loss for booking. `phantom_losses` never
+/// yields a positive number (it always scores `margin(Amount::ZERO, paid)`,
+/// which is `<= 0`), so a `0` can only mean the settled amount itself was
+/// unknown, not that the send broke even.
+fn classify_phantom(loss: i64) -> PhantomKind {
+    if loss == 0 {
+        PhantomKind::UnknownAmount
+    } else {
+        PhantomKind::Loss(loss)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Ledger {
     pub federations: Vec<FederationLedger>,
@@ -736,7 +779,197 @@ impl Gateway {
         &self,
         lnrpc: &dyn ILnRpcClient,
     ) -> anyhow::Result<SolvencyReport> {
-        let ledger = self.compute_ledger(lnrpc).await?;
+        // Bounds every outbound-payment lookup below so one slow or hung
+        // node call cannot stall the periodic report indefinitely.
+        const RECONCILE_LOOKUP_TIMEOUT: Duration = Duration::from_secs(10);
+        // Per-lookup bounds do not bound the pass: a fresh process starts with
+        // an empty cache, so N historical after-dispatch cancellations could
+        // hold the boot gate for N * 10s before the gateway can become
+        // `Running`. Bound the whole pass instead and carry on with whatever
+        // was gathered; anything left uncached is retried on the next tick.
+        const RECONCILE_PASS_BUDGET: Duration = Duration::from_secs(30);
+
+        let mut ledger = self.compute_ledger(lnrpc).await?;
+
+        // The lookup cache holds only *terminal* results (`Succeeded`,
+        // `Failed`, or `None` meaning the node has no record), so a hit
+        // skips the network call outright; `Pending` and lookup errors are
+        // never cached and are retried every tick. Regardless of whether a
+        // status came from cache or a fresh call, it still has to be run
+        // through `phantom_losses` this tick — `compute_ledger` rebuilds
+        // `reconcile` from scratch every time, so the merged (cached +
+        // fresh) set is what must be scored, not just the newly-looked-up
+        // subset. The cache and reported-phantoms mutexes below are each
+        // locked only for a synchronous instant, never across the lookup's
+        // `.await`.
+        let mut fed_statuses: Vec<Vec<(OperationId, Option<OutboundPaymentStatus>)>> =
+            vec![Vec::new(); ledger.federations.len()];
+        let total_lookups: u64 = ledger
+            .federations
+            .iter()
+            .map(|fed| fed.reconcile.len() as u64)
+            .sum();
+        let finished_lookups = AtomicU64::new(0);
+
+        let reconciliation = async {
+            for (fed, statuses) in ledger.federations.iter().zip(fed_statuses.iter_mut()) {
+                statuses.reserve(fed.reconcile.len());
+                for (op, hash) in &fed.reconcile {
+                    let cached = {
+                        let cache = self
+                            .phantom_lookup_cache
+                            .lock()
+                            .expect("phantom-lookup cache mutex is never held across an .await");
+                        cache.get(op).cloned()
+                    };
+                    if let Some(cached) = cached {
+                        statuses.push((*op, cached));
+                        finished_lookups.fetch_add(1, Ordering::Relaxed);
+                        continue;
+                    }
+
+                    match tokio::time::timeout(
+                        RECONCILE_LOOKUP_TIMEOUT,
+                        lnrpc.lookup_outbound_payment(*hash),
+                    )
+                    .await
+                    {
+                        Ok(Ok(status)) => {
+                            // `Pending` is not terminal; leave it uncached so it
+                            // is looked up again next tick.
+                            if !matches!(status, Some(OutboundPaymentStatus::Pending)) {
+                                let mut cache = self.phantom_lookup_cache.lock().expect(
+                                    "phantom-lookup cache mutex is never held across an .await",
+                                );
+                                cache.insert(*op, status.clone());
+                            }
+                            statuses.push((*op, status));
+                        }
+                        Ok(Err(err)) => warn!(
+                            target: LOG_GATEWAY,
+                            federation_id = %fed.federation_id,
+                            operation_id = ?op,
+                            err = %err.fmt_compact(),
+                            "Could not reconcile a cancelled send against the node"
+                        ),
+                        Err(_) => warn!(
+                            target: LOG_GATEWAY,
+                            federation_id = %fed.federation_id,
+                            operation_id = ?op,
+                            "Timed out reconciling a cancelled send against the node"
+                        ),
+                    }
+                    finished_lookups.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        };
+
+        let budget_expired = tokio::time::timeout(RECONCILE_PASS_BUDGET, reconciliation)
+            .await
+            .is_err();
+        if budget_expired {
+            warn!(
+                target: LOG_GATEWAY,
+                budget_secs = RECONCILE_PASS_BUDGET.as_secs(),
+                total_lookups,
+                remaining_lookups =
+                    total_lookups.saturating_sub(finished_lookups.load(Ordering::Relaxed)),
+                "Reconciling cancelled sends against the node ran out of budget; \
+                 scoring what was gathered and retrying the rest next report"
+            );
+        }
+
+        // Nothing prunes the cache on its own, and a gateway that runs for
+        // months accumulates an entry per cancelled send ever reconciled.
+        // `compute_ledger` rebuilds `reconcile` from scratch every report, so
+        // the set below is exactly the operations that can still be looked up;
+        // an entry outside it will never be read again. Bounded by the live
+        // reconcile set, which is itself bounded by the retained history.
+        {
+            let live: BTreeSet<OperationId> = ledger
+                .federations
+                .iter()
+                .flat_map(|fed| fed.reconcile.iter().map(|(op, _)| *op))
+                .collect();
+            let mut cache = self
+                .phantom_lookup_cache
+                .lock()
+                .expect("phantom-lookup cache mutex is never held across an .await");
+            cache.retain(|op, _| live.contains(op));
+        }
+
+        // Every `.await` is done by this point, so the reported-phantoms
+        // mutex below can be held for the whole (purely synchronous) pass.
+        let mut phantom_count = 0u64;
+        {
+            let mut reported = self
+                .phantom_failures_reported
+                .lock()
+                .expect("phantom-failures-reported mutex is never held across an .await");
+            let mut current_reported = BTreeSet::new();
+
+            for (fed, statuses) in ledger.federations.iter_mut().zip(fed_statuses.iter()) {
+                for (op, loss) in phantom_losses(statuses) {
+                    match classify_phantom(loss) {
+                        PhantomKind::UnknownAmount => {
+                            fed.unknown_forwards += 1;
+                            warn!(
+                                target: LOG_GATEWAY,
+                                federation_id = %fed.federation_id,
+                                operation_id = ?op,
+                                "Phantom failure: the node settled a cancelled send but reported no amount"
+                            );
+                        }
+                        PhantomKind::Loss(loss) => {
+                            phantom_count += 1;
+                            fed.realized_margin_msat =
+                                fed.realized_margin_msat.saturating_add(loss);
+                            if loss < 0 {
+                                fed.negative_forwards.push((op, loss));
+                            }
+
+                            let key = (fed.federation_id, op);
+                            current_reported.insert(key);
+                            if reported.contains(&key) {
+                                tracing::debug!(
+                                    target: LOG_GATEWAY,
+                                    federation_id = %fed.federation_id,
+                                    operation_id = ?op,
+                                    loss_msat = loss,
+                                    "Phantom failure: the send was cancelled but the node settled the payment"
+                                );
+                            } else {
+                                tracing::error!(
+                                    target: LOG_GATEWAY,
+                                    federation_id = %fed.federation_id,
+                                    operation_id = ?op,
+                                    loss_msat = loss,
+                                    "Phantom failure: the send was cancelled but the node settled the payment"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
+            if budget_expired {
+                // The pass was cut short, so `current_reported` is a partial
+                // view: a phantom that was not looked up this tick is missing
+                // from it, and replacing would re-escalate it to `error!` next
+                // tick. Union instead, and let the wholesale replacement happen
+                // on the next pass that completes.
+                reported.extend(current_reported);
+            } else {
+                *reported = current_reported;
+            }
+        }
+        crate::metrics::GATEWAY_PHANTOM_FAILURES
+            .set(i64::try_from(phantom_count).unwrap_or(i64::MAX));
+
+        ledger.cumulative_margin_msat = ledger
+            .federations
+            .iter()
+            .fold(0i64, |acc, f| acc.saturating_add(f.realized_margin_msat));
 
         let mut dbtx = self.gateway_db.begin_transaction().await;
         let previous = dbtx.load_drawdown_peak().await;
@@ -1484,6 +1717,44 @@ mod tests {
         };
         let unchanged = advance_peak(Some(prior), -500, Amount::from_msats(9_999));
         assert_eq!(unchanged, prior);
+    }
+
+    #[test]
+    fn a_settled_payment_behind_a_cancelled_send_is_a_realized_loss() {
+        let statuses = vec![
+            (op(1), Some(OutboundPaymentStatus::Failed)),
+            (op(2), None),
+            (op(3), Some(OutboundPaymentStatus::Pending)),
+            (
+                op(4),
+                Some(OutboundPaymentStatus::Succeeded {
+                    amount_sent: Amount::from_msats(1_000),
+                    fee: Some(Amount::from_msats(2)),
+                }),
+            ),
+            (
+                op(5),
+                Some(OutboundPaymentStatus::Succeeded {
+                    amount_sent: Amount::from_msats(1_000),
+                    fee: None,
+                }),
+            ),
+        ];
+        assert_eq!(
+            phantom_losses(&statuses),
+            vec![(op(4), -1_002), (op(5), -1_000)]
+        );
+    }
+
+    // `phantom_losses` scores a settled payment with an unknown amount
+    // (`amount_sent` of zero, e.g. LDK's `amount_msat: None`) as a `0`
+    // loss; the reconciler must not book that as a genuine break-even
+    // forward. `classify_phantom` is the pure decision point that tells the
+    // two cases apart.
+    #[test]
+    fn classify_phantom_treats_a_computed_zero_as_an_unknown_amount_not_a_loss() {
+        assert_eq!(classify_phantom(-1_002), PhantomKind::Loss(-1_002));
+        assert_eq!(classify_phantom(0), PhantomKind::UnknownAmount);
     }
 
     /// The gateway's claim path only ever emits `CreatedMulti`, whose encoded

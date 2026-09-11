@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -20,7 +20,7 @@ use fedimint_lightning::{
     CreateInvoiceRequest, CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse,
     GetNodeInfoResponse, GetRouteHintsResponse, ILnRpcClient, InterceptPaymentRequest,
     InterceptPaymentResponse, LightningRpcError, ListChannelsResponse, OpenChannelResponse,
-    PayInvoiceResponse, RouteHtlcStream, SendOnchainResponse,
+    OutboundPaymentStatus, PayInvoiceResponse, RouteHtlcStream, SendOnchainResponse,
 };
 use fedimint_ln_common::PrunedInvoice;
 use fedimint_ln_common::contracts::Preimage;
@@ -47,6 +47,13 @@ pub struct FakeLightningTest {
     /// payment sent before a state machine restart from one that never left
     /// the gateway.
     outbound_payments: Mutex<HashSet<sha256::Hash>>,
+    /// What `lookup_outbound_payment` answers, per payment hash. Empty by
+    /// default, so the node reports no record of anything; a test that needs
+    /// the solvency reconciler to see a divergence -- the state machine
+    /// believes the payment failed, the node says it settled -- sets the
+    /// status it wants with
+    /// [`FakeLightningTest::set_outbound_payment_status`].
+    outbound_payment_statuses: Mutex<BTreeMap<sha256::Hash, OutboundPaymentStatus>>,
 }
 
 impl FakeLightningTest {
@@ -61,7 +68,20 @@ impl FakeLightningTest {
             gateway_node_pub_key: PublicKey::from_keypair(&kp),
             amount_sent,
             outbound_payments: Mutex::new(HashSet::new()),
+            outbound_payment_statuses: Mutex::new(BTreeMap::new()),
         }
+    }
+
+    /// Makes `lookup_outbound_payment` report `status` for `payment_hash`.
+    pub fn set_outbound_payment_status(
+        &self,
+        payment_hash: sha256::Hash,
+        status: OutboundPaymentStatus,
+    ) {
+        self.outbound_payment_statuses
+            .lock()
+            .expect("Not poisoned")
+            .insert(payment_hash, status);
     }
 
     fn record_outbound_payment(&self, payment_hash: sha256::Hash) {
@@ -194,6 +214,18 @@ impl ILnRpcClient for FakeLightningTest {
             .lock()
             .expect("Not poisoned")
             .contains(&payment_hash))
+    }
+
+    async fn lookup_outbound_payment(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<Option<OutboundPaymentStatus>, LightningRpcError> {
+        Ok(self
+            .outbound_payment_statuses
+            .lock()
+            .expect("Not poisoned")
+            .get(&payment_hash)
+            .cloned())
     }
 
     async fn pay_private(
@@ -438,6 +470,43 @@ mod tests {
                 .await
                 .expect("fake lookup cannot fail"),
             "an unrelated hash must not be reported as dispatched"
+        );
+    }
+
+    /// The solvency reconciler asks the node whether a cancelled send really
+    /// failed. By default the fake has no record of anything; a test that
+    /// wants the divergence has to state it.
+    #[tokio::test]
+    async fn outbound_payment_status_is_only_what_a_test_sets() {
+        let ln = FakeLightningTest::new();
+        let hash = sha256::Hash::hash(b"settled behind a cancellation");
+
+        assert_eq!(
+            ln.lookup_outbound_payment(hash)
+                .await
+                .expect("fake lookup cannot fail"),
+            None,
+            "the fake node starts with no record of any payment"
+        );
+
+        let settled = OutboundPaymentStatus::Succeeded {
+            amount_sent: Amount::from_msats(1_000),
+            fee: Some(Amount::from_msats(2)),
+        };
+        ln.set_outbound_payment_status(hash, settled.clone());
+
+        assert_eq!(
+            ln.lookup_outbound_payment(hash)
+                .await
+                .expect("fake lookup cannot fail"),
+            Some(settled)
+        );
+        assert_eq!(
+            ln.lookup_outbound_payment(sha256::Hash::hash(b"unrelated"))
+                .await
+                .expect("fake lookup cannot fail"),
+            None,
+            "an unrelated hash must not inherit another payment's status"
         );
     }
 }

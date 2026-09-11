@@ -58,8 +58,8 @@ use crate::{
     CreateInvoiceResponse, GetBalancesResponse, GetInvoiceRequest, GetInvoiceResponse,
     GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription, NO_INCOMING_CIRCUIT,
-    OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
-    SendOnchainResponse, SetChannelFeesRequest, lnd_realized_cost,
+    OpenChannelResponse, OutboundPaymentStatus, PayInvoiceResponse, PaymentAction,
+    SendOnchainRequest, SendOnchainResponse, SetChannelFeesRequest, lnd_realized_cost,
 };
 
 type HtlcSubscriptionSender = mpsc::Sender<InterceptPaymentRequest>;
@@ -1364,6 +1364,47 @@ impl ILnRpcClient for GatewayLndClient {
                 ),
             }),
         }
+    }
+
+    async fn lookup_outbound_payment(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<Option<OutboundPaymentStatus>, LightningRpcError> {
+        let mut client = self.connect().await?;
+        let stream = client
+            .router()
+            .track_payment_v2(TrackPaymentRequest {
+                payment_hash: payment_hash.to_byte_array().to_vec(),
+                no_inflight_updates: false,
+            })
+            .await;
+        let stream = match stream {
+            Ok(stream) => stream,
+            Err(status) if status.code() == Code::NotFound => return Ok(None),
+            Err(status) => {
+                return Err(LightningRpcError::FailedPayment {
+                    failure_reason: format!("track_payment_v2 failed: {status:?}"),
+                });
+            }
+        };
+        let payment = match stream.into_inner().message().await {
+            Ok(Some(payment)) => payment,
+            Ok(None) => return Ok(None),
+            Err(status) if status.code() == Code::NotFound => return Ok(None),
+            Err(status) => {
+                return Err(LightningRpcError::FailedPayment {
+                    failure_reason: format!("track_payment_v2 stream failed: {status:?}"),
+                });
+            }
+        };
+        Ok(Some(match payment.status() {
+            PaymentStatus::Succeeded => {
+                let (amount_sent, fee) = lnd_realized_cost(payment.value_msat, payment.fee_msat);
+                OutboundPaymentStatus::Succeeded { amount_sent, fee }
+            }
+            PaymentStatus::InFlight | PaymentStatus::Initiated => OutboundPaymentStatus::Pending,
+            PaymentStatus::Failed | PaymentStatus::Unknown => OutboundPaymentStatus::Failed,
+        }))
     }
 
     async fn route_htlcs<'a>(

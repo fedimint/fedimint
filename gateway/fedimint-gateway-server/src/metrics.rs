@@ -82,3 +82,21 @@ pub static GATEWAY_FEDERATION_REALIZED_MARGIN_MSAT: LazyLock<IntGaugeVec> = Lazy
     )
     .expect("metric registration should not fail")
 });
+
+/// Cancelled sends the node reports as settled anyway: the state machine's
+/// belief about the payment was wrong, and money left despite the refund.
+/// Set once per solvency report to the number of phantoms found in that
+/// report. A gauge rather than a counter: the ledger is rebuilt from
+/// scratch every tick, so every historical phantom is found again on every
+/// tick, and a counter would climb by the phantom count every minute
+/// forever instead of reflecting how many are currently outstanding.
+pub static GATEWAY_PHANTOM_FAILURES: LazyLock<IntGauge> = LazyLock::new(|| {
+    register_int_gauge_with_registry!(
+        opts!(
+            "gateway_phantom_failures",
+            "Cancelled sends the node reports as settled"
+        ),
+        REGISTRY
+    )
+    .expect("metric registration should not fail")
+});
