@@ -1,4 +1,5 @@
 mod api;
+pub mod audit;
 mod complete_sm;
 mod db;
 pub mod events;
