@@ -3647,6 +3647,44 @@ impl Gateway {
         Ok((registered_incoming_contract.contract, client))
     }
 
+    /// Completes (settles or cancels) an intercepted HTLC, retrying transient
+    /// failures until Lightning reports a terminal outcome.
+    ///
+    /// Serves [`IGatewayClientV1::complete_htlc`] and
+    /// [`IGatewayClientV2::complete_htlc`]: by now the incoming contract is
+    /// funded, so giving up on a transient failure would strand it. Only
+    /// [`LightningRpcError::HtlcCompletionRejected`], a permanent state, is
+    /// returned to the caller.
+    async fn await_complete_htlc(
+        &self,
+        htlc: InterceptPaymentResponse,
+    ) -> std::result::Result<(), LightningRpcError> {
+        loop {
+            let lightning_context = self.await_lightning_context().await;
+
+            match lightning_context.lnrpc.complete_htlc(htlc.clone()).await {
+                Ok(()) => return Ok(()),
+                Err(err @ LightningRpcError::HtlcCompletionRejected { .. }) => {
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %err.fmt_compact(),
+                        "Lightning cannot reach the requested terminal HTLC outcome",
+                    );
+                    return Err(err);
+                }
+                Err(err) => {
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %err.fmt_compact(),
+                        "Failure trying to complete HTLC, retrying",
+                    );
+                }
+            }
+
+            sleep(LIGHTNING_CONTEXT_RETRY_INTERVAL).await;
+        }
+    }
+
     /// Answers whether the connected Lightning node has any record of an
     /// outbound payment for `payment_hash`, retrying transient lookup
     /// failures until the node itself can answer.
@@ -3686,30 +3724,7 @@ impl IGatewayClientV2 for Gateway {
         &self,
         htlc_response: InterceptPaymentResponse,
     ) -> std::result::Result<(), LightningRpcError> {
-        loop {
-            let lightning_context = self.await_lightning_context().await;
-
-            match lightning_context
-                .lnrpc
-                .complete_htlc(htlc_response.clone())
-                .await
-            {
-                Ok(..) => return Ok(()),
-                Err(err @ LightningRpcError::HtlcCompletionRejected { .. }) => {
-                    warn!(
-                        target: LOG_GATEWAY,
-                        err = %err.fmt_compact(),
-                        "Lightning cannot reach the requested terminal HTLC outcome",
-                    );
-                    return Err(err);
-                }
-                Err(err) => {
-                    warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failure trying to complete payment");
-                }
-            }
-
-            sleep(LIGHTNING_CONTEXT_RETRY_INTERVAL).await;
-        }
+        self.await_complete_htlc(htlc_response).await
     }
 
     async fn is_direct_swap(
@@ -3999,32 +4014,7 @@ impl IGatewayClientV1 for Gateway {
         &self,
         htlc: InterceptPaymentResponse,
     ) -> std::result::Result<(), LightningRpcError> {
-        // Retry transient failures so the already-funded incoming contract is
-        // not stranded; return only on a permanent outcome. See the trait doc.
-        loop {
-            let lightning_context = self.await_lightning_context().await;
-
-            match lightning_context.lnrpc.complete_htlc(htlc.clone()).await {
-                Ok(()) => return Ok(()),
-                Err(err @ LightningRpcError::HtlcCompletionRejected { .. }) => {
-                    warn!(
-                        target: LOG_GATEWAY,
-                        err = %err.fmt_compact(),
-                        "Lightning cannot reach the requested terminal HTLC outcome",
-                    );
-                    return Err(err);
-                }
-                Err(err) => {
-                    warn!(
-                        target: LOG_GATEWAY,
-                        err = %err.fmt_compact(),
-                        "Failure trying to complete HTLC, retrying",
-                    );
-                }
-            }
-
-            sleep(LIGHTNING_CONTEXT_RETRY_INTERVAL).await;
-        }
+        self.await_complete_htlc(htlc).await
     }
 
     async fn is_lnv2_direct_swap(

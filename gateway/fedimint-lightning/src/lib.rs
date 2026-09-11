@@ -208,6 +208,12 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// Completes an HTLC that was intercepted by the gateway. Must be called
     /// for all successfully intercepted HTLCs sent to the stream returned
     /// by `route_htlcs`.
+    ///
+    /// The gateway retries [`LightningRpcError::FailedToCompleteHtlc`] until
+    /// the call succeeds and records only
+    /// [`LightningRpcError::HtlcCompletionRejected`] as a terminal outcome, so
+    /// implementations must return the latter for a failure no retry can
+    /// change and the former for anything transient.
     async fn complete_htlc(&self, htlc: InterceptPaymentResponse) -> Result<(), LightningRpcError>;
 
     /// Requests the lightning node to create an invoice. The presence of a
