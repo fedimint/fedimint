@@ -94,7 +94,8 @@ use futures::{Future, StreamExt};
 use incoming::IncomingSmError;
 use itertools::Itertools;
 use lightning_invoice::{
-    Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
+    Bolt11Invoice, CreationError, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop,
+    RoutingFees,
 };
 use pay::PayInvoicePayload;
 use rand::rngs::OsRng;
@@ -108,7 +109,8 @@ use tracing::{debug, error, info, warn};
 
 use crate::db::PaymentResultPrefix;
 pub use crate::error::{
-    GatewaySelectionError, LnSubscribeError, PayBolt11InvoiceError, SpendableAmountError,
+    CreateBolt11InvoiceError, GatewaySelectionError, LnSubscribeError, PayBolt11InvoiceError,
+    SpendableAmountError,
 };
 use crate::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
@@ -1033,12 +1035,15 @@ impl LightningClientModule {
         short_channel_id: u64,
         route_hints: &[fedimint_ln_common::route_hints::RouteHint],
         network: Network,
-    ) -> anyhow::Result<(
-        OperationId,
-        Bolt11Invoice,
-        ClientOutputBundle<LightningOutput, LightningClientStateMachines>,
-        [u8; 32],
-    )> {
+    ) -> Result<
+        (
+            OperationId,
+            Bolt11Invoice,
+            ClientOutputBundle<LightningOutput, LightningClientStateMachines>,
+            [u8; 32],
+        ),
+        CreationError,
+    > {
         let preimage_key: [u8; 33] = receiving_key.public_key().serialize();
         let preimage = sha256::Hash::hash(&preimage_key);
         let payment_hash = sha256::Hash::hash(&preimage.to_byte_array());
@@ -1955,7 +1960,7 @@ impl LightningClientModule {
         expiry_time: Option<u64>,
         extra_meta: M,
         gateway: Option<LightningGateway>,
-    ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
+    ) -> Result<(OperationId, Bolt11Invoice, [u8; 32]), CreateBolt11InvoiceError> {
         let receiving_key =
             ReceivingKey::Personal(Keypair::new(&self.secp, &mut rand::rngs::OsRng));
         self.create_bolt11_invoice_internal(
@@ -1981,7 +1986,7 @@ impl LightningClientModule {
         index: u64,
         extra_meta: M,
         gateway: Option<LightningGateway>,
-    ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
+    ) -> Result<(OperationId, Bolt11Invoice, [u8; 32]), CreateBolt11InvoiceError> {
         let tweaked_key = tweak_user_key(&self.secp, user_key, index);
         self.create_bolt11_invoice_for_user(
             amount,
@@ -2003,7 +2008,7 @@ impl LightningClientModule {
         user_key: PublicKey,
         extra_meta: M,
         gateway: Option<LightningGateway>,
-    ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
+    ) -> Result<(OperationId, Bolt11Invoice, [u8; 32]), CreateBolt11InvoiceError> {
         let receiving_key = ReceivingKey::External(user_key);
         self.create_bolt11_invoice_internal(
             amount,
@@ -2025,7 +2030,7 @@ impl LightningClientModule {
         receiving_key: ReceivingKey,
         extra_meta: M,
         gateway: Option<LightningGateway>,
-    ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
+    ) -> Result<(OperationId, Bolt11Invoice, [u8; 32]), CreateBolt11InvoiceError> {
         let gateway_id = gateway.as_ref().map(|g| g.gateway_id);
         let (src_node_id, short_channel_id, route_hints) = if let Some(current_gateway) = gateway {
             (
@@ -2035,23 +2040,28 @@ impl LightningClientModule {
             )
         } else {
             // If no gateway is provided, this is assumed to be an internal payment.
-            let markers = self.client_ctx.get_internal_payment_markers()?;
+            let markers = self
+                .client_ctx
+                .get_internal_payment_markers()
+                .map_err(CreateBolt11InvoiceError::PaymentMarkers)?;
             (markers.0, markers.1, vec![])
         };
 
         debug!(target: LOG_CLIENT_MODULE_LN, ?gateway_id, %amount, "Selected LN gateway for invoice generation");
 
-        let (operation_id, invoice, output, preimage) = self.create_lightning_receive_output(
-            amount,
-            description,
-            receiving_key,
-            rand::rngs::OsRng,
-            expiry_time,
-            src_node_id,
-            short_channel_id,
-            &route_hints,
-            self.cfg.network.0,
-        )?;
+        let (operation_id, invoice, output, preimage) = self
+            .create_lightning_receive_output(
+                amount,
+                description,
+                receiving_key,
+                rand::rngs::OsRng,
+                expiry_time,
+                src_node_id,
+                short_channel_id,
+                &route_hints,
+                self.cfg.network.0,
+            )
+            .map_err(CreateBolt11InvoiceError::InvoiceCreation)?;
 
         let tx =
             TransactionBuilder::new().with_outputs(self.client_ctx.make_client_outputs(output));
@@ -2089,7 +2099,7 @@ impl LightningClientModule {
             .await
             .await_tx_accepted(change_range.txid())
             .await
-            .map_err(|e| anyhow!("Offer transaction was not accepted: {e:?}"))?;
+            .map_err(|reason| CreateBolt11InvoiceError::OfferRejected { reason })?;
 
         debug!(target: LOG_CLIENT_MODULE_LN, %invoice, "Invoice confirmed");
 
