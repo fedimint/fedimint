@@ -254,6 +254,11 @@ impl CompleteHtlcState {
             htlc_id: common.htlc_id,
         };
 
+        // `IGatewayClientV1::complete_htlc` absorbs and retries transient node
+        // and connectivity failures, so any error it returns is a permanent
+        // outcome. Only then is failing terminally correct: the gateway has
+        // already funded the incoming contract, so it must not give up while
+        // settling the upstream HTLC could still succeed.
         context
             .lightning_manager
             .complete_htlc(htlc)

@@ -1292,10 +1292,14 @@ impl Gateway {
         // using the LNv2 protocol. If the `payment_hash` is not registered,
         // this payment is either a legacy Lightning payment or the end destination is
         // not a Fedimint.
+        // Match and fund against the amount actually locked in the incoming
+        // HTLC, not the sender-controlled onion forward amount, so a forged
+        // `amt_to_forward` cannot satisfy the registered contract's amount
+        // check while only a token amount is really locked.
         let (contract, client) = self
             .get_registered_incoming_contract_and_client_v2(
                 PaymentImage::Hash(htlc_request.payment_hash),
-                htlc_request.amount_msat,
+                htlc_request.incoming_amount_msat,
             )
             .await?;
 
@@ -1307,7 +1311,7 @@ impl Gateway {
                 htlc_request.incoming_chan_id,
                 htlc_request.htlc_id,
                 contract,
-                htlc_request.amount_msat,
+                htlc_request.incoming_amount_msat,
             )
             .await
         {
@@ -3653,23 +3657,24 @@ impl Gateway {
 
         Ok((registered_incoming_contract.contract, client))
     }
-}
 
-#[async_trait]
-impl IGatewayClientV2 for Gateway {
-    async fn complete_htlc(
+    /// Completes (settles or cancels) an intercepted HTLC, retrying transient
+    /// failures until Lightning reports a terminal outcome.
+    ///
+    /// Serves [`IGatewayClientV1::complete_htlc`] and
+    /// [`IGatewayClientV2::complete_htlc`]: by now the incoming contract is
+    /// funded, so giving up on a transient failure would strand it. Only
+    /// [`LightningRpcError::HtlcCompletionRejected`], a permanent state, is
+    /// returned to the caller.
+    async fn await_complete_htlc(
         &self,
-        htlc_response: InterceptPaymentResponse,
+        htlc: InterceptPaymentResponse,
     ) -> std::result::Result<(), LightningRpcError> {
         loop {
             let lightning_context = self.await_lightning_context().await;
 
-            match lightning_context
-                .lnrpc
-                .complete_htlc(htlc_response.clone())
-                .await
-            {
-                Ok(..) => return Ok(()),
+            match lightning_context.lnrpc.complete_htlc(htlc.clone()).await {
+                Ok(()) => return Ok(()),
                 Err(err @ LightningRpcError::HtlcCompletionRejected { .. }) => {
                     warn!(
                         target: LOG_GATEWAY,
@@ -3679,12 +3684,58 @@ impl IGatewayClientV2 for Gateway {
                     return Err(err);
                 }
                 Err(err) => {
-                    warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failure trying to complete payment");
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %err.fmt_compact(),
+                        "Failure trying to complete HTLC, retrying",
+                    );
                 }
             }
 
             sleep(LIGHTNING_CONTEXT_RETRY_INTERVAL).await;
         }
+    }
+
+    /// Answers whether the connected Lightning node has any record of an
+    /// outbound payment for `payment_hash`, retrying transient lookup
+    /// failures until the node itself can answer.
+    ///
+    /// Serves [`IGatewayClientV1::outbound_payment_exists`] and
+    /// [`IGatewayClientV2::outbound_payment_exists`]: a wrong `false` lets a
+    /// resumed state machine cancel a contract whose payment is still in
+    /// flight, so no answer is synthesised from a failure.
+    async fn await_outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool {
+        loop {
+            let lightning_context = self.await_lightning_context().await;
+
+            match lightning_context
+                .lnrpc
+                .outbound_payment_exists(payment_hash)
+                .await
+            {
+                Ok(exists) => return exists,
+                Err(err) => {
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %err.fmt_compact(),
+                        %payment_hash,
+                        "Failed to check for a dispatched payment, retrying",
+                    );
+                }
+            }
+
+            sleep(LIGHTNING_CONTEXT_RETRY_INTERVAL).await;
+        }
+    }
+}
+
+#[async_trait]
+impl IGatewayClientV2 for Gateway {
+    async fn complete_htlc(
+        &self,
+        htlc_response: InterceptPaymentResponse,
+    ) -> std::result::Result<(), LightningRpcError> {
+        self.await_complete_htlc(htlc_response).await
     }
 
     async fn is_direct_swap(
@@ -3727,6 +3778,10 @@ impl IGatewayClientV2 for Gateway {
             .map(|response| response.preimage.0)
     }
 
+    async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool {
+        self.await_outbound_payment_exists(payment_hash).await
+    }
+
     async fn min_contract_amount(
         &self,
         federation_id: &FederationId,
@@ -3761,7 +3816,8 @@ impl IGatewayClientV2 for Gateway {
         &self,
         client: &ClientHandleArc,
         invoice: &Bolt11Invoice,
-    ) -> anyhow::Result<FinalReceiveState> {
+        allow_fresh_dispatch: bool,
+    ) -> anyhow::Result<Option<FinalReceiveState>> {
         let swap_params = SwapParameters {
             payment_hash: *invoice.payment_hash(),
             amount_msat: Amount::from_msats(
@@ -3773,7 +3829,12 @@ impl IGatewayClientV2 for Gateway {
         let lnv1 = client
             .get_first_module::<GatewayClientModule>()
             .expect("No LNv1 module");
-        let operation_id = lnv1.gateway_handle_direct_swap(swap_params).await?;
+        let Some(operation_id) = lnv1
+            .gateway_handle_direct_swap(swap_params, allow_fresh_dispatch)
+            .await?
+        else {
+            return Ok(None);
+        };
         let mut stream = lnv1
             .gateway_subscribe_ln_receive(operation_id)
             .await?
@@ -3803,7 +3864,7 @@ impl IGatewayClientV2 for Gateway {
             }
         }
 
-        Ok(final_state)
+        Ok(Some(final_state))
     }
 
     async fn claim_payment_image(
@@ -3956,14 +4017,15 @@ impl IGatewayClientV1 for Gateway {
         }
     }
 
+    async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool {
+        self.await_outbound_payment_exists(payment_hash).await
+    }
+
     async fn complete_htlc(
         &self,
         htlc: InterceptPaymentResponse,
     ) -> std::result::Result<(), LightningRpcError> {
-        // Wait until the lightning node is online to complete the HTLC.
-        let lightning_context = self.await_lightning_context().await;
-
-        lightning_context.lnrpc.complete_htlc(htlc).await
+        self.await_complete_htlc(htlc).await
     }
 
     async fn is_lnv2_direct_swap(
