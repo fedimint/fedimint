@@ -27,7 +27,7 @@ use fedimint_ln_client::{
     GatewaySelectionError, InternalPayState, LightningClientInit, LightningClientModule,
     LightningClientStateMachines, LightningOperationMeta, LightningOperationMetaVariant,
     LnPayState, LnReceiveState, MockGatewayConnection, OutgoingLightningPayment, PayType,
-    ReceivingKey, create_incoming_contract_output,
+    ReceivingKey, SpendableAmountError, create_incoming_contract_output,
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::{EncryptedPreimage, PreimageKey};
@@ -2042,4 +2042,24 @@ mod fedimint_migration_tests {
         )
         .await
     }
+}
+
+/// A client with no gateway registered cannot say what it could spend over
+/// Lightning, and says which of the two reasons applies instead of returning
+/// one interchangeable string.
+#[tokio::test(flavor = "multi_thread")]
+async fn spendable_amount_without_a_gateway_names_the_reason() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let ln_module = client.get_first_module::<LightningClientModule>()?;
+
+    assert_matches!(
+        ln_module.spendable_amount(sats(1000), None).await,
+        Err(SpendableAmountError::Gateway(
+            GatewaySelectionError::NoGatewaysRegistered
+        ))
+    );
+
+    Ok(())
 }

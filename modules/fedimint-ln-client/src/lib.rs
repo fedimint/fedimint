@@ -107,7 +107,7 @@ use tokio::sync::Notify;
 use tracing::{debug, error, info, warn};
 
 use crate::db::PaymentResultPrefix;
-pub use crate::error::GatewaySelectionError;
+pub use crate::error::{GatewaySelectionError, SpendableAmountError};
 use crate::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
 };
@@ -1847,7 +1847,10 @@ impl LightningClientModule {
     /// only the fee of the on-federation transaction. For that reason the quote
     /// is taken on `amount` directly (rather than the gateway-reduced contract
     /// amount), and no gateway round-trip is needed.
-    pub async fn receive_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+    pub async fn receive_fee_quote(
+        &self,
+        amount: Amount,
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         self.client_ctx
             .fee_quote(
                 OperationId::new_random(),
@@ -1859,7 +1862,6 @@ impl LightningClientModule {
                 },
             )
             .await
-            .map_err(anyhow::Error::from)
     }
 
     /// Computes the federation fee a `pay` funding an outgoing contract worth
@@ -1924,13 +1926,13 @@ impl LightningClientModule {
         &self,
         balance: Amount,
         gateway: Option<LightningGateway>,
-    ) -> anyhow::Result<Amount> {
+    ) -> Result<Amount, SpendableAmountError> {
         let gateway = match gateway {
             Some(gateway) => gateway,
             None => self
                 .get_gateway(None, false)
                 .await?
-                .ok_or_else(|| anyhow!("No gateway available to send the payment"))?,
+                .ok_or(SpendableAmountError::NoGatewayAvailable)?,
         };
 
         max_affordable_send_amount(
@@ -1940,8 +1942,9 @@ impl LightningClientModule {
             |invoice_amount: Amount| invoice_amount + gateway.fees.to_amount(&invoice_amount),
             |contract_amount: Amount| self.send_fee_quote(contract_amount),
         )
-        .await?
-        .ok_or_else(|| anyhow!("Balance is too low to send any amount after fees"))
+        .await
+        .map_err(SpendableAmountError::Quote)?
+        .ok_or(SpendableAmountError::BalanceTooLow { balance })
     }
 
     pub async fn create_bolt11_invoice<M: Serialize + Send + Sync>(
