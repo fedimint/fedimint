@@ -160,12 +160,11 @@ impl ILnRpcClient for FakeLightningTest {
         _max_delay: u64,
         _max_fee: Amount,
     ) -> Result<PayInvoiceResponse, LightningRpcError> {
-        self.amount_sent.fetch_add(
-            invoice
-                .amount_milli_satoshis()
-                .expect("Invoice missing amount"),
-            Ordering::Relaxed,
-        );
+        let invoice_amount_msat = invoice
+            .amount_milli_satoshis()
+            .expect("Invoice missing amount");
+        self.amount_sent
+            .fetch_add(invoice_amount_msat, Ordering::Relaxed);
 
         if *invoice.payment_secret() == PaymentSecret(INVALID_INVOICE_PAYMENT_SECRET) {
             return Err(LightningRpcError::FailedPayment {
@@ -177,6 +176,8 @@ impl ILnRpcClient for FakeLightningTest {
 
         Ok(PayInvoiceResponse {
             preimage: Preimage(MOCK_INVOICE_PREIMAGE),
+            amount_sent: Amount::from_msats(invoice_amount_msat),
+            fee: Some(Amount::ZERO),
         })
     }
 
@@ -214,6 +215,8 @@ impl ILnRpcClient for FakeLightningTest {
 
         Ok(PayInvoiceResponse {
             preimage: Preimage(MOCK_INVOICE_PREIMAGE),
+            amount_sent: Amount::from_msats(invoice.amount.msats),
+            fee: Some(Amount::ZERO),
         })
     }
 

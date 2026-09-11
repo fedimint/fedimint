@@ -3767,7 +3767,7 @@ impl IGatewayClientV2 for Gateway {
         invoice: Bolt11Invoice,
         max_delay: u64,
         max_fee: Amount,
-    ) -> std::result::Result<[u8; 32], LightningRpcError> {
+    ) -> std::result::Result<PayInvoiceResponse, LightningRpcError> {
         // The send state machine forfeits the outgoing contract on any error from
         // here, so only the lightning node gets to say this payment failed.
         let lightning_context = self.await_lightning_context().await;
@@ -3775,7 +3775,6 @@ impl IGatewayClientV2 for Gateway {
             .lnrpc
             .pay(invoice, max_delay, max_fee)
             .await
-            .map(|response| response.preimage.0)
     }
 
     async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool {

@@ -59,7 +59,7 @@ use crate::{
     GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription, NO_INCOMING_CIRCUIT,
     OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
-    SendOnchainResponse, SetChannelFeesRequest,
+    SendOnchainResponse, SetChannelFeesRequest, lnd_realized_cost,
 };
 
 type HtlcSubscriptionSender = mpsc::Sender<InterceptPaymentRequest>;
@@ -131,6 +131,13 @@ pub struct GatewayLndClient {
     /// as if it were federation-bound, producing invalid LNv1 responses that
     /// crash LND's htlc_interceptor stream.
     lnv2_filter: Lnv2HoldInvoiceFilter,
+}
+
+/// A settled outbound payment as LND reports it.
+struct LndSettledPayment {
+    preimage_hex: String,
+    value_msat: i64,
+    fee_msat: i64,
 }
 
 impl GatewayLndClient {
@@ -716,7 +723,7 @@ impl GatewayLndClient {
         &self,
         payment_hash: Vec<u8>,
         client: &mut LndClient,
-    ) -> Result<Option<String>, LightningRpcError> {
+    ) -> Result<Option<LndSettledPayment>, LightningRpcError> {
         // Loop until we successfully get the status of the payment, or determine that
         // the payment has not been made yet.
         loop {
@@ -734,7 +741,11 @@ impl GatewayLndClient {
                     match payments.into_inner().message().await {
                         Ok(Some(payment)) => {
                             if payment.status() == PaymentStatus::Succeeded {
-                                return Ok(Some(payment.payment_preimage));
+                                return Ok(Some(LndSettledPayment {
+                                    preimage_hex: payment.payment_preimage,
+                                    value_msat: payment.value_msat,
+                                    fee_msat: payment.fee_msat,
+                                }));
                             }
 
                             let failure_reason = payment.failure_reason();
@@ -1085,21 +1096,22 @@ impl ILnRpcClient for GatewayLndClient {
         );
 
         // If the payment exists, that means we've already tried to pay the invoice
-        let preimage: Vec<u8> = match self
+        let (preimage, amount_sent, fee): (Vec<u8>, Amount, Option<Amount>) = match self
             .lookup_payment(invoice.payment_hash.to_byte_array().to_vec(), &mut client)
             .await?
         {
-            Some(preimage) => {
+            Some(settled) => {
                 info!(
                     target: LOG_LIGHTNING,
                     payment_hash = %PrettyPaymentHash(&payment_hash),
                     "LND payment already exists for invoice",
                 );
-                hex::FromHex::from_hex(preimage.as_str()).map_err(|error| {
-                    LightningRpcError::FailedPayment {
+                let preimage: Vec<u8> = hex::FromHex::from_hex(settled.preimage_hex.as_str())
+                    .map_err(|error| LightningRpcError::FailedPayment {
                         failure_reason: format!("Failed to convert preimage {error:?}"),
-                    }
-                })?
+                    })?;
+                let (amount_sent, fee) = lnd_realized_cost(settled.value_msat, settled.fee_msat);
+                (preimage, amount_sent, fee)
             }
             _ => {
                 // LND API allows fee limits in the `i64` range, but we use `u64` for
@@ -1198,10 +1210,15 @@ impl ILnRpcClient for GatewayLndClient {
                                 payment_hash = %PrettyPaymentHash(&payment_hash),
                                 "LND payment succeeded for invoice",
                             );
-                            break hex::FromHex::from_hex(payment.payment_preimage.as_str())
-                                .map_err(|error| LightningRpcError::FailedPayment {
-                                    failure_reason: format!("Failed to convert preimage {error:?}"),
-                                })?;
+                            let preimage: Vec<u8> = hex::FromHex::from_hex(
+                                payment.payment_preimage.as_str(),
+                            )
+                            .map_err(|error| LightningRpcError::FailedPayment {
+                                failure_reason: format!("Failed to convert preimage {error:?}"),
+                            })?;
+                            let (amount_sent, fee) =
+                                lnd_realized_cost(payment.value_msat, payment.fee_msat);
+                            break (preimage, amount_sent, fee);
                         }
                         Ok(Some(payment)) if payment.status() == PaymentStatus::Failed => {
                             // The one terminal status besides `Succeeded`: a
@@ -1249,14 +1266,17 @@ impl ILnRpcClient for GatewayLndClient {
                                 .lookup_payment(payment_hash.clone(), &mut client)
                                 .await?
                             {
-                                Some(preimage) => {
-                                    break hex::FromHex::from_hex(preimage.as_str()).map_err(
-                                        |error| LightningRpcError::FailedPayment {
-                                            failure_reason: format!(
-                                                "Failed to convert preimage {error:?}"
-                                            ),
-                                        },
-                                    )?;
+                                Some(settled) => {
+                                    let preimage: Vec<u8> =
+                                        hex::FromHex::from_hex(settled.preimage_hex.as_str())
+                                            .map_err(|error| LightningRpcError::FailedPayment {
+                                                failure_reason: format!(
+                                                    "Failed to convert preimage {error:?}"
+                                                ),
+                                            })?;
+                                    let (amount_sent, fee) =
+                                        lnd_realized_cost(settled.value_msat, settled.fee_msat);
+                                    break (preimage, amount_sent, fee);
                                 }
                                 None => {
                                     return Err(LightningRpcError::FailedPayment {
@@ -1274,6 +1294,8 @@ impl ILnRpcClient for GatewayLndClient {
         };
         Ok(PayInvoiceResponse {
             preimage: Preimage(preimage.try_into().expect("Failed to create preimage")),
+            amount_sent,
+            fee,
         })
     }
 

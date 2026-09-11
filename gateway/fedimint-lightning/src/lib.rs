@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use bitcoin::Network;
 use bitcoin::hashes::sha256;
 use fedimint_core::Amount;
+use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{FM_IN_DEVIMINT_ENV, is_env_var_set};
 use fedimint_core::secp256k1::PublicKey;
@@ -449,9 +450,63 @@ pub struct GetRouteHintsResponse {
     pub route_hints: Vec<RouteHint>,
 }
 
+/// What the gateway gave up to satisfy an outgoing contract, as realized by
+/// the rail that carried the payment.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
+pub enum OutboundCost {
+    /// Paid over Lightning. `fee` is `None` only when the node could not
+    /// report the routing fee; the solvency audit scores such forwards as
+    /// unknown-cost rather than guessing.
+    Lightning {
+        amount_sent: Amount,
+        fee: Option<Amount>,
+    },
+    /// Settled by funding an incoming contract in another federation.
+    Swap {
+        funded: Amount,
+        target_federation: FederationId,
+    },
+}
+
+impl OutboundCost {
+    /// Total msat the gateway parted with, if fully known.
+    pub fn total(&self) -> Option<Amount> {
+        match self {
+            OutboundCost::Lightning { amount_sent, fee } => {
+                fee.and_then(|fee| amount_sent.checked_add(fee))
+            }
+            OutboundCost::Swap { funded, .. } => Some(*funded),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PayInvoiceResponse {
     pub preimage: Preimage,
+    /// Amount the node reports having sent, excluding routing fees.
+    pub amount_sent: Amount,
+    /// Routing fee actually paid; `None` if the node did not report one.
+    pub fee: Option<Amount>,
+}
+
+/// LND reports amounts as `i64`; anything negative means "unknown".
+pub(crate) fn lnd_realized_cost(value_msat: i64, fee_msat: i64) -> (Amount, Option<Amount>) {
+    let amount_sent = Amount::from_msats(u64::try_from(value_msat).unwrap_or(0));
+    let fee = u64::try_from(fee_msat).ok().map(Amount::from_msats);
+    (amount_sent, fee)
+}
+
+/// LDK reports amounts as `Option<u64>`. The sent amount falls back to the
+/// invoice amount; the fee is never guessed.
+pub(crate) fn ldk_realized_cost(
+    amount_msat: Option<u64>,
+    fee_paid_msat: Option<u64>,
+    invoice_amount_msat: u64,
+) -> (Amount, Option<Amount>) {
+    (
+        Amount::from_msats(amount_msat.unwrap_or(invoice_amount_msat)),
+        fee_paid_msat.map(Amount::from_msats),
+    )
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -806,5 +861,61 @@ mod tests {
         // and so has htlc id 0.
         assert_eq!(response(101, 0).incoming_circuit(), Some((101, 0)));
         assert_eq!(response(101, 7).incoming_circuit(), Some((101, 7)));
+    }
+}
+
+#[cfg(test)]
+mod cost_tests {
+    use fedimint_core::Amount;
+    use fedimint_core::config::FederationId;
+
+    use super::{OutboundCost, ldk_realized_cost, lnd_realized_cost};
+
+    #[test]
+    fn lightning_total_is_amount_plus_fee_and_none_when_fee_unknown() {
+        let known = OutboundCost::Lightning {
+            amount_sent: Amount::from_msats(1_000),
+            fee: Some(Amount::from_msats(10)),
+        };
+        assert_eq!(known.total(), Some(Amount::from_msats(1_010)));
+
+        let unknown = OutboundCost::Lightning {
+            amount_sent: Amount::from_msats(1_000),
+            fee: None,
+        };
+        assert_eq!(unknown.total(), None);
+    }
+
+    #[test]
+    fn swap_total_is_the_funded_amount() {
+        let cost = OutboundCost::Swap {
+            funded: Amount::from_msats(500),
+            target_federation: FederationId::dummy(),
+        };
+        assert_eq!(cost.total(), Some(Amount::from_msats(500)));
+    }
+
+    #[test]
+    fn lnd_cost_treats_negative_fee_as_unknown() {
+        assert_eq!(
+            lnd_realized_cost(1_000, 7),
+            (Amount::from_msats(1_000), Some(Amount::from_msats(7)))
+        );
+        assert_eq!(
+            lnd_realized_cost(1_000, -1),
+            (Amount::from_msats(1_000), None)
+        );
+    }
+
+    #[test]
+    fn ldk_cost_falls_back_to_invoice_amount_but_never_invents_a_fee() {
+        assert_eq!(
+            ldk_realized_cost(Some(900), Some(5), 1_000),
+            (Amount::from_msats(900), Some(Amount::from_msats(5)))
+        );
+        assert_eq!(
+            ldk_realized_cost(None, None, 1_000),
+            (Amount::from_msats(1_000), None)
+        );
     }
 }

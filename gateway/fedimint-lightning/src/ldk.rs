@@ -40,7 +40,7 @@ use crate::{
     CreateInvoiceResponse, GetBalancesResponse, GetLnOnchainAddressResponse, GetNodeInfoResponse,
     GetRouteHintsResponse, InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription,
     NO_INCOMING_CIRCUIT, OpenChannelRequest, OpenChannelResponse, PayInvoiceResponse,
-    PaymentAction, SendOnchainRequest, SendOnchainResponse,
+    PaymentAction, SendOnchainRequest, SendOnchainResponse, ldk_realized_cost,
 };
 
 /// Forwards `ldk-node`'s log records into the gateway's `tracing` subscriber.
@@ -412,6 +412,7 @@ impl GatewayLdkClient {
     fn ldk_payment_result(
         &self,
         payment_id: PaymentId,
+        invoice_amount_msat: u64,
     ) -> Option<Result<PayInvoiceResponse, LightningRpcError>> {
         let payment_details = self.outbound_payment(payment_id)?;
         match payment_details.status {
@@ -422,8 +423,15 @@ impl GatewayLdkClient {
                     ..
                 } = payment_details.kind
                 {
+                    let (amount_sent, fee) = ldk_realized_cost(
+                        payment_details.amount_msat,
+                        payment_details.fee_paid_msat,
+                        invoice_amount_msat,
+                    );
                     Some(Ok(PayInvoiceResponse {
                         preimage: Preimage(preimage.0),
+                        amount_sent,
+                        fee,
                     }))
                 } else {
                     Some(Err(LightningRpcError::FailedPayment {
@@ -636,7 +644,8 @@ impl ILnRpcClient for GatewayLdkClient {
         // The payment may already be in a terminal state (a known/resumed
         // payment, or an event that fired before we registered the waiter), so
         // check once up front before waiting.
-        if let Some(result) = self.ldk_payment_result(payment_id) {
+        let invoice_amount_msat = invoice.amount_milli_satoshis().unwrap_or(0);
+        if let Some(result) = self.ldk_payment_result(payment_id, invoice_amount_msat) {
             self.pending_payments.write().await.remove(&payment_id);
             return result;
         }
@@ -648,12 +657,13 @@ impl ILnRpcClient for GatewayLdkClient {
         let _ = payment_receiver.await;
 
         self.pending_payments.write().await.remove(&payment_id);
-        self.ldk_payment_result(payment_id).unwrap_or_else(|| {
-            Err(LightningRpcError::FailedPayment {
-                failure_reason: "LDK payment event fired without terminal payment status"
-                    .to_string(),
+        self.ldk_payment_result(payment_id, invoice_amount_msat)
+            .unwrap_or_else(|| {
+                Err(LightningRpcError::FailedPayment {
+                    failure_reason: "LDK payment event fired without terminal payment status"
+                        .to_string(),
+                })
             })
-        })
     }
 
     async fn outbound_payment_exists(

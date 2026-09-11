@@ -35,7 +35,7 @@ use fedimint_core::secp256k1::Keypair;
 use fedimint_core::time::now;
 use fedimint_core::util::Spanned;
 use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send, secp256k1};
-use fedimint_lightning::{InterceptPaymentResponse, LightningRpcError};
+use fedimint_lightning::{InterceptPaymentResponse, LightningRpcError, PayInvoiceResponse};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::SendPaymentPayload;
@@ -862,7 +862,7 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
         invoice: Bolt11Invoice,
         max_delay: u64,
         max_fee: Amount,
-    ) -> Result<[u8; 32], LightningRpcError>;
+    ) -> Result<PayInvoiceResponse, LightningRpcError>;
 
     /// Returns whether the gateway's Lightning node has any record of an
     /// outbound payment for `payment_hash`, whatever its state.

@@ -251,13 +251,13 @@ impl SendStateMachine {
                     return Err(Cancelled::InvoiceExpired);
                 }
 
-                let preimage = context
+                let response = context
                     .gateway
                     .pay(invoice, max_delay, max_fee)
                     .await
                     .map_err(|e| Cancelled::LightningRpcError(e.to_string()))?;
                 Ok(PaymentResponse {
-                    preimage,
+                    preimage: response.preimage.0,
                     target_federation: None,
                 })
             }
