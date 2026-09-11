@@ -18,7 +18,7 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::secp256k1::hashes::sha256;
 use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::task::timeout;
-use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl};
+use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{Amount, BitcoinHash, runtime};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_ln_client::common::{LightningGateway, LightningGatewayAnnouncement};
@@ -787,7 +787,7 @@ async fn select_available_gateways(
     let ln_module = client.get_ln_module()?;
     ln_module.update_gateway_cache().await.map_err(|err| {
         warn!(
-            err = %err.fmt_compact_anyhow(),
+            err = %err.fmt_compact(),
             "Failed to refresh gateway announcements"
         );
         RecurringPaymentError::NoGatewayFound
@@ -813,7 +813,7 @@ async fn select_available_gateways(
             Err(err) => {
                 debug!(
                     gateway_id = %gateway_id,
-                    err = %err.fmt_compact_anyhow(),
+                    err = %err.fmt_compact(),
                     "Gateway failed availability check"
                 );
             }

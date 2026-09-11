@@ -24,10 +24,10 @@ use fedimint_ln_client::receive::{
     LightningReceiveSubmittedOffer,
 };
 use fedimint_ln_client::{
-    InternalPayState, LightningClientInit, LightningClientModule, LightningClientStateMachines,
-    LightningOperationMeta, LightningOperationMetaVariant, LnPayState, LnReceiveState,
-    MockGatewayConnection, OutgoingLightningPayment, PayType, ReceivingKey,
-    create_incoming_contract_output,
+    GatewaySelectionError, InternalPayState, LightningClientInit, LightningClientModule,
+    LightningClientStateMachines, LightningOperationMeta, LightningOperationMetaVariant,
+    LnPayState, LnReceiveState, MockGatewayConnection, OutgoingLightningPayment, PayType,
+    ReceivingKey, create_incoming_contract_output,
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::{EncryptedPreimage, PreimageKey};
@@ -299,13 +299,9 @@ async fn test_select_available_gateway() -> anyhow::Result<()> {
 
     ln_module.update_gateway_cache().await?;
 
-    let result = ln_module.select_available_gateway(None, None).await;
-    assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .to_string()
-            .contains("No gateways available")
+    assert_matches!(
+        ln_module.select_available_gateway(None, None).await,
+        Err(GatewaySelectionError::NoGatewaysRegistered)
     );
 
     let gw1 = gateway(&fixtures, &fed).await;

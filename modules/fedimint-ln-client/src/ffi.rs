@@ -5,6 +5,7 @@ use bitcoin::secp256k1::SecretKey;
 use fedimint_core::Amount;
 use fedimint_core::runtime::ffi_spawn_subscription;
 use fedimint_core::secp256k1::PublicKey;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::util::ffi::UniffiError;
 use fedimint_ln_common::{LightningGateway, LightningGatewayAnnouncement};
 use futures::StreamExt;
@@ -169,7 +170,9 @@ impl LightningClientModule {
 
     #[uniffi::method(name = "update_gateway_cache")]
     pub async fn update_gateway_cache_uniffi(&self) -> Result<()> {
-        self.update_gateway_cache().await?;
+        self.update_gateway_cache()
+            .await
+            .map_err(|e| UniffiError::General(e.fmt_compact().to_string()))?;
         Ok(())
     }
 

@@ -15,6 +15,8 @@ pub mod api;
 #[cfg(feature = "cli")]
 pub mod cli;
 pub mod db;
+/// Error types of the lightning client.
+pub mod error;
 pub mod events;
 #[cfg(feature = "uniffi")]
 pub mod ffi;
@@ -39,7 +41,7 @@ use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
     RecurringPaymentCodeKeyPrefix,
 };
-use fedimint_api_client::api::{DynModuleApi, ServerError};
+use fedimint_api_client::api::{DynModuleApi, FederationResult, ServerError};
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 use fedimint_client_module::error::TransactionSubmitError;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -105,6 +107,7 @@ use tokio::sync::Notify;
 use tracing::{debug, error, info, warn};
 
 use crate::db::PaymentResultPrefix;
+pub use crate::error::GatewaySelectionError;
 use crate::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
 };
@@ -1140,7 +1143,7 @@ impl LightningClientModule {
         &self,
         maybe_gateway: Option<LightningGateway>,
         maybe_invoice: Option<Bolt11Invoice>,
-    ) -> anyhow::Result<LightningGateway> {
+    ) -> Result<LightningGateway, GatewaySelectionError> {
         if let Some(gw) = maybe_gateway {
             let gw_id = gw.gateway_id;
             if self
@@ -1151,12 +1154,12 @@ impl LightningClientModule {
             {
                 return Ok(gw);
             }
-            return Err(anyhow::anyhow!("Specified gateway is offline: {gw_id}"));
+            return Err(GatewaySelectionError::Offline { gateway_id: gw_id });
         }
 
         let gateways: Vec<LightningGatewayAnnouncement> = self.list_gateways().await;
         if gateways.is_empty() {
-            return Err(anyhow::anyhow!("No gateways available"));
+            return Err(GatewaySelectionError::NoGatewaysRegistered);
         }
 
         let gateways_with_status =
@@ -1188,7 +1191,7 @@ impl LightningClientModule {
                 .collect();
 
         if sorted_gateways.is_empty() {
-            return Err(anyhow::anyhow!("No Lightning Gateway was reachable"));
+            return Err(GatewaySelectionError::NoneReachable);
         }
 
         let amount_msat = maybe_invoice.and_then(|inv| inv.amount_milli_satoshis());
@@ -1249,7 +1252,7 @@ impl LightningClientModule {
     /// from the federation.
     ///
     /// See also [`Self::update_gateway_cache_continuously`].
-    pub async fn update_gateway_cache(&self) -> anyhow::Result<()> {
+    pub async fn update_gateway_cache(&self) -> FederationResult<()> {
         self.update_gateway_cache_merge
             .merge(async {
                 let mut gateways = self
@@ -2321,7 +2324,7 @@ impl LightningClientModule {
         &self,
         gateway_id: Option<secp256k1::PublicKey>,
         force_internal: bool,
-    ) -> anyhow::Result<Option<LightningGateway>> {
+    ) -> Result<Option<LightningGateway>, GatewaySelectionError> {
         match gateway_id {
             Some(gateway_id) => {
                 if let Some(gw) = self.select_gateway(&gateway_id).await {
@@ -2343,9 +2346,7 @@ impl LightningClientModule {
                     info!(%gw_id, "Using random gateway");
                     Ok(Some(gw))
                 } else {
-                    Err(anyhow!(
-                        "No gateways exist in gateway cache and `force_internal` is false"
-                    ))
+                    Err(GatewaySelectionError::NoGatewaysRegistered)
                 }
             }
             None => Ok(None),
