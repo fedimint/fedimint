@@ -25,11 +25,11 @@ use fedimint_ln_client::receive::{
     LightningReceiveSubmittedOffer,
 };
 use fedimint_ln_client::{
-    GatewaySelectionError, InternalPayState, LightningClientInit, LightningClientModule,
-    LightningClientStateMachines, LightningOperationMeta, LightningOperationMetaVariant,
-    LnPayState, LnReceiveState, LnSubscribeError, MockGatewayConnection, OutgoingLightningPayment,
-    PayBolt11InvoiceError, PayType, ReceivingKey, SpendableAmountError,
-    create_incoming_contract_output,
+    ClaimIncomingContractError, GatewaySelectionError, InternalPayState, LightningClientInit,
+    LightningClientModule, LightningClientStateMachines, LightningOperationMeta,
+    LightningOperationMetaVariant, LnPayState, LnReceiveState, LnSubscribeError,
+    MockGatewayConnection, OutgoingLightningPayment, PayBolt11InvoiceError, PayType, ReceivingKey,
+    SpendableAmountError, create_incoming_contract_output,
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::{EncryptedPreimage, PreimageKey};
@@ -2123,6 +2123,25 @@ async fn subscribing_with_the_wrong_operation_names_the_kind() -> anyhow::Result
     assert_matches!(
         ln_module.get_ln_pay_details_for(receive_op).await,
         Err(LnSubscribeError::NotAPayment)
+    );
+
+    Ok(())
+}
+
+/// Claiming an incoming contract that was never funded says so, instead of
+/// "No contract found for ..".
+#[tokio::test(flavor = "multi_thread")]
+#[allow(deprecated)]
+async fn claiming_an_unfunded_contract_reports_not_found() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let ln_module = client.get_first_module::<LightningClientModule>()?;
+
+    let keypair = Keypair::new(&secp256k1::Secp256k1::new(), &mut OsRng);
+    assert_matches!(
+        ln_module.scan_receive_for_user(keypair, ()).await,
+        Err(ClaimIncomingContractError::ContractNotFound { .. })
     );
 
     Ok(())

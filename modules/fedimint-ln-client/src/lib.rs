@@ -66,7 +66,7 @@ use fedimint_core::secp256k1::{
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, timeout};
 use fedimint_core::util::update_merge::UpdateMerge;
-use fedimint_core::util::{BoxStream, FmtCompact as _, FmtCompactAnyhow as _, backoff_util, retry};
+use fedimint_core::util::{BoxStream, FmtCompact as _, backoff_util, retry};
 use fedimint_core::{
     Amount, OutPoint, apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1,
 };
@@ -109,8 +109,8 @@ use tracing::{debug, error, info, warn};
 
 use crate::db::PaymentResultPrefix;
 pub use crate::error::{
-    CreateBolt11InvoiceError, GatewaySelectionError, LnSubscribeError, PayBolt11InvoiceError,
-    SpendableAmountError,
+    ClaimIncomingContractError, CreateBolt11InvoiceError, GatewaySelectionError, LnSubscribeError,
+    PayBolt11InvoiceError, SpendableAmountError,
 };
 use crate::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
@@ -1769,7 +1769,7 @@ impl LightningClientModule {
             {
                 Ok(operation_id) => claims.push(operation_id),
                 Err(err) => {
-                    error!(err = %err.fmt_compact_anyhow(), %i, "Failed to scan tweaked key at index i");
+                    error!(err = %err.fmt_compact(), %i, "Failed to scan tweaked key at index i");
                 }
             }
         }
@@ -1785,7 +1785,7 @@ impl LightningClientModule {
         &self,
         key_pair: Keypair,
         extra_meta: M,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, ClaimIncomingContractError> {
         let preimage_key: [u8; 33] = key_pair.public_key().serialize();
         let preimage = sha256::Hash::hash(&preimage_key);
         let contract_id = ContractId::from_raw_hash(sha256::Hash::hash(&preimage.to_byte_array()));
@@ -1802,11 +1802,10 @@ impl LightningClientModule {
         key_pair: Keypair,
         contract_id: ContractId,
         extra_meta: M,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, ClaimIncomingContractError> {
         let incoming_contract_account = get_incoming_contract(self.module_api.clone(), contract_id)
             .await?
-            .ok_or(anyhow!("No contract account found"))
-            .with_context(|| format!("No contract found for {contract_id:?}"))?;
+            .ok_or(ClaimIncomingContractError::ContractNotFound { contract_id })?;
 
         let input = incoming_contract_account.claim();
         let client_input = ClientInput::<LightningInput> {
