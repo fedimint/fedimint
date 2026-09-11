@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use fedimint_core::util::SafeUrl;
+use ldk_node::NodeError;
 use ldk_node::payment::PaymentDirection;
 use lightning::ln::channelmanager::PaymentId;
 use lockable::LockPool;
@@ -9,8 +10,34 @@ use tokio::sync::{RwLock, oneshot};
 
 use super::{
     GatewayLdkClient, InboundRegistrationRefusal, PendingPaymentWakeup, check_inbound_registration,
-    get_esplora_url,
+    get_esplora_url, htlc_completion_error,
 };
+use crate::LightningRpcError;
+
+/// The gateway retries `FailedToCompleteHtlc` forever and records only
+/// `HtlcCompletionRejected`, so an `ldk-node` error that cannot change on
+/// retry must map to the latter or the completion state machine never ends.
+#[test]
+fn completion_errors_are_permanent_unless_persistence_failed() {
+    for err in [
+        NodeError::InvalidPaymentHash,
+        NodeError::InvalidPaymentPreimage,
+        NodeError::InvalidAmount,
+    ] {
+        assert!(
+            matches!(
+                htlc_completion_error(&err, "ph"),
+                LightningRpcError::HtlcCompletionRejected { .. }
+            ),
+            "{err} must be permanent"
+        );
+    }
+
+    assert!(matches!(
+        htlc_completion_error(&NodeError::PersistenceFailed, "ph"),
+        LightningRpcError::FailedToCompleteHtlc { .. }
+    ));
+}
 
 #[test]
 fn verify_ldk_esplora_url() {
