@@ -14,7 +14,7 @@ use fedimint_core::secp256k1::PublicKey;
 #[cfg(feature = "uniffi")]
 use fedimint_core::util::FmtCompact as _;
 use fedimint_ln_common::contracts::ContractId;
-use lightning_invoice::{CreationError, Currency};
+use lightning_invoice::{CreationError, Currency, ParseOrSemanticError};
 use thiserror::Error;
 
 use crate::incoming::IncomingSmError;
@@ -354,4 +354,66 @@ pub enum ReclaimLnReceiveError {
     /// An operation for the reclaim attempt already exists.
     #[error("The reclaim operation already exists")]
     OperationAlreadyExists(#[from] OperationAlreadyExistsError),
+}
+
+/// A failure to turn user input into a BOLT11 invoice to pay.
+///
+/// Covers both halves of the path: working out whether the input is an
+/// invoice, an LNURL or a lightning address, and then obtaining the invoice
+/// that input stands for.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum PaymentInfoError {
+    /// The input is neither a BOLT11 invoice, an LNURL nor a lightning
+    /// address.
+    ///
+    /// The source is the invoice parser's complaint, which is the most
+    /// informative of the three attempts.
+    #[error("The input is not an invoice, an LNURL or a lightning address")]
+    NotAnInvoiceOrLnurl(#[source] ParseOrSemanticError),
+
+    /// The LNURL endpoint could not be reached, or answered with something
+    /// that is not a valid LNURL response.
+    #[error("The LNURL request failed")]
+    Lnurl(#[source] lnurl::Error),
+
+    /// The LNURL resolved, but it is not a pay request, so there is nothing to
+    /// pay.
+    #[error("The LNURL is not a pay request")]
+    NotAPayRequest,
+
+    /// The invoice already carries an amount and one was given on the command
+    /// line, so it is not clear which was meant.
+    #[error("The amount is specified both in the invoice and separately")]
+    AmountInInvoiceAndCommandLine,
+
+    /// The invoice carries no amount, which this client does not support.
+    #[error("The invoice does not specify an amount")]
+    AmountMissingFromInvoice,
+
+    /// An LNURL names no amount of its own, so one has to be supplied.
+    #[error("An amount must be specified when paying to an LNURL")]
+    AmountRequiredForLnurl,
+
+    /// The LNURL endpoint answered with something that is not a BOLT11
+    /// invoice.
+    #[error("The LNURL endpoint did not return a valid invoice")]
+    InvoiceParse(#[source] ParseOrSemanticError),
+
+    /// The LNURL endpoint returned an invoice for a different amount than the
+    /// one that was requested.
+    #[error("The LNURL returned an invoice for {generated:?} instead of the requested {requested}")]
+    AmountMismatch {
+        /// The amount that was asked for.
+        requested: fedimint_core::Amount,
+        /// The amount the returned invoice carries, in millisatoshis.
+        generated: Option<u64>,
+    },
+}
+
+#[cfg(feature = "uniffi")]
+impl From<PaymentInfoError> for fedimint_core::util::ffi::UniffiError {
+    fn from(e: PaymentInfoError) -> Self {
+        Self::General(e.fmt_compact().to_string())
+    }
 }
