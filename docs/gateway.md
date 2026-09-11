@@ -615,7 +615,7 @@ percent of those funds.
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `FM_GATEWAY_DRAWDOWN_WARN_PCT` | `2` | Log a warning with a per-federation breakdown. Also exported as `gateway_drawdown_pct`. |
-| `FM_GATEWAY_DRAWDOWN_HALT_PCT` | `10` | Refuse to start; if already running, stop accepting new forwards, wait for in-flight ones to settle (up to three minutes), then exit. |
+| `FM_GATEWAY_DRAWDOWN_HALT_PCT` | `10` | Refuse to start; if already running, stop accepting new forwards, drain them the same way `/stop` does (unbounded), then wait once more for in-flight forwards — that second wait is bounded to three minutes — and exit. |
 
 The warn threshold must be strictly below the halt threshold; the gateway
 refuses to start otherwise.
@@ -628,12 +628,31 @@ cause, then raise `FM_GATEWAY_DRAWDOWN_HALT_PCT` above the reported drawdown
 and restart. Raising the threshold is a deliberate operator decision; nothing
 resets the peak automatically.
 
+The report is computed from every connected federation at once and fails as a
+whole if any single federation's client cannot be read, so a gateway whose boot
+is blocked on one unreadable federation keeps retrying the check instead of
+reaching `Running`. Repair that federation, or leave it, to let the gateway
+start.
+
 Forwards completed before this feature existed have no recorded cost and are
 excluded from the margin; they show up in the `unknown` count.
 
-`FM_GATEWAY_MAX_FEDERATION_EXPOSURE_MSAT` caps the ecash plus in-flight value
-the gateway will hold in any single federation; outgoing payments that would
-exceed it are refused.
+Four metrics are exported: `gateway_drawdown_pct`,
+`gateway_cumulative_margin_msat`, `gateway_federation_realized_margin_msat`
+(labeled by `federation_id`), and `gateway_phantom_failures` — a gauge of how
+many cancelled sends the last reconciliation pass found the Lightning node had
+actually settled. A non-zero `gateway_phantom_failures` means the gateway
+refunded a contract for a payment that left anyway; each one is also logged at
+error level the first time it is seen.
+
+`FM_GATEWAY_MAX_FEDERATION_EXPOSURE_MSAT` caps, per federation, the ecash the
+gateway holds there plus the positions the ledger counts as open — funded
+incoming contracts and claims awaiting issuance. Outgoing payments that would
+push a federation past the cap are refused. A send still in flight is not part
+of that figure, and the open-positions half is as of the last solvency report
+(at most 60 s old), so the cap is a slow-moving ceiling on accumulated exposure
+rather than a per-request admission control: forwards dispatched inside one
+report interval can all pass it.
 
 </details>
 
