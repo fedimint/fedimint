@@ -15,7 +15,6 @@ pub mod api;
 #[cfg(feature = "cli")]
 pub mod cli;
 pub mod db;
-/// Error types of the lightning client.
 pub mod error;
 pub mod events;
 #[cfg(feature = "uniffi")]
@@ -1922,8 +1921,9 @@ impl LightningClientModule {
     /// [`Self::pay_bolt11_invoice`] remains the source of truth and may still
     /// fail if balance or gateway state changes in between.
     ///
-    /// Returns an error if no gateway is available or if the balance cannot
-    /// cover even the smallest payable amount plus fees. Any LNURL
+    /// Fails with a [`SpendableAmountError`] when no gateway is available,
+    /// when the balance cannot cover even the smallest payable amount plus
+    /// fees, or when a fee quote fails outright. Any LNURL
     /// `minSendable`/`maxSendable` bounds are the caller's responsibility to
     /// apply.
     pub async fn spendable_amount(
@@ -2118,9 +2118,11 @@ impl LightningClientModule {
     ///
     /// # Errors
     ///
-    /// Fails with a [`ReclaimLnReceiveError`] if the original operation is not
-    /// a reclaimable lightning receive, if it is still active, or if the
-    /// original receiving key cannot be recovered from state history.
+    /// Fails with a [`ReclaimLnReceiveError`] if the original operation or
+    /// its metadata cannot be read, if it is not a reclaimable lightning
+    /// receive or is still active, if the original receiving key is
+    /// unavailable in local state history, or if a reclaim operation already
+    /// exists.
     pub async fn reclaim_ln_receive(
         &self,
         original_operation_id: OperationId,
@@ -2673,10 +2675,10 @@ impl PaymentInfo {
             }
             Err(e) => {
                 let lnurl = if info.to_lowercase().starts_with("lnurl") {
-                    lnurl::lnurl::LnUrl::from_str(info).map_err(PaymentInfoError::Lnurl)?
+                    lnurl::lnurl::LnUrl::from_str(info).map_err(PaymentInfoError::LnurlDecode)?
                 } else if info.contains('@') {
                     lnurl::lightning_address::LightningAddress::from_str(info)
-                        .map_err(PaymentInfoError::Lnurl)?
+                        .map_err(PaymentInfoError::LnurlDecode)?
                         .lnurl()
                 } else {
                     return Err(PaymentInfoError::NotAnInvoiceOrLnurl(e));
@@ -2728,7 +2730,7 @@ impl PaymentInfo {
                 if invoice_amount != Some(amount.msats) {
                     return Err(PaymentInfoError::AmountMismatch {
                         requested: amount,
-                        generated: invoice_amount,
+                        generated: invoice_amount.map(Amount::from_msats),
                     });
                 }
                 Ok(invoice)

@@ -51,7 +51,7 @@ use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LightningOperationMeta,
     LightningOperationMetaVariant, LnPayState, LnReceiveState, MockGatewayConnection,
-    OutgoingLightningPayment, PayType,
+    OutgoingLightningPayment, PayBolt11InvoiceError, PayType,
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
@@ -1067,9 +1067,9 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
             let error = user_pay_invoice(&lightning_module, invoice.clone(), &gateway_id)
                 .await
                 .expect_err("Payment of expired invoice should fail");
-            assert!(
-                error.to_string().contains("The invoice has expired"),
-                "Expected 'The invoice has expired' error, got: {error}"
+            assert_matches!(
+                error.downcast_ref::<PayBolt11InvoiceError>(),
+                Some(PayBolt11InvoiceError::InvoiceExpired)
             );
 
             // Balance should be unchanged since no contract was created

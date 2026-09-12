@@ -81,7 +81,7 @@ pub enum RecurringdApiError {
     ApiError(String),
     #[error("Invalid response")]
     DecodingError(#[source] reqwest::Error),
-    #[error("Network error: {0}")]
+    #[error("Network error")]
     NetworkError(#[from] reqwest::Error),
 }
 
