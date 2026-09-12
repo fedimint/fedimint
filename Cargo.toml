@@ -2,6 +2,7 @@
 [workspace]
 members = [
     "crypto/aead",
+    "crypto/bip445",
     "crypto/derive-secret",
     "crypto/hkdf",
     "crypto/tbs",
@@ -179,6 +180,7 @@ esplora-client = { version = "0.12.3", default-features = false, features = [
 fedimint-aead = { path = "./crypto/aead", version = "=0.13.0-alpha" }
 fedimint-api-client = { path = "./fedimint-api-client", version = "=0.13.0-alpha" }
 fedimint-bip39 = { path = "./fedimint-bip39", version = "=0.13.0-alpha" }
+fedimint-bip445 = { path = "./crypto/bip445", version = "=0.13.0-alpha" }
 fedimint-bitcoind = { path = "./fedimint-bitcoind", version = "=0.13.0-alpha" }
 fedimint-build = { path = "./fedimint-build", version = "=0.13.0-alpha" }
 fedimint-client = { path = "./fedimint-client", version = "=0.13.0-alpha" }
