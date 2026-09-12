@@ -3602,10 +3602,7 @@ impl Gateway {
         let operation_id = OperationId::from_encodable(&registered_contract.contract);
 
         if !(wait || client.operation_exists(operation_id).await) {
-            return Ok(VerifyResponse {
-                settled: false,
-                preimage: None,
-            });
+            return Ok(VerifyResponse::pending());
         }
 
         let module = client
@@ -3614,10 +3611,7 @@ impl Gateway {
 
         let Ok(state) = timeout(VERIFY_WAIT_TIMEOUT, module.await_receive(operation_id)).await
         else {
-            return Ok(VerifyResponse {
-                settled: false,
-                preimage: None,
-            });
+            return Ok(VerifyResponse::pending());
         };
 
         let preimage = match state {
@@ -3627,10 +3621,7 @@ impl Gateway {
             FinalReceiveState::Rejected => Err("Payment has been rejected".to_string()),
         }?;
 
-        Ok(VerifyResponse {
-            settled: true,
-            preimage: Some(preimage),
-        })
+        Ok(VerifyResponse::settled(preimage))
     }
 
     /// Retrieves the persisted `CreateInvoicePayload` from the database
