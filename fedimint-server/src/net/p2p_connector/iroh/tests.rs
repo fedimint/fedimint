@@ -82,8 +82,7 @@ async fn production_connectors_exchange_messages_over_direct_override() -> anyho
         <IrohConnector as IP2PConnector<u64>>::connect(&connector_a, peer_b),
         <IrohConnector as IP2PConnector<u64>>::accept(&connector_b),
     )?;
-    let (authenticated_peer, mut incoming) = incoming;
-    let mut outgoing = outgoing;
+    let (authenticated_peer, incoming) = incoming;
     assert_eq!(authenticated_peer, peer_a);
 
     outgoing.send(42).await?;
