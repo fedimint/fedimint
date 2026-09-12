@@ -55,3 +55,24 @@ identity, that listener must remain enabled and reachable. Disabling it or
 downgrading to a binary without the listener is unsupported. After
 advertisement, setting `FM_IROH_NEXT_ENABLE=false` makes startup fail while the
 persisted advertisement exists. Omitting the setting keeps the listener enabled.
+
+## Overriding advertised guardian API URLs
+
+`--override-api-urls` or `FM_OVERRIDE_API_URLS` configures a nonempty,
+comma-separated list of API URLs that a guardian advertises to clients. Use this
+for an externally managed endpoint, such as a reverse proxy or Tor onion service.
+The external endpoint must forward to a guardian API listener; this option does
+not create another listener.
+
+Guardian metadata is persisted, signed, and shared with the federation. On every
+startup, a configured override replaces only its persisted `api_urls`. The Pkarr
+ID and the server-owned, forward-only Iroh 1.0 endpoint remain unchanged. Omitting
+the setting preserves administrator-managed URLs already in the database. For a
+new record without an override, the guardian's consensus-config URL supplies the
+initial value.
+
+The override deliberately does not rewrite consensus config. Consensus-config
+endpoints are immutable bootstrap and guardian-connectivity data established by
+DKG, while guardian metadata is the mutable client-facing advertisement. Treat
+every advertised URL as a credential-bearing trust decision: guardian clients
+can send configured API authentication secrets to the selected endpoint.

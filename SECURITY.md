@@ -76,3 +76,23 @@ cannot overwrite a newer logical attempt, and advertised TTL uses monotonic
 elapsed time. Status assembly holds the federation-manager read lock only while
 capturing one coherent snapshot; do not clone the client solely for this public
 query because that would interfere with concurrent leave.
+
+## Guardian API URL advertisements
+
+Guardian API URLs are credential-bearing trust decisions. Server-side federation
+clients can send configured API authentication secrets to the selected URLs, so
+startup must reconcile persisted guardian metadata before any client or publisher
+snapshots those URLs.
+
+Guardian metadata is signed, persisted, and gossiped among federation members.
+A nonempty `--override-api-urls` or `FM_OVERRIDE_API_URLS` setting makes only the
+metadata's API URL list authoritative. Reconciliation must preserve
+administrator/Pkarr data and the server-owned, forward-only Iroh 1.0 endpoint,
+then sign changed metadata with a timestamp strictly newer than the stored
+record. Timestamp exhaustion must stop startup rather than publish a record peers
+cannot accept.
+
+The consensus-config endpoint only bootstraps a missing metadata record and
+continues to serve immutable peer/bootstrap configuration. Runtime URL
+advertisement belongs in guardian metadata; changing it must not rewrite
+consensus config.
