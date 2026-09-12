@@ -111,6 +111,27 @@ const TEST_MAX_BLOCK_COUNT_INCREMENT: u64 = 100;
 /// below what Bitcoin Core will relay.
 const MIN_FEERATE_VOTE_SATS_PER_KVB: u64 = 1000;
 
+const MAX_PENDING_TRANSACTIONS: usize = 32;
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct PendingTransactionLimitError;
+
+impl std::fmt::Display for PendingTransactionLimitError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "wallet pending transaction limit exceeded")
+    }
+}
+
+impl std::error::Error for PendingTransactionLimitError {}
+
+fn validate_pending_transaction_count(count: usize) -> Result<(), PendingTransactionLimitError> {
+    if count > MAX_PENDING_TRANSACTIONS {
+        return Err(PendingTransactionLimitError);
+    }
+
+    Ok(())
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Encodable, Decodable)]
 pub struct FederationTx {
     pub tx: Transaction,
@@ -535,8 +556,9 @@ impl ServerModule for Wallet {
         }
 
         let consensus_receive_fee = self
-            .receive_fee(dbtx)
+            .try_receive_fee(dbtx)
             .await
+            .map_err(|_| WalletInputError::NoConsensusFeerateAvailable)?
             .ok_or(WalletInputError::NoConsensusFeerateAvailable)?;
 
         // We allow for a higher fee such that a guardian could construct a CPFP
@@ -683,8 +705,9 @@ impl ServerModule for Wallet {
             .ok_or(WalletOutputError::NoFederationUTXO)?;
 
         let consensus_send_fee = self
-            .send_fee(dbtx)
+            .try_send_fee(dbtx)
             .await
+            .map_err(|_| WalletOutputError::NoConsensusFeerateAvailable)?
             .ok_or(WalletOutputError::NoConsensusFeerateAvailable)?;
 
         // We allow for a higher fee such that a guardian could construct a CPFP
@@ -858,7 +881,12 @@ impl ServerModule for Wallet {
                 async |module: &Wallet, context, _params: ()| -> Option<Amount> {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
-                    Ok(module.send_fee(&mut dbtx).await)
+                    module
+                        .try_send_fee(&mut dbtx)
+                        .await
+                        .map_err(|error| {
+                            fedimint_core::module::ApiError::server_error(error.to_string())
+                        })
                 }
             },
             public_api_endpoint! {
@@ -867,7 +895,12 @@ impl ServerModule for Wallet {
                 async |module: &Wallet, context, _params: ()| -> Option<Amount> {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
-                    Ok(module.receive_fee(&mut dbtx).await)
+                    module
+                        .try_receive_fee(&mut dbtx)
+                        .await
+                        .map_err(|error| {
+                            fedimint_core::module::ApiError::server_error(error.to_string())
+                        })
                 }
             },
             public_api_endpoint! {
@@ -1217,22 +1250,21 @@ impl Wallet {
         rates.get(num_peers.threshold() - 1).copied()
     }
 
-    pub async fn consensus_fee(
+    async fn try_consensus_fee(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         tx_vbytes: u64,
-    ) -> Option<Amount> {
+    ) -> Result<Option<Amount>, PendingTransactionLimitError> {
         // The minimum feerate is a protection against a catastrophic error in the
         // feerate estimation and limits the length of the pending transaction stack.
 
         let pending_txs = pending_txs_unordered(dbtx).await;
+        validate_pending_transaction_count(pending_txs.len())?;
 
-        assert!(pending_txs.len() <= 32);
-
-        let feerate = self
-            .consensus_feerate(dbtx)
-            .await?
-            .max(self.cfg.consensus.feerate_base << pending_txs.len());
+        let Some(feerate) = self.consensus_feerate(dbtx).await else {
+            return Ok(None);
+        };
+        let feerate = feerate.max(self.cfg.consensus.feerate_base << pending_txs.len());
 
         let tx_fee = tx_vbytes.saturating_mul(feerate).saturating_div(1000);
 
@@ -1250,17 +1282,39 @@ impl Wallet {
             .map(|t| t.fee.to_sat())
             .fold(stack_fee, u64::saturating_sub);
 
-        Some(Amount::from_sat(tx_fee.max(stack_fee)))
+        Ok(Some(Amount::from_sat(tx_fee.max(stack_fee))))
+    }
+
+    pub async fn consensus_fee(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        tx_vbytes: u64,
+    ) -> Option<Amount> {
+        self.try_consensus_fee(dbtx, tx_vbytes).await.ok().flatten()
+    }
+
+    async fn try_send_fee(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Result<Option<Amount>, PendingTransactionLimitError> {
+        self.try_consensus_fee(dbtx, self.cfg.consensus.send_tx_vbytes)
+            .await
     }
 
     pub async fn send_fee(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<Amount> {
-        self.consensus_fee(dbtx, self.cfg.consensus.send_tx_vbytes)
+        self.try_send_fee(dbtx).await.ok().flatten()
+    }
+
+    async fn try_receive_fee(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Result<Option<Amount>, PendingTransactionLimitError> {
+        self.try_consensus_fee(dbtx, self.cfg.consensus.receive_tx_vbytes)
             .await
     }
 
     pub async fn receive_fee(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<Amount> {
-        self.consensus_fee(dbtx, self.cfg.consensus.receive_tx_vbytes)
-            .await
+        self.try_receive_fee(dbtx).await.ok().flatten()
     }
 
     fn descriptor(&self, tweak: &sha256::Hash) -> Wsh<secp256k1::PublicKey> {
@@ -1539,4 +1593,23 @@ fn calculate_pegout_metrics(
         WALLET_PEGOUT_SATS.observe(amount.sats_f64());
         WALLET_PEGOUT_FEES_SATS.observe(fee.sats_f64());
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        MAX_PENDING_TRANSACTIONS, PendingTransactionLimitError, validate_pending_transaction_count,
+    };
+
+    #[test]
+    fn pending_transaction_limit_boundary() {
+        assert_eq!(
+            validate_pending_transaction_count(MAX_PENDING_TRANSACTIONS),
+            Ok(())
+        );
+        assert_eq!(
+            validate_pending_transaction_count(MAX_PENDING_TRANSACTIONS + 1),
+            Err(PendingTransactionLimitError)
+        );
+    }
 }
