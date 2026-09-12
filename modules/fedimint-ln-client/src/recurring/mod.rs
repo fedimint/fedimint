@@ -7,7 +7,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use anyhow::bail;
 use api::{RecurringdApiError, RecurringdClient};
 use async_stream::stream;
 use bitcoin::hashes::sha256;
@@ -18,7 +17,7 @@ use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_core::BitcoinHash;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::{DatabaseError, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{
     Decodable, DecodeError, Encodable, decode_field_from_finite_reader,
     decode_legacy_system_time_from_finite_reader, encode_legacy_system_time, with_decoding_context,
@@ -41,8 +40,9 @@ use tracing::{debug, trace, warn};
 use crate::db::{RecurringPaymentCodeKey, RecurringPaymentCodeKeyPrefix};
 use crate::receive::LightningReceiveError;
 use crate::{
-    LightningClientModule, LightningClientStateMachines, LightningOperationMeta,
-    LightningOperationMetaVariant, LnReceiveState, tweak_user_key, tweak_user_secret_key,
+    CreateBolt11InvoiceError, LightningClientModule, LightningClientStateMachines,
+    LightningOperationMeta, LightningOperationMetaVariant, LnReceiveState, LnSubscribeError,
+    tweak_user_key, tweak_user_secret_key,
 };
 
 const LOG_CLIENT_RECURRING: &str = "fm::client::ln::recurring";
@@ -360,14 +360,14 @@ impl LightningClientModule {
     pub async fn subscribe_ln_recurring_receive(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
+    ) -> Result<UpdateStreamOrOutcome<LnReceiveState>, LnSubscribeError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let LightningOperationMetaVariant::RecurringPaymentReceive(ReurringPaymentReceiveMeta {
             invoice,
             ..
         }) = operation.meta::<LightningOperationMeta>().variant
         else {
-            bail!("Operation is not a recurring lightning receive")
+            return Err(LnSubscribeError::NotARecurringReceive);
         };
 
         let client_ctx = self.client_ctx.clone();
@@ -502,7 +502,7 @@ impl Display for PaymentCodeId {
 }
 
 impl FromStr for PaymentCodeId {
-    type Err = anyhow::Error;
+    type Err = bitcoin::hashes::hex::HexToArrayError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(sha256::Hash::from_str(s)?))
@@ -516,7 +516,7 @@ impl Display for PaymentCodeRootKey {
 }
 
 impl FromStr for PaymentCodeRootKey {
-    type Err = anyhow::Error;
+    type Err = fedimint_core::secp256k1::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(PublicKey::from_str(s)?))
@@ -565,10 +565,23 @@ pub enum RecurringPaymentError {
     PaymentCodeAlreadyExists(PaymentCodeRootKey),
     #[error("Federation already registered: {0}")]
     FederationAlreadyRegistered(FederationId),
-    #[error("Error joining federation: {0}")]
-    JoiningFederationFailed(anyhow::Error),
-    #[error("Error registering with recurring payment service: {0}")]
-    Other(#[from] anyhow::Error),
+    /// The client could not download the federation's config or build itself
+    /// against it.
+    #[error("Error joining federation")]
+    JoiningFederationFailed(#[source] Box<dyn std::error::Error + Send + Sync>),
+    /// A database operation failed.
+    #[error("Database error")]
+    Database(#[from] DatabaseError),
+    /// An invoice could not be created in the federation.
+    #[error("The invoice could not be created")]
+    InvoiceCreation(#[source] CreateBolt11InvoiceError),
+    /// The receive operation backing an invoice could not be followed.
+    #[error("The lightning receive could not be followed")]
+    Subscribe(#[source] LnSubscribeError),
+    /// The receive operation's update stream ended before the federation
+    /// confirmed the invoice.
+    #[error("BOLT11 invoice not confirmed")]
+    InvoiceNotConfirmed,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -656,4 +669,33 @@ impl Event for RecurringInvoiceCreatedEvent {
     const MODULE: Option<ModuleKind> = Some(fedimint_ln_common::KIND);
     const KIND: EventKind = EventKind::from_static("recurring_invoice_created");
     const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr as _;
+
+    use super::{PaymentCodeId, PaymentCodeRootKey};
+
+    /// A payment code id that is not hex says so through the hex parser's own
+    /// error, which is what clap and any other `FromStr` consumer prints.
+    #[test]
+    fn payment_code_id_rejects_non_hex() {
+        // The type annotation on `_err` is the assertion: the compiler only
+        // accepts it if `from_str` actually failed with the hex parser's own
+        // error.
+        let _err: bitcoin::hashes::hex::HexToArrayError =
+            PaymentCodeId::from_str("not hex").expect_err("not hex");
+    }
+
+    /// A payment code root key that is not a public key says so through
+    /// secp256k1's own error.
+    #[test]
+    fn payment_code_root_key_rejects_non_key() {
+        // The type annotation on `_err` is the assertion: the compiler only
+        // accepts it if `from_str` actually failed with secp256k1's own
+        // error.
+        let _err: fedimint_core::secp256k1::Error =
+            PaymentCodeRootKey::from_str("not a key").expect_err("not a key");
+    }
 }

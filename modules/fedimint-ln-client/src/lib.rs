@@ -15,6 +15,7 @@ pub mod api;
 #[cfg(feature = "cli")]
 pub mod cli;
 pub mod db;
+pub mod error;
 pub mod events;
 #[cfg(feature = "uniffi")]
 pub mod ffi;
@@ -30,7 +31,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, anyhow, bail, ensure, format_err};
 use api::LnFederationApi;
 use async_stream::{stream, try_stream};
 use bitcoin::Network;
@@ -39,7 +39,7 @@ use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
     RecurringPaymentCodeKeyPrefix,
 };
-use fedimint_api_client::api::{DynModuleApi, ServerError};
+use fedimint_api_client::api::{DynModuleApi, FederationResult, ServerError};
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 use fedimint_client_module::error::TransactionSubmitError;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -64,7 +64,7 @@ use fedimint_core::secp256k1::{
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, timeout};
 use fedimint_core::util::update_merge::UpdateMerge;
-use fedimint_core::util::{BoxStream, FmtCompact as _, FmtCompactAnyhow as _, backoff_util, retry};
+use fedimint_core::util::{BoxStream, FmtCompact as _, backoff_util, retry};
 use fedimint_core::{
     Amount, OutPoint, apply, async_trait_maybe_send, push_db_pair_items, runtime, secp256k1,
 };
@@ -92,7 +92,8 @@ use futures::{Future, StreamExt};
 use incoming::IncomingSmError;
 use itertools::Itertools;
 use lightning_invoice::{
-    Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop, RoutingFees,
+    Bolt11Invoice, CreationError, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop,
+    RoutingFees,
 };
 use pay::PayInvoicePayload;
 use rand::rngs::OsRng;
@@ -105,6 +106,10 @@ use tokio::sync::Notify;
 use tracing::{debug, error, info, warn};
 
 use crate::db::PaymentResultPrefix;
+pub use crate::error::{
+    ClaimIncomingContractError, CreateBolt11InvoiceError, GatewaySelectionError, LnSubscribeError,
+    PayBolt11InvoiceError, PaymentInfoError, ReclaimLnReceiveError, SpendableAmountError,
+};
 use crate::incoming::{
     FundingOfferState, IncomingSmCommon, IncomingSmStates, IncomingStateMachine,
 };
@@ -730,17 +735,6 @@ pub enum GatewayStatus {
     OnlineNonVetted,
 }
 
-#[derive(thiserror::Error, Debug, Clone)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Error))]
-pub enum PayBolt11InvoiceError {
-    #[error("Previous payment attempt({}) still in progress", .operation_id.fmt_full())]
-    PreviousPaymentAttemptStillInProgress { operation_id: OperationId },
-    #[error("No LN gateway available")]
-    NoLnGatewayAvailable,
-    #[error("Funded contract already exists: {}", .contract_id)]
-    FundedContractAlreadyExists { contract_id: ContractId },
-}
-
 impl LightningClientModule {
     fn new(
         args: &ClientModuleInitArgs<LightningClientInit>,
@@ -827,29 +821,35 @@ impl LightningClientModule {
         gateway: LightningGateway,
         fed_id: FederationId,
         mut rng: impl RngCore + CryptoRng + 'a,
-    ) -> anyhow::Result<(
-        ClientOutput<LightningOutputV0>,
-        ClientOutputSM<LightningClientStateMachines>,
-        ContractId,
-    )> {
+    ) -> Result<
+        (
+            ClientOutput<LightningOutputV0>,
+            ClientOutputSM<LightningClientStateMachines>,
+            ContractId,
+        ),
+        PayBolt11InvoiceError,
+    > {
         let federation_currency: Currency = self.cfg.network.0.into();
         let invoice_currency = invoice.currency();
-        ensure!(
-            federation_currency == invoice_currency,
-            "Invalid invoice currency: expected={federation_currency:?}, got={invoice_currency:?}"
-        );
+        if federation_currency != invoice_currency {
+            return Err(PayBolt11InvoiceError::WrongCurrency {
+                expected: federation_currency,
+                found: invoice_currency,
+            });
+        }
 
         // Do not create the funding transaction if the gateway is not currently
         // available
         self.gateway_conn
             .verify_gateway_availability(&gateway)
-            .await?;
+            .await
+            .map_err(PayBolt11InvoiceError::GatewayUnavailable)?;
 
         let consensus_count = self
             .module_api
             .fetch_consensus_block_count()
             .await?
-            .ok_or(format_err!("Cannot get consensus block count"))?;
+            .ok_or(PayBolt11InvoiceError::NoConsensusBlockCount)?;
 
         // Add the timelock to the current block count and the invoice's
         // `min_cltv_delta`
@@ -861,7 +861,7 @@ impl LightningClientModule {
         let invoice_amount = Amount::from_msats(
             invoice
                 .amount_milli_satoshis()
-                .context("MissingInvoiceAmount")?,
+                .ok_or(PayBolt11InvoiceError::MissingInvoiceAmount)?,
         );
 
         let gateway_fee = gateway.fees.to_amount(&invoice_amount);
@@ -934,11 +934,14 @@ impl LightningClientModule {
         &self,
         operation_id: OperationId,
         invoice: Bolt11Invoice,
-    ) -> anyhow::Result<(
-        ClientOutput<LightningOutputV0>,
-        ClientOutputSM<LightningClientStateMachines>,
-        ContractId,
-    )> {
+    ) -> Result<
+        (
+            ClientOutput<LightningOutputV0>,
+            ClientOutputSM<LightningClientStateMachines>,
+            ContractId,
+        ),
+        IncomingSmError,
+    > {
         let payment_hash = *invoice.payment_hash();
         let invoice_amount = Amount {
             msats: invoice
@@ -1030,12 +1033,15 @@ impl LightningClientModule {
         short_channel_id: u64,
         route_hints: &[fedimint_ln_common::route_hints::RouteHint],
         network: Network,
-    ) -> anyhow::Result<(
-        OperationId,
-        Bolt11Invoice,
-        ClientOutputBundle<LightningOutput, LightningClientStateMachines>,
-        [u8; 32],
-    )> {
+    ) -> Result<
+        (
+            OperationId,
+            Bolt11Invoice,
+            ClientOutputBundle<LightningOutput, LightningClientStateMachines>,
+            [u8; 32],
+        ),
+        CreationError,
+    > {
         let preimage_key: [u8; 33] = receiving_key.public_key().serialize();
         let preimage = sha256::Hash::hash(&preimage_key);
         let payment_hash = sha256::Hash::hash(&preimage.to_byte_array());
@@ -1140,7 +1146,7 @@ impl LightningClientModule {
         &self,
         maybe_gateway: Option<LightningGateway>,
         maybe_invoice: Option<Bolt11Invoice>,
-    ) -> anyhow::Result<LightningGateway> {
+    ) -> Result<LightningGateway, GatewaySelectionError> {
         if let Some(gw) = maybe_gateway {
             let gw_id = gw.gateway_id;
             if self
@@ -1151,12 +1157,12 @@ impl LightningClientModule {
             {
                 return Ok(gw);
             }
-            return Err(anyhow::anyhow!("Specified gateway is offline: {gw_id}"));
+            return Err(GatewaySelectionError::Offline { gateway_id: gw_id });
         }
 
         let gateways: Vec<LightningGatewayAnnouncement> = self.list_gateways().await;
         if gateways.is_empty() {
-            return Err(anyhow::anyhow!("No gateways available"));
+            return Err(GatewaySelectionError::NoGatewaysRegistered);
         }
 
         let gateways_with_status =
@@ -1188,7 +1194,7 @@ impl LightningClientModule {
                 .collect();
 
         if sorted_gateways.is_empty() {
-            return Err(anyhow::anyhow!("No Lightning Gateway was reachable"));
+            return Err(GatewaySelectionError::NoneReachable);
         }
 
         let amount_msat = maybe_invoice.and_then(|inv| inv.amount_milli_satoshis());
@@ -1249,7 +1255,7 @@ impl LightningClientModule {
     /// from the federation.
     ///
     /// See also [`Self::update_gateway_cache_continuously`].
-    pub async fn update_gateway_cache(&self) -> anyhow::Result<()> {
+    pub async fn update_gateway_cache(&self) -> FederationResult<()> {
         self.update_gateway_cache_merge
             .merge(async {
                 let mut gateways = self
@@ -1341,13 +1347,13 @@ impl LightningClientModule {
     /// The `gateway` can be acquired by calling
     /// [`LightningClientModule::select_gateway`].
     ///
-    /// Can return error of type [`PayBolt11InvoiceError`]
+    /// Fails with a [`PayBolt11InvoiceError`].
     pub async fn pay_bolt11_invoice<M: Serialize + MaybeSend + MaybeSync>(
         &self,
         maybe_gateway: Option<LightningGateway>,
         invoice: Bolt11Invoice,
         extra_meta: M,
-    ) -> anyhow::Result<OutgoingLightningPayment> {
+    ) -> Result<OutgoingLightningPayment, PayBolt11InvoiceError> {
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         let maybe_gateway_id = maybe_gateway.as_ref().map(|g| g.gateway_id);
         let prev_payment_result = self
@@ -1364,11 +1370,11 @@ impl LightningClientModule {
             prev_payment_result.index,
         );
         if self.client_ctx.has_active_states(prev_operation_id).await {
-            bail!(
+            return Err(
                 PayBolt11InvoiceError::PreviousPaymentAttemptStillInProgress {
-                    operation_id: prev_operation_id
-                }
-            )
+                    operation_id: prev_operation_id,
+                },
+            );
         }
 
         // Only a genuinely NEW payment attempt is refused for an expired invoice. This
@@ -1379,11 +1385,10 @@ impl LightningClientModule {
         // `PreviousPaymentAttemptStillInProgress` with its operation id.
         // Checking expiry first would mask both answers behind "Invoice has
         // expired".
-        if let Some(expires_at) = invoice.expires_at() {
-            ensure!(
-                expires_at.as_secs() > fedimint_core::time::duration_since_epoch().as_secs(),
-                "Invoice has expired"
-            );
+        if let Some(expires_at) = invoice.expires_at()
+            && expires_at.as_secs() <= fedimint_core::time::duration_since_epoch().as_secs()
+        {
+            return Err(PayBolt11InvoiceError::InvoiceExpired);
         }
 
         let next_index = prev_payment_result.index + 1;
@@ -1403,7 +1408,10 @@ impl LightningClientModule {
         )
         .await;
 
-        let markers = self.client_ctx.get_internal_payment_markers()?;
+        let markers = self
+            .client_ctx
+            .get_internal_payment_markers()
+            .map_err(PayBolt11InvoiceError::PaymentMarkers)?;
 
         let mut is_internal_payment = invoice_has_internal_payment_markers(&invoice, markers);
         if !is_internal_payment {
@@ -1419,7 +1427,8 @@ impl LightningClientModule {
         let (pay_type, client_output, client_output_sm, contract_id) = if is_internal_payment {
             let (output, output_sm, contract_id) = self
                 .create_incoming_output(operation_id, invoice.clone())
-                .await?;
+                .await
+                .map_err(PayBolt11InvoiceError::InternalContract)?;
             (
                 PayType::Internal(operation_id),
                 output,
@@ -1427,7 +1436,7 @@ impl LightningClientModule {
                 contract_id,
             )
         } else {
-            let gateway = maybe_gateway.context(PayBolt11InvoiceError::NoLnGatewayAvailable)?;
+            let gateway = maybe_gateway.ok_or(PayBolt11InvoiceError::NoLnGatewayAvailable)?;
             let (output, output_sm, contract_id) = self
                 .create_outgoing_output(
                     operation_id,
@@ -1453,12 +1462,12 @@ impl LightningClientModule {
         if let Ok(Some(contract)) = self.module_api.fetch_contract(contract_id).await
             && contract.amount.msats != 0
         {
-            bail!(PayBolt11InvoiceError::FundedContractAlreadyExists { contract_id });
+            return Err(PayBolt11InvoiceError::FundedContractAlreadyExists { contract_id });
         }
 
         let amount_msat = invoice
             .amount_milli_satoshis()
-            .ok_or(anyhow!("MissingInvoiceAmount"))?;
+            .ok_or(PayBolt11InvoiceError::MissingInvoiceAmount)?;
 
         // TODO: return fee from create_outgoing_output or even let user supply
         // it/bounds for it
@@ -1484,7 +1493,7 @@ impl LightningClientModule {
 
         let tx = TransactionBuilder::new().with_outputs(output);
         let extra_meta =
-            serde_json::to_value(extra_meta).context("Failed to serialize extra meta")?;
+            serde_json::to_value(extra_meta).map_err(PayBolt11InvoiceError::ExtraMeta)?;
         let operation_meta_gen = move |change_range: OutPointRange| LightningOperationMeta {
             variant: LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
                 out_point: OutPoint {
@@ -1539,12 +1548,12 @@ impl LightningClientModule {
     pub async fn get_ln_pay_details_for(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<LightningOperationMetaPay> {
+    ) -> Result<LightningOperationMetaPay, LnSubscribeError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let LightningOperationMetaVariant::Pay(pay) =
             operation.meta::<LightningOperationMeta>().variant
         else {
-            anyhow::bail!("Operation is not a lightning payment")
+            return Err(LnSubscribeError::NotAPayment);
         };
         Ok(pay)
     }
@@ -1552,7 +1561,7 @@ impl LightningClientModule {
     pub async fn subscribe_internal_pay(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<InternalPayState>> {
+    ) -> Result<UpdateStreamOrOutcome<InternalPayState>, LnSubscribeError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
 
         let LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
@@ -1563,13 +1572,12 @@ impl LightningClientModule {
             ..
         }) = operation.meta::<LightningOperationMeta>().variant
         else {
-            bail!("Operation is not a lightning payment")
+            return Err(LnSubscribeError::NotAPayment);
         };
 
-        ensure!(
-            is_internal_payment,
-            "Subscribing to an external LN payment, expected internal LN payment"
-        );
+        if !is_internal_payment {
+            return Err(LnSubscribeError::NotInternalPayment);
+        }
 
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
@@ -1612,7 +1620,7 @@ impl LightningClientModule {
     pub async fn subscribe_ln_pay(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<LnPayState>> {
+    ) -> Result<UpdateStreamOrOutcome<LnPayState>, LnSubscribeError> {
         async fn get_next_pay_state(
             stream: &mut BoxStream<'_, LightningClientStateMachines>,
         ) -> Option<LightningPayStates> {
@@ -1637,13 +1645,12 @@ impl LightningClientModule {
             ..
         }) = operation.meta::<LightningOperationMeta>().variant
         else {
-            bail!("Operation is not a lightning payment")
+            return Err(LnSubscribeError::NotAPayment);
         };
 
-        ensure!(
-            !is_internal_payment,
-            "Subscribing to an internal LN payment, expected external LN payment"
-        );
+        if is_internal_payment {
+            return Err(LnSubscribeError::NotExternalPayment);
+        }
 
         let client_ctx = self.client_ctx.clone();
 
@@ -1760,7 +1767,7 @@ impl LightningClientModule {
             {
                 Ok(operation_id) => claims.push(operation_id),
                 Err(err) => {
-                    error!(err = %err.fmt_compact_anyhow(), %i, "Failed to scan tweaked key at index i");
+                    error!(err = %err.fmt_compact(), %i, "Failed to scan tweaked key at index i");
                 }
             }
         }
@@ -1776,7 +1783,7 @@ impl LightningClientModule {
         &self,
         key_pair: Keypair,
         extra_meta: M,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, ClaimIncomingContractError> {
         let preimage_key: [u8; 33] = key_pair.public_key().serialize();
         let preimage = sha256::Hash::hash(&preimage_key);
         let contract_id = ContractId::from_raw_hash(sha256::Hash::hash(&preimage.to_byte_array()));
@@ -1793,11 +1800,10 @@ impl LightningClientModule {
         key_pair: Keypair,
         contract_id: ContractId,
         extra_meta: M,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, ClaimIncomingContractError> {
         let incoming_contract_account = get_incoming_contract(self.module_api.clone(), contract_id)
             .await?
-            .ok_or(anyhow!("No contract account found"))
-            .with_context(|| format!("No contract found for {contract_id:?}"))?;
+            .ok_or(ClaimIncomingContractError::ContractNotFound { contract_id })?;
 
         let input = incoming_contract_account.claim();
         let client_input = ClientInput::<LightningInput> {
@@ -1844,7 +1850,10 @@ impl LightningClientModule {
     /// only the fee of the on-federation transaction. For that reason the quote
     /// is taken on `amount` directly (rather than the gateway-reduced contract
     /// amount), and no gateway round-trip is needed.
-    pub async fn receive_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+    pub async fn receive_fee_quote(
+        &self,
+        amount: Amount,
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         self.client_ctx
             .fee_quote(
                 OperationId::new_random(),
@@ -1856,7 +1865,6 @@ impl LightningClientModule {
                 },
             )
             .await
-            .map_err(anyhow::Error::from)
     }
 
     /// Computes the federation fee a `pay` funding an outgoing contract worth
@@ -1913,21 +1921,22 @@ impl LightningClientModule {
     /// [`Self::pay_bolt11_invoice`] remains the source of truth and may still
     /// fail if balance or gateway state changes in between.
     ///
-    /// Returns an error if no gateway is available or if the balance cannot
-    /// cover even the smallest payable amount plus fees. Any LNURL
+    /// Fails with a [`SpendableAmountError`] when no gateway is available,
+    /// when the balance cannot cover even the smallest payable amount plus
+    /// fees, or when a fee quote fails outright. Any LNURL
     /// `minSendable`/`maxSendable` bounds are the caller's responsibility to
     /// apply.
     pub async fn spendable_amount(
         &self,
         balance: Amount,
         gateway: Option<LightningGateway>,
-    ) -> anyhow::Result<Amount> {
+    ) -> Result<Amount, SpendableAmountError> {
         let gateway = match gateway {
             Some(gateway) => gateway,
             None => self
                 .get_gateway(None, false)
                 .await?
-                .ok_or_else(|| anyhow!("No gateway available to send the payment"))?,
+                .ok_or(SpendableAmountError::NoGatewayAvailable)?,
         };
 
         max_affordable_send_amount(
@@ -1937,8 +1946,9 @@ impl LightningClientModule {
             |invoice_amount: Amount| invoice_amount + gateway.fees.to_amount(&invoice_amount),
             |contract_amount: Amount| self.send_fee_quote(contract_amount),
         )
-        .await?
-        .ok_or_else(|| anyhow!("Balance is too low to send any amount after fees"))
+        .await
+        .map_err(SpendableAmountError::Quote)?
+        .ok_or(SpendableAmountError::BalanceTooLow { balance })
     }
 
     pub async fn create_bolt11_invoice<M: Serialize + Send + Sync>(
@@ -1948,7 +1958,7 @@ impl LightningClientModule {
         expiry_time: Option<u64>,
         extra_meta: M,
         gateway: Option<LightningGateway>,
-    ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
+    ) -> Result<(OperationId, Bolt11Invoice, [u8; 32]), CreateBolt11InvoiceError> {
         let receiving_key =
             ReceivingKey::Personal(Keypair::new(&self.secp, &mut rand::rngs::OsRng));
         self.create_bolt11_invoice_internal(
@@ -1974,7 +1984,7 @@ impl LightningClientModule {
         index: u64,
         extra_meta: M,
         gateway: Option<LightningGateway>,
-    ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
+    ) -> Result<(OperationId, Bolt11Invoice, [u8; 32]), CreateBolt11InvoiceError> {
         let tweaked_key = tweak_user_key(&self.secp, user_key, index);
         self.create_bolt11_invoice_for_user(
             amount,
@@ -1996,7 +2006,7 @@ impl LightningClientModule {
         user_key: PublicKey,
         extra_meta: M,
         gateway: Option<LightningGateway>,
-    ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
+    ) -> Result<(OperationId, Bolt11Invoice, [u8; 32]), CreateBolt11InvoiceError> {
         let receiving_key = ReceivingKey::External(user_key);
         self.create_bolt11_invoice_internal(
             amount,
@@ -2018,7 +2028,7 @@ impl LightningClientModule {
         receiving_key: ReceivingKey,
         extra_meta: M,
         gateway: Option<LightningGateway>,
-    ) -> anyhow::Result<(OperationId, Bolt11Invoice, [u8; 32])> {
+    ) -> Result<(OperationId, Bolt11Invoice, [u8; 32]), CreateBolt11InvoiceError> {
         let gateway_id = gateway.as_ref().map(|g| g.gateway_id);
         let (src_node_id, short_channel_id, route_hints) = if let Some(current_gateway) = gateway {
             (
@@ -2028,23 +2038,28 @@ impl LightningClientModule {
             )
         } else {
             // If no gateway is provided, this is assumed to be an internal payment.
-            let markers = self.client_ctx.get_internal_payment_markers()?;
+            let markers = self
+                .client_ctx
+                .get_internal_payment_markers()
+                .map_err(CreateBolt11InvoiceError::PaymentMarkers)?;
             (markers.0, markers.1, vec![])
         };
 
         debug!(target: LOG_CLIENT_MODULE_LN, ?gateway_id, %amount, "Selected LN gateway for invoice generation");
 
-        let (operation_id, invoice, output, preimage) = self.create_lightning_receive_output(
-            amount,
-            description,
-            receiving_key,
-            rand::rngs::OsRng,
-            expiry_time,
-            src_node_id,
-            short_channel_id,
-            &route_hints,
-            self.cfg.network.0,
-        )?;
+        let (operation_id, invoice, output, preimage) = self
+            .create_lightning_receive_output(
+                amount,
+                description,
+                receiving_key,
+                rand::rngs::OsRng,
+                expiry_time,
+                src_node_id,
+                short_channel_id,
+                &route_hints,
+                self.cfg.network.0,
+            )
+            .map_err(CreateBolt11InvoiceError::InvoiceCreation)?;
 
         let tx =
             TransactionBuilder::new().with_outputs(self.client_ctx.make_client_outputs(output));
@@ -2082,7 +2097,7 @@ impl LightningClientModule {
             .await
             .await_tx_accepted(change_range.txid())
             .await
-            .map_err(|e| anyhow!("Offer transaction was not accepted: {e:?}"))?;
+            .map_err(|reason| CreateBolt11InvoiceError::OfferRejected { reason })?;
 
         debug!(target: LOG_CLIENT_MODULE_LN, %invoice, "Invoice confirmed");
 
@@ -2103,20 +2118,22 @@ impl LightningClientModule {
     ///
     /// # Errors
     ///
-    /// Returns an error if the original operation is not a reclaimable
-    /// lightning receive, if it is still active, or if the original receiving
-    /// key cannot be recovered from state history.
+    /// Fails with a [`ReclaimLnReceiveError`] if the original operation or
+    /// its metadata cannot be read, if it is not a reclaimable lightning
+    /// receive or is still active, if the original receiving key is
+    /// unavailable in local state history, or if a reclaim operation already
+    /// exists.
     pub async fn reclaim_ln_receive(
         &self,
         original_operation_id: OperationId,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, ReclaimLnReceiveError> {
         let operation = self.client_ctx.get_operation(original_operation_id).await?;
         let LightningOperationMeta {
             variant,
             extra_meta,
         } = operation
             .try_meta::<LightningOperationMeta>()
-            .context("Invalid lightning operation metadata")?;
+            .map_err(ReclaimLnReceiveError::Meta)?;
 
         let (invoice, gateway_id) = match variant {
             LightningOperationMetaVariant::Receive {
@@ -2125,19 +2142,19 @@ impl LightningClientModule {
                 ..
             } => (invoice, gateway_id),
             LightningOperationMetaVariant::RecurringPaymentReceive(meta) => (meta.invoice, None),
-            _ => bail!("Operation is not a reclaimable lightning receive"),
+            _ => return Err(ReclaimLnReceiveError::NotReclaimable),
         };
 
         let active_states = self
             .client_ctx
             .get_own_operation_active_states(original_operation_id)
             .await;
-        ensure!(
-            !active_states
-                .iter()
-                .any(|(state, _)| matches!(state, LightningClientStateMachines::Receive(_))),
-            "Cannot reclaim an active lightning receive"
-        );
+        if active_states
+            .iter()
+            .any(|(state, _)| matches!(state, LightningClientStateMachines::Receive(_)))
+        {
+            return Err(ReclaimLnReceiveError::StillActive);
+        }
 
         let inactive_states = self
             .client_ctx
@@ -2147,9 +2164,7 @@ impl LightningClientModule {
         let receiving_key = inactive_states
             .iter()
             .find_map(|(state, _)| Self::ln_receive_key_from_state(state))
-            .ok_or_else(|| {
-                anyhow!("Cannot reclaim LN receive because the original receive key is unavailable")
-            })?;
+            .ok_or(ReclaimLnReceiveError::ReceiveKeyUnavailable)?;
         let db = self.client_ctx.module_db();
         let mut dbtx = db.begin_transaction().await;
         let reclaim_operation_id = OperationId::new_random();
@@ -2207,12 +2222,12 @@ impl LightningClientModule {
     pub async fn subscribe_ln_claim(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
+    ) -> Result<UpdateStreamOrOutcome<LnReceiveState>, LnSubscribeError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let LightningOperationMetaVariant::Claim { out_points } =
             operation.meta::<LightningOperationMeta>().variant
         else {
-            bail!("Operation is not a lightning claim")
+            return Err(LnSubscribeError::NotAClaim);
         };
 
         let client_ctx = self.client_ctx.clone();
@@ -2239,7 +2254,7 @@ impl LightningClientModule {
     pub async fn subscribe_ln_receive(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
+    ) -> Result<UpdateStreamOrOutcome<LnReceiveState>, LnSubscribeError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let (invoice, tx_accepted_future) = match operation.meta::<LightningOperationMeta>().variant
         {
@@ -2254,7 +2269,7 @@ impl LightningClientModule {
                 (invoice, Some(tx_accepted_future))
             }
             LightningOperationMetaVariant::ReceiveReclaim { invoice, .. } => (invoice, None),
-            _ => bail!("Operation is not a lightning receive"),
+            _ => return Err(LnSubscribeError::NotAReceive),
         };
 
         let client_ctx = self.client_ctx.clone();
@@ -2321,7 +2336,7 @@ impl LightningClientModule {
         &self,
         gateway_id: Option<secp256k1::PublicKey>,
         force_internal: bool,
-    ) -> anyhow::Result<Option<LightningGateway>> {
+    ) -> Result<Option<LightningGateway>, GatewaySelectionError> {
         match gateway_id {
             Some(gateway_id) => {
                 if let Some(gw) = self.select_gateway(&gateway_id).await {
@@ -2343,9 +2358,7 @@ impl LightningClientModule {
                     info!(%gw_id, "Using random gateway");
                     Ok(Some(gw))
                 } else {
-                    Err(anyhow!(
-                        "No gateways exist in gateway cache and `force_internal` is false"
-                    ))
+                    Err(GatewaySelectionError::NoGatewaysRegistered)
                 }
             }
             None => Ok(None),
@@ -2358,7 +2371,7 @@ impl LightningClientModule {
     pub async fn await_outgoing_payment(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<LightningPaymentOutcome> {
+    ) -> Result<LightningPaymentOutcome, LnSubscribeError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let variant = operation.meta::<LightningOperationMeta>().variant;
         let LightningOperationMetaVariant::Pay(LightningOperationMetaPay {
@@ -2366,7 +2379,7 @@ impl LightningClientModule {
             ..
         }) = variant
         else {
-            bail!("Operation is not a lightning payment")
+            return Err(LnSubscribeError::NotAPayment);
         };
 
         let mut final_state = None;
@@ -2438,9 +2451,7 @@ impl LightningClientModule {
             }
         }
 
-        final_state.ok_or(anyhow!(
-            "Internal or external outgoing lightning payment did not reach a final state"
-        ))
+        final_state.ok_or(LnSubscribeError::NoFinalState)
     }
 }
 
@@ -2655,7 +2666,7 @@ pub enum PaymentInfo {
 impl PaymentInfo {
     /// Parse `info` as a bolt11 invoice, or resolve it as an LNURL/lightning
     /// address by fetching the endpoint's pay parameters.
-    pub async fn parse(info: &str) -> anyhow::Result<Self> {
+    pub async fn parse(info: &str) -> Result<Self, PaymentInfoError> {
         let info = info.trim();
         match lightning_invoice::Bolt11Invoice::from_str(info) {
             Ok(invoice) => {
@@ -2664,20 +2675,23 @@ impl PaymentInfo {
             }
             Err(e) => {
                 let lnurl = if info.to_lowercase().starts_with("lnurl") {
-                    lnurl::lnurl::LnUrl::from_str(info)?
+                    lnurl::lnurl::LnUrl::from_str(info).map_err(PaymentInfoError::LnurlDecode)?
                 } else if info.contains('@') {
-                    lnurl::lightning_address::LightningAddress::from_str(info)?.lnurl()
+                    lnurl::lightning_address::LightningAddress::from_str(info)
+                        .map_err(PaymentInfoError::LnurlDecode)?
+                        .lnurl()
                 } else {
-                    bail!("Invalid invoice or lnurl: {e:?}");
+                    return Err(PaymentInfoError::NotAnInvoiceOrLnurl(e));
                 };
                 debug!("Parsed parameter as lnurl: {lnurl:?}");
                 let async_client = lnurl::AsyncClient::from_client(reqwest::Client::new());
-                let response = async_client.make_request(&lnurl.url).await?;
+                let response = async_client
+                    .make_request(&lnurl.url)
+                    .await
+                    .map_err(PaymentInfoError::Lnurl)?;
                 match response {
                     lnurl::LnUrlResponse::LnUrlPayResponse(response) => Ok(Self::Lnurl(response)),
-                    other => {
-                        bail!("Unexpected response from lnurl: {other:?}");
-                    }
+                    _ => Err(PaymentInfoError::NotAPayRequest),
                 }
             }
         }
@@ -2689,32 +2703,36 @@ impl PaymentInfo {
         self,
         amount: Option<Amount>,
         lnurl_comment: Option<String>,
-    ) -> anyhow::Result<Bolt11Invoice> {
+    ) -> Result<Bolt11Invoice, PaymentInfoError> {
         match self {
             Self::Bolt11(invoice) => {
                 match (invoice.amount_milli_satoshis(), amount) {
                     (Some(_), Some(_)) => {
-                        bail!("Amount specified in both invoice and command line")
+                        return Err(PaymentInfoError::AmountInInvoiceAndCommandLine);
                     }
                     (None, _) => {
-                        bail!("We don't support invoices without an amount")
+                        return Err(PaymentInfoError::AmountMissingFromInvoice);
                     }
                     _ => {}
                 }
                 Ok(invoice)
             }
             Self::Lnurl(response) => {
-                let amount = amount.context("When using a lnurl, an amount must be specified")?;
+                let amount = amount.ok_or(PaymentInfoError::AmountRequiredForLnurl)?;
                 let async_client = lnurl::AsyncClient::from_client(reqwest::Client::new());
                 let invoice = async_client
                     .get_invoice(&response, amount.msats, None, lnurl_comment.as_deref())
-                    .await?;
-                let invoice = Bolt11Invoice::from_str(invoice.invoice())?;
+                    .await
+                    .map_err(PaymentInfoError::Lnurl)?;
+                let invoice = Bolt11Invoice::from_str(invoice.invoice())
+                    .map_err(PaymentInfoError::InvoiceParse)?;
                 let invoice_amount = invoice.amount_milli_satoshis();
-                ensure!(
-                    invoice_amount == Some(amount.msats),
-                    "the amount generated by the lnurl ({invoice_amount:?}) is different from the requested amount ({amount}), try again using a different amount"
-                );
+                if invoice_amount != Some(amount.msats) {
+                    return Err(PaymentInfoError::AmountMismatch {
+                        requested: amount,
+                        generated: invoice_amount.map(Amount::from_msats),
+                    });
+                }
                 Ok(invoice)
             }
         }
@@ -2726,7 +2744,7 @@ pub async fn get_invoice(
     info: &str,
     amount: Option<Amount>,
     lnurl_comment: Option<String>,
-) -> anyhow::Result<Bolt11Invoice> {
+) -> Result<Bolt11Invoice, PaymentInfoError> {
     PaymentInfo::parse(info)
         .await?
         .get_invoice(amount, lnurl_comment)

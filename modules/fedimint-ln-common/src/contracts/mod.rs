@@ -137,7 +137,7 @@ impl Display for Preimage {
 
 #[cfg(feature = "uniffi")]
 impl FromStr for Preimage {
-    type Err = anyhow::Error;
+    type Err = fedimint_core::hex::FromHexError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bytes: [u8; 32] = fedimint_core::hex::FromHex::from_hex(s)?;

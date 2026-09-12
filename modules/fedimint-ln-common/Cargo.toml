@@ -16,14 +16,14 @@ normal = ["aquamarine"]
 rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
-uniffi = ["dep:uniffi", "fedimint-core/uniffi"]
+uniffi = ["dep:anyhow", "dep:uniffi", "fedimint-core/uniffi"]
 
 [lib]
 name = "fedimint_ln_common"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
+anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 fedimint-connectors = { workspace = true }

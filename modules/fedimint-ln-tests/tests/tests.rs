@@ -9,6 +9,7 @@ use fedimint_client::transaction::{
     TxSubmissionStatesSM,
 };
 use fedimint_client::{Client, ClientHandleArc};
+use fedimint_client_module::error::OperationLookupError;
 use fedimint_client_module::oplog::OperationLogEntry;
 use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::module::{AmountUnit, Amounts, CommonModuleInit as _};
@@ -24,9 +25,11 @@ use fedimint_ln_client::receive::{
     LightningReceiveSubmittedOffer,
 };
 use fedimint_ln_client::{
-    InternalPayState, LightningClientInit, LightningClientModule, LightningClientStateMachines,
-    LightningOperationMeta, LightningOperationMetaVariant, LnPayState, LnReceiveState,
-    MockGatewayConnection, OutgoingLightningPayment, PayType, ReceivingKey,
+    ClaimIncomingContractError, GatewaySelectionError, InternalPayState, LightningClientInit,
+    LightningClientModule, LightningClientStateMachines, LightningOperationMeta,
+    LightningOperationMetaVariant, LnPayState, LnReceiveState, LnSubscribeError,
+    MockGatewayConnection, OutgoingLightningPayment, PayBolt11InvoiceError, PayType, PaymentInfo,
+    PaymentInfoError, ReceivingKey, ReclaimLnReceiveError, SpendableAmountError,
     create_incoming_contract_output,
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
@@ -128,7 +131,7 @@ async fn pay_invoice(
     } else {
         None
     };
-    ln_module.pay_bolt11_invoice(gateway, invoice, ()).await
+    Ok(ln_module.pay_bolt11_invoice(gateway, invoice, ()).await?)
 }
 
 async fn await_client_tx_accepted(
@@ -299,13 +302,9 @@ async fn test_select_available_gateway() -> anyhow::Result<()> {
 
     ln_module.update_gateway_cache().await?;
 
-    let result = ln_module.select_available_gateway(None, None).await;
-    assert!(result.is_err());
-    assert!(
-        result
-            .unwrap_err()
-            .to_string()
-            .contains("No gateways available")
+    assert_matches!(
+        ln_module.select_available_gateway(None, None).await,
+        Err(GatewaySelectionError::NoGatewaysRegistered)
     );
 
     let gw1 = gateway(&fixtures, &fed).await;
@@ -750,12 +749,19 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
         .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &secp256k1::SecretKey::from_keypair(&kp)))
         .expect("Failed to build signet invoice");
 
-    let error = pay_invoice(&client1, signet_invoice, Some(gw.http_gateway_id().await))
+    let ln_module = client1.get_first_module::<LightningClientModule>()?;
+    ln_module.update_gateway_cache().await?;
+    let gateway = ln_module.select_gateway(&gw.http_gateway_id().await).await;
+    let error = ln_module
+        .pay_bolt11_invoice(gateway, signet_invoice, ())
         .await
-        .unwrap_err();
-    assert_eq!(
-        error.to_string(),
-        "Invalid invoice currency: expected=Regtest, got=Signet"
+        .expect_err("Payment of a signet invoice should fail");
+    assert_matches!(
+        error,
+        PayBolt11InvoiceError::WrongCurrency {
+            expected: Currency::Regtest,
+            found: Currency::Signet
+        }
     );
 
     Ok(())
@@ -795,13 +801,12 @@ async fn rejects_expired_invoice() -> anyhow::Result<()> {
 
     // client2 attempts to pay the expired invoice — the send-side check in
     // pay_bolt11_invoice() rejects it before reaching the federation.
-    let error = pay_invoice(&client2, invoice, None)
+    let ln_module = client2.get_first_module::<LightningClientModule>()?;
+    let error = ln_module
+        .pay_bolt11_invoice(None, invoice, ())
         .await
         .expect_err("Payment of expired invoice should fail");
-    assert!(
-        error.to_string().contains("Invoice has expired"),
-        "Expected 'Invoice has expired' error, got: {error}"
-    );
+    assert_matches!(error, PayBolt11InvoiceError::InvoiceExpired);
 
     Ok(())
 }
@@ -2046,4 +2051,147 @@ mod fedimint_migration_tests {
         )
         .await
     }
+}
+
+/// A client with no gateway registered cannot say what it could spend over
+/// Lightning, and says which of the two reasons applies instead of returning
+/// one interchangeable string.
+#[tokio::test(flavor = "multi_thread")]
+async fn spendable_amount_without_a_gateway_names_the_reason() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let ln_module = client.get_first_module::<LightningClientModule>()?;
+
+    assert_matches!(
+        ln_module.spendable_amount(sats(1000), None).await,
+        Err(SpendableAmountError::Gateway(
+            GatewaySelectionError::NoGatewaysRegistered
+        ))
+    );
+
+    Ok(())
+}
+
+/// Subscribing with the wrong operation says which kind of lightning
+/// operation was expected, instead of one of five interchangeable strings.
+#[tokio::test(flavor = "multi_thread")]
+async fn subscribing_with_the_wrong_operation_names_the_kind() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let ln_module = client.get_first_module::<LightningClientModule>()?;
+
+    assert_matches!(
+        ln_module
+            .subscribe_ln_receive(OperationId::new_random())
+            .await,
+        Err(LnSubscribeError::Operation(OperationLookupError::NotFound(
+            _
+        )))
+    );
+
+    let desc = Description::new("wrong-kind".to_string())?;
+    let (receive_op, _invoice, _) = ln_module
+        .create_bolt11_invoice(
+            sats(100),
+            Bolt11InvoiceDescription::Direct(desc),
+            None,
+            (),
+            None,
+        )
+        .await?;
+
+    assert_matches!(
+        ln_module.subscribe_ln_pay(receive_op).await,
+        Err(LnSubscribeError::NotAPayment)
+    );
+    assert_matches!(
+        ln_module.get_ln_pay_details_for(receive_op).await,
+        Err(LnSubscribeError::NotAPayment)
+    );
+
+    Ok(())
+}
+
+/// Claiming an incoming contract that was never funded says so, instead of
+/// "No contract found for ..".
+#[tokio::test(flavor = "multi_thread")]
+#[allow(deprecated)]
+async fn claiming_an_unfunded_contract_reports_not_found() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let ln_module = client.get_first_module::<LightningClientModule>()?;
+
+    let keypair = Keypair::new(&secp256k1::Secp256k1::new(), &mut OsRng);
+    assert_matches!(
+        ln_module.scan_receive_for_user(keypair, ()).await,
+        Err(ClaimIncomingContractError::ContractNotFound { .. })
+    );
+
+    Ok(())
+}
+
+/// Reclaiming something that is not a reclaimable receive says which of the
+/// three refusals applies, instead of one of three interchangeable strings.
+#[tokio::test(flavor = "multi_thread")]
+async fn reclaiming_a_non_receive_reports_not_reclaimable() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let ln_module = client.get_first_module::<LightningClientModule>()?;
+
+    assert_matches!(
+        ln_module
+            .reclaim_ln_receive(OperationId::new_random())
+            .await,
+        Err(ReclaimLnReceiveError::Operation(
+            OperationLookupError::NotFound(_)
+        ))
+    );
+
+    Ok(())
+}
+
+/// Parsing a payment target and turning it into an invoice each name their
+/// own refusal, instead of returning one interchangeable string.
+#[tokio::test(flavor = "multi_thread")]
+async fn payment_info_names_its_refusals() -> anyhow::Result<()> {
+    assert_matches!(
+        PaymentInfo::parse("not an invoice and not an lnurl").await,
+        Err(PaymentInfoError::NotAnInvoiceOrLnurl(_))
+    );
+
+    // A garbage LNURL and a malformed lightning address are both decoding
+    // failures caught before any network request is made.
+    assert_matches!(
+        PaymentInfo::parse("lnurl1notvalidbech32").await,
+        Err(PaymentInfoError::LnurlDecode(_))
+    );
+    assert_matches!(
+        PaymentInfo::parse("not-an-email@").await,
+        Err(PaymentInfoError::LnurlDecode(_))
+    );
+
+    let ctx = secp256k1::Secp256k1::new();
+    let kp = Keypair::new(&ctx, &mut OsRng);
+    let invoice = InvoiceBuilder::new(Currency::Regtest)
+        .description(String::new())
+        .payment_hash(sha256::Hash::hash(&[0; 32]))
+        .current_timestamp()
+        .min_final_cltv_expiry_delta(0)
+        .payment_secret(PaymentSecret([0; 32]))
+        .amount_milli_satoshis(100_000)
+        .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &secp256k1::SecretKey::from_keypair(&kp)))
+        .expect("Failed to build invoice");
+
+    assert_matches!(
+        PaymentInfo::Bolt11(invoice)
+            .get_invoice(Some(sats(100)), None)
+            .await,
+        Err(PaymentInfoError::AmountInInvoiceAndCommandLine)
+    );
+
+    Ok(())
 }
