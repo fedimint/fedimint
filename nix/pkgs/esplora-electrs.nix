@@ -3,29 +3,24 @@
   stdenv,
   llvmPackages,
   fetchFromGitHub,
-  rocksdb_8_3,
+  rocksdb,
   rustPlatform,
 }:
-let
-  rocksdb = rocksdb_8_3;
-in
 rustPlatform.buildRustPackage {
   pname = "esplora";
-  # last tagged version is far behind master
-  version = "20241009";
+  # The last tagged version is far behind the `new-index` branch that Esplora
+  # actually ships from, so we track a revision of that branch instead.
+  version = "20260819";
 
+  # This used to pin a personal fork carrying a single patch, shrinking RocksDB's
+  # write buffer. Upstream has since exposed that as `--db-write-buffer-size-mb`,
+  # which devimint now passes, so the fork is gone and we build upstream
+  # unmodified. Bumping this is just a revision and a hash.
   src = fetchFromGitHub {
-    # original:
-    # owner = "Blockstream";
-    # repo = "electrs";
-    # rev = "adedee15f1fe460398a7045b292604df2161adc0";
-    # hash = "sha256-KnN5C7wFtDF10yxf+1dqIMUb8Q+UuCz4CMQrUFAChuA=";
-
-    # pre-allocation size patch:
-    owner = "dpc";
-    repo = "esplora-electrs";
-    rev = "9339bfaf40b896f9d0b9ee945edc44ef49f99d2b";
-    hash = "sha256-4PL+dvdUOTlX0IcpkcSxZ7TchsCI4fI8OmsFmwrtPHo=";
+    owner = "Blockstream";
+    repo = "electrs";
+    rev = "b7ae3356e3a77b33db96129d61a1b70b8113700e";
+    hash = "sha256-5FUdCGGxVpMCY7YASu2PGpGeCUotEhPzvD6RXLBVSNQ=";
   };
 
   doCheck = false;
@@ -35,7 +30,7 @@ rustPlatform.buildRustPackage {
 
     outputHashes = {
       "electrum-client-0.8.0" = "sha256-HDRdGS7CwWsPXkA1HdurwrVu4lhEx0Ay8vHi08urjZ0=";
-      "electrumd-0.1.0" = "sha256-QsoMD2uVDEITuYmYItfP6BJCq7ApoRztOCs7kdeRL9Y=";
+      "electrumd-0.1.0" = "sha256-Js4gc/XvokWpPGQGPnWcak2Bt6DNQcosT3CkY841z2c=";
       "jsonrpc-0.12.0" = "sha256-lSNkkQttb8LnJej4Vfe7MrjiNPOuJ5A6w5iLstl9O1k=";
     };
   };
@@ -48,7 +43,8 @@ rustPlatform.buildRustPackage {
     export LIBCLANG_PATH="${llvmPackages.libclang.lib}/lib"
   '';
 
-  # link rocksdb dynamically
+  # Link rocksdb dynamically against whatever nixpkgs provides, rather than
+  # pinning a version that has to be bumped in step with the crate.
   ROCKSDB_INCLUDE_DIR = "${rocksdb}/include";
   ROCKSDB_LIB_DIR = "${rocksdb}/lib";
 
