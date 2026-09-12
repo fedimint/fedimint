@@ -51,6 +51,9 @@ tokio-stream = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 uniffi = { workspace = true, optional = true }
 
+[dev-dependencies]
+assert_matches = { workspace = true }
+
 [build-dependencies]
 fedimint-build = { workspace = true }
 

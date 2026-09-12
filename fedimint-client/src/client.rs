@@ -92,8 +92,8 @@ use crate::db::{
     apply_migrations_core_client_dbtx, verify_client_db_integrity_dbtx,
 };
 use crate::error::{
-    ApiVersionDiscoveryError, ClientSecretError, ModuleLookupError, OperationAlreadyExistsError,
-    OperationNotFoundError, RecoveryError, TransactionSubmitError,
+    ApiVersionDiscoveryError, ClientSecretError, InsufficientBalanceError, ModuleLookupError,
+    OperationAlreadyExistsError, OperationNotFoundError, RecoveryError, TransactionSubmitError,
 };
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
@@ -789,7 +789,7 @@ impl Client {
                     output_amount,
                 )
                 .await
-                .map_err(|err| TransactionSubmitError::PrimaryModule(err.into()))?;
+                .map_err(primary_module_error)?;
 
             added_inputs_bundles.push(added_input_bundle);
             added_outputs_bundles.push(added_output_bundle);
@@ -933,7 +933,7 @@ impl Client {
                     balance_output_amount,
                 )
                 .await
-                .map_err(|err| TransactionSubmitError::PrimaryModule(err.into()))?;
+                .map_err(primary_module_error)?;
 
             // Fold the change into the totals. These are a disjoint set of items
             // from the explicit ones (the primary module only sees the scalar
@@ -3044,6 +3044,25 @@ impl ClientContextIface for Client {
             .await
             .map(move |(k, v)| (k.0, v)),
         )
+    }
+}
+
+/// Classifies a primary module's failure to balance a transaction.
+///
+/// The module -> client trait boundary is still `anyhow` (#8821 part E
+/// narrows it), so this walks the error's `source()` chain for the one
+/// condition callers must be able to act on: an [`InsufficientBalanceError`]
+/// means the primary module cannot fund the transaction, as opposed to a
+/// failure of the client, the database or the federation, which stays
+/// [`TransactionSubmitError::PrimaryModule`].
+fn primary_module_error(err: anyhow::Error) -> TransactionSubmitError {
+    let insufficient_balance = err
+        .chain()
+        .find_map(|source| source.downcast_ref::<InsufficientBalanceError>().copied());
+
+    match insufficient_balance {
+        Some(found) => TransactionSubmitError::InsufficientFunds(found),
+        None => TransactionSubmitError::PrimaryModule(err.into()),
     }
 }
 

@@ -431,7 +431,7 @@ async fn withdraw_v2(
         .send_fee()
         .await
         .map_err(|e| AdminGatewayError::WithdrawError {
-            failure_reason: e.to_string(),
+            failure_reason: e.fmt_compact().to_string(),
         })?;
 
     let withdraw_amount = match amount {
@@ -453,7 +453,7 @@ async fn withdraw_v2(
                 .map_err(|err| AdminGatewayError::WithdrawError {
                     failure_reason: format!(
                         "Insufficient funds. Balance: {balance} Fee: {fee}: {}",
-                        err.fmt_compact_anyhow()
+                        err.fmt_compact()
                     ),
                 })?
         }
@@ -469,14 +469,14 @@ async fn withdraw_v2(
         )
         .await
         .map_err(|e| AdminGatewayError::WithdrawError {
-            failure_reason: e.to_string(),
+            failure_reason: e.fmt_compact().to_string(),
         })?;
 
     let result = wallet_module
         .await_final_send_operation_state(operation_id)
         .await
         .map_err(|e| AdminGatewayError::WithdrawError {
-            failure_reason: e.to_string(),
+            failure_reason: e.fmt_compact().to_string(),
         })?;
 
     let fees = PegOutFees::from_amount(fee);
@@ -515,14 +515,14 @@ async fn calculate_max_withdrawable(
             .send_fee()
             .await
             .map_err(|e| AdminGatewayError::WithdrawError {
-                failure_reason: e.to_string(),
+                failure_reason: e.fmt_compact().to_string(),
             })?;
 
         let max_withdrawable = wallet_module
             .max_sendable_amount(balance, fee)
             .await
             .map_err(|err| AdminGatewayError::WithdrawError {
-                failure_reason: err.fmt_compact_anyhow().to_string(),
+                failure_reason: err.fmt_compact().to_string(),
             })?;
 
         // Everything the balance does not become an on-chain payment or miner
@@ -550,7 +550,7 @@ async fn calculate_max_withdrawable(
         .max_withdrawable_amount(address, balance)
         .await
         .map_err(|err| AdminGatewayError::WithdrawError {
-            failure_reason: err.fmt_compact_anyhow().to_string(),
+            failure_reason: err.fmt_compact().to_string(),
         })?;
 
     // Everything the balance does not become an on-chain payment or miner fee
@@ -1529,7 +1529,8 @@ impl Gateway {
         if let Ok(wallet_module) = client.value().get_first_module::<WalletClientModule>() {
             let address = wallet_module
                 .allocate_deposit_address_expert_only(())
-                .await?
+                .await
+                .map_err(|e| AdminGatewayError::Unexpected(e.into()))?
                 .address;
             Ok(address)
         } else if let Ok(wallet_module) = client
@@ -1648,7 +1649,8 @@ impl Gateway {
         if let Ok(wallet_module) = client.value().get_first_module::<WalletClientModule>() {
             wallet_module
                 .recheck_pegin_address_by_address(payload.address)
-                .await?;
+                .await
+                .map_err(|e| AdminGatewayError::Unexpected(e.into()))?;
             Ok(())
         } else if client
             .value()
@@ -3017,23 +3019,28 @@ impl IAdminGateway for Gateway {
                         .map_err(|err| AdminGatewayError::WithdrawError {
                             failure_reason: format!(
                                 "Insufficient funds. Balance: {balance}: {}",
-                                err.fmt_compact_anyhow()
+                                err.fmt_compact()
                             ),
                         })?
                 }
                 BitcoinAmountOrAll::Amount(amount) => (
                     amount,
-                    wallet_module.get_withdraw_fees(&address, amount).await?,
+                    wallet_module
+                        .get_withdraw_fees(&address, amount)
+                        .await
+                        .map_err(|e| AdminGatewayError::Unexpected(e.into()))?,
                 ),
             },
         };
 
         let operation_id = wallet_module
             .withdraw(&address, withdraw_amount, fees, ())
-            .await?;
+            .await
+            .map_err(|e| AdminGatewayError::Unexpected(e.into()))?;
         let mut updates = wallet_module
             .subscribe_withdraw_updates(operation_id)
-            .await?
+            .await
+            .map_err(|e| AdminGatewayError::Unexpected(e.into()))?
             .into_stream();
 
         while let Some(update) = updates.next().await {
@@ -3086,7 +3093,8 @@ impl IAdminGateway for Gateway {
                         mint_fees: None,
                         peg_out_fees: wallet_module
                             .get_withdraw_fees(&address_checked, btc_amount)
-                            .await?,
+                            .await
+                            .map_err(|e| AdminGatewayError::Unexpected(e.into()))?,
                     }
                 } else if let Ok(wallet_module) = client
                     .value()
@@ -3094,7 +3102,7 @@ impl IAdminGateway for Gateway {
                 ) {
                     let fee = wallet_module.send_fee().await.map_err(|e| {
                         AdminGatewayError::WithdrawError {
-                            failure_reason: e.to_string(),
+                            failure_reason: e.fmt_compact().to_string(),
                         }
                     })?;
                     WithdrawDetails {

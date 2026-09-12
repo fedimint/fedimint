@@ -24,13 +24,14 @@ use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, ScriptBuf};
 use db::{NextOutputIndexKey, ValidAddressIndexKey, ValidAddressIndexPrefix};
 use events::{ReceivePaymentEvent, SendPaymentEvent};
-use fedimint_api_client::api::{DynModuleApi, FederationResult};
+use fedimint_api_client::api::{DynModuleApi, FederationError, FederationResult};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
     ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder, max_affordable_send_amount,
 };
 use fedimint_client_module::db::ClientModuleMigrationFn;
+use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
@@ -263,7 +264,7 @@ impl WalletClientModule {
         self.module_api
             .send_fee()
             .await
-            .map_err(|e| SendError::FederationError(e.to_string()))?
+            .map_err(|e| SendError::Federation(Box::new(e)))?
             .ok_or(SendError::NoConsensusFeerateAvailable)
     }
 
@@ -281,7 +282,10 @@ impl WalletClientModule {
     /// The on-chain Bitcoin miner fee is deliberately excluded: it is part of
     /// the output `amount` (see [`Self::send_fee`]), not the on-federation
     /// transaction fee.
-    pub async fn send_fee_quote(&self, amount: bitcoin::Amount) -> anyhow::Result<FeeQuote> {
+    pub async fn send_fee_quote(
+        &self,
+        amount: bitcoin::Amount,
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         let amount = Amount::from_sats(amount.to_sat());
         self.client_ctx
             .fee_quote(
@@ -294,7 +298,6 @@ impl WalletClientModule {
                 },
             )
             .await
-            .map_err(anyhow::Error::from)
     }
 
     /// Finds the largest value that can be sent on chain in full out of
@@ -329,13 +332,14 @@ impl WalletClientModule {
     /// federation's own on-chain constraints — a send whose change UTXO would
     /// fall below the dust limit is still rejected by the guardians.
     ///
-    /// Returns an error if the balance cannot cover even the dust limit plus
-    /// fees.
+    /// Returns [`SendError::InsufficientFunds`] if the balance cannot cover
+    /// the dust limit plus fees, or [`SendError::Failed`] if the fee probe
+    /// itself failed.
     pub async fn max_sendable_amount(
         &self,
         balance: Amount,
         fee: bitcoin::Amount,
-    ) -> anyhow::Result<bitcoin::Amount> {
+    ) -> Result<bitcoin::Amount, SendError> {
         let fee_msats = Amount::from_sats(fee.to_sat());
 
         let max = max_affordable_send_amount(
@@ -350,7 +354,8 @@ impl WalletClientModule {
             |funded: Amount| self.send_fee_quote(bitcoin::Amount::from_sat(funded.msats / 1000)),
         )
         .await
-        .ok_or_else(|| anyhow!("Balance is too low to send any amount on chain after fees"))?;
+        .map_err(SendError::Failed)?
+        .ok_or(SendError::InsufficientFunds)?;
 
         // `gross_up` rounded up to whole satoshis, so the largest affordable
         // amount already sits on a satoshi boundary; no value is lost here.
@@ -362,7 +367,7 @@ impl WalletClientModule {
         self.module_api
             .receive_fee()
             .await
-            .map_err(|e| ReceiveError::FederationError(e.to_string()))?
+            .map_err(|e| ReceiveError::Federation(Box::new(e)))?
             .ok_or(ReceiveError::NoConsensusFeerateAvailable)
     }
 
@@ -388,7 +393,7 @@ impl WalletClientModule {
                 .module_api
                 .send_fee()
                 .await
-                .map_err(|e| SendError::FederationError(e.to_string()))?
+                .map_err(|e| SendError::Federation(Box::new(e)))?
                 .ok_or(SendError::NoConsensusFeerateAvailable)?,
         };
 
@@ -446,7 +451,10 @@ impl WalletClientModule {
                 TransactionBuilder::new().with_outputs(client_output_bundle),
             )
             .await
-            .map_err(|_| SendError::InsufficientFunds)?;
+            .map_err(|error| match error {
+                TransactionSubmitError::InsufficientFunds(_) => SendError::InsufficientFunds,
+                error => SendError::Failed(error),
+            })?;
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
@@ -471,7 +479,7 @@ impl WalletClientModule {
     pub async fn await_final_send_operation_state(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<FinalSendOperationState> {
+    ) -> Result<FinalSendOperationState, OperationLookupError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
 
@@ -515,7 +523,7 @@ impl WalletClientModule {
     pub async fn await_final_receive_operation_state(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<FinalReceiveOperationState> {
+    ) -> Result<FinalReceiveOperationState, OperationLookupError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
 
@@ -599,7 +607,7 @@ impl WalletClientModule {
     pub async fn await_receive(
         &self,
         position: EventLogId,
-    ) -> anyhow::Result<(FinalReceiveOperationState, EventLogId)> {
+    ) -> Result<(FinalReceiveOperationState, EventLogId), AwaitReceiveError> {
         let mut position = position;
 
         loop {
@@ -998,28 +1006,66 @@ impl WalletClientModule {
     }
 }
 
-#[derive(Error, Debug, Clone, Eq, PartialEq)]
+/// A failure to send an on-chain payment.
+#[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum SendError {
-    #[error("Address is from a different network than the federation.")]
+    /// The destination address is not valid on the federation's network.
+    #[error("Address is from a different network than the federation")]
     WrongNetwork,
+
+    /// The value to send is below the federation's dust limit.
     #[error("The value is too small")]
     DustValue,
-    #[error("Federation returned an error: {0}")]
-    FederationError(String),
+
+    /// The federation could not be asked for the current on-chain fee.
+    #[error("The federation returned an error")]
+    Federation(#[source] Box<FederationError>),
+
+    /// The guardians have not agreed a feerate yet, so no on-chain fee can be
+    /// quoted.
     #[error("No consensus feerate is available at this time")]
     NoConsensusFeerateAvailable,
+
+    /// The client cannot fund the wallet output this send needs.
     #[error("The client does not have sufficient funds to send the payment")]
     InsufficientFunds,
+
+    /// The destination is not an address type the federation can pay.
     #[error("Unsupported address type")]
     UnsupportedAddress,
+
+    /// The send transaction could not be submitted for a reason that is not
+    /// about funding.
+    #[error("The send transaction could not be submitted")]
+    Failed(#[source] TransactionSubmitError),
 }
 
-#[derive(Error, Debug, Clone, Eq, PartialEq)]
+/// A failure to quote the fee for claiming an on-chain deposit.
+#[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum ReceiveError {
-    #[error("Federation returned an error: {0}")]
-    FederationError(String),
+    /// The federation could not be asked for the current claim fee.
+    #[error("The federation returned an error")]
+    Federation(#[source] Box<FederationError>),
+
+    /// The guardians have not agreed a feerate yet, so no claim fee can be
+    /// quoted.
     #[error("No consensus feerate is available at this time")]
     NoConsensusFeerateAvailable,
+}
+
+/// A failure to wait for the next on-chain payment to be received.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum AwaitReceiveError {
+    /// The receive operation could not be looked up.
+    #[error("The receive operation could not be looked up")]
+    Operation(#[from] OperationLookupError),
+
+    /// The deposit was claimed, but the ecash it mints was never issued.
+    #[error("The ecash for the claimed deposit could not be issued")]
+    Issuance(#[from] TransactionSubmitError),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

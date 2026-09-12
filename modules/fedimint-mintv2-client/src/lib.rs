@@ -36,7 +36,9 @@ use fedimint_client::transaction::{
     ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
 };
 use fedimint_client_module::db::ClientModuleMigrationFn;
-use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
+use fedimint_client_module::error::{
+    InsufficientBalanceError, OperationLookupError, TransactionSubmitError,
+};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
     ClientModuleRecoveryPrepareArgs, RecoveryMode,
@@ -498,10 +500,17 @@ impl ClientModule for MintClientModule {
             anyhow::bail!("Module can only handle its configured amount unit");
         }
 
-        let funding_notes = self
-            .select_funding_input(dbtx, output_amount.saturating_sub(input_amount))
-            .await
-            .context("Insufficient funds")?;
+        let requested_amount = output_amount.saturating_sub(input_amount);
+        // `select_funding_input` only reads notes, so the balance it left behind is
+        // still accurate for reporting a total below.
+        let Some(funding_notes) = self.select_funding_input(dbtx, requested_amount).await else {
+            let total_amount = self.get_balance(dbtx, unit).await;
+            return Err(InsufficientBalanceError {
+                requested_amount,
+                total_amount,
+            }
+            .into());
+        };
 
         for note in &funding_notes {
             self.remove_spendable_note(dbtx, note).await;
@@ -936,7 +945,10 @@ impl MintClientModule {
                 TransactionBuilder::new().with_outputs(output),
             )
             .await
-            .map_err(|_| SendECashError::InsufficientBalance)?;
+            .map_err(|error| match error {
+                TransactionSubmitError::InsufficientFunds(_) => SendECashError::InsufficientBalance,
+                other => SendECashError::Failed(other),
+            })?;
 
         for outpoint in range {
             self.await_output_sm_success(operation_id, outpoint)
@@ -1052,8 +1064,9 @@ impl MintClientModule {
                 TransactionSubmitError::OperationAlreadyExists(_) => {
                     ReceiveECashError::AlreadyReceived
                 }
-                TransactionSubmitError::NoPrimaryModule { .. }
-                | TransactionSubmitError::PrimaryModule(..) => ReceiveECashError::InsufficientFunds,
+                TransactionSubmitError::InsufficientFunds(_) => {
+                    ReceiveECashError::InsufficientFunds
+                }
                 other => ReceiveECashError::Failed(other),
             })?;
 
@@ -1344,7 +1357,7 @@ async fn download_slice(
 }
 
 /// A failure to send e-cash by preparing notes to hand to the recipient.
-#[derive(Error, Debug, Clone, Eq, PartialEq)]
+#[derive(Error, Debug)]
 #[non_exhaustive]
 pub enum SendECashError {
     /// The client needs to reissue notes to make change, but has no
@@ -1358,6 +1371,10 @@ pub enum SendECashError {
     /// recover from.
     #[error("A non-recoverable error has occurred")]
     Failure,
+    /// The change-making reissue transaction could not be submitted for a
+    /// reason unrelated to funding.
+    #[error("The reissue transaction could not be submitted")]
+    Failed(#[source] TransactionSubmitError),
 }
 
 /// A failure to receive e-cash by reissuing it.

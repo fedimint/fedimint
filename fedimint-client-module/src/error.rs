@@ -5,11 +5,32 @@
 //! sides; they live here rather than in `fedimint-client`, which the modules do
 //! not depend on.
 
+use fedimint_core::Amount;
 use fedimint_core::config::{FederationId, ModuleConfigError};
 use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::DatabaseError;
 use fedimint_core::module::AmountUnit;
 use thiserror::Error;
+
+/// The primary module cannot fund a transaction: the balance it holds is
+/// below what the transaction needs.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Error)]
+pub struct InsufficientBalanceError {
+    /// The amount the transaction needed the primary module to fund.
+    pub requested_amount: Amount,
+    /// The total amount the primary module actually holds.
+    pub total_amount: Amount,
+}
+
+impl std::fmt::Display for InsufficientBalanceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Insufficient balance: requested {} but only {} available",
+            self.requested_amount, self.total_amount
+        )
+    }
+}
 
 /// A failure to add state machines to the client's executor.
 #[derive(Debug, Error)]
@@ -106,7 +127,8 @@ pub enum TransactionSubmitError {
     },
 
     /// The primary module failed to balance the transaction or to complete
-    /// its outputs.
+    /// its outputs. An insufficient balance is reported as
+    /// [`Self::InsufficientFunds`] instead.
     // The boxed cause narrows to `ClientModuleError` once the module->client
     // trait boundary is typed (#8821 part E).
     #[error("The primary module failed")]
@@ -119,6 +141,19 @@ pub enum TransactionSubmitError {
     /// The transaction's state machines could not be registered.
     #[error("Failed to add the transaction's state machines")]
     StateMachines(#[from] AddStateMachinesError),
+
+    /// The primary module holds too little balance to fund the transaction.
+    #[error("Insufficient funds")]
+    InsufficientFunds(#[from] InsufficientBalanceError),
+}
+
+impl TransactionSubmitError {
+    /// Whether this failure means the primary module cannot fund the
+    /// transaction, as opposed to a failure of the client, the database or
+    /// the federation.
+    pub fn is_insufficient_funds(&self) -> bool {
+        matches!(self, Self::InsufficientFunds(_))
+    }
 }
 
 /// A failure to find a module able to serve a request.

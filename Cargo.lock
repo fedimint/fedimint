@@ -3253,6 +3253,7 @@ version = "0.13.0-alpha"
 dependencies = [
  "anyhow",
  "aquamarine",
+ "assert_matches",
  "async-stream",
  "async-trait",
  "bitcoin",
@@ -5147,7 +5148,6 @@ dependencies = [
 name = "fedimint-walletv2-common"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "bitcoin",
  "fedimint-core",
  "miniscript",
@@ -5184,6 +5184,7 @@ name = "fedimint-walletv2-tests"
 version = "0.13.0-alpha"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "async-stream",
  "bitcoin",
  "bitcoincore-rpc",

@@ -9,7 +9,9 @@ use bitcoin::secp256k1;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_client::ClientHandleArc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
+use fedimint_client_module::error::OperationLookupError;
 use fedimint_connectors::ConnectorRegistry;
+use fedimint_core::core::OperationId;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{
     DatabaseError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt,
@@ -28,10 +30,11 @@ use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing_core::config::API_AUTH;
 use fedimint_wallet_client::api::WalletFederationApi;
-use fedimint_wallet_client::client_db::SupportsSafeDepositKey;
+use fedimint_wallet_client::client_db::{SupportsSafeDepositKey, TweakIdx};
 use fedimint_wallet_client::{
-    AllocateDepositOutcome, DepositStateV2, MaybeNewAddress, WalletClientInit, WalletClientModule,
-    WithdrawState,
+    AllocateDepositOutcome, ConsensusVersionVotingError, DepositStateV2, MaybeNewAddress,
+    PegInError, PegOutError, PegOutRequest, SubscribeDepositError, SubscribeWithdrawError,
+    WalletClientInit, WalletClientModule, WithdrawFeesError, WithdrawState,
 };
 use fedimint_wallet_common::config::WalletConfig;
 use fedimint_wallet_common::tweakable::Tweakable;
@@ -101,6 +104,11 @@ async fn peg_in<'a>(
     let op = deposit_address.operation_id;
     let address = deposit_address.address;
     info!(?address, "Peg-in address generated");
+
+    assert_matches!(
+        wallet_module.subscribe_withdraw_updates(op).await,
+        Err(SubscribeWithdrawError::NotAWithdrawal)
+    );
     let (_proof, tx) = bitcoin
         .send_and_mine_block(
             &address,
@@ -381,6 +389,11 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
         sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees.amount().to_sat());
     assert_eq!(client.get_balance_for_btc().await?, balance_after_peg_out);
     assert_eq!(balance_sub.ok().await?, balance_after_peg_out);
+
+    assert_matches!(
+        wallet_module.subscribe_deposit(op).await,
+        Err(SubscribeDepositError::NotADeposit)
+    );
 
     let sub = wallet_module.subscribe_withdraw_updates(op).await?;
     let mut sub = sub.into_stream();
@@ -679,11 +692,12 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
     // See: https://github.com/fedimint/fedimint/issues/3604
     let address = bitcoin.get_new_address().await;
     let peg_out2 = PEG_OUT_AMOUNT_SATS;
-    let fees2 = wallet_module
+    // Must fail because change UTXOs are still being confirmed, and the caller
+    // gets the wallet's own fee-quote error rather than an opaque one.
+    let fees2: Result<PegOutFees, WithdrawFeesError> = wallet_module
         .get_withdraw_fees(&address, bsats(peg_out2))
         .await;
-    // Must fail because change UTXOs are still being confirmed
-    assert!(fees2.is_err());
+    assert_matches!(fees2, Err(WithdrawFeesError::NoQuote));
 
     let current_block = dyn_bitcoin_rpc.get_block_count().await?;
     bitcoin.mine_blocks(finality_delay + 1).await;
@@ -1333,6 +1347,16 @@ async fn allocate_deposit_address_pooled_zero_gap_reuses_until_used() -> anyhow:
         assert_eq!(deposit_address.tweak_idx, tweak_idx0);
     }
 
+    // The pooled allocator reports its own failures, not an opaque string.
+    let typed: Result<_, fedimint_wallet_client::DepositAddressError> =
+        wallet_module.allocate_deposit_address_pooled(0).await;
+    let (deposit_address, outcome) = typed?;
+    assert_matches!(
+        outcome,
+        AllocateDepositOutcome::Reused { original_tweak_idx } if original_tweak_idx == tweak_idx0
+    );
+    assert_eq!(deposit_address.address, addr0);
+
     let operations = client
         .operation_log()
         .paginate_operations_rev(10, None)
@@ -1617,7 +1641,11 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
 
         assert!(expected_available_utxos.insert(expected_available_utxo));
 
-        let wallet_summary = wallet_module.get_wallet_summary().await?;
+        // The summary is a plain federation request, so it reports the
+        // federation's own error rather than an opaque one.
+        let summary: fedimint_api_client::api::FederationResult<_> =
+            wallet_module.get_wallet_summary().await;
+        let wallet_summary = summary?;
         assert_eq!(
             sum_utxos(expected_available_utxos.iter()),
             wallet_summary.total_spendable_balance()
@@ -2519,4 +2547,132 @@ fn verify_bitcoind_backend() {
             "mock_kind".into()
         }
     )
+}
+
+/// The three peg-in lookups each say which thing was not found, instead of
+/// three interchangeable strings.
+#[tokio::test(flavor = "multi_thread")]
+async fn peg_in_lookups_name_what_was_not_found() -> anyhow::Result<()> {
+    skip_if_not_wallet_test_group!("1");
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
+
+    let operation_id = OperationId::new_random();
+    assert_matches!(
+        wallet_module
+            .find_tweak_idx_by_operation_id(operation_id)
+            .await,
+        Err(PegInError::NoAddressForOperation { operation_id: found }) if found == operation_id
+    );
+
+    let tweak_idx = TweakIdx(u64::MAX);
+    assert_matches!(
+        wallet_module.get_pegin_tweak_idx(tweak_idx).await,
+        Err(PegInError::TweakIdxNotFound { tweak_idx: found }) if found == tweak_idx
+    );
+
+    let foreign_address: bitcoin::Address<bitcoin::address::NetworkUnchecked> =
+        "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2".parse()?;
+    assert_matches!(
+        wallet_module
+            .find_tweak_idx_by_address(foreign_address)
+            .await,
+        Err(PegInError::AddressNotDerived)
+    );
+
+    Ok(())
+}
+
+/// Subscribing to an operation that does not exist says so, instead of
+/// "Operation not found: <id>" glued in front of the real lookup error.
+#[tokio::test(flavor = "multi_thread")]
+async fn subscribing_to_an_unknown_deposit_reports_not_found() -> anyhow::Result<()> {
+    skip_if_not_wallet_test_group!("1");
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    assert_matches!(
+        client
+            .get_first_module::<WalletClientModule>()?
+            .subscribe_deposit(OperationId::new_random())
+            .await,
+        Err(SubscribeDepositError::Operation(
+            OperationLookupError::NotFound(_)
+        ))
+    );
+
+    Ok(())
+}
+
+/// A peg-out to an address from another network is refused by name, before
+/// anything is asked of the federation.
+#[tokio::test(flavor = "multi_thread")]
+async fn peg_out_to_a_mainnet_address_is_rejected() -> anyhow::Result<()> {
+    skip_if_not_wallet_test_group!("1");
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
+
+    // A well-known mainnet P2PKH address. The federation runs on regtest.
+    let mainnet_address: bitcoin::Address<bitcoin::address::NetworkUnchecked> =
+        "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2".parse()?;
+
+    assert_matches!(
+        wallet_module
+            .peg_out(PegOutRequest {
+                amount_sat: 100_000,
+                destination_address: mainnet_address,
+                extra_meta: serde_json::Value::Null,
+            })
+            .await,
+        Err(PegOutError::WrongNetwork { .. })
+    );
+
+    Ok(())
+}
+
+/// Subscribing to a withdrawal that does not exist says so, and says it with
+/// the shared operation-lookup error rather than a local string.
+#[tokio::test(flavor = "multi_thread")]
+async fn subscribing_to_an_unknown_withdrawal_reports_not_found() -> anyhow::Result<()> {
+    skip_if_not_wallet_test_group!("1");
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    assert_matches!(
+        client
+            .get_first_module::<WalletClientModule>()?
+            .subscribe_withdraw_updates(OperationId::new_random())
+            .await,
+        Err(SubscribeWithdrawError::Operation(
+            OperationLookupError::NotFound(_)
+        ))
+    );
+
+    Ok(())
+}
+
+/// Voting is an admin action, and a client without admin credentials is told
+/// exactly that instead of being handed a generic failure.
+#[tokio::test(flavor = "multi_thread")]
+async fn voting_without_admin_auth_says_so() -> anyhow::Result<()> {
+    skip_if_not_wallet_test_group!("1");
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    assert_matches!(
+        client
+            .get_first_module::<WalletClientModule>()?
+            .activate_consensus_version_voting()
+            .await,
+        Err(ConsensusVersionVotingError::AdminAuthMissing)
+    );
+
+    Ok(())
 }

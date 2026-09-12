@@ -41,6 +41,7 @@ use db::{
 };
 use fedimint_api_client::api::{DynModuleApi, ServerError};
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
+use fedimint_client_module::error::TransactionSubmitError;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
@@ -1872,7 +1873,7 @@ impl LightningClientModule {
     /// The gateway's off-chain Lightning fee is deliberately excluded: it is
     /// part of the contract `amount` the gateway claims, not the on-federation
     /// transaction fee. So `amount` is the full outgoing contract value.
-    pub async fn send_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+    pub async fn send_fee_quote(&self, amount: Amount) -> Result<FeeQuote, TransactionSubmitError> {
         self.client_ctx
             .fee_quote(
                 OperationId::new_random(),
@@ -1884,7 +1885,6 @@ impl LightningClientModule {
                 },
             )
             .await
-            .map_err(anyhow::Error::from)
     }
 
     /// Computes the largest invoice amount the client can pay in full out of
@@ -1937,7 +1937,7 @@ impl LightningClientModule {
             |invoice_amount: Amount| invoice_amount + gateway.fees.to_amount(&invoice_amount),
             |contract_amount: Amount| self.send_fee_quote(contract_amount),
         )
-        .await
+        .await?
         .ok_or_else(|| anyhow!("Balance is too low to send any amount after fees"))
     }
 
