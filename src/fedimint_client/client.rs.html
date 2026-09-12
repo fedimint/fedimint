@@ -92,8 +92,8 @@
 <a href=#92 id=92 data-nosnippet>92</a>    apply_migrations_core_client_dbtx, verify_client_db_integrity_dbtx,
 <a href=#93 id=93 data-nosnippet>93</a>};
 <a href=#94 id=94 data-nosnippet>94</a><span class="kw">use </span><span class="kw">crate</span>::error::{
-<a href=#95 id=95 data-nosnippet>95</a>    ApiVersionDiscoveryError, ClientSecretError, ModuleLookupError, OperationAlreadyExistsError,
-<a href=#96 id=96 data-nosnippet>96</a>    OperationNotFoundError, RecoveryError, TransactionSubmitError,
+<a href=#95 id=95 data-nosnippet>95</a>    ApiVersionDiscoveryError, ClientSecretError, InsufficientBalanceError, ModuleLookupError,
+<a href=#96 id=96 data-nosnippet>96</a>    OperationAlreadyExistsError, OperationNotFoundError, RecoveryError, TransactionSubmitError,
 <a href=#97 id=97 data-nosnippet>97</a>};
 <a href=#98 id=98 data-nosnippet>98</a><span class="kw">use </span><span class="kw">crate</span>::meta::MetaService;
 <a href=#99 id=99 data-nosnippet>99</a><span class="kw">use </span><span class="kw">crate</span>::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
@@ -789,7 +789,7 @@
 <a href=#789 id=789 data-nosnippet>789</a>                    output_amount,
 <a href=#790 id=790 data-nosnippet>790</a>                )
 <a href=#791 id=791 data-nosnippet>791</a>                .<span class="kw">await
-<a href=#792 id=792 data-nosnippet>792</a>                </span>.map_err(|err| TransactionSubmitError::PrimaryModule(err.into()))<span class="question-mark">?</span>;
+<a href=#792 id=792 data-nosnippet>792</a>                </span>.map_err(primary_module_error)<span class="question-mark">?</span>;
 <a href=#793 id=793 data-nosnippet>793</a>
 <a href=#794 id=794 data-nosnippet>794</a>            added_inputs_bundles.push(added_input_bundle);
 <a href=#795 id=795 data-nosnippet>795</a>            added_outputs_bundles.push(added_output_bundle);
@@ -933,7 +933,7 @@
 <a href=#933 id=933 data-nosnippet>933</a>                    balance_output_amount,
 <a href=#934 id=934 data-nosnippet>934</a>                )
 <a href=#935 id=935 data-nosnippet>935</a>                .<span class="kw">await
-<a href=#936 id=936 data-nosnippet>936</a>                </span>.map_err(|err| TransactionSubmitError::PrimaryModule(err.into()))<span class="question-mark">?</span>;
+<a href=#936 id=936 data-nosnippet>936</a>                </span>.map_err(primary_module_error)<span class="question-mark">?</span>;
 <a href=#937 id=937 data-nosnippet>937</a>
 <a href=#938 id=938 data-nosnippet>938</a>            <span class="comment">// Fold the change into the totals. These are a disjoint set of items
 <a href=#939 id=939 data-nosnippet>939</a>            // from the explicit ones (the primary module only sees the scalar
@@ -3047,32 +3047,51 @@
 <a href=#3047 id=3047 data-nosnippet>3047</a>    }
 <a href=#3048 id=3048 data-nosnippet>3048</a>}
 <a href=#3049 id=3049 data-nosnippet>3049</a>
-<a href=#3050 id=3050 data-nosnippet>3050</a><span class="comment">// TODO: impl `Debug` for `Client` and derive here
-<a href=#3051 id=3051 data-nosnippet>3051</a></span><span class="kw">impl </span>fmt::Debug <span class="kw">for </span>Client {
-<a href=#3052 id=3052 data-nosnippet>3052</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
-<a href=#3053 id=3053 data-nosnippet>3053</a>        <span class="macro">write!</span>(f, <span class="string">"Client"</span>)
-<a href=#3054 id=3054 data-nosnippet>3054</a>    }
-<a href=#3055 id=3055 data-nosnippet>3055</a>}
-<a href=#3056 id=3056 data-nosnippet>3056</a>
-<a href=#3057 id=3057 data-nosnippet>3057</a><span class="kw">pub fn </span>client_decoders&lt;<span class="lifetime">'a</span>&gt;(
-<a href=#3058 id=3058 data-nosnippet>3058</a>    registry: <span class="kw-2">&amp;</span>ModuleInitRegistry&lt;DynClientModuleInit&gt;,
-<a href=#3059 id=3059 data-nosnippet>3059</a>    module_kinds: <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ModuleKind)&gt;,
-<a href=#3060 id=3060 data-nosnippet>3060</a>) -&gt; ModuleDecoderRegistry {
-<a href=#3061 id=3061 data-nosnippet>3061</a>    <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
-<a href=#3062 id=3062 data-nosnippet>3062</a>    <span class="kw">for </span>(id, kind) <span class="kw">in </span>module_kinds {
-<a href=#3063 id=3063 data-nosnippet>3063</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(init) = registry.get(kind) <span class="kw">else </span>{
-<a href=#3064 id=3064 data-nosnippet>3064</a>            <span class="macro">debug!</span>(<span class="string">"Detected configuration for unsupported module id: {id}, kind: {kind}"</span>);
-<a href=#3065 id=3065 data-nosnippet>3065</a>            <span class="kw">continue</span>;
-<a href=#3066 id=3066 data-nosnippet>3066</a>        };
-<a href=#3067 id=3067 data-nosnippet>3067</a>
-<a href=#3068 id=3068 data-nosnippet>3068</a>        modules.insert(
-<a href=#3069 id=3069 data-nosnippet>3069</a>            id,
-<a href=#3070 id=3070 data-nosnippet>3070</a>            (
-<a href=#3071 id=3071 data-nosnippet>3071</a>                kind.clone(),
-<a href=#3072 id=3072 data-nosnippet>3072</a>                IClientModuleInit::decoder(AsRef::&lt;<span class="kw">dyn </span>IClientModuleInit + <span class="lifetime">'static</span>&gt;::as_ref(init)),
-<a href=#3073 id=3073 data-nosnippet>3073</a>            ),
-<a href=#3074 id=3074 data-nosnippet>3074</a>        );
-<a href=#3075 id=3075 data-nosnippet>3075</a>    }
-<a href=#3076 id=3076 data-nosnippet>3076</a>    ModuleDecoderRegistry::from(modules)
-<a href=#3077 id=3077 data-nosnippet>3077</a>}
+<a href=#3050 id=3050 data-nosnippet>3050</a><span class="doccomment">/// Classifies a primary module's failure to balance a transaction.
+<a href=#3051 id=3051 data-nosnippet>3051</a>///
+<a href=#3052 id=3052 data-nosnippet>3052</a>/// The module -&gt; client trait boundary is still `anyhow` (#8821 part E
+<a href=#3053 id=3053 data-nosnippet>3053</a>/// narrows it), so this walks the error's `source()` chain for the one
+<a href=#3054 id=3054 data-nosnippet>3054</a>/// condition callers must be able to act on: an [`InsufficientBalanceError`]
+<a href=#3055 id=3055 data-nosnippet>3055</a>/// means the primary module cannot fund the transaction, as opposed to a
+<a href=#3056 id=3056 data-nosnippet>3056</a>/// failure of the client, the database or the federation, which stays
+<a href=#3057 id=3057 data-nosnippet>3057</a>/// [`TransactionSubmitError::PrimaryModule`].
+<a href=#3058 id=3058 data-nosnippet>3058</a></span><span class="kw">fn </span>primary_module_error(err: anyhow::Error) -&gt; TransactionSubmitError {
+<a href=#3059 id=3059 data-nosnippet>3059</a>    <span class="kw">let </span>insufficient_balance = err
+<a href=#3060 id=3060 data-nosnippet>3060</a>        .chain()
+<a href=#3061 id=3061 data-nosnippet>3061</a>        .find_map(|source| source.downcast_ref::&lt;InsufficientBalanceError&gt;().copied());
+<a href=#3062 id=3062 data-nosnippet>3062</a>
+<a href=#3063 id=3063 data-nosnippet>3063</a>    <span class="kw">match </span>insufficient_balance {
+<a href=#3064 id=3064 data-nosnippet>3064</a>        <span class="prelude-val">Some</span>(found) =&gt; TransactionSubmitError::InsufficientFunds(found),
+<a href=#3065 id=3065 data-nosnippet>3065</a>        <span class="prelude-val">None </span>=&gt; TransactionSubmitError::PrimaryModule(err.into()),
+<a href=#3066 id=3066 data-nosnippet>3066</a>    }
+<a href=#3067 id=3067 data-nosnippet>3067</a>}
+<a href=#3068 id=3068 data-nosnippet>3068</a>
+<a href=#3069 id=3069 data-nosnippet>3069</a><span class="comment">// TODO: impl `Debug` for `Client` and derive here
+<a href=#3070 id=3070 data-nosnippet>3070</a></span><span class="kw">impl </span>fmt::Debug <span class="kw">for </span>Client {
+<a href=#3071 id=3071 data-nosnippet>3071</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+<a href=#3072 id=3072 data-nosnippet>3072</a>        <span class="macro">write!</span>(f, <span class="string">"Client"</span>)
+<a href=#3073 id=3073 data-nosnippet>3073</a>    }
+<a href=#3074 id=3074 data-nosnippet>3074</a>}
+<a href=#3075 id=3075 data-nosnippet>3075</a>
+<a href=#3076 id=3076 data-nosnippet>3076</a><span class="kw">pub fn </span>client_decoders&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#3077 id=3077 data-nosnippet>3077</a>    registry: <span class="kw-2">&amp;</span>ModuleInitRegistry&lt;DynClientModuleInit&gt;,
+<a href=#3078 id=3078 data-nosnippet>3078</a>    module_kinds: <span class="kw">impl </span>Iterator&lt;Item = (ModuleInstanceId, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>ModuleKind)&gt;,
+<a href=#3079 id=3079 data-nosnippet>3079</a>) -&gt; ModuleDecoderRegistry {
+<a href=#3080 id=3080 data-nosnippet>3080</a>    <span class="kw">let </span><span class="kw-2">mut </span>modules = BTreeMap::new();
+<a href=#3081 id=3081 data-nosnippet>3081</a>    <span class="kw">for </span>(id, kind) <span class="kw">in </span>module_kinds {
+<a href=#3082 id=3082 data-nosnippet>3082</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(init) = registry.get(kind) <span class="kw">else </span>{
+<a href=#3083 id=3083 data-nosnippet>3083</a>            <span class="macro">debug!</span>(<span class="string">"Detected configuration for unsupported module id: {id}, kind: {kind}"</span>);
+<a href=#3084 id=3084 data-nosnippet>3084</a>            <span class="kw">continue</span>;
+<a href=#3085 id=3085 data-nosnippet>3085</a>        };
+<a href=#3086 id=3086 data-nosnippet>3086</a>
+<a href=#3087 id=3087 data-nosnippet>3087</a>        modules.insert(
+<a href=#3088 id=3088 data-nosnippet>3088</a>            id,
+<a href=#3089 id=3089 data-nosnippet>3089</a>            (
+<a href=#3090 id=3090 data-nosnippet>3090</a>                kind.clone(),
+<a href=#3091 id=3091 data-nosnippet>3091</a>                IClientModuleInit::decoder(AsRef::&lt;<span class="kw">dyn </span>IClientModuleInit + <span class="lifetime">'static</span>&gt;::as_ref(init)),
+<a href=#3092 id=3092 data-nosnippet>3092</a>            ),
+<a href=#3093 id=3093 data-nosnippet>3093</a>        );
+<a href=#3094 id=3094 data-nosnippet>3094</a>    }
+<a href=#3095 id=3095 data-nosnippet>3095</a>    ModuleDecoderRegistry::from(modules)
+<a href=#3096 id=3096 data-nosnippet>3096</a>}
 </code></pre></div></section></main></body></html>
