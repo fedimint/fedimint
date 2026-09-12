@@ -9,10 +9,10 @@ use fedimint_client_module::error::{
 };
 use fedimint_core::core::OperationId;
 use fedimint_core::db::DatabaseError;
-use fedimint_core::secp256k1;
 use fedimint_core::secp256k1::PublicKey;
 #[cfg(feature = "uniffi")]
 use fedimint_core::util::FmtCompact as _;
+use fedimint_core::{Amount, secp256k1};
 use fedimint_ln_common::contracts::ContractId;
 use lightning_invoice::{CreationError, Currency, ParseOrSemanticError};
 use thiserror::Error;
@@ -85,7 +85,7 @@ pub enum SpendableAmountError {
     #[error("The balance {balance} is too low to send any amount after fees")]
     BalanceTooLow {
         /// The balance the answer was computed against.
-        balance: fedimint_core::Amount,
+        balance: Amount,
     },
 
     /// The fee probe failed for a reason unrelated to the balance.
@@ -405,10 +405,15 @@ pub enum PaymentInfoError {
     #[error("The LNURL returned an invoice for {generated:?} instead of the requested {requested}")]
     AmountMismatch {
         /// The amount that was asked for.
-        requested: fedimint_core::Amount,
-        /// The amount the returned invoice carries, in millisatoshis.
-        generated: Option<u64>,
+        requested: Amount,
+        /// The amount the returned invoice carries.
+        generated: Option<Amount>,
     },
+
+    /// The input looked like an LNURL or a lightning address but could not be
+    /// decoded.
+    #[error("The LNURL or lightning address could not be decoded")]
+    LnurlDecode(#[source] lnurl::Error),
 }
 
 #[cfg(feature = "uniffi")]

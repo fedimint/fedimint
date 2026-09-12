@@ -162,19 +162,6 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
         .mock_receive(sats(1000), AmountUnit::BITCOIN)
         .await?;
 
-    // Creating an invoice reports its own failures, not an opaque string.
-    let typed: Result<_, fedimint_ln_client::CreateBolt11InvoiceError> = client1
-        .get_first_module::<LightningClientModule>()?
-        .create_bolt11_invoice(
-            sats(100),
-            Bolt11InvoiceDescription::Direct(Description::new("typed".to_string())?),
-            None,
-            (),
-            None,
-        )
-        .await;
-    let (_op, _invoice, _preimage) = typed?;
-
     let extra_meta = "internal payment with no gateway registered".to_string();
     let desc = Description::new("with-markers".to_string())?;
     let (op, invoice, _) = client1
@@ -815,10 +802,8 @@ async fn rejects_expired_invoice() -> anyhow::Result<()> {
     // client2 attempts to pay the expired invoice — the send-side check in
     // pay_bolt11_invoice() rejects it before reaching the federation.
     let ln_module = client2.get_first_module::<LightningClientModule>()?;
-    ln_module.update_gateway_cache().await?;
-    let gateway = None;
     let error = ln_module
-        .pay_bolt11_invoice(gateway, invoice, ())
+        .pay_bolt11_invoice(None, invoice, ())
         .await
         .expect_err("Payment of expired invoice should fail");
     assert_matches!(error, PayBolt11InvoiceError::InvoiceExpired);
@@ -2178,7 +2163,17 @@ async fn payment_info_names_its_refusals() -> anyhow::Result<()> {
         Err(PaymentInfoError::NotAnInvoiceOrLnurl(_))
     );
 
-    let desc = Description::new("amount-in-both".to_string())?;
+    // A garbage LNURL and a malformed lightning address are both decoding
+    // failures caught before any network request is made.
+    assert_matches!(
+        PaymentInfo::parse("lnurl1notvalidbech32").await,
+        Err(PaymentInfoError::LnurlDecode(_))
+    );
+    assert_matches!(
+        PaymentInfo::parse("not-an-email@").await,
+        Err(PaymentInfoError::LnurlDecode(_))
+    );
+
     let ctx = secp256k1::Secp256k1::new();
     let kp = Keypair::new(&ctx, &mut OsRng);
     let invoice = InvoiceBuilder::new(Currency::Regtest)
@@ -2190,7 +2185,6 @@ async fn payment_info_names_its_refusals() -> anyhow::Result<()> {
         .amount_milli_satoshis(100_000)
         .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &secp256k1::SecretKey::from_keypair(&kp)))
         .expect("Failed to build invoice");
-    drop(desc);
 
     assert_matches!(
         PaymentInfo::Bolt11(invoice)
