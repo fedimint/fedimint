@@ -39,12 +39,61 @@ jobs:
                 -- \
               nix build -L .#release.quickFuzz
 
+  large-federation:
+    if: github.repository == 'fedimint/fedimint'
+    name: "19 guardian federation (${{ matrix.stack }})"
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      # `run-with-nix-workspace-ci.sh` takes over the shared target dir, so keep
+      # the two stacks sequential rather than racing them on one runner.
+      max-parallel: 1
+      matrix:
+        include:
+          - stack: iroh
+            enable-iroh: "true"
+          - stack: tls
+            enable-iroh: "false"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Prepare
+        uses: ./.github/actions/prepare
+      - uses: dpc/nix-installer-action@c6e05d595d5ed6d6b7c46e42409ca2a126efe13d # dpc/jj-vqymqvyntouw
+      - uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # v17
+        with:
+          name: fedimint
+          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+        continue-on-error: true
+      - uses: ./.github/actions/pin-nix-flake-inputs
+
+      - name: DKG and startup with 19 guardians
+        run: |
+          # `test-ci-all` runs this at 7 guardians on every PR. Large
+          # federations exercise p2p paths that only show up with more peers
+          # and more concurrent data in flight, so they get a daily run at a
+          # size no PR pays for.
+          # the default tmp dir is too long (/home/ubuntu/actions-runner/_work/_temp/)
+          env \
+            TMPDIR=/tmp \
+            CARGO_PROFILE=ci \
+            FM_ENABLE_IROH=${{ matrix.enable-iroh }} \
+            FM_IROH_DHT_ENABLE=false \
+            FM_IROH_NEXT_ENABLE=false \
+            FM_IROH_RELAYS_ENABLE=false \
+            FM_IROH_N0_DISCOVERY_ENABLE=false \
+            FM_IROH_PKARR_RESOLVER_ENABLE=false \
+            FM_IROH_PKARR_PUBLISHER_ENABLE=false \
+            nix develop -c \
+            env -u RUSTC_WRAPPER \
+            scripts/tests/run-with-nix-workspace-ci.sh ./scripts/tests/large-setup-test.sh 19
+
   notifications:
     if: always() && github.repository == 'fedimint/fedimint'
     name: "Notifications"
     timeout-minutes: 1
     runs-on: [self-hosted, linux, x64]
-    needs: [ audit, fuzz ]
+    needs: [ audit, fuzz, large-federation ]
 
     steps:
     - name: Discord notifications on failure
