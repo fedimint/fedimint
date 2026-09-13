@@ -22,6 +22,8 @@ use tokio::net::TcpStream;
 use tokio_rustls::TlsStream;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
+use super::p2p_connector::{DUAL_P2P_ALPN, P2PProtocol};
+
 /// Maximum size of a p2p message in bytes. The largest message we expect to
 /// receive is a signed session outcome.
 pub const MAX_P2P_MESSAGE_SIZE: usize = 10_000_000;
@@ -50,6 +52,11 @@ pub trait IP2PFrame<M>: Send + 'static {
 
 #[async_trait]
 pub trait IP2PConnection<M>: Send + Sync + 'static {
+    /// Protocol selected by the authenticated transport handshake.
+    fn protocol(&self) -> P2PProtocol {
+        P2PProtocol::Legacy
+    }
+
     /// Send a message over the connection. This is *not* required to be
     /// cancel-safe.
     ///
@@ -119,6 +126,8 @@ type TlsFramed = Framed<TlsStream<TcpStream>, LengthDelimitedCodec>;
 /// stream halves are split and guarded separately. That is what lets a send
 /// parked on socket buffers coexist with a concurrent receive.
 pub struct TlsP2PConnection<M> {
+    /// Authenticated handshake result, not the client's offered ALPN.
+    protocol: P2PProtocol,
     sink: tokio::sync::Mutex<SplitSink<TlsFramed, Bytes>>,
     stream: tokio::sync::Mutex<SplitStream<TlsFramed>>,
     // `fn(M) -> M` keeps the struct `Send + Sync` regardless of `M`, which is
@@ -128,9 +137,19 @@ pub struct TlsP2PConnection<M> {
 
 impl<M> TlsP2PConnection<M> {
     pub fn new(framed: TlsFramed) -> Self {
+        let alpn = match framed.get_ref() {
+            TlsStream::Client(tls) => tls.get_ref().1.alpn_protocol(),
+            TlsStream::Server(tls) => tls.get_ref().1.alpn_protocol(),
+        };
+        let protocol = if alpn == Some(DUAL_P2P_ALPN) {
+            P2PProtocol::DualV1
+        } else {
+            P2PProtocol::Legacy
+        };
         let (sink, stream) = framed.split();
 
         Self {
+            protocol,
             sink: tokio::sync::Mutex::new(sink),
             stream: tokio::sync::Mutex::new(stream),
             _message: PhantomData,
@@ -143,6 +162,10 @@ impl<M> IP2PConnection<M> for TlsP2PConnection<M>
 where
     M: Encodable + Decodable + Serialize + DeserializeOwned + Send + 'static,
 {
+    fn protocol(&self) -> P2PProtocol {
+        self.protocol
+    }
+
     async fn send(&self, message: M) -> anyhow::Result<()> {
         let mut bytes = Vec::new();
 
@@ -253,6 +276,14 @@ impl<M> IP2PConnection<M> for IrohV1Connection
 where
     M: Encodable + Decodable + Serialize + DeserializeOwned + Send + 'static,
 {
+    fn protocol(&self) -> P2PProtocol {
+        if self.alpn() == DUAL_P2P_ALPN {
+            P2PProtocol::DualV1
+        } else {
+            P2PProtocol::Legacy
+        }
+    }
+
     async fn send(&self, message: M) -> anyhow::Result<()> {
         let mut bytes = Vec::new();
 

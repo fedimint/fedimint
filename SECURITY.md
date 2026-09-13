@@ -76,3 +76,18 @@ cannot overwrite a newer logical attempt, and advertised TTL uses monotonic
 elapsed time. Status assembly holds the federation-manager read lock only while
 capturing one coherent snapshot; do not clone the client solely for this public
 query because that would interfere with concurrent leave.
+
+## Experimental Guardian P2P Lifecycle
+
+This draft automatically enables sender-owned dual sessions only after
+authenticated transport ALPN negotiation; mixed peers retain legacy
+bidirectional framing. It is a feasibility prototype, not a production rollout
+recommendation. Live incoming duplicates are rejected, so a half-open TLS slot
+has no bounded recovery guarantee. A stale reverse TLS dial during downgrade
+can transiently disturb an old peer before legacy rediscovery. Connected status
+is a local observation, not an admission or delivery acknowledgement; bounded
+lossy queues and the existing DKG loss limitations remain unchanged.
+
+See [the spike report](docs/dual-p2p-spike.md) for ownership, negotiation,
+downgrade behavior, experiments, and deliberately unimplemented recovery
+mechanisms.

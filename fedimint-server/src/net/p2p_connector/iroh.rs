@@ -21,7 +21,7 @@ use serde::de::DeserializeOwned;
 use tracing::trace;
 
 use self::endpoint::build_iroh_endpoint;
-use super::IP2PConnector;
+use super::{DUAL_P2P_ALPN, IP2PConnector};
 use crate::net::p2p_connection::{DynP2PConnection, IP2PConnection as _};
 
 /// Parses the host and port from a url
@@ -109,7 +109,7 @@ impl IrohConnector {
             bind_addr,
             iroh_dns,
             iroh_relays,
-            FEDIMINT_P2P_ALPN,
+            vec![DUAL_P2P_ALPN.to_vec(), FEDIMINT_P2P_ALPN.to_vec()],
         )
         .await?;
 
@@ -161,26 +161,11 @@ where
     }
 
     async fn connect(&self, peer: PeerId) -> anyhow::Result<DynP2PConnection<M>> {
-        let endpoint_id = *self
-            .endpoint_ids
-            .get(&peer)
-            .expect("No endpoint id found for peer");
+        self.connect_protocol(peer, false).await
+    }
 
-        let connection = match self.connection_overrides.get(&endpoint_id) {
-            Some(endpoint_addr) => {
-                trace!(target: LOG_NET_IROH, %endpoint_id, "Using a connectivity override for connection");
-                self.endpoint
-                    .connect(endpoint_addr.clone(), FEDIMINT_P2P_ALPN)
-                    .await?
-            }
-            None => {
-                self.endpoint
-                    .connect(endpoint_id, FEDIMINT_P2P_ALPN)
-                    .await?
-            }
-        };
-
-        Ok(connection.into_dyn())
+    async fn connect_dual(&self, peer: PeerId) -> anyhow::Result<DynP2PConnection<M>> {
+        self.connect_protocol(peer, true).await
     }
 
     async fn accept(&self) -> anyhow::Result<(PeerId, DynP2PConnection<M>)> {
@@ -207,5 +192,46 @@ where
     fn connection_type(&self, _peer: PeerId) -> Option<ConnectionType> {
         // Iroh 1.0 reports paths on live connections rather than the endpoint.
         None
+    }
+}
+
+impl IrohConnector {
+    /// Offer fallback only during lower-ID discovery, never on a reverse dial.
+    async fn connect_protocol<M>(
+        &self,
+        peer: PeerId,
+        dual_only: bool,
+    ) -> anyhow::Result<DynP2PConnection<M>>
+    where
+        M: Encodable + Decodable + Serialize + DeserializeOwned + Send + 'static,
+    {
+        let endpoint_id = *self
+            .endpoint_ids
+            .get(&peer)
+            .expect("No endpoint id found for peer");
+
+        let options =
+            iroh_next::endpoint::ConnectOptions::new().with_additional_alpns(if dual_only {
+                vec![]
+            } else {
+                vec![FEDIMINT_P2P_ALPN.to_vec()]
+            });
+        let connection = match self.connection_overrides.get(&endpoint_id) {
+            Some(endpoint_addr) => {
+                trace!(target: LOG_NET_IROH, %endpoint_id, "Using a connectivity override for connection");
+                self.endpoint
+                    .connect_with_opts(endpoint_addr.clone(), DUAL_P2P_ALPN, options)
+                    .await?
+                    .await?
+            }
+            None => {
+                self.endpoint
+                    .connect_with_opts(endpoint_id, DUAL_P2P_ALPN, options)
+                    .await?
+                    .await?
+            }
+        };
+
+        Ok(connection.into_dyn())
     }
 }

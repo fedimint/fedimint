@@ -28,7 +28,7 @@ pub(super) async fn build_iroh_endpoint(
     bind_addr: SocketAddr,
     iroh_dns: Option<SafeUrl>,
     iroh_relays: Vec<SafeUrl>,
-    alpn: &[u8],
+    alpns: Vec<Vec<u8>>,
 ) -> anyhow::Result<Endpoint> {
     let relay_mode = if !is_env_var_set_opt(FM_IROH_RELAYS_ENABLE_ENV).unwrap_or(true) {
         warn!(target: LOG_NET_IROH, "Iroh relays are disabled");
@@ -84,7 +84,7 @@ pub(super) async fn build_iroh_endpoint(
         builder
             .relay_mode(relay_mode)
             .secret_key(secret_key)
-            .alpns(vec![alpn.to_vec()])
+            .alpns(alpns)
             .transport_config(transport_config)
             // The Iroh builder defaults to wildcard IPv4 and IPv6 sockets.
             // Clear both so the configured bind address remains authoritative.

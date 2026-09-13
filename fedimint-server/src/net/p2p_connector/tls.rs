@@ -18,8 +18,8 @@ use tokio_rustls::rustls::server::WebPkiClientVerifier;
 use tokio_rustls::{TlsAcceptor, TlsConnector, TlsStream, rustls};
 use tokio_util::codec::LengthDelimitedCodec;
 
-use super::IP2PConnector;
 use super::iroh::parse_p2p;
+use super::{DUAL_P2P_ALPN, IP2PConnector};
 use crate::net::p2p_connection::{
     DynP2PConnection, IP2PConnection as _, MAX_P2P_MESSAGE_SIZE, TlsP2PConnection,
 };
@@ -65,10 +65,11 @@ impl TlsTcpConnector {
             .expect("No certificate for ourself found")
             .clone();
 
-        let config = rustls::ServerConfig::builder()
+        let mut config = rustls::ServerConfig::builder()
             .with_client_cert_verifier(verifier)
             .with_single_cert(vec![certificate], cfg.private_key.clone_key())
             .expect("Failed to create TLS config");
+        config.alpn_protocols = vec![DUAL_P2P_ALPN.to_vec()];
 
         let listener = TcpListener::bind(p2p_bind_addr)
             .await
@@ -115,10 +116,11 @@ where
             .expect("No certificate for ourself found")
             .clone();
 
-        let cfg = rustls::ClientConfig::builder()
+        let mut cfg = rustls::ClientConfig::builder()
             .with_root_certificates(root_cert_store)
             .with_client_auth_cert(vec![certificate], self.cfg.private_key.clone_key())
             .expect("Failed to create TLS config");
+        cfg.alpn_protocols = vec![DUAL_P2P_ALPN.to_vec()];
 
         let domain = ServerName::try_from(dns_sanitize(&self.cfg.peer_names[&peer]))
             .expect("Always a valid DNS name");

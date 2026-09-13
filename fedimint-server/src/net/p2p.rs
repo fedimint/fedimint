@@ -5,6 +5,9 @@
 //! its main implementation is [`ReconnectP2PConnections`], see these for
 //! details.
 
+mod dual;
+#[cfg(test)]
+mod spike_tests;
 #[cfg(test)]
 mod tests;
 
@@ -29,7 +32,7 @@ use tracing::{Instrument, debug, info, info_span, warn};
 
 use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
 use crate::net::p2p_connection::{DynConnectionStatusUpdates, DynP2PConnection};
-use crate::net::p2p_connector::DynP2PConnector;
+use crate::net::p2p_connector::{DynP2PConnector, P2PProtocol};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct P2PConnectionState {
@@ -103,12 +106,12 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
             loop {
                 match connector.accept().await {
                     Ok((peer, connection)) => {
-                        if connection_senders
+                        // A full candidate queue for one peer must not block
+                        // accepting connections from every other guardian.
+                        if let Err(async_channel::TrySendError::Closed(_)) = connection_senders
                             .get_mut(&peer)
                             .expect("Authenticating connectors dont return unknown peers")
-                            .send(connection)
-                            .await
-                            .is_err()
+                            .try_send(connection)
                         {
                             break;
                         }
@@ -268,6 +271,10 @@ enum P2PConnectionSMState<M> {
         last_error: Option<String>,
     },
     Connected(DynP2PConnection<M>),
+    Dual {
+        outgoing: Option<DynP2PConnection<M>>,
+        incoming: Option<DynP2PConnection<M>>,
+    },
 }
 
 /// How often live connection metadata (currently only the round-trip time) is
@@ -310,6 +317,9 @@ impl<M: Send + 'static> P2PConnectionStateMachine<M> {
                 self.common
                     .transition_connected(connection, status_updates)
                     .await
+            }
+            P2PConnectionSMState::Dual { outgoing, incoming } => {
+                self.common.transition_dual(outgoing, incoming).await
             }
         }
         .map(|state| P2PConnectionStateMachine {
@@ -371,7 +381,7 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
                             self.connection_deadline =
                                 self.max_connection_age.map(|age| Instant::now() + age);
 
-                            Some(P2PConnectionSMState::Connected(connection))
+                            Some(Self::accepted_state(connection))
                         }
                     };
                 },
@@ -507,6 +517,17 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
         }
     }
 
+    /// An inbound dual session is exclusively the remote sender's direction.
+    fn accepted_state(connection: DynP2PConnection<M>) -> P2PConnectionSMState<M> {
+        match connection.protocol() {
+            P2PProtocol::Legacy => P2PConnectionSMState::Connected(connection),
+            P2PProtocol::DualV1 => P2PConnectionSMState::Dual {
+                outgoing: None,
+                incoming: Some(connection),
+            },
+        }
+    }
+
     async fn transition_disconnected(
         &mut self,
         mut backoff: FibonacciBackoff,
@@ -521,7 +542,7 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
 
                 self.connection_deadline = self.max_connection_age.map(|age| Instant::now() + age);
 
-                Some(P2PConnectionSMState::Connected(connection.ok()?))
+                Some(Self::accepted_state(connection.ok()?))
             },
             // to prevent "reconnection ping-pongs", only the side with lower PeerId reconnects
             () = sleep(backoff.next().expect("Unlimited retries")), if self.our_id < self.peer_id => {
@@ -537,7 +558,13 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
 
                         self.connection_deadline = self.max_connection_age.map(|age| Instant::now() + age);
 
-                        Some(P2PConnectionSMState::Connected(connection))
+                        Some(match connection.protocol() {
+                            P2PProtocol::Legacy => P2PConnectionSMState::Connected(connection),
+                            P2PProtocol::DualV1 => P2PConnectionSMState::Dual {
+                                outgoing: Some(connection),
+                                incoming: None,
+                            },
+                        })
                     }
                     Err(e) => {
                         let last_error = e.fmt_compact_anyhow().to_string();
