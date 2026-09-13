@@ -3640,6 +3640,7 @@ dependencies = [
  "frost-secp256k1",
  "futures",
  "hex",
+ "rand 0.8.5",
  "ring",
  "serde",
  "serde_json",

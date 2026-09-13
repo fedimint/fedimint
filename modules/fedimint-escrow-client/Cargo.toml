@@ -31,6 +31,7 @@ fedimint-server-core = { workspace = true }
 frost-secp256k1 = { version = "3.0.0", features = ["serde"] }
 futures = { workspace = true }
 hex = { workspace = true }
+rand = { workspace = true }
 ring = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

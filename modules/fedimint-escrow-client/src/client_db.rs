@@ -1,57 +1,53 @@
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, TransactionId, impl_db_lookup, impl_db_record};
 use fedimint_escrow_common::EscrowId;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
-use crate::frost::session::{FrostDkgSession, SessionId};
+use crate::frost::session::{FrostDkgSession, FrostDkgSessionRecord, SessionId};
 
 #[repr(u8)]
 #[derive(Debug, Clone, EnumIter, strum_macros::Display)]
 pub enum DbKeyPrefix {
     FrostDkgSession = 0xb1,
-    FrostDkgKeyPackages = 0xb2,
+    FrostDkgSessionRecord = 0xb2,
     ExternalReservedStart = 0xb0,
     CoreInternalReservedStart = 0xd0,
     CoreInternalReservedEnd = 0xff,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
-pub struct FrostDkgSessionKeys(pub SessionId);
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
+pub struct FrostDkgSessionKey(pub SessionId);
 
-#[derive(Debug)]
+#[derive(Debug, Encodable, Decodable)]
 pub struct FrostDkgSessionPrefix;
 
 impl_db_record!(
-    key = FrostDkgSessionKeys,
+    key = FrostDkgSessionKey,
     value = FrostDkgSession,
     db_prefix = DbKeyPrefix::FrostDkgSession
 );
 
 impl_db_lookup!(
-    key = FrostDkgSessionKeys,
+    key = FrostDkgSessionKey,
     query_prefix = FrostDkgSessionPrefix,
 );
 
-pub struct FrostDkgPackagesKeys(pub SessionId);
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
+pub struct FrostDkgSessionRecordkey(pub SessionId);
 
-pub struct FrostDkgKeyPackagesPrefix;
-
-pub struct FrostDkgKeyPackage {
-    round1_secret: Vec<u8>,
-    round2_secret: Vec<u8>,
-    key_package: Vec<u8>,
-    public_key_package: Vec<u8>,
-}
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
+pub struct FrostDkgSessionRecordPrefix;
 
 impl_db_record!(
-    key = FrostDkgPackagesKeys,
-    value = FrostDkgKeyPackage,
-    db_prefix = DbKeyPrefix::FrostDkgKeyPackages
+    key = FrostDkgSessionRecordkey,
+    value = FrostDkgSessionRecord,
+    db_prefix = DbKeyPrefix::FrostDkgSessionRecord
 );
 
 impl_db_lookup!(
-    key = FrostDkgPackagesKeys,
-    query_prefix = FrostDkgKeyPackagesPrefix
+    key = FrostDkgSessionRecordkey,
+    query_prefix = FrostDkgSessionRecordPrefix
 );
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

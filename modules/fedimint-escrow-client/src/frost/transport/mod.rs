@@ -2,8 +2,10 @@ pub mod file;
 pub mod nostr;
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
-use frost_secp256k1 as frost;
+use async_trait::async_trait;
+use frost_secp256k1::{self as frost, Identifier};
 
 use crate::frost::session::SessionId;
 
@@ -22,39 +24,45 @@ pub enum TransportError {
     MissingPackage(frost::Identifier),
 
     #[error("invalid package found")]
-    InvalidPackge,
+    InvalidPackage,
 
     #[error("package already exist")]
     DuplicatePackage,
+
+    #[error("timeout failed")]
+    TimeoutError,
 }
 
-pub trait DkgTransport {
-    type Error;
-
-    pub fn broadcast_round1(
-        &mut self,
+#[async_trait]
+pub trait DkgTransport: Sync + Send {
+    async fn broadcast_round1(
+        &self,
         session_id: &SessionId,
-        sender: frost::Identifier,
+        sender: &Identifier,
         package: frost::keys::dkg::round1::Package,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<(), TransportError>;
 
-    pub fn recv_round1(
+    async fn recv_round1_all(
         &self,
         session_id: &SessionId,
-        receiver: frost::Identifier,
-    ) -> Result<BTreeMap<frost::Identifier, frost::keys::dkg::round1::Package>, Self::Error>;
+        self_id: &Identifier,
+        expected: &[Identifier],
+        timeout: Duration,
+    ) -> Result<BTreeMap<Identifier, frost::keys::dkg::round1::Package>, TransportError>;
 
-    pub fn send_round2(
-        &mut self,
+    async fn send_round2(
+        &self,
         session_id: &SessionId,
-        sender: frost::Identifier,
-        receiver: frost::Identifier,
+        sender: &Identifier,
+        receiver: &Identifier,
         package: frost::keys::dkg::round2::Package,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<(), TransportError>;
 
-    pub fn recv_round2(
+    async fn recv_round2(
         &self,
         session_id: &SessionId,
-        receiver: frost::Identifier,
-    ) -> Result<BTreeMap<frost::Identifier, frost::keys::dkg::round2::Package>, Self::Error>;
+        self_id: &Identifier,
+        expected: &[Identifier],
+        timeout: Duration,
+    ) -> Result<BTreeMap<Identifier, frost::keys::dkg::round2::Package>, TransportError>;
 }

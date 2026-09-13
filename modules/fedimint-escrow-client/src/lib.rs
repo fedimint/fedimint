@@ -161,7 +161,9 @@ impl ModuleInit for EscrowClientInit {
             match table {
                 DbKeyPrefix::ExternalReservedStart
                 | DbKeyPrefix::CoreInternalReservedStart
-                | DbKeyPrefix::CoreInternalReservedEnd => {}
+                | DbKeyPrefix::CoreInternalReservedEnd
+                | DbKeyPrefix::FrostDkgSession
+                | DbKeyPrefix::FrostDkgSessionRecord => {}
             }
         }
 
