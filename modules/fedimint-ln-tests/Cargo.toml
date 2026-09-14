@@ -13,6 +13,7 @@ path = "tests/tests.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+axum = { workspace = true }
 bitcoin_hashes = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
