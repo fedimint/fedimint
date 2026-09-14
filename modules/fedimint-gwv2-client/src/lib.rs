@@ -1,5 +1,7 @@
 mod api;
+pub mod audit;
 mod complete_sm;
+mod db;
 pub mod events;
 mod receive_sm;
 mod send_sm;
@@ -26,7 +28,7 @@ use fedimint_client_module::transaction::{
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
@@ -35,7 +37,7 @@ use fedimint_core::secp256k1::Keypair;
 use fedimint_core::time::now;
 use fedimint_core::util::Spanned;
 use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send, secp256k1};
-use fedimint_lightning::{InterceptPaymentResponse, LightningRpcError};
+use fedimint_lightning::{InterceptPaymentResponse, LightningRpcError, PayInvoiceResponse};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::SendPaymentPayload;
@@ -56,6 +58,7 @@ pub use crate::complete_sm::IncomingCircuitKey;
 use crate::complete_sm::{
     CircuitCompleteSMCommon, CircuitCompleteStateMachine, CompleteSMState, CompleteStateMachine,
 };
+use crate::db::{IncomingAmountKey, IncomingAmountKeyPrefix};
 use crate::receive_sm::ReceiveSMCommon;
 use crate::send_sm::SendSMCommon;
 
@@ -182,10 +185,21 @@ impl ModuleInit for GatewayClientInitV2 {
 
     async fn dump_database(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
-        _prefix_names: Vec<String>,
+        dbtx: &mut DatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
-        Box::new(vec![].into_iter())
+        let mut items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
+        if prefix_names.is_empty() || prefix_names.iter().any(|p| p == "incomingamount") {
+            fedimint_core::push_db_pair_items!(
+                dbtx,
+                IncomingAmountKeyPrefix,
+                IncomingAmountKey,
+                Amount,
+                items,
+                "Incoming HTLC Amounts"
+            );
+        }
+        Box::new(items.into_iter())
     }
 }
 
@@ -447,6 +461,14 @@ impl GatewayClientModuleV2 {
             .min_contract_amount(&payload.federation_id, amount)
             .await?;
 
+        // Everything above is validation of a payload anyone can post, so the
+        // exposure gate runs here: behind the auth signature, and behind the
+        // `operation_exists` join above, so re-requesting a forward already
+        // under way is never refused for exposure it is already counted in.
+        self.gateway
+            .ensure_exposure_allows(payload.federation_id, payload.contract.amount)
+            .await?;
+
         let send_sm = GatewayClientStateMachinesV2::Send(SendStateMachine {
             common: SendSMCommon {
                 operation_id,
@@ -503,6 +525,14 @@ impl GatewayClientModuleV2 {
                         // contract has already been submitted by the send state machine
                         // and finalizes in the background.
                         return Ok(claiming.preimage);
+                    }
+                    SendSMState::Claimed(claimed) => {
+                        // The preimage is proof the payment succeeded, so return it to
+                        // the sender as soon as it is available rather than waiting for
+                        // an additional ordering. The gateway's claim of the outgoing
+                        // contract has already been submitted by the send state machine
+                        // and finalizes in the background.
+                        return Ok(claimed.preimage);
                     }
                     SendSMState::Cancelled(cancelled) => {
                         warn!("Outgoing lightning payment is cancelled {:?}", cancelled);
@@ -630,6 +660,21 @@ impl GatewayClientModuleV2 {
             }
         }
 
+        // Record the value actually locked in the HTLC so the solvency audit
+        // can score this circuit once it completes. Written before the
+        // completion operation exists: a crash in between leaves an orphaned
+        // amount, which is harmless, whereas a completion without an amount is
+        // reported as unknown-cost.
+        {
+            let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+            dbtx.insert_entry(
+                &IncomingAmountKey(completion_operation_id),
+                &Amount::from_msats(amount_msat),
+            )
+            .await;
+            dbtx.commit_tx().await;
+        }
+
         let completion =
             GatewayClientStateMachinesV2::CircuitComplete(CircuitCompleteStateMachine {
                 common: CircuitCompleteSMCommon {
@@ -660,6 +705,17 @@ impl GatewayClientModuleV2 {
         }
 
         Ok(())
+    }
+
+    /// The value locked in the incoming HTLC behind a circuit completion
+    /// operation, if it was recorded.
+    pub async fn incoming_amount(&self, completion_operation_id: OperationId) -> Option<Amount> {
+        self.client_ctx
+            .module_db()
+            .begin_transaction_nc()
+            .await
+            .get_value(&IncomingAmountKey(completion_operation_id))
+            .await
     }
 
     /// Funds the incoming contract of a direct swap and waits for its final
@@ -823,6 +879,23 @@ impl GatewayClientModuleV2 {
     }
 }
 
+/// How relaying an LNv2 outgoing payment onto an LNv1 incoming contract in
+/// another federation ended.
+#[derive(Debug, Clone)]
+pub struct Lnv1SwapOutcome {
+    pub final_state: FinalReceiveState,
+    /// What the target federation's incoming contract was actually funded
+    /// with, read back from that federation's own record once the receive
+    /// succeeded.
+    ///
+    /// The invoice amount is *not* a stand-in: the LNv1 leg funds the invoice
+    /// amount minus that federation's incoming fee, so using the invoice
+    /// amount over-reports what every such swap cost. `None` means the record
+    /// is absent (pre-upgrade history), and the cost has to be recorded as
+    /// unknown rather than guessed.
+    pub funded: Option<Amount>,
+}
+
 /// An interface between module implementation and the general `Gateway`
 ///
 /// To abstract away and decouple the core gateway from the modules, the
@@ -862,7 +935,7 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
         invoice: Bolt11Invoice,
         max_delay: u64,
         max_fee: Amount,
-    ) -> Result<[u8; 32], LightningRpcError>;
+    ) -> Result<PayInvoiceResponse, LightningRpcError>;
 
     /// Returns whether the gateway's Lightning node has any record of an
     /// outbound payment for `payment_hash`, whatever its state.
@@ -906,7 +979,21 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
         client: &ClientHandleArc,
         invoice: &Bolt11Invoice,
         allow_fresh_dispatch: bool,
-    ) -> anyhow::Result<Option<FinalReceiveState>>;
+    ) -> anyhow::Result<Option<Lnv1SwapOutcome>>;
+
+    /// Refuses an outgoing forward that would push this federation's exposure
+    /// (ecash plus open positions) past the operator-configured limit.
+    /// `Ok(())` when no limit is configured.
+    ///
+    /// The gate lives behind this trait rather than at the request handler so
+    /// it can run *after* the contract's auth signature has been verified: the
+    /// route is unauthenticated, and refusing before that would let anyone
+    /// probe the limit.
+    async fn ensure_exposure_allows(
+        &self,
+        federation_id: FederationId,
+        additional: Amount,
+    ) -> anyhow::Result<()>;
 
     /// Claims the given payment image for `operation_id` in the gateway's
     /// global database, returning `true` if this operation may claim the

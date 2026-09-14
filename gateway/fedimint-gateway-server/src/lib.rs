@@ -26,6 +26,7 @@ mod metrics;
 mod rate_limit;
 mod registration_health;
 pub mod rpc_server;
+mod solvency;
 mod types;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -33,7 +34,7 @@ use std::env;
 use std::fmt::Display;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::{Context, anyhow, ensure};
@@ -99,12 +100,13 @@ use fedimint_gw_client::{
 use fedimint_gwv2_client::events::compute_lnv2_stats;
 use fedimint_gwv2_client::{
     EXPIRATION_DELTA_MINIMUM_V2, FinalReceiveState, GatewayClientModuleV2, IGatewayClientV2,
+    Lnv1SwapOutcome,
 };
 use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
     CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse,
     InvoiceDescription, LightningContext, LightningRpcError, LnRpcTracked, Lnv2HoldInvoiceFilter,
-    PayInvoiceResponse, PaymentAction, RouteHtlcStream, ldk,
+    OutboundPaymentStatus, PayInvoiceResponse, PaymentAction, RouteHtlcStream, ldk,
 };
 use fedimint_ln_client::pay::PaymentData;
 use fedimint_ln_common::config::LightningClientConfig;
@@ -127,6 +129,9 @@ use fedimint_wallet_client::{PegOutFees, WalletClientInit, WalletClientModule, W
 use futures::stream::StreamExt;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::rngs::OsRng;
+// The solvency module itself stays private; these two are the shape of the
+// ledger `Gateway::solvency_ledger` hands back.
+pub use solvency::{FederationLedger, Ledger};
 use tokio::sync::RwLock;
 use tracing::{debug, info, info_span, warn};
 
@@ -136,6 +141,7 @@ use crate::events::get_events_for_duration;
 use crate::rate_limit::TokenBucketRateLimiter;
 use crate::registration_health::RegistrationHealthTracker;
 use crate::rpc_server::run_webserver;
+use crate::solvency::DrawdownThresholds;
 use crate::types::PrettyInterceptPaymentRequest;
 
 /// How long a gateway announcement stays valid
@@ -280,6 +286,8 @@ impl Gateway {
         iroh_dns: Option<SafeUrl>,
         #[builder(default)] iroh_relays: Vec<SafeUrl>,
         metrics_listen: Option<SocketAddr>,
+        #[builder(default)] drawdown_thresholds: DrawdownThresholds,
+        max_federation_exposure: Option<Amount>,
     ) -> anyhow::Result<Gateway> {
         let versioned_api = api_addr.map(|addr| {
             addr.join(V1_API_ENDPOINT)
@@ -311,6 +319,8 @@ impl Gateway {
                 metrics_listen,
                 invoice_rate_limit_burst: DEFAULT_INVOICE_RATE_LIMIT_BURST,
                 invoice_rate_limit_per_second: DEFAULT_INVOICE_RATE_LIMIT_PER_SECOND,
+                drawdown_thresholds,
+                max_federation_exposure,
             },
             gateway_db,
             client_builder,
@@ -398,6 +408,41 @@ pub struct Gateway {
 
     /// Rate limiter for the public invoice creation endpoint.
     invoice_rate_limiter: Arc<TokenBucketRateLimiter>,
+
+    /// Drawdown percentages at which the gateway warns and halts.
+    drawdown_thresholds: DrawdownThresholds,
+
+    /// Maximum ecash plus open positions to hold in a single federation.
+    max_federation_exposure: Option<Amount>,
+
+    /// The `(federation_id, operation_id)` stale positions observed in the
+    /// most recent solvency report, used to log the stale-position warning
+    /// only when a federation's stale set actually changes rather than on
+    /// every periodic check.
+    stale_positions_last_report: Arc<Mutex<BTreeSet<(FederationId, OperationId)>>>,
+
+    /// Terminal outbound-payment lookups from the node, cached by
+    /// operation ID so the phantom-failure reconciler does not re-query the
+    /// node every 60s tick for a cancelled send whose outcome is already
+    /// known. `Pending` results and lookup errors are never cached (`None`
+    /// entries are the node genuinely having no record), so those are
+    /// retried on the next tick.
+    phantom_lookup_cache: Arc<Mutex<BTreeMap<OperationId, Option<OutboundPaymentStatus>>>>,
+
+    /// Per-federation open positions as of the most recent solvency report,
+    /// in msat. The exposure check reads this rather than rebuilding the
+    /// ledger per request: that scan is O(history) and the route it gates is
+    /// unauthenticated. Open positions are therefore at most one report
+    /// interval (60s) stale; the ecash half of the exposure is read live,
+    /// which is a single cheap balance lookup. A federation with no entry has
+    /// had no report yet and is treated as holding no open positions.
+    open_positions_last_report: Arc<Mutex<BTreeMap<FederationId, u64>>>,
+
+    /// The `(federation_id, operation_id)` phantom failures already logged
+    /// at `error!` in a previous solvency report, so a newly discovered
+    /// phantom is escalated once and every subsequent tick it is still
+    /// present logs at `debug!` instead.
+    phantom_failures_reported: Arc<Mutex<BTreeSet<(FederationId, OperationId)>>>,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -783,6 +828,12 @@ impl Gateway {
                 gateway_parameters.invoice_rate_limit_burst,
                 gateway_parameters.invoice_rate_limit_per_second,
             )),
+            drawdown_thresholds: gateway_parameters.drawdown_thresholds,
+            max_federation_exposure: gateway_parameters.max_federation_exposure,
+            stale_positions_last_report: Arc::new(Mutex::new(BTreeSet::new())),
+            open_positions_last_report: Arc::new(Mutex::new(BTreeMap::new())),
+            phantom_lookup_cache: Arc::new(Mutex::new(BTreeMap::new())),
+            phantom_failures_reported: Arc::new(Mutex::new(BTreeSet::new())),
         })
     }
 
@@ -839,6 +890,7 @@ impl Gateway {
         self.start_gateway(runtime, mnemonic_receiver.resubscribe());
         self.spawn_backup_task();
         self.spawn_prune_registered_contracts_task();
+        self.spawn_solvency_task();
         // start metrics server
         fedimint_metrics::spawn_api_server(self.metrics_listen, self.task_group.clone()).await?;
         // start webserver last to avoid handling requests before fully initialized
@@ -1064,6 +1116,31 @@ impl Gateway {
             info!(target: LOG_GATEWAY, "Waiting for chain sync");
             if let Err(err) = ln_client.wait_for_chain_sync().await {
                 warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failed to wait for chain sync");
+                return ReceivePaymentStreamAction::RetryAfterDelay;
+            }
+        }
+
+        // Refuse to serve if forwarding history shows an unacceptable drawdown.
+        // `pending()` rather than exit: an orchestrator sees a live, never-ready
+        // process instead of a crashloop that reads as transient. Routed through
+        // `handle.cancel_on_shutdown` (rather than a bare `.await`) so this task
+        // is still joinable on shutdown instead of hanging the task group and
+        // making `/stop` wait out its full timeout.
+        match self.solvency_report(ln_client.as_ref()).await {
+            Ok(report) if report.verdict == solvency::Verdict::Halt => {
+                let _ = handle
+                    .cancel_on_shutdown(std::future::pending::<()>())
+                    .await;
+                info!(target: LOG_GATEWAY, "Received shutdown signal");
+                return ReceivePaymentStreamAction::NoRetry;
+            }
+            Ok(_) => {}
+            Err(err) => {
+                warn!(
+                    target: LOG_GATEWAY,
+                    err = %err.fmt_compact_anyhow(),
+                    "Cannot evaluate solvency before starting"
+                );
                 return ReceivePaymentStreamAction::RetryAfterDelay;
             }
         }
@@ -1565,6 +1642,10 @@ impl Gateway {
             .get_first_module::<GatewayClientModule>()
             .map_err(|err| LNv1Error::OutgoingPayment(err.into()))
             .map_err(PublicGatewayError::LNv1)?;
+        // The exposure gate runs inside `gateway_pay_bolt11_invoice`, behind
+        // its join of an operation already paying this contract, so a client
+        // retrying an in-flight payment is not refused for exposure it is
+        // already counted in.
         let operation_id = gateway_module
             .gateway_pay_bolt11_invoice(payload)
             .await
@@ -2743,6 +2824,7 @@ impl IAdminGateway for Gateway {
             ecash_balances,
             inbound_lightning_liquidity_msats: lightning_node_balances
                 .inbound_lightning_liquidity_msats,
+            lightning_node_total_msats: lightning_node_balances.total_msats(),
         })
     }
 
@@ -2906,33 +2988,7 @@ impl IAdminGateway for Gateway {
     /// Instructs the gateway to shutdown, but only after all incoming payments
     /// have been handled.
     async fn handle_shutdown_msg(&self, task_group: TaskGroup) -> AdminResult<()> {
-        // Take the write lock on the state so that no additional payments are
-        // processed. `ShuttingDown` is terminal, so the state cannot move back to
-        // `Running` once this returns.
-        let was_running = {
-            let mut state_guard = self.state.write().await;
-            if let GatewayState::Running { lightning_context } = state_guard.clone() {
-                *state_guard = GatewayState::ShuttingDown { lightning_context };
-                true
-            } else {
-                false
-            }
-        };
-
-        // The guard has to be released before waiting. Finishing an incoming payment
-        // that already bought the preimage from the federation goes through
-        // `complete_htlc`, which loops on `get_lightning_context` and would block on
-        // the write guard forever. `/stop` would never return, the HTLC would expire,
-        // and the gateway would be left having spent ecash for a payment its sender
-        // gets refunded. `get_lightning_context` accepts `ShuttingDown`, so the
-        // in-flight payments can complete while the gateway drains.
-        if was_running {
-            self.federation_manager
-                .read()
-                .await
-                .wait_for_incoming_payments()
-                .await?;
-        }
+        self.shut_down_and_drain().await?;
 
         let tg = task_group.clone();
         tg.spawn("Kill Gateway", |_task_handle| async {
@@ -3323,6 +3379,51 @@ impl IAdminGateway for Gateway {
 
 // LNv2 Gateway implementation
 impl Gateway {
+    /// Moves the gateway to `ShuttingDown` (if it was `Running`) so no new
+    /// payments are accepted, then waits for whatever is already in flight
+    /// to finish.
+    ///
+    /// Shared by the operator-initiated `/stop` path
+    /// (`handle_shutdown_msg`) and the runtime solvency halt
+    /// (`solvency::spawn_solvency_task`), so a halt exit drains in-flight
+    /// forwards exactly like an operator-initiated shutdown does: skipping
+    /// this would let a hard exit strand a forward mid-flight, leaving the
+    /// gateway having spent ecash for a payment its sender gets refunded.
+    ///
+    /// Take the write lock on the state so that no additional payments are
+    /// processed. `ShuttingDown` is terminal, so the state cannot move back to
+    /// `Running` once this returns.
+    ///
+    /// The guard has to be released before waiting. Finishing an incoming
+    /// payment that already bought the preimage from the federation goes
+    /// through `complete_htlc`, which loops on `get_lightning_context` and
+    /// would block on the write guard forever. The caller would never
+    /// return, the HTLC would expire, and the gateway would be left having
+    /// spent ecash for a payment its sender gets refunded.
+    /// `get_lightning_context` accepts `ShuttingDown`, so the
+    /// in-flight payments can complete while the gateway drains.
+    pub(crate) async fn shut_down_and_drain(&self) -> AdminResult<()> {
+        let was_running = {
+            let mut state_guard = self.state.write().await;
+            if let GatewayState::Running { lightning_context } = state_guard.clone() {
+                *state_guard = GatewayState::ShuttingDown { lightning_context };
+                true
+            } else {
+                false
+            }
+        };
+
+        if was_running {
+            self.federation_manager
+                .read()
+                .await
+                .wait_for_incoming_payments()
+                .await?;
+        }
+
+        Ok(())
+    }
+
     /// Retrieves the `PublicKey` of the Gateway module for a given federation
     /// for LNv2. This is NOT the same as the `gateway_id`, it is different
     /// per-connected federation.
@@ -3402,6 +3503,8 @@ impl Gateway {
             .get_first_module::<GatewayClientModuleV2>()
             .map_err(|err| PublicGatewayError::LNv2(LNv2Error::OutgoingPayment(err.into())))?;
 
+        // The exposure gate runs inside `send_payment`, once the contract's
+        // auth signature has been checked: this route is unauthenticated.
         module
             .send_payment(payload)
             .await
@@ -3775,7 +3878,7 @@ impl IGatewayClientV2 for Gateway {
         invoice: Bolt11Invoice,
         max_delay: u64,
         max_fee: Amount,
-    ) -> std::result::Result<[u8; 32], LightningRpcError> {
+    ) -> std::result::Result<PayInvoiceResponse, LightningRpcError> {
         // The send state machine forfeits the outgoing contract on any error from
         // here, so only the lightning node gets to say this payment failed.
         let lightning_context = self.await_lightning_context().await;
@@ -3783,7 +3886,6 @@ impl IGatewayClientV2 for Gateway {
             .lnrpc
             .pay(invoice, max_delay, max_fee)
             .await
-            .map(|response| response.preimage.0)
     }
 
     async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool {
@@ -3825,7 +3927,7 @@ impl IGatewayClientV2 for Gateway {
         client: &ClientHandleArc,
         invoice: &Bolt11Invoice,
         allow_fresh_dispatch: bool,
-    ) -> anyhow::Result<Option<FinalReceiveState>> {
+    ) -> anyhow::Result<Option<Lnv1SwapOutcome>> {
         let swap_params = SwapParameters {
             payment_hash: *invoice.payment_hash(),
             amount_msat: Amount::from_msats(
@@ -3872,7 +3974,39 @@ impl IGatewayClientV2 for Gateway {
             }
         }
 
-        Ok(Some(final_state))
+        // What this swap actually cost is the amount the *target* federation's
+        // incoming contract was funded with -- the invoice amount minus that
+        // federation's incoming fee -- which no state machine carries, so read
+        // it back from the record `gateway_handle_direct_swap` wrote
+        // atomically with the funding transaction. `None` means the record
+        // predates this (or the swap never funded anything), and the caller
+        // records the cost as unknown instead of guessing it.
+        let funded = match final_state {
+            FinalReceiveState::Success(_) => lnv1
+                .incoming_amounts(operation_id)
+                .await
+                .map(|amounts| amounts.contract_amount),
+            FinalReceiveState::Rejected
+            | FinalReceiveState::Refunded
+            | FinalReceiveState::Failure => None,
+        };
+
+        Ok(Some(Lnv1SwapOutcome {
+            final_state,
+            funded,
+        }))
+    }
+
+    async fn ensure_exposure_allows(
+        &self,
+        federation_id: FederationId,
+        additional: Amount,
+    ) -> anyhow::Result<()> {
+        let client = self
+            .select_client(federation_id)
+            .await
+            .map_err(|err| anyhow!("{err}"))?;
+        Gateway::ensure_exposure_allows(self, federation_id, client.value(), additional).await
     }
 
     async fn claim_payment_image(
@@ -3903,6 +4037,18 @@ impl IGatewayClientV2 for Gateway {
 
 #[async_trait]
 impl IGatewayClientV1 for Gateway {
+    async fn ensure_exposure_allows(
+        &self,
+        federation_id: FederationId,
+        additional: Amount,
+    ) -> anyhow::Result<()> {
+        let client = self
+            .select_client(federation_id)
+            .await
+            .map_err(|err| anyhow!("{err}"))?;
+        Gateway::ensure_exposure_allows(self, federation_id, client.value(), additional).await
+    }
+
     async fn verify_preimage_authentication(
         &self,
         payment_hash: sha256::Hash,

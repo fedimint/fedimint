@@ -134,6 +134,9 @@ pub trait GatewayDbtxNcExt {
         federation_id: FederationId,
         backup_time: Option<SystemTime>,
     );
+
+    async fn load_drawdown_peak(&mut self) -> Option<DrawdownPeak>;
+    async fn save_drawdown_peak(&mut self, peak: &DrawdownPeak);
 }
 
 impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
@@ -316,6 +319,11 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
                         "Gateway Public Keys"
                     );
                 }
+                DbKeyPrefix::DrawdownPeak => {
+                    if let Some(peak) = self.get_value(&DrawdownPeakKey).await {
+                        gateway_items.insert("Drawdown Peak".to_string(), Box::new(peak));
+                    }
+                }
                 _ => {}
             }
         }
@@ -368,6 +376,14 @@ impl<Cap: Send> GatewayDbtxNcExt for DatabaseTransaction<'_, Cap> {
         )
         .await;
     }
+
+    async fn load_drawdown_peak(&mut self) -> Option<DrawdownPeak> {
+        self.get_value(&DrawdownPeakKey).await
+    }
+
+    async fn save_drawdown_peak(&mut self, peak: &DrawdownPeak) {
+        self.insert_entry(&DrawdownPeakKey, peak).await;
+    }
 }
 
 #[repr(u8)]
@@ -382,6 +398,7 @@ enum DbKeyPrefix {
     Iroh = 0x11,
     FederationBackup = 0x12,
     ClaimedOutgoingPaymentImage = 0x13,
+    DrawdownPeak = 0x14,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -971,6 +988,54 @@ impl_db_record!(
     value = OperationId,
     db_prefix = DbKeyPrefix::ClaimedOutgoingPaymentImage,
 );
+
+/// Highest cumulative forwarding margin ever observed, and total gateway
+/// assets at that moment. The solvency check measures drawdown from here.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+pub struct DrawdownPeak {
+    pub peak_cumulative_margin_msat: u64,
+    pub assets_at_peak_msat: u64,
+}
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+struct DrawdownPeakKey;
+
+impl_db_record!(
+    key = DrawdownPeakKey,
+    value = DrawdownPeak,
+    db_prefix = DbKeyPrefix::DrawdownPeak,
+);
+
+#[cfg(test)]
+mod drawdown_peak_tests {
+    use fedimint_core::db::Database;
+    use fedimint_core::db::mem_impl::MemDatabase;
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
+
+    use super::{DrawdownPeak, GatewayDbtxNcExt};
+
+    #[tokio::test]
+    async fn peak_round_trips_and_is_absent_on_a_fresh_db() {
+        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+        assert_eq!(
+            db.begin_transaction_nc().await.load_drawdown_peak().await,
+            None
+        );
+
+        let peak = DrawdownPeak {
+            peak_cumulative_margin_msat: 1_234,
+            assets_at_peak_msat: 5_000_000,
+        };
+        let mut dbtx = db.begin_transaction().await;
+        dbtx.save_drawdown_peak(&peak).await;
+        dbtx.commit_tx().await;
+
+        assert_eq!(
+            db.begin_transaction_nc().await.load_drawdown_peak().await,
+            Some(peak)
+        );
+    }
+}
 
 #[cfg(test)]
 mod migration_tests;

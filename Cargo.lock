@@ -3745,7 +3745,9 @@ dependencies = [
  "fedimint-logging",
  "fedimint-metrics",
  "fedimint-mint-client",
+ "fedimint-mint-server",
  "fedimint-mintv2-client",
+ "fedimint-mintv2-server",
  "fedimint-rocksdb",
  "fedimint-testing",
  "fedimint-testing-core",
@@ -3871,6 +3873,7 @@ dependencies = [
  "lockable",
  "serde",
  "thiserror 2.0.18",
+ "tokio",
  "tokio-stream",
  "tracing",
 ]
@@ -3899,6 +3902,7 @@ dependencies = [
  "serde",
  "serde_millis",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
 ]
 

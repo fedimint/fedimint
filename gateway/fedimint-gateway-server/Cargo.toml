@@ -105,6 +105,8 @@ fedimint-dummy-common = { workspace = true }
 fedimint-dummy-server = { workspace = true }
 fedimint-ln-server = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
+fedimint-mint-server = { workspace = true }
+fedimint-mintv2-server = { workspace = true }
 fedimint-testing = { workspace = true }
 fedimint-testing-core = { workspace = true }
 fedimint-unknown-common = { workspace = true }

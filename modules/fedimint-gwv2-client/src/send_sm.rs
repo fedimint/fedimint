@@ -9,6 +9,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::Amounts;
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::{Amount, OutPoint};
+use fedimint_lightning::OutboundCost;
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, LightningInvoice, OutgoingWitness};
 use serde::{Deserialize, Serialize};
@@ -56,14 +57,31 @@ pub struct SendSMCommon {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum SendSMState {
     Sending,
+    /// Legacy terminal state: the claim was submitted before realized costs
+    /// were recorded. Retained so pre-upgrade history still decodes.
     Claiming(Claiming),
     Cancelled(Cancelled),
+    /// Terminal: the outbound leg settled and the claim was submitted. Carries
+    /// what the outbound leg actually cost so the forward can be scored.
+    Claimed(Claimed),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+pub struct Claimed {
+    pub preimage: [u8; 32],
+    pub outpoints: Vec<OutPoint>,
+    pub cost: OutboundCost,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PaymentResponse {
     preimage: [u8; 32],
     target_federation: Option<FederationId>,
+    /// `None` when the outbound leg settled but what it cost could not be
+    /// established. The claim is then recorded in the legacy `Claiming` state
+    /// and the audit scores the forward as cost-unknown, rather than a guessed
+    /// cost silently becoming a fabricated margin.
+    cost: Option<OutboundCost>,
 }
 
 impl fmt::Display for SendSMState {
@@ -72,6 +90,7 @@ impl fmt::Display for SendSMState {
             SendSMState::Sending => write!(f, "Sending"),
             SendSMState::Claiming(_) => write!(f, "Claiming"),
             SendSMState::Cancelled(_) => write!(f, "Cancelled"),
+            SendSMState::Claimed(_) => write!(f, "Claimed"),
         }
     }
 }
@@ -103,7 +122,7 @@ pub enum Cancelled {
 /// graph LR
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5
 ///
-///     Sending -- payment is successful --> Claiming
+///     Sending -- payment is successful --> Claimed
 ///     Sending -- payment fails --> Cancelled
 /// ```
 impl State for SendStateMachine {
@@ -138,7 +157,7 @@ impl State for SendStateMachine {
                     },
                 )]
             }
-            SendSMState::Claiming(..) | SendSMState::Cancelled(..) => {
+            SendSMState::Claiming(..) | SendSMState::Cancelled(..) | SendSMState::Claimed(..) => {
                 vec![]
             }
         }
@@ -187,16 +206,24 @@ impl SendStateMachine {
         // If it does, we can fund an LNv1 incoming contract to satisfy the LNv2
         // outgoing payment.
         if let Some(client) = context.gateway.is_lnv1_invoice(&invoice).await {
-            let final_state = context
+            let outcome = context
                 .gateway
                 .relay_lnv1_swap(client.value(), &invoice, allow_fresh_dispatch)
                 .await;
-            return match final_state {
-                Ok(Some(final_receive_state)) => match final_receive_state {
+            return match outcome {
+                Ok(Some(outcome)) => match outcome.final_state {
                     FinalReceiveState::Rejected => Err(Cancelled::Rejected),
                     FinalReceiveState::Success(preimage) => Ok(PaymentResponse {
                         preimage,
                         target_federation: Some(client.value().federation_id()),
+                        // The LNv1 leg funds the invoice amount *minus* the
+                        // target federation's incoming fee, so the amount that
+                        // federation recorded is the only honest cost. Absent,
+                        // the cost stays unknown -- never the invoice amount.
+                        cost: outcome.funded.map(|funded| OutboundCost::Swap {
+                            funded,
+                            target_federation: client.value().federation_id(),
+                        }),
                     }),
                     FinalReceiveState::Refunded => Err(Cancelled::Refunded),
                     FinalReceiveState::Failure => Err(Cancelled::Failure),
@@ -213,6 +240,7 @@ impl SendStateMachine {
             .map_err(|e| Cancelled::RegistrationError(e.to_string()))?
         {
             Some((contract, client)) => {
+                let funded = contract.commitment.amount;
                 match client
                     .get_first_module::<GatewayClientModuleV2>()
                     .expect("Must have client module")
@@ -230,6 +258,10 @@ impl SendStateMachine {
                         FinalReceiveState::Success(preimage) => Ok(PaymentResponse {
                             preimage,
                             target_federation: Some(client.federation_id()),
+                            cost: Some(OutboundCost::Swap {
+                                funded,
+                                target_federation: client.federation_id(),
+                            }),
                         }),
                         FinalReceiveState::Refunded => Err(Cancelled::Refunded),
                         FinalReceiveState::Failure => Err(Cancelled::Failure),
@@ -251,14 +283,18 @@ impl SendStateMachine {
                     return Err(Cancelled::InvoiceExpired);
                 }
 
-                let preimage = context
+                let response = context
                     .gateway
                     .pay(invoice, max_delay, max_fee)
                     .await
                     .map_err(|e| Cancelled::LightningRpcError(e.to_string()))?;
                 Ok(PaymentResponse {
-                    preimage,
+                    preimage: response.preimage.0,
                     target_federation: None,
+                    cost: Some(OutboundCost::Lightning {
+                        amount_sent: response.amount_sent,
+                        fee: response.fee,
+                    }),
                 })
             }
         }
@@ -330,10 +366,21 @@ impl SendStateMachine {
                     .into_iter()
                     .collect();
 
-                old_state.update(SendSMState::Claiming(Claiming {
-                    preimage: payment_response.preimage,
-                    outpoints,
-                }))
+                match payment_response.cost {
+                    Some(cost) => old_state.update(SendSMState::Claimed(Claimed {
+                        preimage: payment_response.preimage,
+                        outpoints,
+                        cost,
+                    })),
+                    // The claim still has to be recorded, but nothing is known
+                    // about what the outbound leg cost. The legacy `Claiming`
+                    // state is exactly that record, and the audit already
+                    // scores it as cost-unknown.
+                    None => old_state.update(SendSMState::Claiming(Claiming {
+                        preimage: payment_response.preimage,
+                        outpoints,
+                    })),
+                }
             }
             Err(e) => {
                 client_ctx
@@ -350,5 +397,46 @@ impl SendStateMachine {
                 old_state.update(SendSMState::Cancelled(e))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use fedimint_core::Amount;
+    use fedimint_core::encoding::{Decodable, Encodable};
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
+    use fedimint_lightning::OutboundCost;
+
+    use super::{Claimed, Claiming, SendSMState};
+
+    fn round_trip(state: &SendSMState) -> SendSMState {
+        let bytes = state.consensus_encode_to_vec();
+        SendSMState::consensus_decode_whole(&bytes, &ModuleDecoderRegistry::default())
+            .expect("state round-trips")
+    }
+
+    #[test]
+    fn legacy_claiming_keeps_its_variant_index_and_still_decodes() {
+        let legacy = SendSMState::Claiming(Claiming {
+            preimage: [7; 32],
+            outpoints: vec![],
+        });
+        // Variant index 1 is what every pre-upgrade database holds.
+        assert_eq!(legacy.consensus_encode_to_vec()[0], 1);
+        assert_eq!(round_trip(&legacy), legacy);
+    }
+
+    #[test]
+    fn claimed_is_appended_after_all_existing_variants() {
+        let claimed = SendSMState::Claimed(Claimed {
+            preimage: [7; 32],
+            outpoints: vec![],
+            cost: OutboundCost::Lightning {
+                amount_sent: Amount::from_msats(1_000),
+                fee: Some(Amount::from_msats(3)),
+            },
+        });
+        assert_eq!(claimed.consensus_encode_to_vec()[0], 3);
+        assert_eq!(round_trip(&claimed), claimed);
     }
 }

@@ -42,5 +42,8 @@ thiserror = { workspace = true }
 tpe = { workspace = true }
 tracing = { workspace = true, features = ["log"] }
 
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+
 [lints]
 workspace = true

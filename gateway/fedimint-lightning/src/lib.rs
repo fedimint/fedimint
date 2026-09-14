@@ -10,6 +10,7 @@ use async_trait::async_trait;
 use bitcoin::Network;
 use bitcoin::hashes::sha256;
 use fedimint_core::Amount;
+use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{FM_IN_DEVIMINT_ENV, is_env_var_set};
 use fedimint_core::secp256k1::PublicKey;
@@ -194,6 +195,14 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         &self,
         payment_hash: sha256::Hash,
     ) -> Result<bool, LightningRpcError>;
+
+    /// Looks up an outbound payment by hash without blocking on it. Returns
+    /// `None` if the node has no outbound record for the hash. Must never
+    /// report an *inbound* payment for the same hash.
+    async fn lookup_outbound_payment(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<Option<OutboundPaymentStatus>, LightningRpcError>;
 
     /// Consumes the current client and returns a stream of intercepted HTLCs
     /// and a new client. `complete_htlc` must be called for all successfully
@@ -449,9 +458,74 @@ pub struct GetRouteHintsResponse {
     pub route_hints: Vec<RouteHint>,
 }
 
+/// State of one of *our own* outbound payments as the node records it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum OutboundPaymentStatus {
+    Pending,
+    Succeeded {
+        amount_sent: Amount,
+        fee: Option<Amount>,
+    },
+    Failed,
+}
+
+/// What the gateway gave up to satisfy an outgoing contract, as realized by
+/// the rail that carried the payment.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
+pub enum OutboundCost {
+    /// Paid over Lightning. `fee` is `None` only when the node could not
+    /// report the routing fee; the solvency audit scores such forwards as
+    /// unknown-cost rather than guessing.
+    Lightning {
+        amount_sent: Amount,
+        fee: Option<Amount>,
+    },
+    /// Settled by funding an incoming contract in another federation.
+    Swap {
+        funded: Amount,
+        target_federation: FederationId,
+    },
+}
+
+impl OutboundCost {
+    /// Total msat the gateway parted with, if fully known.
+    pub fn total(&self) -> Option<Amount> {
+        match self {
+            OutboundCost::Lightning { amount_sent, fee } => {
+                fee.and_then(|fee| amount_sent.checked_add(fee))
+            }
+            OutboundCost::Swap { funded, .. } => Some(*funded),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PayInvoiceResponse {
     pub preimage: Preimage,
+    /// Amount the node reports having sent, excluding routing fees.
+    pub amount_sent: Amount,
+    /// Routing fee actually paid; `None` if the node did not report one.
+    pub fee: Option<Amount>,
+}
+
+/// LND reports amounts as `i64`; anything negative means "unknown".
+pub(crate) fn lnd_realized_cost(value_msat: i64, fee_msat: i64) -> (Amount, Option<Amount>) {
+    let amount_sent = Amount::from_msats(u64::try_from(value_msat).unwrap_or(0));
+    let fee = u64::try_from(fee_msat).ok().map(Amount::from_msats);
+    (amount_sent, fee)
+}
+
+/// LDK reports amounts as `Option<u64>`. The sent amount falls back to the
+/// invoice amount; the fee is never guessed.
+pub(crate) fn ldk_realized_cost(
+    amount_msat: Option<u64>,
+    fee_paid_msat: Option<u64>,
+    invoice_amount_msat: u64,
+) -> (Amount, Option<Amount>) {
+    (
+        Amount::from_msats(amount_msat.unwrap_or(invoice_amount_msat)),
+        fee_paid_msat.map(Amount::from_msats),
+    )
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -493,11 +567,38 @@ pub struct ListChannelsResponse {
     pub channels: Vec<ChannelInfo>,
 }
 
+/// A partition of every sat the Lightning node controls. Each sat is in
+/// exactly one bucket, so `total_msats` is conserved across channel opens,
+/// closes and in-flight payments; only real fees change it.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GetBalancesResponse {
+    /// Spendable on-chain funds (confirmed and unconfirmed, net of reserve).
     pub onchain_balance_sats: u64,
+    /// Settled local balance in open channels.
     pub lightning_balance_msats: u64,
+    /// Remote balance in open channels — the counterparty's money.
     pub inbound_lightning_liquidity_msats: u64,
+    /// Local funds locked in outbound HTLCs not yet settled or failed.
+    pub htlc_in_flight_msats: u64,
+    /// Local funds in channels whose funding transaction is unconfirmed.
+    pub pending_open_msats: u64,
+    /// Funds in closed or closing channels not yet swept back on-chain.
+    pub closing_limbo_sats: u64,
+    /// On-chain funds the node keeps unspendable as anchor reserve.
+    pub anchor_reserve_sats: u64,
+}
+
+impl GetBalancesResponse {
+    /// Every sat the node controls, each counted once.
+    pub fn total_msats(&self) -> u64 {
+        self.onchain_balance_sats
+            .saturating_mul(1000)
+            .saturating_add(self.lightning_balance_msats)
+            .saturating_add(self.htlc_in_flight_msats)
+            .saturating_add(self.pending_open_msats)
+            .saturating_add(self.closing_limbo_sats.saturating_mul(1000))
+            .saturating_add(self.anchor_reserve_sats.saturating_mul(1000))
+    }
 }
 
 /// A wrapper around `Arc<dyn ILnRpcClient>` that tracks metrics for each RPC
@@ -630,6 +731,17 @@ impl ILnRpcClient for LnRpcTracked {
             self,
             "outbound_payment_exists",
             self.inner.outbound_payment_exists(payment_hash).await
+        )
+    }
+
+    async fn lookup_outbound_payment(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<Option<OutboundPaymentStatus>, LightningRpcError> {
+        tracked_call!(
+            self,
+            "lookup_outbound_payment",
+            self.inner.lookup_outbound_payment(payment_hash).await
         )
     }
 
@@ -806,5 +918,83 @@ mod tests {
         // and so has htlc id 0.
         assert_eq!(response(101, 0).incoming_circuit(), Some((101, 0)));
         assert_eq!(response(101, 7).incoming_circuit(), Some((101, 7)));
+    }
+}
+
+#[cfg(test)]
+mod cost_tests {
+    use fedimint_core::Amount;
+    use fedimint_core::config::FederationId;
+
+    use super::{OutboundCost, ldk_realized_cost, lnd_realized_cost};
+
+    #[test]
+    fn lightning_total_is_amount_plus_fee_and_none_when_fee_unknown() {
+        let known = OutboundCost::Lightning {
+            amount_sent: Amount::from_msats(1_000),
+            fee: Some(Amount::from_msats(10)),
+        };
+        assert_eq!(known.total(), Some(Amount::from_msats(1_010)));
+
+        let unknown = OutboundCost::Lightning {
+            amount_sent: Amount::from_msats(1_000),
+            fee: None,
+        };
+        assert_eq!(unknown.total(), None);
+    }
+
+    #[test]
+    fn swap_total_is_the_funded_amount() {
+        let cost = OutboundCost::Swap {
+            funded: Amount::from_msats(500),
+            target_federation: FederationId::dummy(),
+        };
+        assert_eq!(cost.total(), Some(Amount::from_msats(500)));
+    }
+
+    #[test]
+    fn lnd_cost_treats_negative_fee_as_unknown() {
+        assert_eq!(
+            lnd_realized_cost(1_000, 7),
+            (Amount::from_msats(1_000), Some(Amount::from_msats(7)))
+        );
+        assert_eq!(
+            lnd_realized_cost(1_000, -1),
+            (Amount::from_msats(1_000), None)
+        );
+    }
+
+    #[test]
+    fn ldk_cost_falls_back_to_invoice_amount_but_never_invents_a_fee() {
+        assert_eq!(
+            ldk_realized_cost(Some(900), Some(5), 1_000),
+            (Amount::from_msats(900), Some(Amount::from_msats(5)))
+        );
+        assert_eq!(
+            ldk_realized_cost(None, None, 1_000),
+            (Amount::from_msats(1_000), None)
+        );
+    }
+}
+
+#[cfg(test)]
+mod partition_tests {
+    use super::GetBalancesResponse;
+
+    #[test]
+    fn total_counts_every_bucket_exactly_once() {
+        let balances = GetBalancesResponse {
+            onchain_balance_sats: 1,
+            lightning_balance_msats: 2_000,
+            inbound_lightning_liquidity_msats: 999_999, // not ours; excluded
+            htlc_in_flight_msats: 3_000,
+            pending_open_msats: 4_000,
+            closing_limbo_sats: 5,
+            anchor_reserve_sats: 6,
+        };
+        assert_eq!(
+            balances.total_msats(),
+            1_000 + 2_000 + 3_000 + 4_000 + 5_000 + 6_000
+        );
     }
 }

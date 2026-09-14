@@ -86,6 +86,11 @@ function gw_restore_test() {
 }
 export -f gw_restore_test
 
+function gw_funds_conservation_test() {
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-module-test.sh node-funds-conservation
+}
+export -f gw_funds_conservation_test
+
 function gw_liquidity_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-module-test.sh liquidity-test
 }
@@ -485,6 +490,7 @@ tests_to_run_in_parallel+=(
   "gw_reboot_test"
   "gw_config_test_lnd"
   "gw_restore_test"
+  "gw_funds_conservation_test"
   "gw_liquidity_test"
   "gw_liquidity_test_walletv2"
   "gw_liquidity_test_mintv2"

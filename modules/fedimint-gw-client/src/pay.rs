@@ -12,7 +12,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::Amounts;
 use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, OutPoint, TransactionId, secp256k1};
-use fedimint_lightning::{LightningRpcError, PayInvoiceResponse};
+use fedimint_lightning::{LightningRpcError, OutboundCost, PayInvoiceResponse};
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_common::config::FeeToAmount;
@@ -55,6 +55,7 @@ const TIMELOCK_DELTA: u64 = 10;
 pub enum GatewayPayStates {
     PayInvoice(GatewayPayInvoice),
     CancelContract(Box<GatewayPayCancelContract>),
+    /// Legacy terminal: claim submitted before realized costs were recorded.
     Preimage(Vec<OutPoint>, Preimage),
     OfferDoesNotExist(ContractId),
     Canceled {
@@ -63,10 +64,20 @@ pub enum GatewayPayStates {
         error: OutgoingPaymentError,
     },
     WaitForSwapPreimage(Box<GatewayPayWaitForSwapPreimage>),
+    /// Legacy in-flight: outbound leg paid, cost not recorded.
     ClaimOutgoingContract(Box<GatewayPayClaimOutgoingContract>),
     Failed {
         error: OutgoingPaymentError,
         error_message: String,
+    },
+    /// Outbound leg settled with a known cost; the claim is being submitted.
+    ClaimOutgoingContractV2(Box<GatewayPayClaimOutgoingContractV2>),
+    /// Terminal: claim submitted, cost known.
+    Claimed {
+        out_points: Vec<OutPoint>,
+        preimage: Preimage,
+        contract_amount: Amount,
+        cost: OutboundCost,
     },
 }
 
@@ -81,6 +92,8 @@ impl fmt::Display for GatewayPayStates {
             GatewayPayStates::WaitForSwapPreimage(_) => write!(f, "WaitForSwapPreimage"),
             GatewayPayStates::ClaimOutgoingContract(_) => write!(f, "ClaimOutgoingContract"),
             GatewayPayStates::Failed { .. } => write!(f, "Failed"),
+            GatewayPayStates::ClaimOutgoingContractV2(_) => write!(f, "ClaimOutgoingContractV2"),
+            GatewayPayStates::Claimed { .. } => write!(f, "Claimed"),
         }
     }
 }
@@ -133,6 +146,9 @@ impl State for GatewayPayStateMachine {
                 context.clone(),
                 self.common.clone(),
             ),
+            GatewayPayStates::ClaimOutgoingContractV2(claim) => {
+                claim.transitions(global_context.clone(), context.clone(), self.common.clone())
+            }
             _ => {
                 vec![]
             }
@@ -287,6 +303,8 @@ impl GatewayPayInvoice {
             .is_lnv2_direct_swap(swap_parameters.payment_hash, amount)
             .await
         {
+            let funded = lnv2_incoming_contract.commitment.amount;
+            let target_federation = client.federation_id();
             let state = match client
                 .get_first_module::<fedimint_gwv2_client::GatewayClientModuleV2>()
                 .expect("Must have client module")
@@ -301,10 +319,14 @@ impl GatewayPayInvoice {
                     fedimint_gwv2_client::FinalReceiveState::Success(preimage) => {
                         GatewayPayStateMachine {
                             common,
-                            state: GatewayPayStates::ClaimOutgoingContract(Box::new(
-                                GatewayPayClaimOutgoingContract {
+                            state: GatewayPayStates::ClaimOutgoingContractV2(Box::new(
+                                GatewayPayClaimOutgoingContractV2 {
                                     contract,
                                     preimage: Preimage(preimage),
+                                    cost: OutboundCost::Swap {
+                                        funded,
+                                        target_federation,
+                                    },
                                 },
                             )),
                         }
@@ -582,12 +604,20 @@ impl GatewayPayInvoice {
             .await;
 
         match payment_result {
-            Ok(PayInvoiceResponse { preimage, .. }) => {
+            Ok(PayInvoiceResponse {
+                preimage,
+                amount_sent,
+                fee,
+            }) => {
                 debug!("Preimage received for contract {contract:?}");
                 GatewayPayStateMachine {
                     common,
-                    state: GatewayPayStates::ClaimOutgoingContract(Box::new(
-                        GatewayPayClaimOutgoingContract { contract, preimage },
+                    state: GatewayPayStates::ClaimOutgoingContractV2(Box::new(
+                        GatewayPayClaimOutgoingContractV2 {
+                            contract,
+                            preimage,
+                            cost: OutboundCost::Lightning { amount_sent, fee },
+                        },
                     )),
                 }
             }
@@ -797,8 +827,8 @@ struct PaymentParameters {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
 pub struct GatewayPayClaimOutgoingContract {
-    contract: OutgoingContractAccount,
-    preimage: Preimage,
+    pub(crate) contract: OutgoingContractAccount,
+    pub(crate) preimage: Preimage,
 }
 
 impl GatewayPayClaimOutgoingContract {
@@ -820,6 +850,7 @@ impl GatewayPayClaimOutgoingContract {
                     common.clone(),
                     contract.clone(),
                     preimage.clone(),
+                    None,
                 ))
             },
         )]
@@ -832,6 +863,7 @@ impl GatewayPayClaimOutgoingContract {
         common: GatewayPayCommon,
         contract: OutgoingContractAccount,
         preimage: Preimage,
+        cost: Option<OutboundCost>,
     ) -> GatewayPayStateMachine {
         debug!("Claiming outgoing contract {contract:?}");
 
@@ -854,25 +886,67 @@ impl GatewayPayClaimOutgoingContract {
             keys: vec![context.redeem_key],
         };
 
-        let out_points = global_context
+        let out_points: Vec<OutPoint> = global_context
             .claim_inputs(dbtx, ClientInputBundle::new_no_sm(vec![client_input]))
             .await
             .expect("Cannot claim input, additional funding needed")
             .into_iter()
             .collect();
         debug!("Claimed outgoing contract {contract:?} with out points {out_points:?}");
-        GatewayPayStateMachine {
-            common,
-            state: GatewayPayStates::Preimage(out_points, preimage),
-        }
+        let state = match cost {
+            Some(cost) => GatewayPayStates::Claimed {
+                out_points,
+                preimage,
+                contract_amount: contract.amount,
+                cost,
+            },
+            None => GatewayPayStates::Preimage(out_points, preimage),
+        };
+        GatewayPayStateMachine { common, state }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
+pub struct GatewayPayClaimOutgoingContractV2 {
+    pub(crate) contract: OutgoingContractAccount,
+    pub(crate) preimage: Preimage,
+    pub(crate) cost: OutboundCost,
+}
+
+impl GatewayPayClaimOutgoingContractV2 {
+    fn transitions(
+        &self,
+        global_context: DynGlobalClientContext,
+        context: GatewayClientContext,
+        common: GatewayPayCommon,
+    ) -> Vec<StateTransition<GatewayPayStateMachine>> {
+        let contract = self.contract.clone();
+        let preimage = self.preimage.clone();
+        let cost = self.cost.clone();
+        vec![StateTransition::new(
+            future::ready(()),
+            move |dbtx, (), _| {
+                Box::pin(
+                    GatewayPayClaimOutgoingContract::transition_claim_outgoing_contract(
+                        dbtx,
+                        global_context.clone(),
+                        context.clone(),
+                        common.clone(),
+                        contract.clone(),
+                        preimage.clone(),
+                        Some(cost.clone()),
+                    ),
+                )
+            },
+        )]
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
 pub struct GatewayPayWaitForSwapPreimage {
-    contract: OutgoingContractAccount,
-    federation_id: FederationId,
-    operation_id: OperationId,
+    pub(crate) contract: OutgoingContractAccount,
+    pub(crate) federation_id: FederationId,
+    pub(crate) operation_id: OperationId,
 }
 
 impl GatewayPayWaitForSwapPreimage {
@@ -889,8 +963,13 @@ impl GatewayPayWaitForSwapPreimage {
             move |_dbtx, result, _old_state| {
                 let common = common.clone();
                 let contract = contract.clone();
-                Box::pin(async {
-                    Self::transition_claim_outgoing_contract(common, result, contract)
+                Box::pin(async move {
+                    Self::transition_claim_outgoing_contract(
+                        common,
+                        result,
+                        contract,
+                        federation_id,
+                    )
                 })
             },
         )]
@@ -901,7 +980,7 @@ impl GatewayPayWaitForSwapPreimage {
         federation_id: FederationId,
         operation_id: OperationId,
         contract: OutgoingContractAccount,
-    ) -> Result<Preimage, OutgoingPaymentError> {
+    ) -> Result<(Preimage, Option<Amount>), OutgoingPaymentError> {
         debug!("Waiting preimage for contract {contract:?}");
 
         let client = context
@@ -951,7 +1030,22 @@ impl GatewayPayWaitForSwapPreimage {
                         }
                         GatewayExtReceiveStates::Preimage(preimage) => {
                             debug!(?contract, "Received preimage");
-                            return Ok(preimage);
+                            // The amount the target federation's incoming contract was
+                            // actually funded with -- not carried by any LNv1 state
+                            // machine, so read it back from the record the target
+                            // client wrote when it funded that contract. `None` here
+                            // means the record predates this fix (or the target client
+                            // vanished); the cost of this swap must then stay unknown
+                            // rather than be guessed from the source contract's amount,
+                            // which includes the gateway's own fee.
+                            let funded = client
+                                .value()
+                                .get_first_module::<GatewayClientModule>()
+                                .expect("Must have client module")
+                                .incoming_amounts(operation_id)
+                                .await
+                                .map(|amounts| amounts.contract_amount);
+                            return Ok((preimage, funded));
                         }
                         other => {
                             warn!(?contract, "Got state {other:?}");
@@ -971,13 +1065,38 @@ impl GatewayPayWaitForSwapPreimage {
         .await
     }
 
+    /// `result` carries the amount the gateway actually funded the target
+    /// federation's incoming contract with, read back from that federation's
+    /// own record (`GatewayClientModule::incoming_amounts`) rather than
+    /// derived here. `contract.amount` -- the *source* outgoing contract's
+    /// amount -- includes the gateway's fee, so it is never used as a stand-in:
+    /// doing so would silently zero out both the margin earned on every LNv1
+    /// swap and any overfunding loss. When the target amount is unavailable
+    /// (`None`, e.g. an operation predating this fix), the claim falls back to
+    /// the legacy `ClaimOutgoingContract` variant so the cost is recorded as
+    /// unknown -- and scored as such by the solvency audit -- instead of being
+    /// guessed.
     fn transition_claim_outgoing_contract(
         common: GatewayPayCommon,
-        result: Result<Preimage, OutgoingPaymentError>,
+        result: Result<(Preimage, Option<Amount>), OutgoingPaymentError>,
         contract: OutgoingContractAccount,
+        federation_id: FederationId,
     ) -> GatewayPayStateMachine {
         match result {
-            Ok(preimage) => GatewayPayStateMachine {
+            Ok((preimage, Some(funded))) => GatewayPayStateMachine {
+                common,
+                state: GatewayPayStates::ClaimOutgoingContractV2(Box::new(
+                    GatewayPayClaimOutgoingContractV2 {
+                        contract,
+                        preimage,
+                        cost: OutboundCost::Swap {
+                            funded,
+                            target_federation: federation_id,
+                        },
+                    },
+                )),
+            },
+            Ok((preimage, None)) => GatewayPayStateMachine {
                 common,
                 state: GatewayPayStates::ClaimOutgoingContract(Box::new(
                     GatewayPayClaimOutgoingContract { contract, preimage },
@@ -996,8 +1115,8 @@ impl GatewayPayWaitForSwapPreimage {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
 pub struct GatewayPayCancelContract {
-    contract: OutgoingContractAccount,
-    error: OutgoingPaymentError,
+    pub(crate) contract: OutgoingContractAccount,
+    pub(crate) error: OutgoingPaymentError,
 }
 
 impl GatewayPayCancelContract {
@@ -1341,6 +1460,50 @@ mod tests {
         assert_eq!(
             validate_amount(Amount::from_msats(u64::MAX), largest_representable),
             Ok(())
+        );
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests_support {
+    use bitcoin::hashes::Hash as _;
+    use fedimint_ln_common::contracts::ContractId;
+
+    use super::{OutgoingPaymentError, OutgoingPaymentErrorType};
+
+    pub(crate) fn dummy_error() -> OutgoingPaymentError {
+        OutgoingPaymentError {
+            error_type: OutgoingPaymentErrorType::InvoiceAlreadyPaid,
+            contract_id: ContractId::from_raw_hash(bitcoin::hashes::sha256::Hash::hash(b"c")),
+            contract: None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod state_layout_tests {
+    use bitcoin::hashes::Hash as _;
+    use fedimint_core::encoding::Encodable;
+    use fedimint_ln_common::contracts::ContractId;
+
+    use super::GatewayPayStates;
+
+    #[test]
+    fn existing_variants_keep_their_indices_and_new_ones_follow() {
+        let legacy = GatewayPayStates::OfferDoesNotExist(ContractId::from_raw_hash(
+            bitcoin::hashes::sha256::Hash::hash(b"x"),
+        ));
+        assert_eq!(legacy.consensus_encode_to_vec()[0], 3);
+        // appended after `Failed` = 7
+        // ClaimOutgoingContractV2 = 8 and Claimed = 9 are asserted by constructing
+        // them in the audit tests of Task 7; here we only pin that nothing moved.
+        assert_eq!(
+            GatewayPayStates::Failed {
+                error: super::tests_support::dummy_error(),
+                error_message: String::new(),
+            }
+            .consensus_encode_to_vec()[0],
+            7
         );
     }
 }

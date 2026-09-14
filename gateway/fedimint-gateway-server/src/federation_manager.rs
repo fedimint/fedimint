@@ -53,6 +53,14 @@ impl FederationManager {
         }
     }
 
+    /// Every connected federation's client, for whole-gateway reports such
+    /// as the forwarding ledger.
+    pub fn clients(
+        &self,
+    ) -> impl Iterator<Item = (&FederationId, &Spanned<fedimint_client::ClientHandleArc>)> {
+        self.clients.iter()
+    }
+
     pub fn add_client(&mut self, index: u64, client: Spanned<fedimint_client::ClientHandleArc>) {
         let federation_id = client.borrow().with_sync(|c| c.federation_id());
         self.clients.insert(federation_id, client);

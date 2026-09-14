@@ -257,6 +257,9 @@ pub struct GatewayBalances {
     pub lightning_balance_msats: u64,
     pub ecash_balances: Vec<FederationBalanceInfo>,
     pub inbound_lightning_liquidity_msats: u64,
+    /// Every sat the Lightning node controls, per the conservation-safe
+    /// partition in `GetBalancesResponse::total_msats`.
+    pub lightning_node_total_msats: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]

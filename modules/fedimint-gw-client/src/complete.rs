@@ -208,14 +208,14 @@ impl WaitForPreimageState {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-enum HtlcOutcome {
+pub(crate) enum HtlcOutcome {
     Success(Preimage),
     Failure(String),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct CompleteHtlcState {
-    outcome: HtlcOutcome,
+    pub(crate) outcome: HtlcOutcome,
 }
 
 impl CompleteHtlcState {

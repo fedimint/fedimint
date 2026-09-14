@@ -37,8 +37,8 @@ use tonic_lnd::lnrpc::{
     ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest,
     ConnectPeerRequest as LndConnectPeerRequest, FeeReportRequest, GetInfoRequest, Invoice,
     InvoiceSubscription, LightningAddress, ListChannelsRequest, ListInvoiceRequest,
-    ListPaymentsRequest, ListPeersRequest, OpenChannelRequest, PolicyUpdateRequest,
-    SendCoinsRequest, UpdateFailure, WalletBalanceRequest,
+    ListPaymentsRequest, ListPeersRequest, OpenChannelRequest, PendingChannelsRequest,
+    PolicyUpdateRequest, SendCoinsRequest, UpdateFailure, WalletBalanceRequest,
 };
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -58,8 +58,8 @@ use crate::{
     CreateInvoiceResponse, GetBalancesResponse, GetInvoiceRequest, GetInvoiceResponse,
     GetLnOnchainAddressResponse, GetNodeInfoResponse, GetRouteHintsResponse,
     InterceptPaymentRequest, InterceptPaymentResponse, InvoiceDescription, NO_INCOMING_CIRCUIT,
-    OpenChannelResponse, PayInvoiceResponse, PaymentAction, SendOnchainRequest,
-    SendOnchainResponse, SetChannelFeesRequest,
+    OpenChannelResponse, OutboundPaymentStatus, PayInvoiceResponse, PaymentAction,
+    SendOnchainRequest, SendOnchainResponse, SetChannelFeesRequest, lnd_realized_cost,
 };
 
 type HtlcSubscriptionSender = mpsc::Sender<InterceptPaymentRequest>;
@@ -131,6 +131,13 @@ pub struct GatewayLndClient {
     /// as if it were federation-bound, producing invalid LNv1 responses that
     /// crash LND's htlc_interceptor stream.
     lnv2_filter: Lnv2HoldInvoiceFilter,
+}
+
+/// A settled outbound payment as LND reports it.
+struct LndSettledPayment {
+    preimage_hex: String,
+    value_msat: i64,
+    fee_msat: i64,
 }
 
 impl GatewayLndClient {
@@ -716,7 +723,7 @@ impl GatewayLndClient {
         &self,
         payment_hash: Vec<u8>,
         client: &mut LndClient,
-    ) -> Result<Option<String>, LightningRpcError> {
+    ) -> Result<Option<LndSettledPayment>, LightningRpcError> {
         // Loop until we successfully get the status of the payment, or determine that
         // the payment has not been made yet.
         loop {
@@ -734,7 +741,11 @@ impl GatewayLndClient {
                     match payments.into_inner().message().await {
                         Ok(Some(payment)) => {
                             if payment.status() == PaymentStatus::Succeeded {
-                                return Ok(Some(payment.payment_preimage));
+                                return Ok(Some(LndSettledPayment {
+                                    preimage_hex: payment.payment_preimage,
+                                    value_msat: payment.value_msat,
+                                    fee_msat: payment.fee_msat,
+                                }));
                             }
 
                             let failure_reason = payment.failure_reason();
@@ -942,6 +953,20 @@ impl fmt::Debug for GatewayLndClient {
     }
 }
 
+/// LND reports balances as `i64`; a negative value is malformed and is
+/// reported as zero rather than wrapping into a huge number.
+fn non_negative_sats(value: i64, field: &'static str) -> u64 {
+    u64::try_from(value).unwrap_or_else(|_| {
+        warn!(
+            target: LOG_LIGHTNING,
+            field,
+            value,
+            "LND reported a negative balance; treating as zero",
+        );
+        0
+    })
+}
+
 #[async_trait]
 impl ILnRpcClient for GatewayLndClient {
     async fn info(&self) -> Result<GetNodeInfoResponse, LightningRpcError> {
@@ -1085,21 +1110,22 @@ impl ILnRpcClient for GatewayLndClient {
         );
 
         // If the payment exists, that means we've already tried to pay the invoice
-        let preimage: Vec<u8> = match self
+        let (preimage, amount_sent, fee): (Vec<u8>, Amount, Option<Amount>) = match self
             .lookup_payment(invoice.payment_hash.to_byte_array().to_vec(), &mut client)
             .await?
         {
-            Some(preimage) => {
+            Some(settled) => {
                 info!(
                     target: LOG_LIGHTNING,
                     payment_hash = %PrettyPaymentHash(&payment_hash),
                     "LND payment already exists for invoice",
                 );
-                hex::FromHex::from_hex(preimage.as_str()).map_err(|error| {
-                    LightningRpcError::FailedPayment {
+                let preimage: Vec<u8> = hex::FromHex::from_hex(settled.preimage_hex.as_str())
+                    .map_err(|error| LightningRpcError::FailedPayment {
                         failure_reason: format!("Failed to convert preimage {error:?}"),
-                    }
-                })?
+                    })?;
+                let (amount_sent, fee) = lnd_realized_cost(settled.value_msat, settled.fee_msat);
+                (preimage, amount_sent, fee)
             }
             _ => {
                 // LND API allows fee limits in the `i64` range, but we use `u64` for
@@ -1198,10 +1224,15 @@ impl ILnRpcClient for GatewayLndClient {
                                 payment_hash = %PrettyPaymentHash(&payment_hash),
                                 "LND payment succeeded for invoice",
                             );
-                            break hex::FromHex::from_hex(payment.payment_preimage.as_str())
-                                .map_err(|error| LightningRpcError::FailedPayment {
-                                    failure_reason: format!("Failed to convert preimage {error:?}"),
-                                })?;
+                            let preimage: Vec<u8> = hex::FromHex::from_hex(
+                                payment.payment_preimage.as_str(),
+                            )
+                            .map_err(|error| LightningRpcError::FailedPayment {
+                                failure_reason: format!("Failed to convert preimage {error:?}"),
+                            })?;
+                            let (amount_sent, fee) =
+                                lnd_realized_cost(payment.value_msat, payment.fee_msat);
+                            break (preimage, amount_sent, fee);
                         }
                         Ok(Some(payment)) if payment.status() == PaymentStatus::Failed => {
                             // The one terminal status besides `Succeeded`: a
@@ -1249,14 +1280,17 @@ impl ILnRpcClient for GatewayLndClient {
                                 .lookup_payment(payment_hash.clone(), &mut client)
                                 .await?
                             {
-                                Some(preimage) => {
-                                    break hex::FromHex::from_hex(preimage.as_str()).map_err(
-                                        |error| LightningRpcError::FailedPayment {
-                                            failure_reason: format!(
-                                                "Failed to convert preimage {error:?}"
-                                            ),
-                                        },
-                                    )?;
+                                Some(settled) => {
+                                    let preimage: Vec<u8> =
+                                        hex::FromHex::from_hex(settled.preimage_hex.as_str())
+                                            .map_err(|error| LightningRpcError::FailedPayment {
+                                                failure_reason: format!(
+                                                    "Failed to convert preimage {error:?}"
+                                                ),
+                                            })?;
+                                    let (amount_sent, fee) =
+                                        lnd_realized_cost(settled.value_msat, settled.fee_msat);
+                                    break (preimage, amount_sent, fee);
                                 }
                                 None => {
                                     return Err(LightningRpcError::FailedPayment {
@@ -1274,6 +1308,8 @@ impl ILnRpcClient for GatewayLndClient {
         };
         Ok(PayInvoiceResponse {
             preimage: Preimage(preimage.try_into().expect("Failed to create preimage")),
+            amount_sent,
+            fee,
         })
     }
 
@@ -1328,6 +1364,47 @@ impl ILnRpcClient for GatewayLndClient {
                 ),
             }),
         }
+    }
+
+    async fn lookup_outbound_payment(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<Option<OutboundPaymentStatus>, LightningRpcError> {
+        let mut client = self.connect().await?;
+        let stream = client
+            .router()
+            .track_payment_v2(TrackPaymentRequest {
+                payment_hash: payment_hash.to_byte_array().to_vec(),
+                no_inflight_updates: false,
+            })
+            .await;
+        let stream = match stream {
+            Ok(stream) => stream,
+            Err(status) if status.code() == Code::NotFound => return Ok(None),
+            Err(status) => {
+                return Err(LightningRpcError::FailedPayment {
+                    failure_reason: format!("track_payment_v2 failed: {status:?}"),
+                });
+            }
+        };
+        let payment = match stream.into_inner().message().await {
+            Ok(Some(payment)) => payment,
+            Ok(None) => return Ok(None),
+            Err(status) if status.code() == Code::NotFound => return Ok(None),
+            Err(status) => {
+                return Err(LightningRpcError::FailedPayment {
+                    failure_reason: format!("track_payment_v2 stream failed: {status:?}"),
+                });
+            }
+        };
+        Ok(Some(match payment.status() {
+            PaymentStatus::Succeeded => {
+                let (amount_sent, fee) = lnd_realized_cost(payment.value_msat, payment.fee_msat);
+                OutboundPaymentStatus::Succeeded { amount_sent, fee }
+            }
+            PaymentStatus::InFlight | PaymentStatus::Initiated => OutboundPaymentStatus::Pending,
+            PaymentStatus::Failed | PaymentStatus::Unknown => OutboundPaymentStatus::Failed,
+        }))
     }
 
     async fn route_htlcs<'a>(
@@ -1998,17 +2075,6 @@ impl ILnRpcClient for GatewayLndClient {
                 failure_reason: format!("Failed to get lightning balance {e:?}"),
             })?
             .into_inner();
-        let total_outbound = channel_balance_response.local_balance.unwrap_or_default();
-        let unsettled_outbound = channel_balance_response
-            .unsettled_local_balance
-            .unwrap_or_default();
-        let pending_outbound = channel_balance_response
-            .pending_open_local_balance
-            .unwrap_or_default();
-        let lightning_balance_msats = total_outbound
-            .msat
-            .saturating_sub(unsettled_outbound.msat)
-            .saturating_sub(pending_outbound.msat);
 
         let total_inbound = channel_balance_response.remote_balance.unwrap_or_default();
         let unsettled_inbound = channel_balance_response
@@ -2022,12 +2088,42 @@ impl ILnRpcClient for GatewayLndClient {
             .saturating_sub(unsettled_inbound.msat)
             .saturating_sub(pending_inbound.msat);
 
+        let pending_channels_response = client
+            .lightning()
+            .pending_channels(PendingChannelsRequest {
+                include_raw_tx: false,
+            })
+            .await
+            .map_err(|e| LightningRpcError::FailedToGetBalances {
+                failure_reason: format!("Failed to get pending channels {e:?}"),
+            })?
+            .into_inner();
+
+        let local = channel_balance_response.local_balance.unwrap_or_default();
+        let unsettled_local = channel_balance_response
+            .unsettled_local_balance
+            .unwrap_or_default();
+        let pending_open_local = channel_balance_response
+            .pending_open_local_balance
+            .unwrap_or_default();
+        let anchor_reserve_sats = non_negative_sats(
+            wallet_balance_response.reserved_balance_anchor_chan,
+            "reserved_balance_anchor_chan",
+        );
+        let total_onchain_sats =
+            non_negative_sats(wallet_balance_response.total_balance, "total_balance");
+
         Ok(GetBalancesResponse {
-            onchain_balance_sats: (wallet_balance_response.total_balance
-                + wallet_balance_response.reserved_balance_anchor_chan)
-                as u64,
-            lightning_balance_msats,
+            onchain_balance_sats: total_onchain_sats.saturating_sub(anchor_reserve_sats),
+            lightning_balance_msats: local.msat,
             inbound_lightning_liquidity_msats,
+            htlc_in_flight_msats: unsettled_local.msat,
+            pending_open_msats: pending_open_local.msat,
+            closing_limbo_sats: non_negative_sats(
+                pending_channels_response.total_limbo_balance,
+                "total_limbo_balance",
+            ),
+            anchor_reserve_sats,
         })
     }
 

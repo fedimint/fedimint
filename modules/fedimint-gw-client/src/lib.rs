@@ -1,4 +1,6 @@
+pub mod audit;
 mod complete;
+mod db;
 pub mod events;
 pub mod pay;
 #[cfg(test)]
@@ -17,6 +19,8 @@ use bitcoin::hashes::{Hash, sha256};
 use bitcoin::key::Secp256k1;
 use bitcoin::secp256k1::All;
 use complete::{GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageState};
+pub use db::Lnv1IncomingAmounts;
+use db::{IncomingAmountsKey, IncomingAmountsKeyPrefix};
 use events::{IncomingPaymentStarted, OutgoingPaymentStarted};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::ClientHandleArc;
@@ -34,7 +38,7 @@ use fedimint_client_module::{
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::{AutocommitError, DatabaseTransaction};
+use fedimint_core::db::{AutocommitError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::time::duration_since_epoch;
@@ -158,10 +162,21 @@ impl ModuleInit for GatewayClientInit {
 
     async fn dump_database(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
-        _prefix_names: Vec<String>,
+        dbtx: &mut DatabaseTransaction<'_>,
+        prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
-        Box::new(vec![].into_iter())
+        let mut items: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
+        if prefix_names.is_empty() || prefix_names.iter().any(|p| p == "incomingamounts") {
+            fedimint_core::push_db_pair_items!(
+                dbtx,
+                IncomingAmountsKeyPrefix,
+                IncomingAmountsKey,
+                Lnv1IncomingAmounts,
+                items,
+                "LNv1 Incoming Amounts"
+            );
+        }
+        Box::new(items.into_iter())
     }
 }
 
@@ -405,6 +420,7 @@ impl GatewayClientModule {
     ) -> Result<
         (
             OperationId,
+            Amount,
             ClientOutput<LightningOutputV0>,
             ClientOutputSM<GatewayClientStateMachines>,
         ),
@@ -439,7 +455,7 @@ impl GatewayClientModule {
                 })]
             }),
         };
-        Ok((operation_id, client_output, client_output_sm))
+        Ok((operation_id, amount, client_output, client_output_sm))
     }
 
     /// Registers the gateway with a federation and reports whether it
@@ -627,6 +643,21 @@ impl GatewayClientModule {
         let (op_id_from_funding, amount, client_output, client_output_sm, contract_id) = self
             .create_funding_incoming_contract_output_from_htlc(htlc.clone())
             .await?;
+        // Neither the receive nor the complete state machine holds an amount,
+        // so record both here for the solvency audit. `incoming_amount_msat` is
+        // the value locked in the HTLC, never the sender-written onion amount.
+        {
+            let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+            dbtx.insert_entry(
+                &IncomingAmountsKey(operation_id),
+                &Lnv1IncomingAmounts {
+                    contract_amount: amount,
+                    incoming_amount: htlc.incoming_amount_msat,
+                },
+            )
+            .await;
+            dbtx.commit_tx().await;
+        }
         // Keep the direct derivation above in sync with the funding helper. Return
         // an error instead of panicking so the caller can fail back the HTLC cleanly.
         anyhow::ensure!(
@@ -662,6 +693,17 @@ impl GatewayClientModule {
             .await;
         dbtx.commit_tx().await;
         Ok(operation_id)
+    }
+
+    /// Amounts recorded for an LNv1 incoming forward, if the HTLC was
+    /// intercepted after amounts were recorded.
+    pub async fn incoming_amounts(&self, operation_id: OperationId) -> Option<Lnv1IncomingAmounts> {
+        self.client_ctx
+            .module_db()
+            .begin_transaction_nc()
+            .await
+            .get_value(&IncomingAmountsKey(operation_id))
+            .await
     }
 
     /// Attempt buying preimage from this federation in order to fulfill a pay
@@ -710,7 +752,8 @@ impl GatewayClientModule {
             return Ok(None);
         }
 
-        let (op_id_from_funding, client_output, client_output_sm) = self
+        let incoming_amount = swap_params.amount_msat;
+        let (op_id_from_funding, amount, client_output, client_output_sm) = self
             .create_funding_incoming_contract_output_from_swap(swap_params.clone())
             .await?;
         // Keep the direct derivation above in sync with the funding helper.
@@ -744,6 +787,21 @@ impl GatewayClientModule {
 
                             return Ok(Some(operation_id));
                         }
+
+                        // Neither the receive nor the complete state machine holds an
+                        // amount, so record both here for the solvency audit, atomically
+                        // with the state machines below. This is what the LNv1 leg of a
+                        // direct swap funds the target incoming contract with -- the
+                        // amount `GatewayPayWaitForSwapPreimage` on the source federation
+                        // reads back as the realized cost of the swap.
+                        dbtx.insert_entry(
+                            &IncomingAmountsKey(operation_id),
+                            &Lnv1IncomingAmounts {
+                                contract_amount: amount,
+                                incoming_amount,
+                            },
+                        )
+                        .await;
 
                         let output = ClientOutput {
                             output: LightningOutput::V0(client_output.output),
@@ -897,12 +955,30 @@ impl GatewayClientModule {
             .verify_pruned_invoice(pay_invoice_payload.payment_data)
             .await?;
 
+        let operation_id = OperationId(payload.contract_id.to_byte_array());
+
+        // A request for a contract already being paid joins the operation
+        // already under way (see the autocommit below) and adds no exposure, so
+        // the gate belongs behind that join: a client retrying an in-flight
+        // payment must not be refused for exposure it is already counted in.
+        // Checked outside the transaction, like LNv2 does, so the balance read
+        // the gate performs never runs nested inside a write transaction; the
+        // autocommit below is still what decides the race.
+        if !self.client_ctx.operation_exists(operation_id).await {
+            // The invoice amount, not the contract amount: this
+            // under-estimates the exposure the forward actually adds by the
+            // gateway's own fee, which makes the gate slightly permissive
+            // rather than slightly wrong in the direction that would refuse a
+            // legitimate forward.
+            self.lightning_manager
+                .ensure_exposure_allows(payload.federation_id, invoice_amount)
+                .await?;
+        }
+
         self.client_ctx.module_db()
             .autocommit(
                 |dbtx, _| {
                     Box::pin(async {
-                        let operation_id = OperationId(payload.contract_id.to_byte_array());
-
                         // The operation id is the contract id, so an existing entry means we
                         // already accepted a request to pay this very contract. The state
                         // machine's own dedupe key covers the whole payload, so a caller who
@@ -1032,6 +1108,22 @@ impl GatewayClientModule {
                                     }
                                 }
                             }
+                            GatewayPayStates::Claimed { out_points, preimage, .. } => {
+                                yield GatewayExtPayStates::Preimage{ preimage: preimage.clone() };
+
+                                match client_ctx.await_primary_module_outputs(operation_id, out_points.clone()).await {
+                                    Ok(()) => {
+                                        debug!(?operation_id, "Success");
+                                        yield GatewayExtPayStates::Success{ preimage: preimage.clone(), out_points };
+                                        return;
+
+                                    }
+                                    Err(e) => {
+                                        warn!(?operation_id, "Got failure {e:?} while awaiting for outputs {out_points:?}");
+                                        // TODO: yield something here?
+                                    }
+                                }
+                            }
                             GatewayPayStates::Canceled { txid, contract_id, error } => {
                                 debug!(?operation_id, "Trying to cancel contract {contract_id:?} due to {error:?}");
                                 match client_ctx.transaction_updates(operation_id).await.await_tx_accepted(txid).await {
@@ -1057,8 +1149,17 @@ impl GatewayClientModule {
                             GatewayPayStates::PayInvoice(_) => {
                                 debug!("Got initial state PayInvoice while awaiting for output of {}", operation_id.fmt_short());
                             }
-                            other => {
-                                info!("Got state {other:?} while awaiting for output of {}", operation_id.fmt_short());
+                            GatewayPayStates::CancelContract(_) => {
+                                info!("Got state CancelContract while awaiting for output of {}", operation_id.fmt_short());
+                            }
+                            GatewayPayStates::WaitForSwapPreimage(_) => {
+                                info!("Got state WaitForSwapPreimage while awaiting for output of {}", operation_id.fmt_short());
+                            }
+                            GatewayPayStates::ClaimOutgoingContract(_) => {
+                                info!("Got state ClaimOutgoingContract while awaiting for output of {}", operation_id.fmt_short());
+                            }
+                            GatewayPayStates::ClaimOutgoingContractV2(_) => {
+                                info!("Got state ClaimOutgoingContractV2 while awaiting for output of {}", operation_id.fmt_short());
                             }
                         }
                     } _ => {
@@ -1329,6 +1430,21 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
         &self,
         htlc_response: InterceptPaymentResponse,
     ) -> Result<(), LightningRpcError>;
+
+    /// Refuses an outgoing forward that would push this federation's exposure
+    /// (ecash plus open positions) past the operator-configured limit.
+    /// `Ok(())` when no limit is configured.
+    ///
+    /// The gate lives behind this trait rather than at the request handler so
+    /// it can run *after* the join in
+    /// [`GatewayClientModule::gateway_pay_bolt11_invoice`]: a client retrying a
+    /// payment already under way must never be refused for exposure it is
+    /// already counted in, or the contract rides to its timeout refund.
+    async fn ensure_exposure_allows(
+        &self,
+        federation_id: FederationId,
+        additional: Amount,
+    ) -> anyhow::Result<()>;
 
     /// Check if the gateway satisfy the LNv1 payment by funding an LNv2
     /// `IncomingContract`
