@@ -159,6 +159,7 @@ declare_vars! {
         FM_PORT_LND_REST: u16 = port_alloc(1)?; env: "FM_PORT_LND_REST";
         FM_PORT_ESPLORA: u16 = port_alloc(1)?; env: "FM_PORT_ESPLORA";
         FM_PORT_ESPLORA_MONITORING: u16 = port_alloc(1)?; env: "FM_PORT_ESPLORA_MONITORING";
+        FM_PORT_ESPLORA_ELECTRUM: u16 = port_alloc(1)?; env: "FM_PORT_ESPLORA_ELECTRUM";
         FM_PORT_GW_LND: u16 = match gateway_base_port {
             Some(b) => b + GATEWAY_PORT_OFFSET_LND,
             None => port_alloc(1)?,

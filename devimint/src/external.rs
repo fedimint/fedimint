@@ -835,6 +835,7 @@ impl Esplora {
         let btc_rpc_port = process_mgr.globals.FM_PORT_BTC_RPC;
         let esplora_port = process_mgr.globals.FM_PORT_ESPLORA;
         let esplora_monitoring_port = process_mgr.globals.FM_PORT_ESPLORA_MONITORING;
+        let esplora_electrum_port = process_mgr.globals.FM_PORT_ESPLORA_ELECTRUM;
         // spawn esplora
         let cmd = cmd!(
             crate::util::Esplora,
@@ -845,6 +846,8 @@ impl Esplora {
             "--daemon-rpc-addr=127.0.0.1:{btc_rpc_port}",
             "--http-addr=127.0.0.1:{esplora_port}",
             "--monitoring-addr=127.0.0.1:{esplora_monitoring_port}",
+            // esplora binds a fixed Electrum port by default, so two devimints on a host collide
+            "--electrum-rpc-addr=127.0.0.1:{esplora_electrum_port}",
             "--jsonrpc-import", // Workaround for incompatible on-disk format
             "--cors=*",         // Allow CORS for WASM recovery tool
         );
