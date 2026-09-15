@@ -72,12 +72,24 @@ pub fn signet_bolt_11_invoice() -> Bolt11Invoice {
 #[derive(Debug)]
 pub struct MockGatewayConnection {
     keypair: Keypair,
+    receive_enabled: bool,
+}
+
+impl MockGatewayConnection {
+    /// A gateway that has turned off receives for the federation.
+    pub fn with_receive_disabled() -> Self {
+        MockGatewayConnection {
+            receive_enabled: false,
+            ..Self::default()
+        }
+    }
 }
 
 impl Default for MockGatewayConnection {
     fn default() -> Self {
         MockGatewayConnection {
             keypair: gateway_keypair(),
+            receive_enabled: true,
         }
     }
 }
@@ -98,6 +110,7 @@ impl GatewayConnection for MockGatewayConnection {
             expiration_delta_default: 500,
             expiration_delta_minimum: 144,
             receive_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+            receive_enabled: self.receive_enabled,
         }))
     }
 

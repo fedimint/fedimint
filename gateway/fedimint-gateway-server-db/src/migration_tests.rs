@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::str::FromStr;
 
 use anyhow::ensure;
@@ -17,14 +18,16 @@ use strum::IntoEnumIterator;
 use tracing::info;
 
 use super::{
-    Amount, BTreeMap, DbKeyPrefix, Encodable, FederationConfig, FederationConfigKey,
-    FederationConfigKeyPrefix, FederationConfigKeyV0, FederationConfigV0, FederationId,
-    GatewayConfigurationKeyV0, GatewayConfigurationV0, GatewayDbExt, GatewayDbtxNcExt,
-    GatewayPublicKey, IDatabaseTransactionOpsCoreTyped, IncomingContract, InviteCode, Keypair,
-    NetworkLegacyEncodingWrapper, OsRng, PaymentImage, PreimageAuthentication,
-    PreimageAuthenticationPrefix, RegisteredIncomingContractKeyV0, RegisteredIncomingContractV0,
-    StreamExt, duration_since_epoch, get_gatewayd_database_migrations, migrate_federation_configs,
-    migrate_registered_incoming_contracts, secp256k1, sha256,
+    Amount, BTreeMap, DbKeyPrefix, Encodable, FederationConfig, FederationConfigKeyPrefix,
+    FederationConfigKeyPrefixV2, FederationConfigKeyV0, FederationConfigKeyV2, FederationConfigV0,
+    FederationConfigV2, FederationId, GatewayConfigurationKeyV0, GatewayConfigurationV0,
+    GatewayDbExt, GatewayDbtxNcExt, GatewayPublicKey, IDatabaseTransactionOpsCoreTyped,
+    IncomingContract, InviteCode, Keypair, NetworkLegacyEncodingWrapper, OsRng, PaymentImage,
+    PreimageAuthentication, PreimageAuthenticationPrefix, RegisteredIncomingContractKeyV0,
+    RegisteredIncomingContractV0, StreamExt, duration_since_epoch,
+    get_gatewayd_database_migrations, migrate_federation_configs,
+    migrate_federation_configs_payment_policies, migrate_registered_incoming_contracts, secp256k1,
+    sha256,
 };
 use crate::GatewayPublicKeyV0;
 
@@ -112,6 +115,12 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
                         ensure!(
                             num_configs > 0,
                             "validate_migrations was not able to read any FederationConfigs"
+                        );
+                        ensure!(
+                            configs
+                                .iter()
+                                .all(|(_, config)| config.payment_policies.is_empty()),
+                            "Migrated FederationConfigs must carry no payment restriction"
                         );
                         info!("Validated FederationConfig");
                     }
@@ -223,6 +232,60 @@ async fn test_registered_incoming_contract_migration() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// `payment_policies` was added to the federation config in v9. Records
+/// written before it must come out without any restriction, with every other
+/// field intact.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_federation_config_payment_policies_migration() -> anyhow::Result<()> {
+    let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+    let federation_id = FederationId::dummy();
+    let invite_code = InviteCode::new(
+        SafeUrl::from_str("http://testfed.com")?,
+        PeerId::from(0),
+        federation_id,
+        None,
+    );
+
+    let mut dbtx = db.begin_transaction().await;
+    dbtx.insert_new_entry(
+        &FederationConfigKeyV2 { id: federation_id },
+        &FederationConfigV2 {
+            invite_code: invite_code.clone(),
+            federation_index: 7,
+            lightning_fee: PaymentFee::SEND_FEE_LIMIT,
+            transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+            _connector: ConnectorType::Tor,
+        },
+    )
+    .await;
+    dbtx.commit_tx().await;
+
+    let mut migration_dbtx = db.begin_transaction().await;
+    migrate_federation_configs_payment_policies(&mut migration_dbtx.to_ref_nc()).await?;
+    migration_dbtx.commit_tx().await;
+
+    let migrated = db
+        .begin_transaction_nc()
+        .await
+        .load_federation_config(federation_id)
+        .await
+        .expect("The federation config survives the migration");
+
+    assert_eq!(
+        migrated,
+        FederationConfig {
+            invite_code,
+            federation_index: 7,
+            lightning_fee: PaymentFee::SEND_FEE_LIMIT,
+            transaction_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+            payment_policies: BTreeSet::new(),
+            _connector: ConnectorType::Tor,
+        }
+    );
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_isolated_db_migration() -> anyhow::Result<()> {
     async fn create_isolated_record(prefix: Vec<u8>, db: &Database) {
@@ -252,10 +315,10 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
     let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
     let mut dbtx = db.begin_transaction().await;
     dbtx.insert_new_entry(
-        &FederationConfigKey {
+        &FederationConfigKeyV2 {
             id: conflicting_fed_id,
         },
-        &FederationConfig {
+        &FederationConfigV2 {
             invite_code: InviteCode::new(
                 SafeUrl::from_str("http://testfed.com").unwrap(),
                 PeerId::from(0),
@@ -272,10 +335,10 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
     .await;
 
     dbtx.insert_new_entry(
-        &FederationConfigKey {
+        &FederationConfigKeyV2 {
             id: nonconflicting_fed_id,
         },
-        &FederationConfig {
+        &FederationConfigV2 {
             invite_code: InviteCode::new(
                 SafeUrl::from_str("http://testfed2.com").unwrap(),
                 PeerId::from(0),
@@ -302,7 +365,7 @@ async fn test_isolated_db_migration() -> anyhow::Result<()> {
     let mut dbtx = db.begin_transaction_nc().await;
 
     let num_configs = dbtx
-        .find_by_prefix(&FederationConfigKeyPrefix)
+        .find_by_prefix(&FederationConfigKeyPrefixV2)
         .await
         .collect::<BTreeMap<_, _>>()
         .await

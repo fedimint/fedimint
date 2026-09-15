@@ -28,8 +28,8 @@ use fedimint_lnv2_client::events::{
 };
 use fedimint_lnv2_client::{
     FinalReceiveOperationState, InvoiceSendStatus, LightningClientInit, LightningClientModule,
-    LightningOperationMeta, ReceiveOperationState, ReceiveWithTermsError, SendOperationState,
-    SendPaymentError, SendWithTermsError,
+    LightningOperationMeta, ReceiveError, ReceiveOperationState, ReceiveWithTermsError,
+    SendOperationState, SendPaymentError, SendWithTermsError,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::PaymentFee;
@@ -98,11 +98,15 @@ fn try_parse_ln_event(entry: &EventLogEntry) -> Option<LnEvent> {
 }
 
 fn fixtures() -> Fixtures {
+    fixtures_with_gateway(MockGatewayConnection::default())
+}
+
+fn fixtures_with_gateway(gateway_conn: MockGatewayConnection) -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit);
 
     fixtures.with_module(
         LightningClientInit {
-            gateway_conn: Some(Arc::new(MockGatewayConnection::default())),
+            gateway_conn: Some(Arc::new(gateway_conn)),
             custom_meta_fn: Arc::new(|| {
                 serde_json::json!({
                     "timestamp": chrono::Utc::now().timestamp(),
@@ -539,6 +543,78 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     assert_eq!(
         update.status,
         SendPaymentStatus::Success(MOCK_INVOICE_PREIMAGE)
+    );
+
+    Ok(())
+}
+
+/// A gateway that has turned receives off for the federation says so in its
+/// routing info. The client refuses to request an invoice from it, while it
+/// can still send through it.
+#[tokio::test(flavor = "multi_thread")]
+async fn receive_refuses_a_gateway_with_receives_turned_off() -> anyhow::Result<()> {
+    let fixtures = fixtures_with_gateway(MockGatewayConnection::with_receive_disabled());
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+
+    assert_eq!(
+        lightning
+            .receive(
+                Amount::from_sats(1000),
+                60,
+                Bolt11InvoiceDescription::Direct(String::new()),
+                Some(mock::gateway()),
+                Value::Null,
+            )
+            .await
+            .err(),
+        Some(ReceiveError::ReceiveDisabled)
+    );
+
+    let receive_fee = lightning
+        .routing_info(&mock::gateway())
+        .await?
+        .expect("The mock gateway serves the federation")
+        .receive_fee;
+
+    assert_eq!(
+        lightning
+            .receive_with_terms(
+                Amount::from_sats(1000),
+                60,
+                Bolt11InvoiceDescription::Direct(String::new()),
+                mock::gateway(),
+                receive_fee,
+                Value::Null,
+            )
+            .await
+            .err(),
+        Some(ReceiveWithTermsError::Receive(
+            ReceiveError::ReceiveDisabled
+        ))
+    );
+
+    // Sending is unaffected by the receive policy.
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    let operation_id = lightning
+        .send(mock::payable_invoice(), Some(mock::gateway()), Value::Null)
+        .await?;
+
+    let mut sub = lightning
+        .subscribe_send_operation_state_updates(operation_id)
+        .await?
+        .into_stream();
+
+    assert_eq!(sub.ok().await?, SendOperationState::Funding);
+    assert_eq!(sub.ok().await?, SendOperationState::Funded);
+    assert_eq!(
+        sub.ok().await?,
+        SendOperationState::Success(MOCK_INVOICE_PREIMAGE)
     );
 
     Ok(())

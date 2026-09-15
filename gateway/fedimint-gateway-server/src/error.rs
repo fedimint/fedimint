@@ -57,6 +57,10 @@ pub enum PublicGatewayError {
     ReceiveEcashError { failure_reason: String },
     #[error("Too many requests")]
     RateLimited,
+    #[error("Receiving payments is disabled for federation {federation_id_prefix}")]
+    ReceiveDisabled {
+        federation_id_prefix: FederationIdPrefix,
+    },
     #[error("Unexpected Error: {}", OptStacktrace(.0))]
     Unexpected(#[from] anyhow::Error),
 }
@@ -103,6 +107,11 @@ impl IntoResponse for PublicGatewayError {
                 "Too many requests, please try again later".to_string(),
                 StatusCode::TOO_MANY_REQUESTS,
             ),
+            // The policy is public: LNv2 clients learn it from `routing_info`
+            // anyway, so naming the federation here reveals nothing new.
+            PublicGatewayError::ReceiveDisabled { .. } => {
+                (self.to_string(), StatusCode::BAD_REQUEST)
+            }
             PublicGatewayError::Unexpected(e) => (e.to_string(), StatusCode::BAD_REQUEST),
         };
 

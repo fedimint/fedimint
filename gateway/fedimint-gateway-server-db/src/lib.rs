@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use std::time::SystemTime;
 
@@ -430,6 +430,26 @@ pub struct FederationConfigV1 {
     pub fees: RoutingFees,
 }
 
+#[derive(Debug, Encodable, Decodable)]
+struct FederationConfigKeyPrefixV2;
+
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
+struct FederationConfigKeyV2 {
+    id: FederationId,
+}
+
+/// The federation config as stored before `payment_policies` was added.
+#[derive(Debug, Clone, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
+pub struct FederationConfigV2 {
+    pub invite_code: InviteCode,
+    #[serde(alias = "mint_channel_id")]
+    pub federation_index: u64,
+    pub lightning_fee: PaymentFee,
+    pub transaction_fee: PaymentFee,
+    #[allow(deprecated)] // only here for decoding backward-compat
+    pub _connector: ConnectorType,
+}
+
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Ord, PartialOrd)]
 struct FederationConfigKey {
     id: FederationId,
@@ -448,6 +468,12 @@ impl_db_record!(
 );
 
 impl_db_record!(
+    key = FederationConfigKeyV2,
+    value = FederationConfigV2,
+    db_prefix = DbKeyPrefix::FederationConfig,
+);
+
+impl_db_record!(
     key = FederationConfigKey,
     value = FederationConfig,
     db_prefix = DbKeyPrefix::FederationConfig,
@@ -460,6 +486,10 @@ impl_db_lookup!(
 impl_db_lookup!(
     key = FederationConfigKeyV1,
     query_prefix = FederationConfigKeyPrefixV1
+);
+impl_db_lookup!(
+    key = FederationConfigKeyV2,
+    query_prefix = FederationConfigKeyPrefixV2
 );
 impl_db_lookup!(
     key = FederationConfigKey,
@@ -652,6 +682,10 @@ pub fn get_gatewayd_database_migrations() -> BTreeMap<DatabaseVersion, GeneralDb
         DatabaseVersion(7),
         Box::new(|ctx| migrate_to_v8(ctx).boxed()),
     );
+    migrations.insert(
+        DatabaseVersion(8),
+        Box::new(|ctx| migrate_to_v9(ctx).boxed()),
+    );
     migrations
 }
 
@@ -741,7 +775,7 @@ async fn migrate_to_v4(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), D
         .await;
     for (fed_id, _old_config) in configs {
         if let Some(old_federation_config) = dbtx.remove_entry(&fed_id).await {
-            let new_fed_config = FederationConfig {
+            let new_fed_config = FederationConfigV2 {
                 invite_code: old_federation_config.invite_code,
                 federation_index: old_federation_config.federation_index,
                 lightning_fee: old_federation_config.fees.into(),
@@ -749,7 +783,7 @@ async fn migrate_to_v4(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), D
                 // Note: deprecated, unused
                 _connector: ConnectorType::Tcp,
             };
-            let new_key = FederationConfigKey { id: fed_id.id };
+            let new_key = FederationConfigKeyV2 { id: fed_id.id };
             dbtx.insert_new_entry(&new_key, &new_fed_config).await;
         }
     }
@@ -776,6 +810,10 @@ async fn migrate_federation_configs(
     // FederationConfig. If that is successful and the federation ID in the
     // config matches the key, then we skip that record and migrate the rest of
     // the entries.
+    //
+    // The records have the shape they had when this migration was written
+    // (`FederationConfigV2`); decoding them as a later shape would misread every
+    // federation config as an isolated database entry and move it away.
     let problem_entries = dbtx
         .raw_find_by_prefix(&[0x04])
         .await?
@@ -790,8 +828,10 @@ async fn migrate_federation_configs(
                 &problem_key[1..33],
                 &ModuleDecoderRegistry::default(),
             )
-            && let Ok(federation_config) =
-                FederationConfig::consensus_decode_whole(&value, &ModuleDecoderRegistry::default())
+            && let Ok(federation_config) = FederationConfigV2::consensus_decode_whole(
+                &value,
+                &ModuleDecoderRegistry::default(),
+            )
             && federation_id == federation_config.invite_code.federation_id()
         {
             continue;
@@ -806,7 +846,7 @@ async fn migrate_federation_configs(
     // Migrate all entries of the isolated databases that don't overlap with
     // `FederationConfig` entries.
     let fed_ids = dbtx
-        .find_by_prefix(&FederationConfigKeyPrefix)
+        .find_by_prefix(&FederationConfigKeyPrefixV2)
         .await
         .collect::<BTreeMap<_, _>>()
         .await;
@@ -831,8 +871,9 @@ async fn migrate_federation_configs(
 async fn migrate_to_v6(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), DbMigrationError> {
     let mut dbtx = ctx.dbtx();
 
+    // The federation configs still have their v2 shape at this point.
     let configs = dbtx
-        .find_by_prefix(&FederationConfigKeyPrefix)
+        .find_by_prefix(&FederationConfigKeyPrefixV2)
         .await
         .collect::<Vec<_>>()
         .await;
@@ -858,6 +899,42 @@ async fn migrate_to_v7(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), D
                 protocol: RegisteredProtocol::Http,
             },
             &gateway_keypair,
+        )
+        .await;
+    }
+
+    Ok(())
+}
+
+/// Adds `payment_policies` to the federation configs. Every gateway performed
+/// every kind of payment before the setting existed, so the migrated records
+/// carry no restriction.
+async fn migrate_to_v9(mut ctx: GeneralDbMigrationFnContext<'_>) -> Result<(), DbMigrationError> {
+    let mut dbtx = ctx.dbtx();
+    migrate_federation_configs_payment_policies(&mut dbtx).await
+}
+
+async fn migrate_federation_configs_payment_policies(
+    dbtx: &mut DatabaseTransaction<'_>,
+) -> Result<(), DbMigrationError> {
+    let configs = dbtx
+        .find_by_prefix(&FederationConfigKeyPrefixV2)
+        .await
+        .collect::<Vec<_>>()
+        .await;
+
+    for (key, config) in configs {
+        dbtx.remove_entry(&key).await;
+        dbtx.insert_new_entry(
+            &FederationConfigKey { id: key.id },
+            &FederationConfig {
+                invite_code: config.invite_code,
+                federation_index: config.federation_index,
+                lightning_fee: config.lightning_fee,
+                transaction_fee: config.transaction_fee,
+                payment_policies: BTreeSet::new(),
+                _connector: config._connector,
+            },
         )
         .await;
     }
