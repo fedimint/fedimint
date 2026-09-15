@@ -7,42 +7,42 @@
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>std::sync::Arc;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>std::time::{Duration, SystemTime};
 <a href=#9 id=9 data-nosnippet>9</a>
-<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>anyhow::bail;
-<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>api::{RecurringdApiError, RecurringdClient};
-<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>async_stream::stream;
-<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>bitcoin::hashes::sha256;
-<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>bitcoin::secp256k1::SECP256K1;
-<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_client_module::OperationId;
-<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_client_module::module::ClientContext;
-<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_client_module::oplog::UpdateStreamOrOutcome;
-<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_core::BitcoinHash;
-<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>fedimint_core::config::FederationId;
-<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>fedimint_core::core::ModuleKind;
-<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
-<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>fedimint_core::encoding::{
-<a href=#23 id=23 data-nosnippet>23</a>    Decodable, DecodeError, Encodable, decode_field_from_finite_reader,
-<a href=#24 id=24 data-nosnippet>24</a>    decode_legacy_system_time_from_finite_reader, encode_legacy_system_time, with_decoding_context,
-<a href=#25 id=25 data-nosnippet>25</a>};
-<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>fedimint_core::secp256k1::{Keypair, PublicKey};
-<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>fedimint_core::task::sleep;
-<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>fedimint_core::util::{BoxFuture, FmtCompact, SafeUrl};
-<a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span>fedimint_derive_secret::ChildId;
-<a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>fedimint_eventlog::{Event, EventKind, EventPersistence};
-<a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span>futures::StreamExt;
-<a href=#33 id=33 data-nosnippet>33</a><span class="kw">use </span>futures::future::select_all;
-<a href=#34 id=34 data-nosnippet>34</a><span class="kw">use </span>lightning_invoice::Bolt11Invoice;
-<a href=#35 id=35 data-nosnippet>35</a><span class="kw">use </span>serde::{Deserialize, Serialize};
-<a href=#36 id=36 data-nosnippet>36</a><span class="kw">use </span>thiserror::Error;
-<a href=#37 id=37 data-nosnippet>37</a><span class="kw">use </span>tokio::select;
-<a href=#38 id=38 data-nosnippet>38</a><span class="kw">use </span>tokio::sync::Notify;
-<a href=#39 id=39 data-nosnippet>39</a><span class="kw">use </span>tracing::{debug, trace, warn};
-<a href=#40 id=40 data-nosnippet>40</a>
-<a href=#41 id=41 data-nosnippet>41</a><span class="kw">use </span><span class="kw">crate</span>::db::{RecurringPaymentCodeKey, RecurringPaymentCodeKeyPrefix};
-<a href=#42 id=42 data-nosnippet>42</a><span class="kw">use </span><span class="kw">crate</span>::receive::LightningReceiveError;
-<a href=#43 id=43 data-nosnippet>43</a><span class="kw">use </span>crate::{
-<a href=#44 id=44 data-nosnippet>44</a>    LightningClientModule, LightningClientStateMachines, LightningOperationMeta,
-<a href=#45 id=45 data-nosnippet>45</a>    LightningOperationMetaVariant, LnReceiveState, tweak_user_key, tweak_user_secret_key,
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>api::{RecurringdApiError, RecurringdClient};
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>async_stream::stream;
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>bitcoin::hashes::sha256;
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>bitcoin::secp256k1::SECP256K1;
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_client_module::OperationId;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_client_module::module::ClientContext;
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_client_module::oplog::UpdateStreamOrOutcome;
+<a href=#17 id=17 data-nosnippet>17</a><span class="kw">use </span>fedimint_core::BitcoinHash;
+<a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_core::config::FederationId;
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>fedimint_core::core::ModuleKind;
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>fedimint_core::db::{DatabaseError, IDatabaseTransactionOpsCoreTyped};
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_core::encoding::{
+<a href=#22 id=22 data-nosnippet>22</a>    Decodable, DecodeError, Encodable, decode_field_from_finite_reader,
+<a href=#23 id=23 data-nosnippet>23</a>    decode_legacy_system_time_from_finite_reader, encode_legacy_system_time, with_decoding_context,
+<a href=#24 id=24 data-nosnippet>24</a>};
+<a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>fedimint_core::secp256k1::{Keypair, PublicKey};
+<a href=#27 id=27 data-nosnippet>27</a><span class="kw">use </span>fedimint_core::task::sleep;
+<a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>fedimint_core::util::{BoxFuture, FmtCompact, SafeUrl};
+<a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>fedimint_derive_secret::ChildId;
+<a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span>fedimint_eventlog::{Event, EventKind, EventPersistence};
+<a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>futures::StreamExt;
+<a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span>futures::future::select_all;
+<a href=#33 id=33 data-nosnippet>33</a><span class="kw">use </span>lightning_invoice::Bolt11Invoice;
+<a href=#34 id=34 data-nosnippet>34</a><span class="kw">use </span>serde::{Deserialize, Serialize};
+<a href=#35 id=35 data-nosnippet>35</a><span class="kw">use </span>thiserror::Error;
+<a href=#36 id=36 data-nosnippet>36</a><span class="kw">use </span>tokio::select;
+<a href=#37 id=37 data-nosnippet>37</a><span class="kw">use </span>tokio::sync::Notify;
+<a href=#38 id=38 data-nosnippet>38</a><span class="kw">use </span>tracing::{debug, trace, warn};
+<a href=#39 id=39 data-nosnippet>39</a>
+<a href=#40 id=40 data-nosnippet>40</a><span class="kw">use </span><span class="kw">crate</span>::db::{RecurringPaymentCodeKey, RecurringPaymentCodeKeyPrefix};
+<a href=#41 id=41 data-nosnippet>41</a><span class="kw">use </span><span class="kw">crate</span>::receive::LightningReceiveError;
+<a href=#42 id=42 data-nosnippet>42</a><span class="kw">use </span>crate::{
+<a href=#43 id=43 data-nosnippet>43</a>    CreateBolt11InvoiceError, LightningClientModule, LightningClientStateMachines,
+<a href=#44 id=44 data-nosnippet>44</a>    LightningOperationMeta, LightningOperationMetaVariant, LnReceiveState, LnSubscribeError,
+<a href=#45 id=45 data-nosnippet>45</a>    tweak_user_key, tweak_user_secret_key,
 <a href=#46 id=46 data-nosnippet>46</a>};
 <a href=#47 id=47 data-nosnippet>47</a>
 <a href=#48 id=48 data-nosnippet>48</a><span class="kw">const </span>LOG_CLIENT_RECURRING: <span class="kw-2">&amp;</span>str = <span class="string">"fm::client::ln::recurring"</span>;
@@ -360,14 +360,14 @@
 <a href=#360 id=360 data-nosnippet>360</a>    <span class="kw">pub async fn </span>subscribe_ln_recurring_receive(
 <a href=#361 id=361 data-nosnippet>361</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#362 id=362 data-nosnippet>362</a>        operation_id: OperationId,
-<a href=#363 id=363 data-nosnippet>363</a>    ) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;LnReceiveState&gt;&gt; {
+<a href=#363 id=363 data-nosnippet>363</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;UpdateStreamOrOutcome&lt;LnReceiveState&gt;, LnSubscribeError&gt; {
 <a href=#364 id=364 data-nosnippet>364</a>        <span class="kw">let </span>operation = <span class="self">self</span>.client_ctx.get_operation(operation_id).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#365 id=365 data-nosnippet>365</a>        <span class="kw">let </span>LightningOperationMetaVariant::RecurringPaymentReceive(ReurringPaymentReceiveMeta {
 <a href=#366 id=366 data-nosnippet>366</a>            invoice,
 <a href=#367 id=367 data-nosnippet>367</a>            ..
 <a href=#368 id=368 data-nosnippet>368</a>        }) = operation.meta::&lt;LightningOperationMeta&gt;().variant
 <a href=#369 id=369 data-nosnippet>369</a>        <span class="kw">else </span>{
-<a href=#370 id=370 data-nosnippet>370</a>            <span class="macro">bail!</span>(<span class="string">"Operation is not a recurring lightning receive"</span>)
+<a href=#370 id=370 data-nosnippet>370</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(LnSubscribeError::NotARecurringReceive);
 <a href=#371 id=371 data-nosnippet>371</a>        };
 <a href=#372 id=372 data-nosnippet>372</a>
 <a href=#373 id=373 data-nosnippet>373</a>        <span class="kw">let </span>client_ctx = <span class="self">self</span>.client_ctx.clone();
@@ -502,7 +502,7 @@
 <a href=#502 id=502 data-nosnippet>502</a>}
 <a href=#503 id=503 data-nosnippet>503</a>
 <a href=#504 id=504 data-nosnippet>504</a><span class="kw">impl </span>FromStr <span class="kw">for </span>PaymentCodeId {
-<a href=#505 id=505 data-nosnippet>505</a>    <span class="kw">type </span><span class="prelude-val">Err </span>= anyhow::Error;
+<a href=#505 id=505 data-nosnippet>505</a>    <span class="kw">type </span><span class="prelude-val">Err </span>= bitcoin::hashes::hex::HexToArrayError;
 <a href=#506 id=506 data-nosnippet>506</a>
 <a href=#507 id=507 data-nosnippet>507</a>    <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
 <a href=#508 id=508 data-nosnippet>508</a>        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(sha256::Hash::from_str(s)<span class="question-mark">?</span>))
@@ -516,7 +516,7 @@
 <a href=#516 id=516 data-nosnippet>516</a>}
 <a href=#517 id=517 data-nosnippet>517</a>
 <a href=#518 id=518 data-nosnippet>518</a><span class="kw">impl </span>FromStr <span class="kw">for </span>PaymentCodeRootKey {
-<a href=#519 id=519 data-nosnippet>519</a>    <span class="kw">type </span><span class="prelude-val">Err </span>= anyhow::Error;
+<a href=#519 id=519 data-nosnippet>519</a>    <span class="kw">type </span><span class="prelude-val">Err </span>= fedimint_core::secp256k1::Error;
 <a href=#520 id=520 data-nosnippet>520</a>
 <a href=#521 id=521 data-nosnippet>521</a>    <span class="kw">fn </span>from_str(s: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, <span class="self">Self</span>::Err&gt; {
 <a href=#522 id=522 data-nosnippet>522</a>        <span class="prelude-val">Ok</span>(<span class="self">Self</span>(PublicKey::from_str(s)<span class="question-mark">?</span>))
@@ -565,96 +565,138 @@
 <a href=#565 id=565 data-nosnippet>565</a>    </span>PaymentCodeAlreadyExists(PaymentCodeRootKey),
 <a href=#566 id=566 data-nosnippet>566</a>    <span class="attr">#[error(<span class="string">"Federation already registered: {0}"</span>)]
 <a href=#567 id=567 data-nosnippet>567</a>    </span>FederationAlreadyRegistered(FederationId),
-<a href=#568 id=568 data-nosnippet>568</a>    <span class="attr">#[error(<span class="string">"Error joining federation: {0}"</span>)]
-<a href=#569 id=569 data-nosnippet>569</a>    </span>JoiningFederationFailed(anyhow::Error),
-<a href=#570 id=570 data-nosnippet>570</a>    <span class="attr">#[error(<span class="string">"Error registering with recurring payment service: {0}"</span>)]
-<a href=#571 id=571 data-nosnippet>571</a>    </span>Other(<span class="attr">#[from] </span>anyhow::Error),
-<a href=#572 id=572 data-nosnippet>572</a>}
-<a href=#573 id=573 data-nosnippet>573</a>
-<a href=#574 id=574 data-nosnippet>574</a><span class="attr">#[derive(Debug, Clone, Serialize)]
-<a href=#575 id=575 data-nosnippet>575</a></span><span class="kw">pub struct </span>RecurringPaymentCodeEntry {
-<a href=#576 id=576 data-nosnippet>576</a>    <span class="kw">pub </span>protocol: RecurringPaymentProtocol,
-<a href=#577 id=577 data-nosnippet>577</a>    <span class="kw">pub </span>root_keypair: Keypair,
-<a href=#578 id=578 data-nosnippet>578</a>    <span class="kw">pub </span>code: String,
-<a href=#579 id=579 data-nosnippet>579</a>    <span class="kw">pub </span>recurringd_api: SafeUrl,
-<a href=#580 id=580 data-nosnippet>580</a>    <span class="kw">pub </span>last_derivation_index: u64,
-<a href=#581 id=581 data-nosnippet>581</a>    <span class="kw">pub </span>creation_time: SystemTime,
-<a href=#582 id=582 data-nosnippet>582</a>    <span class="kw">pub </span>meta: String,
-<a href=#583 id=583 data-nosnippet>583</a>}
-<a href=#584 id=584 data-nosnippet>584</a>
-<a href=#585 id=585 data-nosnippet>585</a><span class="kw">impl </span>Encodable <span class="kw">for </span>RecurringPaymentCodeEntry {
-<a href=#586 id=586 data-nosnippet>586</a>    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
-<a href=#587 id=587 data-nosnippet>587</a>        <span class="self">self</span>.protocol.consensus_encode(writer)<span class="question-mark">?</span>;
-<a href=#588 id=588 data-nosnippet>588</a>        <span class="self">self</span>.root_keypair.consensus_encode(writer)<span class="question-mark">?</span>;
-<a href=#589 id=589 data-nosnippet>589</a>        <span class="self">self</span>.code.consensus_encode(writer)<span class="question-mark">?</span>;
-<a href=#590 id=590 data-nosnippet>590</a>        <span class="self">self</span>.recurringd_api.consensus_encode(writer)<span class="question-mark">?</span>;
-<a href=#591 id=591 data-nosnippet>591</a>        <span class="self">self</span>.last_derivation_index.consensus_encode(writer)<span class="question-mark">?</span>;
-<a href=#592 id=592 data-nosnippet>592</a>        encode_legacy_system_time(<span class="kw-2">&amp;</span><span class="self">self</span>.creation_time, writer)<span class="question-mark">?</span>;
-<a href=#593 id=593 data-nosnippet>593</a>        <span class="self">self</span>.meta.consensus_encode(writer)
-<a href=#594 id=594 data-nosnippet>594</a>    }
-<a href=#595 id=595 data-nosnippet>595</a>}
-<a href=#596 id=596 data-nosnippet>596</a>
-<a href=#597 id=597 data-nosnippet>597</a><span class="kw">impl </span>Decodable <span class="kw">for </span>RecurringPaymentCodeEntry {
-<a href=#598 id=598 data-nosnippet>598</a>    <span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;D: std::io::Read&gt;(
-<a href=#599 id=599 data-nosnippet>599</a>        decoder: <span class="kw-2">&amp;mut </span>D,
-<a href=#600 id=600 data-nosnippet>600</a>        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
-<a href=#601 id=601 data-nosnippet>601</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
-<a href=#602 id=602 data-nosnippet>602</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-<a href=#603 id=603 data-nosnippet>603</a>            protocol: decode_field_from_finite_reader(
-<a href=#604 id=604 data-nosnippet>604</a>                decoder,
-<a href=#605 id=605 data-nosnippet>605</a>                modules,
-<a href=#606 id=606 data-nosnippet>606</a>                <span class="string">"Decoding named block field: RecurringPaymentCodeEntry{ ... protocol ... }"</span>,
-<a href=#607 id=607 data-nosnippet>607</a>            )<span class="question-mark">?</span>,
-<a href=#608 id=608 data-nosnippet>608</a>            root_keypair: decode_field_from_finite_reader(
-<a href=#609 id=609 data-nosnippet>609</a>                decoder,
-<a href=#610 id=610 data-nosnippet>610</a>                modules,
-<a href=#611 id=611 data-nosnippet>611</a>                <span class="string">"Decoding named block field: RecurringPaymentCodeEntry{ ... root_keypair ... }"</span>,
-<a href=#612 id=612 data-nosnippet>612</a>            )<span class="question-mark">?</span>,
-<a href=#613 id=613 data-nosnippet>613</a>            code: decode_field_from_finite_reader(
-<a href=#614 id=614 data-nosnippet>614</a>                decoder,
-<a href=#615 id=615 data-nosnippet>615</a>                modules,
-<a href=#616 id=616 data-nosnippet>616</a>                <span class="string">"Decoding named block field: RecurringPaymentCodeEntry{ ... code ... }"</span>,
-<a href=#617 id=617 data-nosnippet>617</a>            )<span class="question-mark">?</span>,
-<a href=#618 id=618 data-nosnippet>618</a>            recurringd_api: decode_field_from_finite_reader(
-<a href=#619 id=619 data-nosnippet>619</a>                decoder,
-<a href=#620 id=620 data-nosnippet>620</a>                modules,
-<a href=#621 id=621 data-nosnippet>621</a>                <span class="string">"Decoding named block field: RecurringPaymentCodeEntry{ ... recurringd_api ... }"</span>,
-<a href=#622 id=622 data-nosnippet>622</a>            )<span class="question-mark">?</span>,
-<a href=#623 id=623 data-nosnippet>623</a>            last_derivation_index: decode_field_from_finite_reader(
-<a href=#624 id=624 data-nosnippet>624</a>                decoder,
-<a href=#625 id=625 data-nosnippet>625</a>                modules,
-<a href=#626 id=626 data-nosnippet>626</a>                <span class="string">"Decoding named block field: RecurringPaymentCodeEntry{ ... last_derivation_index ... }"</span>,
-<a href=#627 id=627 data-nosnippet>627</a>            )<span class="question-mark">?</span>,
-<a href=#628 id=628 data-nosnippet>628</a>            creation_time: with_decoding_context(
-<a href=#629 id=629 data-nosnippet>629</a>                decode_legacy_system_time_from_finite_reader(decoder, modules),
-<a href=#630 id=630 data-nosnippet>630</a>                <span class="string">"Decoding named block field: RecurringPaymentCodeEntry{ ... creation_time ... }"</span>,
-<a href=#631 id=631 data-nosnippet>631</a>            )<span class="question-mark">?</span>,
-<a href=#632 id=632 data-nosnippet>632</a>            meta: decode_field_from_finite_reader(
-<a href=#633 id=633 data-nosnippet>633</a>                decoder,
-<a href=#634 id=634 data-nosnippet>634</a>                modules,
-<a href=#635 id=635 data-nosnippet>635</a>                <span class="string">"Decoding named block field: RecurringPaymentCodeEntry{ ... meta ... }"</span>,
-<a href=#636 id=636 data-nosnippet>636</a>            )<span class="question-mark">?</span>,
-<a href=#637 id=637 data-nosnippet>637</a>        })
-<a href=#638 id=638 data-nosnippet>638</a>    }
-<a href=#639 id=639 data-nosnippet>639</a>}
-<a href=#640 id=640 data-nosnippet>640</a>
-<a href=#641 id=641 data-nosnippet>641</a><span class="doccomment">/// Event that is fired when a recurring payment code (i.e. LNURL) had an
-<a href=#642 id=642 data-nosnippet>642</a>/// invoice generated for it.
-<a href=#643 id=643 data-nosnippet>643</a>///
-<a href=#644 id=644 data-nosnippet>644</a>/// It only means we saw a new invoice, the payment status has to be tracked
-<a href=#645 id=645 data-nosnippet>645</a>/// independently. To do so use the `operation_id` and subscribe to the update
-<a href=#646 id=646 data-nosnippet>646</a>/// stream using [`LightningClientModule::subscribe_ln_recurring_receive`] with
-<a href=#647 id=647 data-nosnippet>647</a>/// it.
-<a href=#648 id=648 data-nosnippet>648</a></span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
-<a href=#649 id=649 data-nosnippet>649</a></span><span class="kw">pub struct </span>RecurringInvoiceCreatedEvent {
-<a href=#650 id=650 data-nosnippet>650</a>    <span class="kw">pub </span>payment_code_idx: u64,
-<a href=#651 id=651 data-nosnippet>651</a>    <span class="kw">pub </span>invoice_idx: u64,
-<a href=#652 id=652 data-nosnippet>652</a>    <span class="kw">pub </span>operation_id: OperationId,
-<a href=#653 id=653 data-nosnippet>653</a>}
-<a href=#654 id=654 data-nosnippet>654</a>
-<a href=#655 id=655 data-nosnippet>655</a><span class="kw">impl </span>Event <span class="kw">for </span>RecurringInvoiceCreatedEvent {
-<a href=#656 id=656 data-nosnippet>656</a>    <span class="kw">const </span>MODULE: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">Some</span>(fedimint_ln_common::KIND);
-<a href=#657 id=657 data-nosnippet>657</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"recurring_invoice_created"</span>);
-<a href=#658 id=658 data-nosnippet>658</a>    <span class="kw">const </span>PERSISTENCE: EventPersistence = EventPersistence::Persistent;
-<a href=#659 id=659 data-nosnippet>659</a>}
+<a href=#568 id=568 data-nosnippet>568</a>    <span class="doccomment">/// The client could not download the federation's config or build itself
+<a href=#569 id=569 data-nosnippet>569</a>    /// against it.
+<a href=#570 id=570 data-nosnippet>570</a>    </span><span class="attr">#[error(<span class="string">"Error joining federation"</span>)]
+<a href=#571 id=571 data-nosnippet>571</a>    </span>JoiningFederationFailed(<span class="attr">#[source] </span>Box&lt;<span class="kw">dyn </span>std::error::Error + Send + Sync&gt;),
+<a href=#572 id=572 data-nosnippet>572</a>    <span class="doccomment">/// A database operation failed.
+<a href=#573 id=573 data-nosnippet>573</a>    </span><span class="attr">#[error(<span class="string">"Database error"</span>)]
+<a href=#574 id=574 data-nosnippet>574</a>    </span>Database(<span class="attr">#[from] </span>DatabaseError),
+<a href=#575 id=575 data-nosnippet>575</a>    <span class="doccomment">/// An invoice could not be created in the federation.
+<a href=#576 id=576 data-nosnippet>576</a>    </span><span class="attr">#[error(<span class="string">"The invoice could not be created"</span>)]
+<a href=#577 id=577 data-nosnippet>577</a>    </span>InvoiceCreation(<span class="attr">#[source] </span>CreateBolt11InvoiceError),
+<a href=#578 id=578 data-nosnippet>578</a>    <span class="doccomment">/// The receive operation backing an invoice could not be followed.
+<a href=#579 id=579 data-nosnippet>579</a>    </span><span class="attr">#[error(<span class="string">"The lightning receive could not be followed"</span>)]
+<a href=#580 id=580 data-nosnippet>580</a>    </span>Subscribe(<span class="attr">#[source] </span>LnSubscribeError),
+<a href=#581 id=581 data-nosnippet>581</a>    <span class="doccomment">/// The receive operation's update stream ended before the federation
+<a href=#582 id=582 data-nosnippet>582</a>    /// confirmed the invoice.
+<a href=#583 id=583 data-nosnippet>583</a>    </span><span class="attr">#[error(<span class="string">"BOLT11 invoice not confirmed"</span>)]
+<a href=#584 id=584 data-nosnippet>584</a>    </span>InvoiceNotConfirmed,
+<a href=#585 id=585 data-nosnippet>585</a>}
+<a href=#586 id=586 data-nosnippet>586</a>
+<a href=#587 id=587 data-nosnippet>587</a><span class="attr">#[derive(Debug, Clone, Serialize)]
+<a href=#588 id=588 data-nosnippet>588</a></span><span class="kw">pub struct </span>RecurringPaymentCodeEntry {
+<a href=#589 id=589 data-nosnippet>589</a>    <span class="kw">pub </span>protocol: RecurringPaymentProtocol,
+<a href=#590 id=590 data-nosnippet>590</a>    <span class="kw">pub </span>root_keypair: Keypair,
+<a href=#591 id=591 data-nosnippet>591</a>    <span class="kw">pub </span>code: String,
+<a href=#592 id=592 data-nosnippet>592</a>    <span class="kw">pub </span>recurringd_api: SafeUrl,
+<a href=#593 id=593 data-nosnippet>593</a>    <span class="kw">pub </span>last_derivation_index: u64,
+<a href=#594 id=594 data-nosnippet>594</a>    <span class="kw">pub </span>creation_time: SystemTime,
+<a href=#595 id=595 data-nosnippet>595</a>    <span class="kw">pub </span>meta: String,
+<a href=#596 id=596 data-nosnippet>596</a>}
+<a href=#597 id=597 data-nosnippet>597</a>
+<a href=#598 id=598 data-nosnippet>598</a><span class="kw">impl </span>Encodable <span class="kw">for </span>RecurringPaymentCodeEntry {
+<a href=#599 id=599 data-nosnippet>599</a>    <span class="kw">fn </span>consensus_encode&lt;W: std::io::Write&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, writer: <span class="kw-2">&amp;mut </span>W) -&gt; <span class="prelude-ty">Result</span>&lt;(), std::io::Error&gt; {
+<a href=#600 id=600 data-nosnippet>600</a>        <span class="self">self</span>.protocol.consensus_encode(writer)<span class="question-mark">?</span>;
+<a href=#601 id=601 data-nosnippet>601</a>        <span class="self">self</span>.root_keypair.consensus_encode(writer)<span class="question-mark">?</span>;
+<a href=#602 id=602 data-nosnippet>602</a>        <span class="self">self</span>.code.consensus_encode(writer)<span class="question-mark">?</span>;
+<a href=#603 id=603 data-nosnippet>603</a>        <span class="self">self</span>.recurringd_api.consensus_encode(writer)<span class="question-mark">?</span>;
+<a href=#604 id=604 data-nosnippet>604</a>        <span class="self">self</span>.last_derivation_index.consensus_encode(writer)<span class="question-mark">?</span>;
+<a href=#605 id=605 data-nosnippet>605</a>        encode_legacy_system_time(<span class="kw-2">&amp;</span><span class="self">self</span>.creation_time, writer)<span class="question-mark">?</span>;
+<a href=#606 id=606 data-nosnippet>606</a>        <span class="self">self</span>.meta.consensus_encode(writer)
+<a href=#607 id=607 data-nosnippet>607</a>    }
+<a href=#608 id=608 data-nosnippet>608</a>}
+<a href=#609 id=609 data-nosnippet>609</a>
+<a href=#610 id=610 data-nosnippet>610</a><span class="kw">impl </span>Decodable <span class="kw">for </span>RecurringPaymentCodeEntry {
+<a href=#611 id=611 data-nosnippet>611</a>    <span class="kw">fn </span>consensus_decode_partial_from_finite_reader&lt;D: std::io::Read&gt;(
+<a href=#612 id=612 data-nosnippet>612</a>        decoder: <span class="kw-2">&amp;mut </span>D,
+<a href=#613 id=613 data-nosnippet>613</a>        modules: <span class="kw-2">&amp;</span>ModuleDecoderRegistry,
+<a href=#614 id=614 data-nosnippet>614</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, DecodeError&gt; {
+<a href=#615 id=615 data-nosnippet>615</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#616 id=616 data-nosnippet>616</a>            protocol: decode_field_from_finite_reader(
+<a href=#617 id=617 data-nosnippet>617</a>                decoder,
+<a href=#618 id=618 data-nosnippet>618</a>                modules,
+<a href=#619 id=619 data-nosnippet>619</a>                <span class="string">"Decoding named block field: RecurringPaymentCodeEntry{ ... protocol ... }"</span>,
+<a href=#620 id=620 data-nosnippet>620</a>            )<span class="question-mark">?</span>,
+<a href=#621 id=621 data-nosnippet>621</a>            root_keypair: decode_field_from_finite_reader(
+<a href=#622 id=622 data-nosnippet>622</a>                decoder,
+<a href=#623 id=623 data-nosnippet>623</a>                modules,
+<a href=#624 id=624 data-nosnippet>624</a>                <span class="string">"Decoding named block field: RecurringPaymentCodeEntry{ ... root_keypair ... }"</span>,
+<a href=#625 id=625 data-nosnippet>625</a>            )<span class="question-mark">?</span>,
+<a href=#626 id=626 data-nosnippet>626</a>            code: decode_field_from_finite_reader(
+<a href=#627 id=627 data-nosnippet>627</a>                decoder,
+<a href=#628 id=628 data-nosnippet>628</a>                modules,
+<a href=#629 id=629 data-nosnippet>629</a>                <span class="string">"Decoding named block field: RecurringPaymentCodeEntry{ ... code ... }"</span>,
+<a href=#630 id=630 data-nosnippet>630</a>            )<span class="question-mark">?</span>,
+<a href=#631 id=631 data-nosnippet>631</a>            recurringd_api: decode_field_from_finite_reader(
+<a href=#632 id=632 data-nosnippet>632</a>                decoder,
+<a href=#633 id=633 data-nosnippet>633</a>                modules,
+<a href=#634 id=634 data-nosnippet>634</a>                <span class="string">"Decoding named block field: RecurringPaymentCodeEntry{ ... recurringd_api ... }"</span>,
+<a href=#635 id=635 data-nosnippet>635</a>            )<span class="question-mark">?</span>,
+<a href=#636 id=636 data-nosnippet>636</a>            last_derivation_index: decode_field_from_finite_reader(
+<a href=#637 id=637 data-nosnippet>637</a>                decoder,
+<a href=#638 id=638 data-nosnippet>638</a>                modules,
+<a href=#639 id=639 data-nosnippet>639</a>                <span class="string">"Decoding named block field: RecurringPaymentCodeEntry{ ... last_derivation_index ... }"</span>,
+<a href=#640 id=640 data-nosnippet>640</a>            )<span class="question-mark">?</span>,
+<a href=#641 id=641 data-nosnippet>641</a>            creation_time: with_decoding_context(
+<a href=#642 id=642 data-nosnippet>642</a>                decode_legacy_system_time_from_finite_reader(decoder, modules),
+<a href=#643 id=643 data-nosnippet>643</a>                <span class="string">"Decoding named block field: RecurringPaymentCodeEntry{ ... creation_time ... }"</span>,
+<a href=#644 id=644 data-nosnippet>644</a>            )<span class="question-mark">?</span>,
+<a href=#645 id=645 data-nosnippet>645</a>            meta: decode_field_from_finite_reader(
+<a href=#646 id=646 data-nosnippet>646</a>                decoder,
+<a href=#647 id=647 data-nosnippet>647</a>                modules,
+<a href=#648 id=648 data-nosnippet>648</a>                <span class="string">"Decoding named block field: RecurringPaymentCodeEntry{ ... meta ... }"</span>,
+<a href=#649 id=649 data-nosnippet>649</a>            )<span class="question-mark">?</span>,
+<a href=#650 id=650 data-nosnippet>650</a>        })
+<a href=#651 id=651 data-nosnippet>651</a>    }
+<a href=#652 id=652 data-nosnippet>652</a>}
+<a href=#653 id=653 data-nosnippet>653</a>
+<a href=#654 id=654 data-nosnippet>654</a><span class="doccomment">/// Event that is fired when a recurring payment code (i.e. LNURL) had an
+<a href=#655 id=655 data-nosnippet>655</a>/// invoice generated for it.
+<a href=#656 id=656 data-nosnippet>656</a>///
+<a href=#657 id=657 data-nosnippet>657</a>/// It only means we saw a new invoice, the payment status has to be tracked
+<a href=#658 id=658 data-nosnippet>658</a>/// independently. To do so use the `operation_id` and subscribe to the update
+<a href=#659 id=659 data-nosnippet>659</a>/// stream using [`LightningClientModule::subscribe_ln_recurring_receive`] with
+<a href=#660 id=660 data-nosnippet>660</a>/// it.
+<a href=#661 id=661 data-nosnippet>661</a></span><span class="attr">#[derive(Debug, Clone, Serialize, Deserialize)]
+<a href=#662 id=662 data-nosnippet>662</a></span><span class="kw">pub struct </span>RecurringInvoiceCreatedEvent {
+<a href=#663 id=663 data-nosnippet>663</a>    <span class="kw">pub </span>payment_code_idx: u64,
+<a href=#664 id=664 data-nosnippet>664</a>    <span class="kw">pub </span>invoice_idx: u64,
+<a href=#665 id=665 data-nosnippet>665</a>    <span class="kw">pub </span>operation_id: OperationId,
+<a href=#666 id=666 data-nosnippet>666</a>}
+<a href=#667 id=667 data-nosnippet>667</a>
+<a href=#668 id=668 data-nosnippet>668</a><span class="kw">impl </span>Event <span class="kw">for </span>RecurringInvoiceCreatedEvent {
+<a href=#669 id=669 data-nosnippet>669</a>    <span class="kw">const </span>MODULE: <span class="prelude-ty">Option</span>&lt;ModuleKind&gt; = <span class="prelude-val">Some</span>(fedimint_ln_common::KIND);
+<a href=#670 id=670 data-nosnippet>670</a>    <span class="kw">const </span>KIND: EventKind = EventKind::from_static(<span class="string">"recurring_invoice_created"</span>);
+<a href=#671 id=671 data-nosnippet>671</a>    <span class="kw">const </span>PERSISTENCE: EventPersistence = EventPersistence::Persistent;
+<a href=#672 id=672 data-nosnippet>672</a>}
+<a href=#673 id=673 data-nosnippet>673</a>
+<a href=#674 id=674 data-nosnippet>674</a><span class="attr">#[cfg(test)]
+<a href=#675 id=675 data-nosnippet>675</a></span><span class="kw">mod </span>tests {
+<a href=#676 id=676 data-nosnippet>676</a>    <span class="kw">use </span>std::str::FromStr <span class="kw">as _</span>;
+<a href=#677 id=677 data-nosnippet>677</a>
+<a href=#678 id=678 data-nosnippet>678</a>    <span class="kw">use </span>super::{PaymentCodeId, PaymentCodeRootKey};
+<a href=#679 id=679 data-nosnippet>679</a>
+<a href=#680 id=680 data-nosnippet>680</a>    <span class="doccomment">/// A payment code id that is not hex says so through the hex parser's own
+<a href=#681 id=681 data-nosnippet>681</a>    /// error, which is what clap and any other `FromStr` consumer prints.
+<a href=#682 id=682 data-nosnippet>682</a>    </span><span class="attr">#[test]
+<a href=#683 id=683 data-nosnippet>683</a>    </span><span class="kw">fn </span>payment_code_id_rejects_non_hex() {
+<a href=#684 id=684 data-nosnippet>684</a>        <span class="comment">// The type annotation on `_err` is the assertion: the compiler only
+<a href=#685 id=685 data-nosnippet>685</a>        // accepts it if `from_str` actually failed with the hex parser's own
+<a href=#686 id=686 data-nosnippet>686</a>        // error.
+<a href=#687 id=687 data-nosnippet>687</a>        </span><span class="kw">let </span>_err: bitcoin::hashes::hex::HexToArrayError =
+<a href=#688 id=688 data-nosnippet>688</a>            PaymentCodeId::from_str(<span class="string">"not hex"</span>).expect_err(<span class="string">"not hex"</span>);
+<a href=#689 id=689 data-nosnippet>689</a>    }
+<a href=#690 id=690 data-nosnippet>690</a>
+<a href=#691 id=691 data-nosnippet>691</a>    <span class="doccomment">/// A payment code root key that is not a public key says so through
+<a href=#692 id=692 data-nosnippet>692</a>    /// secp256k1's own error.
+<a href=#693 id=693 data-nosnippet>693</a>    </span><span class="attr">#[test]
+<a href=#694 id=694 data-nosnippet>694</a>    </span><span class="kw">fn </span>payment_code_root_key_rejects_non_key() {
+<a href=#695 id=695 data-nosnippet>695</a>        <span class="comment">// The type annotation on `_err` is the assertion: the compiler only
+<a href=#696 id=696 data-nosnippet>696</a>        // accepts it if `from_str` actually failed with secp256k1's own
+<a href=#697 id=697 data-nosnippet>697</a>        // error.
+<a href=#698 id=698 data-nosnippet>698</a>        </span><span class="kw">let </span>_err: fedimint_core::secp256k1::Error =
+<a href=#699 id=699 data-nosnippet>699</a>            PaymentCodeRootKey::from_str(<span class="string">"not a key"</span>).expect_err(<span class="string">"not a key"</span>);
+<a href=#700 id=700 data-nosnippet>700</a>    }
+<a href=#701 id=701 data-nosnippet>701</a>}
 </code></pre></div></section></main></body></html>
