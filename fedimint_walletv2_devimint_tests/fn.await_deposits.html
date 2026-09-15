@@ -3,7 +3,7 @@
     position: <a class="struct" href="../fedimint_eventlog/struct.EventLogId.html" title="struct fedimint_eventlog::EventLogId">EventLogId</a>,
     receives: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.usize.html">usize</a>,
     min_balance: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>,
-) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.102/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Waits for <code>receives</code> deposits to be claimed (starting from event log
+) -&gt; <a class="type" href="https://docs.rs/anyhow/1.0.104/anyhow/type.Result.html" title="type anyhow::Result">Result</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.unit.html">()</a>&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Waits for <code>receives</code> deposits to be claimed (starting from event log
 <code>position</code>) and then asserts the client balance reached at least
 <code>min_balance</code> sats.</p>
 <p>On <code>fedimint-cli</code> versions without <code>await-receive</code> (&lt;= 0.11), falls back to
