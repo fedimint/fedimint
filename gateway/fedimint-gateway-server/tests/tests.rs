@@ -28,7 +28,7 @@ use fedimint_core::{
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::Event;
-use fedimint_gateway_common::{PaymentLogPayload, SetFeesPayload};
+use fedimint_gateway_common::{PaymentLogPayload, SetFeesPayload, SetPaymentPolicyPayload};
 use fedimint_gateway_server::{Gateway, GatewayState};
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_gw_client::pay::{
@@ -46,6 +46,7 @@ use fedimint_gwv2_client::{
     FinalReceiveState, GatewayClientModuleV2, GatewayClientStateMachinesV2, GatewayOperationMetaV2,
     IncomingCircuitKey,
 };
+use fedimint_lightning::InterceptPaymentRequest;
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
@@ -60,10 +61,12 @@ use fedimint_ln_common::contracts::{
 };
 use fedimint_ln_common::{LightningGateway, LightningInput, LightningOutput, PrunedInvoice};
 use fedimint_ln_server::LightningInit;
-use fedimint_lnv2_common::LightningInvoice;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
-    GatewayConnection, PaymentFee, RoutingInfo, SendPaymentPayload,
+    CreateBolt11InvoicePayload, GatewayConnection, PaymentFee, RoutingInfo, SendPaymentPayload,
+};
+use fedimint_lnv2_common::{
+    Bolt11InvoiceDescription as Bolt11InvoiceDescriptionV2, LightningInvoice,
 };
 use fedimint_logging::LOG_TEST;
 use fedimint_testing::btc::BitcoinTest;
@@ -1393,6 +1396,325 @@ async fn test_gateway_enforces_fee_limits_without_lnv2() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Asks the gateway for an LNv2 invoice paying an incoming contract keyed to
+/// its module key, the way an LNv2 client does.
+async fn create_lnv2_invoice(
+    gateway: &Gateway,
+    federation_id: FederationId,
+    preimage: [u8; 32],
+) -> anyhow::Result<Bolt11Invoice> {
+    let client = gateway.select_client(federation_id).await?.into_value();
+    let module = client.get_first_module::<GatewayClientModuleV2>()?;
+    let routing_info = gateway
+        .routing_info_v2(&federation_id)
+        .await?
+        .expect("Gateway is connected to the federation");
+    let amount = Amount::from_sats(1000);
+    let contract = IncomingContract::new(
+        module.cfg.tpe_agg_pk,
+        [42; 32],
+        preimage,
+        PaymentImage::Hash(preimage.consensus_hash()),
+        routing_info.receive_fee.subtract_from(amount.msats),
+        u64::MAX,
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        module.keypair.public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+    );
+
+    Ok(gateway
+        .create_bolt11_invoice_v2(CreateBolt11InvoicePayload {
+            federation_id,
+            contract,
+            amount,
+            description: Bolt11InvoiceDescriptionV2::Direct(String::new()),
+            expiry_secs: 3600,
+        })
+        .await?)
+}
+
+/// `set_payment_policy` turns receives off for one federation. The LNv2
+/// routing info advertises it, requests for new invoices are refused, and the
+/// payment of an invoice issued before the switch was flipped is refused as
+/// well, so no funds enter the federation through the gateway.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_payment_policy_disables_lnv2_receives() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, _, _| async move {
+        let federation_id = fed.id();
+
+        assert!(
+            gateway
+                .routing_info_v2(&federation_id)
+                .await?
+                .expect("Gateway is connected to the federation")
+                .receive_enabled
+        );
+
+        // An invoice issued while receives were still on.
+        let earlier_invoice = create_lnv2_invoice(&gateway, federation_id, [1; 32]).await?;
+        let earlier_amount_msats = earlier_invoice
+            .amount_milli_satoshis()
+            .expect("The invoice has an amount");
+
+        gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: Some(federation_id),
+                receive_enabled: Some(false),
+            })
+            .await?;
+
+        assert!(
+            !gateway
+                .routing_info_v2(&federation_id)
+                .await?
+                .expect("Gateway is connected to the federation")
+                .receive_enabled
+        );
+
+        let error = create_lnv2_invoice(&gateway, federation_id, [2; 32])
+            .await
+            .expect_err("An invoice was created while receives are off");
+        assert!(
+            error.to_string().contains("Receiving payments is disabled"),
+            "Expected the invoice to be refused because receives are off, got: {error}"
+        );
+
+        let error = gateway
+            .get_registered_incoming_contract_and_client_v2(
+                PaymentImage::Hash(*earlier_invoice.payment_hash()),
+                earlier_amount_msats,
+            )
+            .await
+            .expect_err("The payment of an earlier invoice was accepted while receives are off");
+        assert!(
+            error.to_string().contains("Receiving payments is disabled"),
+            "Expected the payment to be refused because receives are off, got: {error}"
+        );
+
+        // Turning receives back on restores both.
+        gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: Some(federation_id),
+                receive_enabled: Some(true),
+            })
+            .await?;
+
+        assert!(
+            gateway
+                .routing_info_v2(&federation_id)
+                .await?
+                .expect("Gateway is connected to the federation")
+                .receive_enabled
+        );
+        gateway
+            .get_registered_incoming_contract_and_client_v2(
+                PaymentImage::Hash(*earlier_invoice.payment_hash()),
+                earlier_amount_msats,
+            )
+            .await?;
+        create_lnv2_invoice(&gateway, federation_id, [3; 32]).await?;
+
+        Ok(())
+    })
+    .await
+}
+
+/// An LNv2 invoice issued while receives were on is not settled once they are
+/// off: the payment that arrives for it is failed back and the gateway funds
+/// nothing. The same payment goes through once receives are turned back on.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_payment_policy_fails_lnv2_payment_of_earlier_invoice() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, _, _| async move {
+        let federation_id = fed.id();
+        let initial_gateway_balance = Amount::from_msats(1_000_000_000);
+        send_msats_to_gateway(&gateway, federation_id, initial_gateway_balance.msats).await;
+        let gateway_client = gateway.select_client(federation_id).await?.into_value();
+
+        let invoice = create_lnv2_invoice(&gateway, federation_id, [4; 32]).await?;
+        let invoice_amount_msats = invoice
+            .amount_milli_satoshis()
+            .expect("The invoice has an amount");
+
+        // The payment of one of the gateway's own HOLD invoices arrives without
+        // a federation scid or an incoming circuit.
+        let payment_request = InterceptPaymentRequest {
+            payment_hash: *invoice.payment_hash(),
+            amount_msat: invoice_amount_msats,
+            incoming_amount_msat: invoice_amount_msats,
+            expiry: u32::MAX,
+            incoming_chan_id: 0,
+            short_channel_id: None,
+            htlc_id: 0,
+        };
+        let lightning_context = gateway.get_lightning_context().await?;
+
+        gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: Some(federation_id),
+                receive_enabled: Some(false),
+            })
+            .await?;
+
+        assert_eq!(
+            gateway
+                .handle_lightning_payment(payment_request.clone(), &lightning_context)
+                .await,
+            "cancel"
+        );
+        assert_eq!(
+            gateway_client.get_balance_for_btc().await?,
+            initial_gateway_balance
+        );
+
+        gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: Some(federation_id),
+                receive_enabled: Some(true),
+            })
+            .await?;
+
+        assert_eq!(
+            gateway
+                .handle_lightning_payment(payment_request, &lightning_context)
+                .await,
+            "lnv2"
+        );
+
+        // Accepting the payment funds the incoming contract with the gateway's
+        // ecash.
+        retry(
+            "waiting for the gateway to fund the incoming contract",
+            backoff_util::aggressive_backoff(),
+            || async {
+                let balance = gateway_client.get_balance_for_btc().await?;
+                anyhow::ensure!(
+                    balance < initial_gateway_balance,
+                    "The gateway has not funded the incoming contract yet"
+                );
+                Ok(())
+            },
+        )
+        .await?;
+
+        Ok(())
+    })
+    .await
+}
+
+/// LNv1 clients cannot learn that receives are off, so their invoices still
+/// route to the gateway. The gateway refuses the intercepted HTLC before
+/// touching the federation and fails it back, spending nothing.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_payment_policy_disables_lnv1_receives() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, user_client, _| async move {
+        let gateway_id = gateway.http_gateway_id().await;
+        let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+        let initial_gateway_balance = sats(1000);
+        gateway_client
+            .get_first_module::<DummyClientModule>()?
+            .mock_receive(initial_gateway_balance, AmountUnit::BITCOIN)
+            .await?;
+
+        let invoice_amount = sats(100);
+        let ln_module = user_client.get_first_module::<LightningClientModule>()?;
+        let lightning_gateway = ln_module.select_gateway(&gateway_id).await;
+        let (_invoice_op, invoice, _) = ln_module
+            .create_bolt11_invoice(
+                invoice_amount,
+                Bolt11InvoiceDescription::Direct(Description::new("description".to_string())?),
+                None,
+                "test receives turned off",
+                lightning_gateway,
+            )
+            .await?;
+
+        let payment_request = InterceptPaymentRequest {
+            payment_hash: *invoice.payment_hash(),
+            amount_msat: invoice_amount.msats,
+            incoming_amount_msat: invoice_amount.msats,
+            expiry: u32::MAX,
+            incoming_chan_id: 2,
+            short_channel_id: Some(1),
+            htlc_id: 1,
+        };
+        let lightning_context = gateway.get_lightning_context().await?;
+
+        gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: Some(fed.id()),
+                receive_enabled: Some(false),
+            })
+            .await?;
+
+        assert_eq!(
+            gateway
+                .handle_lightning_payment(payment_request.clone(), &lightning_context)
+                .await,
+            "cancel"
+        );
+        assert_eq!(
+            gateway_client.get_balance_for_btc().await?,
+            initial_gateway_balance
+        );
+
+        // Once receives are back on, the same HTLC is claimed over LNv1.
+        gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: Some(fed.id()),
+                receive_enabled: Some(true),
+            })
+            .await?;
+
+        assert_eq!(
+            gateway
+                .handle_lightning_payment(payment_request, &lightning_context)
+                .await,
+            "lnv1"
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+/// A mistyped federation id must not pass for a switch that was flipped, and
+/// no federation id at all applies the policy to every connected federation.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_payment_policy_requires_a_connected_federation() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, _, _| async move {
+        let error = gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: Some(FederationId::dummy()),
+                receive_enabled: Some(false),
+            })
+            .await
+            .expect_err("The payment policy of an unknown federation was changed");
+        assert!(
+            error
+                .to_string()
+                .contains("No federation available for prefix"),
+            "Expected the unknown federation to be rejected, got: {error}"
+        );
+
+        gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: None,
+                receive_enabled: Some(false),
+            })
+            .await?;
+        assert!(
+            !gateway
+                .routing_info_v2(&fed.id())
+                .await?
+                .expect("Gateway is connected to the federation")
+                .receive_enabled
+        );
+
+        Ok(())
+    })
+    .await
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::Result<()> {
     multi_federation_test(|gateway, fed1, fed2, _| async move {
@@ -2208,6 +2530,7 @@ impl CapturingGatewayConnection {
             expiration_delta_default: 500,
             expiration_delta_minimum: 144,
             receive_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+            receive_enabled: true,
         });
     }
 

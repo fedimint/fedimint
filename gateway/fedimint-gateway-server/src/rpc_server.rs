@@ -27,9 +27,10 @@ use fedimint_gateway_common::{
     PAYMENT_SUMMARY_ENDPOINT, PEGIN_FROM_ONCHAIN_ENDPOINT, PayInvoiceForOperatorPayload,
     PayOfferPayload, PaymentLogPayload, PaymentSummaryPayload, PeginFromOnchainPayload,
     RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, SEND_ONCHAIN_ENDPOINT, SET_CHANNEL_FEES_ENDPOINT,
-    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest,
-    SetChannelFeesRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, V1_API_ENDPOINT,
-    WITHDRAW_ENDPOINT, WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload, WithdrawToOnchainPayload,
+    SET_FEES_ENDPOINT, SET_PAYMENT_POLICY_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    SendOnchainRequest, SetChannelFeesRequest, SetFeesPayload, SetMnemonicPayload,
+    SetPaymentPolicyPayload, SpendEcashPayload, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
+    WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload, WithdrawToOnchainPayload,
 };
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_ln_common::gateway_endpoint_constants::{
@@ -54,7 +55,7 @@ use crate::{Gateway, GatewayState};
 
 // Routes that the liquidity manager is allowed to access. Any authenticated
 // route NOT in this list requires the admin password.
-const LIQUIDITY_MANAGER_ROUTES: [&str; 21] = [
+const LIQUIDITY_MANAGER_ROUTES: [&str; 22] = [
     ADDRESS_ENDPOINT,
     ADDRESS_RECHECK_ENDPOINT,
     CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
@@ -75,6 +76,7 @@ const LIQUIDITY_MANAGER_ROUTES: [&str; 21] = [
     PEGIN_FROM_ONCHAIN_ENDPOINT,
     SET_CHANNEL_FEES_ENDPOINT,
     SET_FEES_ENDPOINT,
+    SET_PAYMENT_POLICY_ENDPOINT,
     WITHDRAW_TO_ONCHAIN_ENDPOINT,
 ];
 
@@ -523,6 +525,13 @@ fn routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handlers)
     );
     let authenticated_routes = register_post_handler(
         handlers,
+        SET_PAYMENT_POLICY_ENDPOINT,
+        set_payment_policy,
+        is_authenticated,
+        authenticated_routes,
+    );
+    let authenticated_routes = register_post_handler(
+        handlers,
         CONFIGURATION_ENDPOINT,
         configuration,
         is_authenticated,
@@ -700,6 +709,15 @@ async fn set_fees(
     Json(payload): Json<SetFeesPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     gateway.handle_set_fees_msg(payload).await?;
+    Ok(Json(json!(())))
+}
+
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
+async fn set_payment_policy(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<SetPaymentPolicyPayload>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    gateway.handle_set_payment_policy_msg(payload).await?;
     Ok(Json(json!(())))
 }
 

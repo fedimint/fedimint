@@ -27,10 +27,10 @@ use fedimint_gateway_common::{
     PayOfferPayload, PayOfferResponse, PaymentLogPayload, PaymentLogResponse,
     PaymentSummaryPayload, PaymentSummaryResponse, PeginFromOnchainPayload, RECEIVE_ECASH_ENDPOINT,
     ReceiveEcashPayload, ReceiveEcashResponse, SEND_ONCHAIN_ENDPOINT, SET_CHANNEL_FEES_ENDPOINT,
-    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest,
-    SetChannelFeesRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload,
-    SpendEcashResponse, WITHDRAW_ENDPOINT, WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload,
-    WithdrawResponse, WithdrawToOnchainPayload,
+    SET_FEES_ENDPOINT, SET_PAYMENT_POLICY_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    SendOnchainRequest, SetChannelFeesRequest, SetFeesPayload, SetMnemonicPayload,
+    SetPaymentPolicyPayload, SpendEcashPayload, SpendEcashResponse, WITHDRAW_ENDPOINT,
+    WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload, WithdrawResponse, WithdrawToOnchainPayload,
 };
 use fedimint_ln_common::Method;
 use fedimint_ln_common::client::GatewayApi;
@@ -178,6 +178,21 @@ pub async fn set_fees(
 ) -> ServerResult<()> {
     client
         .request(base_url, Method::POST, SET_FEES_ENDPOINT, Some(payload))
+        .await
+}
+
+pub async fn set_payment_policy(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    payload: SetPaymentPolicyPayload,
+) -> ServerResult<()> {
+    client
+        .request(
+            base_url,
+            Method::POST,
+            SET_PAYMENT_POLICY_ENDPOINT,
+            Some(payload),
+        )
         .await
 }
 

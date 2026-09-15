@@ -541,6 +541,33 @@ Fees are configured per-federation:
 </details>
 
 <details>
+<summary><strong>Turn Off Receives for a Federation</strong></summary>
+
+You can stop the gateway from receiving Lightning payments on behalf of a federation's clients without disconnecting from the federation. Outgoing payments and swaps out of the federation keep working, and the gateway's own operator invoices, ecash receives and peg-ins are unaffected.
+
+While receives are off for a federation:
+
+- LNv2 clients see the setting in the gateway's routing info and skip the gateway when picking one to receive with. Requests to create an invoice are refused.
+- LNv1 clients cannot be told about the setting, so their invoices still route to the gateway. The gateway fails those payments back to the sender instead of funding them.
+- Payments of invoices issued before receives were turned off are failed back as well, so no funds enter the federation through the gateway.
+
+#### How to Turn Receives Off or On
+
+1. Navigate to the federation card
+2. Click the **Fees** tab (shown by default)
+3. Click **Disable Receives** or **Enable Receives**
+
+Or from the command line:
+
+```bash
+gateway-cli cfg set-payment-policy --federation-id <FEDERATION_ID> --receive-enabled false
+```
+
+Omit `--federation-id` to apply the setting to every connected federation. The current setting is shown by `gateway-cli cfg display` and by the red **Receives disabled** badge on the federation card.
+
+</details>
+
+<details>
 <summary><strong>Monitor Your Gateway</strong></summary>
 
 Effective monitoring ensures your gateway operates smoothly and profitably.

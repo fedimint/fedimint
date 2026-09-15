@@ -178,6 +178,19 @@ pub struct RoutingInfo {
     pub expiration_delta_default: u64,
     /// This is the fee the gateway charges for an incoming payment.
     pub receive_fee: PaymentFee,
+    /// Whether the gateway currently accepts incoming payments on behalf of
+    /// this federation's clients. When it does not, it refuses to create
+    /// invoices for the federation and fails back the incoming payments of
+    /// invoices it already issued.
+    ///
+    /// Gateways that predate this field always accept them, so it defaults to
+    /// `true` when absent.
+    #[serde(default = "default_receive_enabled")]
+    pub receive_enabled: bool,
+}
+
+const fn default_receive_enabled() -> bool {
+    true
 }
 
 impl RoutingInfo {

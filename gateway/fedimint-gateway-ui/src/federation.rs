@@ -14,7 +14,7 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::{Amount, BitcoinAmountOrAll, PeerId, TieredCounts};
 use fedimint_gateway_common::{
     DepositAddressPayload, FederationInfo, LeaveFedPayload, ReceiveEcashPayload, SetFeesPayload,
-    SpendEcashPayload, WithdrawPayload, WithdrawPreviewPayload,
+    SetPaymentPolicyPayload, SpendEcashPayload, WithdrawPayload, WithdrawPreviewPayload,
 };
 use fedimint_mint_client::OOBNotes;
 use fedimint_ui_common::UiState;
@@ -26,9 +26,9 @@ use qrcode::render::svg;
 use serde::Deserialize;
 
 use crate::{
-    DEPOSIT_ADDRESS_ROUTE, DynGatewayApi, RECEIVE_ECASH_ROUTE, SET_FEES_ROUTE, SPEND_ECASH_ROUTE,
-    WITHDRAW_CONFIRM_ROUTE, WITHDRAW_PREVIEW_ROUTE, redirect_error, redirect_success,
-    redirect_success_with_export_reminder,
+    DEPOSIT_ADDRESS_ROUTE, DynGatewayApi, RECEIVE_ECASH_ROUTE, SET_FEES_ROUTE,
+    SET_PAYMENT_POLICY_ROUTE, SPEND_ECASH_ROUTE, WITHDRAW_CONFIRM_ROUTE, WITHDRAW_PREVIEW_ROUTE,
+    redirect_error, redirect_success, redirect_success_with_export_reminder,
 };
 
 #[derive(Deserialize)]
@@ -167,6 +167,9 @@ pub fn render<E: Display>(
                     div class="card-header dashboard-header d-flex justify-content-between align-items-center" {
                         div {
                             (fed.federation_name.clone().unwrap_or("Unnamed Federation".to_string()))
+                            @if !fed.config.receive_enabled() {
+                                span class="badge bg-danger ms-2" title="Incoming Lightning payments for this federation are rejected" { "Receives disabled" }
+                            }
                         }
 
                         div class="d-flex align-items-center gap-2" {
@@ -387,6 +390,41 @@ pub fn render<E: Display>(
                                             onclick={(format!("toggleFeesEdit('{}')", fed.federation_id))}
                                         {
                                             "Cancel"
+                                        }
+                                    }
+                                }
+
+                                // PAYMENT POLICY
+                                div class="mt-3" {
+                                    table class="table table-sm mb-2" {
+                                        tbody {
+                                            tr {
+                                                th {
+                                                    "Receives "
+                                                    span class="text-muted" data-bs-toggle="tooltip" title="Whether the gateway accepts incoming Lightning payments on behalf of this federation's clients" { "ⓘ" }
+                                                }
+                                                td {
+                                                    @if fed.config.receive_enabled() {
+                                                        span class="badge bg-success" { "Enabled" }
+                                                    } @else {
+                                                        span class="badge bg-danger" { "Disabled" }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    form method="post" action={(SET_PAYMENT_POLICY_ROUTE)} {
+                                        input type="hidden" name="federation_id" value=(fed.federation_id.to_string());
+                                        @if fed.config.receive_enabled() {
+                                            input type="hidden" name="receive_enabled" value="false";
+                                            button type="submit"
+                                                class="btn btn-sm btn-outline-danger"
+                                                onclick=("return confirm('Turn off receives for this federation? Incoming Lightning payments will be rejected, including payments of invoices that were already issued.');")
+                                            { "Disable Receives" }
+                                        } @else {
+                                            input type="hidden" name="receive_enabled" value="true";
+                                            button type="submit" class="btn btn-sm btn-outline-success" { "Enable Receives" }
                                         }
                                     }
                                 }
@@ -717,6 +755,23 @@ pub async fn set_fees_handler<E: Display>(
     match state.api.handle_set_fees_msg(payload).await {
         Ok(_) => redirect_success("Successfully set fees".to_string()).into_response(),
         Err(err) => redirect_error(format!("Failed to update fees: {err}")).into_response(),
+    }
+}
+
+pub async fn set_payment_policy_handler<E: Display>(
+    State(state): State<UiState<DynGatewayApi<E>>>,
+    _auth: UserAuth,
+    Form(payload): Form<SetPaymentPolicyPayload>,
+) -> impl IntoResponse {
+    tracing::info!(?payload, "Received payment policy payload");
+
+    match state.api.handle_set_payment_policy_msg(payload).await {
+        Ok(()) => {
+            redirect_success("Successfully updated payment policy".to_string()).into_response()
+        }
+        Err(err) => {
+            redirect_error(format!("Failed to update payment policy: {err}")).into_response()
+        }
     }
 }
 

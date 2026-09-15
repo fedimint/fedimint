@@ -1015,17 +1015,57 @@ impl LightningClientModule {
         gateway: Option<SafeUrl>,
     ) -> Result<(SafeUrl, RoutingInfo), ReceiveError> {
         match gateway {
-            Some(gateway) => Ok((
-                gateway.clone(),
-                self.routing_info(&gateway)
+            Some(gateway) => {
+                let routing_info = self
+                    .routing_info(&gateway)
                     .await
                     .map_err(|e| ReceiveError::FailedToConnectToGateway(e.to_string()))?
-                    .ok_or(ReceiveError::FederationNotSupported)?,
-            )),
+                    .ok_or(ReceiveError::FederationNotSupported)?;
+
+                if !routing_info.receive_enabled {
+                    return Err(ReceiveError::ReceiveDisabled);
+                }
+
+                Ok((gateway, routing_info))
+            }
             None => self
-                .select_gateway(None)
+                .select_receive_gateway()
                 .await
                 .map_err(ReceiveError::SelectGateway),
+        }
+    }
+
+    /// Selects the first registered gateway that is online and currently
+    /// accepts incoming payments for this federation. A gateway that answers
+    /// but has turned receives off is skipped rather than handed an invoice
+    /// request it would refuse.
+    async fn select_receive_gateway(&self) -> Result<(SafeUrl, RoutingInfo), SelectGatewayError> {
+        let gateways = self
+            .module_api
+            .gateways()
+            .await
+            .map_err(|e| SelectGatewayError::FailedToRequestGateways(e.to_string()))?;
+
+        if gateways.is_empty() {
+            return Err(SelectGatewayError::NoGatewaysAvailable);
+        }
+
+        let mut any_responded = false;
+
+        for gateway in gateways {
+            if let Ok(Some(routing_info)) = self.routing_info(&gateway).await {
+                any_responded = true;
+
+                if routing_info.receive_enabled {
+                    return Ok((gateway, routing_info));
+                }
+            }
+        }
+
+        if any_responded {
+            Err(SelectGatewayError::NoGatewayAcceptsReceives)
+        } else {
+            Err(SelectGatewayError::GatewaysUnresponsive)
         }
     }
 
@@ -1569,6 +1609,8 @@ pub enum SelectGatewayError {
     NoGatewaysAvailable,
     #[error("All gateways failed to respond")]
     GatewaysUnresponsive,
+    #[error("No online gateway currently accepts incoming payments for this federation")]
+    NoGatewayAcceptsReceives,
 }
 
 /// The status of the latest send attempt for an invoice, derived from the
@@ -1639,6 +1681,8 @@ pub enum ReceiveError {
     FailedToConnectToGateway(String),
     #[error("Gateway does not support this federation")]
     FederationNotSupported,
+    #[error("Gateway does not currently accept incoming payments for this federation")]
+    ReceiveDisabled,
     #[error("Gateway fee exceeds the allowed limit")]
     GatewayFeeExceedsLimit,
     #[error("Amount is too small to cover fees")]
