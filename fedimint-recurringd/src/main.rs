@@ -16,7 +16,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiAuth;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, SafeUrl};
 use fedimint_ln_client::recurring::api::{
     RecurringPaymentRegistrationRequest, RecurringPaymentRegistrationResponse,
 };
@@ -205,7 +205,14 @@ async fn lnurl_pay(
             .await
         {
             Ok(response) => LnurlResponse::Ok(response),
-            Err(e) => LnurlResponse::error(e.to_string()),
+            Err(e) => {
+                debug!(
+                    payment_code_id = ?payment_code_id,
+                    err = %e.fmt_compact(),
+                    "LNURL pay request failed"
+                );
+                LnurlResponse::error(e.to_string())
+            }
         },
     )
 }
@@ -222,7 +229,15 @@ async fn lnurl_pay_invoice(
             .await
         {
             Ok(invoice) => LnurlResponse::Ok(invoice),
-            Err(e) => LnurlResponse::error(e.to_string()),
+            Err(e) => {
+                debug!(
+                    payment_code_id = ?payment_code_id,
+                    amount = %params.amount,
+                    err = %e.fmt_compact(),
+                    "LNURL invoice request failed"
+                );
+                LnurlResponse::error(e.to_string())
+            }
         },
     )
 }
@@ -266,6 +281,12 @@ async fn verify_invoice_paid(
             })
         })
         .unwrap_or_else(|e| {
+            debug!(
+                federation_id = %federation_id,
+                operation_id = ?operation_id,
+                err = %e.fmt_compact(),
+                "LUD-21 verify request failed"
+            );
             json!({
                 "status": "ERROR",
                 "reason": e.to_string(),
@@ -279,7 +300,7 @@ struct ApiError(anyhow::Error);
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response<Body> {
-        debug!("ApiError: {}", self.0);
+        debug!("ApiError: {}", self.0.fmt_compact_anyhow());
 
         (
             StatusCode::INTERNAL_SERVER_ERROR,
