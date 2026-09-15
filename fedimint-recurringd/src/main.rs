@@ -205,7 +205,14 @@ async fn lnurl_pay(
             .await
         {
             Ok(response) => LnurlResponse::Ok(response),
-            Err(e) => LnurlResponse::error(e.fmt_compact().to_string()),
+            Err(e) => {
+                debug!(
+                    payment_code_id = ?payment_code_id,
+                    err = %e.fmt_compact(),
+                    "LNURL pay request failed"
+                );
+                LnurlResponse::error(e.to_string())
+            }
         },
     )
 }
@@ -222,7 +229,15 @@ async fn lnurl_pay_invoice(
             .await
         {
             Ok(invoice) => LnurlResponse::Ok(invoice),
-            Err(e) => LnurlResponse::error(e.fmt_compact().to_string()),
+            Err(e) => {
+                debug!(
+                    payment_code_id = ?payment_code_id,
+                    amount = %params.amount,
+                    err = %e.fmt_compact(),
+                    "LNURL invoice request failed"
+                );
+                LnurlResponse::error(e.to_string())
+            }
         },
     )
 }
@@ -266,9 +281,15 @@ async fn verify_invoice_paid(
             })
         })
         .unwrap_or_else(|e| {
+            debug!(
+                federation_id = %federation_id,
+                operation_id = ?operation_id,
+                err = %e.fmt_compact(),
+                "LUD-21 verify request failed"
+            );
             json!({
                 "status": "ERROR",
-                "reason": e.fmt_compact().to_string(),
+                "reason": e.to_string(),
             })
         });
 
@@ -284,7 +305,7 @@ impl IntoResponse for ApiError {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({
-                "error": self.0.fmt_compact_anyhow().to_string(),
+                "error": self.0.to_string(),
             })),
         )
             .into_response()

@@ -127,8 +127,8 @@ pub enum LnSubscribeError {
     #[error("The operation is not a recurring lightning receive")]
     NotARecurringReceive,
 
-    /// The operation is a payment, but it is settled inside the federation
-    /// rather than over Lightning, so it has no external payment states.
+    /// The operation is a payment that goes out over Lightning rather than
+    /// settling inside the federation, so it has no internal payment states.
     #[error("The operation is an external lightning payment, not an internal one")]
     NotInternalPayment,
 
