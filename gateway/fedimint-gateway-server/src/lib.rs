@@ -4073,6 +4073,10 @@ impl IGatewayClientV1 for Gateway {
         Ok(())
     }
 
+    async fn receive_enabled(&self, federation_id: FederationId) -> bool {
+        self.receive_enabled(federation_id).await
+    }
+
     async fn get_routing_fees(&self, federation_id: FederationId) -> Option<RoutingFees> {
         let mut gateway_dbtx = self.gateway_db.begin_transaction_nc().await;
         let lightning_fee = gateway_dbtx

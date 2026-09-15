@@ -1715,6 +1715,102 @@ async fn test_gateway_payment_policy_requires_a_connected_federation() -> anyhow
     .await
 }
 
+/// Has a client of `recipient`'s federation create an LNv1 invoice through the
+/// gateway, funds its payment from `payer`'s federation, and hands that payment
+/// to the gateway. Returns the state the gateway's payment reaches after it is
+/// created.
+async fn gateway_attempts_lnv1_swap(
+    gateway: &Gateway,
+    payer: &ClientHandleArc,
+    recipient: &ClientHandleArc,
+) -> anyhow::Result<GatewayExtPayStates> {
+    let gateway_id = gateway.http_gateway_id().await;
+    let recipient_ln = recipient.get_first_module::<LightningClientModule>()?;
+    recipient_ln.update_gateway_cache().await?;
+    let (_receive_op, invoice, _) = recipient_ln
+        .create_bolt11_invoice(
+            msats(2_500),
+            Bolt11InvoiceDescription::Direct(Description::new("swap".to_string())?),
+            None,
+            "test swap into a federation",
+            recipient_ln.select_gateway(&gateway_id).await,
+        )
+        .await?;
+
+    let payload = funded_lnv1_pay_payload(payer, invoice, &gateway_id).await?;
+
+    let gateway_client = gateway
+        .select_client(payer.federation_id())
+        .await?
+        .into_value();
+    let gateway_module = gateway_client.get_first_module::<GatewayClientModule>()?;
+    let operation_id = gateway_module.gateway_pay_bolt11_invoice(payload).await?;
+    let mut updates = gateway_module
+        .gateway_subscribe_ln_pay(operation_id)
+        .await?
+        .into_stream();
+    assert_eq!(updates.ok().await?, GatewayExtPayStates::Created);
+
+    Ok(updates.ok().await?)
+}
+
+/// A swap into a federation involves no Lightning payment, so the receive
+/// switch cannot rely on the check at HTLC intercept. While receives are off
+/// for the recipient's federation, the gateway cancels the payer's contract
+/// without funding anything there. Once receives are back on, a swap goes
+/// through.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_payment_policy_refuses_swaps_into_a_federation() -> anyhow::Result<()> {
+    multi_federation_test(|gateway, fed1, fed2, _| async move {
+        let id1 = fed1.id();
+        let id2 = fed2.id();
+        fed1.connect_gateway(&gateway).await;
+        fed2.connect_gateway(&gateway).await;
+        send_msats_to_gateway(&gateway, id1, 10_000).await;
+        send_msats_to_gateway(&gateway, id2, 10_000).await;
+
+        let payer = fed1.new_client().await;
+        payer
+            .get_first_module::<DummyClientModule>()?
+            .mock_receive(sats(100), AmountUnit::BITCOIN)
+            .await?;
+        let recipient = fed2.new_client().await;
+
+        gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: Some(id2),
+                receive_enabled: Some(false),
+            })
+            .await?;
+
+        assert_matches!(
+            gateway_attempts_lnv1_swap(&gateway, &payer, &recipient).await?,
+            GatewayExtPayStates::Canceled {
+                error: OutgoingPaymentError {
+                    error_type: OutgoingPaymentErrorType::SwapFailed { swap_error },
+                    ..
+                }
+            } if swap_error.contains("Receiving payments is disabled")
+        );
+        assert_eq!(get_balances(&gateway, vec![id2]).await, vec![10_000]);
+
+        gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: Some(id2),
+                receive_enabled: Some(true),
+            })
+            .await?;
+
+        assert_matches!(
+            gateway_attempts_lnv1_swap(&gateway, &payer, &recipient).await?,
+            GatewayExtPayStates::Preimage { .. }
+        );
+
+        Ok(())
+    })
+    .await
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::Result<()> {
     multi_federation_test(|gateway, fed1, fed2, _| async move {

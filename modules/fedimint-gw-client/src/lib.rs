@@ -710,6 +710,21 @@ impl GatewayClientModule {
             return Ok(None);
         }
 
+        // A swap is how funds from another federation enter this one through
+        // the gateway, so it is refused while the operator has receives turned
+        // off. The payer's contract is cancelled and they are refunded. A swap
+        // already funded resumes above regardless.
+        let federation_id = self
+            .client_ctx
+            .get_config()
+            .await
+            .global
+            .calculate_federation_id();
+        anyhow::ensure!(
+            self.lightning_manager.receive_enabled(federation_id).await,
+            "Receiving payments is disabled for federation {federation_id}"
+        );
+
         let (op_id_from_funding, client_output, client_output_sm) = self
             .create_funding_incoming_contract_output_from_swap(swap_params.clone())
             .await?;
@@ -1277,6 +1292,12 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
 
     /// Retrieves the federation's routing fees from the federation's config.
     async fn get_routing_fees(&self, federation_id: FederationId) -> Option<RoutingFees>;
+
+    /// Whether the gateway currently accepts payments on behalf of the clients
+    /// of `federation_id`, as set by its operator.
+    ///
+    /// Consulted before funding a new direct swap into the federation.
+    async fn receive_enabled(&self, federation_id: FederationId) -> bool;
 
     /// Retrieve a client given a federation ID, used for swapping ecash between
     /// federations.

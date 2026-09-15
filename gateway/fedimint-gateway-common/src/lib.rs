@@ -212,8 +212,9 @@ impl FederationConfig {
     Deserialize,
 )]
 pub enum PaymentPolicy {
-    /// Do not accept incoming Lightning payments: refuse to create invoices
-    /// and fail back the payments of invoices that were already issued.
+    /// Do not accept incoming payments: refuse to create invoices, fail back
+    /// the payments of invoices that were already issued, and refuse swaps
+    /// into the federation.
     ReceivesDisabled,
 }
 

@@ -549,7 +549,8 @@ While receives are off for a federation:
 
 - LNv2 clients see the setting in the gateway's routing info and skip the gateway when picking one to receive with. Requests to create an invoice are refused.
 - LNv1 clients cannot be told about the setting, so their invoices still route to the gateway. The gateway fails those payments back to the sender instead of funding them.
-- Payments of invoices issued before receives were turned off are failed back as well, so no funds enter the federation through the gateway.
+- Payments of invoices issued before receives were turned off are failed back as well.
+- Swaps into the federation from another federation on this gateway are refused, so no funds enter the federation through the gateway.
 
 #### How to Turn Receives Off or On
 
