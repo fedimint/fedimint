@@ -43,12 +43,12 @@ pub trait WalletFederationApi {
     /// Returns the total number of recovery items stored on the federation
     async fn fetch_recovery_count(&self) -> FederationResult<u64>;
 
-    /// Fetches recovery items in the range `[start, end)` via consensus
-    async fn fetch_recovery_slice(
-        &self,
-        start: u64,
-        end: u64,
-    ) -> FederationResult<Vec<RecoveryItem>>;
+    /// Fetches recovery items in the range `[start, end)` via consensus.
+    ///
+    /// Retries each peer with backoff until a threshold of peers agree, so a
+    /// transient transport failure on one peer (on top of a peer that is
+    /// already offline) does not abort the whole recovery.
+    async fn fetch_recovery_slice(&self, start: u64, end: u64) -> Vec<RecoveryItem>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -224,12 +224,8 @@ where
         .await
     }
 
-    async fn fetch_recovery_slice(
-        &self,
-        start: u64,
-        end: u64,
-    ) -> FederationResult<Vec<RecoveryItem>> {
-        self.request_current_consensus::<Vec<RecoveryItem>>(
+    async fn fetch_recovery_slice(&self, start: u64, end: u64) -> Vec<RecoveryItem> {
+        self.request_current_consensus_retry::<Vec<RecoveryItem>>(
             RECOVERY_SLICE_ENDPOINT.to_string(),
             ApiRequestErased::new((start, end)),
         )

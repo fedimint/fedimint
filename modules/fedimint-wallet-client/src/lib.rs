@@ -218,13 +218,12 @@ impl WalletClientInit {
     async fn recover_from_slices(
         &self,
         args: &ClientModuleRecoverArgs<Self>,
+        total_items: u64,
     ) -> anyhow::Result<Option<fedimint_core::Amount>> {
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),
             module_root_secret: args.module_root_secret().clone(),
         };
-
-        let total_items = args.module_api().fetch_recovery_count().await?;
 
         let mut state = RecoveryStateV2::new();
 
@@ -233,7 +232,7 @@ impl WalletClientInit {
         for start in (0..total_items).step_by(SLICE_SIZE as usize) {
             let end = std::cmp::min(start + SLICE_SIZE, total_items);
 
-            let items = args.module_api().fetch_recovery_slice(start, end).await?;
+            let items = args.module_api().fetch_recovery_slice(start, end).await;
 
             for item in &items {
                 match item {
@@ -450,12 +449,15 @@ impl ClientModuleInit for WalletClientInit {
                 .await;
         }
 
-        // Determine which method to use based on endpoint availability
-        if args.module_api().fetch_recovery_count().await.is_ok() {
-            self.recover_from_slices(args).await
-        } else {
-            args.recover_from_history::<WalletRecovery>(self, snapshot)
-                .await
+        // Determine which method to use based on endpoint availability. The
+        // count fetched here is reused by the slice recovery so that it is not
+        // requested a second time (and cannot transiently fail there).
+        match args.module_api().fetch_recovery_count().await {
+            Ok(total_items) => self.recover_from_slices(args, total_items).await,
+            Err(_) => {
+                args.recover_from_history::<WalletRecovery>(self, snapshot)
+                    .await
+            }
         }
     }
 
