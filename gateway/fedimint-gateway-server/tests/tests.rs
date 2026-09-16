@@ -1433,10 +1433,10 @@ async fn create_lnv2_invoice(
         .await?)
 }
 
-/// `set_payment_policy` turns receives off for one federation. The LNv2
-/// routing info advertises it, requests for new invoices are refused, and the
-/// payment of an invoice issued before the switch was flipped is refused as
-/// well, so no funds enter the federation through the gateway.
+/// `set_payment_policy` turns receives off for one federation: the LNv2
+/// routing info advertises it and requests for new invoices are refused. The
+/// payment of an invoice issued before the switch is covered by
+/// `test_gateway_payment_policy_fails_lnv2_payment_of_earlier_invoice`.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_payment_policy_disables_lnv2_receives() -> anyhow::Result<()> {
     single_federation_test(|gateway, _, fed, _, _| async move {
@@ -1449,12 +1449,6 @@ async fn test_gateway_payment_policy_disables_lnv2_receives() -> anyhow::Result<
                 .expect("Gateway is connected to the federation")
                 .receive_enabled
         );
-
-        // An invoice issued while receives were still on.
-        let earlier_invoice = create_lnv2_invoice(&gateway, federation_id, [1; 32]).await?;
-        let earlier_amount_msats = earlier_invoice
-            .amount_milli_satoshis()
-            .expect("The invoice has an amount");
 
         gateway
             .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
@@ -1479,19 +1473,7 @@ async fn test_gateway_payment_policy_disables_lnv2_receives() -> anyhow::Result<
             "Expected the invoice to be refused because receives are off, got: {error}"
         );
 
-        let error = gateway
-            .get_registered_incoming_contract_and_client_v2(
-                PaymentImage::Hash(*earlier_invoice.payment_hash()),
-                earlier_amount_msats,
-            )
-            .await
-            .expect_err("The payment of an earlier invoice was accepted while receives are off");
-        assert!(
-            error.to_string().contains("Receiving payments is disabled"),
-            "Expected the payment to be refused because receives are off, got: {error}"
-        );
-
-        // Turning receives back on restores both.
+        // Turning receives back on restores invoice creation.
         gateway
             .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
                 federation_id: Some(federation_id),
@@ -1506,12 +1488,6 @@ async fn test_gateway_payment_policy_disables_lnv2_receives() -> anyhow::Result<
                 .expect("Gateway is connected to the federation")
                 .receive_enabled
         );
-        gateway
-            .get_registered_incoming_contract_and_client_v2(
-                PaymentImage::Hash(*earlier_invoice.payment_hash()),
-                earlier_amount_msats,
-            )
-            .await?;
         create_lnv2_invoice(&gateway, federation_id, [3; 32]).await?;
 
         Ok(())
@@ -1555,11 +1531,13 @@ async fn test_gateway_payment_policy_fails_lnv2_payment_of_earlier_invoice() -> 
             })
             .await?;
 
+        // The LNv2 rail recognises the payment and cancels its HTLC itself, so
+        // this counts as an LNv2 attempt rather than an unmatched payment.
         assert_eq!(
             gateway
                 .handle_lightning_payment(payment_request.clone(), &lightning_context)
                 .await,
-            "cancel"
+            "lnv2"
         );
         assert_eq!(
             gateway_client.get_balance_for_btc().await?,
@@ -1952,6 +1930,17 @@ async fn get_balances(gw: &Gateway, ids: Vec<FederationId>) -> Vec<u64> {
         .collect()
 }
 
+/// Turns the gateway's receive policy for `federation_id` on or off.
+async fn set_receive_enabled(gateway: &Gateway, federation_id: FederationId, enabled: bool) {
+    gateway
+        .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+            federation_id: Some(federation_id),
+            receive_enabled: Some(enabled),
+        })
+        .await
+        .expect("The gateway is connected to the federation");
+}
+
 /// Gives msats to the gateway using the dummy module.
 async fn send_msats_to_gateway(gateway: &Gateway, federation_id: FederationId, msats: u64) {
     let client = gateway
@@ -2252,6 +2241,243 @@ fn decryptable_incoming_contract(client: &ClientHandleArc) -> anyhow::Result<Inc
     );
     assert!(contract.verify());
     Ok(contract)
+}
+
+/// The receive policy is a fresh-dispatch gate on the swap rail: it refuses a
+/// swap that has not started, while a swap the gateway already funded still
+/// resumes once receives are off. Refusing the resumed one would forfeit the
+/// payer's outgoing contract after the recipient had already been paid out of
+/// gateway funds.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv2_swap_applies_the_receive_policy_only_to_fresh_dispatches() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+    send_msats_to_gateway(&gateway, fed.id(), 1_000_000_000).await;
+
+    let client = gateway.select_client(fed.id()).await?.into_value();
+    let contract = decryptable_incoming_contract(&client)?;
+    let balance_before = client.get_balance_for_btc().await?;
+
+    set_receive_enabled(&gateway, fed.id(), false).await;
+
+    let error = client
+        .get_first_module::<GatewayClientModuleV2>()?
+        .relay_direct_swap(contract.clone(), 900, true)
+        .await
+        .expect_err("a fresh swap is refused while receives are off");
+    assert!(
+        error.to_string().contains("Receiving payments is disabled"),
+        "Expected the swap to be refused because receives are off, got: {error}"
+    );
+    assert_eq!(
+        client.get_balance_for_btc().await?,
+        balance_before,
+        "a refused swap must not fund anything"
+    );
+
+    set_receive_enabled(&gateway, fed.id(), true).await;
+
+    assert_eq!(
+        client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .relay_direct_swap(contract.clone(), 900, true)
+            .await?,
+        Some(FinalReceiveState::Success([0; 32]))
+    );
+    let balance_after_funding = client.get_balance_for_btc().await?;
+    assert!(
+        balance_after_funding < balance_before,
+        "the swap funds the incoming contract"
+    );
+
+    set_receive_enabled(&gateway, fed.id(), false).await;
+
+    assert_eq!(
+        client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .relay_direct_swap(contract, 900, true)
+            .await?,
+        Some(FinalReceiveState::Success([0; 32])),
+        "a swap already funded resumes even though receives are off"
+    );
+    assert_eq!(
+        client.get_balance_for_btc().await?,
+        balance_after_funding,
+        "the incoming contract must only be funded once"
+    );
+
+    Ok(())
+}
+
+/// The same gate on the LNv2 HTLC rail: a fresh receive is refused while
+/// receives are off, but a replay and a further circuit for a contract the
+/// gateway already funded are still relayed. Dropping those would leave the
+/// gateway unable to settle a payment it has already paid for.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv2_htlc_applies_the_receive_policy_only_to_fresh_dispatches() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+    send_msats_to_gateway(&gateway, fed.id(), 1_000_000_000).await;
+
+    let client = gateway.select_client(fed.id()).await?.into_value();
+    let module = client.get_first_module::<GatewayClientModuleV2>()?;
+    let preimage = [23; 32];
+    let payment_hash = preimage.consensus_hash();
+    let contract = IncomingContract::new(
+        module.cfg.tpe_agg_pk,
+        [42; 32],
+        preimage,
+        PaymentImage::Hash(payment_hash),
+        Amount::from_sats(1000),
+        u64::MAX,
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        module.keypair.public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+    );
+    let balance_before = client.get_balance_for_btc().await?;
+
+    set_receive_enabled(&gateway, fed.id(), false).await;
+
+    let error = module
+        .relay_incoming_htlc(payment_hash, 0, 0, contract.clone(), 1_000_000)
+        .await
+        .expect_err("a fresh receive is refused while receives are off");
+    assert!(
+        error.to_string().contains("Receiving payments is disabled"),
+        "Expected the receive to be refused because receives are off, got: {error}"
+    );
+    assert_eq!(
+        client.get_balance_for_btc().await?,
+        balance_before,
+        "a refused receive must not fund anything"
+    );
+
+    set_receive_enabled(&gateway, fed.id(), true).await;
+
+    module
+        .relay_incoming_htlc(payment_hash, 0, 0, contract.clone(), 1_000_000)
+        .await?;
+    let balance_after_funding = client.get_balance_for_btc().await?;
+    assert!(
+        balance_after_funding < balance_before,
+        "the relay funds the incoming contract"
+    );
+
+    set_receive_enabled(&gateway, fed.id(), false).await;
+
+    module
+        .relay_incoming_htlc(payment_hash, 0, 0, contract.clone(), 1_000_000)
+        .await?;
+    module
+        .relay_incoming_htlc(payment_hash, 42, 7, contract, 1_000_000)
+        .await?;
+    assert_eq!(
+        client.get_balance_for_btc().await?,
+        balance_after_funding,
+        "the incoming contract must only be funded once"
+    );
+
+    Ok(())
+}
+
+/// The LNv1 intercept applies the policy the same way: a fresh HTLC is refused
+/// while receives are off, while a replay of a circuit the gateway already
+/// funded still resolves, so the gateway can settle the payment it paid for.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv1_intercept_applies_the_receive_policy_only_to_fresh_htlcs() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, user_client, _| async move {
+        let gateway_id = gateway.http_gateway_id().await;
+        let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+        let initial_gateway_balance = sats(1000);
+        gateway_client
+            .get_first_module::<DummyClientModule>()?
+            .mock_receive(initial_gateway_balance, AmountUnit::BITCOIN)
+            .await?;
+
+        let invoice_amount = sats(100);
+        let ln_module = user_client.get_first_module::<LightningClientModule>()?;
+        let lightning_gateway = ln_module.select_gateway(&gateway_id).await;
+        let (_invoice_op, invoice, _) = ln_module
+            .create_bolt11_invoice(
+                invoice_amount,
+                Bolt11InvoiceDescription::Direct(Description::new("description".to_string())?),
+                None,
+                "test the receive policy on the intercept",
+                lightning_gateway,
+            )
+            .await?;
+
+        let htlc = Htlc {
+            payment_hash: *invoice.payment_hash(),
+            incoming_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
+            outgoing_amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().unwrap()),
+            incoming_expiry: fedimint_gw_client::LNV1_HTLC_EXPIRY_SAFETY_MARGIN + 1,
+            short_channel_id: Some(1),
+            incoming_chan_id: 2,
+            htlc_id: 1,
+        };
+        let gateway_ln_module = gateway_client.get_first_module::<GatewayClientModule>()?;
+
+        set_receive_enabled(&gateway, fed.id(), false).await;
+
+        let error = gateway_ln_module
+            .gateway_handle_intercepted_htlc(htlc.clone(), async { Ok(0) })
+            .await
+            .expect_err("a fresh HTLC is refused while receives are off");
+        assert!(
+            error.to_string().contains("Receiving payments is disabled"),
+            "Expected the HTLC to be refused because receives are off, got: {error}"
+        );
+        assert_eq!(
+            gateway_client.get_balance_for_btc().await?,
+            initial_gateway_balance,
+            "a refused HTLC must not fund anything"
+        );
+
+        set_receive_enabled(&gateway, fed.id(), true).await;
+
+        let operation_id = gateway_ln_module
+            .gateway_handle_intercepted_htlc(htlc.clone(), async { Ok(0) })
+            .await?;
+        let mut intercept_sub = gateway_ln_module
+            .gateway_subscribe_ln_receive(operation_id)
+            .await?
+            .into_stream();
+        assert_eq!(intercept_sub.ok().await?, GatewayExtReceiveStates::Funding);
+        assert_matches!(
+            intercept_sub.ok().await?,
+            GatewayExtReceiveStates::Preimage { .. }
+        );
+        let funded_balance = gateway_client.get_balance_for_btc().await?;
+        assert_eq!(
+            funded_balance,
+            initial_gateway_balance.saturating_sub(invoice_amount)
+        );
+
+        set_receive_enabled(&gateway, fed.id(), false).await;
+
+        let replay_operation_id = gateway_ln_module
+            .gateway_handle_intercepted_htlc(htlc, async {
+                anyhow::bail!("backend info must not be queried for a replay")
+            })
+            .await?;
+        assert_eq!(
+            replay_operation_id, operation_id,
+            "a replayed circuit resolves even though receives are off"
+        );
+        assert_eq!(
+            gateway_client.get_balance_for_btc().await?,
+            funded_balance,
+            "the replay must not fund anything further"
+        );
+
+        Ok(())
+    })
+    .await
 }
 
 /// When a wall-clock gate forbids a fresh dispatch and no swap operation

@@ -573,6 +573,16 @@ impl GatewayClientModuleV2 {
 
         let commitment = contract.commitment.clone();
         if plan == IncomingRelayPlan::CreateReceiveAndCompletion {
+            // Only a fresh receive funds an incoming contract, so only it is
+            // subject to the operator's receive policy. `AddCompletion` joins a
+            // receive operation that already exists, and dropping it would
+            // strand a contract the gateway has already funded.
+            anyhow::ensure!(
+                self.gateway.receive_enabled(&self.federation_id).await,
+                "Receiving payments is disabled for federation {}",
+                self.federation_id
+            );
+
             let refund_keypair = self.keypair;
             let client_output = ClientOutput::<LightningOutput> {
                 output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
@@ -689,6 +699,17 @@ impl GatewayClientModuleV2 {
         if !allow_fresh_dispatch {
             return Ok(None);
         }
+
+        // A swap funds an incoming contract in this federation, so the
+        // operator's receive policy refuses to start one. It is consulted only
+        // here, below the resume path: a swap already funded must still be
+        // joined, or the gateway forfeits the payer's contract after having
+        // paid the recipient.
+        anyhow::ensure!(
+            self.gateway.receive_enabled(&self.federation_id).await,
+            "Receiving payments is disabled for federation {}",
+            self.federation_id
+        );
 
         let refund_keypair = self.keypair;
 
@@ -875,6 +896,13 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
     /// must absorb transient node failures and only answer once the node's
     /// payment store could actually be consulted.
     async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool;
+
+    /// Whether the gateway currently accepts payments on behalf of the clients
+    /// of `federation_id`, as set by its operator.
+    ///
+    /// Consulted only before funding a new incoming contract: work already
+    /// funded must finish, or the gateway abandons a contract it has paid for.
+    async fn receive_enabled(&self, federation_id: &FederationId) -> bool;
 
     /// Computes the minimum contract amount necessary for making an outgoing
     /// payment.

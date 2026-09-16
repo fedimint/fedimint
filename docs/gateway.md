@@ -551,6 +551,7 @@ While receives are off for a federation:
 - LNv1 clients cannot be told about the setting, so their invoices still route to the gateway. The gateway fails those payments back to the sender instead of funding them.
 - Payments of invoices issued before receives were turned off are failed back as well.
 - Swaps into the federation from another federation on this gateway are refused, so no funds enter the federation through the gateway.
+- A payment or swap the gateway had already funded before the switch still completes, so the gateway is never left out of pocket for a contract it paid.
 
 #### How to Turn Receives Off or On
 

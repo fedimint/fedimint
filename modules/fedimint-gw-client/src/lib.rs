@@ -609,6 +609,21 @@ impl GatewayClientModule {
             return Ok(operation_id);
         }
 
+        // The operator's receive policy refuses a fresh payment, but only
+        // below the replay checks above: a circuit this gateway already funded
+        // must still be settled, or the gateway is out of pocket for a
+        // contract it has paid for.
+        let federation_id = self
+            .client_ctx
+            .get_config()
+            .await
+            .global
+            .calculate_federation_id();
+        anyhow::ensure!(
+            self.lightning_manager.receive_enabled(federation_id).await,
+            "Receiving payments is disabled for federation {federation_id}"
+        );
+
         let current_block_height = current_block_height.await?;
         htlc.ensure_safe_expiry(current_block_height)?;
         let remaining_blocks = htlc.incoming_expiry.saturating_sub(current_block_height);
