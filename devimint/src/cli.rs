@@ -459,6 +459,7 @@ async fn handle_dev_fed_command(
                 path = %process_mgr.globals.FM_DATA_DIR.display(),
                 "Devfed ready"
             );
+            log_web_ui_urls(&dev_fed, pre_restore).await?;
             exec_or_wait_for_shutdown(exec, &task_group).await
         }
     };
@@ -467,6 +468,41 @@ async fn handle_dev_fed_command(
     // task group by now.
     dev_fed.fast_terminate().await;
     result
+}
+
+/// Logs the web UI address of every guardian and gateway.
+///
+/// Their ports are allocated per run, so an operator dropping into a devimint
+/// shell would otherwise have to dig them out of the env vars before opening
+/// any of the UIs.
+///
+/// Gateways are skipped before a manual restore: that mode deliberately stops
+/// short of finalizing the dev fed, and awaiting a gateway here would start
+/// waiting on work it does not otherwise do.
+async fn log_web_ui_urls(dev_fed: &DevJitFed, pre_restore: bool) -> Result<()> {
+    for (peer_id, peer_vars) in &dev_fed.fed().await?.vars {
+        info!(
+            target: LOG_DEVIMINT,
+            "fedimint-{peer_id} UI: http://{}", peer_vars.FM_BIND_UI
+        );
+    }
+
+    if pre_restore {
+        return Ok(());
+    }
+
+    for gateway in [
+        dev_fed.gw_lnd().await?,
+        dev_fed.gw_ldk().await?,
+        dev_fed.gw_ldk_second().await?,
+    ] {
+        info!(
+            target: LOG_DEVIMINT,
+            "{} UI: http://127.0.0.1:{}", gateway.gw_name, gateway.gw_port
+        );
+    }
+
+    Ok(())
 }
 
 pub async fn exec_user_command(path: Vec<ffi::OsString>) -> Result<(), anyhow::Error> {
