@@ -1,0 +1,36 @@
+[package]
+authors = { workspace = true }
+description = "fedimint-bip445 is a helper cryptography library for threshold schnorr signatures"
+edition = { workspace = true }
+license = { workspace = true }
+name = "fedimint-bip445"
+readme = { workspace = true }
+repository = { workspace = true }
+version = { workspace = true }
+
+[features]
+default = []
+unstable = []
+
+[lib]
+name = "bip445"
+path = "src/lib.rs"
+
+[dependencies]
+bitcoin = { workspace = true }
+fedimint-core = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+secp256k1 = { workspace = true, features = [
+    "global-context",
+    "rand-std",
+    "serde",
+] }
+serde = { workspace = true }
+
+[dev-dependencies]
+hex = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true
