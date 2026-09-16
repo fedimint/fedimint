@@ -611,6 +611,20 @@ impl GatewayClientModule {
             return Ok(operation_id);
         }
 
+        // The operator's receive policy refuses a fresh payment, but only
+        // below the replay checks above: a circuit this gateway already funded
+        // must still be settled, or the gateway is out of pocket for a
+        // contract it has paid for.
+        let federation_id = self
+            .client_ctx
+            .get_config()
+            .await
+            .global
+            .calculate_federation_id();
+        if !self.lightning_manager.receive_enabled(federation_id).await {
+            return Err(HandleInterceptedHtlcError::ReceiveDisabled { federation_id });
+        }
+
         let current_block_height = current_block_height
             .await
             .map_err(HandleInterceptedHtlcError::BlockHeight)?;
@@ -734,10 +748,9 @@ impl GatewayClientModule {
             .await
             .global
             .calculate_federation_id();
-        anyhow::ensure!(
-            self.lightning_manager.receive_enabled(federation_id).await,
-            "Receiving payments is disabled for federation {federation_id}"
-        );
+        if !self.lightning_manager.receive_enabled(federation_id).await {
+            return Err(HandleDirectSwapError::ReceiveDisabled { federation_id });
+        }
 
         let (op_id_from_funding, client_output, client_output_sm) = self
             .create_funding_incoming_contract_output_from_swap(swap_params.clone())
