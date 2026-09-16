@@ -4,7 +4,7 @@ pub mod metrics;
 pub mod tracked;
 
 use anyhow::Result;
-use bitcoin::{BlockHash, Transaction};
+use bitcoin::{BlockHash, Transaction, Txid};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::util::{FmtCompactAnyhow, SafeUrl};
 use fedimint_core::{ChainId, Feerate};
@@ -133,6 +133,18 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
     async fn get_sync_progress(&self) -> Result<Option<f64>> {
         // We're always in sync, just like esplora
         self.esplora_client.get_sync_progress().await
+    }
+
+    // Mempool reads have no esplora fallback: esplora cannot serve them at all,
+    // so a failing bitcoind means no mempool visibility rather than a degraded
+    // one. Callers treat the error the same way they treat `None`.
+
+    async fn get_mempool_txids(&self) -> Result<Option<Vec<Txid>>> {
+        self.bitcoind_client.get_mempool_txids().await
+    }
+
+    async fn get_mempool_tx(&self, txid: &Txid) -> Result<Option<Transaction>> {
+        self.bitcoind_client.get_mempool_tx(txid).await
     }
 
     async fn get_chain_id(&self) -> Result<ChainId> {
