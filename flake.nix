@@ -118,6 +118,14 @@
           "linked-specs"
           "linked-specs-updating"
           "linked-specs-review"
+          "multipart-review"
+          "multipart-review-architecture"
+          "multipart-review-coordination"
+          "multipart-review-judgment"
+          "multipart-review-maintainability"
+          "multipart-review-reliability"
+          "multipart-review-rust-style"
+          "multipart-review-skills"
         ];
 
         linkProjectSkills = pkgs.writeShellScriptBin "link-project-skills" ''
