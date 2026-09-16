@@ -2874,6 +2874,20 @@ impl Client {
         self.primary_module_for_unit(AmountUnit::BITCOIN)
             .expect("No primary module for Bitcoin")
     }
+
+    /// Returns the typed module of kind `M` this client would use for `unit`.
+    ///
+    /// Unlike [`Self::get_first_module`], which picks the first instance of a
+    /// kind regardless of asset, this selects by `unit` so a federation with
+    /// several mints for different assets routes to the right one.
+    pub fn get_primary_module_for_unit<M: ClientModule>(
+        &self,
+        unit: AmountUnit,
+    ) -> anyhow::Result<&M> {
+        self.primary_modules_for_unit(unit)
+            .find_map(|(_, module)| module.as_any().downcast_ref::<M>())
+            .ok_or_else(|| anyhow::format_err!("No {} module for unit {unit:?}", M::kind()))
+    }
 }
 
 #[apply(async_trait_maybe_send!)]

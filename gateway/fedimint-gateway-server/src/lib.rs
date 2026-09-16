@@ -1771,7 +1771,12 @@ impl Gateway {
             }
 
             Ok(ReceiveEcashResponse { amount })
-        } else if let Ok(mint) = client.value().get_first_module::<MintV2ClientModule>() {
+        } else if let Ok(mint) = client
+            .value()
+            .get_primary_module_for_unit::<MintV2ClientModule>(
+                fedimint_core::module::AmountUnit::BITCOIN,
+            )
+        {
             let ecash: fedimint_mintv2_client::ECash =
                 base32::decode_prefixed(FEDIMINT_PREFIX, &payload.notes).map_err(|e| {
                     PublicGatewayError::ReceiveEcashError {
@@ -2978,7 +2983,9 @@ impl IAdminGateway for Gateway {
             Ok(SpendEcashResponse {
                 notes: notes.to_string(),
             })
-        } else if let Ok(mint_module) = client.get_first_module::<MintV2ClientModule>() {
+        } else if let Ok(mint_module) = client.get_primary_module_for_unit::<MintV2ClientModule>(
+            fedimint_core::module::AmountUnit::BITCOIN,
+        ) {
             let (_, ecash) = mint_module
                 .send(payload.amount, serde_json::Value::Null, true)
                 .await
