@@ -218,6 +218,22 @@ pub enum PaymentPolicy {
     ReceivesDisabled,
 }
 
+/// Held while the gateway funds a fresh incoming payment, so its payment
+/// policy cannot change between the check that admitted the payment and the
+/// operation that funds it.
+///
+/// Turning a policy off waits for every guard outstanding at that moment, so a
+/// payment admitted before the change always funds, and none is admitted after
+/// the change returns.
+#[derive(Debug)]
+pub struct PaymentPolicyGuard(#[allow(dead_code)] tokio::sync::OwnedRwLockReadGuard<()>);
+
+impl PaymentPolicyGuard {
+    pub fn new(guard: tokio::sync::OwnedRwLockReadGuard<()>) -> Self {
+        Self(guard)
+    }
+}
+
 /// Information about one of the feds we are connected to
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FederationInfo {

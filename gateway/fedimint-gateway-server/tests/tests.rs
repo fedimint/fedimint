@@ -2243,6 +2243,154 @@ fn decryptable_incoming_contract(client: &ClientHandleArc) -> anyhow::Result<Inc
     Ok(contract)
 }
 
+/// The race on the swap rail: a swap that is in flight and has not funded when
+/// disabling completes must not fund afterwards.
+///
+/// The admission below pins the policy, so disabling queues behind it and the
+/// swap queues behind disabling, leaving the swap in flight with no funding
+/// operation of its own. Releasing the admission lets disabling finish, and the
+/// swap must then be refused rather than funding under a policy that is gone.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_swap_in_flight_when_disabling_completes_cannot_fund() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+    send_msats_to_gateway(&gateway, fed.id(), 1_000_000_000).await;
+
+    let client = gateway.select_client(fed.id()).await?.into_value();
+    let contract = decryptable_incoming_contract(&client)?;
+    let operation_id = OperationId::from_encodable(&contract);
+    let balance_before = client.get_balance_for_btc().await?;
+
+    // A payment that passed the check and has yet to fund.
+    let admitted = <Gateway as fedimint_gwv2_client::IGatewayClientV2>::begin_fresh_receive(
+        &gateway,
+        &fed.id(),
+    )
+    .await
+    .expect("receives are on");
+
+    let disabling = {
+        let gateway = gateway.clone();
+        let federation_id = fed.id();
+        fedimint_core::runtime::spawn("disable-receives", async move {
+            gateway
+                .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                    federation_id: Some(federation_id),
+                    receive_enabled: Some(false),
+                })
+                .await
+        })
+    };
+    sleep_in_test(
+        "waiting for disabling to queue behind the admitted payment",
+        Duration::from_millis(200),
+    )
+    .await;
+
+    let relaying = {
+        let client = client.clone();
+        let contract = contract.clone();
+        fedimint_core::runtime::spawn("swap-in-flight", async move {
+            client
+                .get_first_module::<GatewayClientModuleV2>()
+                .expect("The federation has an LNv2 module")
+                .relay_direct_swap(contract, 900, true)
+                .await
+        })
+    };
+    sleep_in_test(
+        "waiting for the swap to reach its policy check",
+        Duration::from_millis(200),
+    )
+    .await;
+
+    drop(admitted);
+
+    timeout(Duration::from_secs(10), disabling)
+        .await
+        .expect("disabling must complete once the admitted payment releases it")
+        .expect("the disable task panicked")?;
+
+    let error = timeout(Duration::from_secs(10), relaying)
+        .await
+        .expect("the swap must resolve once disabling has completed")
+        .expect("the swap task panicked")
+        .expect_err("a swap in flight when disabling completed must not fund");
+    assert!(
+        error.to_string().contains("Receiving payments is disabled"),
+        "Expected the swap to be refused because receives are off, got: {error}"
+    );
+
+    assert_eq!(
+        client.get_balance_for_btc().await?,
+        balance_before,
+        "the refused swap must not have funded anything"
+    );
+    assert!(
+        !client.operation_exists(operation_id).await,
+        "the refused swap must not have created an operation"
+    );
+
+    Ok(())
+}
+
+/// Turning receives off linearizes against fresh funding. It cannot complete
+/// while a payment that passed the policy check has yet to fund, and once it
+/// has completed no further payment is admitted. Without that, a payment could
+/// read the policy, be paused before its funding operation exists, and still
+/// fund after the operator was told receives were off.
+#[tokio::test(flavor = "multi_thread")]
+async fn disabling_receives_waits_for_an_admitted_payment_to_fund() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+
+    // A payment that passed the check and has not funded yet.
+    let admitted = <Gateway as fedimint_gwv2_client::IGatewayClientV2>::begin_fresh_receive(
+        &gateway,
+        &fed.id(),
+    )
+    .await
+    .expect("receives are on");
+
+    assert!(
+        timeout(
+            Duration::from_millis(500),
+            gateway.handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: Some(fed.id()),
+                receive_enabled: Some(false),
+            }),
+        )
+        .await
+        .is_err(),
+        "disabling must not complete while an admitted payment has yet to fund"
+    );
+
+    drop(admitted);
+
+    gateway
+        .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+            federation_id: Some(fed.id()),
+            receive_enabled: Some(false),
+        })
+        .await?;
+
+    assert!(
+        <Gateway as fedimint_gwv2_client::IGatewayClientV2>::begin_fresh_receive(
+            &gateway,
+            &fed.id()
+        )
+        .await
+        .is_none(),
+        "no payment is admitted once disabling has completed"
+    );
+
+    Ok(())
+}
+
 /// The receive policy is a fresh-dispatch gate on the swap rail: it refuses a
 /// swap that has not started, while a swap the gateway already funded still
 /// resumes once receives are off. Refusing the resumed one would forfeit the

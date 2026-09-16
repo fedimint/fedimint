@@ -609,21 +609,6 @@ impl GatewayClientModule {
             return Ok(operation_id);
         }
 
-        // The operator's receive policy refuses a fresh payment, but only
-        // below the replay checks above: a circuit this gateway already funded
-        // must still be settled, or the gateway is out of pocket for a
-        // contract it has paid for.
-        let federation_id = self
-            .client_ctx
-            .get_config()
-            .await
-            .global
-            .calculate_federation_id();
-        anyhow::ensure!(
-            self.lightning_manager.receive_enabled(federation_id).await,
-            "Receiving payments is disabled for federation {federation_id}"
-        );
-
         let current_block_height = current_block_height.await?;
         htlc.ensure_safe_expiry(current_block_height)?;
         let remaining_blocks = htlc.incoming_expiry.saturating_sub(current_block_height);
@@ -658,6 +643,26 @@ impl GatewayClientModule {
             ClientOutputBundle::new(vec![output], vec![client_output_sm]),
         ));
         let operation_meta_gen = |_: OutPointRange| GatewayMeta::Receive;
+
+        // The receive policy admits a fresh payment only here, below the replay
+        // checks above: a circuit this gateway already funded must still be
+        // settled, or the gateway is out of pocket for a contract it paid for.
+        // The guard is held across the funding write, so a payment cannot slip
+        // in after disabling has returned.
+        let federation_id = self
+            .client_ctx
+            .get_config()
+            .await
+            .global
+            .calculate_federation_id();
+        let _policy_guard = self
+            .lightning_manager
+            .begin_fresh_receive(federation_id)
+            .await
+            .ok_or_else(|| {
+                anyhow::anyhow!("Receiving payments is disabled for federation {federation_id}")
+            })?;
+
         self.client_ctx
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;
@@ -725,21 +730,6 @@ impl GatewayClientModule {
             return Ok(None);
         }
 
-        // A swap is how funds from another federation enter this one through
-        // the gateway, so it is refused while the operator has receives turned
-        // off. The payer's contract is cancelled and they are refunded. A swap
-        // already funded resumes above regardless.
-        let federation_id = self
-            .client_ctx
-            .get_config()
-            .await
-            .global
-            .calculate_federation_id();
-        anyhow::ensure!(
-            self.lightning_manager.receive_enabled(federation_id).await,
-            "Receiving payments is disabled for federation {federation_id}"
-        );
-
         let (op_id_from_funding, client_output, client_output_sm) = self
             .create_funding_incoming_contract_output_from_swap(swap_params.clone())
             .await?;
@@ -748,6 +738,24 @@ impl GatewayClientModule {
             op_id_from_funding == operation_id,
             "operation id derivation must match: {op_id_from_funding:?} != {operation_id:?}"
         );
+
+        // A swap is how funds from another federation enter this one through
+        // the gateway, so it is admitted only while receives are on, and the
+        // guard holds that admission across the funding transaction below. A
+        // swap already funded resumes above regardless.
+        let federation_id = self
+            .client_ctx
+            .get_config()
+            .await
+            .global
+            .calculate_federation_id();
+        let _policy_guard = self
+            .lightning_manager
+            .begin_fresh_receive(federation_id)
+            .await
+            .ok_or_else(|| {
+                anyhow::anyhow!("Receiving payments is disabled for federation {federation_id}")
+            })?;
 
         self.client_ctx
             .module_db()
@@ -1308,11 +1316,18 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
     /// Retrieves the federation's routing fees from the federation's config.
     async fn get_routing_fees(&self, federation_id: FederationId) -> Option<RoutingFees>;
 
-    /// Whether the gateway currently accepts payments on behalf of the clients
-    /// of `federation_id`, as set by its operator.
+    /// Admits a fresh incoming payment for the clients of `federation_id` when
+    /// the operator's receive policy allows one, or answers `None` when
+    /// receives are disabled.
     ///
-    /// Consulted before funding a new direct swap into the federation.
-    async fn receive_enabled(&self, federation_id: FederationId) -> bool;
+    /// The returned guard must be held until the funding operation exists.
+    /// That is what makes disabling atomic: a policy change waits for the
+    /// guards outstanding when it runs, so a payment admitted here always
+    /// funds, and none is admitted once the change has returned.
+    async fn begin_fresh_receive(
+        &self,
+        federation_id: FederationId,
+    ) -> Option<fedimint_gateway_common::PaymentPolicyGuard>;
 
     /// Retrieve a client given a federation ID, used for swapping ecash between
     /// federations.

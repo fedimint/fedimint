@@ -82,12 +82,12 @@ use fedimint_gateway_common::{
     GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningInfo,
     LightningMode, ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse,
     OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
-    PaymentLogPayload, PaymentLogResponse, PaymentPolicy, PaymentStats, PaymentSummaryPayload,
-    PaymentSummaryResponse, PeginFromOnchainPayload, ReceiveEcashPayload, ReceiveEcashResponse,
-    RegisteredProtocol, SendOnchainRequest, SetChannelFeesRequest, SetFeesPayload,
-    SetMnemonicPayload, SetPaymentPolicyPayload, SpendEcashPayload, SpendEcashResponse,
-    V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse,
-    WithdrawResponse, WithdrawToOnchainPayload,
+    PaymentLogPayload, PaymentLogResponse, PaymentPolicy, PaymentPolicyGuard, PaymentStats,
+    PaymentSummaryPayload, PaymentSummaryResponse, PeginFromOnchainPayload, ReceiveEcashPayload,
+    ReceiveEcashResponse, RegisteredProtocol, SendOnchainRequest, SetChannelFeesRequest,
+    SetFeesPayload, SetMnemonicPayload, SetPaymentPolicyPayload, SpendEcashPayload,
+    SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload,
+    WithdrawPreviewResponse, WithdrawResponse, WithdrawToOnchainPayload,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 pub use fedimint_gateway_ui::IAdminGateway;
@@ -399,6 +399,10 @@ pub struct Gateway {
 
     /// Rate limiter for the public invoice creation endpoint.
     invoice_rate_limiter: Arc<TokenBucketRateLimiter>,
+
+    /// Serializes payment policy changes against the funding of the payments
+    /// those policies admit.
+    payment_policy_lock: Arc<RwLock<()>>,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -784,6 +788,7 @@ impl Gateway {
                 gateway_parameters.invoice_rate_limit_burst,
                 gateway_parameters.invoice_rate_limit_per_second,
             )),
+            payment_policy_lock: Arc::new(RwLock::new(())),
         })
     }
 
@@ -2638,6 +2643,11 @@ impl IAdminGateway for Gateway {
             receive_enabled,
         }: SetPaymentPolicyPayload,
     ) -> AdminResult<()> {
+        // Taken before the policy is read anywhere else: every payment admitted
+        // under the old policy funds before this returns, and none is admitted
+        // afterwards.
+        let _policy_change = self.payment_policy_lock.write().await;
+
         let mut dbtx = self.gateway_db.begin_transaction().await;
         let mut fed_configs = if let Some(fed_id) = federation_id {
             dbtx.load_federation_configs()
@@ -3426,6 +3436,19 @@ impl Gateway {
             .is_none_or(|config| config.receive_enabled())
     }
 
+    /// Admits a fresh incoming payment when the receive policy allows it,
+    /// returning a guard that holds off a policy change until the caller has
+    /// funded the payment.
+    async fn admit_fresh_receive(&self, federation_id: FederationId) -> Option<PaymentPolicyGuard> {
+        // The policy is read under the guard, so it cannot change between this
+        // read and the funding the caller performs while holding it.
+        let guard = self.payment_policy_lock.clone().read_owned().await;
+
+        self.receive_enabled(federation_id)
+            .await
+            .then(|| PaymentPolicyGuard::new(guard))
+    }
+
     /// Returns payment information that LNv2 clients can use to instruct this
     /// Gateway to pay an invoice or receive a payment.
     pub async fn routing_info_v2(
@@ -3882,8 +3905,11 @@ impl IGatewayClientV2 for Gateway {
         self.await_outbound_payment_exists(payment_hash).await
     }
 
-    async fn receive_enabled(&self, federation_id: &FederationId) -> bool {
-        self.receive_enabled(*federation_id).await
+    async fn begin_fresh_receive(
+        &self,
+        federation_id: &FederationId,
+    ) -> Option<PaymentPolicyGuard> {
+        self.admit_fresh_receive(*federation_id).await
     }
 
     async fn min_contract_amount(
@@ -4045,8 +4071,8 @@ impl IGatewayClientV1 for Gateway {
         Ok(())
     }
 
-    async fn receive_enabled(&self, federation_id: FederationId) -> bool {
-        self.receive_enabled(federation_id).await
+    async fn begin_fresh_receive(&self, federation_id: FederationId) -> Option<PaymentPolicyGuard> {
+        self.admit_fresh_receive(federation_id).await
     }
 
     async fn get_routing_fees(&self, federation_id: FederationId) -> Option<RoutingFees> {

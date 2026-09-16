@@ -576,12 +576,18 @@ impl GatewayClientModuleV2 {
             // Only a fresh receive funds an incoming contract, so only it is
             // subject to the operator's receive policy. `AddCompletion` joins a
             // receive operation that already exists, and dropping it would
-            // strand a contract the gateway has already funded.
-            anyhow::ensure!(
-                self.gateway.receive_enabled(&self.federation_id).await,
-                "Receiving payments is disabled for federation {}",
-                self.federation_id
-            );
+            // strand a contract the gateway has already funded. The guard is
+            // held until the funding write below has happened.
+            let _policy_guard = self
+                .gateway
+                .begin_fresh_receive(&self.federation_id)
+                .await
+                .ok_or_else(|| {
+                    anyhow!(
+                        "Receiving payments is disabled for federation {}",
+                        self.federation_id
+                    )
+                })?;
 
             let refund_keypair = self.keypair;
             let client_output = ClientOutput::<LightningOutput> {
@@ -700,16 +706,20 @@ impl GatewayClientModuleV2 {
             return Ok(None);
         }
 
-        // A swap funds an incoming contract in this federation, so the
-        // operator's receive policy refuses to start one. It is consulted only
-        // here, below the resume path: a swap already funded must still be
-        // joined, or the gateway forfeits the payer's contract after having
-        // paid the recipient.
-        anyhow::ensure!(
-            self.gateway.receive_enabled(&self.federation_id).await,
-            "Receiving payments is disabled for federation {}",
-            self.federation_id
-        );
+        // A swap funds an incoming contract in this federation, so it is
+        // admitted only while receives are on. That happens below the resume
+        // path: a swap already funded must still be joined, or the gateway
+        // forfeits the payer's contract after having paid the recipient.
+        let policy_guard = self
+            .gateway
+            .begin_fresh_receive(&self.federation_id)
+            .await
+            .ok_or_else(|| {
+                anyhow!(
+                    "Receiving payments is disabled for federation {}",
+                    self.federation_id
+                )
+            })?;
 
         let refund_keypair = self.keypair;
 
@@ -749,6 +759,10 @@ impl GatewayClientModuleV2 {
                 transaction,
             )
             .await?;
+
+        // The operation exists, so the policy may change again: what follows
+        // waits for the swap to finish and must not block an operator.
+        drop(policy_guard);
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         self.client_ctx
@@ -897,12 +911,18 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
     /// payment store could actually be consulted.
     async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool;
 
-    /// Whether the gateway currently accepts payments on behalf of the clients
-    /// of `federation_id`, as set by its operator.
+    /// Admits a fresh incoming payment for the clients of `federation_id` when
+    /// the operator's receive policy allows one, or answers `None` when
+    /// receives are disabled.
     ///
-    /// Consulted only before funding a new incoming contract: work already
-    /// funded must finish, or the gateway abandons a contract it has paid for.
-    async fn receive_enabled(&self, federation_id: &FederationId) -> bool;
+    /// The returned guard must be held until the funding operation exists, so
+    /// a payment admitted here always funds and none is admitted once
+    /// disabling has returned. Work already funded must finish regardless, or
+    /// the gateway abandons a contract it has paid for.
+    async fn begin_fresh_receive(
+        &self,
+        federation_id: &FederationId,
+    ) -> Option<fedimint_gateway_common::PaymentPolicyGuard>;
 
     /// Computes the minimum contract amount necessary for making an outgoing
     /// payment.
