@@ -147,11 +147,6 @@ impl ServerBitcoinRpcMonitor {
     }
 
     pub async fn submit_transaction(&self, tx: Transaction) -> Result<()> {
-        ensure!(
-            self.status_receiver.borrow().is_some(),
-            "Not connected to bitcoin backend"
-        );
-
         self.rpc.submit_transaction(tx).await
     }
 
@@ -208,6 +203,15 @@ pub trait IServerBitcoinRpc: Debug + Send + Sync + 'static {
 
     /// Returns the current block count
     async fn get_block_count(&self) -> Result<u64>;
+
+    /// Returns the current block count and whether initial block download is
+    /// still active.
+    ///
+    /// Backends without an explicit IBD flag are assumed ready. Full nodes
+    /// should override this method when both values come from one status call.
+    async fn get_block_count_and_initial_block_download(&self) -> Result<(u64, bool)> {
+        Ok((self.get_block_count().await?, false))
+    }
 
     /// Returns the block hash at a given height
     ///

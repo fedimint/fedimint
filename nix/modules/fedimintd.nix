@@ -182,7 +182,12 @@ let
             type = types.nullOr types.str;
             default = null;
             example = "http://127.0.0.1:38332";
-            description = "Bitcoin node (bitcoind/electrum/esplora) address to connect to";
+            description = ''
+              Bitcoind RPC URL. With esploraUrl also configured, reads prefer
+              bitcoind and retry individual failures on Esplora. Block counts
+              use Esplora while bitcoind reports initial block download.
+              Broadcast is bitcoind-first, not simultaneous.
+            '';
           };
 
           bitcoindUser = mkOption {
@@ -216,7 +221,14 @@ let
             type = types.nullOr types.str;
             default = null;
             example = "https://mempool.space/signet/api";
-            description = "Bitcoin node (bitcoind/electrum/esplora) address to connect to";
+            description = ''
+              Trusted Esplora HTTP base URL. Esplora is trusted for chain
+              selection and can bootstrap while bitcoind is offline. In hybrid
+              mode endpoint chain identities are compared once at startup when
+              both respond; transactions go to Esplora only after a primary
+              broadcast error. Public services can correlate guardian queries
+              and see fallback transactions.
+            '';
           };
 
         };

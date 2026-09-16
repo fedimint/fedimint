@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use anyhow::anyhow;
 use bitcoin::{BlockHash, Transaction};
 use bitcoincore_rpc::Error::JsonRpc;
@@ -56,6 +59,11 @@ impl IServerBitcoinRpc for BitcoindClient {
         block_in_place(|| self.client.get_block_count())
             .map(|height| height + 1)
             .map_err(anyhow::Error::from)
+    }
+
+    async fn get_block_count_and_initial_block_download(&self) -> anyhow::Result<(u64, bool)> {
+        let info = block_in_place(|| self.client.get_blockchain_info())?;
+        Ok((info.blocks + 1, info.initial_block_download))
     }
 
     async fn get_block_hash(&self, height: u64) -> anyhow::Result<BlockHash> {
