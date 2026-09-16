@@ -147,11 +147,9 @@ impl ServerBitcoinRpcMonitor {
     }
 
     pub async fn submit_transaction(&self, tx: Transaction) -> Result<()> {
-        ensure!(
-            self.status_receiver.borrow().is_some(),
-            "Not connected to bitcoin backend"
-        );
-
+        // Read health is not broadcast readiness: a node in IBD (or with a
+        // failed fee estimate) can still accept a transaction. The backend
+        // remains responsible for any identity checks and transport errors.
         self.rpc.submit_transaction(tx).await
     }
 
@@ -247,6 +245,17 @@ pub trait IServerBitcoinRpc: Debug + Send + Sync + 'static {
     /// Returns the node's estimated chain sync percentage as a float between
     /// 0.0 and 1.0, or `None` if the node doesn't support this feature.
     async fn get_sync_progress(&self) -> Result<Option<f64>>;
+
+    /// Whether this backend is still downloading its initial chain.
+    ///
+    /// Backends without a sync estimate are assumed ready, as with Esplora.
+    /// Full nodes should override this with their explicit IBD status.
+    async fn is_in_initial_block_download(&self) -> Result<bool> {
+        Ok(self
+            .get_sync_progress()
+            .await?
+            .is_some_and(|progress| progress < 1.0))
+    }
 
     /// Returns the chain ID (block hash at height 1)
     ///
