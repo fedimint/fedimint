@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["SessionStatus","SessionStatusV2"],"struct":["AcceptedItem","SessionOutcome","SignedSessionOutcome"]};
+window.SIDEBAR_ITEMS = {"enum":["ConsensusItem","SessionStatus","SessionStatusV2"],"struct":["AcceptedItem","SessionOutcome","SignedSessionOutcome"]};
