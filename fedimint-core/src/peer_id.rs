@@ -80,7 +80,7 @@ impl NumPeers {
     /// Returns the number of guardians that can be evil without disrupting the
     /// federation.
     pub fn max_evil(self) -> usize {
-        (self.total() - 1) / 3
+        self.total().saturating_sub(1) / 3
     }
 
     /// Returns the number of guardians to select such that at least one is
@@ -92,13 +92,13 @@ impl NumPeers {
     /// Returns the degree of an underlying polynomial to require threshold
     /// signatures.
     pub fn degree(self) -> usize {
-        self.threshold() - 1
+        self.threshold().saturating_sub(1)
     }
 
     /// Returns the number of guardians required to achieve consensus and
     /// produce valid signatures.
     pub fn threshold(self) -> usize {
-        self.total() - self.max_evil()
+        self.total().saturating_sub(self.max_evil())
     }
 }
 
@@ -149,5 +149,64 @@ impl NumPeersExt for Vec<PeerUrl> {
 impl NumPeersExt for BTreeSet<PeerId> {
     fn to_num_peers(&self) -> NumPeers {
         NumPeers(self.len())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    use super::{NumPeers, NumPeersExt, PeerId};
+
+    #[test]
+    fn test_num_peers_zero_does_not_underflow() {
+        let zero = NumPeers::from(0);
+        assert_eq!(zero.total(), 0);
+        assert_eq!(zero.max_evil(), 0);
+        assert_eq!(zero.threshold(), 0);
+        assert_eq!(zero.degree(), 0);
+        assert_eq!(zero.one_honest(), 1);
+    }
+
+    #[test]
+    fn test_empty_collections_to_num_peers() {
+        let empty_vec: Vec<PeerId> = Vec::new();
+        assert_eq!(empty_vec.to_num_peers().max_evil(), 0);
+        assert_eq!(empty_vec.to_num_peers().threshold(), 0);
+
+        let empty_map: BTreeMap<PeerId, ()> = BTreeMap::new();
+        assert_eq!(empty_map.to_num_peers().max_evil(), 0);
+        assert_eq!(empty_map.to_num_peers().threshold(), 0);
+
+        let empty_set: BTreeSet<PeerId> = BTreeSet::new();
+        assert_eq!(empty_set.to_num_peers().max_evil(), 0);
+        assert_eq!(empty_set.to_num_peers().threshold(), 0);
+    }
+
+    #[test]
+    fn test_num_peers_standard_topologies() {
+        // 1 peer: f = 0, threshold = 1, degree = 0
+        let one = NumPeers::from(1);
+        assert_eq!(one.max_evil(), 0);
+        assert_eq!(one.threshold(), 1);
+        assert_eq!(one.degree(), 0);
+
+        // 4 peers: f = 1, threshold = 3, degree = 2
+        let four = NumPeers::from(4);
+        assert_eq!(four.max_evil(), 1);
+        assert_eq!(four.threshold(), 3);
+        assert_eq!(four.degree(), 2);
+
+        // 7 peers: f = 2, threshold = 5, degree = 4
+        let seven = NumPeers::from(7);
+        assert_eq!(seven.max_evil(), 2);
+        assert_eq!(seven.threshold(), 5);
+        assert_eq!(seven.degree(), 4);
+
+        // 10 peers: f = 3, threshold = 7, degree = 6
+        let ten = NumPeers::from(10);
+        assert_eq!(ten.max_evil(), 3);
+        assert_eq!(ten.threshold(), 7);
+        assert_eq!(ten.degree(), 6);
     }
 }
