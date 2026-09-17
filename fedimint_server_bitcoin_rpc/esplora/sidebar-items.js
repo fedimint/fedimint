@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["ESPLORA_CLIENT_TIMEOUT_SECONDS"],"struct":["EsploraClient"]};
+window.SIDEBAR_ITEMS = {"constant":["ESPLORA_CLIENT_TIMEOUT_SECONDS"],"fn":["validate_block"],"struct":["EsploraClient"]};
