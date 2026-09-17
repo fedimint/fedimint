@@ -31,7 +31,8 @@ use fedimint_lnv2_client::events::{
 use fedimint_lnv2_client::{
     FinalReceiveOperationState, InvoiceSendStatus, LightningClientInit, LightningClientModule,
     LightningOperationMeta, ReceiveError, ReceiveOperationState, ReceiveWithTermsError,
-    SendOperationState, SendPaymentError, SendWithTermsError,
+    SelectGatewayError, SendOperationState, SendPaymentError, SendWithTermsError,
+    SpendableAmountError,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::PaymentFee;
@@ -945,6 +946,40 @@ async fn following_an_unknown_operation_reports_not_found() -> anyhow::Result<()
             .subscribe_receive_operation_state_updates(OperationId::new_random())
             .await,
         Err(OperationLookupError::NotFound(_))
+    );
+
+    Ok(())
+}
+
+/// Working out what the wallet could spend over lightning fails for two very
+/// different reasons, and the caller needs to tell them apart: there is no
+/// gateway to quote a fee schedule against, or there is one and the balance
+/// still cannot cover the smallest payable amount plus fees.
+#[tokio::test(flavor = "multi_thread")]
+async fn spendable_amount_names_the_reason_it_has_no_answer() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+
+    // No gateway is registered with this federation, so there is nothing to
+    // select and no fee schedule to compute against.
+    assert_matches!(
+        lightning.spendable_amount(sats(1000), None).await,
+        Err(SpendableAmountError::SelectGateway(
+            SelectGatewayError::NoGatewaysAvailable
+        ))
+    );
+
+    // Naming the mock gateway gets past selection, and an empty wallet then
+    // cannot cover even one millisatoshi plus its fees.
+    assert_matches!(
+        lightning
+            .spendable_amount(Amount::ZERO, Some(mock::gateway()))
+            .await,
+        Err(SpendableAmountError::BalanceTooLow {
+            balance: Amount::ZERO
+        })
     );
 
     Ok(())
