@@ -22,7 +22,7 @@ use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1;
 use db::{DbKeyPrefix, GatewayKey, IncomingContractStreamIndexKey};
 use fedimint_api_client::api::DynModuleApi;
-use fedimint_client_module::error::TransactionSubmitError;
+use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
@@ -790,7 +790,7 @@ impl LightningClientModule {
     pub async fn get_invoice_send_status(
         &self,
         invoice: &Bolt11Invoice,
-    ) -> anyhow::Result<InvoiceSendStatus> {
+    ) -> Result<InvoiceSendStatus, OperationLookupError> {
         // Send only creates attempt index 0 nowadays, but older clients
         // allocated a fresh index per retry, so scan for the latest attempt.
         // No new attempt was ever allocated after a success, so the latest
@@ -835,7 +835,7 @@ impl LightningClientModule {
     pub async fn subscribe_send_operation_state_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<SendOperationState>> {
+    ) -> Result<UpdateStreamOrOutcome<SendOperationState>, OperationLookupError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
@@ -900,7 +900,7 @@ impl LightningClientModule {
     pub async fn await_final_send_operation_state(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<FinalSendOperationState> {
+    ) -> Result<FinalSendOperationState, OperationLookupError> {
         let mut stream = self
             .subscribe_send_operation_state_updates(operation_id)
             .await?
@@ -1385,7 +1385,7 @@ impl LightningClientModule {
     pub async fn subscribe_receive_operation_state_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<ReceiveOperationState>> {
+    ) -> Result<UpdateStreamOrOutcome<ReceiveOperationState>, OperationLookupError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
@@ -1431,7 +1431,7 @@ impl LightningClientModule {
     pub async fn await_final_receive_operation_state(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<FinalReceiveOperationState> {
+    ) -> Result<FinalReceiveOperationState, OperationLookupError> {
         let mut stream = self
             .subscribe_receive_operation_state_updates(operation_id)
             .await?

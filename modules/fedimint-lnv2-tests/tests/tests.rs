@@ -4,12 +4,14 @@ use std::pin::pin;
 use std::sync::Arc;
 
 use anyhow::Context as _;
+use assert_matches::assert_matches;
 use async_stream::stream;
 use bitcoin::hashes::{Hash as _, sha256};
 use fedimint_client::ClientHandleArc;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
+use fedimint_client_module::error::OperationLookupError;
 use fedimint_client_module::module::ClientModule;
 use fedimint_core::base32::{FEDIMINT_PREFIX, decode_prefixed};
 use fedimint_core::core::{IntoDynInstance, OperationId};
@@ -916,6 +918,33 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
             invoice_currency: lightning_invoice::Currency::Signet,
             federation_currency: lightning_invoice::Currency::Regtest
         }
+    );
+
+    Ok(())
+}
+
+/// Following an operation that was never started reports the shared
+/// operation-lookup error, so a caller can tell "I have never seen that id"
+/// apart from a genuine lightning failure without reading a message.
+#[tokio::test(flavor = "multi_thread")]
+async fn following_an_unknown_operation_reports_not_found() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+
+    assert_matches!(
+        lightning
+            .await_final_send_operation_state(OperationId::new_random())
+            .await,
+        Err(OperationLookupError::NotFound(_))
+    );
+
+    assert_matches!(
+        lightning
+            .subscribe_receive_operation_state_updates(OperationId::new_random())
+            .await,
+        Err(OperationLookupError::NotFound(_))
     );
 
     Ok(())
