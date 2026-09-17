@@ -289,9 +289,9 @@ pub struct FeeOutOfRangeError(PaymentFee);
 ///
 /// This is what an operator sees when a fee passed on the gateway's command
 /// line or in its environment cannot be read, so each variant says which half
-/// of the pair the parser could not make sense of. Unlike the other error
-/// types here the messages interpolate their cause: the only consumer is
-/// `clap`, which renders the top-level `Display` and never walks `source()`.
+/// of the pair the parser could not make sense of.
+// The messages interpolate their source because clap renders only the top-level Display of a
+// FromStr error (the #8821 FromStr carve-out).
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum ParsePaymentFeeError {

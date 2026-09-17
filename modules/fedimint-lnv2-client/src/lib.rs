@@ -1281,7 +1281,8 @@ impl LightningClientModule {
     /// [`SpendableAmountError::Quote`] if the fee probe itself failed; only
     /// the first of the two says the wallet is short. Any LNURL
     /// `minSendable`/`maxSendable` bounds are the caller's responsibility to
-    /// apply.
+    /// apply. The remaining variants of [`SpendableAmountError`] are
+    /// gateway-side, and none of them means the wallet is short.
     pub async fn spendable_amount(
         &self,
         balance: Amount,
@@ -1748,7 +1749,7 @@ pub enum RoutingInfoError {
 pub enum SpendableAmountError {
     /// The caller named a gateway and its routing information could not be
     /// fetched, so there is no fee schedule to compute against.
-    #[error("The gateway's routing information could not be fetched")]
+    #[error(transparent)]
     RoutingInfo(#[from] RoutingInfoError),
 
     /// The caller named a gateway and it answered, but it does not serve this
@@ -1758,7 +1759,7 @@ pub enum SpendableAmountError {
 
     /// The caller named no gateway and none could be picked automatically, so
     /// there is no fee schedule to compute against.
-    #[error("No gateway could be selected for the payment")]
+    #[error(transparent)]
     SelectGateway(#[from] SelectGatewayError),
 
     /// The gateway's default send fee is above the limit this module accepts,
