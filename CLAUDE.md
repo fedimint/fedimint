@@ -66,7 +66,7 @@ fedimint-<module>-server/     # Server-side consensus logic
 ### Entry Points
 - `fedimintd/src/bin/main.rs` - Federation node daemon
 - `fedimint-cli/src/main.rs` - Command-line client interface
-- `gateway/fedimint-gateway-server/src/bin/main.rs` - Lightning gateway
+- `gateway/fedimint-gateway-server/src/bin/gatewayd.rs` - Lightning gateway
 
 ## Development Patterns
 
