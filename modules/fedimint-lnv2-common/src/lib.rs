@@ -19,6 +19,7 @@ pub mod tweak;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::schnorr::Signature;
 use config::LightningClientConfig;
+pub use fedimint_core::config::ExcessiveRelativeFeeError;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};

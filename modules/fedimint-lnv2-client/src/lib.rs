@@ -22,7 +22,7 @@ use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1;
 use db::{DbKeyPrefix, GatewayKey, IncomingContractStreamIndexKey};
 use fedimint_api_client::api::DynModuleApi;
-use fedimint_client_module::error::TransactionSubmitError;
+use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
@@ -790,7 +790,7 @@ impl LightningClientModule {
     pub async fn get_invoice_send_status(
         &self,
         invoice: &Bolt11Invoice,
-    ) -> anyhow::Result<InvoiceSendStatus> {
+    ) -> Result<InvoiceSendStatus, OperationLookupError> {
         // Send only creates attempt index 0 nowadays, but older clients
         // allocated a fresh index per retry, so scan for the latest attempt.
         // No new attempt was ever allocated after a success, so the latest
@@ -835,7 +835,7 @@ impl LightningClientModule {
     pub async fn subscribe_send_operation_state_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<SendOperationState>> {
+    ) -> Result<UpdateStreamOrOutcome<SendOperationState>, OperationLookupError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
@@ -900,7 +900,7 @@ impl LightningClientModule {
     pub async fn await_final_send_operation_state(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<FinalSendOperationState> {
+    ) -> Result<FinalSendOperationState, OperationLookupError> {
         let mut stream = self
             .subscribe_send_operation_state_updates(operation_id)
             .await?
@@ -1184,7 +1184,10 @@ impl LightningClientModule {
     /// only the fee of the on-federation transaction. For that reason the quote
     /// is taken on `amount` directly (rather than the gateway-reduced contract
     /// amount), and no gateway round-trip is needed.
-    pub async fn receive_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+    pub async fn receive_fee_quote(
+        &self,
+        amount: Amount,
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         self.client_ctx
             .fee_quote(
                 OperationId::new_random(),
@@ -1196,7 +1199,6 @@ impl LightningClientModule {
                 },
             )
             .await
-            .map_err(anyhow::Error::from)
     }
 
     /// Whether an incoming contract worth `amount` is worth claiming, i.e.
@@ -1274,19 +1276,23 @@ impl LightningClientModule {
     /// of truth and may still fail if balance or gateway state changes in
     /// between.
     ///
-    /// Returns an error if the balance cannot cover even the smallest payable
-    /// amount plus fees. Any LNURL `minSendable`/`maxSendable` bounds are the
-    /// caller's responsibility to apply.
+    /// Returns [`SpendableAmountError::BalanceTooLow`] if the balance cannot
+    /// cover even the smallest payable amount plus fees, and
+    /// [`SpendableAmountError::Quote`] if the fee probe itself failed; only
+    /// the first of the two says the wallet is short. Any LNURL
+    /// `minSendable`/`maxSendable` bounds are the caller's responsibility to
+    /// apply. The remaining variants of [`SpendableAmountError`] are
+    /// gateway-side, and none of them means the wallet is short.
     pub async fn spendable_amount(
         &self,
         balance: Amount,
         gateway: Option<SafeUrl>,
-    ) -> anyhow::Result<Amount> {
+    ) -> Result<Amount, SpendableAmountError> {
         let routing_info = match gateway {
             Some(gateway) => self
                 .routing_info(&gateway)
                 .await?
-                .ok_or_else(|| anyhow::anyhow!("Federation not supported by gateway"))?,
+                .ok_or(SpendableAmountError::FederationNotSupported)?,
             None => self.select_gateway(None).await?.1,
         };
 
@@ -1296,10 +1302,12 @@ impl LightningClientModule {
         // direct swap.
         let send_fee = routing_info.send_fee_default;
 
-        anyhow::ensure!(
-            send_fee.is_within(&PaymentFee::SEND_FEE_LIMIT),
-            "Gateway's default send fee exceeds the limit"
-        );
+        if !send_fee.is_within(&PaymentFee::SEND_FEE_LIMIT) {
+            return Err(SpendableAmountError::SendFeeExceedsLimit {
+                fee: send_fee,
+                limit: PaymentFee::SEND_FEE_LIMIT,
+            });
+        }
 
         max_affordable_send_amount(
             balance,
@@ -1308,8 +1316,9 @@ impl LightningClientModule {
             |invoice_amount: Amount| send_fee.add_to(invoice_amount.msats),
             |contract_amount: Amount| self.send_fee_quote(contract_amount),
         )
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("Balance is too low to send any amount after fees"))
+        .await
+        .map_err(SpendableAmountError::Quote)?
+        .ok_or(SpendableAmountError::BalanceTooLow { balance })
     }
 
     // Receive an incoming contract locked to a public key derived from our
@@ -1385,7 +1394,7 @@ impl LightningClientModule {
     pub async fn subscribe_receive_operation_state_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<ReceiveOperationState>> {
+    ) -> Result<UpdateStreamOrOutcome<ReceiveOperationState>, OperationLookupError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
@@ -1431,7 +1440,7 @@ impl LightningClientModule {
     pub async fn await_final_receive_operation_state(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<FinalReceiveOperationState> {
+    ) -> Result<FinalReceiveOperationState, OperationLookupError> {
         let mut stream = self
             .subscribe_receive_operation_state_updates(operation_id)
             .await?
@@ -1726,6 +1735,54 @@ pub enum ListGatewaysError {
 pub enum RoutingInfoError {
     #[error("Failed to request routing info")]
     FailedToRequestRoutingInfo,
+}
+
+/// A failure to work out the largest invoice amount the client could pay in
+/// full.
+///
+/// The answer depends on a gateway's fee schedule as well as on the balance,
+/// so it can be missing either because no schedule could be obtained or
+/// because the balance does not reach the smallest payable amount once both
+/// fees are applied.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum SpendableAmountError {
+    /// The caller named a gateway and its routing information could not be
+    /// fetched, so there is no fee schedule to compute against.
+    #[error(transparent)]
+    RoutingInfo(#[from] RoutingInfoError),
+
+    /// The caller named a gateway and it answered, but it does not serve this
+    /// federation.
+    #[error("The gateway does not support this federation")]
+    FederationNotSupported,
+
+    /// The caller named no gateway and none could be picked automatically, so
+    /// there is no fee schedule to compute against.
+    #[error(transparent)]
+    SelectGateway(#[from] SelectGatewayError),
+
+    /// The gateway's default send fee is above the limit this module accepts,
+    /// so an amount computed against it would not be payable through it.
+    #[error("The gateway's default send fee {fee} exceeds the limit {limit}")]
+    SendFeeExceedsLimit {
+        /// The default send fee the gateway announced.
+        fee: PaymentFee,
+        /// The largest default send fee this module accepts.
+        limit: PaymentFee,
+    },
+
+    /// The fee probe failed for a reason unrelated to the balance.
+    #[error("The fee quote for the payment failed")]
+    Quote(#[source] TransactionSubmitError),
+
+    /// The balance cannot cover the smallest payable amount plus the gateway
+    /// and federation fees, so there is no amount to send.
+    #[error("The balance {balance} is too low to send any amount after fees")]
+    BalanceTooLow {
+        /// The balance the answer was computed against.
+        balance: Amount,
+    },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

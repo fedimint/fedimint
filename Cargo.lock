@@ -4187,7 +4187,6 @@ dependencies = [
 name = "fedimint-lnv2-common"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "bitcoin",
  "fedimint-connectors",
@@ -4232,6 +4231,7 @@ name = "fedimint-lnv2-tests"
 version = "0.13.0-alpha"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "async-stream",
  "async-trait",
  "bitcoin",
