@@ -15,6 +15,7 @@ use devimint::version_constants::VERSION_0_12_0_ALPHA;
 use devimint::{cmd, util};
 use fedimint_core::PeerId;
 use fedimint_core::runtime::sleep;
+use fedimint_core::setup_code::WalletDescriptorKind;
 use fedimint_core::task::sleep_in_test;
 use fedimint_eventlog::EventLogId;
 use fedimint_walletv2_common::TxInfo;
@@ -22,6 +23,34 @@ use fedimint_walletv2_common::taproot::frost::FrostFinalizationStat;
 use serde::Deserialize;
 use tokio::task::JoinHandle;
 use tracing::info;
+
+/// Asserts that a federation-derived address matches the wallet `descriptor`
+/// the federation was configured with: [`WalletDescriptorKind::Wsh`] produces a
+/// P2WSH address, while [`WalletDescriptorKind::Tr`] and
+/// [`WalletDescriptorKind::Frost`] both produce P2TR addresses.
+///
+/// `FM_WALLETV2_DESCRIPTOR` is only honoured by guardians that understand it;
+/// one that doesn't silently builds the default `wsh` wallet instead. Without
+/// this check a test asking for `frost` would pass while exercising `wsh`.
+pub fn ensure_address_matches_descriptor(
+    address: &Address,
+    descriptor: WalletDescriptorKind,
+) -> anyhow::Result<()> {
+    let script = address.script_pubkey();
+
+    let matches = match descriptor {
+        WalletDescriptorKind::Wsh => script.is_p2wsh(),
+        WalletDescriptorKind::Tr | WalletDescriptorKind::Frost => script.is_p2tr(),
+    };
+
+    ensure!(
+        matches,
+        "Federation address {address} does not match the configured {descriptor:?} wallet \
+         descriptor; the guardians likely ignored FM_WALLETV2_DESCRIPTOR and fell back to wsh"
+    );
+
+    Ok(())
+}
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 pub enum FinalSendState {

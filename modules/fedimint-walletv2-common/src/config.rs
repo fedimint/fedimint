@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use bitcoin::hashes::{Hash, sha256};
-use fedimint_core::config::ExcessiveRelativeFeeError;
 use bitcoin::{Network, XOnlyPublicKey};
+use fedimint_core::config::ExcessiveRelativeFeeError;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::setup_code::WalletDescriptorKind;
