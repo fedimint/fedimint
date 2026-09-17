@@ -22,7 +22,16 @@ fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-metrics = { workspace = true }
 fedimint-server-core = { workspace = true }
+serde_json = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+bitcoin = { workspace = true }
+bitcoincore-rpc = { workspace = true }
+fedimint-core = { workspace = true }
+fedimint-server-core = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

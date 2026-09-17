@@ -130,6 +130,20 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
         }
     }
 
+    async fn submit_package(&self, transactions: &[Transaction]) -> Result<()> {
+        match self.bitcoind_client.submit_package(transactions).await {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                warn!(
+                    target: LOG_SERVER,
+                    error = %e.fmt_compact_anyhow(),
+                    "BitcoindClient failed for submit_package, falling back to EsploraClient"
+                );
+                self.esplora_client.submit_package(transactions).await
+            }
+        }
+    }
+
     async fn get_sync_progress(&self) -> Result<Option<f64>> {
         // We're always in sync, just like esplora
         self.esplora_client.get_sync_progress().await
