@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["MAX_INVOICE_EXPIRY_SECS"],"fn":["default_receive_enabled"],"struct":["CreateBolt11InvoicePayload","FeeOutOfRangeError","PaymentFee","RealGatewayConnection","RoutingInfo","SendPaymentPayload"],"trait":["GatewayConnection"]};
+window.SIDEBAR_ITEMS = {"constant":["MAX_INVOICE_EXPIRY_SECS"],"enum":["ParsePaymentFeeError"],"fn":["default_receive_enabled"],"struct":["CreateBolt11InvoicePayload","FeeOutOfRangeError","PaymentFee","RealGatewayConnection","RoutingInfo","SendPaymentPayload"],"trait":["GatewayConnection"]};
