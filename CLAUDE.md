@@ -1,127 +1,20 @@
-# CLAUDE.md
+# Agent Instructions
 
-This project uses the Linked Specs convention; consult the `linked-specs`
-skill before working with specs or governed code.
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-Additional agent-specific instructions (e.g. for CI-driven code review) can be found in `.github/agents/`.
-
-## Project Overview
-
-Fedimint is a modular framework for building federated financial applications. It provides a trust-minimized, censorship-resistant, and private alternative to centralized applications. The core implementation focuses on a federated Chaumian e-cash mint that's natively compatible with Bitcoin and the Lightning Network.
+This project uses the Linked Specs convention. Consult the `linked-specs` skill
+before working with specs or governed code.
 
 Read `SECURITY.md` before changing network APIs, authentication boundaries,
 credential handling, or privacy-sensitive public responses.
 
-## Essential Commands
+Load these project-local skills when their descriptions match the work:
 
-### Build and Development
-- `just build` - Build the entire workspace
-- `just check` - Run cargo check on everything
-- `just test` - Run tests (builds first)
-- `cargo check -q` - Quick syntax/type checking
-- `just lint` - Run linters (git pre-commit hook)
-- `just clippy` - Run clippy with warnings as errors
-- `just format` - Format code with rustfmt and nixfmt
+- `fedimint-codebase`: before navigating the codebase, deciding where a change
+  belongs, or working across Fedimint's components, modules, consensus, or
+  client state machines.
+- `fedimint-development`: before changing or reviewing code, or using the
+  project's build, test, lint, formatting, documentation, or
+  development-environment workflows.
+- `pr-submissions-checklist`: before creating or updating a pull request.
 
-### Testing
-- `just test-ci-all` - Run all tests in parallel like CI
-- `just final-lint` - Fast lint-only subset of pre-PR checks
-- `just final-check` - All checks recommended before opening a PR
-- `just check-wasm` - Verify WASM compatibility
-
-### Development Environment
-- `just devimint-env` - Spawn development federation environment
-- `just devimint-env-pre-dkg` - Start pre-DKG federation on fixed ports
-- `nix develop` - Enter Nix development shell
-
-### Documentation
-- `just build-docs` - Build cargo doc documentation
-- `just docs` - Build and open documentation
-
-## Architecture Overview
-
-### Core Components
-- **fedimint-core** - Core framework, types, and utilities shared between client/server
-- **fedimint-server** - Federation consensus logic using AlephBFT
-- **fedimint-client** - Client library for interacting with federations
-- **modules/** - Pluggable modules (mint, wallet, lightning, meta)
-- **gateway/** - Lightning gateway for payment routing
-
-### Module Structure Pattern
-Each module follows a three-crate pattern:
-```
-fedimint-<module>-common/     # Shared types and config
-fedimint-<module>-client/     # Client-side functionality
-fedimint-<module>-server/     # Server-side consensus logic
-```
-
-### Key Modules
-- **Mint Module** (`fedimint-mint-*`) - Chaumian e-cash implementation
-- **Wallet Module** (`fedimint-wallet-*`) - Bitcoin on-chain functionality
-- **Lightning Module** (`fedimint-ln-*`, `fedimint-lnv2-*`) - Lightning Network integration
-- **Meta Module** (`fedimint-meta-*`) - Federation metadata management
-
-### Entry Points
-- `fedimintd/src/bin/main.rs` - Federation node daemon
-- `fedimint-cli/src/main.rs` - Command-line client interface
-- `gateway/fedimint-gateway-server/src/bin/main.rs` - Lightning gateway
-
-## Development Patterns
-
-### Consensus Architecture
-- Byzantine fault-tolerant consensus using AlephBFT
-- Epoch-based transaction processing
-- Module-specific consensus contributions
-- Client operations driven by async state machines
-
-### Key Design Patterns
-- **Extensible Module System** - Modules implement `ServerModule` and `ClientModule` traits
-- **Type-Safe Encoding** - Custom `Encodable`/`Decodable` traits with module registries
-- **Operation-Based Client API** - Long-running operations with `OperationId` tracking
-- **Database Abstraction** - Key-value store with module-specific namespacing
-
-### Testing Strategy
-- Integration tests using `devimint` development environment
-- Module-specific test suites in `fedimint-*-tests` crates
-- Database migration testing with snapshot validation
-- WASM compatibility verification
-- Real service testing against bitcoind/Lightning nodes
-
-### Code Organization
-- Workspace with 78+ member crates
-- Nix-based reproducible development environment
-- `just` for build automation and common tasks
-- Multi-process development using `mprocs`
-- Extensive CI pipeline with compatibility testing
-
-### Code Quality Standards
-- **Never use `unwrap()` in non-test code** - Always use `expect()` with a succinct message explaining why the condition cannot fail
-- **Use structured logging** - Break logging statements into multiple lines for readability and use tracing's structured logging (field = value) instead of string interpolation
-- **Group related parameters** - When passing many related parameters, create utility structs (like `ConnectionLimits`) to reduce function parameter count and improve readability
-- Follow existing patterns and conventions in the codebase
-- Use meaningful error messages that help with debugging
-
-## Common Workflows
-
-### Adding New Module Functionality
-1. Implement consensus logic in `*-server` crate
-2. Add client-side operations in `*-client` crate
-3. Update shared types in `*-common` crate
-4. Add integration tests in `*-tests` crate
-5. Update database migrations if needed
-
-### After Making Code Changes
-- Always run `just format` after making code changes to ensure formatting is correct
-
-### Before Opening a PR
-Read the `pr-submissions-checklist` skill for PR description and pre-submit guidance.
-
-Run `just final-lint` before submitting a PR to catch easy issues without waiting for CI. This is the fast lint-only subset of `just final-check`.
-
-Run `just final-check` before opening larger or riskier PRs, or when extra confidence is needed. It includes:
-- Linting and formatting
-- Full test suite
-- Documentation tests
-- WASM compatibility check
+Additional agent-specific instructions, such as CI-driven code-review guidance,
+live in `.github/agents/`.
