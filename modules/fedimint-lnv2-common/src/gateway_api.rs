@@ -1,3 +1,4 @@
+use std::num::ParseIntError;
 use std::str::FromStr;
 
 use bitcoin::secp256k1::PublicKey;
@@ -6,7 +7,7 @@ use fedimint_connectors::error::ServerError;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
+use fedimint_core::{Amount, OutPoint, ParseAmountError, apply, async_trait_maybe_send};
 use fedimint_ln_common::client::GatewayApi;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use reqwest::Method;
@@ -284,6 +285,29 @@ impl PaymentFee {
 #[error("Payment fee {0} exceeds the range of RoutingFees")]
 pub struct FeeOutOfRangeError(PaymentFee);
 
+/// A failure to read a [`PaymentFee`] out of its `<base>,<ppm>` text form.
+///
+/// This is what an operator sees when a fee passed on the gateway's command
+/// line or in its environment cannot be read, so each variant says which half
+/// of the pair the parser could not make sense of. Unlike the other error
+/// types here the messages interpolate their cause: the only consumer is
+/// `clap`, which renders the top-level `Display` and never walks `source()`.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ParsePaymentFeeError {
+    /// The text is not a base fee and a relative fee separated by one comma.
+    #[error("Expected the format <base>,<ppm>")]
+    Format,
+
+    /// The part before the comma is not an amount.
+    #[error("The base fee is not an amount: {0}")]
+    Base(#[from] ParseAmountError),
+
+    /// The part after the comma is not a number of parts per million.
+    #[error("The relative fee is not a number of parts per million: {0}")]
+    PartsPerMillion(#[from] ParseIntError),
+}
+
 impl From<RoutingFees> for PaymentFee {
     fn from(value: RoutingFees) -> Self {
         PaymentFee {
@@ -312,28 +336,21 @@ impl std::fmt::Display for PaymentFee {
 }
 
 impl FromStr for PaymentFee {
-    type Err = anyhow::Error;
+    type Err = ParsePaymentFeeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.split(',');
-        let base_str = parts
-            .next()
-            .ok_or(anyhow::anyhow!("Failed to parse base fee"))?;
-        let ppm_str = parts.next().ok_or(anyhow::anyhow!("Failed to parse ppm"))?;
+        // `split_once` is what the pair actually is. The previous `split`
+        // could not fail on the base half at all, because `split` always
+        // yields a first item, so that branch was unreachable.
+        let (base_str, ppm_str) = s.split_once(',').ok_or(ParsePaymentFeeError::Format)?;
 
-        // Ensure no extra parts
-        if parts.next().is_some() {
-            return Err(anyhow::anyhow!(
-                "Failed to parse fees. Expected format <base>,<ppm>"
-            ));
+        if ppm_str.contains(',') {
+            return Err(ParsePaymentFeeError::Format);
         }
 
-        let base = Amount::from_str(base_str)?;
-        let parts_per_million = ppm_str.parse::<u64>()?;
-
         Ok(PaymentFee {
-            base,
-            parts_per_million,
+            base: Amount::from_str(base_str)?,
+            parts_per_million: ppm_str.parse::<u64>()?,
         })
     }
 }
@@ -343,7 +360,7 @@ mod tests {
     use fedimint_core::Amount;
     use lightning_invoice::RoutingFees;
 
-    use super::PaymentFee;
+    use super::{ParsePaymentFeeError, PaymentFee};
 
     /// A lower `base` must not let an over-limit `parts_per_million` through,
     /// which is what the lexicographic ordering used to allow.
@@ -460,6 +477,48 @@ mod tests {
         assert_eq!(
             PaymentFee::TRANSACTION_FEE_DEFAULT.fee(1_000_000),
             Amount::from_msats(2_000 + 3_000)
+        );
+    }
+
+    /// A fee string that is not a `<base>,<ppm>` pair is one condition, not
+    /// three, and the operator who typed it needs to see which half of the
+    /// pair the parser could not read.
+    #[test]
+    fn parsing_a_fee_names_the_half_that_failed() {
+        assert!(matches!(
+            "1000".parse::<PaymentFee>(),
+            Err(ParsePaymentFeeError::Format)
+        ));
+        assert!(matches!(
+            "".parse::<PaymentFee>(),
+            Err(ParsePaymentFeeError::Format)
+        ));
+        assert!(matches!(
+            "1,2,3".parse::<PaymentFee>(),
+            Err(ParsePaymentFeeError::Format)
+        ));
+        assert!(matches!(
+            "banana,3000".parse::<PaymentFee>(),
+            Err(ParsePaymentFeeError::Base(_))
+        ));
+        assert!(matches!(
+            "2000,banana".parse::<PaymentFee>(),
+            Err(ParsePaymentFeeError::PartsPerMillion(_))
+        ));
+    }
+
+    /// The `Display`/`FromStr` pair is what clap uses for the gateway's
+    /// `--default-routing-fees` flag and its default value, so it has to round
+    /// trip.
+    #[test]
+    fn a_fee_round_trips_through_its_text_form() {
+        let fee = PaymentFee::TRANSACTION_FEE_DEFAULT;
+
+        assert_eq!(
+            fee.to_string()
+                .parse::<PaymentFee>()
+                .expect("The rendered form parses back"),
+            fee
         );
     }
 }
