@@ -14,6 +14,7 @@ Load these project-local skills when their descriptions match the work:
 - `fedimint-development`: before changing or reviewing code, or using the
   project's build, test, lint, formatting, documentation, or
   development-environment workflows.
+- `fedimint-coding-style`: before writing, modifying, or reviewing Rust code.
 - `multipart-review` (`./.agents/skills/multipart-review`): for all code
   reviews.
 - `pr-submissions-checklist`: before creating or updating a pull request.
