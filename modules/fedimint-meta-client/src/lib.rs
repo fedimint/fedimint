@@ -47,6 +47,7 @@ use serde::Deserialize;
 use serde_json::json;
 use states::MetaStateMachine;
 use strum::IntoEnumIterator;
+use thiserror::Error;
 use tracing::{debug, warn};
 
 #[derive(Debug)]
@@ -57,10 +58,16 @@ pub struct MetaClientModule {
 }
 
 impl MetaClientModule {
-    fn admin_auth(&self) -> anyhow::Result<ApiAuth> {
+    /// The admin credentials this client was built with.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`MetaAdminError::AdminAuthMissing`] if the client was built
+    /// without them.
+    fn admin_auth(&self) -> Result<ApiAuth, MetaAdminError> {
         self.admin_auth
             .clone()
-            .ok_or_else(|| anyhow::format_err!("Admin auth not set"))
+            .ok_or(MetaAdminError::AdminAuthMissing)
     }
 
     /// Submit a meta consensus value
@@ -70,7 +77,13 @@ impl MetaClientModule {
     ///
     /// To "cancel" previous vote, peer can submit a value equal to the current
     /// consensus value.
-    pub async fn submit(&self, key: MetaKey, value: MetaValue) -> anyhow::Result<()> {
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`MetaAdminError::AdminAuthMissing`] if this client holds no
+    /// admin credentials, and with [`MetaAdminError::Federation`] if the
+    /// guardians could not be asked to record the vote.
+    pub async fn submit(&self, key: MetaKey, value: MetaValue) -> Result<(), MetaAdminError> {
         self.module_api
             .submit(key, value, self.admin_auth()?)
             .await?;
@@ -113,14 +126,45 @@ impl MetaClientModule {
     /// Get current submissions to change the meta consensus value.
     ///
     /// Upon changing the consensus
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`MetaAdminError::AdminAuthMissing`] if this client holds no
+    /// admin credentials, and with [`MetaAdminError::Federation`] if the
+    /// guardians could not be asked for their submissions.
     pub async fn get_submissions(
         &self,
         key: MetaKey,
-    ) -> anyhow::Result<BTreeMap<PeerId, MetaValue>> {
+    ) -> Result<BTreeMap<PeerId, MetaValue>, MetaAdminError> {
         Ok(self
             .module_api
             .get_submissions(key, self.admin_auth()?)
             .await?)
+    }
+}
+
+/// A failure of a meta operation that speaks for the federation's guardians.
+///
+/// Both operations it covers, submitting a value and reading the pending
+/// submissions, are guardian-only endpoints. They can therefore fail before
+/// any request leaves the client, when it holds no admin credentials at all,
+/// as well as while talking to the federation.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum MetaAdminError {
+    /// This client was not built with admin credentials, so it cannot call a
+    /// guardian-only endpoint.
+    #[error("Admin auth not set")]
+    AdminAuthMissing,
+
+    /// The federation could not be reached, or its guardians disagreed.
+    #[error("The federation could not be reached")]
+    Federation(#[source] Box<FederationError>),
+}
+
+impl From<FederationError> for MetaAdminError {
+    fn from(source: FederationError) -> Self {
+        Self::Federation(Box::new(source))
     }
 }
 
