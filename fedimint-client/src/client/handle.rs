@@ -2,10 +2,9 @@ use std::ops;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::format_err;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::runtime;
-use fedimint_core::util::FmtCompactAnyhow as _;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_logging::LOG_CLIENT;
 #[cfg(not(target_family = "wasm"))]
 use tokio::runtime::{Handle as RuntimeHandle, RuntimeFlavor};
@@ -13,6 +12,7 @@ use tracing::{Instrument as _, debug, error, trace, warn};
 
 use super::Client;
 use crate::ClientBuilder;
+use crate::error::ClientBuildError;
 
 /// User handle to the [`Client`] instance
 ///
@@ -80,7 +80,7 @@ impl ClientHandle {
             .await
         {
             client_span.in_scope(|| {
-                warn!(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), "Error waiting for client task group to shut down");
+                warn!(target: LOG_CLIENT, err = %err.fmt_compact(), "Error waiting for client task group to shut down");
             });
         }
 
@@ -107,17 +107,17 @@ impl ClientHandle {
 
     /// Restart the client
     ///
-    /// Returns false if there are other clones of [`ClientHandle`], or starting
-    /// the client again failed for some reason.
+    /// Fails if there are other clones of [`ClientHandle`], or if starting the
+    /// client again failed for some reason.
     ///
     /// Notably it will re-use the original [`fedimint_core::db::Database`]
     /// handle, and not attempt to open it again.
-    pub async fn restart(self) -> anyhow::Result<ClientHandle> {
+    pub async fn restart(self) -> Result<ClientHandle, ClientBuildError> {
         let (builder, config, api_secret, root_secret, db, endpoints) = {
             let client = self
                 .inner
                 .as_ref()
-                .ok_or_else(|| format_err!("Already stopped"))?;
+                .ok_or(ClientBuildError::AlreadyStopped)?;
             let builder = ClientBuilder::from_existing(client);
             let config = client.config().await;
             let api_secret = client.api_secret.clone();
@@ -164,20 +164,31 @@ impl Drop for ClientHandle {
             return;
         }
 
-        // We can't use block_on in single-threaded mode or wasm
+        // We can't use block_on in single-threaded mode, on wasm, or on a thread
+        // without a runtime context, e.g. when the last handle is dropped while
+        // unwinding from a panic. Destructors must never panic, so all these
+        // cases fall back to a non-blocking partial shutdown.
+        #[cfg(not(target_family = "wasm"))]
+        let runtime_handle = RuntimeHandle::try_current();
         #[cfg(target_family = "wasm")]
         let can_block = false;
         #[cfg(not(target_family = "wasm"))]
-        // nosemgrep: ban-raw-block-on
-        let can_block = RuntimeHandle::current().runtime_flavor() != RuntimeFlavor::CurrentThread;
+        let can_block = runtime_handle
+            .as_ref()
+            .is_ok_and(|handle| handle.runtime_flavor() != RuntimeFlavor::CurrentThread);
         if !can_block {
             let inner = self.inner.take().expect("Must have inner client set");
             inner.executor.stop_executor();
-            if cfg!(target_family = "wasm") {
-                error!(target: LOG_CLIENT, "Automatic client shutdown is not possible on wasm, call ClientHandle::shutdown manually.");
+            #[cfg(target_family = "wasm")]
+            let reason = "on wasm";
+            #[cfg(not(target_family = "wasm"))]
+            // `can_block` is false, so an existing runtime must be current-thread flavored.
+            let reason = if runtime_handle.is_ok() {
+                "on current thread runtime"
             } else {
-                error!(target: LOG_CLIENT, "Automatic client shutdown is not possible on current thread runtime, call ClientHandle::shutdown manually.");
-            }
+                "without a runtime"
+            };
+            error!(target: LOG_CLIENT, "Automatic client shutdown is not possible {reason}, call ClientHandle::shutdown manually.");
             return;
         }
 

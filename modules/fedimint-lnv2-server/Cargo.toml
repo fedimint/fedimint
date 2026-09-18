@@ -18,11 +18,11 @@ erased-serde = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
 fedimint-logging = { workspace = true }
+fedimint-metrics = { workspace = true }
 fedimint-server-core = { workspace = true }
 futures = { workspace = true }
 group = { workspace = true }
 rand = { workspace = true }
-rand_chacha = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }

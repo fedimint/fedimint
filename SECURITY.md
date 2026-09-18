@@ -58,3 +58,21 @@ Out of scope:
 - Attacks that need a majority of guardians to be malicious. The threat model
   assumes fewer than one third of guardians are faulty.
 - Test and development setups, such as `devimint`.
+
+
+## Public Gateway Federation Status
+
+Configured gateways expose unauthenticated HTTP and Iroh `POST
+/federation_status` queries for one exact federation ID. The response contains
+only finite, detail-free connectivity, Lightning module capability, and
+registration-health classes for that ID. It must not reveal the gateway's
+federation inventory, guardian identities, balances, route hints, credentials,
+or raw errors; `/info` remains authenticated. A gateway that has not completed
+mnemonic setup exposes only its setup endpoints.
+
+Registration observations are process-local and cleared when the gateway leaves
+the federation. Concurrent results follow attempt begin order so stale work
+cannot overwrite a newer logical attempt, and advertised TTL uses monotonic
+elapsed time. Status assembly holds the federation-manager read lock only while
+capturing one coherent snapshot; do not clone the client solely for this public
+query because that would interfere with concurrent leave.

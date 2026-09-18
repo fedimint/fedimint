@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use fedimint_core::runtime;
-use fedimint_core::task::jit::{JitTry, JitTryAnyhow};
+use fedimint_core::task::jit::JitTry;
 use fedimint_logging::LOG_DEVIMINT;
 use tokio::join;
 use tracing::{debug, info};
@@ -73,7 +73,7 @@ pub async fn dev_fed(process_mgr: &ProcessManager) -> Result<DevFed> {
         .await
 }
 
-type JitArc<T> = JitTryAnyhow<Arc<T>>;
+type JitArc<T> = JitTry<Arc<T>, anyhow::Error>;
 
 #[derive(Clone)]
 pub struct DevJitFed {
@@ -142,7 +142,7 @@ impl DevJitFed {
                 Ok(Arc::new(lnd))
             }
         });
-        let esplora = JitTryAnyhow::new_try({
+        let esplora = JitTry::new_try({
             let process_mgr = process_mgr.to_owned();
             let bitcoind = bitcoind.clone();
             || async move {
@@ -155,7 +155,7 @@ impl DevJitFed {
             }
         });
 
-        let fed = JitTryAnyhow::new_try({
+        let fed = JitTry::new_try({
             let process_mgr = process_mgr.to_owned();
             let bitcoind = bitcoind.clone();
             move || async move {
@@ -182,7 +182,7 @@ impl DevJitFed {
             }
         });
 
-        let gw_lnd = JitTryAnyhow::new_try({
+        let gw_lnd = JitTry::new_try({
             let process_mgr = process_mgr.to_owned();
             let lnd = lnd.clone();
             || async move {
@@ -194,7 +194,7 @@ impl DevJitFed {
                 Ok(Arc::new(lnd_gw))
             }
         });
-        let gw_lnd_registered = JitTryAnyhow::new_try({
+        let gw_lnd_registered = JitTry::new_try({
             let gw_lnd = gw_lnd.clone();
             let fed = fed.clone();
             move || async move {
@@ -211,7 +211,7 @@ impl DevJitFed {
             }
         });
 
-        let gw_ldk = JitTryAnyhow::new_try({
+        let gw_ldk = JitTry::new_try({
             let process_mgr = process_mgr.to_owned();
             let bitcoind = bitcoind.clone();
             move || async move {
@@ -233,7 +233,7 @@ impl DevJitFed {
                 Ok(Arc::new(ldk_gw))
             }
         });
-        let gw_ldk_second = JitTryAnyhow::new_try({
+        let gw_ldk_second = JitTry::new_try({
             let process_mgr = process_mgr.to_owned();
             let bitcoind = bitcoind.clone();
             move || async move {
@@ -255,7 +255,7 @@ impl DevJitFed {
                 Ok(Arc::new(ldk_gw2))
             }
         });
-        let gw_ldk_connected = JitTryAnyhow::new_try({
+        let gw_ldk_connected = JitTry::new_try({
             let gw_ldk = gw_ldk.clone();
             let fed = fed.clone();
             move || async move {
@@ -275,7 +275,7 @@ impl DevJitFed {
                 Ok(Arc::new(()))
             }
         });
-        let gw_ldk_second_connected = JitTryAnyhow::new_try({
+        let gw_ldk_second_connected = JitTry::new_try({
             let gw_ldk_second = gw_ldk_second.clone();
             let fed = fed.clone();
             move || async move {
@@ -294,7 +294,7 @@ impl DevJitFed {
             }
         });
 
-        let fed_epoch_generated = JitTryAnyhow::new_try({
+        let fed_epoch_generated = JitTry::new_try({
             let fed = fed.clone();
             move || async move {
                 let fed = fed.get_try().await?.deref().clone();
@@ -308,7 +308,7 @@ impl DevJitFed {
             }
         });
 
-        let channel_opened = JitTryAnyhow::new_try({
+        let channel_opened = JitTry::new_try({
             let gw_lnd = gw_lnd.clone();
             let gw_ldk = gw_ldk.clone();
             let gw_ldk_second = gw_ldk_second.clone();
@@ -340,7 +340,7 @@ impl DevJitFed {
             }
         });
 
-        let lnv2_gateways_added = JitTryAnyhow::new_try({
+        let lnv2_gateways_added = JitTry::new_try({
             let fed = fed.clone();
             let gw_lnd = gw_lnd.clone();
             let gw_ldk = gw_ldk.clone();
@@ -375,7 +375,7 @@ impl DevJitFed {
             }
         });
 
-        let recurringd = JitTryAnyhow::new_try({
+        let recurringd = JitTry::new_try({
             let process_mgr = process_mgr.to_owned();
             move || async move {
                 debug!(target: LOG_DEVIMINT, "Starting recurringd...");
@@ -386,7 +386,7 @@ impl DevJitFed {
             }
         });
 
-        let recurringd_connected = JitTryAnyhow::new_try({
+        let recurringd_connected = JitTry::new_try({
             let recurringd = recurringd.clone();
             let fed = fed.clone();
             move || async move {
@@ -403,7 +403,7 @@ impl DevJitFed {
             }
         });
 
-        let recurringdv2 = JitTryAnyhow::new_try({
+        let recurringdv2 = JitTry::new_try({
             let process_mgr = process_mgr.to_owned();
             move || async move {
                 debug!(target: LOG_DEVIMINT, "Starting recurringdv2...");

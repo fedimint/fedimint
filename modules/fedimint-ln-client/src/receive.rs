@@ -351,7 +351,9 @@ pub async fn get_incoming_contract(
                 Err(fedimint_api_client::api::FederationError::general(
                     ACCOUNT_ENDPOINT,
                     contract_id,
-                    anyhow::anyhow!("Contract {contract_id} is not an incoming contract"),
+                    fedimint_api_client::api::FederationGeneralError::UnexpectedResponse {
+                        message: format!("Contract {contract_id} is not an incoming contract"),
+                    },
                 ))
             }
         }

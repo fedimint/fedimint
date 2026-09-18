@@ -1,5 +1,6 @@
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::Amount;
+use fedimint_lightning::InterceptPaymentRequest;
 
 use super::{Htlc, LNV1_HTLC_EXPIRY_SAFETY_MARGIN, UnsafeHtlcExpiry};
 
@@ -76,5 +77,39 @@ fn accepts_htlc_near_maximum_height_without_overflow() {
     assert_eq!(
         htlc(incoming_expiry).ensure_safe_expiry(current_block_height),
         Ok(())
+    );
+}
+
+#[test]
+fn htlc_conversion_keeps_incoming_and_outgoing_amounts_distinct() {
+    // `amount_msat` is the sender-written onion forward amount, while
+    // `incoming_amount_msat` is the value actually locked in the HTLC.
+    // Collapsing them into one lets a forged forward amount satisfy the
+    // solvency check that guards contract funding, so the conversion must
+    // keep the two separate.
+    let forged_forward_amount = 1_000_000;
+    let real_locked_amount = 1_000;
+
+    let intercept = InterceptPaymentRequest {
+        payment_hash: sha256::Hash::all_zeros(),
+        amount_msat: forged_forward_amount,
+        incoming_amount_msat: real_locked_amount,
+        expiry: 500,
+        incoming_chan_id: 2,
+        short_channel_id: Some(1),
+        htlc_id: 3,
+    };
+
+    let htlc = Htlc::try_from(intercept).expect("conversion of a valid request succeeds");
+
+    assert_eq!(
+        htlc.incoming_amount_msat,
+        Amount::from_msats(real_locked_amount),
+        "the received amount must come from the real locked value"
+    );
+    assert_eq!(
+        htlc.outgoing_amount_msat,
+        Amount::from_msats(forged_forward_amount),
+        "the onion forward amount must stay in its own field, never conflated with the received amount"
     );
 }

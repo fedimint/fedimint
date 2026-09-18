@@ -1415,7 +1415,8 @@ impl Wallet {
             sats_per_kvb: ((self
                 .btc_rpc
                 .status()
-                .map_or(self.cfg.consensus.default_fee, |status| status.fee_rate)
+                .and_then(|status| status.fee_rate)
+                .unwrap_or(self.cfg.consensus.default_fee)
                 .sats_per_kvb as f64
                 * get_feerate_multiplier())
             .round()) as u64,

@@ -3,10 +3,9 @@ use std::fmt;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use anyhow::{Context, bail};
 use async_trait::async_trait;
 use fedimint_core::config::ALEPH_BFT_UNIT_BYTE_LIMIT;
 use fedimint_core::envs::{
@@ -89,6 +88,7 @@ use tokio::sync::watch;
 use tracing::{debug, trace, warn};
 
 use super::{DynGuaridianConnection, IGuardianConnection, ServerError, ServerResult};
+use crate::error::ConnectorError;
 use crate::{Connectivity, DynGatewayConnection, IConnection, IGatewayConnection, IrohPeerInfo};
 
 #[derive(Clone)]
@@ -108,6 +108,16 @@ pub(crate) struct IrohConnector {
     /// direct). Consumers of [`crate::ConnectorRegistry`] subscribe via
     /// [`crate::ConnectorRegistry::connectivity_change_notifier`].
     path_change: Arc<watch::Sender<u64>>,
+
+    /// Live connections dialed over the next stack, kept so
+    /// [`crate::Connector::connectivity`] can read their paths back.
+    ///
+    /// Iroh 1.0 exposes path state per connection rather than per endpoint,
+    /// so unlike the stable stack there is no `endpoint.conn_type(node_id)`
+    /// to consult after the fact. Entries are keyed by the stable [`NodeId`]
+    /// because that is what callers derive from a peer url, and are replaced
+    /// on redial, so the map stays bounded by the number of distinct peers.
+    next_connections: Arc<Mutex<BTreeMap<NodeId, iroh_next::endpoint::Connection>>>,
 }
 
 impl fmt::Debug for IrohConnector {
@@ -120,7 +130,7 @@ impl fmt::Debug for IrohConnector {
 }
 
 impl IrohConnector {
-    pub async fn new(
+    pub(crate) async fn new(
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
         path_change: Arc<watch::Sender<u64>>,
@@ -137,7 +147,7 @@ impl IrohConnector {
             FM_IROH_CONNECT_OVERRIDES_PLAIN_ENV,
             FM_GW_IROH_CONNECT_OVERRIDES_PLAIN_ENV,
         ] {
-            for (k, v) in parse_kv_list_from_env::<NodeId, SocketAddr>(env_var)? {
+            for (k, v) in parse_kv_list_from_env::<NodeId, SocketAddr>(env_var) {
                 s = s.with_connection_override(k, NodeAddr::new(k).with_direct_addresses([v]));
             }
         }
@@ -146,7 +156,7 @@ impl IrohConnector {
     }
 
     #[allow(clippy::too_many_lines)]
-    pub async fn new_no_overrides(
+    pub(crate) async fn new_no_overrides(
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
         path_change: Arc<watch::Sender<u64>>,
@@ -262,26 +272,29 @@ impl IrohConnector {
             next: endpoint_next,
             connection_overrides: BTreeMap::new(),
             path_change,
+            next_connections: Arc::new(Mutex::new(BTreeMap::new())),
         })
     }
 
-    pub fn with_connection_override(mut self, node: NodeId, addr: NodeAddr) -> Self {
+    pub(crate) fn with_connection_override(mut self, node: NodeId, addr: NodeAddr) -> Self {
         self.connection_overrides.insert(node, addr);
         self
     }
 
-    pub fn node_id_from_url(url: &SafeUrl) -> anyhow::Result<NodeId> {
+    pub(crate) fn node_id_from_url(url: &SafeUrl) -> Result<NodeId, ConnectorError> {
         if url.scheme() != "iroh" {
-            bail!(
-                "Unsupported scheme: {}, passed to iroh endpoint handler",
-                url.scheme()
-            );
+            return Err(ConnectorError::UnsupportedScheme {
+                scheme: url.scheme().to_owned(),
+            });
         }
-        let host = url.host_str().context("Missing host string in Iroh URL")?;
+        let host = url.host_str().ok_or_else(|| ConnectorError::MissingHost {
+            url: url.to_owned(),
+        })?;
 
-        let node_id = PublicKey::from_str(host).context("Failed to parse node id")?;
-
-        Ok(node_id)
+        PublicKey::from_str(host).map_err(|source| ConnectorError::InvalidNodeId {
+            host: host.to_owned(),
+            source: Box::new(source),
+        })
     }
 }
 
@@ -296,18 +309,18 @@ impl crate::Connector for IrohConnector {
             // There seem to be no way to pass secret over current Iroh calling
             // convention. Connecting anyway would silently drop the credential and
             // talk to an API that never authenticates us, so refuse instead.
-            return Err(ServerError::Connection(anyhow::format_err!(
-                "Iroh api secrets currently not supported"
-            )));
+            return Err(ServerError::Connection(
+                "Iroh api secrets currently not supported".into(),
+            ));
         }
         let node_id =
             Self::node_id_from_url(url).map_err(|source| ServerError::InvalidPeerUrl {
-                source,
+                source: Box::new(source),
                 url: url.to_owned(),
             })?;
         let next_only = crate::is_iroh_next_endpoint_url(url).map_err(|source| {
             ServerError::InvalidPeerUrl {
-                source,
+                source: Box::new(source),
                 url: url.to_owned(),
             }
         })?;
@@ -377,17 +390,18 @@ impl crate::Connector for IrohConnector {
         }
 
         Err(prev_err.unwrap_or_else(|| {
-            ServerError::ServerError(anyhow::anyhow!("Both iroh connection attempts failed"))
+            ServerError::ServerError("Both iroh connection attempts failed".to_string())
         }))
     }
 
-    async fn connect_gateway(&self, url: &SafeUrl) -> anyhow::Result<DynGatewayConnection> {
+    async fn connect_gateway(&self, url: &SafeUrl) -> Result<DynGatewayConnection, ConnectorError> {
         let node_id = Self::node_id_from_url(url)?;
         if let Some(node_addr) = self.connection_overrides.get(&node_id).cloned() {
             let conn = self
                 .stable
                 .connect(node_addr.clone(), FEDIMINT_GATEWAY_ALPN)
-                .await?;
+                .await
+                .map_err(|err| ConnectorError::Transport(err.into()))?;
 
             #[cfg(not(target_family = "wasm"))]
             Self::spawn_connection_monitoring_stable(
@@ -398,7 +412,11 @@ impl crate::Connector for IrohConnector {
 
             Ok(IGatewayConnection::into_dyn(conn))
         } else {
-            let conn = self.stable.connect(node_id, FEDIMINT_GATEWAY_ALPN).await?;
+            let conn = self
+                .stable
+                .connect(node_id, FEDIMINT_GATEWAY_ALPN)
+                .await
+                .map_err(|err| ConnectorError::Transport(err.into()))?;
             Ok(IGatewayConnection::into_dyn(conn))
         }
     }
@@ -407,6 +425,16 @@ impl crate::Connector for IrohConnector {
         let Ok(node_id) = Self::node_id_from_url(url) else {
             return Connectivity::Unknown;
         };
+
+        // The next stack is consulted first: a peer reached over an advertised
+        // Iroh 1.0 endpoint never has a stable connection to report, and when
+        // both stacks were raced the next connection is the live one. Falling
+        // through to the stable endpoint in that case would report
+        // `Unknown`, which callers render as a disconnected peer.
+        if let Some(connectivity) = self.connectivity_next(node_id) {
+            return connectivity;
+        }
+
         let Ok(watcher) = self.stable.conn_type(node_id) else {
             return Connectivity::Unknown;
         };
@@ -425,7 +453,7 @@ impl crate::Connector for IrohConnector {
     ) -> ServerResult<Option<IrohPeerInfo>> {
         let node_id =
             Self::node_id_from_url(url).map_err(|source| ServerError::InvalidPeerUrl {
-                source,
+                source: Box::new(source),
                 url: url.to_owned(),
             })?;
         let connection_override = self.connection_overrides.get(&node_id).cloned();
@@ -436,7 +464,7 @@ impl crate::Connector for IrohConnector {
         let mut conn_type_watcher = self
             .stable
             .conn_type(node_id)
-            .map_err(ServerError::Connection)?;
+            .map_err(|err| ServerError::Connection(err.into()))?;
         let mut conn_type = conn_type_watcher
             .get()
             .unwrap_or(iroh::endpoint::ConnectionType::None);
@@ -467,6 +495,43 @@ impl crate::Connector for IrohConnector {
 }
 
 impl IrohConnector {
+    /// Report how a retained next-stack connection is reaching `node_id`.
+    ///
+    /// Returns `None` when the next stack has nothing to say about the peer,
+    /// so the caller can fall back to the stable stack: no connection held,
+    /// one that has since closed, or one whose paths cannot be classified.
+    /// None of those mean "disconnected", which is what answering
+    /// [`Connectivity::Unknown`] would tell callers.
+    fn connectivity_next(&self, node_id: NodeId) -> Option<Connectivity> {
+        let connections = self
+            .next_connections
+            .lock()
+            .expect("Next connection mutex is never held across a panic");
+
+        let connection = connections.get(&node_id)?;
+
+        if connection.close_reason().is_some() {
+            return None;
+        }
+
+        // A path carries application data over either an IP or a relay
+        // address, so holding one of each is the next-stack spelling of the
+        // stable stack's `Mixed`.
+        let paths = connection.paths();
+        let direct = paths.iter().any(|path| path.is_ip());
+        let relay = paths.iter().any(|path| path.is_relay());
+
+        Some(match (direct, relay) {
+            (true, true) => Connectivity::Mixed,
+            (true, false) => Connectivity::Direct,
+            (false, true) => Connectivity::Relay,
+            // Nothing to classify. Fall back to the stable stack rather than
+            // answering `Unknown`, which callers render as a disconnected
+            // peer — the very thing this lookup exists to avoid.
+            (false, false) => return None,
+        })
+    }
+
     fn iroh_peer_info_from_conn_type(
         &self,
         node_id: NodeId,
@@ -574,7 +639,7 @@ impl IrohConnector {
                 conn
             }
             None => self.stable.connect(node_id, FEDIMINT_API_ALPN).await,
-        }.map_err(ServerError::Connection)?;
+        }.map_err(|err| ServerError::Connection(err.into()))?;
 
         Ok(conn)
     }
@@ -615,8 +680,14 @@ impl IrohConnector {
                 FEDIMINT_API_ALPN
             ).await,
         }
-        .map_err(Into::into)
-        .map_err(ServerError::Connection)?;
+        .map_err(|err| ServerError::Connection(err.into()))?;
+
+        // Retain the connection so `connectivity` can read its paths back;
+        // iroh 1.0 offers no endpoint-level lookup to recover it from.
+        self.next_connections
+            .lock()
+            .expect("Next connection mutex is never held across a panic")
+            .insert(node_id, conn.clone());
 
         Ok(conn)
     }
@@ -733,17 +804,17 @@ impl IGuardianConnection for Connection {
                     iroh::endpoint::VarInt::from_u32(IROH_REQUEST_TIMEOUT_ERROR_CODE),
                     IROH_REQUEST_TIMEOUT_ERROR_REASON,
                 );
-                return Err(ServerError::Transport(anyhow::anyhow!(
-                    "iroh request {method_str} timed out after {timeout:?}"
-                )));
+                return Err(ServerError::Transport(
+                    format!("iroh request {method_str} timed out after {timeout:?}").into(),
+                ));
             }
         };
 
         // TODO: We should not be serializing Results on the wire
         let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)
-            .map_err(|e| ServerError::InvalidResponse(e.into()))?;
+            .map_err(|e| ServerError::InvalidResponse(e.fmt_compact().to_string()))?;
 
-        response.map_err(|e| ServerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
+        response.map_err(|e| ServerError::InvalidResponse(format!("Api Error: {e:?}")))
     }
 }
 
@@ -800,17 +871,17 @@ impl IGuardianConnection for iroh_next::endpoint::Connection {
                     iroh_next::endpoint::VarInt::from_u32(IROH_REQUEST_TIMEOUT_ERROR_CODE),
                     IROH_REQUEST_TIMEOUT_ERROR_REASON,
                 );
-                return Err(ServerError::Transport(anyhow::anyhow!(
-                    "iroh request {method_str} timed out after {timeout:?}"
-                )));
+                return Err(ServerError::Transport(
+                    format!("iroh request {method_str} timed out after {timeout:?}").into(),
+                ));
             }
         };
 
         // TODO: We should not be serializing Results on the wire
         let response = serde_json::from_slice::<Result<Value, ApiError>>(&response)
-            .map_err(|e| ServerError::InvalidResponse(e.into()))?;
+            .map_err(|e| ServerError::InvalidResponse(e.fmt_compact().to_string()))?;
 
-        response.map_err(|e| ServerError::InvalidResponse(anyhow::anyhow!("Api Error: {:?}", e)))
+        response.map_err(|e| ServerError::InvalidResponse(format!("Api Error: {e:?}")))
     }
 }
 
@@ -848,14 +919,13 @@ impl IGatewayConnection for Connection {
             .map_err(|e| ServerError::Transport(e.into()))?;
 
         let response = serde_json::from_slice::<IrohGatewayResponse>(&response)
-            .map_err(|e| ServerError::InvalidResponse(e.into()))?;
-        match StatusCode::from_u16(response.status).map_err(|e| {
-            ServerError::InvalidResponse(anyhow::anyhow!("Invalid status code: {}", e))
-        })? {
+            .map_err(|e| ServerError::InvalidResponse(e.fmt_compact().to_string()))?;
+        match StatusCode::from_u16(response.status)
+            .map_err(|e| ServerError::InvalidResponse(format!("Invalid status code: {e}")))?
+        {
             StatusCode::OK => Ok(response.body),
-            status => Err(ServerError::ServerError(anyhow::anyhow!(
-                "Server returned status code: {}",
-                status
+            status => Err(ServerError::ServerError(format!(
+                "Server returned status code: {status}"
             ))),
         }
     }
@@ -872,8 +942,10 @@ mod tests {
     use fedimint_core::util::SafeUrl;
 
     use super::{
-        IROH_REQUEST_TIMEOUT_DEFAULT, IROH_REQUEST_TIMEOUT_LONG_POLL, request_timeout_for_method,
+        IROH_REQUEST_TIMEOUT_DEFAULT, IROH_REQUEST_TIMEOUT_LONG_POLL, IrohConnector,
+        request_timeout_for_method,
     };
+    use crate::error::ConnectorError;
     use crate::{iroh_next_endpoint_url, is_iroh_next_endpoint_url, preserve_iroh_next_marker};
 
     const TEST_ENDPOINT_ID: &str =
@@ -902,9 +974,36 @@ mod tests {
     }
 
     #[test]
-    fn unknown_iroh_api_version_path_is_rejected() {
-        let url = SafeUrl::parse(&format!("iroh://{TEST_ENDPOINT_ID}/v2")).expect("valid Iroh URL");
-        assert!(is_iroh_next_endpoint_url(&url).is_err());
+    fn unsupported_iroh_url_path_is_typed() {
+        let url = SafeUrl::parse("iroh://someendpoint/v2").expect("valid url");
+        assert!(
+            matches!(
+                is_iroh_next_endpoint_url(&url),
+                Err(ConnectorError::UnsupportedUrlPath { .. })
+            ),
+            "{:?}",
+            is_iroh_next_endpoint_url(&url)
+        );
+    }
+
+    #[test]
+    fn garbage_endpoint_id_is_an_invalid_node_id() {
+        let err = iroh_next_endpoint_url("not-an-endpoint-id")
+            .expect_err("garbage is not an endpoint id");
+        assert!(
+            matches!(err, ConnectorError::InvalidNodeId { .. }),
+            "{err:?}"
+        );
+    }
+
+    #[test]
+    fn a_non_iroh_url_has_an_unsupported_scheme() {
+        let url = SafeUrl::parse("ws://example.com").expect("valid url");
+        let err = IrohConnector::node_id_from_url(&url).expect_err("ws is not iroh");
+        assert!(
+            matches!(err, ConnectorError::UnsupportedScheme { .. }),
+            "{err:?}"
+        );
     }
 
     /// Every `await_*` endpoint currently exposed by fedimint modules

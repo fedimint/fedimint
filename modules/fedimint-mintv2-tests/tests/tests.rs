@@ -1,7 +1,9 @@
 use std::pin::pin;
 
 use anyhow::ensure;
+use assert_matches::assert_matches;
 use async_stream::stream;
+use fedimint_client::error::OperationLookupError;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client::transaction::TransactionBuilder;
 use fedimint_client::{ClientHandleArc, ModuleRecoveryCompleted, RootSecret};
@@ -10,7 +12,7 @@ use fedimint_core::base32::{self, FEDIMINT_PREFIX};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::module::Amounts;
+use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::secp256k1::{Keypair, SECP256K1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
@@ -158,6 +160,10 @@ async fn send_and_receive() -> anyhow::Result<()> {
             include_invite.then(|| client_send.federation_id()),
         );
 
+        // The sender attaches the unit its mint is configured with; the test
+        // federation's mint is denominated in Bitcoin.
+        assert_eq!(ecash.unit(), AmountUnit::BITCOIN);
+
         let operation_id = client_receive
             .get_first_module::<MintClientModule>()?
             .receive(ecash, Value::Null)
@@ -186,6 +192,24 @@ async fn send_and_receive() -> anyhow::Result<()> {
     }
 
     ensure!(client_receive.get_balance_for_btc().await? >= Amount::from_sats(9900));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn awaiting_an_unknown_receive_operation_reports_not_found() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+    let operation_id = OperationId::new_random();
+
+    assert_matches!(
+        client
+            .get_first_module::<MintClientModule>()?
+            .await_final_receive_operation_state(operation_id)
+            .await,
+        Err(OperationLookupError::NotFound(_))
+    );
 
     Ok(())
 }
@@ -283,7 +307,7 @@ async fn send_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
 
         // Settle any pending change from the previous iteration so the quote and
         // the send observe the same inventory.
-        client.wait_for_all_active_state_machines().await?;
+        client.wait_for_all_active_state_machines().await;
 
         let quote = mint.send_fee_quote(Amount::from_sats(1_000)).await?;
         let before = client.get_balance_for_btc().await?;
@@ -295,7 +319,7 @@ async fn send_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
 
         // A send may trigger an internal reissue whose change notes are credited
         // by output state machines; wait for them before reading the balance.
-        client.wait_for_all_active_state_machines().await?;
+        client.wait_for_all_active_state_machines().await;
         let after = client.get_balance_for_btc().await?;
 
         // Value conservation: the wallet loses exactly the sent value plus the fee.
@@ -354,7 +378,7 @@ async fn test_client_recovery(
     root_secret: RootSecret,
 ) -> anyhow::Result<()> {
     // Wait for state machines to complete
-    client.wait_for_all_active_state_machines().await?;
+    client.wait_for_all_active_state_machines().await;
 
     let expected_balance = client.get_balance_for_btc().await?;
 
@@ -363,6 +387,17 @@ async fn test_client_recovery(
     let recovering_client = fed
         .recover_client_with_db(MemDatabase::new().into(), root_secret.clone())
         .await;
+
+    // Neither module is held back by the recovery: the dummy module implements
+    // none, and the mint fixed the extent of its own before it was initialized.
+    // So both are usable while the recovery is still running, rather than only
+    // once it has finished and the client has been reopened.
+    ensure!(
+        recovering_client.all_modules_usable(),
+        "A module was held back by the recovery"
+    );
+    recovering_client.get_first_module::<DummyClientModule>()?;
+    recovering_client.get_first_module::<MintClientModule>()?;
 
     recovering_client.wait_for_all_recoveries().await?;
 
@@ -374,21 +409,30 @@ async fn test_client_recovery(
         "recovery-completed event amount mismatch: expected {expected_balance}, got {event_amount:?}"
     );
 
-    // After recovery completes, we need to reopen the client for modules to be
-    // available. This is documented behavior - see gateway's client.rs:94-97
-    let recovered_client = fed
-        .open_client_with_db(recovering_client.db().clone(), root_secret)
-        .await;
+    // The recovered notes are signed and land in the very client that ran the
+    // recovery, without it having to be reopened first.
+    recovering_client.wait_for_all_active_state_machines().await;
 
-    recovered_client
-        .wait_for_all_active_state_machines()
-        .await?;
-
-    let recovered_balance = recovered_client.get_balance_for_btc().await?;
+    let recovered_balance = recovering_client.get_balance_for_btc().await?;
 
     ensure!(
         recovered_balance == expected_balance,
         "Recovery balance mismatch: expected {expected_balance}, got {recovered_balance}"
+    );
+
+    // Reopening must neither restart the recovery nor duplicate what it
+    // recovered.
+    let reopened_client = fed
+        .open_client_with_db(recovering_client.db().clone(), root_secret)
+        .await;
+
+    reopened_client.wait_for_all_active_state_machines().await;
+
+    let reopened_balance = reopened_client.get_balance_for_btc().await?;
+
+    ensure!(
+        reopened_balance == expected_balance,
+        "Balance changed on reopen: expected {expected_balance}, got {reopened_balance}"
     );
 
     Ok(())
@@ -562,12 +606,12 @@ async fn receive_rejects_ecash_from_another_federation() -> anyhow::Result<()> {
     // checks the mint id before submitting anything to consensus.
     let foreign_ecash = ECash::new(FederationId::dummy(), ecash.notes());
 
-    assert_eq!(
+    assert_matches!(
         client
             .get_first_module::<MintClientModule>()?
             .receive(foreign_ecash, Value::Null)
             .await,
-        Err(ReceiveECashError::WrongFederation),
+        Err(ReceiveECashError::WrongFederation)
     );
 
     Ok(())
@@ -602,12 +646,12 @@ async fn receiving_the_same_ecash_twice_is_rejected() -> anyhow::Result<()> {
     // The operation id is derived from the ecash itself, so a second receive of
     // the identical notes finds the existing operation and refuses rather than
     // submitting a duplicate transaction.
-    assert_eq!(
+    assert_matches!(
         client
             .get_first_module::<MintClientModule>()?
             .receive(ecash, Value::Null)
             .await,
-        Err(ReceiveECashError::AlreadyReceived),
+        Err(ReceiveECashError::AlreadyReceived)
     );
 
     Ok(())
@@ -630,12 +674,12 @@ async fn receive_rejects_notes_below_the_base_fee() -> anyhow::Result<()> {
 
     let dust_ecash = ECash::new(client.federation_id(), vec![dust_note]);
 
-    assert_eq!(
+    assert_matches!(
         client
             .get_first_module::<MintClientModule>()?
             .receive(dust_ecash, Value::Null)
             .await,
-        Err(ReceiveECashError::UneconomicalDenomination),
+        Err(ReceiveECashError::UneconomicalDenomination)
     );
 
     Ok(())
@@ -649,13 +693,13 @@ async fn send_without_funds_reports_insufficient_balance() -> anyhow::Result<()>
     // Deliberately no `issue_ecash` call: the wallet is empty.
     let client = fed.new_client().await;
 
-    assert_eq!(
+    assert_matches!(
         client
             .get_first_module::<MintClientModule>()?
             .send(Amount::from_sats(1_000), Value::Null, false)
             .await
             .map(|(_operation_id, ecash)| ecash.amount()),
-        Err(SendECashError::InsufficientBalance),
+        Err(SendECashError::InsufficientBalance)
     );
 
     Ok(())

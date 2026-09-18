@@ -17,14 +17,15 @@ use fedimint_core::db::{
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
 use fedimint_core::envs::is_running_in_test_env;
-use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
-use fedimint_core::net::peers::DynP2PConnections;
+use fedimint_core::net::DynP2PConnections;
 use fedimint_core::runtime::spawn;
 use fedimint_core::secp256k1::schnorr;
-use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
+use fedimint_core::session_outcome::{
+    AcceptedItem, ConsensusItem, SessionOutcome, SignedSessionOutcome,
+};
 use fedimint_core::task::{TaskGroup, TaskHandle, sleep};
 use fedimint_core::timing::TimeReporter;
 use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _};
@@ -1162,7 +1163,7 @@ impl ConsensusEngine {
         let filter_map = move |response: SerdeModuleEncoding<SignedSessionOutcome>| {
             let signed_session_outcome = response
                 .try_into_inner(&decoders)
-                .map_err(|x| ServerError::ResponseDeserialization(x.into()))?;
+                .map_err(|x| ServerError::ResponseDeserialization(Box::new(x)))?;
             let header = signed_session_outcome.session_outcome.header(index);
             if signed_session_outcome.signatures.len() == threshold
                 && signed_session_outcome
@@ -1172,7 +1173,9 @@ impl ConsensusEngine {
             {
                 Ok(signed_session_outcome)
             } else {
-                Err(ServerError::InvalidResponse(anyhow!("Invalid signatures")))
+                Err(ServerError::InvalidResponse(
+                    "Invalid signatures".to_string(),
+                ))
             }
         };
 

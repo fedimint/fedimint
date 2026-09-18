@@ -310,7 +310,7 @@ async fn main() -> anyhow::Result<()> {
             timeout_secs,
             limit_endpoints,
         } => {
-            let connectors = ConnectorRegistry::build_from_client_env()?.bind().await?;
+            let connectors = ConnectorRegistry::build_from_client_env().bind().await;
             let invite_code = InviteCode::from_str(&invite_code).context("invalid invite code")?;
             test_connect_raw_client(
                 &connectors,
@@ -324,7 +324,7 @@ async fn main() -> anyhow::Result<()> {
             .await?
         }
         Command::TestDownload { invite_code } => {
-            let connectors = ConnectorRegistry::build_from_client_env()?.bind().await?;
+            let connectors = ConnectorRegistry::build_from_client_env().bind().await;
             let invite_code = InviteCode::from_str(&invite_code).context("invalid invite code")?;
             test_download_config(&connectors, &invite_code, opts.users, &event_sender.clone())
         }

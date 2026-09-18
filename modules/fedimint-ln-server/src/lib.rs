@@ -1502,6 +1502,12 @@ impl Lightning {
 
         let gateway_id = gateway.info.gateway_id;
 
+        anyhow::ensure!(
+            gateway.info.fees.proportional_millionths <= 1_000_000,
+            "Gateway registration fee of {} proportional millionths exceeds the payment itself",
+            gateway.info.fees.proportional_millionths
+        );
+
         // Reject a forged proof outright rather than silently downgrading it to an
         // unsigned registration, which would hide a misconfigured gateway.
         if let Some(auth) = &gateway.auth {
@@ -3015,6 +3021,36 @@ mod tests {
         );
 
         assert!(server.list_gateways(&mut dbtx.to_ref_nc()).await.is_empty());
+    }
+
+    /// A rate above one million cannot be represented by the deployed `LNv1`
+    /// fee formula, and used to panic clients that priced it. Refuse to
+    /// store one.
+    #[test_log::test(tokio::test)]
+    async fn registration_with_absurd_proportional_fee_is_rejected() {
+        let (server, db, _tg) = build_server();
+        let mut dbtx = db.begin_transaction().await;
+        let mut dbtx = dbtx.to_ref_with_prefix_module_id(42).0;
+
+        let gateway_id = random_pub_key();
+        let mut absurd = announcement(gateway_id, "https://gw.example/v1");
+        absurd.info.fees.proportional_millionths = 1_000_001;
+
+        let err = server
+            .register_gateway(&mut dbtx.to_ref_nc(), absurd)
+            .await
+            .expect_err("a fee larger than the payment must be rejected");
+        assert!(err.to_string().contains("exceeds the payment itself"));
+        assert!(server.list_gateways(&mut dbtx.to_ref_nc()).await.is_empty());
+
+        let mut at_limit = announcement(gateway_id, "https://gw.example/v1");
+        at_limit.info.fees.proportional_millionths = 1_000_000;
+
+        server
+            .register_gateway(&mut dbtx.to_ref_nc(), at_limit)
+            .await
+            .expect("a fee equal to the payment is within the bound");
+        assert_eq!(server.list_gateways(&mut dbtx.to_ref_nc()).await.len(), 1);
     }
 
     /// A captured proof must not be replayable to roll a gateway back to

@@ -20,6 +20,7 @@ use fedimint_core::core::{ModuleInstanceId, OperationId};
 use time::OffsetDateTime;
 
 use crate::Client;
+use crate::error::OperationNotFoundError;
 
 /// Visualization data for a single operation and its state machines.
 pub struct OperationVisData {
@@ -324,13 +325,14 @@ impl Client {
         &self,
         explicit: Option<OperationId>,
         limit: Option<usize>,
-    ) -> anyhow::Result<Vec<(OperationId, Option<SystemTime>, OperationLogEntry)>> {
+    ) -> Result<Vec<(OperationId, Option<SystemTime>, OperationLogEntry)>, OperationNotFoundError>
+    {
         if let Some(id) = explicit {
             let entry = self
                 .operation_log()
                 .get_operation(id)
                 .await
-                .ok_or_else(|| anyhow::anyhow!("Operation not found"))?;
+                .ok_or(OperationNotFoundError { operation_id: id })?;
             return Ok(vec![(id, None, entry)]);
         }
         let ops = self
@@ -348,7 +350,7 @@ impl Client {
         &self,
         operation_id: Option<OperationId>,
         limit: Option<usize>,
-    ) -> anyhow::Result<Vec<OperationVisData>> {
+    ) -> Result<Vec<OperationVisData>, OperationNotFoundError> {
         let ops: Vec<(OperationId, Option<SystemTime>, OperationLogEntry)> =
             self.resolve_operations(operation_id, limit).await?;
         let kinds = self.sm_module_to_string_map().await;
@@ -401,7 +403,7 @@ impl Client {
         &self,
         operation_id: Option<OperationId>,
         limit: Option<usize>,
-    ) -> anyhow::Result<Vec<OperationTransactionsVisData>> {
+    ) -> Result<Vec<OperationTransactionsVisData>, OperationNotFoundError> {
         let ops: Vec<(OperationId, Option<SystemTime>, OperationLogEntry)> =
             self.resolve_operations(operation_id, limit).await?;
         let kinds = self.sm_module_to_string_map().await;

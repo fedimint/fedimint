@@ -5,9 +5,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Context;
 use assert_matches::assert_matches;
 use bitcoin::hashes::{Hash, sha256};
+use fedimint_api_client::api::ServerError;
 use fedimint_client::ClientHandleArc;
+use fedimint_client::error::TransactionSubmitError;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
@@ -18,12 +21,14 @@ use fedimint_core::encoding::Encodable;
 use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::task::{TaskGroup, sleep_in_test, timeout};
 use fedimint_core::time::now;
-use fedimint_core::util::{NextOrPending, backoff_util, retry};
-use fedimint_core::{Amount, OutPoint, TransactionId, msats, sats, secp256k1};
+use fedimint_core::util::{NextOrPending, SafeUrl, backoff_util, retry};
+use fedimint_core::{
+    Amount, OutPoint, TransactionId, apply, async_trait_maybe_send, msats, sats, secp256k1,
+};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::Event;
-use fedimint_gateway_common::{PaymentLogPayload, SetFeesPayload};
+use fedimint_gateway_common::{PaymentLogPayload, SetFeesPayload, SetPaymentPolicyPayload};
 use fedimint_gateway_server::{Gateway, GatewayState};
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_gw_client::pay::{
@@ -41,12 +46,13 @@ use fedimint_gwv2_client::{
     FinalReceiveState, GatewayClientModuleV2, GatewayClientStateMachinesV2, GatewayOperationMetaV2,
     IncomingCircuitKey,
 };
+use fedimint_lightning::InterceptPaymentRequest;
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LightningOperationMeta,
     LightningOperationMetaVariant, LnPayState, LnReceiveState, MockGatewayConnection,
-    OutgoingLightningPayment, PayType,
+    OutgoingLightningPayment, PayBolt11InvoiceError, PayType,
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
@@ -55,15 +61,19 @@ use fedimint_ln_common::contracts::{
 };
 use fedimint_ln_common::{LightningGateway, LightningInput, LightningOutput, PrunedInvoice};
 use fedimint_ln_server::LightningInit;
-use fedimint_lnv2_common::LightningInvoice;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
-use fedimint_lnv2_common::gateway_api::{PaymentFee, SendPaymentPayload};
+use fedimint_lnv2_common::gateway_api::{
+    CreateBolt11InvoicePayload, GatewayConnection, PaymentFee, RoutingInfo, SendPaymentPayload,
+};
+use fedimint_lnv2_common::{
+    Bolt11InvoiceDescription as Bolt11InvoiceDescriptionV2, LightningInvoice,
+};
 use fedimint_logging::LOG_TEST;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::db::BYTE_33;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
-use fedimint_testing::ln::FakeLightningTest;
+use fedimint_testing::ln::{FakeLightningTest, MOCK_INVOICE_PREIMAGE};
 use fedimint_unknown_server::UnknownInit;
 use futures::Future;
 use itertools::Itertools;
@@ -71,6 +81,7 @@ use lightning_invoice::{
     Bolt11Invoice, Bolt11InvoiceDescription, Currency, Description, InvoiceBuilder, PaymentSecret,
     RoutingFees,
 };
+use secp256k1::schnorr::Signature;
 use secp256k1::{Keypair, PublicKey, SecretKey};
 use tpe::G1Affine;
 use tracing::info;
@@ -82,7 +93,7 @@ async fn user_pay_invoice(
 ) -> anyhow::Result<OutgoingLightningPayment> {
     ln_module.update_gateway_cache().await?;
     let gateway = ln_module.select_gateway(gateway_id).await;
-    ln_module.pay_bolt11_invoice(gateway, invoice, ()).await
+    Ok(ln_module.pay_bolt11_invoice(gateway, invoice, ()).await?)
 }
 
 fn fixtures() -> Fixtures {
@@ -419,7 +430,9 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
             let tx = TransactionBuilder::new().with_inputs(
                 ClientInputBundle::new_no_sm(vec![client_input]).into_dyn(gateway_module.id),
             );
-            let operation_meta_gen = |_: OutPointRange| GatewayMeta::Pay {};
+            let operation_meta_gen = |_: OutPointRange| GatewayMeta::Pay {
+                preimage_auth: sha256::Hash::hash(&[]),
+            };
             let operation_id = OperationId(*invoice.payment_hash().as_ref());
             let txid = gateway_client
                 .finalize_and_submit_transaction(
@@ -899,7 +912,15 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
             .await
         {
             Ok(_) => panic!("Expected incoming offer validation to fail due to lack of funds"),
-            Err(e) => assert_eq!(e.to_string(), "Insufficient funds".to_string()),
+            Err(e) => {
+                let TransactionSubmitError::PrimaryModule(cause) = e
+                    .downcast::<TransactionSubmitError>()
+                    .expect("funding the HTLC fails at transaction submission")
+                else {
+                    panic!("Expected the primary module to reject the funding");
+                };
+                assert_eq!(cause.to_string(), "Insufficient funds");
+            }
         }
 
         Ok(())
@@ -1049,13 +1070,160 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
             let error = user_pay_invoice(&lightning_module, invoice.clone(), &gateway_id)
                 .await
                 .expect_err("Payment of expired invoice should fail");
-            assert!(
-                error.to_string().contains("Invoice has expired"),
-                "Expected 'Invoice has expired' error, got: {error}"
+            assert_matches!(
+                error.downcast_ref::<PayBolt11InvoiceError>(),
+                Some(PayBolt11InvoiceError::InvoiceExpired)
             );
 
             // Balance should be unchanged since no contract was created
             assert_eq!(user_client.get_balance_for_btc().await?, sats(2000));
+
+            Ok(())
+        },
+    )
+    .await
+}
+
+/// Funds an outgoing contract for `invoice` through the user client while the
+/// invoice is still valid, returning the `PayInvoicePayload` a test can hand
+/// to `gateway_pay_bolt11_invoice` after letting the invoice expire.
+async fn funded_lnv1_pay_payload(
+    user_client: &ClientHandleArc,
+    invoice: Bolt11Invoice,
+    gateway_id: &PublicKey,
+) -> anyhow::Result<PayInvoicePayload> {
+    let user_lightning_module = user_client.get_first_module::<LightningClientModule>()?;
+    let lightning_gateway = user_lightning_module.select_gateway(gateway_id).await;
+
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id,
+        fee: _,
+    } = user_pay_invoice(&user_lightning_module, invoice.clone(), gateway_id).await?;
+    let PayType::Lightning(pay_op) = payment_type else {
+        panic!("Expected Lightning payment!");
+    };
+    let mut pay_sub = user_lightning_module
+        .subscribe_ln_pay(pay_op)
+        .await?
+        .into_stream();
+    assert_eq!(pay_sub.ok().await?, LnPayState::Created);
+    assert_matches!(pay_sub.ok().await?, LnPayState::Funded { .. });
+
+    Ok(PayInvoicePayload {
+        federation_id: user_client.federation_id(),
+        contract_id,
+        payment_data: get_payment_data(lightning_gateway, invoice),
+        preimage_auth: Hash::hash(&[0; 32]),
+    })
+}
+
+/// The restart-forfeiture scenario on LNv1's Lightning rail: the gateway
+/// dispatches the payment, restarts, and its `PayInvoice` state machine
+/// re-runs validation only after the invoice has expired. The node still
+/// knows the payment, so the recorded expiry refusal must step aside and the
+/// state machine must resume to the preimage and claim the contract --
+/// cancelling instead would refund the user while the dispatched payment
+/// settles, leaving the gateway out of pocket.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv1_pay_resumes_expired_invoice_already_dispatched() -> anyhow::Result<()> {
+    single_federation_test(
+        |gateway, other_lightning_client, fed, user_client, _| async move {
+            let gateway_id = gateway.http_gateway_id().await;
+            let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+            user_client
+                .get_first_module::<DummyClientModule>()?
+                .mock_receive(sats(1000), AmountUnit::BITCOIN)
+                .await?;
+
+            let invoice = other_lightning_client.invoice(sats(250), Some(5))?;
+            let payload =
+                funded_lnv1_pay_payload(&user_client, invoice.clone(), &gateway_id).await?;
+
+            // The pre-restart dispatch: the gateway's own node pays the
+            // invoice, so its outbound store knows the payment hash the way
+            // a real node would after a crash mid-payment.
+            gateway
+                .get_lightning_context()
+                .await?
+                .lnrpc
+                .pay(invoice.clone(), 0, Amount::ZERO)
+                .await?;
+
+            sleep_in_test(
+                "waiting for the dispatched invoice to expire",
+                Duration::from_secs(6),
+            )
+            .await;
+            // Guards against the invoice fixture outliving the wait, which
+            // would make this test pass without exercising the gate at all.
+            assert!(invoice.is_expired());
+
+            let gw_pay_op = gateway_client
+                .get_first_module::<GatewayClientModule>()?
+                .gateway_pay_bolt11_invoice(payload)
+                .await?;
+            let mut gw_pay_sub = gateway_client
+                .get_first_module::<GatewayClientModule>()?
+                .gateway_subscribe_ln_pay(gw_pay_op)
+                .await?
+                .into_stream();
+            assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
+            assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Preimage { .. });
+            assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Success { .. });
+
+            Ok(())
+        },
+    )
+    .await
+}
+
+/// The other side of LNv1's expiry gate: an expired invoice whose payment was
+/// never dispatched anywhere must still cancel the outgoing contract with
+/// `InvoiceExpired`, so the user's escrow is returned.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv1_pay_cancels_expired_invoice_never_dispatched() -> anyhow::Result<()> {
+    single_federation_test(
+        |gateway, other_lightning_client, fed, user_client, _| async move {
+            let gateway_id = gateway.http_gateway_id().await;
+            let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+            user_client
+                .get_first_module::<DummyClientModule>()?
+                .mock_receive(sats(1000), AmountUnit::BITCOIN)
+                .await?;
+
+            let invoice = other_lightning_client.invoice(sats(250), Some(5))?;
+            let payload =
+                funded_lnv1_pay_payload(&user_client, invoice.clone(), &gateway_id).await?;
+
+            sleep_in_test(
+                "waiting for the undispatched invoice to expire",
+                Duration::from_secs(6),
+            )
+            .await;
+            assert!(invoice.is_expired());
+
+            let gw_pay_op = gateway_client
+                .get_first_module::<GatewayClientModule>()?
+                .gateway_pay_bolt11_invoice(payload)
+                .await?;
+            let mut gw_pay_sub = gateway_client
+                .get_first_module::<GatewayClientModule>()?
+                .gateway_subscribe_ln_pay(gw_pay_op)
+                .await?
+                .into_stream();
+            assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
+            assert_matches!(
+                gw_pay_sub.ok().await?,
+                GatewayExtPayStates::Canceled {
+                    error: OutgoingPaymentError {
+                        error_type: OutgoingPaymentErrorType::InvalidOutgoingContract {
+                            error: OutgoingContractError::InvoiceExpired(_)
+                        },
+                        ..
+                    }
+                }
+            );
 
             Ok(())
         },
@@ -1226,6 +1394,325 @@ async fn test_gateway_enforces_fee_limits_without_lnv2() -> anyhow::Result<()> {
     );
 
     Ok(())
+}
+
+/// Asks the gateway for an LNv2 invoice paying an incoming contract keyed to
+/// its module key, the way an LNv2 client does.
+async fn create_lnv2_invoice(
+    gateway: &Gateway,
+    federation_id: FederationId,
+    preimage: [u8; 32],
+) -> anyhow::Result<Bolt11Invoice> {
+    let client = gateway.select_client(federation_id).await?.into_value();
+    let module = client.get_first_module::<GatewayClientModuleV2>()?;
+    let routing_info = gateway
+        .routing_info_v2(&federation_id)
+        .await?
+        .expect("Gateway is connected to the federation");
+    let amount = Amount::from_sats(1000);
+    let contract = IncomingContract::new(
+        module.cfg.tpe_agg_pk,
+        [42; 32],
+        preimage,
+        PaymentImage::Hash(preimage.consensus_hash()),
+        routing_info.receive_fee.subtract_from(amount.msats),
+        u64::MAX,
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        module.keypair.public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+    );
+
+    Ok(gateway
+        .create_bolt11_invoice_v2(CreateBolt11InvoicePayload {
+            federation_id,
+            contract,
+            amount,
+            description: Bolt11InvoiceDescriptionV2::Direct(String::new()),
+            expiry_secs: 3600,
+        })
+        .await?)
+}
+
+/// `set_payment_policy` turns receives off for one federation. The LNv2
+/// routing info advertises it, requests for new invoices are refused, and the
+/// payment of an invoice issued before the switch was flipped is refused as
+/// well, so no funds enter the federation through the gateway.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_payment_policy_disables_lnv2_receives() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, _, _| async move {
+        let federation_id = fed.id();
+
+        assert!(
+            gateway
+                .routing_info_v2(&federation_id)
+                .await?
+                .expect("Gateway is connected to the federation")
+                .receive_enabled
+        );
+
+        // An invoice issued while receives were still on.
+        let earlier_invoice = create_lnv2_invoice(&gateway, federation_id, [1; 32]).await?;
+        let earlier_amount_msats = earlier_invoice
+            .amount_milli_satoshis()
+            .expect("The invoice has an amount");
+
+        gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: Some(federation_id),
+                receive_enabled: Some(false),
+            })
+            .await?;
+
+        assert!(
+            !gateway
+                .routing_info_v2(&federation_id)
+                .await?
+                .expect("Gateway is connected to the federation")
+                .receive_enabled
+        );
+
+        let error = create_lnv2_invoice(&gateway, federation_id, [2; 32])
+            .await
+            .expect_err("An invoice was created while receives are off");
+        assert!(
+            error.to_string().contains("Receiving payments is disabled"),
+            "Expected the invoice to be refused because receives are off, got: {error}"
+        );
+
+        let error = gateway
+            .get_registered_incoming_contract_and_client_v2(
+                PaymentImage::Hash(*earlier_invoice.payment_hash()),
+                earlier_amount_msats,
+            )
+            .await
+            .expect_err("The payment of an earlier invoice was accepted while receives are off");
+        assert!(
+            error.to_string().contains("Receiving payments is disabled"),
+            "Expected the payment to be refused because receives are off, got: {error}"
+        );
+
+        // Turning receives back on restores both.
+        gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: Some(federation_id),
+                receive_enabled: Some(true),
+            })
+            .await?;
+
+        assert!(
+            gateway
+                .routing_info_v2(&federation_id)
+                .await?
+                .expect("Gateway is connected to the federation")
+                .receive_enabled
+        );
+        gateway
+            .get_registered_incoming_contract_and_client_v2(
+                PaymentImage::Hash(*earlier_invoice.payment_hash()),
+                earlier_amount_msats,
+            )
+            .await?;
+        create_lnv2_invoice(&gateway, federation_id, [3; 32]).await?;
+
+        Ok(())
+    })
+    .await
+}
+
+/// An LNv2 invoice issued while receives were on is not settled once they are
+/// off: the payment that arrives for it is failed back and the gateway funds
+/// nothing. The same payment goes through once receives are turned back on.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_payment_policy_fails_lnv2_payment_of_earlier_invoice() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, _, _| async move {
+        let federation_id = fed.id();
+        let initial_gateway_balance = Amount::from_msats(1_000_000_000);
+        send_msats_to_gateway(&gateway, federation_id, initial_gateway_balance.msats).await;
+        let gateway_client = gateway.select_client(federation_id).await?.into_value();
+
+        let invoice = create_lnv2_invoice(&gateway, federation_id, [4; 32]).await?;
+        let invoice_amount_msats = invoice
+            .amount_milli_satoshis()
+            .expect("The invoice has an amount");
+
+        // The payment of one of the gateway's own HOLD invoices arrives without
+        // a federation scid or an incoming circuit.
+        let payment_request = InterceptPaymentRequest {
+            payment_hash: *invoice.payment_hash(),
+            amount_msat: invoice_amount_msats,
+            incoming_amount_msat: invoice_amount_msats,
+            expiry: u32::MAX,
+            incoming_chan_id: 0,
+            short_channel_id: None,
+            htlc_id: 0,
+        };
+        let lightning_context = gateway.get_lightning_context().await?;
+
+        gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: Some(federation_id),
+                receive_enabled: Some(false),
+            })
+            .await?;
+
+        assert_eq!(
+            gateway
+                .handle_lightning_payment(payment_request.clone(), &lightning_context)
+                .await,
+            "cancel"
+        );
+        assert_eq!(
+            gateway_client.get_balance_for_btc().await?,
+            initial_gateway_balance
+        );
+
+        gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: Some(federation_id),
+                receive_enabled: Some(true),
+            })
+            .await?;
+
+        assert_eq!(
+            gateway
+                .handle_lightning_payment(payment_request, &lightning_context)
+                .await,
+            "lnv2"
+        );
+
+        // Accepting the payment funds the incoming contract with the gateway's
+        // ecash.
+        retry(
+            "waiting for the gateway to fund the incoming contract",
+            backoff_util::aggressive_backoff(),
+            || async {
+                let balance = gateway_client.get_balance_for_btc().await?;
+                anyhow::ensure!(
+                    balance < initial_gateway_balance,
+                    "The gateway has not funded the incoming contract yet"
+                );
+                Ok(())
+            },
+        )
+        .await?;
+
+        Ok(())
+    })
+    .await
+}
+
+/// LNv1 clients cannot learn that receives are off, so their invoices still
+/// route to the gateway. The gateway refuses the intercepted HTLC before
+/// touching the federation and fails it back, spending nothing.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_payment_policy_disables_lnv1_receives() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, user_client, _| async move {
+        let gateway_id = gateway.http_gateway_id().await;
+        let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+        let initial_gateway_balance = sats(1000);
+        gateway_client
+            .get_first_module::<DummyClientModule>()?
+            .mock_receive(initial_gateway_balance, AmountUnit::BITCOIN)
+            .await?;
+
+        let invoice_amount = sats(100);
+        let ln_module = user_client.get_first_module::<LightningClientModule>()?;
+        let lightning_gateway = ln_module.select_gateway(&gateway_id).await;
+        let (_invoice_op, invoice, _) = ln_module
+            .create_bolt11_invoice(
+                invoice_amount,
+                Bolt11InvoiceDescription::Direct(Description::new("description".to_string())?),
+                None,
+                "test receives turned off",
+                lightning_gateway,
+            )
+            .await?;
+
+        let payment_request = InterceptPaymentRequest {
+            payment_hash: *invoice.payment_hash(),
+            amount_msat: invoice_amount.msats,
+            incoming_amount_msat: invoice_amount.msats,
+            expiry: u32::MAX,
+            incoming_chan_id: 2,
+            short_channel_id: Some(1),
+            htlc_id: 1,
+        };
+        let lightning_context = gateway.get_lightning_context().await?;
+
+        gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: Some(fed.id()),
+                receive_enabled: Some(false),
+            })
+            .await?;
+
+        assert_eq!(
+            gateway
+                .handle_lightning_payment(payment_request.clone(), &lightning_context)
+                .await,
+            "cancel"
+        );
+        assert_eq!(
+            gateway_client.get_balance_for_btc().await?,
+            initial_gateway_balance
+        );
+
+        // Once receives are back on, the same HTLC is claimed over LNv1.
+        gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: Some(fed.id()),
+                receive_enabled: Some(true),
+            })
+            .await?;
+
+        assert_eq!(
+            gateway
+                .handle_lightning_payment(payment_request, &lightning_context)
+                .await,
+            "lnv1"
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+/// A mistyped federation id must not pass for a switch that was flipped, and
+/// no federation id at all applies the policy to every connected federation.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_payment_policy_requires_a_connected_federation() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, _, _| async move {
+        let error = gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: Some(FederationId::dummy()),
+                receive_enabled: Some(false),
+            })
+            .await
+            .expect_err("The payment policy of an unknown federation was changed");
+        assert!(
+            error
+                .to_string()
+                .contains("No federation available for prefix"),
+            "Expected the unknown federation to be rejected, got: {error}"
+        );
+
+        gateway
+            .handle_set_payment_policy_msg(SetPaymentPolicyPayload {
+                federation_id: None,
+                receive_enabled: Some(false),
+            })
+            .await?;
+        assert!(
+            !gateway
+                .routing_info_v2(&fed.id())
+                .await?
+                .expect("Gateway is connected to the federation")
+                .receive_enabled
+        );
+
+        Ok(())
+    })
+    .await
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -1429,9 +1916,9 @@ async fn lnv2_incoming_contract_with_invalid_preimage_is_refunded() -> anyhow::R
     assert_eq!(
         client
             .get_first_module::<GatewayClientModuleV2>()?
-            .relay_direct_swap(contract, 900)
+            .relay_direct_swap(contract, 900, true)
             .await?,
-        FinalReceiveState::Refunded
+        Some(FinalReceiveState::Refunded)
     );
 
     Ok(())
@@ -1588,9 +2075,9 @@ async fn lnv2_expired_incoming_contract_is_rejected() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<GatewayClientModuleV2>()?
-            .relay_direct_swap(contract, 900)
+            .relay_direct_swap(contract, 900, true)
             .await?,
-        FinalReceiveState::Rejected
+        Some(FinalReceiveState::Rejected)
     );
 
     Ok(())
@@ -1632,9 +2119,9 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<GatewayClientModuleV2>()?
-            .relay_direct_swap(contract.clone(), 900)
+            .relay_direct_swap(contract.clone(), 900, true)
             .await?,
-        FinalReceiveState::Success([0; 32])
+        Some(FinalReceiveState::Success([0; 32]))
     );
 
     contract.commitment.amount = Amount::from_sats(100);
@@ -1644,9 +2131,118 @@ async fn lnv2_malleated_incoming_contract_is_rejected() -> anyhow::Result<()> {
     assert_eq!(
         client
             .get_first_module::<GatewayClientModuleV2>()?
-            .relay_direct_swap(contract, 900)
+            .relay_direct_swap(contract, 900, true)
             .await?,
-        FinalReceiveState::Rejected
+        Some(FinalReceiveState::Rejected)
+    );
+
+    Ok(())
+}
+
+/// Builds an incoming contract the gateway can fund and decrypt to the
+/// preimage `[0; 32]`, for tests driving `relay_direct_swap` directly.
+fn decryptable_incoming_contract(client: &ClientHandleArc) -> anyhow::Result<IncomingContract> {
+    let module = client.get_first_module::<GatewayClientModuleV2>()?;
+    let contract = IncomingContract::new(
+        module.cfg.tpe_agg_pk,
+        [42; 32],
+        [0; 32],
+        PaymentImage::Hash([0_u8; 32].consensus_hash()),
+        Amount::from_sats(1000),
+        u64::MAX,
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        module.keypair.public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+    );
+    assert!(contract.verify());
+    Ok(contract)
+}
+
+/// When a wall-clock gate forbids a fresh dispatch and no swap operation
+/// exists, the relay must start nothing and say so -- and the refusal must
+/// leave no state behind, so the same swap can still be dispatched once the
+/// caller allows it.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv2_relay_forbidden_fresh_swap_starts_nothing() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+    send_msats_to_gateway(&gateway, fed.id(), 1_000_000_000).await;
+
+    let client = gateway.select_client(fed.id()).await?.into_value();
+    let contract = decryptable_incoming_contract(&client)?;
+    let balance_before = client.get_balance_for_btc().await?;
+
+    assert_eq!(
+        client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .relay_direct_swap(contract.clone(), 900, false)
+            .await?,
+        None,
+        "no operation exists and fresh dispatch is forbidden, so nothing may start"
+    );
+    assert_eq!(
+        client.get_balance_for_btc().await?,
+        balance_before,
+        "a refused swap must not fund anything"
+    );
+
+    assert_eq!(
+        client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .relay_direct_swap(contract, 900, true)
+            .await?,
+        Some(FinalReceiveState::Success([0; 32])),
+        "the refusal must not have consumed or poisoned the swap"
+    );
+
+    Ok(())
+}
+
+/// The restart-forfeiture scenario on the LNv2 swap rail: the swap was
+/// dispatched, the gateway restarted, and by the time the send state machine
+/// re-enters, its wall-clock gate forbids fresh dispatches. The relay must
+/// join the operation already in flight and hand back its outcome -- without
+/// funding a second time.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv2_relay_resumes_swap_when_fresh_is_forbidden() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+    send_msats_to_gateway(&gateway, fed.id(), 1_000_000_000).await;
+
+    let client = gateway.select_client(fed.id()).await?.into_value();
+    let contract = decryptable_incoming_contract(&client)?;
+    let balance_before = client.get_balance_for_btc().await?;
+
+    assert_eq!(
+        client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .relay_direct_swap(contract.clone(), 900, true)
+            .await?,
+        Some(FinalReceiveState::Success([0; 32]))
+    );
+    let balance_after_first = client.get_balance_for_btc().await?;
+    assert!(
+        balance_after_first < balance_before,
+        "the first relay funds the incoming contract"
+    );
+
+    assert_eq!(
+        client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .relay_direct_swap(contract, 900, false)
+            .await?,
+        Some(FinalReceiveState::Success([0; 32])),
+        "the re-entrant relay joins the dispatched swap even though fresh dispatch is forbidden"
+    );
+
+    assert_eq!(
+        client.get_balance_for_btc().await?,
+        balance_after_first,
+        "the incoming contract must only be funded once"
     );
 
     Ok(())
@@ -1913,6 +2509,317 @@ async fn lnv2_routes_reject_a_federation_without_an_lnv2_module() -> anyhow::Res
     Ok(())
 }
 
+/// Captures the `SendPaymentPayload` its client built and then parks, leaving
+/// the outgoing contract funded so a test can drive the gateway side itself.
+#[derive(Debug, Default)]
+struct CapturingGatewayConnection {
+    routing_info: std::sync::Mutex<Option<RoutingInfo>>,
+    captured: std::sync::Mutex<Option<SendPaymentPayload>>,
+}
+
+impl CapturingGatewayConnection {
+    /// The client keys its contract to the gateway's `module_public_key`, which
+    /// does not exist until after the fixtures this connection is built into.
+    fn publish(&self, module_public_key: PublicKey) {
+        *self.routing_info.lock().expect("Not poisoned") = Some(RoutingInfo {
+            lightning_public_key: module_public_key,
+            lightning_alias: Some("capturing-gateway".to_string()),
+            module_public_key,
+            send_fee_default: PaymentFee::TRANSACTION_FEE_DEFAULT,
+            send_fee_minimum: PaymentFee::TRANSACTION_FEE_DEFAULT,
+            expiration_delta_default: 500,
+            expiration_delta_minimum: 144,
+            receive_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+            receive_enabled: true,
+        });
+    }
+
+    async fn captured(&self) -> SendPaymentPayload {
+        retry(
+            "waiting for the client to send its payment to the gateway",
+            backoff_util::aggressive_backoff(),
+            || async {
+                self.captured
+                    .lock()
+                    .expect("Not poisoned")
+                    .clone()
+                    .context("The client has not sent its payment yet")
+            },
+        )
+        .await
+        .expect("The client sends its payment once the contract is accepted")
+    }
+}
+
+#[apply(async_trait_maybe_send!)]
+impl GatewayConnection for CapturingGatewayConnection {
+    async fn routing_info(
+        &self,
+        _gateway_api: SafeUrl,
+        _federation_id: &FederationId,
+    ) -> Result<Option<RoutingInfo>, ServerError> {
+        Ok(self.routing_info.lock().expect("Not poisoned").clone())
+    }
+
+    async fn bolt11_invoice(
+        &self,
+        _gateway_api: SafeUrl,
+        _federation_id: FederationId,
+        _contract: IncomingContract,
+        _amount: Amount,
+        _description: fedimint_lnv2_common::Bolt11InvoiceDescription,
+        _expiry_secs: u32,
+    ) -> Result<Bolt11Invoice, ServerError> {
+        unimplemented!("This connection only sends")
+    }
+
+    async fn send_payment(
+        &self,
+        _gateway_api: SafeUrl,
+        federation_id: FederationId,
+        outpoint: OutPoint,
+        contract: OutgoingContract,
+        invoice: LightningInvoice,
+        auth: Signature,
+    ) -> Result<Result<[u8; 32], Signature>, ServerError> {
+        *self.captured.lock().expect("Not poisoned") = Some(SendPaymentPayload {
+            federation_id,
+            outpoint,
+            contract,
+            invoice,
+            auth,
+        });
+
+        // Never answer, so the client's state machine stays parked and does not
+        // refund the contract out from under the test.
+        std::future::pending().await
+    }
+}
+
+fn capturing_lnv2_fixtures(gateway_conn: Arc<CapturingGatewayConnection>) -> Fixtures {
+    Fixtures::new_primary(DummyClientInit, DummyInit)
+        .with_server_only_module(UnknownInit)
+        .with_module(
+            LightningClientInit {
+                gateway_conn: Some(Arc::new(MockGatewayConnection)),
+            },
+            LightningInit,
+        )
+        .with_module(
+            fedimint_lnv2_client::LightningClientInit {
+                gateway_conn: Some(gateway_conn),
+                ..Default::default()
+            },
+            fedimint_lnv2_server::LightningInit,
+        )
+}
+
+/// `/send_payment` is unauthenticated and its operation id is derived from the
+/// outgoing contract, which is public in the funding transaction. Joining that
+/// operation yields the preimage, so the join has to stay behind the contract's
+/// auth signature. It used to run first.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv2_send_payment_join_requires_the_contract_auth() -> anyhow::Result<()> {
+    let gateway_conn = Arc::new(CapturingGatewayConnection::default());
+    let fixtures = capturing_lnv2_fixtures(gateway_conn.clone());
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+
+    let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+    gateway_conn.publish(
+        gateway_client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .keypair
+            .public_key(),
+    );
+
+    let user_client = fed.new_client().await;
+    user_client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    // Funds the outgoing contract and hands us the payload it would have posted.
+    let sender = user_client.clone();
+    let invoice = FakeLightningTest::new().invoice(sats(1000), None)?;
+    fedimint_core::runtime::spawn("lnv2-user-send", async move {
+        sender
+            .get_first_module::<fedimint_lnv2_client::LightningClientModule>()
+            .expect("The federation has an LNv2 module")
+            .send(
+                invoice,
+                Some(SafeUrl::parse("http://capturing-gateway.test").expect("Valid url")),
+                serde_json::Value::Null,
+            )
+            .await
+    });
+
+    let payload = gateway_conn.captured().await;
+
+    // The genuine request. This puts the operation on record, and its preimage
+    // is what the forged request below must not reach.
+    gateway
+        .send_payment_v2(payload.clone())
+        .await?
+        .expect("The gateway pays the invoice and answers with its preimage");
+
+    assert!(
+        gateway_client
+            .operation_exists(OperationId::from_encodable(&payload.contract))
+            .await,
+        "the payment has to be on record for the join to be what is under test"
+    );
+
+    // Anyone can rebuild this payload from the funding transaction. What they
+    // cannot do is sign for the contract's refund key.
+    let attacker = Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
+    let forged = SendPaymentPayload {
+        auth: secp256k1::SECP256K1.sign_schnorr(
+            &secp256k1::Message::from_digest(
+                *payload.invoice.consensus_hash::<sha256::Hash>().as_ref(),
+            ),
+            &attacker,
+        ),
+        ..payload
+    };
+
+    let error = gateway
+        .send_payment_v2(forged)
+        .await
+        .expect_err("a forged auth signature must not be answered with the payment in flight")
+        .to_string();
+
+    // Naming the check keeps this from passing for an unrelated reason.
+    assert!(
+        error.contains("Invalid auth signature for the invoice data"),
+        "the request must be refused by the auth check, got: {error}"
+    );
+
+    Ok(())
+}
+
+/// Funds an outgoing contract for `invoice` through a real client send and
+/// returns the `SendPaymentPayload` the client would have posted to the
+/// gateway, so a test can drive `send_payment_v2` itself.
+async fn captured_lnv2_send_payload(
+    gateway: &Gateway,
+    gateway_conn: &CapturingGatewayConnection,
+    fed: &FederationTest,
+    invoice: Bolt11Invoice,
+) -> anyhow::Result<SendPaymentPayload> {
+    let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+    gateway_conn.publish(
+        gateway_client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .keypair
+            .public_key(),
+    );
+
+    let user_client = fed.new_client().await;
+    user_client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    let sender = user_client.clone();
+    fedimint_core::runtime::spawn("lnv2-user-send", async move {
+        sender
+            .get_first_module::<fedimint_lnv2_client::LightningClientModule>()
+            .expect("The federation has an LNv2 module")
+            .send(
+                invoice,
+                Some(SafeUrl::parse("http://capturing-gateway.test").expect("Valid url")),
+                serde_json::Value::Null,
+            )
+            .await
+    });
+
+    Ok(gateway_conn.captured().await)
+}
+
+/// The scenario behind the restart-forfeiture fix, on the Lightning rail: the
+/// gateway dispatches a payment, restarts, and re-enters its send state
+/// machine only after the invoice has expired. The node still knows the
+/// payment, so the expiry gate must step aside and the state machine must
+/// resume to the preimage and claim the contract -- cancelling instead would
+/// refund the sender while the dispatched payment settles, leaving the
+/// gateway out of pocket.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv2_send_resumes_expired_invoice_already_dispatched() -> anyhow::Result<()> {
+    let gateway_conn = Arc::new(CapturingGatewayConnection::default());
+    let fixtures = capturing_lnv2_fixtures(gateway_conn.clone());
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+
+    let invoice = FakeLightningTest::new().invoice(sats(1000), Some(5))?;
+    let payload =
+        captured_lnv2_send_payload(&gateway, &gateway_conn, &fed, invoice.clone()).await?;
+
+    // The pre-restart dispatch: the gateway's own node pays the invoice, so
+    // its outbound store knows the payment hash the way a real node would
+    // after a crash mid-payment.
+    gateway
+        .get_lightning_context()
+        .await?
+        .lnrpc
+        .pay(invoice.clone(), 0, Amount::ZERO)
+        .await?;
+
+    sleep_in_test(
+        "waiting for the dispatched invoice to expire",
+        Duration::from_secs(6),
+    )
+    .await;
+    // Guards against the invoice fixture outliving the wait, which would
+    // make this test pass without exercising the expiry gate at all.
+    assert!(invoice.is_expired());
+
+    let preimage = gateway
+        .send_payment_v2(payload)
+        .await?
+        .expect("the send resumes the dispatched payment instead of forfeiting the contract");
+    assert_eq!(preimage, MOCK_INVOICE_PREIMAGE);
+
+    Ok(())
+}
+
+/// The other side of the expiry gate: an expired invoice whose payment was
+/// never dispatched anywhere must still cancel, handing the sender a forfeit
+/// signature that verifies against the contract so they can reclaim their
+/// escrow.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv2_send_cancels_expired_invoice_never_dispatched() -> anyhow::Result<()> {
+    let gateway_conn = Arc::new(CapturingGatewayConnection::default());
+    let fixtures = capturing_lnv2_fixtures(gateway_conn.clone());
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+
+    let invoice = FakeLightningTest::new().invoice(sats(1000), Some(5))?;
+    let payload =
+        captured_lnv2_send_payload(&gateway, &gateway_conn, &fed, invoice.clone()).await?;
+
+    sleep_in_test(
+        "waiting for the undispatched invoice to expire",
+        Duration::from_secs(6),
+    )
+    .await;
+    assert!(invoice.is_expired());
+
+    let signature = gateway
+        .send_payment_v2(payload.clone())
+        .await?
+        .expect_err("an expired invoice that was never dispatched is refused");
+    assert!(
+        payload.contract.verify_forfeit_signature(&signature),
+        "the sender must receive a forfeit signature that reclaims the escrow"
+    );
+
+    Ok(())
+}
+
 /// An amountless BOLT11 invoice is rejected by `validate_outgoing_account`, but
 /// the operation log entry written when the payment starts needs the amount
 /// before the state machine ever gets that far, and used to `expect` it.
@@ -1962,6 +2869,11 @@ async fn test_gateway_client_rejects_amountless_invoice() -> anyhow::Result<()> 
 /// single payment attempt, so the duplicate has to be recognised as one and
 /// answered with the operation already in flight rather than buying the
 /// preimage a second time out of the gateway's own funds.
+///
+/// Recognising it is only correct for the caller the payment belongs to, since
+/// the returned operation yields the preimage and contract ids are visible to
+/// every member of the federation. The operation records the `preimage_auth`
+/// that started it, and only a request carrying that same one may join it.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_pay_invoice_is_idempotent_per_contract() -> anyhow::Result<()> {
     single_federation_test(
@@ -2000,20 +2912,51 @@ async fn test_gateway_client_pay_invoice_is_idempotent_per_contract() -> anyhow:
                 preimage_auth,
             };
 
+            let ours = Hash::hash(&[0; 32]);
+            let theirs = Hash::hash(&[1; 32]);
+
             let gateway_module = gateway_client.get_first_module::<GatewayClientModule>()?;
             let first = gateway_module
-                .gateway_pay_bolt11_invoice(payload(Hash::hash(&[0; 32])))
+                .gateway_pay_bolt11_invoice(payload(ours))
                 .await?;
             // Same contract, different `preimage_auth`: a distinct state machine
             // state, so the executor's dedupe does not catch this one.
-            let second = gateway_module
-                .gateway_pay_bolt11_invoice(payload(Hash::hash(&[1; 32])))
-                .await?;
-
-            assert_eq!(
-                first, second,
-                "the duplicate request joins the payment already in flight"
+            assert!(
+                gateway_module
+                    .gateway_pay_bolt11_invoice(payload(theirs))
+                    .await
+                    .is_err(),
+                "a duplicate request must not be answered with someone else's operation"
             );
+
+            // The join is keyed on the authentication the operation recorded,
+            // not on the `payment_data` the caller hands us alongside a
+            // `contract_id`. Those two are independent fields of the payload, so
+            // an authentication the caller holds for some other invoice must not
+            // buy them a join here.
+            let theirs_invoice = other_lightning_client.invoice(sats(250), None)?;
+            assert!(
+                gateway_module
+                    .gateway_pay_bolt11_invoice(PayInvoicePayload {
+                        payment_data: get_payment_data(selected_gateway.clone(), theirs_invoice),
+                        ..payload(theirs)
+                    })
+                    .await
+                    .is_err(),
+                "an authentication for a different invoice must not join this contract"
+            );
+
+            // The authentication is recorded when the operation is created, so
+            // our own retry joins right away instead of having to wait for the
+            // payment to get far enough along to establish one.
+            assert_eq!(
+                gateway_module
+                    .gateway_pay_bolt11_invoice(payload(ours))
+                    .await?,
+                first,
+                "our own retry joins the payment already in flight"
+            );
+
             assert_eq!(
                 gateway_client
                     .operation_log()
@@ -2031,6 +2974,23 @@ async fn test_gateway_client_pay_invoice_is_idempotent_per_contract() -> anyhow:
             assert_eq!(gw_pay_sub.ok().await?, GatewayExtPayStates::Created);
             assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Preimage { .. });
             assert_matches!(gw_pay_sub.ok().await?, GatewayExtPayStates::Success { .. });
+
+            // Still gated once the payment has completed and the operation has
+            // the preimage sitting on it for the taking.
+            assert!(
+                gateway_module
+                    .gateway_pay_bolt11_invoice(payload(theirs))
+                    .await
+                    .is_err(),
+                "a mismatched `preimage_auth` must not reach the preimage"
+            );
+            assert_eq!(
+                gateway_module
+                    .gateway_pay_bolt11_invoice(payload(ours))
+                    .await?,
+                first,
+                "our own retry still joins the completed payment"
+            );
 
             // One purchase of the preimage, so exactly one claim of the contract.
             let outgoing_fee = gateway
@@ -2189,8 +3149,9 @@ async fn test_gateway_client_direct_swap_reentry_joins_the_funded_swap() -> anyh
         };
         let gateway_module = gateway_client.get_first_module::<GatewayClientModule>()?;
         let first = gateway_module
-            .gateway_handle_direct_swap(swap_params.clone())
-            .await?;
+            .gateway_handle_direct_swap(swap_params.clone(), true)
+            .await?
+            .expect("a permitted fresh dispatch starts the swap");
         let mut receive_sub = gateway_module
             .gateway_subscribe_ln_receive(first)
             .await?
@@ -2203,15 +3164,19 @@ async fn test_gateway_client_direct_swap_reentry_joins_the_funded_swap() -> anyh
 
         // The restart: the same swap is asked for again, with the offer that
         // funded it already consumed.
+        // A re-entrant call resumes even when a fresh dispatch is forbidden:
+        // this is the restart-after-invoice-expiry case, which must join the
+        // swap already in flight rather than cancel it.
         let second = fedimint_core::task::timeout(
             Duration::from_secs(30),
-            gateway_module.gateway_handle_direct_swap(swap_params),
+            gateway_module.gateway_handle_direct_swap(swap_params, false),
         )
         .await
         .expect("a re-entrant direct swap must not wait on the offer it already consumed")?;
 
         assert_eq!(
-            first, second,
+            Some(first),
+            second,
             "the re-entrant swap joins the operation already holding the preimage"
         );
         assert_eq!(
@@ -2236,8 +3201,8 @@ async fn test_gateway_client_direct_swap_reentry_joins_the_funded_swap() -> anyh
             amount_msat: invoice_amount,
         };
         let (left, right) = tokio::join!(
-            gateway_module.gateway_handle_direct_swap(concurrent_swap_params.clone()),
-            gateway_module.gateway_handle_direct_swap(concurrent_swap_params),
+            gateway_module.gateway_handle_direct_swap(concurrent_swap_params.clone(), true),
+            gateway_module.gateway_handle_direct_swap(concurrent_swap_params, true),
         );
         assert_eq!(
             left?, right?,
@@ -2247,6 +3212,42 @@ async fn test_gateway_client_direct_swap_reentry_joins_the_funded_swap() -> anyh
             gateway_client.get_balance_for_btc().await?,
             initial_gateway_balance.saturating_sub(invoice_amount + invoice_amount),
             "the second swap's incoming contract must also only be funded once"
+        );
+
+        // A swap that was never started must not start when fresh dispatch is
+        // forbidden -- this is the expired-invoice cancel path -- and the
+        // refusal must leave the offer intact for a later permitted dispatch.
+        let (_invoice_op, refused_invoice, _) = ln_module
+            .create_bolt11_invoice(
+                invoice_amount,
+                Bolt11InvoiceDescription::Direct(Description::new("refused".to_string())?),
+                None,
+                "test forbidden fresh direct swap",
+                ln_module.select_gateway(&gateway_id).await,
+            )
+            .await?;
+        let refused_swap_params = SwapParameters {
+            payment_hash: *refused_invoice.payment_hash(),
+            amount_msat: invoice_amount,
+        };
+        assert_eq!(
+            gateway_module
+                .gateway_handle_direct_swap(refused_swap_params.clone(), false)
+                .await?,
+            None,
+            "no operation exists and fresh dispatch is forbidden, so nothing may start"
+        );
+        assert_eq!(
+            gateway_client.get_balance_for_btc().await?,
+            initial_gateway_balance.saturating_sub(invoice_amount + invoice_amount),
+            "a refused swap must not fund anything"
+        );
+        assert!(
+            gateway_module
+                .gateway_handle_direct_swap(refused_swap_params, true)
+                .await?
+                .is_some(),
+            "the refusal must not have consumed the offer"
         );
 
         Ok(())

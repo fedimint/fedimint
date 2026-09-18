@@ -22,7 +22,7 @@ mod receive;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::Infallible;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context as _, anyhow};
@@ -36,8 +36,12 @@ use fedimint_client::transaction::{
     ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder,
 };
 use fedimint_client_module::db::ClientModuleMigrationFn;
+use fedimint_client_module::error::{
+    InsufficientBalanceError, OperationLookupError, TransactionSubmitError,
+};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
+    ClientModuleRecoveryPrepareArgs, RecoveryMode,
 };
 use fedimint_client_module::module::recovery::{NoModuleBackup, RecoveryProgress};
 use fedimint_client_module::module::{
@@ -55,6 +59,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::secp256k1::rand::{Rng, thread_rng};
 use fedimint_core::secp256k1::{Keypair, PublicKey};
+use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{Amount, OutPoint, PeerId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::DerivableSecret;
@@ -62,9 +67,8 @@ use fedimint_mintv2_common::config::{FeeConsensus, MintClientConfig, client_deno
 use fedimint_mintv2_common::{
     Denomination, KIND, MintCommonInit, MintInput, MintModuleTypes, MintOutput, Note, RecoveryItem,
 };
-use futures::{StreamExt, TryFutureExt, pin_mut};
+use futures::{StreamExt, pin_mut};
 use itertools::Itertools;
-use rand::seq::IteratorRandom;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tbs::AggregatePublicKey;
@@ -80,6 +84,19 @@ use crate::receive::{ReceiveSMState, ReceiveStateMachine};
 
 const TARGET_PER_DENOMINATION: usize = 3;
 const SLICE_SIZE: u64 = 10000;
+/// How long a guardian sits out after failing to answer a slice request.
+const PEER_READMISSION: Duration = Duration::from_secs(60);
+/// How long a single peer is given to answer a slice request.
+///
+/// A slice takes a second or two from a healthy guardian, so waiting half a
+/// minute only delays noticing that one is not going to answer. The timeout
+/// grows on every failed attempt up to [`MAX_SLICE_TIMEOUT`], so a client
+/// on a slow connection where every guardian exceeds the initial timeout
+/// still makes progress instead of retrying forever.
+const SLICE_TIMEOUT: Duration = Duration::from_secs(10);
+/// Upper bound for the per-retry growth of [`SLICE_TIMEOUT`]; the flat
+/// timeout used before the growth was introduced.
+const MAX_SLICE_TIMEOUT: Duration = Duration::from_secs(30);
 const PARALLEL_HASH_REQUESTS: usize = 10;
 const PARALLEL_SLICE_REQUESTS: usize = 10;
 
@@ -152,33 +169,62 @@ impl ClientModuleInit for MintClientInit {
             .expect("no version conflicts")
     }
 
-    async fn recover(
-        &self,
-        args: &ClientModuleRecoverArgs<Self>,
-        _snapshot: Option<&NoModuleBackup>,
-    ) -> anyhow::Result<Option<Amount>> {
-        let mut state = if let Some(state) = args
+    fn recovery_mode(&self) -> RecoveryMode {
+        RecoveryMode::Usable
+    }
+
+    async fn prepare_recovery(&self, args: &ClientModuleRecoveryPrepareArgs) -> anyhow::Result<()> {
+        if args
             .db()
             .begin_transaction_nc()
             .await
             .get_value(&RecoveryStateKey)
             .await
+            .is_some()
         {
-            state
-        } else {
-            RecoveryState {
-                next_index: 0,
-                total_items: args.module_api().fetch_recovery_count().await?,
-                requests: BTreeMap::new(),
-                nonces: BTreeSet::new(),
-            }
+            return Ok(());
+        }
+
+        // The total is the number of items the federation had processed when
+        // the recovery began, so every note this client issues from here on
+        // lands beyond it and is never rediscovered by the scan. Committing
+        // that bound before the module is initialized is what lets the module
+        // be used while its own recovery is still running: the two cannot
+        // arrive at the same note.
+        let state = RecoveryState {
+            next_index: 0,
+            total_items: args.module_api().fetch_recovery_count().await?,
+            requests: BTreeMap::new(),
+            nonces: BTreeSet::new(),
         };
+
+        let mut dbtx = args.db().begin_transaction().await;
+
+        dbtx.insert_entry(&RecoveryStateKey, &state).await;
+
+        dbtx.commit_tx().await;
+
+        Ok(())
+    }
+
+    async fn recover(
+        &self,
+        args: &ClientModuleRecoverArgs<Self>,
+        _snapshot: Option<&NoModuleBackup>,
+    ) -> anyhow::Result<Option<Amount>> {
+        let mut state = args
+            .db()
+            .begin_transaction_nc()
+            .await
+            .get_value(&RecoveryStateKey)
+            .await
+            .expect("Prepare recovery commits the state before the recovery is started");
 
         if state.next_index == state.total_items {
             return Ok(None);
         }
 
-        let peer_selector = PeerSelector::new(args.api().all_peers().clone());
+        let peer_pool = PeerPool::new(args.api().all_peers());
 
         let mut recovery_stream = futures::stream::iter(
             (state.next_index..state.total_items).step_by(SLICE_SIZE as usize),
@@ -191,23 +237,44 @@ impl ClientModuleInit for MintClientInit {
         })
         .buffered(PARALLEL_HASH_REQUESTS)
         .map(|(start, end, hash)| {
-            download_slice_with_hash(
-                args.module_api().clone(),
-                peer_selector.clone(),
-                start,
-                end,
-                hash,
-            )
+            let module_api = args.module_api().clone();
+            let peer_pool = peer_pool.clone();
+
+            async move {
+                (
+                    start,
+                    download_slice(module_api, peer_pool, start, end, hash).await,
+                )
+            }
         })
-        .buffered(PARALLEL_SLICE_REQUESTS);
+        // Unordered, so a guardian that goes quiet holds up only its own
+        // slice. Delivering in order would let it halt everything: the other
+        // requests would finish, their results would fill the buffer, and no
+        // new request could start until the straggler returned. Downloading
+        // runs ahead of it instead, and the items are put back in order below.
+        .buffer_unordered(PARALLEL_SLICE_REQUESTS);
 
         let tweak_filter = issuance::tweak_filter(args.module_root_secret());
 
+        // Slices that arrived before the ones in front of them. An input
+        // spends an output that has to have been seen already, so items are
+        // scanned in index order however they turn up. This holds whatever
+        // downloaded while a slice was outstanding, which the timeout bounds.
+        let mut pending: BTreeMap<u64, Vec<RecoveryItem>> = BTreeMap::new();
+
         loop {
-            let items = recovery_stream
-                .next()
-                .await
-                .context("Recovery stream finished before recovery is complete")?;
+            let items = loop {
+                if let Some(items) = pending.remove(&state.next_index) {
+                    break items;
+                }
+
+                let (start, items) = recovery_stream
+                    .next()
+                    .await
+                    .context("Recovery stream finished before recovery is complete")?;
+
+                pending.insert(start, items);
+            };
 
             for item in &items {
                 match item {
@@ -433,10 +500,17 @@ impl ClientModule for MintClientModule {
             anyhow::bail!("Module can only handle its configured amount unit");
         }
 
-        let funding_notes = self
-            .select_funding_input(dbtx, output_amount.saturating_sub(input_amount))
-            .await
-            .context("Insufficient funds")?;
+        let requested_amount = output_amount.saturating_sub(input_amount);
+        // `select_funding_input` only reads notes, so the balance it left behind is
+        // still accurate for reporting a total below.
+        let Some(funding_notes) = self.select_funding_input(dbtx, requested_amount).await else {
+            let total_amount = self.get_balance(dbtx, unit).await;
+            return Err(InsufficientBalanceError {
+                requested_amount,
+                total_amount,
+            }
+            .into());
+        };
 
         for note in &funding_notes {
             self.remove_spendable_note(dbtx, note).await;
@@ -681,6 +755,16 @@ impl MintClientModule {
         ClientInputBundle::new(inputs, input_sms)
     }
 
+    /// Build the blinded outputs and their output state machines for a
+    /// reissue transaction.
+    ///
+    /// # Cancel safety
+    ///
+    /// Cancel safe: this only reads pre-ground blinding tweaks from an
+    /// in-memory channel and constructs values, it performs no database
+    /// writes. Dropping the future merely discards the tweaks it had taken,
+    /// which are random (so nothing is lost) and replenished by the
+    /// background grinder task.
     async fn create_output_bundle(
         &self,
         operation_id: OperationId,
@@ -717,6 +801,15 @@ impl MintClientModule {
         ClientOutputBundle::new(outputs, output_sms)
     }
 
+    /// Wait for the output state machine of the given outpoint to reach a
+    /// terminal state.
+    ///
+    /// # Cancel safety
+    ///
+    /// Cancel safe: this only subscribes to the operation's state
+    /// notifications and waits, it performs no database writes. Dropping the
+    /// future stops the wait; the underlying state machine keeps running in
+    /// the executor.
     async fn await_output_sm_success(
         &self,
         operation_id: OperationId,
@@ -777,14 +870,26 @@ impl MintClientModule {
     /// smallest denomination used throughout the client. If the rounded
     /// amount cannot be covered with the ecash notes in the client's
     /// database the client will create a transaction to reissue the
-    /// required denominations. It is safe to cancel the send method call
-    /// before the reissue is complete in which case the reissued notes are
-    /// returned to the regular balance. To cancel a successful ecash send
-    /// simply receive it yourself.
+    /// required denominations. To cancel a successful ecash send simply
+    /// receive it yourself.
     ///
     /// If `include_invite` is set, the federation's invite code is embedded in
     /// the returned ecash so a recipient that has not joined the federation can
     /// do so directly from the received ecash.
+    ///
+    /// # Cancel safety
+    ///
+    /// This method is cancel safe. Every database mutation it makes happens
+    /// inside a single
+    /// [`autocommit`](fedimint_core::db::Database::autocommit) transaction
+    /// (spending the notes for the fast path, and creating the change-making
+    /// reissue transaction otherwise), so dropping the future either commits
+    /// a unit of work in full or leaves the database untouched: notes are
+    /// never removed without a persisted operation that produces the ecash or
+    /// returns the change. Federation submission is driven by a state machine
+    /// in the executor rather than awaited here, so a cancelled call cannot
+    /// abort an in-flight reissue; if change-making had already been
+    /// submitted it completes on its own and the notes return to the balance.
     pub async fn send(
         &self,
         amount: Amount,
@@ -840,7 +945,10 @@ impl MintClientModule {
                 TransactionBuilder::new().with_outputs(output),
             )
             .await
-            .map_err(|_| SendECashError::InsufficientBalance)?;
+            .map_err(|error| match error {
+                TransactionSubmitError::InsufficientFunds(_) => SendECashError::InsufficientBalance,
+                other => SendECashError::Failed(other),
+            })?;
 
         for outpoint in range {
             self.await_output_sm_success(operation_id, outpoint)
@@ -851,6 +959,16 @@ impl MintClientModule {
         Box::pin(self.send(amount, custom_meta, include_invite)).await
     }
 
+    /// Fast path for [`Self::send`]: if exact change is already held, spend
+    /// those notes and record the send operation. Returns `None` when exact
+    /// change is not available, leaving the caller to make change.
+    ///
+    /// # Cancel safety
+    ///
+    /// All writes go to the passed `dbtx`, so this inherits the cancel safety
+    /// of that transaction: it must be run inside an `autocommit` (as `send`
+    /// does) for the note spend and the operation log entry to commit or roll
+    /// back together.
     async fn send_ecash_dbtx(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -872,7 +990,8 @@ impl MintClientModule {
             ECash::new_with_invite(notes, &invite)
         } else {
             ECash::new(self.federation_id, notes)
-        };
+        }
+        .with_unit(self.cfg.amount_unit);
         let amount = ecash.amount();
         let operation_id = OperationId::new_random();
 
@@ -913,10 +1032,6 @@ impl MintClientModule {
     ) -> Result<OperationId, ReceiveECashError> {
         let operation_id = OperationId::from_encodable(&ecash);
 
-        if self.client_ctx.operation_exists(operation_id).await {
-            return Err(ReceiveECashError::AlreadyReceived);
-        }
-
         if ecash.mint() != Some(self.federation_id) {
             return Err(ReceiveECashError::WrongFederation);
         }
@@ -945,14 +1060,16 @@ impl MintClientModule {
                 },
                 TransactionBuilder::new().with_inputs(input),
             )
-            .or_else(|_| async {
-                if self.client_ctx.operation_exists(operation_id).await {
-                    Err(ReceiveECashError::AlreadyReceived)
-                } else {
-                    Err(ReceiveECashError::InsufficientFunds)
+            .await
+            .map_err(|error| match error {
+                TransactionSubmitError::OperationAlreadyExists(_) => {
+                    ReceiveECashError::AlreadyReceived
                 }
-            })
-            .await?;
+                TransactionSubmitError::InsufficientFunds(_) => {
+                    ReceiveECashError::InsufficientFunds
+                }
+                other => ReceiveECashError::Failed(other),
+            })?;
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
@@ -980,7 +1097,10 @@ impl MintClientModule {
     /// rather than committed, so the client's notes are read but left
     /// untouched. The quote is point-in-time: it depends on the current
     /// inventory and can move as notes change.
-    pub async fn receive_fee_quote(&self, ecash: &ECash) -> anyhow::Result<FeeQuote> {
+    pub async fn receive_fee_quote(
+        &self,
+        ecash: &ECash,
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         // A receive submits the ecash notes as explicit inputs and no explicit
         // outputs; the shared, module-agnostic fee quote runs the primary-module
         // balancing (rebalancing + minting change) over the real inventory.
@@ -1017,7 +1137,7 @@ impl MintClientModule {
     /// inputs) via the shared, module-agnostic fee quote over the real
     /// inventory. The quote is point-in-time: it depends on the current
     /// inventory and can move as notes change.
-    pub async fn send_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
+    pub async fn send_fee_quote(&self, amount: Amount) -> Result<FeeQuote, TransactionSubmitError> {
         let amount = round_to_multiple(amount, client_denominations().next().unwrap().amount());
 
         // Exact-change path: handing out existing notes never costs a fee.
@@ -1096,7 +1216,7 @@ impl MintClientModule {
     pub async fn await_final_receive_operation_state(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<FinalReceiveOperationState> {
+    ) -> Result<FinalReceiveOperationState, OperationLookupError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
 
@@ -1143,107 +1263,146 @@ impl MintClientModule {
     }
 }
 
+/// Hands out guardians so that only one slice request is outstanding to each.
+///
+/// Whichever peer finishes first takes the next slice, so a slow guardian
+/// receives less work without anyone having to measure how slow it is, and one
+/// that is not answering ties up a single request rather than a share of all
+/// of them.
 #[derive(Clone)]
-struct PeerSelector {
-    latency: Arc<RwLock<BTreeMap<PeerId, Duration>>>,
+struct PeerPool {
+    receiver: async_channel::Receiver<PeerId>,
+    sender: async_channel::Sender<PeerId>,
 }
 
-impl PeerSelector {
-    fn new(peers: BTreeSet<PeerId>) -> Self {
-        let latency = peers
-            .into_iter()
-            .map(|peer| (peer, Duration::ZERO))
-            .collect();
+impl PeerPool {
+    fn new(peers: &BTreeSet<PeerId>) -> Self {
+        let (sender, receiver) = async_channel::bounded(peers.len().max(1));
 
-        Self {
-            latency: Arc::new(RwLock::new(latency)),
+        for peer in peers {
+            sender
+                .try_send(*peer)
+                .expect("Capacity was sized to hold every peer");
         }
+
+        Self { receiver, sender }
     }
 
-    /// Pick 2 peers at random, return the one with lower latency
-    fn choose_peer(&self) -> PeerId {
-        let latency = self.latency.read().unwrap();
-
-        let peer_a = latency.iter().choose(&mut thread_rng()).unwrap();
-        let peer_b = latency.iter().choose(&mut thread_rng()).unwrap();
-
-        if peer_a.1 <= peer_b.1 {
-            *peer_a.0
-        } else {
-            *peer_b.0
-        }
+    /// Wait for a guardian with no request outstanding.
+    async fn acquire(&self) -> PeerId {
+        self.receiver
+            .recv()
+            .await
+            .expect("The sender is held for as long as the receiver")
     }
 
-    // Update with exponential moving average (α = 0.1)
-    fn report(&self, peer: PeerId, duration: Duration) {
-        self.latency
-            .write()
-            .unwrap()
-            .entry(peer)
-            .and_modify(|latency| *latency = *latency * 9 / 10 + duration * 1 / 10)
-            .or_insert(duration);
+    /// Take a guardian out of rotation, putting it back once it has sat out
+    /// [`PEER_READMISSION`].
+    ///
+    /// Dropping it for good would cost a guardian that timed out once the rest
+    /// of the recovery, which on a federation of four is a quarter of the
+    /// capacity thrown away for a single bad request.
+    fn retire(&self, peer: PeerId) {
+        let pool = self.clone();
+
+        fedimint_core::runtime::spawn("mintv2 recovery peer readmission", async move {
+            fedimint_core::runtime::sleep(PEER_READMISSION).await;
+
+            pool.release(peer);
+        });
     }
 
-    fn remove(&self, peer: PeerId) {
-        self.latency.write().unwrap().remove(&peer);
+    /// Put a guardian back for the next slice.
+    fn release(&self, peer: PeerId) {
+        self.sender
+            .try_send(peer)
+            .expect("Only peers taken from the pool are put back");
     }
 }
 
-/// Download a slice with hash verification and peer selection
-async fn download_slice_with_hash(
+/// Download a slice, asking one guardian at a time and holding it for the
+/// duration of the request.
+async fn download_slice(
     module_api: DynModuleApi,
-    peer_selector: PeerSelector,
+    peers: PeerPool,
     start: u64,
     end: u64,
     expected_hash: sha256::Hash,
 ) -> Vec<RecoveryItem> {
-    const TIMEOUT: Duration = Duration::from_secs(30);
+    let mut timeouts = custom_backoff(SLICE_TIMEOUT, MAX_SLICE_TIMEOUT, None);
 
     loop {
-        let peer = peer_selector.choose_peer();
-        let start_time = fedimint_core::time::now();
+        let peer = peers.acquire().await;
 
-        if let Ok(data) = module_api
-            .fetch_recovery_slice(peer, TIMEOUT, start, end)
-            .await
-        {
-            let elapsed = fedimint_core::time::now()
-                .duration_since(start_time)
-                .unwrap_or_default();
+        let timeout = timeouts.next().expect("The backoff never gives up");
 
-            peer_selector.report(peer, elapsed);
+        let result = module_api
+            .fetch_recovery_slice(peer, timeout, start, end)
+            .await;
 
-            if data.consensus_hash::<sha256::Hash>() == expected_hash {
+        match result {
+            Ok(data) if data.consensus_hash::<sha256::Hash>() == expected_hash => {
+                peers.release(peer);
+
                 return data;
             }
-
-            peer_selector.remove(peer);
-        } else {
-            peer_selector.report(peer, TIMEOUT);
+            // Either served something the other guardians disagree with, or
+            // did not answer at all. Either way it sits out for a while: a
+            // request that reaches the timeout took many times longer than a
+            // healthy guardian needs, so asking it again mostly buys another
+            // timeout. The timeout grows in case it is the client's own
+            // connection that is too slow for the initial one.
+            Ok(_) | Err(_) => peers.retire(peer),
         }
     }
 }
 
-#[derive(Error, Debug, Clone, Eq, PartialEq)]
+/// A failure to send e-cash by preparing notes to hand to the recipient.
+#[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum SendECashError {
+    /// The client needs to reissue notes to make change, but has no
+    /// connection to the federation to do so.
     #[error("We need to reissue notes but the client is offline")]
     Offline,
+    /// The client's balance cannot cover the amount requested.
     #[error("The clients balance is insufficient")]
     InsufficientBalance,
+    /// The client failed to prepare the notes for a reason it cannot
+    /// recover from.
     #[error("A non-recoverable error has occurred")]
     Failure,
+    /// The change-making reissue transaction could not be submitted for a
+    /// reason unrelated to funding.
+    #[error("The reissue transaction could not be submitted")]
+    Failed(#[source] TransactionSubmitError),
 }
 
-#[derive(Error, Debug, Clone, Eq, PartialEq)]
+/// A failure to receive e-cash by reissuing it.
+#[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum ReceiveECashError {
+    /// The e-cash was issued by a different federation.
     #[error("The ECash is from a different federation")]
     WrongFederation,
+
+    /// One of the notes is worth no more than the fee to reissue it.
     #[error("ECash contains an uneconomical denomination")]
     UneconomicalDenomination,
+
+    /// The client cannot cover the fee the reissue costs.
     #[error("Receiving ecash requires additional funds")]
     InsufficientFunds,
+
+    /// An operation for this exact e-cash already exists, so it was already
+    /// received.
     #[error("The ECash was already received")]
     AlreadyReceived,
+
+    /// The reissue transaction could not be submitted for a reason unrelated
+    /// to funding.
+    #[error("The reissue transaction could not be submitted")]
+    Failed(#[source] TransactionSubmitError),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]

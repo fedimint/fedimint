@@ -75,3 +75,13 @@ pub const FM_GATEWAY_METRICS_LISTEN_ADDR_ENV: &str = "FM_GATEWAY_METRICS_LISTEN_
 /// Environment variable that instructs the gateway to generate a mnemonic if
 /// one has not already been set.
 pub const FM_GATEWAY_SKIP_SETUP_ENV: &str = "FM_GATEWAY_SKIP_SETUP";
+
+/// Environment variable that specifies the maximum burst of requests to the
+/// public invoice creation endpoint accepted before rate limiting kicks in.
+pub const FM_GATEWAY_INVOICE_RATE_LIMIT_BURST_ENV: &str = "FM_GATEWAY_INVOICE_RATE_LIMIT_BURST";
+
+/// Environment variable that specifies the sustained number of requests per
+/// second to the public invoice creation endpoint accepted before rate
+/// limiting kicks in.
+pub const FM_GATEWAY_INVOICE_RATE_LIMIT_PER_SECOND_ENV: &str =
+    "FM_GATEWAY_INVOICE_RATE_LIMIT_PER_SECOND";

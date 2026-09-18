@@ -6,7 +6,6 @@ use std::mem;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::anyhow;
 use fedimint_client_module::sm::executor::{
     ActiveStateKey, ContextGen, IExecutor, InactiveStateKey,
 };
@@ -186,7 +185,10 @@ impl Executor {
     ///
     /// **Attention**: do not use before background task is started!
     // TODO: remove warning once finality is an inherent state attribute
-    pub async fn add_state_machines(&self, states: Vec<DynState>) -> anyhow::Result<()> {
+    pub async fn add_state_machines(
+        &self,
+        states: Vec<DynState>,
+    ) -> Result<(), AddStateMachinesError> {
         self.inner
             .db
             .autocommit(
@@ -195,11 +197,10 @@ impl Executor {
             )
             .await
             .map_err(|e| match e {
-                AutocommitError::CommitFailed {
-                    last_error,
-                    attempts,
-                } => anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
-                AutocommitError::ClosureError { error, .. } => anyhow!("{error:?}"),
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    AddStateMachinesError::Database(last_error)
+                }
+                AutocommitError::ClosureError { error, .. } => error,
             })?;
 
         // TODO: notify subscribers to state changes?
@@ -226,7 +227,9 @@ impl Executor {
                 .valid_module_ids
                 .contains(&state.module_instance_id())
             {
-                return Err(AddStateMachinesError::Other(anyhow!("Unknown module")));
+                return Err(AddStateMachinesError::UnknownModule {
+                    module_instance_id: state.module_instance_id(),
+                });
             }
 
             let is_active_state = dbtx
@@ -260,9 +263,7 @@ impl Executor {
                 {
                     Some(context) => {
                         if state.is_terminal(module_context, &context) {
-                            return Err(AddStateMachinesError::Other(anyhow!(
-                                "State is already terminal, adding it to the executor doesn't make sense."
-                            )));
+                            return Err(AddStateMachinesError::StateAlreadyTerminal);
                         }
                     }
                     _ => {
@@ -913,7 +914,13 @@ impl ExecutorInner {
 impl ExecutorInner {
     /// See [`Executor::stop_executor`].
     fn stop_executor(&self) -> Option<()> {
-        let mut state = self.state.write().expect("Locking can't fail");
+        // This runs from destructors, which must never panic, so recover from a lock
+        // poisoned by a panic elsewhere. `ExecutorState` is always left in a coherent
+        // variant, so the poison can be ignored safely.
+        let mut state = self
+            .state
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         state.stop()
     }
@@ -1085,9 +1092,7 @@ impl Decodable for InactiveStateKeyBytes {
         let operation_id = OperationId::consensus_decode_partial(reader, modules)?;
         let module_instance_id = ModuleInstanceId::consensus_decode_partial(reader, modules)?;
         let mut bytes = Vec::new();
-        reader
-            .read_to_end(&mut bytes)
-            .map_err(DecodeError::from_err)?;
+        reader.read_to_end(&mut bytes)?;
 
         let mut instance_bytes = ModuleInstanceId::consensus_encode_to_vec(&module_instance_id);
         instance_bytes.append(&mut bytes);
@@ -1179,9 +1184,7 @@ impl Decodable for ActiveStateKeyBytes {
         let operation_id = OperationId::consensus_decode_partial(reader, modules)?;
         let module_instance_id = ModuleInstanceId::consensus_decode_partial(reader, modules)?;
         let mut bytes = Vec::new();
-        reader
-            .read_to_end(&mut bytes)
-            .map_err(DecodeError::from_err)?;
+        reader.read_to_end(&mut bytes)?;
 
         let mut instance_bytes = ModuleInstanceId::consensus_encode_to_vec(&module_instance_id);
         instance_bytes.append(&mut bytes);

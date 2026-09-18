@@ -22,6 +22,7 @@ pub mod config;
 pub mod contracts;
 pub mod federation_endpoint_constants;
 pub mod gateway_endpoint_constants;
+mod preimage_auth;
 
 /// Exclusive remaining-CLTV safety margin for funding LNv1 incoming contracts.
 ///
@@ -45,11 +46,10 @@ use std::collections::BTreeMap;
 use std::io::{Error, Read, Write};
 use std::time::{Duration, SystemTime};
 
-use anyhow::Context as AnyhowContext;
 use bitcoin::hashes::{Hash, sha256};
 use config::LightningClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
-use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeContext, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::secp256k1::Message;
@@ -59,6 +59,7 @@ use fedimint_core::{
     extensible_associated_module_type, plugin_types_trait_impl_common, secp256k1,
 };
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
+pub use preimage_auth::PreimageAuth;
 pub use reqwest::Method;
 use secp256k1::schnorr::Signature;
 use serde::{Deserialize, Serialize};
@@ -343,11 +344,10 @@ impl Decodable for LightningGatewayRegistration {
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let json_repr = String::consensus_decode_partial(r, modules)?;
-        serde_json::from_str(&json_repr).map_err(|e| {
-            DecodeError::new_custom(
-                anyhow::Error::new(e).context("Failed to deserialize LightningGatewayRegistration"),
-            )
-        })
+        DecodeContext::context(
+            serde_json::from_str(&json_repr).map_err(DecodeError::from_err),
+            "Failed to deserialize LightningGatewayRegistration",
+        )
     }
 }
 
@@ -843,8 +843,14 @@ impl PrunedInvoice {
     }
 }
 
+/// A BOLT11 invoice carried no amount, so it cannot be pruned to the fields a
+/// gateway needs to pay it.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, thiserror::Error)]
+#[error("The invoice does not specify an amount")]
+pub struct MissingInvoiceAmountError;
+
 impl TryFrom<Bolt11Invoice> for PrunedInvoice {
-    type Error = anyhow::Error;
+    type Error = MissingInvoiceAmountError;
 
     fn try_from(invoice: Bolt11Invoice) -> Result<Self, Self::Error> {
         Ok(PrunedInvoice::new(
@@ -852,7 +858,7 @@ impl TryFrom<Bolt11Invoice> for PrunedInvoice {
             Amount::from_msats(
                 invoice
                     .amount_milli_satoshis()
-                    .context("Invoice amount is missing")?,
+                    .ok_or(MissingInvoiceAmountError)?,
             ),
         ))
     }
@@ -914,4 +920,34 @@ pub fn create_gateway_remove_message(
     message_preimage.append(&mut guardian_id.consensus_encode_to_vec());
     message_preimage.append(&mut challenge.consensus_encode_to_vec());
     Message::from_digest(*sha256::Hash::hash(message_preimage.as_slice()).as_ref())
+}
+
+#[cfg(test)]
+mod tests {
+    use bitcoin::hashes::{Hash as _, sha256};
+    use bitcoin::secp256k1::{Secp256k1, SecretKey};
+    use lightning_invoice::{Bolt11Invoice, Currency, InvoiceBuilder, PaymentSecret};
+
+    use super::{MissingInvoiceAmountError, PrunedInvoice};
+
+    /// An invoice without an amount cannot be pruned, and says that rather
+    /// than returning a message.
+    #[test]
+    fn pruning_an_amountless_invoice_reports_the_missing_amount() {
+        let ctx = Secp256k1::new();
+        let sk = SecretKey::from_slice(&[1; 32]).expect("Valid secret key");
+        let invoice: Bolt11Invoice = InvoiceBuilder::new(Currency::Regtest)
+            .description(String::new())
+            .payment_hash(sha256::Hash::hash(&[0; 32]))
+            .current_timestamp()
+            .min_final_cltv_expiry_delta(0)
+            .payment_secret(PaymentSecret([0; 32]))
+            .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &sk))
+            .expect("Failed to build invoice");
+
+        assert_eq!(
+            PrunedInvoice::try_from(invoice),
+            Err(MissingInvoiceAmountError)
+        );
+    }
 }

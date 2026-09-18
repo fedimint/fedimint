@@ -20,6 +20,7 @@ use common::{KIND, MetaConsensusValue, MetaKey, MetaValue};
 use db::DbKeyPrefix;
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 use fedimint_client_module::db::ClientModuleMigrationFn;
+use fedimint_client_module::error::MetaFetchError;
 use fedimint_client_module::meta::{FetchKind, LegacyMetaSource, MetaSource, MetaValues};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
@@ -286,7 +287,7 @@ impl<S: MetaSource> MetaSource for MetaModuleMetaSourceWithFallback<S> {
         api: &DynGlobalApi,
         fetch_kind: fedimint_client_module::meta::FetchKind,
         last_revision: Option<u64>,
-    ) -> anyhow::Result<fedimint_client_module::meta::MetaValues> {
+    ) -> Result<fedimint_client_module::meta::MetaValues, MetaFetchError> {
         let backoff = match fetch_kind {
             // need to be fast the first time.
             FetchKind::Initial => backoff_util::aggressive_backoff(),
@@ -296,7 +297,7 @@ impl<S: MetaSource> MetaSource for MetaModuleMetaSourceWithFallback<S> {
         let maybe_meta_module_meta = get_meta_module_value(client_config, api, backoff)
             .await
             .map(|meta| {
-                Result::<_, anyhow::Error>::Ok(MetaValues {
+                Result::<_, MetaFetchError>::Ok(MetaValues {
                     values: serde_json::from_slice(meta.value.as_slice())?,
                     revision: meta.revision,
                 })
@@ -325,7 +326,7 @@ async fn get_meta_module_value(
             let meta_api = api.with_module(instance_id);
 
             let overrides_res = retry("fetch_meta_values", backoff, || async {
-                Ok(meta_api.get_consensus(DEFAULT_META_KEY).await?)
+                anyhow::Ok(meta_api.get_consensus(DEFAULT_META_KEY).await?)
             })
             .await;
 

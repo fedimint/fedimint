@@ -48,3 +48,40 @@ fn test_deserialize_amount_or_all() {
     let amount_parsed = BitcoinAmountOrAll::from_str(&amount_string).unwrap();
     assert_eq!(amount, amount_parsed);
 }
+
+#[test]
+fn bitcoin_amount_or_all_parse_errors_are_typed() {
+    use std::str::FromStr;
+
+    use crate::{BitcoinAmountOrAll, ParseBitcoinAmountOrAllError};
+
+    assert_eq!(
+        BitcoinAmountOrAll::from_str("ALL").expect("parses"),
+        BitcoinAmountOrAll::All
+    );
+    assert!(matches!(
+        BitcoinAmountOrAll::from_str("1msat"),
+        Err(ParseBitcoinAmountOrAllError::Precision(_))
+    ));
+    assert!(matches!(
+        BitcoinAmountOrAll::from_str("not a number"),
+        Err(ParseBitcoinAmountOrAllError::Amount(_))
+    ));
+}
+
+#[test]
+fn operation_id_parse_error_is_typed() {
+    use std::str::FromStr;
+
+    use crate::core::OperationId;
+
+    // 64 hex digits (32 bytes) with one invalid character: `hex` 0.4 checks the
+    // length before the characters, so a short input would report
+    // `InvalidStringLength` instead.
+    let input = format!("z{}", "0".repeat(63));
+    let err: hex::FromHexError = OperationId::from_str(&input).expect_err("not hex");
+    assert!(matches!(
+        err,
+        hex::FromHexError::InvalidHexCharacter { c: 'z', index: 0 }
+    ));
+}

@@ -16,7 +16,6 @@ use std::str::FromStr;
 use std::sync::LazyLock;
 use std::{fs, io};
 
-use anyhow::format_err;
 use fedimint_logging::LOG_CORE;
 pub use fedimint_util_error::*;
 use futures::StreamExt;
@@ -35,13 +34,18 @@ pub type BoxFuture<'a, T> = Pin<Box<maybe_add_send!(dyn Future<Output = T> + 'a)
 /// Stream that is `Send` unless targeting WASM
 pub type BoxStream<'a, T> = Pin<Box<maybe_add_send!(dyn futures::Stream<Item = T> + 'a)>>;
 
+/// The stream ended while an item was still expected.
+#[derive(Debug, thiserror::Error, Clone, Copy, Eq, PartialEq)]
+#[error("Stream was unexpectedly closed")]
+pub struct StreamEndedError;
+
 #[apply(async_trait_maybe_send!)]
 pub trait NextOrPending {
     type Output;
 
     async fn next_or_pending(&mut self) -> Self::Output;
 
-    async fn ok(&mut self) -> anyhow::Result<Self::Output>;
+    async fn ok(&mut self) -> Result<Self::Output, StreamEndedError>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -54,10 +58,8 @@ where
 
     /// Waits for the next item in a stream. If the stream is closed while
     /// waiting, returns an error.  Useful when expecting a stream to progress.
-    async fn ok(&mut self) -> anyhow::Result<Self::Output> {
-        self.next()
-            .await
-            .map_or_else(|| Err(format_err!("Stream was unexpectedly closed")), Ok)
+    async fn ok(&mut self) -> Result<Self::Output, StreamEndedError> {
+        self.next().await.ok_or(StreamEndedError)
     }
 
     /// Waits for the next item in a stream. If the stream is closed while
@@ -413,7 +415,7 @@ pub fn handle_version_hash_command(version_hash: &str) {
 ///     backoff_util::background_backoff(),
 ///     || async {
 ///         // Fallible network calls …
-///         Ok(())
+///         anyhow::Ok(())
 ///     },
 /// )
 /// .await
@@ -425,15 +427,16 @@ pub fn handle_version_hash_command(version_hash: &str) {
 ///
 /// - If the closure runs successfully, the result is immediately returned
 /// - If the closure did not run successfully for `max_attempts` times, the
-///   error of the closure is returned
-pub async fn retry<F, Fut, T>(
+///   closure's error is returned
+pub async fn retry<F, Fut, T, E>(
     op_name: impl Into<String>,
     strategy: impl backoff_util::Backoff,
     op_fn: F,
-) -> Result<T, anyhow::Error>
+) -> Result<T, E>
 where
     F: Fn() -> Fut,
-    Fut: Future<Output = Result<T, anyhow::Error>>,
+    Fut: Future<Output = Result<T, E>>,
+    E: Display,
 {
     let mut strategy = strategy;
     let op_name = op_name.into();
@@ -447,7 +450,7 @@ where
                     // run closure op_fn again
                     debug!(
                         target: LOG_CORE,
-                        err = %err.fmt_compact_anyhow(),
+                        err = %format_args!("{err:#}"),
                         %attempts,
                         interval = interval.as_secs(),
                         "{} failed, retrying",
@@ -457,7 +460,7 @@ where
                 } else {
                     warn!(
                         target: LOG_CORE,
-                        err = %err.fmt_compact_anyhow(),
+                        err = %format_args!("{err:#}"),
                         %attempts,
                         "{} failed",
                         op_name,

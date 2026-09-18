@@ -18,7 +18,7 @@ use fedimint_core::module::ModuleCommon;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::runtime::block_in_place;
 use fedimint_core::task::block_on;
-use fedimint_core::task::jit::JitTryAnyhow;
+use fedimint_core::task::jit::JitTry;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, NumPeers, PeerId};
 use fedimint_gateway_common::WithdrawResponse;
@@ -62,7 +62,7 @@ pub struct Federation {
     pub bitcoind: Bitcoind,
 
     /// Built in [`Client`], already joined
-    client: JitTryAnyhow<Client>,
+    client: JitTry<Client, anyhow::Error>,
     #[allow(dead_code)] // Will need it later, maybe
     connectors: ConnectorRegistry,
 }
@@ -364,7 +364,7 @@ impl Federation {
         let mut admin_clients: BTreeMap<PeerId, DynGlobalApi> = BTreeMap::new();
         let mut api_endpoints: BTreeMap<PeerId, _> = BTreeMap::new();
 
-        let connectors = ConnectorRegistry::build_from_testing_env()?.bind().await?;
+        let connectors = ConnectorRegistry::build_from_testing_env().bind().await;
         for peer_id in num_peers.peer_ids() {
             let peer_env_vars = vars::Fedimintd::init(
                 &process_mgr.globals,
@@ -392,7 +392,7 @@ impl Federation {
                 SafeUrl::parse(&peer_env_vars.FM_API_URL)?,
                 // TODO: will need it somewhere
                 // &process_mgr.globals.FM_FORCE_API_SECRETS.get_active(),
-            )?;
+            );
             api_endpoints.insert(peer_id, peer_env_vars.FM_API_URL.clone());
             admin_clients.insert(peer_id, admin_client);
             peer_to_env_vars_map.insert(peer_id.to_usize(), peer_env_vars);
@@ -467,7 +467,7 @@ impl Federation {
             }
         }
 
-        let client = JitTryAnyhow::new_try({
+        let client = JitTry::<_, anyhow::Error>::new_try({
             move || async move {
                 let client = Client::open_or_create(federation_name.as_str())?;
                 let invite_code = Self::invite_code_static()?;
@@ -567,7 +567,7 @@ impl Federation {
 
     pub fn client_config(&self) -> Result<ClientConfig> {
         let cfg_path = self.vars[&0].FM_DATA_DIR.join("client.json");
-        load_from_file(&cfg_path)
+        Ok(load_from_file(&cfg_path)?)
     }
 
     /// Get the module instance ID for a given module kind

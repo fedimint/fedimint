@@ -47,8 +47,6 @@ use std::ops::{self, Range};
 use std::str::FromStr;
 
 pub use amount::*;
-/// Mostly re-exported for [`Decodable`] macros.
-pub use anyhow;
 use bitcoin::address::NetworkUnchecked;
 pub use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::{Address, Network};
@@ -86,7 +84,6 @@ pub mod encoding;
 pub mod endpoint_constants;
 /// Common environment variables
 pub mod envs;
-pub mod epoch;
 /// Formatting helpers
 pub mod fmt_utils;
 /// Federation invite code
@@ -272,7 +269,7 @@ impl std::fmt::Display for BitcoinAmountOrAll {
 }
 
 impl FromStr for BitcoinAmountOrAll {
-    type Err = anyhow::Error;
+    type Err = ParseBitcoinAmountOrAllError;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         if s.eq_ignore_ascii_case("all") {
@@ -282,6 +279,18 @@ impl FromStr for BitcoinAmountOrAll {
             Ok(Self::Amount(amount.try_into()?))
         }
     }
+}
+
+/// Failure to parse a [`BitcoinAmountOrAll`] from its string form.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ParseBitcoinAmountOrAllError {
+    /// The string is neither `all` nor a valid amount.
+    #[error("Invalid amount: {0}")]
+    Amount(#[from] ParseAmountError),
+    /// The amount is valid but has sub-satoshi precision.
+    #[error("Amount cannot be expressed in satoshis: {0}")]
+    Precision(#[from] AmountConversionError),
 }
 
 // Custom serde to handle both "all" and numbers/strings
@@ -563,7 +572,7 @@ impl Decodable for TransactionId {
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 32];
-        d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
+        d.read_exact(&mut bytes)?;
         Ok(Self::from_byte_array(bytes))
     }
 }

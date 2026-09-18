@@ -28,6 +28,7 @@ hex = { workspace = true }
 itertools = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time", "macros", "rt"] }
 tracing = { workspace = true }
 uniffi = { workspace = true, optional = true }

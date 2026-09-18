@@ -166,7 +166,7 @@ impl GeneralCommands {
                     .expect("Before unix epoch")
                     .as_millis()
                     .try_into()
-                    .map_err(|e| ServerError::InternalClientError(anyhow::anyhow!("{e}")))?;
+                    .map_err(|e| ServerError::InternalClientError(format!("{e}")))?;
                 let one_day_ago = now
                     .checked_sub(Duration::from_hours(24))
                     .expect("Before unix epoch");
@@ -175,7 +175,7 @@ impl GeneralCommands {
                     .expect("Before unix epoch")
                     .as_millis()
                     .try_into()
-                    .map_err(|e| ServerError::InternalClientError(anyhow::anyhow!("{e}")))?;
+                    .map_err(|e| ServerError::InternalClientError(format!("{e}")))?;
                 let end_millis = end.unwrap_or(now_millis);
                 let start_millis = start.unwrap_or(one_day_ago_millis);
                 let payment_summary = payment_summary(

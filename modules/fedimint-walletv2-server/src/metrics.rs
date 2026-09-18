@@ -1,0 +1,91 @@
+#![allow(clippy::disallowed_types)]
+// Prometheus registration macros use `HashMap` internally.
+
+use std::sync::LazyLock;
+
+use fedimint_metrics::prometheus::{
+    IntGauge, register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_gauge_with_registry,
+};
+use fedimint_metrics::{
+    AMOUNTS_BUCKETS_SATS, Histogram, HistogramVec, REGISTRY, histogram_opts, opts,
+};
+
+pub(crate) static WALLET_INOUT_SATS: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec_with_registry!(
+        histogram_opts!(
+            "walletv2_inout_sats",
+            "Value of wallet input/out in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        &["direction"],
+        REGISTRY
+    )
+    .unwrap()
+});
+pub(crate) static WALLET_INOUT_FEES_SATS: LazyLock<HistogramVec> = LazyLock::new(|| {
+    register_histogram_vec_with_registry!(
+        histogram_opts!(
+            "walletv2_inout_fees_sats",
+            "Value of wallet input/output fees in sats",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        &["direction"],
+        REGISTRY
+    )
+    .unwrap()
+});
+pub(crate) static WALLET_PEGIN_SATS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_with_registry!(
+        histogram_opts!(
+            "walletv2_pegin_sats",
+            "Value of peg-in transactions in sats (deprecated - prefer walletv2_inout_sats)",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
+    .unwrap()
+});
+pub(crate) static WALLET_PEGIN_FEES_SATS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_with_registry!(
+        histogram_opts!(
+            "walletv2_pegin_fees_sats",
+            "Value of peg-in fees in sats (deprecated - prefer walletv2_inout_fees_sats)",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
+    .unwrap()
+});
+pub(crate) static WALLET_PEGOUT_SATS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_with_registry!(
+        histogram_opts!(
+            "walletv2_pegout_sats",
+            "Value of peg-out transactions in sats (deprecated - prefer walletv2_inout_sats)",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
+    .unwrap()
+});
+pub(crate) static WALLET_PEGOUT_FEES_SATS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_with_registry!(
+        histogram_opts!(
+            "walletv2_pegout_fees_sats",
+            "Value of peg-out fees in sats (deprecated - prefer walletv2_inout_fees_sats)",
+            AMOUNTS_BUCKETS_SATS.clone()
+        ),
+        REGISTRY
+    )
+    .unwrap()
+});
+pub(crate) static WALLET_BLOCK_COUNT: LazyLock<IntGauge> = LazyLock::new(|| {
+    register_int_gauge_with_registry!(
+        opts!(
+            "walletv2_block_count",
+            "Blockchain block count as monitored by wallet module",
+        ),
+        REGISTRY
+    )
+    .unwrap()
+});

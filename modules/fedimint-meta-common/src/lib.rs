@@ -138,7 +138,7 @@ impl Decodable for MetaValue {
         let bytes = Vec::consensus_decode_partial(r, modules)?;
 
         if Self::MAX_LEN_BYTES < bytes.len() {
-            return Err(DecodeError::new_custom(anyhow::format_err!("Too long")));
+            return Err(DecodeError::from_str("Too long"));
         }
 
         Ok(Self(bytes))

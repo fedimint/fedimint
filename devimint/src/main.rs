@@ -29,27 +29,49 @@ pub enum Cmd {
     Test(devimint::tests::TestCmd),
 }
 
-async fn handle_command() -> anyhow::Result<()> {
-    let args = Args::parse();
-    match args.command {
+impl Cmd {
+    fn setup_test_dir(&self, common_args: &CommonArgs) -> Option<PathBuf> {
+        match self {
+            Cmd::Base(
+                devimint::cli::Cmd::ExternalDaemons { .. }
+                | devimint::cli::Cmd::DevFed { .. }
+                | devimint::cli::Cmd::DevFedPreRestore { .. },
+            )
+            | Cmd::Test(_) => Some(common_args.test_dir()),
+            Cmd::Base(devimint::cli::Cmd::Rpc(_)) => None,
+        }
+    }
+}
+
+async fn handle_command(args: Args) -> (anyhow::Result<()>, Option<PathBuf>) {
+    let setup_test_dir = args.command.setup_test_dir(&args.common);
+    let result = match args.command {
         Cmd::Base(base) => devimint::cli::handle_command(base, args.common).await,
         Cmd::Test(test) => devimint::tests::handle_command(test, args.common).await,
+    };
+    (result, setup_test_dir)
+}
+
+async fn write_error_marker(test_dir: Option<PathBuf>) -> anyhow::Result<()> {
+    let test_dir = test_dir.or_else(|| env::var(FM_TEST_DIR_ENV).ok().map(PathBuf::from));
+    if let Some(test_dir) = test_dir {
+        let ready_file = test_dir.join("ready");
+        write_overwrite_async(ready_file, "ERROR").await?;
+    } else {
+        warn!(target: LOG_DEVIMINT, "{}", &format!("{FM_TEST_DIR_ENV} was not set"));
     }
+    Ok(())
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let start_time = Instant::now();
     handle_version_hash_command(fedimint_build_code_version_env!());
-    let res = match handle_command().await {
+    let (command_result, setup_test_dir) = handle_command(Args::parse()).await;
+    let res = match command_result {
         Ok(r) => Ok(r),
         Err(e) => {
-            if let Ok(test_dir) = env::var(FM_TEST_DIR_ENV) {
-                let ready_file = PathBuf::from(test_dir).join("ready");
-                write_overwrite_async(ready_file, "ERROR").await?;
-            } else {
-                warn!(target: LOG_DEVIMINT, "{}", &format!("{FM_TEST_DIR_ENV} was not set"));
-            }
+            write_error_marker(setup_test_dir).await?;
             Err(e)
         }
     };

@@ -270,7 +270,26 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     let gw_ldk = dev_fed.gw_ldk().await?;
     let lnd = dev_fed.lnd().await?;
 
-    let (hold_preimage, hold_invoice, hold_payment_hash) = lnd.create_hold_invoice(60000).await?;
+    // Gateways before 0.12 forward *every* pending HOLD invoice on their
+    // Lightning node to the gateway's payment handler and cancel the ones
+    // they cannot match to a registered LNv2 incoming contract. That includes
+    // the HOLD invoice this test creates directly on the LND node the LND
+    // gateway shares, so the gateway's cancel races this test's settle and
+    // fails it with `invoice already canceled` whenever the gateway wins.
+    // Only exercise HOLD invoices against gateways that filter out HOLD
+    // invoices they did not create themselves.
+    let test_hold_invoice = gw_lnd.gatewayd_version >= *VERSION_0_12_0_ALPHA;
+
+    let hold_invoice = if test_hold_invoice {
+        Some(lnd.create_hold_invoice(60000).await?)
+    } else {
+        info!(
+            gatewayd_version = %gw_lnd.gatewayd_version,
+            "Skipping HOLD invoice payment: gateway cancels HOLD invoices it did not create"
+        );
+
+        None
+    };
 
     let gateway_pairs = [(gw_lnd, gw_ldk), (gw_ldk, gw_lnd)];
 
@@ -359,13 +378,15 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     )
     .await?;
 
-    info!("Testing Client can pay LND HOLD invoice via LDK Gateway...");
+    if let Some((hold_preimage, hold_invoice, hold_payment_hash)) = hold_invoice {
+        info!("Testing Client can pay LND HOLD invoice via LDK Gateway...");
 
-    let (state, _) = try_join!(
-        common::send(&client, &gw_ldk.addr, &hold_invoice),
-        lnd.settle_hold_invoice(hold_preimage, hold_payment_hash),
-    )?;
-    assert!(matches!(state, FinalSendOperationState::Success(_)));
+        let (state, _) = try_join!(
+            common::send(&client, &gw_ldk.addr, &hold_invoice),
+            lnd.settle_hold_invoice(hold_preimage, hold_payment_hash),
+        )?;
+        assert!(matches!(state, FinalSendOperationState::Success(_)));
+    }
 
     info!("Testing LNv2 lightning fees...");
 
@@ -405,7 +426,10 @@ async fn test_payments(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     let ldk_payment_summary = gw_ldk.client().payment_summary().await?;
 
-    assert_eq!(ldk_payment_summary.outgoing.total_success, 4);
+    assert_eq!(
+        ldk_payment_summary.outgoing.total_success,
+        if test_hold_invoice { 4 } else { 3 }
+    );
     assert_eq!(ldk_payment_summary.outgoing.total_failure, 2);
     assert_eq!(ldk_payment_summary.incoming.total_success, 4);
     assert_eq!(ldk_payment_summary.incoming.total_failure, 0);

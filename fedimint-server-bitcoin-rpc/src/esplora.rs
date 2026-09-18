@@ -1,7 +1,10 @@
-use std::collections::HashMap;
+#[cfg(test)]
+mod tests;
+
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
-use anyhow::Context;
+use anyhow::{Context, ensure};
 use bitcoin::{BlockHash, Transaction};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::util::SafeUrl;
@@ -11,6 +14,33 @@ use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use tracing::info;
 
 const ESPLORA_CLIENT_TIMEOUT_SECONDS: u64 = 60;
+
+/// Check payload integrity against the caller's requested header hash.
+///
+/// This does not validate chain selection or proof of work: the configured
+/// Esplora server remains a trusted source of block hashes.
+fn validate_block(block: bitcoin::Block, requested: &BlockHash) -> anyhow::Result<bitcoin::Block> {
+    ensure!(
+        block.block_hash() == *requested,
+        "Esplora returned a different block"
+    );
+    ensure!(
+        block.check_merkle_root(),
+        "Esplora returned an invalid transaction merkle root"
+    );
+    // Merkle roots alone permit mutation by duplicating the final subtree.
+    // A valid block cannot repeat a txid, so reject all duplicate transactions.
+    let mut txids = HashSet::with_capacity(block.txdata.len());
+    ensure!(
+        block
+            .txdata
+            .iter()
+            .all(|tx| txids.insert(tx.compute_txid())),
+        "Esplora returned duplicate transactions"
+    );
+    Ok(block)
+}
+
 #[derive(Debug)]
 pub struct EsploraClient {
     client: esplora_client::AsyncClient,
@@ -64,10 +94,12 @@ impl IServerBitcoinRpc for EsploraClient {
     }
 
     async fn get_block(&self, block_hash: &BlockHash) -> anyhow::Result<bitcoin::Block> {
-        self.client
+        let block = self
+            .client
             .get_block_by_hash(block_hash)
             .await?
-            .context("Block with this hash is not available")
+            .context("Block with this hash is not available")?;
+        validate_block(block, block_hash)
     }
 
     async fn get_feerate(&self) -> anyhow::Result<Option<Feerate>> {
@@ -83,11 +115,8 @@ impl IServerBitcoinRpc for EsploraClient {
     }
 
     async fn submit_transaction(&self, transaction: Transaction) -> anyhow::Result<()> {
-        // `esplora-client` v0.6.0 only surfaces HTTP error codes, which prevents us
-        // from detecting errors for transactions already submitted.
-        // TODO: Suppress `esplora-client` already submitted errors when client is
-        // updated
-        // https://github.com/fedimint/fedimint/issues/3732
+        // Preserve server rejections, including already-known transactions.
+        // Callers retry broadcasts and must not treat acceptance as confirmation.
         self.client.broadcast(&transaction).await?;
         Ok(())
     }

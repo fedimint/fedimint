@@ -10,6 +10,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::Amounts;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, OutPoint, TransactionId, secp256k1};
 use fedimint_lightning::{LightningRpcError, PayInvoiceResponse};
 use fedimint_ln_client::api::LnFederationApi;
@@ -163,6 +164,8 @@ pub enum OutgoingContractError {
     MissingContractData,
     #[error("The invoice is expired. Expiry happened at timestamp: {0}")]
     InvoiceExpired(u64),
+    #[error("The invoice amount plus the gateway fee overflows")]
+    InvoiceAmountTooLarge,
 }
 
 #[derive(
@@ -276,6 +279,7 @@ impl GatewayPayInvoice {
         contract: OutgoingContractAccount,
         swap_parameters: SwapParameters,
         common: GatewayPayCommon,
+        fresh_dispatch_refusal: Option<OutgoingContractError>,
     ) -> Option<GatewayPayStateMachine> {
         let amount = swap_parameters.amount_msat;
         if let Ok(Some((lnv2_incoming_contract, client))) = context
@@ -286,10 +290,14 @@ impl GatewayPayInvoice {
             let state = match client
                 .get_first_module::<fedimint_gwv2_client::GatewayClientModuleV2>()
                 .expect("Must have client module")
-                .relay_direct_swap(lnv2_incoming_contract, amount.msats)
+                .relay_direct_swap(
+                    lnv2_incoming_contract,
+                    amount.msats,
+                    fresh_dispatch_refusal.is_none(),
+                )
                 .await
             {
-                Ok(final_receive_state) => match final_receive_state {
+                Ok(Some(final_receive_state)) => match final_receive_state {
                     fedimint_gwv2_client::FinalReceiveState::Success(preimage) => {
                         GatewayPayStateMachine {
                             common,
@@ -319,6 +327,25 @@ impl GatewayPayInvoice {
                         )),
                     },
                 },
+                Ok(None) => {
+                    let error = fresh_dispatch_refusal
+                        .expect("the relay only refuses a fresh dispatch when one was denied");
+                    GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::CancelContract(Box::new(
+                            GatewayPayCancelContract {
+                                contract: contract.clone(),
+                                error: OutgoingPaymentError {
+                                    contract_id: contract.contract.contract_id(),
+                                    contract: Some(contract.clone()),
+                                    error_type: OutgoingPaymentErrorType::InvalidOutgoingContract {
+                                        error,
+                                    },
+                                },
+                            },
+                        )),
+                    }
+                }
                 Err(err) => GatewayPayStateMachine {
                     common,
                     state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
@@ -377,9 +404,14 @@ impl GatewayPayInvoice {
         let swap_parameters: anyhow::Result<SwapParameters> =
             payment_parameters.payment_data.clone().try_into();
         if let Ok(swap_parameters) = swap_parameters
-            && let Some(new_state) =
-                Self::buy_lnv2_preimage(&context, contract.clone(), swap_parameters, common.clone())
-                    .await
+            && let Some(new_state) = Self::buy_lnv2_preimage(
+                &context,
+                contract.clone(),
+                swap_parameters,
+                common.clone(),
+                payment_parameters.fresh_dispatch.clone().err(),
+            )
+            .await
         {
             return new_state;
         }
@@ -397,6 +429,7 @@ impl GatewayPayInvoice {
                             payment_parameters.payment_data.clone(),
                             contract.clone(),
                             common.clone(),
+                            payment_parameters.fresh_dispatch.clone().err(),
                         )
                     })
                     .await
@@ -502,7 +535,40 @@ impl GatewayPayInvoice {
     ) -> GatewayPayStateMachine {
         debug!("Buying preimage over lightning for contract {contract:?}");
 
-        let max_delay = buy_preimage.max_delay;
+        // A payment the node already knows resolves through `pay`'s
+        // idempotent resume path, which never re-dispatches, so a drifted
+        // timelock or expiry gate only refuses a dispatch that never happened.
+        if let Err(error) = &buy_preimage.fresh_dispatch
+            && !context
+                .lightning_manager
+                .outbound_payment_exists(buy_preimage.payment_data.payment_hash())
+                .await
+        {
+            warn!(
+                ?contract,
+                err = %error.fmt_compact(),
+                "Refusing fresh lightning dispatch"
+            );
+            return GatewayPayStateMachine {
+                common,
+                state: GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract {
+                    contract: contract.clone(),
+                    error: OutgoingPaymentError {
+                        contract_id: contract.contract.contract_id(),
+                        contract: Some(contract),
+                        error_type: OutgoingPaymentErrorType::InvalidOutgoingContract {
+                            error: error.clone(),
+                        },
+                    },
+                })),
+            };
+        }
+
+        // On the resume path `pay` consults the node's own payment record
+        // before the budget, so `0` is a fail-closed sentinel: should that
+        // record have vanished in between, LND rejects a zero CLTV limit and
+        // LDK finds no route, rather than dispatching under a stale budget.
+        let max_delay = buy_preimage.fresh_dispatch.clone().unwrap_or(0);
         let max_fee = buy_preimage.max_send_amount.saturating_sub(
             buy_preimage
                 .payment_data
@@ -556,16 +622,17 @@ impl GatewayPayInvoice {
         payment_data: PaymentData,
         contract: OutgoingContractAccount,
         common: GatewayPayCommon,
+        fresh_dispatch_refusal: Option<OutgoingContractError>,
     ) -> GatewayPayStateMachine {
         debug!("Buying preimage via direct swap for contract {contract:?}");
         match payment_data.try_into() {
             Ok(swap_params) => match client
                 .get_first_module::<GatewayClientModule>()
                 .expect("Must have client module")
-                .gateway_handle_direct_swap(swap_params)
+                .gateway_handle_direct_swap(swap_params, fresh_dispatch_refusal.is_none())
                 .await
             {
-                Ok(operation_id) => {
+                Ok(Some(operation_id)) => {
                     debug!("Direct swap initiated for contract {contract:?}");
                     GatewayPayStateMachine {
                         common,
@@ -574,6 +641,25 @@ impl GatewayPayInvoice {
                                 contract,
                                 federation_id: client.federation_id(),
                                 operation_id,
+                            },
+                        )),
+                    }
+                }
+                Ok(None) => {
+                    let error = fresh_dispatch_refusal
+                        .expect("the relay only refuses a fresh dispatch when one was denied");
+                    GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::CancelContract(Box::new(
+                            GatewayPayCancelContract {
+                                contract: contract.clone(),
+                                error: OutgoingPaymentError {
+                                    contract_id: contract.contract.contract_id(),
+                                    contract: Some(contract.clone()),
+                                    error_type: OutgoingPaymentErrorType::InvalidOutgoingContract {
+                                        error,
+                                    },
+                                },
                             },
                         )),
                     }
@@ -649,8 +735,14 @@ impl GatewayPayInvoice {
             .amount()
             .ok_or(OutgoingContractError::InvoiceMissingAmount)?;
 
+        // A pruned invoice carries a raw, caller-controlled amount. Add the fee
+        // with checked arithmetic so a huge amount cannot overflow `u64` and
+        // wrap the underfunding check below into passing against a near-empty
+        // contract.
         let gateway_fee = routing_fees.to_amount(&payment_amount);
-        let necessary_contract_amount = payment_amount + gateway_fee;
+        let necessary_contract_amount = payment_amount
+            .checked_add(gateway_fee)
+            .ok_or(OutgoingContractError::InvoiceAmountTooLarge)?;
         if account.amount < necessary_contract_amount {
             return Err(OutgoingContractError::Underfunded(
                 necessary_contract_amount,
@@ -658,21 +750,34 @@ impl GatewayPayInvoice {
             ));
         }
 
+        // `max_delay` becomes the lightning node's CLTV limit, and LND treats
+        // a limit of zero as "unset", enforcing its `--max-cltv-expiry`
+        // default instead. That would let the HTLC outlive the contract
+        // timelock, so zero must fail closed just like the underflow case.
         let max_delay = u64::from(account.contract.timelock)
             .checked_sub(consensus_block_count.saturating_sub(1))
-            .and_then(|delta| delta.checked_sub(TIMELOCK_DELTA));
-        if max_delay.is_none() {
-            return Err(OutgoingContractError::TimeoutTooClose);
-        }
+            .and_then(|delta| delta.checked_sub(TIMELOCK_DELTA))
+            .filter(|max_delay| *max_delay > 0);
 
-        if payment_data.is_expired() {
-            return Err(OutgoingContractError::InvoiceExpired(
+        // The timelock budget and invoice expiry drift with the chain tip and
+        // the wall clock, and this validation re-runs from scratch whenever
+        // the state machine restarts. Failing validation outright would
+        // cancel a payment that may have been dispatched before a crash and
+        // still be in flight -- one that settles or fails regardless of
+        // either gate -- returning the escrow while the payment can still
+        // claim it. They are therefore recorded as a refusal that each rail
+        // consults only before dispatching fresh; anything already started
+        // resumes unconditionally.
+        let fresh_dispatch = match max_delay {
+            None => Err(OutgoingContractError::TimeoutTooClose),
+            Some(_) if payment_data.is_expired() => Err(OutgoingContractError::InvoiceExpired(
                 payment_data.expiry_timestamp(),
-            ));
-        }
+            )),
+            Some(max_delay) => Ok(max_delay),
+        };
 
         Ok(PaymentParameters {
-            max_delay: max_delay.unwrap(),
+            fresh_dispatch,
             max_send_amount: account.amount,
             payment_data: payment_data.clone(),
         })
@@ -681,7 +786,11 @@ impl GatewayPayInvoice {
 
 #[derive(Debug, Clone, Eq, PartialEq, Decodable, Encodable, Serialize, Deserialize)]
 struct PaymentParameters {
-    max_delay: u64,
+    /// `Ok` carries the CLTV budget a fresh dispatch must respect. `Err` means
+    /// a drifted pre-dispatch gate (timelock budget or invoice expiry) forbids
+    /// starting one. Each rail consults this only before initiating; a
+    /// dispatch that already exists resumes unconditionally.
+    fresh_dispatch: Result<u64, OutgoingContractError>,
     max_send_amount: Amount,
     payment_data: PaymentData,
 }
@@ -998,7 +1107,7 @@ mod tests {
     use fedimint_ln_common::contracts::outgoing::{OutgoingContract, OutgoingContractAccount};
     use lightning_invoice::RoutingFees;
 
-    use super::{GatewayPayInvoice, OutgoingContractError};
+    use super::{GatewayPayInvoice, OutgoingContractError, TIMELOCK_DELTA};
 
     const CONSENSUS_BLOCK_COUNT: u64 = 1;
     const INVOICE_AMOUNT: Amount = Amount::from_msats(1000);
@@ -1013,15 +1122,30 @@ mod tests {
     /// An account that is valid in every respect other than the payment hash,
     /// which the caller chooses so a mismatch can be tested in isolation.
     fn contract_account(hash: sha256::Hash) -> OutgoingContractAccount {
+        // Comfortably beyond `CONSENSUS_BLOCK_COUNT + TIMELOCK_DELTA`
+        contract_account_with_timelock(hash, 100)
+    }
+
+    fn contract_account_with_timelock(
+        hash: sha256::Hash,
+        timelock: u32,
+    ) -> OutgoingContractAccount {
+        contract_account_with(hash, INVOICE_AMOUNT, timelock)
+    }
+
+    fn contract_account_with(
+        hash: sha256::Hash,
+        amount: Amount,
+        timelock: u32,
+    ) -> OutgoingContractAccount {
         let gateway_key = secp256k1::PublicKey::from_keypair(&gateway_keypair());
 
         OutgoingContractAccount {
-            amount: INVOICE_AMOUNT,
+            amount,
             contract: OutgoingContract {
                 hash,
                 gateway_key,
-                // Comfortably beyond `CONSENSUS_BLOCK_COUNT + TIMELOCK_DELTA`
-                timelock: 100,
+                timelock,
                 user_key: gateway_key,
                 cancelled: false,
             },
@@ -1029,8 +1153,12 @@ mod tests {
     }
 
     fn payment_data(payment_hash: sha256::Hash) -> PaymentData {
+        pruned_payment_data(payment_hash, INVOICE_AMOUNT)
+    }
+
+    fn pruned_payment_data(payment_hash: sha256::Hash, amount: Amount) -> PaymentData {
         PaymentData::PrunedInvoice(PrunedInvoice {
-            amount: INVOICE_AMOUNT,
+            amount,
             destination: secp256k1::PublicKey::from_keypair(&gateway_keypair()),
             destination_features: vec![],
             payment_hash,
@@ -1045,17 +1173,44 @@ mod tests {
         contract_hash: sha256::Hash,
         invoice_hash: sha256::Hash,
     ) -> Result<(), OutgoingContractError> {
+        validate_account(&contract_account(contract_hash), invoice_hash)
+    }
+
+    /// Surfaces a recorded fresh-dispatch refusal as an error so tests can
+    /// assert on the drifting gates alongside the hard validation errors.
+    fn validate_account(
+        account: &OutgoingContractAccount,
+        invoice_hash: sha256::Hash,
+    ) -> Result<(), OutgoingContractError> {
+        validate_payment_data(account, &payment_data(invoice_hash))
+    }
+
+    fn validate_payment_data(
+        account: &OutgoingContractAccount,
+        payment_data: &PaymentData,
+    ) -> Result<(), OutgoingContractError> {
         GatewayPayInvoice::validate_outgoing_account(
-            &contract_account(contract_hash),
+            account,
             gateway_keypair(),
             CONSENSUS_BLOCK_COUNT,
-            &payment_data(invoice_hash),
+            payment_data,
             RoutingFees {
                 base_msat: 0,
                 proportional_millionths: 0,
             },
         )
-        .map(|_| ())
+        .and_then(|parameters| parameters.fresh_dispatch.map(|_| ()))
+    }
+
+    /// Payment data whose invoice expired at the unix epoch.
+    fn expired_payment_data(payment_hash: sha256::Hash) -> PaymentData {
+        match payment_data(payment_hash) {
+            PaymentData::PrunedInvoice(mut invoice) => {
+                invoice.expiry_timestamp = 0;
+                PaymentData::PrunedInvoice(invoice)
+            }
+            PaymentData::Invoice(..) => unreachable!("the fixture builds a pruned invoice"),
+        }
     }
 
     /// Guards against the fixture being invalid for some unrelated reason,
@@ -1065,6 +1220,68 @@ mod tests {
         let hash = sha256::Hash::hash(b"preimage");
 
         assert_eq!(validate(hash, hash), Ok(()));
+    }
+
+    /// A timelock close enough to the consensus height that `max_delay`
+    /// computes to zero must refuse a fresh dispatch: LND treats a CLTV limit
+    /// of zero as "unset" and substitutes its `--max-cltv-expiry` default,
+    /// which would let the HTLC outlive the contract timelock and the user
+    /// refund the contract while the payment is still in flight. The refusal
+    /// is recorded rather than failing validation so a payment dispatched
+    /// before a restart can still resume.
+    #[test]
+    fn rejects_timelock_yielding_a_max_delay_of_zero() {
+        let hash = sha256::Hash::hash(b"preimage");
+        let zero_delay_timelock =
+            u32::try_from(CONSENSUS_BLOCK_COUNT - 1 + TIMELOCK_DELTA).expect("small constant");
+
+        let validate_with_timelock =
+            |timelock| validate_account(&contract_account_with_timelock(hash, timelock), hash);
+
+        // The smallest acceptable timelock, asserted so this test pins the
+        // boundary rather than passing against a check that rejects
+        // everything.
+        assert_eq!(validate_with_timelock(zero_delay_timelock + 1), Ok(()));
+
+        assert_eq!(
+            validate_with_timelock(zero_delay_timelock),
+            Err(OutgoingContractError::TimeoutTooClose)
+        );
+        assert_eq!(
+            validate_with_timelock(zero_delay_timelock - 1),
+            Err(OutgoingContractError::TimeoutTooClose)
+        );
+    }
+
+    /// An expired invoice must refuse a fresh dispatch. Like the timelock
+    /// gate, the refusal is recorded rather than failing validation, so a
+    /// payment dispatched before a restart can still resume past it.
+    #[test]
+    fn records_refusal_for_an_expired_invoice() {
+        let hash = sha256::Hash::hash(b"preimage");
+
+        assert_eq!(
+            validate_payment_data(&contract_account(hash), &expired_payment_data(hash)),
+            Err(OutgoingContractError::InvoiceExpired(0))
+        );
+    }
+
+    /// When both drifting gates fail, the timelock refusal is reported: with
+    /// no timelock budget left the payment cannot be dispatched at all, so
+    /// expiry never gets a say. Pinned so error reporting stays stable.
+    #[test]
+    fn timelock_refusal_takes_precedence_over_expiry() {
+        let hash = sha256::Hash::hash(b"preimage");
+        let zero_delay_timelock =
+            u32::try_from(CONSENSUS_BLOCK_COUNT - 1 + TIMELOCK_DELTA).expect("small constant");
+
+        assert_eq!(
+            validate_payment_data(
+                &contract_account_with_timelock(hash, zero_delay_timelock),
+                &expired_payment_data(hash),
+            ),
+            Err(OutgoingContractError::TimeoutTooClose)
+        );
     }
 
     #[test]
@@ -1081,6 +1298,49 @@ mod tests {
             Err(OutgoingContractError::InvalidOutgoingContract {
                 contract_id: contract_account(contract_hash).contract.contract_id(),
             })
+        );
+    }
+
+    /// A pruned invoice's amount is a raw, caller-supplied `u64`. An amount so
+    /// large that `payment_amount + fee` overflows must be rejected: otherwise
+    /// the sum wraps to a small value, the underfunding check passes against a
+    /// near-empty contract, and the gateway pays out real funds it can never
+    /// reclaim.
+    #[test]
+    fn rejects_invoice_amount_that_would_overflow_the_underfunding_check() {
+        let hash = sha256::Hash::hash(b"preimage");
+
+        // A one-millisatoshi base fee makes `u64::MAX + fee` wrap to zero, so
+        // before the fix the underfunding check passed against any contract.
+        let fees = RoutingFees {
+            base_msat: 1,
+            proportional_millionths: 0,
+        };
+
+        let validate_amount = |contract_amount: Amount, invoice_amount: Amount| {
+            GatewayPayInvoice::validate_outgoing_account(
+                &contract_account_with(hash, contract_amount, 100),
+                gateway_keypair(),
+                CONSENSUS_BLOCK_COUNT,
+                &pruned_payment_data(hash, invoice_amount),
+                fees,
+            )
+            .map(|_| ())
+        };
+
+        // The attack: a wrapping invoice amount against a near-empty contract.
+        assert_eq!(
+            validate_amount(Amount::from_msats(1), Amount::from_msats(u64::MAX)),
+            Err(OutgoingContractError::InvoiceAmountTooLarge)
+        );
+
+        // The largest amount whose sum with the fee still fits is accepted when
+        // the contract funds it, so the guard rejects exactly the overflow and
+        // nothing else.
+        let largest_representable = Amount::from_msats(u64::MAX - u64::from(fees.base_msat));
+        assert_eq!(
+            validate_amount(Amount::from_msats(u64::MAX), largest_representable),
+            Ok(())
         );
     }
 }

@@ -1,5 +1,5 @@
 use fedimint_core::config::P2PMessage;
-use fedimint_core::net::peers::DynP2PConnections;
+use fedimint_core::net::DynP2PConnections;
 use fedimint_core::{NumPeers, PeerId};
 
 /// A handle passed to `ServerModuleInit::distributed_gen`

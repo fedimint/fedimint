@@ -109,7 +109,7 @@ impl Debug for OperationId {
 }
 
 impl FromStr for OperationId {
-    type Err = anyhow::Error;
+    type Err = hex::FromHexError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bytes: [u8; 32] = hex::FromHex::from_hex(s)?;
@@ -305,10 +305,7 @@ impl DecoderBuilder {
                 };
                 let typed_val =
                     Type::consensus_decode_partial(&mut reader, decoders).map_err(|err| {
-                        let err: anyhow::Error = err.into();
-                        DecodeError::new_custom(
-                            err.context(format!("while decoding Dyn type module_id={instance}")),
-                        )
+                        err.context(format!("while decoding Dyn type module_id={instance}"))
                     })?;
                 let dyn_val = typed_val.into_dyn(instance);
                 let any_val: Box<dyn Any> = Box::new(dyn_val);
@@ -364,15 +361,11 @@ impl Decoder {
         let left = reader.limit();
 
         if left != 0 {
-            return Err(fedimint_core::encoding::DecodeError::new_custom(
-                anyhow::anyhow!(
-                    "Dyn type did not consume all bytes during decoding; module_id={}; expected={}; left={}; type={}",
-                    module_id,
-                    total_len,
-                    left,
-                    std::any::type_name::<DynType>(),
-                ),
-            ));
+            return Err(fedimint_core::encoding::DecodeError::custom(format!(
+                "Dyn type did not consume all bytes during decoding; module_id={module_id}; \
+                 expected={total_len}; left={left}; type={}",
+                std::any::type_name::<DynType>(),
+            )));
         }
 
         Ok(val)

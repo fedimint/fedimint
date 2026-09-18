@@ -17,7 +17,7 @@ use fedimint_core::config::{
 };
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{
-    DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCore,
+    DatabaseTransaction, DatabaseVersion, DbMigrationError, IDatabaseTransactionOpsCore,
     IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::Encodable;
@@ -380,7 +380,7 @@ impl ServerModuleInit for MintInit {
 
 async fn migrate_db_v0(
     mut migration_context: ServerModuleDbMigrationFnContext<'_, Mint>,
-) -> anyhow::Result<()> {
+) -> Result<(), DbMigrationError> {
     let blind_nonces = migration_context
         .get_typed_module_history_stream()
         .await
@@ -430,7 +430,7 @@ async fn migrate_db_v0(
 // Remove now unused ECash backups from DB. Backup functionality moved to core.
 async fn migrate_db_v1(
     mut migration_context: ServerModuleDbMigrationFnContext<'_, Mint>,
-) -> anyhow::Result<()> {
+) -> Result<(), DbMigrationError> {
     migration_context
         .dbtx()
         .raw_remove_by_prefix(&[0x15])
@@ -440,7 +440,9 @@ async fn migrate_db_v1(
 }
 
 // Backfill RecoveryItem and RecoveryBlindNonceOutpoint from module history
-async fn migrate_db_v2(mut ctx: ServerModuleDbMigrationFnContext<'_, Mint>) -> anyhow::Result<()> {
+async fn migrate_db_v2(
+    mut ctx: ServerModuleDbMigrationFnContext<'_, Mint>,
+) -> Result<(), DbMigrationError> {
     let mut recovery_items = Vec::new();
     let mut blind_nonce_outpoints = Vec::new();
     let mut stream = ctx.get_typed_module_history_stream().await;

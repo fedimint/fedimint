@@ -6,7 +6,7 @@ use async_stream::stream;
 use fedimint_client_module::meta::{FetchKind, MetaSource, MetaValue, MetaValues};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::task::waiter::Waiter;
-use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _};
+use fedimint_core::util::FmtCompact as _;
 use fedimint_logging::LOG_CLIENT;
 use futures::StreamExt as _;
 use serde::de::DeserializeOwned;
@@ -200,7 +200,7 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
         match meta_values {
             Ok(meta_values) => self.save_meta_values(client, &meta_values).await,
             Err(error) => {
-                warn!(target: LOG_CLIENT, err = %error.fmt_compact_anyhow(), "failed to fetch source");
+                warn!(target: LOG_CLIENT, err = %error.fmt_compact(), "failed to fetch source");
             }
         };
         self.initial_fetch_waiter.done();

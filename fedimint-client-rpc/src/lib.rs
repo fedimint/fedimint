@@ -15,12 +15,12 @@ use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::util::{BoxFuture, BoxStream};
+use fedimint_core::util::{BoxFuture, BoxStream, FmtCompactAnyhow as _};
 use fedimint_core::{Amount, TieredCounts, impl_db_record};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_ln_client::{LightningClientInit, LightningClientModule};
 use fedimint_meta_client::{MetaClientInit, MetaClientModule};
-use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes};
+use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes, OOBNotesParseError};
 use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
 use futures::StreamExt;
 use futures::future::{AbortHandle, Abortable};
@@ -185,7 +185,7 @@ impl RpcGlobalState {
     }
 
     async fn client_builder() -> Result<fedimint_client::ClientBuilder, anyhow::Error> {
-        let mut builder = fedimint_client::Client::builder().await?;
+        let mut builder = fedimint_client::Client::builder().await;
         builder.with_module(MintClientInit);
         builder.with_module(LightningClientInit::default());
         builder.with_module(WalletClientInit(None));
@@ -534,7 +534,7 @@ impl RpcGlobalState {
                     Err(e) => RpcResponse {
                         request_id,
                         kind: RpcResponseKind::Error {
-                            error: e.to_string(),
+                            error: e.fmt_compact_anyhow().to_string(),
                         },
                     },
                 };
@@ -646,9 +646,8 @@ impl RpcGlobalState {
     }
 }
 
-pub fn parse_oob_notes(oob_notes_str: &str) -> anyhow::Result<ParsedNoteDetails> {
-    let oob_notes =
-        OOBNotes::from_str(oob_notes_str).context("Failed to parse OOB notes string")?;
+pub fn parse_oob_notes(oob_notes_str: &str) -> Result<ParsedNoteDetails, OOBNotesParseError> {
+    let oob_notes = OOBNotes::from_str(oob_notes_str)?;
 
     let total_amount = oob_notes.total_amount();
     let federation_id_prefix = oob_notes.federation_id_prefix();

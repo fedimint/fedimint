@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
@@ -26,6 +26,9 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod envs;
+pub mod federation_status;
+
+pub use federation_status::*;
 
 pub const V1_API_ENDPOINT: &str = "v1";
 
@@ -36,6 +39,7 @@ pub const CONFIGURATION_ENDPOINT: &str = "/config";
 pub const CONNECT_FED_ENDPOINT: &str = "/connect_fed";
 pub const CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT: &str = "/create_bolt11_invoice_for_operator";
 pub const CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT: &str = "/create_bolt12_offer_for_operator";
+pub const FEDERATION_STATUS_ENDPOINT: &str = "/federation_status";
 pub const GATEWAY_INFO_ENDPOINT: &str = "/info";
 pub const INVITE_CODES_ENDPOINT: &str = "/invite_codes";
 pub const GET_BALANCES_ENDPOINT: &str = "/balances";
@@ -57,6 +61,7 @@ pub const PEGIN_FROM_ONCHAIN_ENDPOINT: &str = "/pegin_from_onchain";
 pub const RECEIVE_ECASH_ENDPOINT: &str = "/receive_ecash";
 pub const SET_CHANNEL_FEES_ENDPOINT: &str = "/set_channel_fees";
 pub const SET_FEES_ENDPOINT: &str = "/set_fees";
+pub const SET_PAYMENT_POLICY_ENDPOINT: &str = "/set_payment_policy";
 pub const STOP_ENDPOINT: &str = "/stop";
 pub const SEND_ONCHAIN_ENDPOINT: &str = "/send_onchain";
 pub const SPEND_ECASH_ENDPOINT: &str = "/spend_ecash";
@@ -168,8 +173,48 @@ pub struct FederationConfig {
     pub federation_index: u64,
     pub lightning_fee: PaymentFee,
     pub transaction_fee: PaymentFee,
+    /// Restrictions on the payments the gateway performs on behalf of this
+    /// federation's clients. Empty means every kind of payment is performed.
+    /// Changed with `set_payment_policy`.
+    ///
+    /// Gateways that predate this field do not send it and perform every kind
+    /// of payment, so it defaults to no restrictions when absent.
+    #[serde(default)]
+    pub payment_policies: BTreeSet<PaymentPolicy>,
     #[allow(deprecated)] // only here for decoding backward-compat
     pub _connector: ConnectorType,
+}
+
+impl FederationConfig {
+    /// Whether the gateway accepts incoming Lightning payments on behalf of
+    /// this federation's clients.
+    pub fn receive_enabled(&self) -> bool {
+        !self
+            .payment_policies
+            .contains(&PaymentPolicy::ReceivesDisabled)
+    }
+}
+
+/// A restriction on the payments the gateway performs on behalf of a
+/// federation's clients.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Encodable,
+    Decodable,
+    Serialize,
+    Deserialize,
+)]
+pub enum PaymentPolicy {
+    /// Do not accept incoming Lightning payments: refuse to create invoices
+    /// and fail back the payments of invoices that were already issued.
+    ReceivesDisabled,
 }
 
 /// Information about one of the feds we are connected to
@@ -208,6 +253,19 @@ pub struct SetFeesPayload {
     pub lightning_parts_per_million: Option<u64>,
     pub transaction_base: Option<Amount>,
     pub transaction_parts_per_million: Option<u64>,
+}
+
+/// Changes which payments the gateway performs on behalf of a federation's
+/// clients. Like `SetFeesPayload`, every setting is optional and only the ones
+/// present change, so further kinds of payments can be added later.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SetPaymentPolicyPayload {
+    /// The federation to change, or every connected federation when absent
+    pub federation_id: Option<FederationId>,
+    /// Whether to accept incoming Lightning payments for the federation's
+    /// clients. Turning this off refuses new invoices and fails back the
+    /// payments of invoices that were already issued.
+    pub receive_enabled: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

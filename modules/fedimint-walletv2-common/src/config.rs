@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use bitcoin::Network;
 use bitcoin::hashes::{Hash, sha256};
+use fedimint_core::config::ExcessiveRelativeFeeError;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, PeerId, plugin_types_trait_impl_config, weight_to_vbytes};
@@ -147,13 +148,17 @@ impl FeeConsensus {
     /// percent.
     ///
     /// # Errors
-    /// - This constructor returns an error if the relative fee is in excess of
-    ///   ten thousand parts per million.
-    pub fn new(parts_per_million: u64) -> anyhow::Result<Self> {
-        anyhow::ensure!(
-            parts_per_million <= 10_000,
-            "Relative fee over ten thousand parts per million is excessive"
-        );
+    /// - Returns [`ExcessiveRelativeFeeError`] if the relative fee is in excess
+    ///   of ten thousand parts per million.
+    pub fn new(parts_per_million: u64) -> Result<Self, ExcessiveRelativeFeeError> {
+        const MAX_PARTS_PER_MILLION: u64 = 10_000;
+
+        if parts_per_million > MAX_PARTS_PER_MILLION {
+            return Err(ExcessiveRelativeFeeError {
+                parts_per_million,
+                max: MAX_PARTS_PER_MILLION,
+            });
+        }
 
         Ok(Self {
             base: Amount::from_sats(100),
@@ -172,6 +177,15 @@ impl FeeConsensus {
             .checked_add(self.base.msats)
             .expect("The division creates sufficient headroom to add the base fee")
     }
+}
+
+#[test]
+fn a_relative_fee_over_the_limit_is_rejected() {
+    let err: ExcessiveRelativeFeeError =
+        FeeConsensus::new(10_001).expect_err("A fee over one percent is excessive");
+
+    assert_eq!(err.parts_per_million, 10_001);
+    assert_eq!(err.max, 10_000);
 }
 
 #[test]

@@ -22,6 +22,7 @@ use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1;
 use db::{DbKeyPrefix, GatewayKey, IncomingContractStreamIndexKey};
 use fedimint_api_client::api::DynModuleApi;
+use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
@@ -42,22 +43,22 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::duration_since_epoch;
-use fedimint_core::util::SafeUrl;
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
-    GatewayConnection, PaymentFee, RealGatewayConnection, RoutingInfo,
+    GatewayConnection, MAX_INVOICE_EXPIRY_SECS, PaymentFee, RealGatewayConnection, RoutingInfo,
 };
 use fedimint_lnv2_common::{
     Bolt11InvoiceDescription, GatewayApi, KIND, LightningCommonInit, LightningInvoice,
-    LightningModuleTypes, LightningOutput, LightningOutputV0, MINIMUM_INCOMING_CONTRACT_AMOUNT,
-    lnurl, tweak,
+    LightningModuleTypes, LightningOutput, LightningOutputV0, lnurl, tweak,
 };
+use fedimint_logging::LOG_CLIENT_MODULE_LNV2;
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Currency};
-use secp256k1::{Keypair, PublicKey, Scalar, SecretKey, ecdh};
+use secp256k1::{Keypair, Scalar, SecretKey, ecdh};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum::IntoEnumIterator as _;
@@ -203,6 +204,10 @@ pub enum ReceiveOperationState {
     Claimed,
     /// Either a programming error has occurred or the federation is malicious.
     Failure,
+    /// The contract is worth less than the federation charges to claim it, so
+    /// it was left unclaimed. Reachable without any payment request of ours:
+    /// anyone can address an incoming contract to a published lnurl key.
+    Uneconomical,
 }
 
 /// The final state of an operation receiving a payment over lightning.
@@ -214,6 +219,9 @@ pub enum FinalReceiveOperationState {
     Claimed,
     /// Either a programming error has occurred or the federation is malicious.
     Failure,
+    /// The contract is worth less than the federation charges to claim it, so
+    /// it was left unclaimed.
+    Uneconomical,
 }
 
 pub type ReceiveResult = Result<(Bolt11Invoice, OperationId), ReceiveError>;
@@ -535,13 +543,85 @@ impl LightningClientModule {
     ///
     /// The absolute fee for a payment can be calculated from the operation meta
     /// to be shown to the user in the transaction history.
-    #[allow(clippy::too_many_lines)]
     pub async fn send(
         &self,
         invoice: Bolt11Invoice,
         gateway: Option<SafeUrl>,
         custom_meta: Value,
     ) -> Result<OperationId, SendPaymentError> {
+        let (amount, operation_id) = self.validate_send_invoice(&invoice).await?;
+
+        let (gateway_api, routing_info) = self.resolve_send_gateway(&invoice, gateway).await?;
+
+        self.fund_outgoing_contract(
+            invoice,
+            amount,
+            operation_id,
+            gateway_api,
+            routing_info,
+            custom_meta,
+        )
+        .await
+    }
+
+    /// Pays `invoice` through `gateway` at the terms the caller already
+    /// checked.
+    ///
+    /// [`Self::send`] reads the gateway's terms itself, so a caller that showed
+    /// the user a fee and asked for approval has no guarantee the funded
+    /// contract carries that fee: the gateway may change its schedule between
+    /// the two reads. This variant takes the `send_fee` and `expiration_delta`
+    /// the caller obtained from [`RoutingInfo::send_parameters`] and refuses
+    /// with [`SendWithTermsError::TermsChanged`], before funding anything, if
+    /// the gateway currently reports different terms. A cheaper fee counts
+    /// as changed too, so the funded contract always matches what was
+    /// approved. This binds the funded contract to the approved terms, not
+    /// the gateway's acceptance: a gateway that raises its schedule after the
+    /// check can still refuse the contract, in which case the payment is
+    /// refunded. The error carries the current terms for re-quoting.
+    pub async fn send_with_terms(
+        &self,
+        invoice: Bolt11Invoice,
+        gateway: SafeUrl,
+        send_fee: PaymentFee,
+        expiration_delta: u64,
+        custom_meta: Value,
+    ) -> Result<OperationId, SendWithTermsError> {
+        let (amount, operation_id) = self.validate_send_invoice(&invoice).await?;
+
+        let (gateway_api, routing_info) =
+            self.resolve_send_gateway(&invoice, Some(gateway)).await?;
+
+        let current = routing_info.send_parameters(&invoice);
+
+        if current != (send_fee, expiration_delta) {
+            return Err(SendWithTermsError::TermsChanged {
+                send_fee: current.0,
+                expiration_delta: current.1,
+            });
+        }
+
+        let operation_id = self
+            .fund_outgoing_contract(
+                invoice,
+                amount,
+                operation_id,
+                gateway_api,
+                routing_info,
+                custom_meta,
+            )
+            .await?;
+
+        Ok(operation_id)
+    }
+
+    /// Checks that `invoice` is payable by this client and has not been
+    /// attempted before, returning its amount in millisatoshis and the
+    /// operation id a payment of it uses.
+    async fn validate_send_invoice(
+        &self,
+        invoice: &Bolt11Invoice,
+    ) -> Result<(u64, OperationId), SendPaymentError> {
         let amount = invoice
             .amount_milli_satoshis()
             .ok_or(SendPaymentError::InvoiceMissingAmount)?;
@@ -566,25 +646,48 @@ impl LightningClientModule {
             return Err(SendPaymentError::DuplicatePaymentAttempt(operation_id));
         }
 
-        let (ephemeral_tweak, ephemeral_pk) = tweak::generate(self.keypair.public_key());
+        Ok((amount, operation_id))
+    }
 
-        let refund_keypair = SecretKey::from_slice(&ephemeral_tweak)
-            .expect("32 bytes, within curve order")
-            .keypair(secp256k1::SECP256K1);
-
-        let (gateway_api, routing_info) = match gateway {
-            Some(gateway_api) => (
+    /// Resolves the gateway to pay `invoice` through and its current routing
+    /// info: the given one, or an automatically selected one when `None`.
+    async fn resolve_send_gateway(
+        &self,
+        invoice: &Bolt11Invoice,
+        gateway: Option<SafeUrl>,
+    ) -> Result<(SafeUrl, RoutingInfo), SendPaymentError> {
+        match gateway {
+            Some(gateway_api) => Ok((
                 gateway_api.clone(),
                 self.routing_info(&gateway_api)
                     .await
                     .map_err(|e| SendPaymentError::FailedToConnectToGateway(e.to_string()))?
                     .ok_or(SendPaymentError::FederationNotSupported)?,
-            ),
+            )),
             None => self
                 .select_gateway(Some(invoice.clone()))
                 .await
-                .map_err(SendPaymentError::SelectGateway)?,
-        };
+                .map_err(SendPaymentError::SelectGateway),
+        }
+    }
+
+    /// Funds an outgoing contract for `invoice` at the terms in `routing_info`
+    /// and starts the state machine that hands it to `gateway_api`.
+    #[allow(clippy::too_many_lines)]
+    async fn fund_outgoing_contract(
+        &self,
+        invoice: Bolt11Invoice,
+        amount: u64,
+        operation_id: OperationId,
+        gateway_api: SafeUrl,
+        routing_info: RoutingInfo,
+        custom_meta: Value,
+    ) -> Result<OperationId, SendPaymentError> {
+        let (ephemeral_tweak, ephemeral_pk) = tweak::generate(self.keypair.public_key());
+
+        let refund_keypair = SecretKey::from_slice(&ephemeral_tweak)
+            .expect("32 bytes, within curve order")
+            .keypair(secp256k1::SECP256K1);
 
         let (send_fee, expiration_delta) = routing_info.send_parameters(&invoice);
 
@@ -659,7 +762,7 @@ impl LightningClientModule {
                 transaction,
             )
             .await
-            .map_err(|e| SendPaymentError::FailedToFundPayment(e.to_string()))?;
+            .map_err(|e| SendPaymentError::FailedToFundPayment(e.fmt_compact().to_string()))?;
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
@@ -687,7 +790,7 @@ impl LightningClientModule {
     pub async fn get_invoice_send_status(
         &self,
         invoice: &Bolt11Invoice,
-    ) -> anyhow::Result<InvoiceSendStatus> {
+    ) -> Result<InvoiceSendStatus, OperationLookupError> {
         // Send only creates attempt index 0 nowadays, but older clients
         // allocated a fresh index per retry, so scan for the latest attempt.
         // No new attempt was ever allocated after a success, so the latest
@@ -732,7 +835,7 @@ impl LightningClientModule {
     pub async fn subscribe_send_operation_state_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<SendOperationState>> {
+    ) -> Result<UpdateStreamOrOutcome<SendOperationState>, OperationLookupError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
@@ -797,7 +900,7 @@ impl LightningClientModule {
     pub async fn await_final_send_operation_state(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<FinalSendOperationState> {
+    ) -> Result<FinalSendOperationState, OperationLookupError> {
         let mut stream = self
             .subscribe_send_operation_state_updates(operation_id)
             .await?
@@ -840,168 +943,146 @@ impl LightningClientModule {
         gateway: Option<SafeUrl>,
         custom_meta: Value,
     ) -> Result<(Bolt11Invoice, OperationId), ReceiveError> {
-        let (gateway, contract, invoice) = self
-            .create_contract_and_fetch_invoice(
-                self.keypair.public_key(),
+        if expiry_secs > MAX_INVOICE_EXPIRY_SECS {
+            return Err(ReceiveError::InvoiceExpiryTooLong);
+        }
+
+        let (gateway, routing_info) = self.resolve_receive_gateway(gateway).await?;
+
+        self.receive_with_routing_info(
+            amount,
+            expiry_secs,
+            description,
+            gateway,
+            routing_info,
+            custom_meta,
+        )
+        .await
+    }
+
+    /// Requests an invoice from `gateway` at the receive fee the caller
+    /// already checked.
+    ///
+    /// [`Self::receive`] reads the gateway's fee itself, so a caller that
+    /// showed the user a fee has no guarantee the incoming contract is
+    /// created at that fee: the gateway may change its schedule between the
+    /// two reads. This variant takes the `receive_fee` the caller obtained
+    /// from [`RoutingInfo::receive_fee`] and refuses with
+    /// [`ReceiveWithTermsError::TermsChanged`], before creating anything, if
+    /// the gateway currently reports a different fee. A cheaper fee counts as
+    /// changed too, so the contract always matches what was approved; the
+    /// error carries the current fee for re-quoting.
+    pub async fn receive_with_terms(
+        &self,
+        amount: Amount,
+        expiry_secs: u32,
+        description: Bolt11InvoiceDescription,
+        gateway: SafeUrl,
+        receive_fee: PaymentFee,
+        custom_meta: Value,
+    ) -> Result<(Bolt11Invoice, OperationId), ReceiveWithTermsError> {
+        if expiry_secs > MAX_INVOICE_EXPIRY_SECS {
+            return Err(ReceiveError::InvoiceExpiryTooLong.into());
+        }
+
+        let (gateway, routing_info) = self.resolve_receive_gateway(Some(gateway)).await?;
+
+        if routing_info.receive_fee != receive_fee {
+            return Err(ReceiveWithTermsError::TermsChanged {
+                receive_fee: routing_info.receive_fee,
+            });
+        }
+
+        let (invoice, operation_id) = self
+            .receive_with_routing_info(
                 amount,
                 expiry_secs,
                 description,
                 gateway,
+                routing_info,
+                custom_meta,
             )
             .await?;
-
-        let operation_id = self
-            .receive_incoming_contract(
-                self.keypair.secret_key(),
-                contract.clone(),
-                LightningOperationMeta::Receive(ReceiveOperationMeta {
-                    gateway,
-                    contract,
-                    invoice: LightningInvoice::Bolt11(invoice.clone()),
-                    custom_meta,
-                }),
-            )
-            .await
-            .expect("The contract has been generated with our public key");
 
         Ok((invoice, operation_id))
     }
 
-    /// Computes the federation fee a `receive` of `amount` would incur, without
-    /// submitting anything.
-    ///
-    /// When the incoming contract is claimed, the client submits a transaction
-    /// with a single Lightning input worth the contract amount; the primary
-    /// module balances it by minting the change credited to the wallet. This
-    /// quotes the fee of that transaction — the Lightning input fee, the mint
-    /// output fees, and any sub-denomination dust — via the shared,
-    /// module-agnostic fee quote.
-    ///
-    /// The gateway's off-chain Lightning fee is deliberately excluded: this is
-    /// only the fee of the on-federation transaction. For that reason the quote
-    /// is taken on `amount` directly (rather than the gateway-reduced contract
-    /// amount), and no gateway round-trip is needed.
-    pub async fn receive_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
-        self.client_ctx
-            .fee_quote(
-                OperationId::new_random(),
-                FeeQuoteRequest {
-                    input_amount: Amounts::new_bitcoin(amount),
-                    output_amount: Amounts::ZERO,
-                    input_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.fee(amount)),
-                    output_fee: Amounts::ZERO,
-                },
-            )
-            .await
-    }
-
-    /// Computes the federation fee a `send` funding an outgoing contract worth
-    /// `amount` would incur, without submitting anything.
-    ///
-    /// When a payment is sent, the client submits a transaction with a single
-    /// Lightning output (the outgoing contract) worth `amount`; the primary
-    /// module balances it by spending ecash to fund the contract and minting
-    /// any change. This quotes the fee of that transaction — the Lightning
-    /// output fee, the mint input fees on the funding notes, any mint change
-    /// output fees, and sub-denomination dust — via the shared, module-agnostic
-    /// fee quote.
-    ///
-    /// The gateway's off-chain Lightning fee is deliberately excluded: it is
-    /// part of the contract `amount` the gateway claims, not the on-federation
-    /// transaction fee. So `amount` is the full outgoing contract value
-    /// (`send_fee.add_to(invoice_amount)`).
-    pub async fn send_fee_quote(&self, amount: Amount) -> anyhow::Result<FeeQuote> {
-        self.client_ctx
-            .fee_quote(
-                OperationId::new_random(),
-                FeeQuoteRequest {
-                    input_amount: Amounts::ZERO,
-                    output_amount: Amounts::new_bitcoin(amount),
-                    input_fee: Amounts::ZERO,
-                    output_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.fee(amount)),
-                },
-            )
-            .await
-    }
-
-    /// Computes the largest invoice amount the client can pay in full out of
-    /// `balance`, i.e. the amount to request an invoice for in order to spend
-    /// (close to) the entire balance.
-    ///
-    /// Paying an invoice deducts two kinds of fee from the balance:
-    /// - the *gateway* fee, which is added on top of the invoice amount to form
-    ///   the outgoing contract (`send_fee.add_to(invoice_amount)`), and
-    /// - the *federation* fee of funding that contract — the Lightning output
-    ///   fee, the mint input fees on the funding notes, the mint output fees on
-    ///   any change, and sub-denomination dust — as quoted by
-    ///   [`Self::send_fee_quote`].
-    ///
-    /// `balance` is the client's current Bitcoin balance (e.g. from
-    /// `Client::get_balance_for_btc`). `gateway` optionally pins the gateway
-    /// whose fee schedule to use; if `None` one is selected automatically, the
-    /// same way [`Self::send`] does when no gateway is given. The gateway's
-    /// *default* send fee is used — the higher of its two send fees, applied to
-    /// a Lightning swap rather than a direct fedimint-to-fedimint swap — so the
-    /// returned amount stays payable even when the eventual invoice is routed
-    /// over Lightning.
-    ///
-    /// The maximum payable amount is found by binary search over the real fee
-    /// quote (see [`max_affordable_send_amount`]) rather than a closed form,
-    /// because the federation fee is stepwise in the amount. The quote is
-    /// point-in-time and moves with the balance, exactly like
-    /// [`Self::send_fee_quote`]; the eventual [`Self::send`] remains the source
-    /// of truth and may still fail if balance or gateway state changes in
-    /// between.
-    ///
-    /// Returns an error if the balance cannot cover even the smallest payable
-    /// amount plus fees. Any LNURL `minSendable`/`maxSendable` bounds are the
-    /// caller's responsibility to apply.
-    pub async fn spendable_amount(
+    /// Resolves the gateway to request an invoice from and its current
+    /// routing info: the given one, or an automatically selected one when
+    /// `None`.
+    async fn resolve_receive_gateway(
         &self,
-        balance: Amount,
         gateway: Option<SafeUrl>,
-    ) -> anyhow::Result<Amount> {
-        let routing_info = match gateway {
-            Some(gateway) => self
-                .routing_info(&gateway)
-                .await?
-                .ok_or_else(|| anyhow::anyhow!("Federation not supported by gateway"))?,
-            None => self.select_gateway(None).await?.1,
-        };
+    ) -> Result<(SafeUrl, RoutingInfo), ReceiveError> {
+        match gateway {
+            Some(gateway) => {
+                let routing_info = self
+                    .routing_info(&gateway)
+                    .await
+                    .map_err(|e| ReceiveError::FailedToConnectToGateway(e.to_string()))?
+                    .ok_or(ReceiveError::FederationNotSupported)?;
 
-        // The default (Lightning-swap) send fee is the higher of the gateway's
-        // two send fees, so using it keeps the result payable even if the
-        // eventual invoice is routed over Lightning instead of settled by a
-        // direct swap.
-        let send_fee = routing_info.send_fee_default;
+                if !routing_info.receive_enabled {
+                    return Err(ReceiveError::ReceiveDisabled);
+                }
 
-        anyhow::ensure!(
-            send_fee.is_within(&PaymentFee::SEND_FEE_LIMIT),
-            "Gateway's default send fee exceeds the limit"
-        );
-
-        max_affordable_send_amount(
-            balance,
-            Amount::from_msats(1),
-            balance,
-            |invoice_amount: Amount| send_fee.add_to(invoice_amount.msats),
-            |contract_amount: Amount| self.send_fee_quote(contract_amount),
-        )
-        .await
-        .ok_or_else(|| anyhow::anyhow!("Balance is too low to send any amount after fees"))
+                Ok((gateway, routing_info))
+            }
+            None => self
+                .select_receive_gateway()
+                .await
+                .map_err(ReceiveError::SelectGateway),
+        }
     }
 
-    /// Create an incoming contract locked to a public key derived from the
-    /// recipient's static module public key and fetches the corresponding
-    /// invoice.
-    async fn create_contract_and_fetch_invoice(
+    /// Selects the first registered gateway that is online and currently
+    /// accepts incoming payments for this federation. A gateway that answers
+    /// but has turned receives off is skipped rather than handed an invoice
+    /// request it would refuse.
+    async fn select_receive_gateway(&self) -> Result<(SafeUrl, RoutingInfo), SelectGatewayError> {
+        let gateways = self
+            .module_api
+            .gateways()
+            .await
+            .map_err(|e| SelectGatewayError::FailedToRequestGateways(e.to_string()))?;
+
+        if gateways.is_empty() {
+            return Err(SelectGatewayError::NoGatewaysAvailable);
+        }
+
+        let mut any_responded = false;
+
+        for gateway in gateways {
+            if let Ok(Some(routing_info)) = self.routing_info(&gateway).await {
+                any_responded = true;
+
+                if routing_info.receive_enabled {
+                    return Ok((gateway, routing_info));
+                }
+            }
+        }
+
+        if any_responded {
+            Err(SelectGatewayError::NoGatewayAcceptsReceives)
+        } else {
+            Err(SelectGatewayError::GatewaysUnresponsive)
+        }
+    }
+
+    /// Creates the incoming contract locked to a public key derived from our
+    /// static module public key, fetches its invoice from `gateway` at the
+    /// terms in `routing_info`, then starts the receive operation.
+    async fn receive_with_routing_info(
         &self,
-        recipient_static_pk: PublicKey,
         amount: Amount,
         expiry_secs: u32,
         description: Bolt11InvoiceDescription,
-        gateway: Option<SafeUrl>,
-    ) -> Result<(SafeUrl, IncomingContract, Bolt11Invoice), ReceiveError> {
+        gateway: SafeUrl,
+        routing_info: RoutingInfo,
+        custom_meta: Value,
+    ) -> Result<(Bolt11Invoice, OperationId), ReceiveError> {
+        let recipient_static_pk = self.keypair.public_key();
+
         let (ephemeral_tweak, ephemeral_pk) = tweak::generate(recipient_static_pk);
 
         let encryption_seed = ephemeral_tweak
@@ -1012,20 +1093,6 @@ impl LightningClientModule {
             .consensus_hash::<sha256::Hash>()
             .to_byte_array();
 
-        let (gateway, routing_info) = match gateway {
-            Some(gateway) => (
-                gateway.clone(),
-                self.routing_info(&gateway)
-                    .await
-                    .map_err(|e| ReceiveError::FailedToConnectToGateway(e.to_string()))?
-                    .ok_or(ReceiveError::FederationNotSupported)?,
-            ),
-            None => self
-                .select_gateway(None)
-                .await
-                .map_err(ReceiveError::SelectGateway)?,
-        };
-
         if !routing_info
             .receive_fee
             .is_within(&PaymentFee::RECEIVE_FEE_LIMIT)
@@ -1035,7 +1102,10 @@ impl LightningClientModule {
 
         let contract_amount = routing_info.receive_fee.subtract_from(amount.msats);
 
-        if contract_amount < MINIMUM_INCOMING_CONTRACT_AMOUNT {
+        // Quoting the claim against this federation's fee consensus is exact, where a
+        // fixed floor is either too permissive or too strict depending on how the
+        // federation is configured.
+        if !self.is_worth_claiming(contract_amount).await {
             return Err(ReceiveError::AmountTooSmall);
         }
 
@@ -1083,7 +1153,172 @@ impl LightningClientModule {
             return Err(ReceiveError::IncorrectInvoiceAmount);
         }
 
-        Ok((gateway, contract, invoice))
+        let operation_id = self
+            .receive_incoming_contract(
+                self.keypair.secret_key(),
+                contract.clone(),
+                LightningOperationMeta::Receive(ReceiveOperationMeta {
+                    gateway,
+                    contract,
+                    invoice: LightningInvoice::Bolt11(invoice.clone()),
+                    custom_meta,
+                }),
+            )
+            .await
+            .expect("The contract has been generated with our public key");
+
+        Ok((invoice, operation_id))
+    }
+
+    /// Computes the federation fee a `receive` of `amount` would incur, without
+    /// submitting anything.
+    ///
+    /// When the incoming contract is claimed, the client submits a transaction
+    /// with a single Lightning input worth the contract amount; the primary
+    /// module balances it by minting the change credited to the wallet. This
+    /// quotes the fee of that transaction — the Lightning input fee, the mint
+    /// output fees, and any sub-denomination dust — via the shared,
+    /// module-agnostic fee quote.
+    ///
+    /// The gateway's off-chain Lightning fee is deliberately excluded: this is
+    /// only the fee of the on-federation transaction. For that reason the quote
+    /// is taken on `amount` directly (rather than the gateway-reduced contract
+    /// amount), and no gateway round-trip is needed.
+    pub async fn receive_fee_quote(
+        &self,
+        amount: Amount,
+    ) -> Result<FeeQuote, TransactionSubmitError> {
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    input_amount: Amounts::new_bitcoin(amount),
+                    output_amount: Amounts::ZERO,
+                    input_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.fee(amount)),
+                    output_fee: Amounts::ZERO,
+                },
+            )
+            .await
+    }
+
+    /// Whether an incoming contract worth `amount` is worth claiming, i.e.
+    /// whether claiming it would leave the wallet better off than leaving it.
+    ///
+    /// This is the computed counterpart of a fixed dust limit: it prices the
+    /// actual claim - the lightning input fee at this federation's fee
+    /// consensus, the change the primary module has to mint, and the
+    /// sub-denomination remainder that cannot be minted at all - rather than
+    /// assuming a floor. A quote that fails outright is the same verdict: the
+    /// claim spends the contract as the transaction's only input, so a fee
+    /// larger than the contract leaves a transaction that cannot be balanced.
+    async fn is_worth_claiming(&self, amount: Amount) -> bool {
+        match self.receive_fee_quote(amount).await {
+            Ok(quote) => quote.total().get_bitcoin() < amount,
+            Err(_) => false,
+        }
+    }
+
+    /// Computes the federation fee a `send` funding an outgoing contract worth
+    /// `amount` would incur, without submitting anything.
+    ///
+    /// When a payment is sent, the client submits a transaction with a single
+    /// Lightning output (the outgoing contract) worth `amount`; the primary
+    /// module balances it by spending ecash to fund the contract and minting
+    /// any change. This quotes the fee of that transaction — the Lightning
+    /// output fee, the mint input fees on the funding notes, any mint change
+    /// output fees, and sub-denomination dust — via the shared, module-agnostic
+    /// fee quote.
+    ///
+    /// The gateway's off-chain Lightning fee is deliberately excluded: it is
+    /// part of the contract `amount` the gateway claims, not the on-federation
+    /// transaction fee. So `amount` is the full outgoing contract value
+    /// (`send_fee.add_to(invoice_amount)`).
+    pub async fn send_fee_quote(&self, amount: Amount) -> Result<FeeQuote, TransactionSubmitError> {
+        self.client_ctx
+            .fee_quote(
+                OperationId::new_random(),
+                FeeQuoteRequest {
+                    input_amount: Amounts::ZERO,
+                    output_amount: Amounts::new_bitcoin(amount),
+                    input_fee: Amounts::ZERO,
+                    output_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.fee(amount)),
+                },
+            )
+            .await
+    }
+
+    /// Computes the largest invoice amount the client can pay in full out of
+    /// `balance`, i.e. the amount to request an invoice for in order to spend
+    /// (close to) the entire balance.
+    ///
+    /// Paying an invoice deducts two kinds of fee from the balance:
+    /// - the *gateway* fee, which is added on top of the invoice amount to form
+    ///   the outgoing contract (`send_fee.add_to(invoice_amount)`), and
+    /// - the *federation* fee of funding that contract — the Lightning output
+    ///   fee, the mint input fees on the funding notes, the mint output fees on
+    ///   any change, and sub-denomination dust — as quoted by
+    ///   [`Self::send_fee_quote`].
+    ///
+    /// `balance` is the client's current Bitcoin balance (e.g. from
+    /// `Client::get_balance_for_btc`). `gateway` optionally pins the gateway
+    /// whose fee schedule to use; if `None` one is selected automatically, the
+    /// same way [`Self::send`] does when no gateway is given. The gateway's
+    /// *default* send fee is used — the higher of its two send fees, applied to
+    /// a Lightning swap rather than a direct fedimint-to-fedimint swap — so the
+    /// returned amount stays payable even when the eventual invoice is routed
+    /// over Lightning.
+    ///
+    /// The maximum payable amount is found by binary search over the real fee
+    /// quote (see [`max_affordable_send_amount`]) rather than a closed form,
+    /// because the federation fee is stepwise in the amount. The quote is
+    /// point-in-time and moves with the balance, exactly like
+    /// [`Self::send_fee_quote`]; the eventual [`Self::send`] remains the source
+    /// of truth and may still fail if balance or gateway state changes in
+    /// between.
+    ///
+    /// Returns [`SpendableAmountError::BalanceTooLow`] if the balance cannot
+    /// cover even the smallest payable amount plus fees, and
+    /// [`SpendableAmountError::Quote`] if the fee probe itself failed; only
+    /// the first of the two says the wallet is short. Any LNURL
+    /// `minSendable`/`maxSendable` bounds are the caller's responsibility to
+    /// apply. The remaining variants of [`SpendableAmountError`] are
+    /// gateway-side, and none of them means the wallet is short.
+    pub async fn spendable_amount(
+        &self,
+        balance: Amount,
+        gateway: Option<SafeUrl>,
+    ) -> Result<Amount, SpendableAmountError> {
+        let routing_info = match gateway {
+            Some(gateway) => self
+                .routing_info(&gateway)
+                .await?
+                .ok_or(SpendableAmountError::FederationNotSupported)?,
+            None => self.select_gateway(None).await?.1,
+        };
+
+        // The default (Lightning-swap) send fee is the higher of the gateway's
+        // two send fees, so using it keeps the result payable even if the
+        // eventual invoice is routed over Lightning instead of settled by a
+        // direct swap.
+        let send_fee = routing_info.send_fee_default;
+
+        if !send_fee.is_within(&PaymentFee::SEND_FEE_LIMIT) {
+            return Err(SpendableAmountError::SendFeeExceedsLimit {
+                fee: send_fee,
+                limit: PaymentFee::SEND_FEE_LIMIT,
+            });
+        }
+
+        max_affordable_send_amount(
+            balance,
+            Amount::from_msats(1),
+            balance,
+            |invoice_amount: Amount| send_fee.add_to(invoice_amount.msats),
+            |contract_amount: Amount| self.send_fee_quote(contract_amount),
+        )
+        .await
+        .map_err(SpendableAmountError::Quote)?
+        .ok_or(SpendableAmountError::BalanceTooLow { balance })
     }
 
     // Receive an incoming contract locked to a public key derived from our
@@ -1159,7 +1394,7 @@ impl LightningClientModule {
     pub async fn subscribe_receive_operation_state_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<ReceiveOperationState>> {
+    ) -> Result<UpdateStreamOrOutcome<ReceiveOperationState>, OperationLookupError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
@@ -1168,7 +1403,8 @@ impl LightningClientModule {
                 ReceiveOperationState::Pending | ReceiveOperationState::Claiming => false,
                 ReceiveOperationState::Expired
                 | ReceiveOperationState::Claimed
-                | ReceiveOperationState::Failure => true,
+                | ReceiveOperationState::Failure
+                | ReceiveOperationState::Uneconomical => true,
             }, move || {
             stream! {
                 loop {
@@ -1189,6 +1425,10 @@ impl LightningClientModule {
                                 yield ReceiveOperationState::Expired;
                                 return;
                             }
+                            ReceiveSMState::Uneconomical => {
+                                yield ReceiveOperationState::Uneconomical;
+                                return;
+                            }
                         }
                     }
                 }
@@ -1200,7 +1440,7 @@ impl LightningClientModule {
     pub async fn await_final_receive_operation_state(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<FinalReceiveOperationState> {
+    ) -> Result<FinalReceiveOperationState, OperationLookupError> {
         let mut stream = self
             .subscribe_receive_operation_state_updates(operation_id)
             .await?
@@ -1218,6 +1458,9 @@ impl LightningClientModule {
                 }
                 ReceiveOperationState::Failure => {
                     final_state = Some(FinalReceiveOperationState::Failure);
+                }
+                ReceiveOperationState::Uneconomical => {
+                    final_state = Some(FinalReceiveOperationState::Uneconomical);
                 }
                 _ => {}
             }
@@ -1311,6 +1554,28 @@ impl LightningClientModule {
             .await;
 
         for contract in &contracts {
+            // The stream carries every incoming contract the federation funded, and
+            // anyone can address one to a published lnurl key. Check that it is ours
+            // before quoting - recovering the keys is local arithmetic, the quote
+            // reads the wallet - and skip the contracts the claim fee would swallow,
+            // so that unsolicited dust never becomes an operation in the first place.
+            if self
+                .recover_contract_keys(self.lnurl_keypair.secret_key(), contract)
+                .is_none()
+            {
+                continue;
+            }
+
+            if !self.is_worth_claiming(contract.commitment.amount).await {
+                warn!(
+                    target: LOG_CLIENT_MODULE_LNV2,
+                    amount = %contract.commitment.amount,
+                    "Ignoring incoming contract, its amount does not cover the claim fee"
+                );
+
+                continue;
+            }
+
             if let Some(operation_id) = self
                 .receive_incoming_contract(
                     self.lnurl_keypair.secret_key(),
@@ -1353,6 +1618,8 @@ pub enum SelectGatewayError {
     NoGatewaysAvailable,
     #[error("All gateways failed to respond")]
     GatewaysUnresponsive,
+    #[error("No online gateway currently accepts incoming payments for this federation")]
+    NoGatewayAcceptsReceives,
 }
 
 /// The status of the latest send attempt for an invoice, derived from the
@@ -1399,6 +1666,22 @@ pub enum SendPaymentError {
     },
 }
 
+/// A failure of [`LightningClientModule::send_with_terms`].
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum SendWithTermsError {
+    /// The gateway's current send terms differ from the ones the caller
+    /// checked. Carries the current terms so the caller can re-quote.
+    #[error("Gateway's send terms changed since they were checked")]
+    TermsChanged {
+        send_fee: PaymentFee,
+        expiration_delta: u64,
+    },
+    /// Any failure [`LightningClientModule::send`] can report.
+    #[error(transparent)]
+    Send(#[from] SendPaymentError),
+}
+
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum ReceiveError {
     #[error(transparent)]
@@ -1407,6 +1690,8 @@ pub enum ReceiveError {
     FailedToConnectToGateway(String),
     #[error("Gateway does not support this federation")]
     FederationNotSupported,
+    #[error("Gateway does not currently accept incoming payments for this federation")]
+    ReceiveDisabled,
     #[error("Gateway fee exceeds the allowed limit")]
     GatewayFeeExceedsLimit,
     #[error("Amount is too small to cover fees")]
@@ -1415,6 +1700,21 @@ pub enum ReceiveError {
     InvalidInvoice,
     #[error("Gateway returned an invoice with incorrect amount")]
     IncorrectInvoiceAmount,
+    #[error("Requested invoice expiry exceeds the maximum of one day")]
+    InvoiceExpiryTooLong,
+}
+
+/// A failure of [`LightningClientModule::receive_with_terms`].
+#[derive(Error, Debug, Clone, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum ReceiveWithTermsError {
+    /// The gateway's current receive fee differs from the one the caller
+    /// checked. Carries the current fee so the caller can re-quote.
+    #[error("Gateway's receive fee changed since it was checked")]
+    TermsChanged { receive_fee: PaymentFee },
+    /// Any failure [`LightningClientModule::receive`] can report.
+    #[error(transparent)]
+    Receive(#[from] ReceiveError),
 }
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
@@ -1435,6 +1735,54 @@ pub enum ListGatewaysError {
 pub enum RoutingInfoError {
     #[error("Failed to request routing info")]
     FailedToRequestRoutingInfo,
+}
+
+/// A failure to work out the largest invoice amount the client could pay in
+/// full.
+///
+/// The answer depends on a gateway's fee schedule as well as on the balance,
+/// so it can be missing either because no schedule could be obtained or
+/// because the balance does not reach the smallest payable amount once both
+/// fees are applied.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum SpendableAmountError {
+    /// The caller named a gateway and its routing information could not be
+    /// fetched, so there is no fee schedule to compute against.
+    #[error(transparent)]
+    RoutingInfo(#[from] RoutingInfoError),
+
+    /// The caller named a gateway and it answered, but it does not serve this
+    /// federation.
+    #[error("The gateway does not support this federation")]
+    FederationNotSupported,
+
+    /// The caller named no gateway and none could be picked automatically, so
+    /// there is no fee schedule to compute against.
+    #[error(transparent)]
+    SelectGateway(#[from] SelectGatewayError),
+
+    /// The gateway's default send fee is above the limit this module accepts,
+    /// so an amount computed against it would not be payable through it.
+    #[error("The gateway's default send fee {fee} exceeds the limit {limit}")]
+    SendFeeExceedsLimit {
+        /// The default send fee the gateway announced.
+        fee: PaymentFee,
+        /// The largest default send fee this module accepts.
+        limit: PaymentFee,
+    },
+
+    /// The fee probe failed for a reason unrelated to the balance.
+    #[error("The fee quote for the payment failed")]
+    Quote(#[source] TransactionSubmitError),
+
+    /// The balance cannot cover the smallest payable amount plus the gateway
+    /// and federation fees, so there is no amount to send.
+    #[error("The balance {balance} is too low to send any amount after fees")]
+    BalanceTooLow {
+        /// The balance the answer was computed against.
+        balance: Amount,
+    },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

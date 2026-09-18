@@ -18,6 +18,7 @@ axum-extra = { workspace = true, features = ["cookie"] }
 fedimint-core = { workspace = true }
 maud = { workspace = true }
 serde = { workspace = true }
+subtle = { workspace = true }
 tokio = { workspace = true, features = ["net", "time"] }
 
 [lints]

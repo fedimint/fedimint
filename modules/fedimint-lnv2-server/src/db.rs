@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::{DbMigrationError, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{OutPoint, PeerId, impl_db_lookup, impl_db_record};
@@ -229,7 +229,7 @@ impl_db_lookup!(
 
 pub(crate) async fn migrate_to_v1(
     mut ctx: ServerModuleDbMigrationFnContext<'_, Lightning>,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), DbMigrationError> {
     let mut contracts = BTreeMap::new();
     let mut stream_index = 0;
 

@@ -2,7 +2,7 @@
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result, ensure};
 use async_trait::async_trait;
@@ -35,7 +35,6 @@ use fedimint_core::endpoint_constants::{
     SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_GUARDIAN_METADATA_ENDPOINT,
     SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
-use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::{
@@ -49,7 +48,7 @@ use fedimint_core::net::api_announcement::{
 use fedimint_core::net::auth::GuardianAuthToken;
 use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::session_outcome::{
-    SessionOutcome, SessionStatus, SessionStatusV2, SignedSessionOutcome,
+    ConsensusItem, SessionOutcome, SessionStatus, SessionStatusV2, SignedSessionOutcome,
 };
 use fedimint_core::task::TaskGroup;
 use fedimint_core::transaction::{
@@ -78,7 +77,7 @@ use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_d
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 use crate::net::api::HasApiContext;
 use crate::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix, get_api_urls};
-use crate::net::p2p::P2PStatusReceivers;
+use crate::net::p2p::{P2PConnectionState, P2PStatusReceivers};
 
 /// Maximum number of output outcomes a single `await_outputs_outcomes` request
 /// may ask for. The endpoint is public and unauthenticated and the requested
@@ -88,6 +87,18 @@ use crate::net::p2p::P2PStatusReceivers;
 /// Real transactions have a handful of outputs; a client that somehow needs
 /// more can still ask for them one outpoint at a time.
 const MAX_OUTPUTS_OUTCOMES_BATCH: usize = 1024;
+
+/// Maximum clock lead accepted for a signed client backup request.
+///
+/// This matches the one-hour limit used for signed guardian metadata
+/// timestamps.
+const MAX_BACKUP_FUTURE_TIMESTAMP_SECS: u64 = 60 * 60;
+
+fn backup_timestamp_is_too_far_in_future(timestamp: SystemTime, now: SystemTime) -> bool {
+    timestamp
+        .duration_since(now)
+        .is_ok_and(|lead| lead > Duration::from_secs(MAX_BACKUP_FUTURE_TIMESTAMP_SECS))
+}
 
 /// Number of output outcomes `outpoint_range` asks for, if it is a range we are
 /// willing to serve.
@@ -105,6 +116,38 @@ fn checked_outputs_outcomes_count(outpoint_range: OutPointRange) -> Result<usize
     );
 
     Ok(count)
+}
+
+/// Status of a single peer, read from the p2p and consensus-item watch
+/// channels it is tracked by.
+///
+/// Each channel is read exactly once, into a local. `watch::Receiver::borrow`
+/// returns a guard over a `parking_lot::RwLock`, and Rust drops temporaries at
+/// the end of the enclosing *statement* rather than the sub-expression, so
+/// borrowing inline in a struct literal would keep several guards alive at
+/// once. That deadlocks the whole process: `parking_lot`'s `RwLock` is
+/// write-preferring, so a second `borrow()` of a channel this thread already
+/// holds a guard on blocks behind any writer that queued in between, and that
+/// writer can never drain because the first guard is still held. These are
+/// blocking waits, so every stuck request burns a tokio worker until the
+/// runtime has none left to poll the reactor with.
+fn legacy_peer_status(
+    p2p_receiver: &watch::Receiver<P2PConnectionState>,
+    ci_receiver: &watch::Receiver<Option<u64>>,
+    session_count: u64,
+) -> LegacyPeerStatus {
+    let p2p_connected = p2p_receiver.borrow().connected.is_some();
+    let last_contribution = *ci_receiver.borrow();
+
+    LegacyPeerStatus {
+        connection_status: if p2p_connected {
+            LegacyP2PConnectionStatus::Connected
+        } else {
+            LegacyP2PConnectionStatus::Disconnected
+        },
+        last_contribution,
+        flagged: last_contribution.unwrap_or(0) + 1 < session_count,
+    }
 }
 
 #[derive(Clone)]
@@ -368,16 +411,10 @@ impl ConsensusApi {
             .map(|(peer, p2p_receiver)| {
                 let ci_receiver = self.ci_status_receivers.get(peer).unwrap();
 
-                let consensus_status = LegacyPeerStatus {
-                    connection_status: match p2p_receiver.borrow().connected {
-                        Some(..) => LegacyP2PConnectionStatus::Connected,
-                        None => LegacyP2PConnectionStatus::Disconnected,
-                    },
-                    last_contribution: *ci_receiver.borrow(),
-                    flagged: ci_receiver.borrow().unwrap_or(0) + 1 < session_count,
-                };
-
-                (*peer, consensus_status)
+                (
+                    *peer,
+                    legacy_peer_status(p2p_receiver, ci_receiver, session_count),
+                )
             })
             .collect::<BTreeMap<_, _>>();
 
@@ -482,6 +519,12 @@ impl ConsensusApi {
         let request = request
             .verify_valid(SECP256K1)
             .map_err(|_| ApiError::bad_request("invalid request".into()))?;
+
+        if backup_timestamp_is_too_far_in_future(request.timestamp, fedimint_core::time::now()) {
+            return Err(ApiError::bad_request(
+                "timestamp too far in the future".into(),
+            ));
+        }
 
         if request.payload.len() > BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES {
             return Err(ApiError::bad_request("snapshot too large".into()));
@@ -1201,6 +1244,12 @@ pub(crate) async fn backup_statistics_static(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::Ordering::Relaxed;
+    use std::sync::atomic::{AtomicBool, AtomicUsize};
+    use std::thread;
+    use std::time::Instant;
+
     use fedimint_core::db::IRawDatabaseExt as _;
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::net::guardian_metadata::GuardianMetadata;
@@ -1236,6 +1285,163 @@ mod tests {
                 "{rejected:?} must be rejected"
             );
         }
+    }
+
+    /// `legacy_peer_status` must never hold two guards on the same watch
+    /// channel at once. `parking_lot`'s `RwLock` is write-preferring, so the
+    /// second `borrow()` would block behind a queued writer that can never
+    /// drain past the first guard, wedging a guardian permanently.
+    ///
+    /// Hitting the window between two guards is a race, so this hammers it:
+    /// with the guards overlapping, a writer lands in that window and the
+    /// reader threads stop making progress long before the deadline.
+    #[test]
+    fn legacy_peer_status_does_not_deadlock_against_a_writer() {
+        const READERS: usize = 8;
+        const READS_PER_THREAD: u64 = 100_000;
+
+        let (p2p_sender, p2p_receiver) = watch::channel(P2PConnectionState {
+            connected: None,
+            last_error: None,
+        });
+        let (ci_sender, ci_receiver) = watch::channel(None);
+        let stop = Arc::new(AtomicBool::new(false));
+
+        let writers = [
+            {
+                // The p2p writer is the one observed wedged in production: the
+                // connection task calls `send_replace` on every state change.
+                let stop = stop.clone();
+                thread::spawn(move || {
+                    let mut connected = false;
+                    while !stop.load(Relaxed) {
+                        connected = !connected;
+                        p2p_sender.send_replace(P2PConnectionState {
+                            connected: connected.then_some(P2PConnectionStatus {
+                                conn_type: None,
+                                rtt: None,
+                            }),
+                            last_error: None,
+                        });
+                    }
+                })
+            },
+            {
+                let stop = stop.clone();
+                thread::spawn(move || {
+                    let mut session = 0;
+                    while !stop.load(Relaxed) {
+                        session += 1;
+                        ci_sender.send_replace(Some(session));
+                    }
+                })
+            },
+        ];
+
+        let finished_readers = Arc::new(AtomicUsize::new(0));
+
+        for _ in 0..READERS {
+            let p2p_receiver = p2p_receiver.clone();
+            let ci_receiver = ci_receiver.clone();
+            let finished_readers = finished_readers.clone();
+
+            thread::spawn(move || {
+                for _ in 0..READS_PER_THREAD {
+                    legacy_peer_status(&p2p_receiver, &ci_receiver, u64::MAX);
+                }
+
+                finished_readers.fetch_add(1, Relaxed);
+            });
+        }
+
+        // Deadlocked readers never return, so wait on a counter rather than
+        // joining them: this has to fail the test, not hang the suite.
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while finished_readers.load(Relaxed) < READERS {
+            if Instant::now() >= deadline {
+                // Stop the writers before failing. The wedged readers can
+                // never be joined, so a writer still spinning here would burn
+                // a core for the rest of the test binary and slow every test
+                // that runs after this one.
+                stop.store(true, Relaxed);
+
+                panic!(
+                    "only {} of {READERS} reader threads finished before the deadline, \
+                     which means peer status reads are wedged behind a writer",
+                    finished_readers.load(Relaxed)
+                );
+            }
+
+            thread::sleep(Duration::from_millis(10));
+        }
+
+        stop.store(true, Relaxed);
+        for writer in writers {
+            writer.join().expect("writer thread panicked");
+        }
+    }
+
+    /// The two watch channels are read once each, and `flagged` is derived
+    /// from the same `last_contribution` that is reported.
+    #[test]
+    fn legacy_peer_status_flags_peers_lagging_the_session_count() {
+        let peer_status = |connected: bool, last_contribution, session_count| {
+            let (_p2p_sender, p2p_receiver) = watch::channel(P2PConnectionState {
+                connected: connected.then_some(P2PConnectionStatus {
+                    conn_type: None,
+                    rtt: None,
+                }),
+                last_error: None,
+            });
+            let (_ci_sender, ci_receiver) = watch::channel(last_contribution);
+
+            legacy_peer_status(&p2p_receiver, &ci_receiver, session_count)
+        };
+
+        let current = peer_status(true, Some(9), 10);
+        assert_eq!(
+            current.connection_status,
+            LegacyP2PConnectionStatus::Connected
+        );
+        assert_eq!(current.last_contribution, Some(9));
+        assert!(!current.flagged, "a peer one behind the session is current");
+
+        assert!(
+            peer_status(true, Some(8), 10).flagged,
+            "a peer two behind the session is flagged"
+        );
+        assert!(
+            peer_status(true, None, 10).flagged,
+            "a peer that has never contributed is flagged"
+        );
+        assert!(
+            !peer_status(true, None, 1).flagged,
+            "no peer has contributed to the first session yet"
+        );
+
+        assert_eq!(
+            peer_status(false, Some(9), 10).connection_status,
+            LegacyP2PConnectionStatus::Disconnected
+        );
+    }
+
+    #[test]
+    fn backup_timestamp_future_limit_is_strict() {
+        let now = SystemTime::UNIX_EPOCH;
+        let at_limit = now
+            .checked_add(Duration::from_secs(MAX_BACKUP_FUTURE_TIMESTAMP_SECS))
+            .expect("UNIX epoch plus one hour is representable");
+        let beyond_limit = at_limit
+            .checked_add(Duration::from_nanos(1))
+            .expect("one nanosecond past the limit is representable");
+        let past = now
+            .checked_sub(Duration::from_nanos(1))
+            .expect("one nanosecond before the UNIX epoch is representable");
+
+        assert!(!backup_timestamp_is_too_far_in_future(now, now));
+        assert!(!backup_timestamp_is_too_far_in_future(past, now));
+        assert!(!backup_timestamp_is_too_far_in_future(at_limit, now));
+        assert!(backup_timestamp_is_too_far_in_future(beyond_limit, now));
     }
 
     #[tokio::test]

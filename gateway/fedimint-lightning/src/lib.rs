@@ -135,6 +135,11 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     ///   as if it were the first call.
     /// * If the payment has already been attempted and failed, return an error.
     /// * If the payment has already succeeded, return a success response.
+    ///
+    /// Consult that record before enforcing `max_delay` or `max_fee`: a state
+    /// machine resuming a payment it dispatched before a restart may pass a
+    /// placeholder `max_delay` of `0`, which must only ever fail a dispatch
+    /// that would otherwise start fresh.
     async fn pay(
         &self,
         invoice: Bolt11Invoice,
@@ -175,6 +180,21 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         false
     }
 
+    /// Returns whether the node has any record of an outbound payment for
+    /// `payment_hash`, whatever its state: in-flight, succeeded, or failed.
+    ///
+    /// State machines call this when they resume after a restart to
+    /// distinguish a payment dispatched before the crash from one that never
+    /// left the gateway: pre-dispatch gates such as invoice expiry must not
+    /// cancel a payment the node may still settle. Implementations must
+    /// answer from the node's own payment store without waiting for the
+    /// payment to reach a terminal state, and must not count inbound records
+    /// for the same hash.
+    async fn outbound_payment_exists(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<bool, LightningRpcError>;
+
     /// Consumes the current client and returns a stream of intercepted HTLCs
     /// and a new client. `complete_htlc` must be called for all successfully
     /// intercepted HTLCs sent to the returned stream.
@@ -193,6 +213,12 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// Completes an HTLC that was intercepted by the gateway. Must be called
     /// for all successfully intercepted HTLCs sent to the stream returned
     /// by `route_htlcs`.
+    ///
+    /// The gateway retries [`LightningRpcError::FailedToCompleteHtlc`] until
+    /// the call succeeds and records only
+    /// [`LightningRpcError::HtlcCompletionRejected`] as a terminal outcome, so
+    /// implementations must return the latter for a failure no retry can
+    /// change and the former for anything transient.
     async fn complete_htlc(&self, htlc: InterceptPaymentResponse) -> Result<(), LightningRpcError>;
 
     /// Requests the lightning node to create an invoice. The presence of a
@@ -374,7 +400,14 @@ pub const NO_INCOMING_CIRCUIT: (u64, u64) = (0, 0);
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct InterceptPaymentRequest {
     pub payment_hash: sha256::Hash,
+    /// The amount the HTLC claims to deliver. On the LND forward-intercept path
+    /// this is the sender-written onion `amt_to_forward`, so it must never be
+    /// trusted for funding decisions. On the HOLD-invoice and LDK paths it is
+    /// the real received amount.
     pub amount_msat: u64,
+    /// The amount actually locked in the incoming HTLC -- the real value the
+    /// gateway receives on settlement. Funding and fee checks must use this.
+    pub incoming_amount_msat: u64,
     pub expiry: u32,
     pub incoming_chan_id: u64,
     pub short_channel_id: Option<u64>,
@@ -587,6 +620,17 @@ impl ILnRpcClient for LnRpcTracked {
 
     fn supports_private_payments(&self) -> bool {
         self.inner.supports_private_payments()
+    }
+
+    async fn outbound_payment_exists(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<bool, LightningRpcError> {
+        tracked_call!(
+            self,
+            "outbound_payment_exists",
+            self.inner.outbound_payment_exists(payment_hash).await
+        )
     }
 
     async fn route_htlcs<'a>(

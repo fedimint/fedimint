@@ -16,7 +16,7 @@ use fedimint_core::module::{
     ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, MultiApiVersion,
     SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
-use fedimint_core::net::peers::{DynP2PConnections, Recipient};
+use fedimint_core::net::{DynP2PConnections, Recipient};
 use fedimint_core::setup_code::{PeerEndpoints, PeerSetupCode};
 use fedimint_core::task::sleep;
 use fedimint_core::util::SafeUrl;
@@ -124,8 +124,14 @@ pub struct ServerConfigPrivate {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable)]
 pub struct ServerConfigConsensus {
-    /// The normalized `x.y.z` release version used for consensus config
-    /// checksums
+    /// The compatibility version used for consensus config checksums
+    ///
+    /// Newly generated configs use `major.minor` plus an exact optional vendor
+    /// suffix; restored legacy configs can contain `major.minor.patch`.
+    ///
+    /// This remains a string because it is persisted in consensus-config JSON
+    /// and its string consensus encoding contributes to the federation ID.
+    /// Changing the field type or encoding would break existing configurations.
     pub code_version: String,
     /// Agreed on core consensus version
     pub version: CoreConsensusVersion,
@@ -325,7 +331,13 @@ impl ServerConfig {
         code_version: String,
     ) -> Self {
         let consensus = ServerConfigConsensus {
-            code_version: fedimint_core::version::release_version(&code_version).to_owned(),
+            // Setup validates untrusted code versions before config generation.
+            // Keep this lower-level API usable by test helpers that use opaque
+            // version strings, as it was before DKG compatibility was added.
+            code_version: fedimint_core::version::DkgVersion::parse(&code_version).map_or_else(
+                |_| fedimint_core::version::release_version(&code_version).to_owned(),
+                |version| version.compatibility_version().to_string(),
+            ),
             version: CORE_CONSENSUS_VERSION,
             broadcast_public_keys,
             broadcast_rounds_per_session: if is_running_in_test_env() {
@@ -392,7 +404,7 @@ impl ServerConfig {
             .clone();
         let module = ServerModuleConfig::from(private, consensus);
 
-        module.to_typed()
+        Ok(module.to_typed()?)
     }
     pub fn get_module_id_by_kind(
         &self,
@@ -873,3 +885,6 @@ impl ConfigGenParams {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests;

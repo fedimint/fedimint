@@ -20,8 +20,11 @@ pub mod envs;
 mod error;
 mod events;
 mod federation_manager;
+mod federation_status;
 mod iroh_server;
 mod metrics;
+mod rate_limit;
+mod registration_health;
 pub mod rpc_server;
 mod types;
 
@@ -79,11 +82,12 @@ use fedimint_gateway_common::{
     GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningInfo,
     LightningMode, ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse,
     OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
-    PaymentLogPayload, PaymentLogResponse, PaymentStats, PaymentSummaryPayload,
+    PaymentLogPayload, PaymentLogResponse, PaymentPolicy, PaymentStats, PaymentSummaryPayload,
     PaymentSummaryResponse, PeginFromOnchainPayload, ReceiveEcashPayload, ReceiveEcashResponse,
     RegisteredProtocol, SendOnchainRequest, SetChannelFeesRequest, SetFeesPayload,
-    SetMnemonicPayload, SpendEcashPayload, SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload,
-    WithdrawPreviewPayload, WithdrawPreviewResponse, WithdrawResponse, WithdrawToOnchainPayload,
+    SetMnemonicPayload, SetPaymentPolicyPayload, SpendEcashPayload, SpendEcashResponse,
+    V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse,
+    WithdrawResponse, WithdrawToOnchainPayload,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 pub use fedimint_gateway_ui::IAdminGateway;
@@ -104,15 +108,16 @@ use fedimint_lightning::{
     PayInvoiceResponse, PaymentAction, RouteHtlcStream, ldk,
 };
 use fedimint_ln_client::pay::PaymentData;
-use fedimint_ln_common::LightningCommonInit;
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{IdentifiableContract, Preimage};
+use fedimint_ln_common::{LightningCommonInit, PreimageAuth};
 use fedimint_lnurl::VerifyResponse;
 use fedimint_lnv2_common::Bolt11InvoiceDescription;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
-    CreateBolt11InvoicePayload, PaymentFee, RoutingInfo, SendPaymentPayload,
+    CreateBolt11InvoicePayload, MAX_INVOICE_EXPIRY_SECS, PaymentFee, RoutingInfo,
+    SendPaymentPayload,
 };
 use fedimint_logging::LOG_GATEWAY;
 use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes, ReissueExternalNotesState};
@@ -129,6 +134,8 @@ use tracing::{debug, info, info_span, warn};
 use crate::envs::FM_GATEWAY_MNEMONIC_ENV;
 use crate::error::{AdminGatewayError, LNv1Error, LNv2Error, PublicGatewayError};
 use crate::events::get_events_for_duration;
+use crate::rate_limit::TokenBucketRateLimiter;
+use crate::registration_health::RegistrationHealthTracker;
 use crate::rpc_server::run_webserver;
 use crate::types::PrettyInterceptPaymentRequest;
 
@@ -138,6 +145,13 @@ const GW_ANNOUNCEMENT_TTL: Duration = Duration::from_mins(10);
 /// The default number of route hints that the legacy gateway provides for
 /// invoice creation.
 const DEFAULT_NUM_ROUTE_HINTS: u32 = 1;
+
+/// Default maximum burst of requests to the public invoice creation endpoint.
+const DEFAULT_INVOICE_RATE_LIMIT_BURST: u32 = 50;
+
+/// Default sustained number of requests per second to the public invoice
+/// creation endpoint.
+const DEFAULT_INVOICE_RATE_LIMIT_PER_SECOND: u32 = 5;
 
 /// Default Bitcoin network for testing purposes.
 pub const DEFAULT_NETWORK: Network = Network::Regtest;
@@ -296,6 +310,8 @@ impl Gateway {
                 iroh_relays,
                 skip_setup: true,
                 metrics_listen,
+                invoice_rate_limit_burst: DEFAULT_INVOICE_RATE_LIMIT_BURST,
+                invoice_rate_limit_per_second: DEFAULT_INVOICE_RATE_LIMIT_PER_SECOND,
             },
             gateway_db,
             client_builder,
@@ -377,6 +393,12 @@ pub struct Gateway {
     /// A map of the network protocols the gateway supports to the data needed
     /// for registering with a federation.
     registrations: BTreeMap<RegisteredProtocol, Registration>,
+
+    /// Detail-free retained results of LNv1 federation registration attempts.
+    registration_health: RegistrationHealthTracker,
+
+    /// Rate limiter for the public invoice creation endpoint.
+    invoice_rate_limiter: Arc<TokenBucketRateLimiter>,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -410,7 +432,7 @@ async fn withdraw_v2(
         .send_fee()
         .await
         .map_err(|e| AdminGatewayError::WithdrawError {
-            failure_reason: e.to_string(),
+            failure_reason: e.fmt_compact().to_string(),
         })?;
 
     let withdraw_amount = match amount {
@@ -418,7 +440,7 @@ async fn withdraw_v2(
             let balance = client.get_balance_for_btc().await.map_err(|err| {
                 AdminGatewayError::Unexpected(anyhow!(
                     "Balance not available: {}",
-                    err.fmt_compact_anyhow()
+                    err.fmt_compact()
                 ))
             })?;
 
@@ -432,7 +454,7 @@ async fn withdraw_v2(
                 .map_err(|err| AdminGatewayError::WithdrawError {
                     failure_reason: format!(
                         "Insufficient funds. Balance: {balance} Fee: {fee}: {}",
-                        err.fmt_compact_anyhow()
+                        err.fmt_compact()
                     ),
                 })?
         }
@@ -448,14 +470,14 @@ async fn withdraw_v2(
         )
         .await
         .map_err(|e| AdminGatewayError::WithdrawError {
-            failure_reason: e.to_string(),
+            failure_reason: e.fmt_compact().to_string(),
         })?;
 
     let result = wallet_module
         .await_final_send_operation_state(operation_id)
         .await
         .map_err(|e| AdminGatewayError::WithdrawError {
-            failure_reason: e.to_string(),
+            failure_reason: e.fmt_compact().to_string(),
         })?;
 
     let fees = PegOutFees::from_amount(fee);
@@ -484,10 +506,7 @@ async fn calculate_max_withdrawable(
     address: &Address,
 ) -> AdminResult<WithdrawDetails> {
     let balance = client.get_balance_for_btc().await.map_err(|err| {
-        AdminGatewayError::Unexpected(anyhow!(
-            "Balance not available: {}",
-            err.fmt_compact_anyhow()
-        ))
+        AdminGatewayError::Unexpected(anyhow!("Balance not available: {}", err.fmt_compact()))
     })?;
 
     if let Ok(wallet_module) =
@@ -497,14 +516,14 @@ async fn calculate_max_withdrawable(
             .send_fee()
             .await
             .map_err(|e| AdminGatewayError::WithdrawError {
-                failure_reason: e.to_string(),
+                failure_reason: e.fmt_compact().to_string(),
             })?;
 
         let max_withdrawable = wallet_module
             .max_sendable_amount(balance, fee)
             .await
             .map_err(|err| AdminGatewayError::WithdrawError {
-                failure_reason: err.fmt_compact_anyhow().to_string(),
+                failure_reason: err.fmt_compact().to_string(),
             })?;
 
         // Everything the balance does not become an on-chain payment or miner
@@ -532,7 +551,7 @@ async fn calculate_max_withdrawable(
         .max_withdrawable_amount(address, balance)
         .await
         .map_err(|err| AdminGatewayError::WithdrawError {
-            failure_reason: err.fmt_compact_anyhow().to_string(),
+            failure_reason: err.fmt_compact().to_string(),
         })?;
 
     // Everything the balance does not become an on-chain payment or miner fee
@@ -680,7 +699,7 @@ impl Gateway {
 
                 Client::store_encodable_client_secret(&gateway_db, mnemonic.to_entropy())
                     .await
-                    .map_err(AdminGatewayError::MnemonicError)?;
+                    .map_err(|err| AdminGatewayError::MnemonicError(err.into()))?;
                 GatewayState::Disconnected
             } else {
                 GatewayState::NotConfigured { mnemonic_sender }
@@ -760,6 +779,11 @@ impl Gateway {
             iroh_relays: gateway_parameters.iroh_relays,
             iroh_listen: gateway_parameters.iroh_listen,
             registrations,
+            registration_health: RegistrationHealthTracker::default(),
+            invoice_rate_limiter: Arc::new(TokenBucketRateLimiter::new(
+                gateway_parameters.invoice_rate_limit_burst,
+                gateway_parameters.invoice_rate_limit_per_second,
+            )),
         })
     }
 
@@ -815,6 +839,7 @@ impl Gateway {
         self.load_clients().await?;
         self.start_gateway(runtime, mnemonic_receiver.resubscribe());
         self.spawn_backup_task();
+        self.spawn_prune_registered_contracts_task();
         // start metrics server
         fedimint_metrics::spawn_api_server(self.metrics_listen, self.task_group.clone()).await?;
         // start webserver last to avoid handling requests before fully initialized
@@ -842,6 +867,53 @@ impl Gateway {
                     }
                 }
             });
+    }
+
+    /// Spawns a background task that periodically deletes registered incoming
+    /// contract records whose invoice has long expired, so unpaid invoice
+    /// registrations cannot grow the database without bound.
+    fn spawn_prune_registered_contracts_task(&self) {
+        let self_copy = self.clone();
+        self.task_group.spawn_cancellable_silent(
+            "prune registered incoming contracts",
+            async move {
+                const PRUNE_INTERVAL: Duration = Duration::from_hours(1);
+                // Records are kept for a day past invoice expiry so payments
+                // settled shortly before expiry can still complete and be
+                // verified via the preimage verification endpoint.
+                const RETENTION_AFTER_EXPIRY: Duration = Duration::from_hours(24);
+
+                let mut interval = tokio::time::interval(PRUNE_INTERVAL);
+                loop {
+                    interval.tick().await;
+
+                    let cutoff_secs = duration_since_epoch()
+                        .saturating_sub(RETENTION_AFTER_EXPIRY)
+                        .as_secs();
+
+                    let mut dbtx = self_copy.gateway_db.begin_transaction().await;
+                    let num_pruned = dbtx.prune_registered_incoming_contracts(cutoff_secs).await;
+                    match dbtx.commit_tx_result().await {
+                        Ok(()) => {
+                            if num_pruned > 0 {
+                                info!(
+                                    target: LOG_GATEWAY,
+                                    num_pruned,
+                                    "Pruned expired incoming contract records"
+                                );
+                            }
+                        }
+                        Err(err) => {
+                            warn!(
+                                target: LOG_GATEWAY,
+                                err = %err.fmt_compact(),
+                                "Failed to prune expired incoming contract records"
+                            );
+                        }
+                    }
+                }
+            },
+        );
     }
 
     /// Loops through all federations and checks their last save backup time. If
@@ -926,7 +998,7 @@ impl Gateway {
                             // could cause it to cancel real HTLCs after `gateway_receiver`
                             // is dropped.
                             if let Err(err) = payment_stream_task_group.shutdown_join_all(None).await {
-                                crit!(target: LOG_GATEWAY, err = %err.fmt_compact_anyhow(), "Lightning payment stream task group shutdown");
+                                crit!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Lightning payment stream task group shutdown");
                             }
                             sleep(Duration::from_secs(PAYMENT_STREAM_RETRY_SECONDS)).await;
                             continue
@@ -942,7 +1014,7 @@ impl Gateway {
 
                     self_copy.set_gateway_state(GatewayState::Disconnected).await;
                     if let Err(err) = payment_stream_task_group.shutdown_join_all(None).await {
-                        crit!(target: LOG_GATEWAY, err = %err.fmt_compact_anyhow(), "Lightning payment stream task group shutdown");
+                        crit!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Lightning payment stream task group shutdown");
                     }
 
                     self_copy.unannounce_from_all_federations().await;
@@ -1112,7 +1184,7 @@ impl Gateway {
     /// the HTLC so LND can route it as a normal forward.
     ///
     /// Returns the outcome label for metrics tracking.
-    async fn handle_lightning_payment(
+    pub async fn handle_lightning_payment(
         &self,
         payment_request: InterceptPaymentRequest,
         lightning_context: &LightningContext,
@@ -1179,13 +1251,22 @@ impl Gateway {
             None => false,
         };
 
-        if is_federation_scid {
+        // An LNv2 payment carries no federation scid, so a registered contract
+        // whose federation has receives turned off is only recognisable by the
+        // error the LNv2 attempt returned. It is cancelled explicitly rather
+        // than left to the forward branch, whose meaning for a HOLD invoice is
+        // up to the lightning backend.
+        let receive_disabled = [&lnv2_result, &lnv1_result]
+            .into_iter()
+            .any(|result| matches!(result, Err(PublicGatewayError::ReceiveDisabled { .. })));
+
+        if is_federation_scid || receive_disabled {
             // The HTLC targeted a federation we serve but we couldn't claim
-            // it (no LNv1 offer / no LNv2 contract / underfunded gateway /
-            // federation timeout / etc.). Surface the underlying error
-            // variants so operators can diagnose the cause; otherwise both
-            // `Err` values are dropped on the floor and the only visible
-            // signal is the metric label `"error"`.
+            // it (no LNv1 offer / no LNv2 contract / receives turned off /
+            // underfunded gateway / federation timeout / etc.). Surface the
+            // underlying error variants so operators can diagnose the cause;
+            // otherwise both `Err` values are dropped on the floor and the
+            // only visible signal is the metric label `"error"`.
             warn!(
                 target: LOG_GATEWAY,
                 payment_hash = %payment_request.payment_hash,
@@ -1193,9 +1274,10 @@ impl Gateway {
                 amount_msat = payment_request.amount_msat,
                 incoming_chan_id = payment_request.incoming_chan_id,
                 htlc_id = payment_request.htlc_id,
+                receive_disabled,
                 lnv2_err = ?lnv2_result.as_ref().err(),
                 lnv1_err = ?lnv1_result.as_ref().err(),
-                "Unmatched lightning payment for federation scid: cancelling HTLC",
+                "Lightning payment for a served federation could not be accepted: cancelling HTLC",
             );
             Self::cancel_unmatched_lightning_payment(payment_request, lightning_context).await;
             "cancel"
@@ -1221,10 +1303,14 @@ impl Gateway {
         // using the LNv2 protocol. If the `payment_hash` is not registered,
         // this payment is either a legacy Lightning payment or the end destination is
         // not a Fedimint.
+        // Match and fund against the amount actually locked in the incoming
+        // HTLC, not the sender-controlled onion forward amount, so a forged
+        // `amt_to_forward` cannot satisfy the registered contract's amount
+        // check while only a token amount is really locked.
         let (contract, client) = self
             .get_registered_incoming_contract_and_client_v2(
                 PaymentImage::Hash(htlc_request.payment_hash),
-                htlc_request.amount_msat,
+                htlc_request.incoming_amount_msat,
             )
             .await?;
 
@@ -1236,7 +1322,7 @@ impl Gateway {
                 htlc_request.incoming_chan_id,
                 htlc_request.htlc_id,
                 contract,
-                htlc_request.amount_msat,
+                htlc_request.incoming_amount_msat,
             )
             .await
         {
@@ -1279,6 +1365,16 @@ impl Gateway {
         else {
             return Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment("Incoming payment has a last hop short channel id that does not map to a known federation".to_string())));
         };
+
+        // LNv1 clients cannot be told that receives are off, so their invoices
+        // still route here. Refusing before any federation interaction fails
+        // the HTLC back to the sender without spending anything.
+        let federation_id = client.borrow().with_sync(|client| client.federation_id());
+        if !self.receive_enabled(federation_id).await {
+            return Err(PublicGatewayError::ReceiveDisabled {
+                federation_id_prefix: federation_id.to_prefix(),
+            });
+        }
 
         // Both LND's `incoming_expiry` and LDK's `claim_deadline` are absolute
         // Bitcoin heights. LDK does not currently produce LNv1 forwards (it has
@@ -1454,7 +1550,8 @@ impl Gateway {
         if let Ok(wallet_module) = client.value().get_first_module::<WalletClientModule>() {
             let address = wallet_module
                 .allocate_deposit_address_expert_only(())
-                .await?
+                .await
+                .map_err(|e| AdminGatewayError::Unexpected(e.into()))?
                 .address;
             Ok(address)
         } else if let Ok(wallet_module) = client
@@ -1487,7 +1584,7 @@ impl Gateway {
         let gateway_module = &client
             .value()
             .get_first_module::<GatewayClientModule>()
-            .map_err(LNv1Error::OutgoingPayment)
+            .map_err(|err| LNv1Error::OutgoingPayment(err.into()))
             .map_err(PublicGatewayError::LNv1)?;
         let operation_id = gateway_module
             .gateway_pay_bolt11_invoice(payload)
@@ -1558,7 +1655,8 @@ impl Gateway {
             .backup_to_federation(fedimint_client::backup::Metadata::from_json_serialized(
                 metadata,
             ))
-            .await?;
+            .await
+            .map_err(anyhow::Error::from)?;
         Ok(())
     }
 
@@ -1572,7 +1670,8 @@ impl Gateway {
         if let Ok(wallet_module) = client.value().get_first_module::<WalletClientModule>() {
             wallet_module
                 .recheck_pegin_address_by_address(payload.address)
-                .await?;
+                .await
+                .map_err(|e| AdminGatewayError::Unexpected(e.into()))?;
             Ok(())
         } else if client
             .value()
@@ -1624,14 +1723,17 @@ impl Gateway {
         if let Ok(mint) = client.value().get_first_module::<MintClientModule>() {
             let notes = OOBNotes::from_str(&payload.notes).map_err(|e| {
                 PublicGatewayError::ReceiveEcashError {
-                    failure_reason: format!("Expected OOBNotes for MintV1 federation: {e}"),
+                    failure_reason: format!(
+                        "Expected OOBNotes for MintV1 federation: {}",
+                        e.fmt_compact()
+                    ),
                 }
             })?;
             let amount = notes.total_amount();
 
             let operation_id = mint.reissue_external_notes(notes, ()).await.map_err(|e| {
                 PublicGatewayError::ReceiveEcashError {
-                    failure_reason: e.to_string(),
+                    failure_reason: e.fmt_compact().to_string(),
                 }
             })?;
 
@@ -1639,7 +1741,10 @@ impl Gateway {
                 .subscribe_reissue_external_notes(operation_id)
                 .await
                 .map_err(|e| PublicGatewayError::ReceiveEcashError {
-                    failure_reason: format!("Could not subscribe to reissue operation: {e}"),
+                    failure_reason: format!(
+                        "Could not subscribe to reissue operation: {}",
+                        e.fmt_compact()
+                    ),
                 })?
                 .into_stream();
 
@@ -1666,7 +1771,12 @@ impl Gateway {
             }
 
             Ok(ReceiveEcashResponse { amount })
-        } else if let Ok(mint) = client.value().get_first_module::<MintV2ClientModule>() {
+        } else if let Ok(mint) = client
+            .value()
+            .get_primary_module_for_unit::<MintV2ClientModule>(
+                fedimint_core::module::AmountUnit::BITCOIN,
+            )
+        {
             let ecash: fedimint_mintv2_client::ECash =
                 base32::decode_prefixed(FEDIMINT_PREFIX, &payload.notes).map_err(|e| {
                     PublicGatewayError::ReceiveEcashError {
@@ -1679,14 +1789,14 @@ impl Gateway {
                 .receive(ecash, serde_json::Value::Null)
                 .await
                 .map_err(|e| PublicGatewayError::ReceiveEcashError {
-                    failure_reason: e.to_string(),
+                    failure_reason: e.fmt_compact().to_string(),
                 })?;
 
             let final_state = mint
                 .await_final_receive_operation_state(operation_id)
                 .await
                 .map_err(|e| PublicGatewayError::ReceiveEcashError {
-                    failure_reason: e.to_string(),
+                    failure_reason: e.fmt_compact().to_string(),
                 })?;
             match final_state {
                 fedimint_mintv2_client::FinalReceiveOperationState::Success => {}
@@ -1801,11 +1911,21 @@ impl Gateway {
 
                 let fed_manager = self.federation_manager.read().await;
                 if let Some(client) = fed_manager.client(federation_id) {
+                    let federation_id = *federation_id;
                     let client_arc = client.clone().into_value();
                     let route_hints = route_hints.clone();
                     let lightning_context = lightning_context.clone();
-                    let registrations =
-                        self.registrations.clone().into_values().collect::<Vec<_>>();
+                    let registration_health = self.registration_health.clone();
+                    let registrations = self
+                        .registrations
+                        .clone()
+                        .into_iter()
+                        .map(|(protocol, registration)| {
+                            let attempt =
+                                registration_health.begin_lnv1_attempt(federation_id, protocol);
+                            (registration, attempt)
+                        })
+                        .collect::<Vec<_>>();
 
                     register_task_group.spawn_cancellable_silent(
                         "register federation",
@@ -1816,8 +1936,8 @@ impl Gateway {
                                 return;
                             };
 
-                            for registration in registrations {
-                                gateway_client
+                            for (registration, attempt) in registrations {
+                                let succeeded = gateway_client
                                     .try_register_with_federation(
                                         route_hints.clone(),
                                         GW_ANNOUNCEMENT_TTL,
@@ -1825,6 +1945,14 @@ impl Gateway {
                                         lightning_context.clone(),
                                         registration.endpoint_url,
                                         registration.keypair,
+                                    )
+                                    .await;
+                                registration_health
+                                    .complete_attempt(
+                                        attempt,
+                                        succeeded,
+                                        fedimint_core::time::now(),
+                                        fedimint_core::runtime::Instant::now(),
                                     )
                                     .await;
                             }
@@ -1965,7 +2093,7 @@ impl Gateway {
 
         // Verify the LNv1 network if present
         if let Some(cfg) = lnv1_cfg {
-            let ln_cfg: &LightningClientConfig = cfg.cast()?;
+            let ln_cfg: &LightningClientConfig = cfg.cast().map_err(anyhow::Error::from)?;
 
             if ln_cfg.network.0 != network {
                 crit!(
@@ -1983,7 +2111,8 @@ impl Gateway {
 
         // Verify the LNv2 network if present
         if let Some(cfg) = lnv2_cfg {
-            let ln_cfg: &fedimint_lnv2_common::config::LightningClientConfig = cfg.cast()?;
+            let ln_cfg: &fedimint_lnv2_common::config::LightningClientConfig =
+                cfg.cast().map_err(anyhow::Error::from)?;
 
             if ln_cfg.network != network {
                 crit!(
@@ -2277,6 +2406,9 @@ impl IAdminGateway for Gateway {
 
         dbtx.remove_federation_config(payload.federation_id).await;
         dbtx.commit_tx().await;
+        self.registration_health
+            .clear_federation(payload.federation_id)
+            .await;
         Ok(federation_info)
     }
 
@@ -2320,6 +2452,7 @@ impl IAdminGateway for Gateway {
             federation_index,
             lightning_fee: self.default_routing_fees,
             transaction_fee: self.default_transaction_fees,
+            payment_policies: BTreeSet::new(),
             // Note: deprecated, unused
             _connector: ConnectorType::Tcp,
         };
@@ -2346,7 +2479,7 @@ impl IAdminGateway for Gateway {
             .await?;
 
         if recover {
-            client.wait_for_all_active_state_machines().await?;
+            client.wait_for_all_active_state_machines().await;
         }
 
         // Instead of using `FederationManager::federation_info`, we manually create
@@ -2357,7 +2490,7 @@ impl IAdminGateway for Gateway {
             balance_msat: client.get_balance_for_btc().await.unwrap_or_else(|err| {
                 warn!(
                     target: LOG_GATEWAY,
-                    err = %err.fmt_compact_anyhow(),
+                    err = %err.fmt_compact(),
                     %federation_id,
                     "Balance not immediately available after joining/recovering."
                 );
@@ -2371,17 +2504,29 @@ impl IAdminGateway for Gateway {
         if matches!(self.lightning_mode, LightningMode::Lnd { .. })
             && let Ok(lnv1) = client.get_first_module::<GatewayClientModule>()
         {
-            for registration in self.registrations.values() {
-                lnv1.try_register_with_federation(
-                    // Route hints will be updated in the background
-                    Vec::new(),
-                    GW_ANNOUNCEMENT_TTL,
-                    routing_fees,
-                    lightning_context.clone(),
-                    registration.endpoint_url.clone(),
-                    registration.keypair,
-                )
-                .await;
+            for (protocol, registration) in &self.registrations {
+                let attempt = self
+                    .registration_health
+                    .begin_lnv1_attempt(federation_id, protocol.clone());
+                let succeeded = lnv1
+                    .try_register_with_federation(
+                        // Route hints will be updated in the background
+                        Vec::new(),
+                        GW_ANNOUNCEMENT_TTL,
+                        routing_fees,
+                        lightning_context.clone(),
+                        registration.endpoint_url.clone(),
+                        registration.keypair,
+                    )
+                    .await;
+                self.registration_health
+                    .complete_attempt(
+                        attempt,
+                        succeeded,
+                        fedimint_core::time::now(),
+                        fedimint_core::runtime::Instant::now(),
+                    )
+                    .await;
             }
         }
 
@@ -2503,6 +2648,75 @@ impl IAdminGateway for Gateway {
             self.register_federations(&fed_configs, &register_task_group)
                 .await;
         }
+
+        Ok(())
+    }
+
+    /// Handles a request to change which payments the gateway performs on
+    /// behalf of the clients of all federations or of the federation specified
+    /// by the `FederationId`. Like `set_fees`, only the settings present in
+    /// the payload change.
+    async fn handle_set_payment_policy_msg(
+        &self,
+        SetPaymentPolicyPayload {
+            federation_id,
+            receive_enabled,
+        }: SetPaymentPolicyPayload,
+    ) -> AdminResult<()> {
+        let mut dbtx = self.gateway_db.begin_transaction().await;
+        let mut fed_configs = if let Some(fed_id) = federation_id {
+            dbtx.load_federation_configs()
+                .await
+                .into_iter()
+                .filter(|(id, _)| *id == fed_id)
+                .collect::<BTreeMap<_, _>>()
+        } else {
+            dbtx.load_federation_configs().await
+        };
+
+        // Silently succeeding on an unknown federation would let a mistyped id
+        // pass for a switch that was never flipped.
+        if let Some(fed_id) = federation_id
+            && fed_configs.is_empty()
+        {
+            return Err(FederationNotConnected {
+                federation_id_prefix: fed_id.to_prefix(),
+            }
+            .into());
+        }
+
+        let federation_manager = self.federation_manager.read().await;
+
+        for (federation_id, config) in &mut fed_configs {
+            federation_manager
+                .client(federation_id)
+                .ok_or(FederationNotConnected {
+                    federation_id_prefix: federation_id.to_prefix(),
+                })?;
+
+            if let Some(receive_enabled) = receive_enabled {
+                if receive_enabled {
+                    config
+                        .payment_policies
+                        .remove(&PaymentPolicy::ReceivesDisabled);
+                } else {
+                    config
+                        .payment_policies
+                        .insert(PaymentPolicy::ReceivesDisabled);
+                }
+            }
+
+            info!(
+                target: LOG_GATEWAY,
+                %federation_id,
+                payment_policies = ?config.payment_policies,
+                "Updated federation payment policy"
+            );
+
+            dbtx.save_federation_config(config).await;
+        }
+
+        dbtx.commit_tx().await;
 
         Ok(())
     }
@@ -2761,12 +2975,17 @@ impl IAdminGateway for Gateway {
             .into_value();
 
         if let Ok(mint_module) = client.get_first_module::<MintClientModule>() {
-            let notes = mint_module.send_oob_notes(payload.amount, ()).await?;
+            let notes = mint_module
+                .send_oob_notes(payload.amount, ())
+                .await
+                .map_err(|e| AdminGatewayError::Unexpected(e.into()))?;
             debug!(target: LOG_GATEWAY, ?notes, "Spend ecash notes");
             Ok(SpendEcashResponse {
                 notes: notes.to_string(),
             })
-        } else if let Ok(mint_module) = client.get_first_module::<MintV2ClientModule>() {
+        } else if let Ok(mint_module) = client.get_primary_module_for_unit::<MintV2ClientModule>(
+            fedimint_core::module::AmountUnit::BITCOIN,
+        ) {
             let (_, ecash) = mint_module
                 .send(payload.amount, serde_json::Value::Null, true)
                 .await
@@ -2816,7 +3035,7 @@ impl IAdminGateway for Gateway {
         let tg = task_group.clone();
         tg.spawn("Kill Gateway", |_task_handle| async {
             if let Err(err) = task_group.shutdown_join_all(Duration::from_mins(3)).await {
-                warn!(target: LOG_GATEWAY, err = %err.fmt_compact_anyhow(), "Error shutting down gateway");
+                warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Error shutting down gateway");
             }
         });
         Ok(())
@@ -2855,7 +3074,10 @@ impl IAdminGateway for Gateway {
             return withdraw_v2(client.value(), &wallet_module, &address, amount).await;
         }
 
-        let wallet_module = client.value().get_first_module::<WalletClientModule>()?;
+        let wallet_module = client
+            .value()
+            .get_first_module::<WalletClientModule>()
+            .map_err(anyhow::Error::from)?;
 
         // If fees are provided (from UI preview flow), use them directly
         // Otherwise fetch fees (CLI backwards compatibility)
@@ -2885,7 +3107,7 @@ impl IAdminGateway for Gateway {
                     let balance = client.value().get_balance_for_btc().await.map_err(|err| {
                         AdminGatewayError::Unexpected(anyhow!(
                             "Balance not available: {}",
-                            err.fmt_compact_anyhow()
+                            err.fmt_compact()
                         ))
                     })?;
 
@@ -2895,23 +3117,28 @@ impl IAdminGateway for Gateway {
                         .map_err(|err| AdminGatewayError::WithdrawError {
                             failure_reason: format!(
                                 "Insufficient funds. Balance: {balance}: {}",
-                                err.fmt_compact_anyhow()
+                                err.fmt_compact()
                             ),
                         })?
                 }
                 BitcoinAmountOrAll::Amount(amount) => (
                     amount,
-                    wallet_module.get_withdraw_fees(&address, amount).await?,
+                    wallet_module
+                        .get_withdraw_fees(&address, amount)
+                        .await
+                        .map_err(|e| AdminGatewayError::Unexpected(e.into()))?,
                 ),
             },
         };
 
         let operation_id = wallet_module
             .withdraw(&address, withdraw_amount, fees, ())
-            .await?;
+            .await
+            .map_err(|e| AdminGatewayError::Unexpected(e.into()))?;
         let mut updates = wallet_module
             .subscribe_withdraw_updates(operation_id)
-            .await?
+            .await
+            .map_err(|e| AdminGatewayError::Unexpected(e.into()))?
             .into_stream();
 
         while let Some(update) = updates.next().await {
@@ -2964,7 +3191,8 @@ impl IAdminGateway for Gateway {
                         mint_fees: None,
                         peg_out_fees: wallet_module
                             .get_withdraw_fees(&address_checked, btc_amount)
-                            .await?,
+                            .await
+                            .map_err(|e| AdminGatewayError::Unexpected(e.into()))?,
                     }
                 } else if let Ok(wallet_module) = client
                     .value()
@@ -2972,7 +3200,7 @@ impl IAdminGateway for Gateway {
                 ) {
                     let fee = wallet_module.send_fee().await.map_err(|e| {
                         AdminGatewayError::WithdrawError {
-                            failure_reason: e.to_string(),
+                            failure_reason: e.fmt_compact().to_string(),
                         }
                     })?;
                     WithdrawDetails {
@@ -3104,7 +3332,7 @@ impl IAdminGateway for Gateway {
 
         Client::store_encodable_client_secret(&self.gateway_db, mnemonic.to_entropy())
             .await
-            .map_err(AdminGatewayError::MnemonicError)?;
+            .map_err(|err| AdminGatewayError::MnemonicError(err.into()))?;
 
         *state_guard = GatewayState::Disconnected;
         drop(state_guard);
@@ -3212,6 +3440,19 @@ impl Gateway {
             })
     }
 
+    /// Whether the gateway currently accepts incoming payments on behalf of
+    /// the clients of `federation_id`, as set with `set_payment_policy`. A
+    /// federation without a stored config is treated as accepting them, so the
+    /// check never turns a missing record into a refused payment.
+    async fn receive_enabled(&self, federation_id: FederationId) -> bool {
+        self.gateway_db
+            .begin_transaction_nc()
+            .await
+            .load_federation_config(federation_id)
+            .await
+            .is_none_or(|config| config.receive_enabled())
+    }
+
     /// Returns payment information that LNv2 clients can use to instruct this
     /// Gateway to pay an invoice or receive a payment.
     pub async fn routing_info_v2(
@@ -3229,6 +3470,7 @@ impl Gateway {
 
         let lightning_fee = fed_config.lightning_fee;
         let transaction_fee = fed_config.transaction_fee;
+        let receive_enabled = fed_config.receive_enabled();
 
         // This route is public and unauthenticated, so the sum of two fees stored
         // before the fee limits applied must not be able to panic here.
@@ -3255,6 +3497,7 @@ impl Gateway {
                 // The base fee ensures that the gateway does not loose sats receiving the payment
                 // due to fees paid on the transaction funding the incoming contract
                 receive_fee: transaction_fee,
+                receive_enabled,
             }))
     }
 
@@ -3270,7 +3513,7 @@ impl Gateway {
         let module = client
             .value()
             .get_first_module::<GatewayClientModuleV2>()
-            .map_err(|err| PublicGatewayError::LNv2(LNv2Error::OutgoingPayment(err)))?;
+            .map_err(|err| PublicGatewayError::LNv2(LNv2Error::OutgoingPayment(err.into())))?;
 
         module
             .send_payment(payload)
@@ -3283,10 +3526,17 @@ impl Gateway {
     /// the connected Lightning node, then save the payment hash so that
     /// incoming lightning payments can be matched as a receive attempt to a
     /// specific federation.
-    async fn create_bolt11_invoice_v2(
+    pub async fn create_bolt11_invoice_v2(
         &self,
         payload: CreateBolt11InvoicePayload,
     ) -> Result<Bolt11Invoice> {
+        // Unauthenticated invoice creation consumes resources on the Lightning
+        // node and burns CPU on contract verification, so the request rate is
+        // limited before any other work is done.
+        if !self.invoice_rate_limiter.try_acquire() {
+            return Err(PublicGatewayError::RateLimited);
+        }
+
         if !payload.contract.verify() {
             return Err(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
                 "The contract is invalid".to_string(),
@@ -3299,6 +3549,12 @@ impl Gateway {
                 payload.federation_id
             )),
         )?;
+
+        if !payment_info.receive_enabled {
+            return Err(PublicGatewayError::ReceiveDisabled {
+                federation_id_prefix: payload.federation_id.to_prefix(),
+            });
+        }
 
         if payload.contract.commitment.refund_pk != payment_info.module_public_key {
             return Err(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
@@ -3326,6 +3582,12 @@ impl Gateway {
             )));
         }
 
+        if payload.expiry_secs > MAX_INVOICE_EXPIRY_SECS {
+            return Err(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
+                "The invoice expiry exceeds the maximum of one day".to_string(),
+            )));
+        }
+
         let payment_hash = match payload.contract.commitment.payment_image {
             PaymentImage::Hash(payment_hash) => payment_hash,
             PaymentImage::Point(..) => {
@@ -3335,21 +3597,21 @@ impl Gateway {
             }
         };
 
-        let invoice = self
-            .create_invoice_via_lnrpc_v2(
-                payment_hash,
-                payload.amount,
-                payload.description.clone(),
-                payload.expiry_secs,
-            )
-            .await?;
-
+        // Reserve the payment hash in the database before requesting the
+        // invoice so a replayed payment hash is rejected without creating any
+        // state on the Lightning node, and so the contract is guaranteed to be
+        // registered by the time the invoice is payable.
         let mut dbtx = self.gateway_db.begin_transaction().await;
+
+        let invoice_expires_at_secs = duration_since_epoch()
+            .as_secs()
+            .saturating_add(u64::from(payload.expiry_secs));
 
         if dbtx
             .save_registered_incoming_contract(
                 payload.federation_id,
                 payload.amount,
+                invoice_expires_at_secs,
                 payload.contract,
             )
             .await
@@ -3366,7 +3628,34 @@ impl Gateway {
             ))
         })?;
 
-        Ok(invoice)
+        match self
+            .create_invoice_via_lnrpc_v2(
+                payment_hash,
+                payload.amount,
+                payload.description.clone(),
+                payload.expiry_secs,
+            )
+            .await
+        {
+            Ok(invoice) => Ok(invoice),
+            Err(err) => {
+                // Release the reservation so the payment hash is not burned by
+                // a transient Lightning node failure.
+                let mut dbtx = self.gateway_db.begin_transaction().await;
+                dbtx.delete_registered_incoming_contract(PaymentImage::Hash(payment_hash))
+                    .await;
+                if let Err(db_err) = dbtx.commit_tx_result().await {
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %db_err.fmt_compact(),
+                        %payment_hash,
+                        "Failed to release incoming contract reservation after Lightning error"
+                    );
+                }
+
+                Err(err.into())
+            }
+        }
     }
 
     /// Retrieves a BOLT11 invoice from the connected Lightning node with a
@@ -3488,6 +3777,18 @@ impl Gateway {
             )));
         }
 
+        // Turning receives off covers invoices issued before the switch was
+        // flipped: every incoming contract of the federation is refused, whether
+        // it would be funded from an HTLC or from a direct swap.
+        if !self
+            .receive_enabled(registered_incoming_contract.federation_id)
+            .await
+        {
+            return Err(PublicGatewayError::ReceiveDisabled {
+                federation_id_prefix: registered_incoming_contract.federation_id.to_prefix(),
+            });
+        }
+
         let client = self
             .select_client(registered_incoming_contract.federation_id)
             .await?
@@ -3495,23 +3796,24 @@ impl Gateway {
 
         Ok((registered_incoming_contract.contract, client))
     }
-}
 
-#[async_trait]
-impl IGatewayClientV2 for Gateway {
-    async fn complete_htlc(
+    /// Completes (settles or cancels) an intercepted HTLC, retrying transient
+    /// failures until Lightning reports a terminal outcome.
+    ///
+    /// Serves [`IGatewayClientV1::complete_htlc`] and
+    /// [`IGatewayClientV2::complete_htlc`]: by now the incoming contract is
+    /// funded, so giving up on a transient failure would strand it. Only
+    /// [`LightningRpcError::HtlcCompletionRejected`], a permanent state, is
+    /// returned to the caller.
+    async fn await_complete_htlc(
         &self,
-        htlc_response: InterceptPaymentResponse,
+        htlc: InterceptPaymentResponse,
     ) -> std::result::Result<(), LightningRpcError> {
         loop {
             let lightning_context = self.await_lightning_context().await;
 
-            match lightning_context
-                .lnrpc
-                .complete_htlc(htlc_response.clone())
-                .await
-            {
-                Ok(..) => return Ok(()),
+            match lightning_context.lnrpc.complete_htlc(htlc.clone()).await {
+                Ok(()) => return Ok(()),
                 Err(err @ LightningRpcError::HtlcCompletionRejected { .. }) => {
                     warn!(
                         target: LOG_GATEWAY,
@@ -3521,12 +3823,58 @@ impl IGatewayClientV2 for Gateway {
                     return Err(err);
                 }
                 Err(err) => {
-                    warn!(target: LOG_GATEWAY, err = %err.fmt_compact(), "Failure trying to complete payment");
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %err.fmt_compact(),
+                        "Failure trying to complete HTLC, retrying",
+                    );
                 }
             }
 
             sleep(LIGHTNING_CONTEXT_RETRY_INTERVAL).await;
         }
+    }
+
+    /// Answers whether the connected Lightning node has any record of an
+    /// outbound payment for `payment_hash`, retrying transient lookup
+    /// failures until the node itself can answer.
+    ///
+    /// Serves [`IGatewayClientV1::outbound_payment_exists`] and
+    /// [`IGatewayClientV2::outbound_payment_exists`]: a wrong `false` lets a
+    /// resumed state machine cancel a contract whose payment is still in
+    /// flight, so no answer is synthesised from a failure.
+    async fn await_outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool {
+        loop {
+            let lightning_context = self.await_lightning_context().await;
+
+            match lightning_context
+                .lnrpc
+                .outbound_payment_exists(payment_hash)
+                .await
+            {
+                Ok(exists) => return exists,
+                Err(err) => {
+                    warn!(
+                        target: LOG_GATEWAY,
+                        err = %err.fmt_compact(),
+                        %payment_hash,
+                        "Failed to check for a dispatched payment, retrying",
+                    );
+                }
+            }
+
+            sleep(LIGHTNING_CONTEXT_RETRY_INTERVAL).await;
+        }
+    }
+}
+
+#[async_trait]
+impl IGatewayClientV2 for Gateway {
+    async fn complete_htlc(
+        &self,
+        htlc_response: InterceptPaymentResponse,
+    ) -> std::result::Result<(), LightningRpcError> {
+        self.await_complete_htlc(htlc_response).await
     }
 
     async fn is_direct_swap(
@@ -3569,6 +3917,10 @@ impl IGatewayClientV2 for Gateway {
             .map(|response| response.preimage.0)
     }
 
+    async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool {
+        self.await_outbound_payment_exists(payment_hash).await
+    }
+
     async fn min_contract_amount(
         &self,
         federation_id: &FederationId,
@@ -3603,7 +3955,8 @@ impl IGatewayClientV2 for Gateway {
         &self,
         client: &ClientHandleArc,
         invoice: &Bolt11Invoice,
-    ) -> anyhow::Result<FinalReceiveState> {
+        allow_fresh_dispatch: bool,
+    ) -> anyhow::Result<Option<FinalReceiveState>> {
         let swap_params = SwapParameters {
             payment_hash: *invoice.payment_hash(),
             amount_msat: Amount::from_msats(
@@ -3615,7 +3968,12 @@ impl IGatewayClientV2 for Gateway {
         let lnv1 = client
             .get_first_module::<GatewayClientModule>()
             .expect("No LNv1 module");
-        let operation_id = lnv1.gateway_handle_direct_swap(swap_params).await?;
+        let Some(operation_id) = lnv1
+            .gateway_handle_direct_swap(swap_params, allow_fresh_dispatch)
+            .await?
+        else {
+            return Ok(None);
+        };
         let mut stream = lnv1
             .gateway_subscribe_ln_receive(operation_id)
             .await?
@@ -3645,7 +4003,7 @@ impl IGatewayClientV2 for Gateway {
             }
         }
 
-        Ok(final_state)
+        Ok(Some(final_state))
     }
 
     async fn claim_payment_image(
@@ -3684,7 +4042,7 @@ impl IGatewayClientV1 for Gateway {
     ) -> std::result::Result<(), OutgoingPaymentError> {
         let mut dbtx = self.gateway_db.begin_transaction().await;
         if let Some(secret_hash) = dbtx.load_preimage_authentication(payment_hash).await {
-            if secret_hash != preimage_auth {
+            if !PreimageAuth::new(secret_hash).verifies(preimage_auth) {
                 return Err(OutgoingPaymentError {
                     error_type: OutgoingPaymentErrorType::InvalidInvoicePreimage,
                     contract_id: contract.contract.contract_id(),
@@ -3798,14 +4156,15 @@ impl IGatewayClientV1 for Gateway {
         }
     }
 
+    async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool {
+        self.await_outbound_payment_exists(payment_hash).await
+    }
+
     async fn complete_htlc(
         &self,
         htlc: InterceptPaymentResponse,
     ) -> std::result::Result<(), LightningRpcError> {
-        // Wait until the lightning node is online to complete the HTLC.
-        let lightning_context = self.await_lightning_context().await;
-
-        lightning_context.lnrpc.complete_htlc(htlc).await
+        self.await_complete_htlc(htlc).await
     }
 
     async fn is_lnv2_direct_swap(

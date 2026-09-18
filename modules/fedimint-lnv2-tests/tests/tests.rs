@@ -3,32 +3,50 @@ mod mock;
 use std::pin::pin;
 use std::sync::Arc;
 
+use anyhow::Context as _;
+use assert_matches::assert_matches;
 use async_stream::stream;
+use bitcoin::hashes::{Hash as _, sha256};
 use fedimint_client::ClientHandleArc;
-use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
+use fedimint_client::transaction::{
+    ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
+};
+use fedimint_client_module::error::OperationLookupError;
 use fedimint_client_module::module::ClientModule;
+use fedimint_core::base32::{FEDIMINT_PREFIX, decode_prefixed};
 use fedimint_core::core::{IntoDynInstance, OperationId};
+use fedimint_core::encoding::Encodable as _;
 use fedimint_core::module::{AmountUnit, Amounts};
-use fedimint_core::util::NextOrPending as _;
-use fedimint_core::{Amount, OutPoint, sats};
+use fedimint_core::secp256k1::{PublicKey, Scalar};
+use fedimint_core::time::duration_since_epoch;
+use fedimint_core::util::{NextOrPending as _, SafeUrl, backoff_util, retry};
+use fedimint_core::{Amount, OutPoint, msats, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
+use fedimint_lnurl::parse_lnurl;
 use fedimint_lnv2_client::events::{
     ReceivePaymentEvent, SendPaymentEvent, SendPaymentStatus, SendPaymentUpdateEvent,
 };
 use fedimint_lnv2_client::{
-    InvoiceSendStatus, LightningClientInit, LightningClientModule, LightningOperationMeta,
-    ReceiveOperationState, SendOperationState, SendPaymentError,
+    FinalReceiveOperationState, InvoiceSendStatus, LightningClientInit, LightningClientModule,
+    LightningOperationMeta, ReceiveError, ReceiveOperationState, ReceiveWithTermsError,
+    SelectGatewayError, SendOperationState, SendPaymentError, SendWithTermsError,
+    SpendableAmountError,
 };
+use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
+use fedimint_lnv2_common::gateway_api::PaymentFee;
+use fedimint_lnv2_common::lnurl::LnurlRequest;
 use fedimint_lnv2_common::{
-    Bolt11InvoiceDescription, KIND, LightningInput, LightningInputV0, OutgoingWitness,
+    Bolt11InvoiceDescription, KIND, LightningInput, LightningInputV0, LightningOutput,
+    LightningOutputV0, OutgoingWitness, tweak,
 };
 use fedimint_lnv2_server::LightningInit;
 use fedimint_logging::LOG_TEST;
 use fedimint_testing::fixtures::Fixtures;
 use futures::StreamExt;
 use serde_json::Value;
+use tpe::AggregatePublicKey;
 use tracing::warn;
 
 use crate::mock::{MOCK_INVOICE_PREIMAGE, MockGatewayConnection};
@@ -83,11 +101,15 @@ fn try_parse_ln_event(entry: &EventLogEntry) -> Option<LnEvent> {
 }
 
 fn fixtures() -> Fixtures {
+    fixtures_with_gateway(MockGatewayConnection::default())
+}
+
+fn fixtures_with_gateway(gateway_conn: MockGatewayConnection) -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit);
 
     fixtures.with_module(
         LightningClientInit {
-            gateway_conn: Some(Arc::new(MockGatewayConnection::default())),
+            gateway_conn: Some(Arc::new(gateway_conn)),
             custom_meta_fn: Arc::new(|| {
                 serde_json::json!({
                     "timestamp": chrono::Utc::now().timestamp(),
@@ -177,6 +199,138 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
             .get_invoice_send_status(&invoice)
             .await?,
         InvoiceSendStatus::Succeeded(operation_id),
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn send_with_terms_funds_the_contract_at_the_checked_terms() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+    let gateway = mock::gateway();
+    let invoice = mock::payable_invoice();
+    let amount = invoice
+        .amount_milli_satoshis()
+        .expect("Invoice has an amount");
+
+    // The terms a caller would show the user before asking for approval.
+    let routing_info = lightning
+        .routing_info(&gateway)
+        .await?
+        .expect("Mock gateway supports the federation");
+    let (send_fee, expiration_delta) = routing_info.send_parameters(&invoice);
+
+    let operation_id = lightning
+        .send_with_terms(
+            invoice.clone(),
+            gateway,
+            send_fee,
+            expiration_delta,
+            Value::Null,
+        )
+        .await?;
+
+    // The funded contract carries exactly the approved fee.
+    let meta = client
+        .operation_log()
+        .get_operation(operation_id)
+        .await
+        .expect("Operation exists")
+        .meta::<LightningOperationMeta>();
+    let LightningOperationMeta::Send(meta) = meta else {
+        panic!("Expected a send operation");
+    };
+    assert_eq!(meta.contract.amount, send_fee.add_to(amount));
+
+    let mut sub = lightning
+        .subscribe_send_operation_state_updates(operation_id)
+        .await?
+        .into_stream();
+
+    assert_eq!(sub.ok().await?, SendOperationState::Funding);
+    assert_eq!(sub.ok().await?, SendOperationState::Funded);
+    assert_eq!(
+        sub.ok().await?,
+        SendOperationState::Success(MOCK_INVOICE_PREIMAGE)
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn send_with_terms_refuses_when_the_gateway_terms_changed() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+    let gateway = mock::gateway();
+    let invoice = mock::payable_invoice();
+
+    let routing_info = lightning
+        .routing_info(&gateway)
+        .await?
+        .expect("Mock gateway supports the federation");
+    let (send_fee, expiration_delta) = routing_info.send_parameters(&invoice);
+
+    // The caller checked a fee the gateway no longer offers.
+    let stale_fee = PaymentFee {
+        base: Amount::from_sats(1),
+        parts_per_million: 1,
+    };
+    assert_ne!(stale_fee, send_fee);
+
+    assert_eq!(
+        lightning
+            .send_with_terms(
+                invoice.clone(),
+                gateway.clone(),
+                stale_fee,
+                expiration_delta,
+                Value::Null,
+            )
+            .await,
+        Err(SendWithTermsError::TermsChanged {
+            send_fee,
+            expiration_delta,
+        }),
+    );
+
+    // The caller checked an expiration delta the gateway no longer offers.
+    assert_eq!(
+        lightning
+            .send_with_terms(
+                invoice.clone(),
+                gateway,
+                send_fee,
+                expiration_delta + 1,
+                Value::Null,
+            )
+            .await,
+        Err(SendWithTermsError::TermsChanged {
+            send_fee,
+            expiration_delta,
+        }),
+    );
+
+    // Nothing was funded.
+    assert_eq!(
+        lightning.get_invoice_send_status(&invoice).await?,
+        InvoiceSendStatus::NotAttempted,
     );
 
     Ok(())
@@ -397,6 +551,78 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// A gateway that has turned receives off for the federation says so in its
+/// routing info. The client refuses to request an invoice from it, while it
+/// can still send through it.
+#[tokio::test(flavor = "multi_thread")]
+async fn receive_refuses_a_gateway_with_receives_turned_off() -> anyhow::Result<()> {
+    let fixtures = fixtures_with_gateway(MockGatewayConnection::with_receive_disabled());
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+
+    assert_eq!(
+        lightning
+            .receive(
+                Amount::from_sats(1000),
+                60,
+                Bolt11InvoiceDescription::Direct(String::new()),
+                Some(mock::gateway()),
+                Value::Null,
+            )
+            .await
+            .err(),
+        Some(ReceiveError::ReceiveDisabled)
+    );
+
+    let receive_fee = lightning
+        .routing_info(&mock::gateway())
+        .await?
+        .expect("The mock gateway serves the federation")
+        .receive_fee;
+
+    assert_eq!(
+        lightning
+            .receive_with_terms(
+                Amount::from_sats(1000),
+                60,
+                Bolt11InvoiceDescription::Direct(String::new()),
+                mock::gateway(),
+                receive_fee,
+                Value::Null,
+            )
+            .await
+            .err(),
+        Some(ReceiveWithTermsError::Receive(
+            ReceiveError::ReceiveDisabled
+        ))
+    );
+
+    // Sending is unaffected by the receive policy.
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    let operation_id = lightning
+        .send(mock::payable_invoice(), Some(mock::gateway()), Value::Null)
+        .await?;
+
+    let mut sub = lightning
+        .subscribe_send_operation_state_updates(operation_id)
+        .await?
+        .into_stream();
+
+    assert_eq!(sub.ok().await?, SendOperationState::Funding);
+    assert_eq!(sub.ok().await?, SendOperationState::Funded);
+    assert_eq!(
+        sub.ok().await?,
+        SendOperationState::Success(MOCK_INVOICE_PREIMAGE)
+    );
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn receive_operation_expires() -> anyhow::Result<()> {
     let fixtures = fixtures();
@@ -428,6 +654,252 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn receive_with_terms_creates_the_contract_at_the_checked_fee() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+    let gateway = mock::gateway();
+    let amount = Amount::from_sats(1000);
+
+    let receive_fee = lightning
+        .routing_info(&gateway)
+        .await?
+        .expect("Mock gateway supports the federation")
+        .receive_fee;
+
+    let (invoice, operation_id) = lightning
+        .receive_with_terms(
+            amount,
+            60,
+            Bolt11InvoiceDescription::Direct(String::new()),
+            gateway,
+            receive_fee,
+            Value::Null,
+        )
+        .await?;
+
+    assert_eq!(invoice.amount_milli_satoshis(), Some(amount.msats));
+
+    let meta = client
+        .operation_log()
+        .get_operation(operation_id)
+        .await
+        .expect("Operation exists")
+        .meta::<LightningOperationMeta>();
+    let LightningOperationMeta::Receive(meta) = meta else {
+        panic!("Expected a receive operation");
+    };
+    // The created contract carries exactly the approved fee.
+    assert_eq!(
+        meta.contract.commitment.amount,
+        receive_fee.subtract_from(amount.msats)
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receive_with_terms_refuses_when_the_gateway_fee_changed() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+    let gateway = mock::gateway();
+
+    let receive_fee = lightning
+        .routing_info(&gateway)
+        .await?
+        .expect("Mock gateway supports the federation")
+        .receive_fee;
+
+    let stale_fee = PaymentFee {
+        base: Amount::from_sats(1),
+        parts_per_million: 1,
+    };
+    assert_ne!(stale_fee, receive_fee);
+
+    assert_eq!(
+        lightning
+            .receive_with_terms(
+                Amount::from_sats(1000),
+                60,
+                Bolt11InvoiceDescription::Direct(String::new()),
+                gateway,
+                stale_fee,
+                Value::Null,
+            )
+            .await,
+        Err(ReceiveWithTermsError::TermsChanged { receive_fee }),
+    );
+
+    // Nothing was created.
+    assert!(
+        client
+            .operation_log()
+            .paginate_operations_rev(10, None)
+            .await
+            .is_empty()
+    );
+
+    Ok(())
+}
+
+/// Builds an incoming contract addressed to `recipient_pk`, the way a sender
+/// does: the claim key is derived from the recipient's published static key and
+/// a fresh ephemeral key, so anyone who knows that static key can address one.
+fn incoming_contract_for(
+    recipient_pk: PublicKey,
+    aggregate_pk: AggregatePublicKey,
+    amount: Amount,
+) -> IncomingContract {
+    let (ephemeral_tweak, ephemeral_pk) = tweak::generate(recipient_pk);
+
+    let encryption_seed = ephemeral_tweak
+        .consensus_hash::<sha256::Hash>()
+        .to_byte_array();
+
+    let preimage = encryption_seed
+        .consensus_hash::<sha256::Hash>()
+        .to_byte_array();
+
+    let claim_pk = recipient_pk
+        .mul_tweak(
+            secp256k1::SECP256K1,
+            &Scalar::from_be_bytes(ephemeral_tweak).expect("Within curve order"),
+        )
+        .expect("Tweak is valid");
+
+    IncomingContract::new(
+        aggregate_pk,
+        encryption_seed,
+        preimage,
+        PaymentImage::Hash(preimage.consensus_hash()),
+        amount,
+        duration_since_epoch().as_secs().saturating_add(3600),
+        claim_pk,
+        mock::gateway_keypair().public_key(),
+        ephemeral_pk,
+    )
+}
+
+/// Funds `contract` straight from `funder`'s balance. No gateway is involved:
+/// consensus funds an incoming contract of any amount, so this is what an
+/// attacker with a little ecash can do to anyone whose static key they know.
+async fn fund_incoming_contract(
+    funder: &ClientHandleArc,
+    contract: &IncomingContract,
+) -> anyhow::Result<()> {
+    let lnv2_module_id = funder
+        .get_first_instance(&LightningClientModule::kind())
+        .expect("lnv2 module not found");
+
+    funder
+        .finalize_and_submit_transaction(
+            OperationId::new_random(),
+            "Funding an incoming contract",
+            |_| (),
+            TransactionBuilder::new().with_outputs(
+                ClientOutputBundle::new_no_sm(vec![ClientOutput {
+                    output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
+                    amounts: Amounts::new_bitcoin(contract.commitment.amount),
+                }])
+                .into_dyn(lnv2_module_id),
+            ),
+        )
+        .await?;
+
+    Ok(())
+}
+
+/// A contract worth less than the fee to claim it must be left alone rather
+/// than driven into a claim that cannot be funded.
+///
+/// Anyone can address an incoming contract to a published lnurl key, and
+/// consensus funds one of any amount, so the amount is entirely the sender's
+/// choice. The client used to start a claim for it regardless; with nothing in
+/// the wallet to cover the shortfall the claim panicked inside the state
+/// machine executor, and since nothing commits it panicked again on every
+/// restart — a wallet bricked for the price of a few sats.
+///
+/// The victim here holds no balance at all, which is the state a fresh wallet
+/// publishing an address is in.
+#[tokio::test(flavor = "multi_thread")]
+async fn unsolicited_dust_contract_does_not_wedge_the_client() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let victim = fed.new_client().await;
+    let attacker = fed.new_client().await;
+
+    attacker
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await?;
+
+    // Everything the attacker needs is in what the victim publishes.
+    let lnurl = victim
+        .get_first_module::<LightningClientModule>()?
+        .generate_lnurl(
+            SafeUrl::parse("https://recurring.xyz/").expect("Valid Url"),
+            Some(mock::gateway()),
+        )
+        .await?;
+    let url = parse_lnurl(&lnurl).expect("Generated lnurl decodes");
+    let payload = url.rsplit("pay/").next().expect("Url carries a payload");
+    let request = decode_prefixed::<LnurlRequest>(FEDIMINT_PREFIX, payload)?;
+
+    let dust = incoming_contract_for(request.recipient_pk, request.aggregate_pk, msats(1));
+    fund_incoming_contract(&attacker, &dust).await?;
+
+    // A second, claimable contract behind the dust one. Waiting for its operation
+    // proves the victim processed past the dust rather than dying on it: the
+    // lnurl task handles the stream in order.
+    let claimable = incoming_contract_for(
+        request.recipient_pk,
+        request.aggregate_pk,
+        Amount::from_sats(100),
+    );
+    fund_incoming_contract(&attacker, &claimable).await?;
+
+    let claimable_operation = OperationId::from_encodable(&claimable);
+    retry(
+        "waiting for the claimable contract to be picked up",
+        backoff_util::aggressive_backoff(),
+        || async {
+            victim
+                .operation_log()
+                .get_operation(claimable_operation)
+                .await
+                .context("Claimable contract was not picked up")
+        },
+    )
+    .await?;
+
+    // The dust never became an operation at all.
+    assert!(
+        victim
+            .operation_log()
+            .get_operation(OperationId::from_encodable(&dust))
+            .await
+            .is_none(),
+        "Dust contract should have been ignored"
+    );
+
+    // And the client is still running: it claimed the contract that was worth it.
+    assert_eq!(
+        victim
+            .get_first_module::<LightningClientModule>()?
+            .await_final_receive_operation_state(claimable_operation)
+            .await?,
+        FinalReceiveOperationState::Claimed
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
@@ -452,6 +924,67 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Following an operation that was never started reports the shared
+/// operation-lookup error, so a caller can tell "I have never seen that id"
+/// apart from a genuine lightning failure without reading a message.
+#[tokio::test(flavor = "multi_thread")]
+async fn following_an_unknown_operation_reports_not_found() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+
+    assert_matches!(
+        lightning
+            .await_final_send_operation_state(OperationId::new_random())
+            .await,
+        Err(OperationLookupError::NotFound(_))
+    );
+
+    assert_matches!(
+        lightning
+            .subscribe_receive_operation_state_updates(OperationId::new_random())
+            .await,
+        Err(OperationLookupError::NotFound(_))
+    );
+
+    Ok(())
+}
+
+/// Working out what the wallet could spend over lightning fails for two very
+/// different reasons, and the caller needs to tell them apart: there is no
+/// gateway to quote a fee schedule against, or there is one and the balance
+/// still cannot cover the smallest payable amount plus fees.
+#[tokio::test(flavor = "multi_thread")]
+async fn spendable_amount_names_the_reason_it_has_no_answer() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+
+    // No gateway is registered with this federation, so there is nothing to
+    // select and no fee schedule to compute against.
+    assert_matches!(
+        lightning.spendable_amount(sats(1000), None).await,
+        Err(SpendableAmountError::SelectGateway(
+            SelectGatewayError::NoGatewaysAvailable
+        ))
+    );
+
+    // Naming the mock gateway gets past selection, and an empty wallet then
+    // cannot cover even one millisatoshi plus its fees.
+    assert_matches!(
+        lightning
+            .spendable_amount(Amount::ZERO, Some(mock::gateway()))
+            .await,
+        Err(SpendableAmountError::BalanceTooLow {
+            balance: Amount::ZERO
+        })
+    );
+
+    Ok(())
+}
+
 mod db {
     use std::collections::BTreeMap;
 
@@ -462,11 +995,12 @@ mod db {
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
-    use fedimint_core::epoch::ConsensusItem;
     use fedimint_core::module::CommonModuleInit;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::secp256k1::{PublicKey, SECP256K1, SecretKey};
-    use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
+    use fedimint_core::session_outcome::{
+        AcceptedItem, ConsensusItem, SessionOutcome, SignedSessionOutcome,
+    };
     use fedimint_core::transaction::{Transaction, TransactionSignature};
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{Amount, BitcoinHash, OutPoint, PeerId};

@@ -15,7 +15,6 @@ name = "fedimint_lnv2_common"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 fedimint-connectors = { workspace = true }

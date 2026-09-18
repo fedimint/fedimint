@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::anyhow;
 use fedimint_client::meta::MetaService;
 use fedimint_client::{Client, ClientHandleArc, ClientModule, ClientModuleInstance};
 use fedimint_client_module::meta::LegacyMetaSource;
@@ -18,7 +17,7 @@ use fedimint_core::invite_code::InviteCode;
 use fedimint_core::secp256k1::hashes::sha256;
 use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::task::timeout;
-use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl};
+use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{Amount, BitcoinHash, runtime};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_ln_client::common::{LightningGateway, LightningGatewayAnnouncement};
@@ -74,7 +73,7 @@ impl RecurringInvoiceServer {
         let mut gateway_cache = HashMap::<FederationId, watch::Receiver<Vec<CachedGateway>>>::new();
 
         for (federation_id, db) in load_federation_client_databases(&db).await {
-            let mut client_builder = Client::builder().await?;
+            let mut client_builder = Client::builder().await;
             client_builder.with_meta_service(recurringd_meta_service());
             client_builder.with_module(LightningClientInit::default());
             client_builder.with_module(MintClientInit);
@@ -161,9 +160,7 @@ impl RecurringInvoiceServer {
         client_db: Database,
         invite_code: &InviteCode,
     ) -> Result<ClientHandleArc, RecurringPaymentError> {
-        let mut client_builder = Client::builder()
-            .await
-            .map_err(RecurringPaymentError::JoiningFederationFailed)?;
+        let mut client_builder = Client::builder().await;
 
         client_builder.with_meta_service(recurringd_meta_service());
         client_builder.with_module(LightningClientInit::default());
@@ -171,13 +168,14 @@ impl RecurringInvoiceServer {
 
         let client = client_builder
             .preview(connectors, invite_code)
-            .await?
+            .await
+            .map_err(|err| RecurringPaymentError::JoiningFederationFailed(Box::new(err)))?
             .join(
                 client_db,
                 fedimint_client::RootSecret::StandardDoubleDerive(Self::default_secret()),
             )
             .await
-            .map_err(RecurringPaymentError::JoiningFederationFailed)?;
+            .map_err(|err| RecurringPaymentError::JoiningFederationFailed(Box::new(err)))?;
         Ok(Arc::new(client))
     }
 
@@ -234,7 +232,7 @@ impl RecurringInvoiceServer {
             &0,
         )
         .await;
-        dbtx.commit_tx_result().await.map_err(anyhow::Error::from)?;
+        dbtx.commit_tx_result().await?;
 
         Ok(payment_code)
     }
@@ -375,7 +373,8 @@ impl RecurringInvoiceServer {
                                 serde_json::Value::Null,
                                 Some(gateway),
                             )
-                            .await?;
+                            .await
+                            .map_err(RecurringPaymentError::InvoiceCreation)?;
 
                         self.save_bolt11_invoice(
                             dbtx,
@@ -386,7 +385,7 @@ impl RecurringInvoiceServer {
                         )
                         .await;
 
-                        Result::<_, anyhow::Error>::Ok((operation_id, invoice))
+                        Result::<_, RecurringPaymentError>::Ok((operation_id, invoice))
                     })
                 },
                 None,
@@ -671,7 +670,8 @@ async fn await_invoice_confirmed(
 ) -> Result<(), RecurringPaymentError> {
     let mut operation_updated = ln_module
         .subscribe_ln_receive(operation_id)
-        .await?
+        .await
+        .map_err(RecurringPaymentError::Subscribe)?
         .into_stream();
 
     while let Some(update) = operation_updated.next().await {
@@ -680,9 +680,7 @@ async fn await_invoice_confirmed(
         }
     }
 
-    Err(RecurringPaymentError::Other(anyhow!(
-        "BOLT11 invoice not confirmed"
-    )))
+    Err(RecurringPaymentError::InvoiceNotConfirmed)
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
@@ -784,7 +782,7 @@ async fn select_available_gateways(
     let ln_module = client.get_ln_module()?;
     ln_module.update_gateway_cache().await.map_err(|err| {
         warn!(
-            err = %err.fmt_compact_anyhow(),
+            err = %err.fmt_compact(),
             "Failed to refresh gateway announcements"
         );
         RecurringPaymentError::NoGatewayFound
@@ -810,7 +808,7 @@ async fn select_available_gateways(
             Err(err) => {
                 debug!(
                     gateway_id = %gateway_id,
-                    err = %err.fmt_compact_anyhow(),
+                    err = %err.fmt_compact(),
                     "Gateway failed availability check"
                 );
             }

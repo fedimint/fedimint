@@ -5,15 +5,15 @@ use std::fmt::{Display, Formatter};
 use std::io::Read;
 use std::str::FromStr;
 
-use anyhow::ensure;
 use bech32::{Bech32m, Hrp};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
-use crate::base32::FEDIMINT_PREFIX;
+use crate::base32::{FEDIMINT_PREFIX, PrefixedDecodeError};
 use crate::config::FederationId;
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
-use crate::util::SafeUrl;
+use crate::util::{FmtCompact as _, SafeUrl};
 use crate::{NumPeersExt, PeerId};
 
 /// Information required for client to join Federation
@@ -30,7 +30,7 @@ pub struct InviteCode(Vec<InviteCodePart>);
 #[cfg(feature = "uniffi")]
 uniffi::custom_type!(InviteCode, String, {
     lower: |i| i.to_string(),
-    try_lift: |s| s.parse().map_err(|e: anyhow::Error| e),
+    try_lift: |s| s.parse::<InviteCode>().map_err(anyhow::Error::from),
 });
 
 impl Decodable for InviteCode {
@@ -218,20 +218,61 @@ enum InviteCodePart {
 const BECH32_HRP: Hrp = Hrp::parse_unchecked("fed1");
 
 impl FromStr for InviteCode {
-    type Err = anyhow::Error;
+    type Err = InviteCodeParseError;
 
     fn from_str(encoded: &str) -> Result<Self, Self::Err> {
-        if let Ok(invite_code) = crate::base32::decode_prefixed(FEDIMINT_PREFIX, encoded) {
-            return Ok(invite_code);
+        // The prefix is ASCII, so a case-insensitive match here agrees with the
+        // lowercasing `decode_prefixed` does before comparing the prefix.
+        if encoded
+            .get(..FEDIMINT_PREFIX.len())
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(FEDIMINT_PREFIX))
+        {
+            return Ok(crate::base32::decode_prefixed(FEDIMINT_PREFIX, encoded)?);
         }
 
         let (hrp, data) = bech32::decode(encoded)?;
 
-        ensure!(hrp == BECH32_HRP, "Invalid HRP in bech32 encoding");
+        if hrp != BECH32_HRP {
+            return Err(InviteCodeParseError::InvalidHrp { hrp });
+        }
 
         let invite = Self::consensus_decode_whole(&data, &ModuleRegistry::default())?;
 
         Ok(invite)
+    }
+}
+
+/// Failure to parse an [`InviteCode`] from its string form.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum InviteCodeParseError {
+    /// The string is not a valid bech32m encoding.
+    #[error("Invalid bech32 encoding: {0}")]
+    Bech32(#[from] bech32::DecodeError),
+    /// The bech32 human-readable part is not the invite code HRP.
+    #[error(
+        "Invalid bech32 human-readable part '{hrp}', expected '{}'",
+        BECH32_HRP
+    )]
+    InvalidHrp { hrp: bech32::Hrp },
+    /// The payload is not a valid consensus encoding of an invite code.
+    #[error("Invalid invite code payload: {}", .0.fmt_compact())]
+    Decode(DecodeError),
+    /// The string carries the [`FEDIMINT_PREFIX`] but its base 32 payload does
+    /// not decode into an invite code.
+    #[error("Invalid prefixed base32 invite code: {}", .0.fmt_compact())]
+    Base32(PrefixedDecodeError),
+}
+
+impl From<DecodeError> for InviteCodeParseError {
+    fn from(source: DecodeError) -> Self {
+        Self::Decode(source)
+    }
+}
+
+impl From<PrefixedDecodeError> for InviteCodeParseError {
+    fn from(source: PrefixedDecodeError) -> Self {
+        Self::Base32(source)
     }
 }
 
@@ -270,6 +311,7 @@ mod tests {
     use fedimint_core::PeerId;
     use fedimint_core::base32::FEDIMINT_PREFIX;
 
+    use super::{BECH32_HRP, InviteCodeParseError};
     use crate::config::FederationId;
     use crate::invite_code::InviteCode;
 
@@ -300,5 +342,104 @@ mod tests {
                 ))
             ]
         );
+    }
+
+    #[test]
+    fn from_str_rejects_wrong_hrp() {
+        let other_hrp = bech32::Hrp::parse("abcd").expect("valid hrp");
+        let encoded = bech32::encode::<bech32::Bech32m>(other_hrp, &[0u8; 8]).expect("encodes");
+        assert!(matches!(
+            InviteCode::from_str(&encoded),
+            Err(InviteCodeParseError::InvalidHrp { hrp }) if hrp == other_hrp
+        ));
+    }
+
+    #[test]
+    fn from_str_reports_the_whole_decode_chain_for_a_truncated_payload() {
+        use crate::encoding::Encodable;
+        use crate::util::FmtCompact as _;
+
+        // Dropping the last byte of a valid invite code cuts off mid-federation-id, so
+        // the reader runs out of input partway through the consensus decode instead of
+        // failing on the very first byte.
+        let invite_code_str = "fed11qgqpu8rhwden5te0vejkg6tdd9h8gepwd4cxcumxv4jzuen0duhsqqfqh6nl7sgk72caxfx8khtfnn8y436q3nhyrkev3qp8ugdhdllnh86qmp42pm";
+        let invite = InviteCode::from_str(invite_code_str).expect("valid invite code");
+        let bytes = invite.consensus_encode_to_vec();
+        let encoded = bech32::encode::<bech32::Bech32m>(BECH32_HRP, &bytes[..bytes.len() - 1])
+            .expect("encodes");
+
+        let err = InviteCode::from_str(&encoded).expect_err("payload is truncated");
+        let text = err.to_string();
+        let InviteCodeParseError::Decode(inner) = err else {
+            panic!("a truncated payload is a decode error: {err:?}");
+        };
+
+        assert_eq!(
+            text,
+            format!("Invalid invite code payload: {}", inner.fmt_compact())
+        );
+        assert_ne!(
+            inner.fmt_compact().to_string(),
+            inner.to_string(),
+            "the decode error has more than one layer, and the message shows all of them"
+        );
+    }
+
+    #[test]
+    fn from_str_reports_the_whole_decode_chain_for_a_truncated_prefixed_payload() {
+        use crate::base32::PrefixedDecodeError;
+        use crate::encoding::Encodable;
+        use crate::util::FmtCompact as _;
+
+        // Same truncation as the bech32 case above, but the payload carries the
+        // FEDIMINT_PREFIX and is base32-encoded instead of bech32-encoded.
+        let invite_code_str = "fed11qgqpu8rhwden5te0vejkg6tdd9h8gepwd4cxcumxv4jzuen0duhsqqfqh6nl7sgk72caxfx8khtfnn8y436q3nhyrkev3qp8ugdhdllnh86qmp42pm";
+        let invite = InviteCode::from_str(invite_code_str).expect("valid invite code");
+        let bytes = invite.consensus_encode_to_vec();
+        let encoded =
+            crate::base32::encode_prefixed_bytes(FEDIMINT_PREFIX, &bytes[..bytes.len() - 1]);
+
+        let err = InviteCode::from_str(&encoded).expect_err("payload is truncated");
+        let text = err.to_string();
+        let err_fmt_compact = err.fmt_compact().to_string();
+        let InviteCodeParseError::Base32(PrefixedDecodeError::ConsensusDecode(inner)) = err else {
+            panic!("a truncated payload is a decode error: {err:?}");
+        };
+
+        assert_eq!(
+            text,
+            format!(
+                "Invalid prefixed base32 invite code: \
+                 Invalid consensus encoding in base32 payload: {}",
+                inner.fmt_compact()
+            )
+        );
+        assert_eq!(
+            err_fmt_compact, text,
+            "no source, so nothing is printed twice"
+        );
+        assert_ne!(
+            inner.fmt_compact().to_string(),
+            inner.to_string(),
+            "the decode error has more than one layer, and the message shows all of them"
+        );
+    }
+
+    #[test]
+    fn from_str_rejects_non_bech32() {
+        assert!(matches!(
+            InviteCode::from_str("definitely not bech32"),
+            Err(InviteCodeParseError::Bech32(_))
+        ));
+    }
+
+    #[test]
+    fn from_str_reports_corrupt_prefixed_base32() {
+        use crate::util::FmtCompact as _;
+
+        let err = InviteCode::from_str(&format!("{FEDIMINT_PREFIX}not!base32"))
+            .expect_err("not!base32 is not valid base32");
+        assert!(matches!(err, InviteCodeParseError::Base32(_)), "{err:?}");
+        assert_eq!(err.fmt_compact().to_string(), err.to_string());
     }
 }

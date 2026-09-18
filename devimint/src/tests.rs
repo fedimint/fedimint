@@ -20,7 +20,7 @@ use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
 use fedimint_core::util::backoff_util::aggressive_backoff;
-use fedimint_core::util::{retry, write_overwrite_async};
+use fedimint_core::util::{FmtCompactAnyhow, retry, write_overwrite_async};
 use fedimint_core::{Amount, PeerId};
 use fedimint_ln_client::LightningPaymentOutcome;
 use fedimint_ln_client::cli::LnInvoiceResponse;
@@ -31,16 +31,18 @@ use fedimint_testing_core::node_type::LightningNodeType;
 use futures::future::try_join_all;
 use serde_json::json;
 use substring::Substring;
-use tokio::net::TcpStream;
+use tokio::net::TcpListener;
 use tokio::{fs, try_join};
 use tracing::{debug, error, info};
 
-use crate::cli::{CommonArgs, cleanup_on_exit, exec_user_command, setup};
+use crate::cli::{CommonArgs, cleanup_on_exit, exec_or_wait_for_shutdown, setup};
+use crate::devfed::DevJitFed;
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV};
 use crate::federation::Client;
 use crate::util::{LoadTestTool, ProcessManager, almost_equal, poll};
 use crate::version_constants::{
     VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA, VERSION_0_13_0_ALPHA,
+    ensure_expected_fedimintd_version,
 };
 use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed};
 
@@ -1246,10 +1248,8 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap()
         .to_owned();
 
-    assert_eq!(
-        semver::Version::parse(&peer_0_fedimintd_version)?,
-        fedimintd_version
-    );
+    ensure_expected_fedimintd_version(&peer_0_fedimintd_version, fedimintd_version)
+        .expect("peer should report the expected fedimintd version");
 
     info!("Checking initial announcements...");
 
@@ -1484,8 +1484,8 @@ pub async fn guardian_metadata_tests(dev_fed: DevFed) -> Result<()> {
         .FM_API_URL
         .parse()
         .expect("FM_API_URL must be a valid SafeUrl");
-    let connectors = ConnectorRegistry::build_from_testing_env()?.bind().await?;
-    let admin_api = DynGlobalApi::new_admin(connectors, peer_id, peer0_real_url, None)?;
+    let connectors = ConnectorRegistry::build_from_testing_env().bind().await;
+    let admin_api = DynGlobalApi::new_admin(connectors, peer_id, peer0_real_url, None);
     let invite: InviteCode = admin_api
         .request_single_peer(
             INVITE_CODE_ENDPOINT.to_string(),
@@ -2876,48 +2876,48 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
     match cmd {
         TestCmd::WasmTestSetup { exec } => {
             let (process_mgr, task_group) = setup(common_args).await?;
+            // Bind before bringing up the federation, and outside the faucet
+            // task, so that a port clash fails the setup right away instead of
+            // leaving the test suite talking to whatever else is listening on
+            // that port. Holding the socket from here on also keeps other port
+            // allocators off it.
+            let faucet_bind_addr = process_mgr.globals.FM_FAUCET_BIND_ADDR.clone();
+            let faucet_listener = TcpListener::bind(&faucet_bind_addr)
+                .await
+                .with_context(|| format!("binding faucet to {faucet_bind_addr}"))?;
+            let gw_lnd_port = process_mgr.globals.FM_PORT_GW_LND;
+            let dev_fed = DevJitFed::new(&process_mgr, false, false)?;
             let main = {
                 let task_group = task_group.clone();
+                let dev_fed = dev_fed.clone();
                 async move {
-                    let dev_fed = dev_fed(&process_mgr).await?;
-                    let gw_lnd = dev_fed.gw_lnd.clone();
-                    let fed = dev_fed.fed.clone();
-                    gw_lnd
+                    let dev_fed = dev_fed.to_dev_fed(&process_mgr).await?;
+                    dev_fed
+                        .gw_lnd
                         .client()
                         .set_federation_routing_fee(dev_fed.fed.calculate_federation_id(), 0, 0)
                         .await?;
+                    let faucet = crate::faucet::Faucet::new(&dev_fed)?;
+                    info!(addr = %faucet_bind_addr, "Faucet listening");
                     task_group.spawn_cancellable("faucet", async move {
-                        if let Err(err) = crate::faucet::run(
-                            &dev_fed,
-                            format!("0.0.0.0:{}", process_mgr.globals.FM_PORT_FAUCET),
-                            process_mgr.globals.FM_PORT_GW_LND,
-                        )
-                        .await
+                        if let Err(err) =
+                            crate::faucet::run(faucet, faucet_listener, gw_lnd_port).await
                         {
-                            error!("Error spawning faucet: {err}");
+                            error!(err = %err.fmt_compact_anyhow(), "Faucet failed");
                         }
                     });
-                    try_join!(fed.pegin_gateways(30_000, vec![&gw_lnd]), async {
-                        poll("waiting for faucet startup", || async {
-                            TcpStream::connect(format!(
-                                "127.0.0.1:{}",
-                                process_mgr.globals.FM_PORT_FAUCET
-                            ))
-                            .await
-                            .context("connect to faucet")
-                            .map_err(ControlFlow::Continue)
-                        })
+                    dev_fed
+                        .fed
+                        .pegin_gateways(30_000, vec![&dev_fed.gw_lnd])
                         .await?;
-                        Ok(())
-                    },)?;
-                    if let Some(exec) = exec {
-                        exec_user_command(exec).await?;
-                        task_group.shutdown();
-                    }
-                    Ok::<_, anyhow::Error>(())
+                    exec_or_wait_for_shutdown(exec, &task_group).await
                 }
             };
-            cleanup_on_exit(main, task_group).await?;
+            let result = cleanup_on_exit(main, task_group).await;
+            // Explicit teardown in async context; `cleanup_on_exit` has joined
+            // the task group by now.
+            dev_fed.fast_terminate().await;
+            result?;
         }
         TestCmd::LatencyTests { r#type, iterations } => {
             let (process_mgr, _) = setup(common_args).await?;

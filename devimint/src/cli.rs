@@ -8,7 +8,7 @@ use anyhow::{Context, Result, anyhow, ensure};
 use clap::builder::BoolishValueParser;
 use clap::{Parser, Subcommand};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::{FmtCompactAnyhow as _, write_overwrite_async};
+use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
 use rand::Rng as _;
 use rand::distributions::Alphanumeric;
@@ -216,32 +216,74 @@ pub async fn update_test_dir_link(
     Ok(())
 }
 
-pub async fn cleanup_on_exit<T>(
-    main_process: impl futures::Future<Output = Result<T>>,
+/// Runs `main_process` until it finishes or the task group is told to shut
+/// down, then shuts the task group down and joins it on every exit path, so
+/// that tasks still holding daemons finish inside the runtime instead of
+/// being dropped by its shutdown. Callers tear their daemons down explicitly
+/// afterwards.
+pub async fn cleanup_on_exit(
+    main_process: impl futures::Future<Output = Result<()>>,
     task_group: TaskGroup,
-) -> Result<Option<T>> {
-    match task_group
+) -> Result<()> {
+    let result = match task_group
         .make_handle()
         .cancel_on_shutdown(main_process)
         .await
     {
         Err(_) => {
-            info!("Received shutdown signal before finishing main process, exiting early");
-            Ok(None)
+            info!(
+                target: LOG_DEVIMINT,
+                "Received shutdown signal before finishing main process, exiting early"
+            );
+            Ok(())
         }
-        Ok(Ok(v)) => {
-            debug!(target: LOG_DEVIMINT, "Main process finished successfully, shutting down task group");
-            task_group
-                .shutdown_join_all(Duration::from_secs(30))
-                .await?;
-
-            // the caller can drop the v after shutdown
-            Ok(Some(v))
+        Ok(Ok(())) => {
+            debug!(
+                target: LOG_DEVIMINT,
+                "Main process finished successfully, shutting down task group"
+            );
+            Ok(())
         }
         Ok(Err(err)) => {
-            warn!(target: LOG_DEVIMINT, err = %err.fmt_compact_anyhow(), "Main process failed, will shutdown");
+            warn!(
+                target: LOG_DEVIMINT,
+                err = %err.fmt_compact_anyhow(),
+                "Main process failed, will shutdown"
+            );
             Err(err)
         }
+    };
+
+    let joined = task_group.shutdown_join_all(Duration::from_secs(30)).await;
+
+    match (result, joined) {
+        (Ok(()), joined) => joined.map_err(anyhow::Error::from),
+        (Err(err), Ok(())) => Err(err),
+        (Err(err), Err(join_err)) => {
+            // The main process error is the one worth reporting.
+            warn!(
+                target: LOG_DEVIMINT,
+                err = %join_err.fmt_compact(),
+                "Task group did not shut down cleanly"
+            );
+            Err(err)
+        }
+    }
+}
+
+/// Runs the user command if there is one, otherwise waits for the task group
+/// to be told to shut down, e.g. by a signal.
+pub async fn exec_or_wait_for_shutdown(
+    exec: Option<Vec<ffi::OsString>>,
+    task_group: &TaskGroup,
+) -> Result<()> {
+    if let Some(exec) = exec {
+        debug!(target: LOG_DEVIMINT, "Starting exec command");
+        exec_user_command(exec).await
+    } else {
+        debug!(target: LOG_DEVIMINT, "Waiting for group task shutdown");
+        task_group.make_handle().make_shutdown_rx().await;
+        Ok(())
     }
 }
 
@@ -288,12 +330,11 @@ async fn handle_dev_fed_command(
         "dev-fed-pre-restore cannot be combined with skip-setup or pre-dkg"
     );
     let (process_mgr, task_group) = setup(common_args).await?;
+    let dev_fed = DevJitFed::new_with_pre_restore(&process_mgr, skip_setup, pre_dkg, pre_restore)?;
     let main = {
         let task_group = task_group.clone();
+        let dev_fed = dev_fed.clone();
         async move {
-            let dev_fed =
-                DevJitFed::new_with_pre_restore(&process_mgr, skip_setup, pre_dkg, pre_restore)?;
-
             let pegin_start_time = Instant::now();
             debug!(target: LOG_DEVIMINT, "Peging in client and gateways");
 
@@ -410,7 +451,7 @@ async fn handle_dev_fed_command(
                 dev_fed.finalize(&process_mgr).await?;
             }
 
-            let daemons = write_ready_file(&process_mgr.globals, Ok(dev_fed)).await?;
+            write_ready_file(&process_mgr.globals, Ok(())).await?;
 
             info!(
                 target: LOG_DEVIMINT,
@@ -418,20 +459,47 @@ async fn handle_dev_fed_command(
                 path = %process_mgr.globals.FM_DATA_DIR.display(),
                 "Devfed ready"
             );
-            if let Some(exec) = exec {
-                debug!(target: LOG_DEVIMINT, "Starting exec command");
-                exec_user_command(exec).await?;
-                task_group.shutdown();
-            }
-
-            debug!(target: LOG_DEVIMINT, "Waiting for group task shutdown");
-            task_group.make_handle().make_shutdown_rx().await;
-
-            Ok::<_, anyhow::Error>(daemons)
+            log_web_ui_urls(&dev_fed, pre_restore).await?;
+            exec_or_wait_for_shutdown(exec, &task_group).await
         }
     };
-    if let Some(fed) = cleanup_on_exit(main, task_group).await? {
-        fed.fast_terminate().await;
+    let result = cleanup_on_exit(main, task_group).await;
+    // Explicit teardown in async context; `cleanup_on_exit` has joined the
+    // task group by now.
+    dev_fed.fast_terminate().await;
+    result
+}
+
+/// Logs the web UI address of every guardian and gateway.
+///
+/// Their ports are allocated per run, so an operator dropping into a devimint
+/// shell would otherwise have to dig them out of the env vars before opening
+/// any of the UIs.
+///
+/// Gateways are skipped before a manual restore: that mode deliberately stops
+/// short of finalizing the dev fed, and awaiting a gateway here would start
+/// waiting on work it does not otherwise do.
+async fn log_web_ui_urls(dev_fed: &DevJitFed, pre_restore: bool) -> Result<()> {
+    for (peer_id, peer_vars) in &dev_fed.fed().await?.vars {
+        info!(
+            target: LOG_DEVIMINT,
+            "fedimint-{peer_id} UI: http://{}", peer_vars.FM_BIND_UI
+        );
+    }
+
+    if pre_restore {
+        return Ok(());
+    }
+
+    for gateway in [
+        dev_fed.gw_lnd().await?,
+        dev_fed.gw_ldk().await?,
+        dev_fed.gw_ldk_second().await?,
+    ] {
+        info!(
+            target: LOG_DEVIMINT,
+            "{} UI: http://127.0.0.1:{}", gateway.gw_name, gateway.gw_port
+        );
     }
 
     Ok(())

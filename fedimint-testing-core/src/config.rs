@@ -62,7 +62,10 @@ pub fn local_config_gen_params(
                 enabled_modules: None,
                 federation_size: None,
                 network: bitcoin::Network::Regtest,
-                fedimint_version: fedimint_core::version::cargo_pkg_release().to_owned(),
+                fedimint_version: fedimint_core::version::DkgVersion::parse(
+                    fedimint_core::version::cargo_pkg_release(),
+                )
+                .expect("cargo package release is a valid semantic version"),
             };
             (*peer, params)
         })

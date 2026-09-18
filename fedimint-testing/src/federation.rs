@@ -16,7 +16,7 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
-use fedimint_core::net::peers::IP2PConnections;
+use fedimint_core::net::IP2PConnections;
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::task::{TaskGroup, block_in_place, sleep_in_test};
 use fedimint_gateway_common::ConnectFedPayload;
@@ -85,12 +85,12 @@ impl FederationTest {
     pub async fn new_admin_api(&self, peer_id: PeerId) -> anyhow::Result<DynGlobalApi> {
         let config = self.configs.get(&peer_id).expect("peer to have config");
 
-        DynGlobalApi::new_admin(
-            ConnectorRegistry::build_from_testing_env()?.bind().await?,
+        Ok(DynGlobalApi::new_admin(
+            ConnectorRegistry::build_from_testing_env().bind().await,
             peer_id,
             config.consensus.api_endpoints()[&peer_id].url.clone(),
             None,
-        )
+        ))
     }
 
     /// Create a new admin client connected to this fed
@@ -113,16 +113,15 @@ impl FederationTest {
         admin_creds: Option<AdminCreds>,
     ) -> ClientHandleArc {
         info!(target: LOG_TEST, "Setting new client with config");
-        let mut client_builder = Client::builder().await.expect("Failed to build client");
+        let mut client_builder = Client::builder().await;
         client_builder.with_module_inits(self.client_init.clone());
         if let Some(admin_creds) = admin_creds {
             client_builder.set_admin_creds(admin_creds);
         }
-        let client_secret = Client::load_or_generate_client_secret(&db).await.unwrap();
+        let client_secret = Client::load_or_generate_client_secret(&db).await;
         client_builder
             .preview_with_existing_config(self.connectors.clone(), client_config, None)
             .await
-            .expect("Preview failed")
             .join(
                 db,
                 RootSecret::StandardDoubleDerive(PlainRootSecretStrategy::to_root_secret(
@@ -146,12 +145,11 @@ impl FederationTest {
             .unwrap();
 
         info!(target: LOG_TEST, "Joining client with existing db");
-        let mut client_builder = Client::builder().await.expect("Failed to build client");
+        let mut client_builder = Client::builder().await;
         client_builder.with_module_inits(self.client_init.clone());
         client_builder
             .preview_with_existing_config(self.connectors.clone(), client_config, None)
             .await
-            .expect("Preview failed")
             .join(db, root_secret)
             .await
             .map(Arc::new)
@@ -172,12 +170,11 @@ impl FederationTest {
             .unwrap();
 
         info!(target: LOG_TEST, "Recovering client with existing db");
-        let mut client_builder = Client::builder().await.expect("Failed to build client");
+        let mut client_builder = Client::builder().await;
         client_builder.with_module_inits(self.client_init.clone());
         client_builder
             .preview_with_existing_config(self.connectors.clone(), client_config, None)
             .await
-            .expect("Preview failed")
             .recover(db, root_secret, None)
             .await
             .map(Arc::new)
@@ -191,7 +188,7 @@ impl FederationTest {
         root_secret: RootSecret,
     ) -> ClientHandleArc {
         info!(target: LOG_TEST, "Opening client with existing db");
-        let mut client_builder = Client::builder().await.expect("Failed to build client");
+        let mut client_builder = Client::builder().await;
         client_builder.with_module_inits(self.client_init.clone());
         client_builder
             .open(self.connectors.clone(), db, root_secret)
@@ -345,7 +342,7 @@ impl FederationTestBuilder {
             }
 
             let instances = cfg.consensus.iter_module_instances();
-            let decoders = self.server_init.available_decoders(instances).unwrap();
+            let decoders = self.server_init.available_decoders(instances);
             let db = Database::new(MemDatabase::new(), decoders);
             let module_init_registry = self.server_init.clone();
             let subgroup = task_group.make_subgroup();
@@ -376,11 +373,7 @@ impl FederationTestBuilder {
 
             task_group.spawn("fedimintd", move |_| async move {
                 Box::pin(consensus::run(
-                    ConnectorRegistry::build_from_testing_env()
-                        .unwrap()
-                        .bind()
-                        .await
-                        .unwrap(),
+                    ConnectorRegistry::build_from_testing_env().bind().await,
                     Some(ApiAuth::new("pass".to_string())),
                     Some(ApiAuth::new("pass".to_string())),
                     connections,
@@ -417,18 +410,13 @@ impl FederationTestBuilder {
                 continue;
             }
 
-            let connectors = ConnectorRegistry::build_from_testing_env()
-                .unwrap()
-                .bind()
-                .await
-                .unwrap();
+            let connectors = ConnectorRegistry::build_from_testing_env().bind().await;
             let api = DynGlobalApi::new_admin(
                 connectors,
                 peer_id,
                 config.consensus.api_endpoints()[&peer_id].url.clone(),
                 None,
-            )
-            .unwrap();
+            );
 
             while let Err(e) = api
                 .request_admin_no_auth::<u64>(SESSION_COUNT_ENDPOINT, ApiRequestErased::default())
@@ -449,11 +437,7 @@ impl FederationTestBuilder {
             _task: task_group,
             num_peers: self.num_peers,
             num_offline: self.num_offline,
-            connectors: ConnectorRegistry::build_from_testing_env()
-                .expect("Failed to initialize endpoints for testing (env)")
-                .bind()
-                .await
-                .expect("Failed to initialize endpoints for testing"),
+            connectors: ConnectorRegistry::build_from_testing_env().bind().await,
         }
     }
 }

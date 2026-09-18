@@ -1,9 +1,9 @@
-use anyhow::anyhow;
 use bitcoin::{Address, Amount};
 use fedimint_api_client::api::{
-    FederationApiExt, FederationError, FederationResult, IModuleFederationApi, ServerResult,
+    FederationApiExt, FederationError, FederationGeneralError, FederationResult,
+    IModuleFederationApi, ServerResult,
 };
-use fedimint_api_client::query::FilterMapThreshold;
+use fedimint_api_client::query::{FilterMapThreshold, ThresholdAgreement};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{ApiAuth, ApiRequestErased, ModuleConsensusVersion};
 use fedimint_core::task::{MaybeSend, MaybeSync};
@@ -41,11 +41,14 @@ pub trait WalletFederationApi {
     async fn activate_consensus_version_voting(&self, auth: ApiAuth) -> FederationResult<()>;
 
     /// Returns the total number of recovery items stored on the federation
-    async fn fetch_recovery_count(&self) -> anyhow::Result<u64>;
+    async fn fetch_recovery_count(&self) -> FederationResult<u64>;
 
-    /// Fetches recovery items in the range `[start, end)` via consensus
-    async fn fetch_recovery_slice(&self, start: u64, end: u64)
-    -> anyhow::Result<Vec<RecoveryItem>>;
+    /// Fetches recovery items in the range `[start, end)` via consensus.
+    ///
+    /// Retries each peer with backoff until a threshold of peers agree, so a
+    /// transient transport failure on one peer (on top of a peer that is
+    /// already offline) does not abort the whole recovery.
+    async fn fetch_recovery_slice(&self, start: u64, end: u64) -> Vec<RecoveryItem>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -117,7 +120,9 @@ where
             return Err(FederationError::general(
                 BLOCK_COUNT_LOCAL_ENDPOINT.to_string(),
                 ApiRequestErased::default(),
-                anyhow!("No valid block counts received"),
+                FederationGeneralError::ThresholdFailed {
+                    message: "No valid block counts received".to_string(),
+                },
             ));
         }
 
@@ -132,11 +137,48 @@ where
         address: &Address,
         amount: Amount,
     ) -> FederationResult<Option<PegOutFees>> {
-        self.request_current_consensus(
+        let params = ApiRequestErased::new((address, amount.to_sat()));
+
+        // Deliberately not `request_current_consensus`. The quote is a pure
+        // function of the ordered consensus log, so peers in sync always agree;
+        // one that has fallen behind never converges, and `ThresholdConsensus`
+        // would re-request it forever while logging nothing at all.
+        let quotes = match self
+            .request_with_strategy(
+                ThresholdAgreement::new(self.all_peers().to_num_peers()),
+                PEG_OUT_FEES_ENDPOINT.to_string(),
+                params.clone(),
+            )
+            .await?
+        {
+            Ok(fees) => return Ok(fees),
+            Err(quotes) => quotes,
+        };
+
+        let detail = quotes
+            .iter()
+            .map(|(peer, quote)| match quote {
+                Some(fees) => format!(
+                    "peer {peer}: {} sats/kvb, weight {}",
+                    fees.fee_rate.sats_per_kvb, fees.total_weight
+                ),
+                None => format!("peer {peer}: no quote"),
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+
+        Err(FederationError::general(
             PEG_OUT_FEES_ENDPOINT.to_string(),
-            ApiRequestErased::new((address, amount.to_sat())),
-        )
-        .await
+            params,
+            FederationGeneralError::ThresholdFailed {
+                message: format!(
+                    "Guardians disagree on peg-out fees ({detail}). The quote is consensus \
+                     state, so a guardian returning a different value has diverged - most \
+                     often because its Bitcoin backend is lagging. The same rate validates \
+                     the peg-out, so it cannot be accepted until the federation agrees."
+                ),
+            },
+        ))
     }
 
     async fn fetch_bitcoin_rpc_kind(&self, peer_id: PeerId) -> FederationResult<String> {
@@ -174,25 +216,19 @@ where
         .await
     }
 
-    async fn fetch_recovery_count(&self) -> anyhow::Result<u64> {
+    async fn fetch_recovery_count(&self) -> FederationResult<u64> {
         self.request_current_consensus::<u64>(
             RECOVERY_COUNT_ENDPOINT.to_string(),
             ApiRequestErased::default(),
         )
         .await
-        .map_err(|e| anyhow!("{e}"))
     }
 
-    async fn fetch_recovery_slice(
-        &self,
-        start: u64,
-        end: u64,
-    ) -> anyhow::Result<Vec<RecoveryItem>> {
-        self.request_current_consensus::<Vec<RecoveryItem>>(
+    async fn fetch_recovery_slice(&self, start: u64, end: u64) -> Vec<RecoveryItem> {
+        self.request_current_consensus_retry::<Vec<RecoveryItem>>(
             RECOVERY_SLICE_ENDPOINT.to_string(),
             ApiRequestErased::new((start, end)),
         )
         .await
-        .map_err(|e| anyhow!("{e}"))
     }
 }

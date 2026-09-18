@@ -29,7 +29,9 @@ use fedimint_core::module::{ApiAuth, CORE_CONSENSUS_VERSION};
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::timing;
-use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command};
+use fedimint_core::util::{
+    FmtCompact as _, FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command,
+};
 use fedimint_ln_server::LightningInit;
 use fedimint_logging::{LOG_CORE, LOG_SERVER, TracingSetup};
 use fedimint_meta_server::MetaInit;
@@ -310,11 +312,13 @@ impl ServerOpts {
 ///   (`fedimintd version-hash`). See `fedimint-build` crate for easy way to
 ///   obtain it.
 ///
-/// * `code_version_vendor_suffix` - An optional suffix that will be appended to
-///   the internal fedimint release version, to distinguish binaries built by
-///   different vendors, usually with a different set of modules. The suffix is
-///   informational in setup/DKG: compatibility and consensus config generation
-///   use the normalized `x.y.z` release version.
+/// * `code_version_vendor_suffix` - An optional vendor string appended to the
+///   internal Fedimint release version, to distinguish binaries built by
+///   different vendors, usually with a different set of modules. It is encoded
+///   as `SemVer` build metadata and therefore must contain dot-separated,
+///   non-empty identifiers with only ASCII alphanumeric characters and hyphens.
+///   Setup/DKG compatibility and consensus config generation require the same
+///   exact optional vendor string as well as the same `major.minor` series.
 #[allow(clippy::too_many_lines)]
 pub async fn run(
     module_init_registry: ServerModuleInitRegistry,
@@ -381,6 +385,8 @@ pub async fn run(
         || fedimint_version.to_string(),
         |suffix| format!("{fedimint_version}+{suffix}"),
     );
+    fedimint_core::version::DkgVersion::parse(&code_version_str)
+        .context("Invalid Fedimint version vendor string")?;
 
     let timing_total_runtime = timing::TimeReporter::new("total-runtime").info();
 
@@ -527,7 +533,7 @@ pub async fn run(
     debug!(target: LOG_CORE, "Terminating main task");
 
     if let Err(err) = root_task_group.join_all(Some(SHUTDOWN_TIMEOUT)).await {
-        error!(target: LOG_CORE, err = %err.fmt_compact_anyhow(), "Error while shutting down task group");
+        error!(target: LOG_CORE, err = %err.fmt_compact(), "Error while shutting down task group");
     }
 
     debug!(target: LOG_CORE, "Shutdown complete");

@@ -7,6 +7,7 @@ use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{
     BitcoindRpcNoChainIdFactory, ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
+    ClientModuleRecoveryPrepareArgs, RecoveryMode,
 };
 use fedimint_client_module::module::recovery::{DynModuleBackup, RecoveryProgress};
 use fedimint_client_module::module::{ClientContext, DynClientModule, FinalClientIface};
@@ -38,6 +39,17 @@ pub trait IClientModuleInit: IDynCommonModuleInit + fmt::Debug + MaybeSend + May
 
     /// See [`ClientModuleInit::supported_api_versions`]
     fn supported_api_versions(&self) -> MultiApiVersion;
+
+    /// See [`ClientModuleInit::recovery_mode`]
+    fn recovery_mode(&self) -> RecoveryMode;
+
+    /// See [`ClientModuleInit::prepare_recovery`]
+    async fn prepare_recovery(
+        &self,
+        db: Database,
+        instance_id: ModuleInstanceId,
+        api: DynGlobalApi,
+    ) -> anyhow::Result<()>;
 
     #[allow(clippy::too_many_arguments)]
     async fn recover(
@@ -109,6 +121,28 @@ where
 
     fn supported_api_versions(&self) -> MultiApiVersion {
         <Self as ClientModuleInit>::supported_api_versions(self)
+    }
+
+    fn recovery_mode(&self) -> RecoveryMode {
+        <Self as ClientModuleInit>::recovery_mode(self)
+    }
+
+    async fn prepare_recovery(
+        &self,
+        db: Database,
+        instance_id: ModuleInstanceId,
+        api: DynGlobalApi,
+    ) -> anyhow::Result<()> {
+        let (module_db, _global_dbtx_access_token) = db.with_prefix_module_id(instance_id);
+
+        <Self as ClientModuleInit>::prepare_recovery(
+            self,
+            &ClientModuleRecoveryPrepareArgs {
+                db: module_db,
+                module_api: api.with_module(instance_id),
+            },
+        )
+        .await
     }
 
     async fn recover(

@@ -1,6 +1,6 @@
 use bitcoin::secp256k1::ecdsa::Signature;
 use bitcoin::{BlockHash, OutPoint, TxOut, Txid};
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::{DbMigrationError, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::ModuleConsensusVersion;
 use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};
@@ -231,7 +231,7 @@ impl_db_lookup!(
 /// Migrate to v1, backfilling all previously pegged-in outpoints
 pub async fn migrate_to_v1(
     mut ctx: ServerModuleDbMigrationFnContext<'_, Wallet>,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), DbMigrationError> {
     let outpoints = ctx
         .get_typed_module_history_stream()
         .await
@@ -306,7 +306,7 @@ impl_db_lookup!(key = RecoveryItemKey, query_prefix = RecoveryItemKeyPrefix);
 /// Migrate to v2, backfilling recovery items from module history
 pub async fn migrate_to_v2(
     mut ctx: ServerModuleDbMigrationFnContext<'_, Wallet>,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), DbMigrationError> {
     let mut recovery_items = Vec::new();
     let mut stream = ctx.get_typed_module_history_stream().await;
 
@@ -344,7 +344,7 @@ pub async fn migrate_to_v2(
 /// recoverable in full.
 pub async fn migrate_to_v3(
     mut ctx: ServerModuleDbMigrationFnContext<'_, Wallet>,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), DbMigrationError> {
     let mut dbtx = ctx.dbtx();
 
     let change_outpoints = dbtx

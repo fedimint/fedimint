@@ -12,6 +12,7 @@ use bitcoin_hashes::Hash as _;
 use bitcoin_hashes::hex::DisplayHex;
 pub use common::{BackupRequest, SignedBackupRequest};
 use config::MintClientConfig;
+pub use fedimint_core::config::ExcessiveRelativeFeeError;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};

@@ -13,7 +13,6 @@ name = "fedimint_fountain"
 path = "./src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 bitcoin_hashes = { workspace = true }
 fedimint-core = { workspace = true }
 rand = { workspace = true }

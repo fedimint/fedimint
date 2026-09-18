@@ -271,10 +271,8 @@ async fn run() -> CliOutputResult {
     let cli = Cli::parse();
     let connector_registry = ConnectorRegistry::build_from_client_defaults()
         .with_env_var_overrides()
-        .map_err(ServerError::InternalClientError)?
         .bind()
-        .await
-        .map_err(ServerError::InternalClientError)?;
+        .await;
     let client = GatewayApi::new(cli.rpcpassword, connector_registry);
 
     let output = match cli.command {

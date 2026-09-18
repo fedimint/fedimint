@@ -208,7 +208,7 @@ impl Decodable for PegInProof {
             tweak_contract_key: PublicKey::consensus_decode_partial(d, modules)?,
         };
 
-        validate_peg_in_proof(&slf).map_err(DecodeError::new_custom)?;
+        validate_peg_in_proof(&slf).map_err(|error| DecodeError::Invalid(error.into()))?;
         Ok(slf)
     }
 }

@@ -22,11 +22,11 @@ use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, apply_migrations_dbtx, verify_module_db_integrity_dbtx};
 use fedimint_core::envs::is_running_in_test_env;
-use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ApiAuth, FEDIMINT_API_ALPN};
+use fedimint_core::net::DynP2PConnections;
 use fedimint_core::net::iroh::build_iroh_endpoint;
-use fedimint_core::net::peers::DynP2PConnections;
+use fedimint_core::session_outcome::ConsensusItem;
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
@@ -273,7 +273,7 @@ pub async fn run(
             .map(|(&peer_id, url)| (peer_id, url.url.clone()))
             .collect(),
         None,
-    )?;
+    );
 
     let bitcoin_rpc_connection = ServerBitcoinRpcMonitor::new(
         dyn_server_bitcoin_rpc,
@@ -455,7 +455,11 @@ pub async fn run(
                         break;
                     }
 
-                    info!(target: LOG_CONSENSUS, "Waiting for bitcoin backend to sync... {progress:.1}%");
+                    info!(
+                        target: LOG_CONSENSUS,
+                        "Waiting for bitcoin backend to sync... {:.1}%",
+                        progress * 100.0
+                    );
                 } else {
                     break;
                 }
@@ -480,7 +484,7 @@ pub async fn run(
             connectors,
             api_urls,
             force_api_secrets.get_active().as_deref(),
-        )?,
+        ),
         cfg: cfg.clone(),
         connections,
         ord_latency_sender,

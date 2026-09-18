@@ -98,6 +98,16 @@ impl AmountUnit {
     }
 }
 
+impl fmt::Display for AmountUnit {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.is_bitcoin() {
+            f.write_str("bitcoin")
+        } else {
+            write!(f, "{}", self.0)
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct AmountWithUnit {
     amounts: Amount,
@@ -362,7 +372,7 @@ pub struct IrohGatewayResponse {
 pub const FEDIMINT_API_ALPN: &[u8] = b"FEDIMINT_API_ALPN";
 pub const FEDIMINT_GATEWAY_ALPN: &[u8] = b"FEDIMINT_GATEWAY_ALPN";
 
-/// Authentication secret used to verify guardian admin API requests.
+/// Authentication secret used to verify privileged API requests.
 ///
 /// The inner value is private to prevent timing leaks via direct comparison.
 /// Use [`Self::verify`] for authentication checks.

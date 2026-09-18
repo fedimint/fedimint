@@ -37,6 +37,7 @@ tracing = { workspace = true, features = ["log"] }
 [dev-dependencies]
 fedimint-logging = { workspace = true }
 fedimint-testing = { workspace = true }
+tpe = { workspace = true }
 
 [lints]
 workspace = true

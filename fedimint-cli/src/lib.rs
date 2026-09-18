@@ -349,7 +349,7 @@ impl Opts {
             });
         };
 
-        DynGlobalApi::new_admin(
+        Ok(DynGlobalApi::new_admin(
             self.make_endpoints().await.map_err(|e| CliError {
                 error: e.to_string(),
             })?,
@@ -360,16 +360,15 @@ impl Opts {
                 .context("Our peer URL not found in config")
                 .map_err_cli()?,
             api_secret,
-        )
-        .map_err_cli()
+        ))
     }
 
     async fn make_endpoints(&self) -> Result<ConnectorRegistry, anyhow::Error> {
-        ConnectorRegistry::build_from_client_defaults()
+        Ok(ConnectorRegistry::build_from_client_defaults()
             .iroh_pkarr_dht(self.iroh_enable_dht())
             .ws_force_tor(self.use_tor())
             .bind()
-            .await
+            .await)
     }
 
     fn auth(&self) -> CliResult<ApiAuth> {
@@ -859,7 +858,6 @@ impl FedimintCli {
     async fn make_client_builder(&self, cli: &Opts) -> CliResult<(ClientBuilder, Database)> {
         let mut client_builder = Client::builder()
             .await
-            .map_err_cli()?
             .with_iroh_enable_dht(cli.iroh_enable_dht());
         client_builder.with_module_inits(self.module_inits.clone());
 
@@ -1239,8 +1237,7 @@ impl FedimintCli {
                         .get_value(&ApiSecretKey)
                         .await
                         .as_deref(),
-                )
-                .map_err_cli()?;
+                );
 
                 // Use the `auth` endpoint to verify credentials
                 admin_api.auth(auth.clone()).await.map_err(|e| CliError {
@@ -1462,9 +1459,7 @@ impl FedimintCli {
                     .map_err_cli_msg("can't get mint module")?;
 
                 for _ in 0..count {
-                    mint.advance_note_idx(amount)
-                        .await
-                        .map_err_cli_msg("failed to advance the note_idx")?;
+                    mint.advance_note_idx(amount).await;
                 }
 
                 Ok(CliOutput::Raw(serde_json::Value::Null))
@@ -1511,10 +1506,7 @@ impl FedimintCli {
 
             Command::Dev(DevCmd::WaitComplete) => {
                 let client = self.client_open(&cli).await?;
-                client
-                    .wait_for_all_active_state_machines()
-                    .await
-                    .map_err_cli_msg("failed to wait for all active state machines")?;
+                client.wait_for_all_active_state_machines().await;
                 Ok(CliOutput::Raw(serde_json::Value::Null))
             }
             Command::Dev(DevCmd::Wait { seconds }) => {
@@ -1832,7 +1824,7 @@ impl FedimintCli {
                             Box::pin(async move {
                                 info!(target: LOG_CLIENT, "{event:?}");
 
-                                Ok(())
+                                Ok::<(), std::convert::Infallible>(())
                             })
                         },
                     )
@@ -1914,7 +1906,7 @@ impl FedimintCli {
         args: SetupAdminArgs,
     ) -> anyhow::Result<Value> {
         let client =
-            DynGlobalApi::new_admin_setup(cli.make_endpoints().await?, args.endpoint.clone())?;
+            DynGlobalApi::new_admin_setup(cli.make_endpoints().await?, args.endpoint.clone());
 
         match &args.subcommand {
             SetupAdminCmd::Status => {
