@@ -4335,7 +4335,6 @@ dependencies = [
 name = "fedimint-meta-common"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "fedimint-core",
  "fedimint-logging",
  "hex",
