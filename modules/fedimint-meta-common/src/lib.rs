@@ -87,7 +87,7 @@ pub struct MetaValue(Vec<u8>);
 uniffi::custom_newtype!(MetaValue, Vec<u8>);
 
 impl FromStr for MetaValue {
-    type Err = anyhow::Error;
+    type Err = hex::FromHexError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(hex::decode(s)?))
@@ -287,5 +287,37 @@ impl fmt::Display for MetaOutputOutcome {
 impl fmt::Display for MetaConsensusItem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Meta - len: {}", self.value.0.len())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use hex::FromHexError;
+
+    use super::MetaValue;
+
+    #[test]
+    fn a_value_that_is_not_hex_is_rejected() {
+        assert!(matches!(
+            "zz".parse::<MetaValue>(),
+            Err(FromHexError::InvalidHexCharacter { c: 'z', index: 0 })
+        ));
+        assert!(matches!(
+            "0".parse::<MetaValue>(),
+            Err(FromHexError::OddLength)
+        ));
+    }
+
+    #[test]
+    fn a_value_round_trips_through_its_hex_form() {
+        let value = MetaValue::from([0x01, 0x02, 0xff].as_slice());
+
+        assert_eq!(
+            value
+                .to_string()
+                .parse::<MetaValue>()
+                .expect("The rendered form parses back"),
+            value
+        );
     }
 }
