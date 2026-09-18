@@ -143,12 +143,10 @@ impl MetaClientModule {
     }
 }
 
-/// A failure of a meta operation that speaks for the federation's guardians.
+/// A failure of one of the meta client's guardian-only operations.
 ///
-/// Both operations it covers, submitting a value and reading the pending
-/// submissions, are guardian-only endpoints. They can therefore fail before
-/// any request leaves the client, when it holds no admin credentials at all,
-/// as well as while talking to the federation.
+/// These endpoints can fail before any request leaves the client, when it
+/// holds no admin credentials, as well as while talking to the federation.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum MetaAdminError {
@@ -157,8 +155,8 @@ pub enum MetaAdminError {
     #[error("Admin auth not set")]
     AdminAuthMissing,
 
-    /// The federation could not be reached, or its guardians disagreed.
-    #[error("The federation could not be reached")]
+    /// The federation rejected the request, or could not be reached.
+    #[error("The federation request failed")]
     Federation(#[source] Box<FederationError>),
 }
 
