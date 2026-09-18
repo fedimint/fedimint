@@ -158,7 +158,7 @@ fn threshold_agreement_counts_every_peer() {
     // among 1, 2 and 3 only becomes visible once the fourth answer lands. A
     // strategy that stopped at `threshold` responses would have reported a
     // divergence that does not exist.
-    let mut agreement = ThresholdAgreement::<u64>::new(NumPeers::from(4));
+    let mut agreement = ThresholdAgreement::<u64>::new(NumPeers::new(4).expect("four is nonzero"));
 
     assert_matches!(agreement.process(PeerId::from(0), 0), QueryStep::Continue);
     assert_matches!(agreement.process(PeerId::from(1), 1), QueryStep::Continue);
@@ -173,7 +173,7 @@ fn threshold_agreement_counts_every_peer() {
 fn threshold_agreement_reports_divergence_once_every_peer_has_answered() {
     use assert_matches::assert_matches;
 
-    let mut agreement = ThresholdAgreement::<u64>::new(NumPeers::from(4));
+    let mut agreement = ThresholdAgreement::<u64>::new(NumPeers::new(4).expect("four is nonzero"));
 
     assert_matches!(agreement.process(PeerId::from(0), 0), QueryStep::Continue);
     assert_matches!(agreement.process(PeerId::from(1), 1), QueryStep::Continue);
@@ -192,7 +192,7 @@ fn threshold_agreement_does_not_wait_on_a_peer_that_errored() {
     // A failed peer completes the picture just as a response does, so the
     // divergence is reported rather than waiting on an answer that is never
     // coming - the hang this strategy exists to avoid.
-    let mut agreement = ThresholdAgreement::<u64>::new(NumPeers::from(4));
+    let mut agreement = ThresholdAgreement::<u64>::new(NumPeers::new(4).expect("four is nonzero"));
 
     assert_matches!(agreement.process(PeerId::from(0), 0), QueryStep::Continue);
     assert_matches!(agreement.process(PeerId::from(1), 1), QueryStep::Continue);
@@ -212,7 +212,7 @@ fn threshold_agreement_defers_to_peer_errors_when_too_few_answered() {
     // Two of four unreachable leaves fewer responses than the threshold. The
     // useful complaint is that peers are down, which the caller reports from
     // its own error accounting, so stay quiet.
-    let mut agreement = ThresholdAgreement::<u64>::new(NumPeers::from(4));
+    let mut agreement = ThresholdAgreement::<u64>::new(NumPeers::new(4).expect("four is nonzero"));
 
     assert_matches!(agreement.process(PeerId::from(0), 0), QueryStep::Continue);
     assert_matches!(agreement.process(PeerId::from(1), 1), QueryStep::Continue);
@@ -298,7 +298,7 @@ impl<R: Eq + Clone> QueryStrategy<R, Result<R, BTreeMap<PeerId, R>>> for Thresho
 fn test_threshold_consensus() {
     use assert_matches::assert_matches;
 
-    let mut consensus = ThresholdConsensus::<u64>::new(NumPeers::from(4));
+    let mut consensus = ThresholdConsensus::<u64>::new(NumPeers::new(4).expect("four is nonzero"));
 
     assert_matches!(consensus.process(PeerId::from(0), 1), QueryStep::Continue);
     assert_matches!(consensus.process(PeerId::from(1), 1), QueryStep::Continue);

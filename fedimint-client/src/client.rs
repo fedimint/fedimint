@@ -1645,7 +1645,8 @@ impl Client {
             "Fetching common api versions"
         );
 
-        let num_peers = NumPeers::from(config.global.api_endpoints.len());
+        let num_peers = NumPeers::try_from(config.global.api_endpoints.len())
+            .expect("client config must contain at least one guardian");
 
         Self::fetch_peers_api_versions_from_threshold_of_peers(num_peers, api.clone()).await
     }
@@ -1874,7 +1875,8 @@ impl Client {
         );
 
         let (num_responses_sender, mut num_responses_receiver) = tokio::sync::watch::channel(0);
-        let num_peers = NumPeers::from(config.global.api_endpoints.len());
+        let num_peers = NumPeers::try_from(config.global.api_endpoints.len())
+            .expect("client config must contain at least one guardian");
 
         task_group.spawn_cancellable_with_span(
             client_span.clone(),

@@ -7,7 +7,7 @@ use fedimint_api_client::query::{FilterMapThreshold, ThresholdAgreement};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::module::{ApiAuth, ApiRequestErased, ModuleConsensusVersion};
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{NumPeersExt, PeerId, apply, async_trait_maybe_send};
+use fedimint_core::{NumPeers, NumPeersExt, PeerId, apply, async_trait_maybe_send};
 use fedimint_wallet_common::endpoint_constants::{
     ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT, BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT,
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
@@ -107,7 +107,8 @@ where
             .request_with_strategy(
                 FilterMapThreshold::<Option<u32>, Option<u32>>::new(
                     filter_map,
-                    self.all_peers().to_num_peers().threshold().into(),
+                    NumPeers::try_from(self.all_peers().to_num_peers().threshold())
+                        .expect("a federation threshold is nonzero"),
                 ),
                 BLOCK_COUNT_LOCAL_ENDPOINT.to_string(),
                 ApiRequestErased::default(),
