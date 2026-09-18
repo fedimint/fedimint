@@ -18,7 +18,7 @@ use anyhow::Context as _;
 use api::MetaFederationApi;
 use common::{KIND, MetaConsensusValue, MetaKey, MetaValue};
 use db::DbKeyPrefix;
-use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
+use fedimint_api_client::api::{DynGlobalApi, DynModuleApi, FederationError};
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::error::MetaFetchError;
 use fedimint_client_module::meta::{FetchKind, LegacyMetaSource, MetaSource, MetaValues};
@@ -32,6 +32,8 @@ use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::{
     Amounts, ApiAuth, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion,
 };
+#[cfg(feature = "uniffi")]
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::util::backoff_util::FibonacciBackoff;
 #[cfg(feature = "uniffi")]
 use fedimint_core::util::ffi::UniffiError;
@@ -79,11 +81,16 @@ impl MetaClientModule {
     /// Get the current meta consensus value along with it's revision
     ///
     /// See [`Self::get_consensus_value_rev`] to use when checking for updates.
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`FederationError`] if the federation could not be asked
+    /// for the value.
     pub async fn get_consensus_value(
         &self,
         key: MetaKey,
-    ) -> anyhow::Result<Option<MetaConsensusValue>> {
-        Ok(self.module_api.get_consensus(key).await?)
+    ) -> Result<Option<MetaConsensusValue>, FederationError> {
+        self.module_api.get_consensus(key).await
     }
 
     /// Get the current meta consensus value revision
@@ -91,8 +98,16 @@ impl MetaClientModule {
     /// Each time a meta consensus value changes, the revision increases,
     /// so checking just the revision can save a lot of bandwidth in periodic
     /// checks.
-    pub async fn get_consensus_value_rev(&self, key: MetaKey) -> anyhow::Result<Option<u64>> {
-        Ok(self.module_api.get_consensus_rev(key).await?)
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`FederationError`] if the federation could not be asked
+    /// for the revision.
+    pub async fn get_consensus_value_rev(
+        &self,
+        key: MetaKey,
+    ) -> Result<Option<u64>, FederationError> {
+        self.module_api.get_consensus_rev(key).await
     }
 
     /// Get current submissions to change the meta consensus value.
@@ -117,10 +132,9 @@ impl MetaClientModule {
         &self,
         key: MetaKey,
     ) -> Result<Option<MetaConsensusValue>, UniffiError> {
-        self.module_api
-            .get_consensus(key)
+        self.get_consensus_value(key)
             .await
-            .map_err(|e| UniffiError::from(anyhow::anyhow!(e.to_string())))
+            .map_err(|e| UniffiError::General(e.fmt_compact().to_string()))
     }
 }
 
