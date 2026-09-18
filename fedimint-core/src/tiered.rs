@@ -90,12 +90,19 @@ impl<T> Tiered<T> {
 impl Tiered<()> {
     /// Generates denominations of a given base up to and including `max`
     pub fn gen_denominations(denomination_base: u16, max: Amount) -> Self {
+        if denomination_base <= 1 {
+            return Self::default();
+        }
+
         let mut amounts = vec![];
 
         let mut denomination = Amount::from_msats(1);
         while denomination <= max {
             amounts.push((denomination, ()));
-            denomination = denomination * denomination_base.into();
+            let Some(next) = denomination.checked_mul(denomination_base.into()) else {
+                break;
+            };
+            denomination = next;
         }
 
         amounts.into_iter().collect()
