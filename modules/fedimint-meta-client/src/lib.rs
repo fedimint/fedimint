@@ -18,7 +18,7 @@ use anyhow::Context as _;
 use api::MetaFederationApi;
 use common::{KIND, MetaConsensusValue, MetaKey, MetaValue};
 use db::DbKeyPrefix;
-use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
+use fedimint_api_client::api::{DynGlobalApi, DynModuleApi, FederationError};
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::error::MetaFetchError;
 use fedimint_client_module::meta::{FetchKind, LegacyMetaSource, MetaSource, MetaValues};
@@ -32,6 +32,8 @@ use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::{
     Amounts, ApiAuth, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion,
 };
+#[cfg(feature = "uniffi")]
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::util::backoff_util::FibonacciBackoff;
 #[cfg(feature = "uniffi")]
 use fedimint_core::util::ffi::UniffiError;
@@ -45,6 +47,7 @@ use serde::Deserialize;
 use serde_json::json;
 use states::MetaStateMachine;
 use strum::IntoEnumIterator;
+use thiserror::Error;
 use tracing::{debug, warn};
 
 #[derive(Debug)]
@@ -55,10 +58,16 @@ pub struct MetaClientModule {
 }
 
 impl MetaClientModule {
-    fn admin_auth(&self) -> anyhow::Result<ApiAuth> {
+    /// The admin credentials this client was built with.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`MetaAdminError::AdminAuthMissing`] if the client was built
+    /// without them.
+    fn admin_auth(&self) -> Result<ApiAuth, MetaAdminError> {
         self.admin_auth
             .clone()
-            .ok_or_else(|| anyhow::format_err!("Admin auth not set"))
+            .ok_or(MetaAdminError::AdminAuthMissing)
     }
 
     /// Submit a meta consensus value
@@ -68,7 +77,13 @@ impl MetaClientModule {
     ///
     /// To "cancel" previous vote, peer can submit a value equal to the current
     /// consensus value.
-    pub async fn submit(&self, key: MetaKey, value: MetaValue) -> anyhow::Result<()> {
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`MetaAdminError::AdminAuthMissing`] if this client holds no
+    /// admin credentials, and with [`MetaAdminError::Federation`] if the
+    /// guardians could not be asked to record the vote.
+    pub async fn submit(&self, key: MetaKey, value: MetaValue) -> Result<(), MetaAdminError> {
         self.module_api
             .submit(key, value, self.admin_auth()?)
             .await?;
@@ -79,11 +94,16 @@ impl MetaClientModule {
     /// Get the current meta consensus value along with it's revision
     ///
     /// See [`Self::get_consensus_value_rev`] to use when checking for updates.
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`FederationError`] if the federation could not be asked
+    /// for the value.
     pub async fn get_consensus_value(
         &self,
         key: MetaKey,
-    ) -> anyhow::Result<Option<MetaConsensusValue>> {
-        Ok(self.module_api.get_consensus(key).await?)
+    ) -> Result<Option<MetaConsensusValue>, FederationError> {
+        self.module_api.get_consensus(key).await
     }
 
     /// Get the current meta consensus value revision
@@ -91,21 +111,58 @@ impl MetaClientModule {
     /// Each time a meta consensus value changes, the revision increases,
     /// so checking just the revision can save a lot of bandwidth in periodic
     /// checks.
-    pub async fn get_consensus_value_rev(&self, key: MetaKey) -> anyhow::Result<Option<u64>> {
-        Ok(self.module_api.get_consensus_rev(key).await?)
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`FederationError`] if the federation could not be asked
+    /// for the revision.
+    pub async fn get_consensus_value_rev(
+        &self,
+        key: MetaKey,
+    ) -> Result<Option<u64>, FederationError> {
+        self.module_api.get_consensus_rev(key).await
     }
 
     /// Get current submissions to change the meta consensus value.
     ///
     /// Upon changing the consensus
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`MetaAdminError::AdminAuthMissing`] if this client holds no
+    /// admin credentials, and with [`MetaAdminError::Federation`] if the
+    /// guardians could not be asked for their submissions.
     pub async fn get_submissions(
         &self,
         key: MetaKey,
-    ) -> anyhow::Result<BTreeMap<PeerId, MetaValue>> {
+    ) -> Result<BTreeMap<PeerId, MetaValue>, MetaAdminError> {
         Ok(self
             .module_api
             .get_submissions(key, self.admin_auth()?)
             .await?)
+    }
+}
+
+/// A failure of one of the meta client's guardian-only operations.
+///
+/// These endpoints can fail before any request leaves the client, when it
+/// holds no admin credentials, as well as while talking to the federation.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum MetaAdminError {
+    /// This client was not built with admin credentials, so it cannot call a
+    /// guardian-only endpoint.
+    #[error("Admin auth not set")]
+    AdminAuthMissing,
+
+    /// The federation rejected the request, or could not be reached.
+    #[error("The federation request failed")]
+    Federation(#[source] Box<FederationError>),
+}
+
+impl From<FederationError> for MetaAdminError {
+    fn from(source: FederationError) -> Self {
+        Self::Federation(Box::new(source))
     }
 }
 
@@ -117,10 +174,9 @@ impl MetaClientModule {
         &self,
         key: MetaKey,
     ) -> Result<Option<MetaConsensusValue>, UniffiError> {
-        self.module_api
-            .get_consensus(key)
+        self.get_consensus_value(key)
             .await
-            .map_err(|e| UniffiError::from(anyhow::anyhow!(e.to_string())))
+            .map_err(|e| UniffiError::General(e.fmt_compact().to_string()))
     }
 }
 
