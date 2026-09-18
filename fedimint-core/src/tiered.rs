@@ -88,7 +88,9 @@ impl<T> Tiered<T> {
 }
 
 impl Tiered<()> {
-    /// Generates denominations of a given base up to and including `max`
+    /// Generates denominations of a given base up to and including `max`.
+    ///
+    /// Returns an empty [`Tiered`] instance if `denomination_base <= 1`.
     pub fn gen_denominations(denomination_base: u16, max: Amount) -> Self {
         if denomination_base <= 1 {
             return Self::default();
