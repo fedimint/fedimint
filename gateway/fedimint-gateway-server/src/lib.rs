@@ -82,12 +82,12 @@ use fedimint_gateway_common::{
     GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningInfo,
     LightningMode, ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse,
     OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
-    PaymentLogPayload, PaymentLogResponse, PaymentPolicy, PaymentStats, PaymentSummaryPayload,
-    PaymentSummaryResponse, PeginFromOnchainPayload, ReceiveEcashPayload, ReceiveEcashResponse,
-    RegisteredProtocol, SendOnchainRequest, SetChannelFeesRequest, SetFeesPayload,
-    SetMnemonicPayload, SetPaymentPolicyPayload, SpendEcashPayload, SpendEcashResponse,
-    V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse,
-    WithdrawResponse, WithdrawToOnchainPayload,
+    PaymentLogPayload, PaymentLogResponse, PaymentPolicy, PaymentPolicyGuard, PaymentStats,
+    PaymentSummaryPayload, PaymentSummaryResponse, PeginFromOnchainPayload, ReceiveEcashPayload,
+    ReceiveEcashResponse, RegisteredProtocol, SendOnchainRequest, SetChannelFeesRequest,
+    SetFeesPayload, SetMnemonicPayload, SetPaymentPolicyPayload, SpendEcashPayload,
+    SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload,
+    WithdrawPreviewResponse, WithdrawResponse, WithdrawToOnchainPayload,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 pub use fedimint_gateway_ui::IAdminGateway;
@@ -399,6 +399,10 @@ pub struct Gateway {
 
     /// Rate limiter for the public invoice creation endpoint.
     invoice_rate_limiter: Arc<TokenBucketRateLimiter>,
+
+    /// Serializes payment policy changes against the funding of the payments
+    /// those policies admit.
+    payment_policy_lock: Arc<RwLock<()>>,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -784,6 +788,7 @@ impl Gateway {
                 gateway_parameters.invoice_rate_limit_burst,
                 gateway_parameters.invoice_rate_limit_per_second,
             )),
+            payment_policy_lock: Arc::new(RwLock::new(())),
         })
     }
 
@@ -1251,16 +1256,7 @@ impl Gateway {
             None => false,
         };
 
-        // An LNv2 payment carries no federation scid, so a registered contract
-        // whose federation has receives turned off is only recognisable by the
-        // error the LNv2 attempt returned. It is cancelled explicitly rather
-        // than left to the forward branch, whose meaning for a HOLD invoice is
-        // up to the lightning backend.
-        let receive_disabled = [&lnv2_result, &lnv1_result]
-            .into_iter()
-            .any(|result| matches!(result, Err(PublicGatewayError::ReceiveDisabled { .. })));
-
-        if is_federation_scid || receive_disabled {
+        if is_federation_scid {
             // The HTLC targeted a federation we serve but we couldn't claim
             // it (no LNv1 offer / no LNv2 contract / receives turned off /
             // underfunded gateway / federation timeout / etc.). Surface the
@@ -1274,7 +1270,6 @@ impl Gateway {
                 amount_msat = payment_request.amount_msat,
                 incoming_chan_id = payment_request.incoming_chan_id,
                 htlc_id = payment_request.htlc_id,
-                receive_disabled,
                 lnv2_err = ?lnv2_result.as_ref().err(),
                 lnv1_err = ?lnv1_result.as_ref().err(),
                 "Lightning payment for a served federation could not be accepted: cancelling HTLC",
@@ -1365,16 +1360,6 @@ impl Gateway {
         else {
             return Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment("Incoming payment has a last hop short channel id that does not map to a known federation".to_string())));
         };
-
-        // LNv1 clients cannot be told that receives are off, so their invoices
-        // still route here. Refusing before any federation interaction fails
-        // the HTLC back to the sender without spending anything.
-        let federation_id = client.borrow().with_sync(|client| client.federation_id());
-        if !self.receive_enabled(federation_id).await {
-            return Err(PublicGatewayError::ReceiveDisabled {
-                federation_id_prefix: federation_id.to_prefix(),
-            });
-        }
 
         // Both LND's `incoming_expiry` and LDK's `claim_deadline` are absolute
         // Bitcoin heights. LDK does not currently produce LNv1 forwards (it has
@@ -2663,6 +2648,11 @@ impl IAdminGateway for Gateway {
             receive_enabled,
         }: SetPaymentPolicyPayload,
     ) -> AdminResult<()> {
+        // Taken before the policy is read anywhere else: every payment admitted
+        // under the old policy funds before this returns, and none is admitted
+        // afterwards.
+        let _policy_change = self.payment_policy_lock.write().await;
+
         let mut dbtx = self.gateway_db.begin_transaction().await;
         let mut fed_configs = if let Some(fed_id) = federation_id {
             dbtx.load_federation_configs()
@@ -3453,6 +3443,19 @@ impl Gateway {
             .is_none_or(|config| config.receive_enabled())
     }
 
+    /// Admits a fresh incoming payment when the receive policy allows it,
+    /// returning a guard that holds off a policy change until the caller has
+    /// funded the payment.
+    async fn admit_fresh_receive(&self, federation_id: FederationId) -> Option<PaymentPolicyGuard> {
+        // The policy is read under the guard, so it cannot change between this
+        // read and the funding the caller performs while holding it.
+        let guard = self.payment_policy_lock.clone().read_owned().await;
+
+        self.receive_enabled(federation_id)
+            .await
+            .then(|| PaymentPolicyGuard::new(guard))
+    }
+
     /// Returns payment information that LNv2 clients can use to instruct this
     /// Gateway to pay an invoice or receive a payment.
     pub async fn routing_info_v2(
@@ -3777,18 +3780,6 @@ impl Gateway {
             )));
         }
 
-        // Turning receives off covers invoices issued before the switch was
-        // flipped: every incoming contract of the federation is refused, whether
-        // it would be funded from an HTLC or from a direct swap.
-        if !self
-            .receive_enabled(registered_incoming_contract.federation_id)
-            .await
-        {
-            return Err(PublicGatewayError::ReceiveDisabled {
-                federation_id_prefix: registered_incoming_contract.federation_id.to_prefix(),
-            });
-        }
-
         let client = self
             .select_client(registered_incoming_contract.federation_id)
             .await?
@@ -3919,6 +3910,13 @@ impl IGatewayClientV2 for Gateway {
 
     async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool {
         self.await_outbound_payment_exists(payment_hash).await
+    }
+
+    async fn begin_fresh_receive(
+        &self,
+        federation_id: &FederationId,
+    ) -> Option<PaymentPolicyGuard> {
+        self.admit_fresh_receive(*federation_id).await
     }
 
     async fn min_contract_amount(
@@ -4078,6 +4076,10 @@ impl IGatewayClientV1 for Gateway {
         }
 
         Ok(())
+    }
+
+    async fn begin_fresh_receive(&self, federation_id: FederationId) -> Option<PaymentPolicyGuard> {
+        self.admit_fresh_receive(federation_id).await
     }
 
     async fn get_routing_fees(&self, federation_id: FederationId) -> Option<RoutingFees> {
