@@ -309,7 +309,7 @@ impl ServerModuleInit for MintInit {
 }
 
 fn dealer_polynomial(num_peers: NumPeers) -> Vec<Scalar> {
-    (0..num_peers.threshold())
+    (0..num_peers.threshold_expect())
         .map(|_| Scalar::random(&mut OsRng))
         .collect()
 }

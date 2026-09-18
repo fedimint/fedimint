@@ -45,7 +45,7 @@ pub fn sleep_duration() -> Duration {
 
 pub fn descriptor(pks: &BTreeMap<PeerId, PublicKey>, tweak: &sha256::Hash) -> Wsh<PublicKey> {
     Wsh::new_sortedmulti(
-        pks.to_num_peers().threshold(),
+        pks.to_num_peers().threshold_expect(),
         pks.values()
             .map(|pk| tweak_public_key(pk, tweak))
             .collect::<Vec<PublicKey>>(),

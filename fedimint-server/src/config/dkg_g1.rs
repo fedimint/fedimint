@@ -26,7 +26,7 @@ struct DkgG1 {
 
 impl DkgG1 {
     fn new(num_peers: NumPeers, identity: PeerId) -> Self {
-        let polynomial = (0..num_peers.threshold())
+        let polynomial = (0..num_peers.threshold_expect())
             .map(|_| Scalar::random(&mut OsRng))
             .collect::<Vec<Scalar>>();
 
@@ -75,7 +75,7 @@ impl DkgG1 {
                 );
 
                 ensure!(
-                    self.num_peers.threshold() == polynomial.len(),
+                    self.num_peers.threshold_expect() == polynomial.len(),
                     "DKG G1: polynomial commitment from peer {peer} is of wrong degree."
                 );
 
@@ -124,7 +124,7 @@ impl DkgG1 {
                 if self.sk_shares.len() == self.num_peers.total() {
                     let sks = self.sk_shares.values().sum();
 
-                    let pks = (0..self.num_peers.threshold())
+                    let pks = (0..self.num_peers.threshold_expect())
                         .map(|i| {
                             self.commitments
                                 .values()

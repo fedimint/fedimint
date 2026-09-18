@@ -361,7 +361,7 @@ impl ServerModule for Meta {
             .collect()
             .await;
 
-        let threshold = self.num_peers.threshold();
+        let threshold = self.num_peers.threshold_expect();
         info!(target: LOG_MODULE_META,
              %peer_id,
              %key,

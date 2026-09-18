@@ -400,7 +400,7 @@ impl MintRecoveryStateV2 {
                 .into_iter()
                 .filter_map(|(a, idx)| idx.prev().map(|idx| (a, idx)))
                 .collect(),
-            threshold: pub_key_shares.to_num_peers().threshold() as u64,
+            threshold: pub_key_shares.to_num_peers().threshold_expect() as u64,
             gap_limit,
             tbs_pks,
             pub_key_shares,

@@ -257,7 +257,10 @@ impl ServerModuleInit for LightningInit {
         peers: &[PeerId],
         args: &ConfigGenModuleArgs,
     ) -> BTreeMap<PeerId, ServerModuleConfig> {
-        let sks = threshold_crypto::SecretKeySet::random(peers.to_num_peers().degree(), &mut OsRng);
+        let sks = threshold_crypto::SecretKeySet::random(
+            peers.to_num_peers().degree_expect(),
+            &mut OsRng,
+        );
         let pks = sks.public_keys();
 
         peers
@@ -1239,7 +1242,7 @@ impl Lightning {
 
         assert!(versions.first() <= versions.last());
 
-        versions[self.num_peers.max_evil()]
+        versions[self.num_peers.max_evil_expect()]
     }
 
     /// Whether the funded-exactly-once rules of
@@ -2539,7 +2542,7 @@ mod tests {
         let mut dbtx = db.begin_transaction().await;
         let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0.into_nc();
 
-        // Three of four peers vote for 2.1, so the max_evil()-th lowest vote
+        // Three of four peers vote for 2.1, so the max_evil_expect()-th lowest vote
         // (index 1 of the sorted votes, with the fourth peer padded to 2.0)
         // reaches 2.1 and activates the funded-exactly-once rules.
         for peer in 0..3u16 {

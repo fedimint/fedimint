@@ -1583,7 +1583,7 @@ impl Client {
 
     /// Fetch API versions from peers, retrying until we get threshold number of
     /// successful responses. Returns the successful responses collected
-    /// from at least `num_peers.threshold()` peers.
+    /// from at least `num_peers.threshold_expect()` peers.
     pub async fn fetch_peers_api_versions_from_threshold_of_peers(
         num_peers: NumPeers,
         api: DynGlobalApi,
@@ -1604,7 +1604,7 @@ impl Client {
 
         let mut successful_responses = BTreeMap::new();
 
-        while successful_responses.len() < num_peers.threshold()
+        while successful_responses.len() < num_peers.threshold_expect()
             && let Some((peer_id, response)) = requests.next().await
         {
             let retry = match response {
@@ -1897,7 +1897,7 @@ impl Client {
             // risk of picking wrong version in very rare circumstances.
             let _: Result<_, Elapsed> = runtime::timeout(
                 Duration::from_secs(30),
-                num_responses_receiver.wait_for(|num| num_peers.threshold() <= *num),
+                num_responses_receiver.wait_for(|num| num_peers.threshold_expect() <= *num),
             )
             .await;
 

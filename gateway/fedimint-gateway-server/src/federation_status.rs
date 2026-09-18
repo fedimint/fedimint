@@ -30,7 +30,7 @@ fn federation_connectivity(
         .count();
     if connected == 0 {
         FederationConnectivity::Disconnected
-    } else if connected < NumPeers::from(connection_status.len()).threshold() {
+    } else if connected < NumPeers::from(connection_status.len()).threshold_expect() {
         FederationConnectivity::Degraded
     } else {
         FederationConnectivity::Connected

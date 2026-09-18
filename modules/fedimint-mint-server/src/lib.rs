@@ -204,7 +204,7 @@ impl ServerModuleInit for MintInit {
             .iter()
             .map(|&amount| {
                 let (tbs_pk, tbs_pks, tbs_sks) =
-                    dealer_keygen(peers.to_num_peers().threshold(), peers.len());
+                    dealer_keygen(peers.to_num_peers().threshold_expect(), peers.len());
                 (amount, (tbs_pk, tbs_pks, tbs_sks))
             })
             .collect::<BTreeMap<_, _>>();
@@ -338,7 +338,7 @@ impl ServerModuleInit for MintInit {
                 .map(|(amt, keys)| {
                     let keys = (0_u64..)
                         .zip(keys)
-                        .take(config.peer_tbs_pks.to_num_peers().threshold())
+                        .take(config.peer_tbs_pks.to_num_peers().threshold_expect())
                         .collect();
 
                     (amt, aggregate_public_key_shares(&keys))
@@ -947,7 +947,7 @@ impl Mint {
         .map(|(amt, keys)| {
             let keys = (0_u64..)
                 .zip(keys)
-                .take(cfg.consensus.peer_tbs_pks.to_num_peers().threshold())
+                .take(cfg.consensus.peer_tbs_pks.to_num_peers().threshold_expect())
                 .collect();
 
             (amt, aggregate_public_key_shares(&keys))

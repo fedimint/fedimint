@@ -204,7 +204,7 @@ pub trait FederationApiExt: IRawFederationApi {
         }
 
         let mut peer_errors = BTreeMap::new();
-        let peer_error_threshold = self.all_peers().to_num_peers().one_honest();
+        let peer_error_threshold = self.all_peers().to_num_peers().one_honest_expect();
 
         loop {
             let (peer, result) = futures

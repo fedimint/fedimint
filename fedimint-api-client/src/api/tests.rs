@@ -36,7 +36,7 @@ fn creates_essential_guardians_invite_code() {
     peer_to_url_map.insert(PeerId::from(1), "ws://test2".parse().expect("URL fail"));
     peer_to_url_map.insert(PeerId::from(2), "ws://test3".parse().expect("URL fail"));
     peer_to_url_map.insert(PeerId::from(3), "ws://test4".parse().expect("URL fail"));
-    let max_size = peer_to_url_map.to_num_peers().max_evil() + 1;
+    let max_size = peer_to_url_map.to_num_peers().max_evil_expect() + 1;
 
     let code =
         InviteCode::new_with_essential_num_guardians(&peer_to_url_map, FederationId::dummy());

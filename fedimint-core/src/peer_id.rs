@@ -63,6 +63,9 @@ impl From<PeerId> for u16 {
 }
 
 /// The number of guardians in a federation.
+///
+/// This type can represent zero guardians. Methods that calculate quorum
+/// parameters have an `_expect` suffix and panic when the count is zero.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NumPeers(usize);
 
@@ -79,26 +82,46 @@ impl NumPeers {
 
     /// Returns the number of guardians that can be evil without disrupting the
     /// federation.
-    pub fn max_evil(self) -> usize {
+    ///
+    /// # Panics
+    ///
+    /// Panics if the number of guardians is zero.
+    pub fn max_evil_expect(self) -> usize {
+        assert!(
+            self.total() > 0,
+            "a federation must have at least one guardian"
+        );
         (self.total() - 1) / 3
     }
 
     /// Returns the number of guardians to select such that at least one is
     /// honest (assuming the federation is not compromised).
-    pub fn one_honest(self) -> usize {
-        self.max_evil() + 1
+    ///
+    /// # Panics
+    ///
+    /// Panics if the number of guardians is zero.
+    pub fn one_honest_expect(self) -> usize {
+        self.max_evil_expect() + 1
     }
 
     /// Returns the degree of an underlying polynomial to require threshold
     /// signatures.
-    pub fn degree(self) -> usize {
-        self.threshold() - 1
+    ///
+    /// # Panics
+    ///
+    /// Panics if the number of guardians is zero.
+    pub fn degree_expect(self) -> usize {
+        self.threshold_expect() - 1
     }
 
     /// Returns the number of guardians required to achieve consensus and
     /// produce valid signatures.
-    pub fn threshold(self) -> usize {
-        self.total() - self.max_evil()
+    ///
+    /// # Panics
+    ///
+    /// Panics if the number of guardians is zero.
+    pub fn threshold_expect(self) -> usize {
+        self.total() - self.max_evil_expect()
     }
 }
 
@@ -151,3 +174,6 @@ impl NumPeersExt for BTreeSet<PeerId> {
         NumPeers(self.len())
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -104,7 +104,7 @@ impl SignedSessionOutcome {
             Message::from_digest(sha256::Hash::from_engine(engine).to_byte_array())
         };
 
-        let threshold = broadcast_public_keys.to_num_peers().threshold();
+        let threshold = broadcast_public_keys.to_num_peers().threshold_expect();
         if self.signatures.len() < threshold {
             return false;
         }

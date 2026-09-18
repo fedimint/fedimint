@@ -376,7 +376,7 @@ impl ServerModuleInit for LightningInit {
 }
 
 fn dealer_polynomial(num_peers: NumPeers) -> Vec<Scalar> {
-    (0..num_peers.threshold())
+    (0..num_peers.threshold_expect())
         .map(|_| Scalar::random(&mut OsRng))
         .collect()
 }
@@ -793,7 +793,10 @@ impl Lightning {
         // increase the consensus block count and any consensus block count has been
         // confirmed by a threshold of peers.
 
-        counts.get(num_peers.threshold() - 1).copied().unwrap_or(0)
+        counts
+            .get(num_peers.threshold_expect() - 1)
+            .copied()
+            .unwrap_or(0)
     }
 
     async fn consensus_unix_time(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {
@@ -816,7 +819,10 @@ impl Lightning {
         // advance the consensus unix time and any consensus unix time has been
         // confirmed by a threshold of peers.
 
-        times.get(num_peers.threshold() - 1).copied().unwrap_or(0)
+        times
+            .get(num_peers.threshold_expect() - 1)
+            .copied()
+            .unwrap_or(0)
     }
 
     async fn await_incoming_contract(

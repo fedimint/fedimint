@@ -85,7 +85,7 @@ impl<R, T> FilterMapThreshold<R, T> {
         Self {
             filter_map: Box::new(verifier),
             filtered_responses: BTreeMap::new(),
-            threshold: num_peers.threshold(),
+            threshold: num_peers.threshold_expect(),
         }
     }
 }
@@ -122,7 +122,7 @@ impl<R> ThresholdConsensus<R> {
         Self {
             responses: BTreeMap::new(),
             retry: BTreeSet::new(),
-            threshold: num_peers.threshold(),
+            threshold: num_peers.threshold_expect(),
         }
     }
 }
@@ -249,7 +249,7 @@ impl<R> ThresholdAgreement<R> {
         Self {
             responses: BTreeMap::new(),
             errors: 0,
-            threshold: num_peers.threshold(),
+            threshold: num_peers.threshold_expect(),
             total: num_peers.total(),
         }
     }

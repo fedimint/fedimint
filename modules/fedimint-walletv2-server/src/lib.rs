@@ -1135,7 +1135,14 @@ impl Wallet {
             .collect::<BTreeMap<PeerId, Vec<Signature>>>()
             .await;
 
-        if signatures.len() == self.cfg.consensus.bitcoin_pks.to_num_peers().threshold() {
+        if signatures.len()
+            == self
+                .cfg
+                .consensus
+                .bitcoin_pks
+                .to_num_peers()
+                .threshold_expect()
+        {
             dbtx.remove_entry(&UnsignedTxKey(txid)).await;
 
             dbtx.remove_by_prefix(&SignaturesTxidPrefix(txid)).await;
@@ -1195,7 +1202,10 @@ impl Wallet {
         // increase the consensus block count and any consensus block count has been
         // confirmed by a threshold of peers.
 
-        counts.get(num_peers.threshold() - 1).copied().unwrap_or(0)
+        counts
+            .get(num_peers.threshold_expect() - 1)
+            .copied()
+            .unwrap_or(0)
     }
 
     pub async fn consensus_feerate(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<u64> {
@@ -1214,7 +1224,7 @@ impl Wallet {
 
         assert!(rates.first() <= rates.last());
 
-        rates.get(num_peers.threshold() - 1).copied()
+        rates.get(num_peers.threshold_expect() - 1).copied()
     }
 
     pub async fn consensus_fee(

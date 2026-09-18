@@ -399,7 +399,7 @@ impl ServerModuleInit for WalletInit {
                         .map(|(peer_id, (_, pk))| (*peer_id, CompressedPublicKey { key: *pk }))
                         .collect(),
                     *sk,
-                    peers.to_num_peers().threshold(),
+                    peers.to_num_peers().threshold_expect(),
                     args.network,
                     finality_delay,
                     client_default_bitcoin_rpc.clone(),
@@ -436,7 +436,7 @@ impl ServerModuleInit for WalletInit {
         let wallet_cfg = WalletConfig::new(
             peer_peg_in_keys,
             sk,
-            peers.num_peers().threshold(),
+            peers.num_peers().threshold_expect(),
             args.network,
             finality_delay,
             client_default_bitcoin_rpc,
@@ -1488,7 +1488,7 @@ impl Wallet {
 
         assert!(versions.first() <= versions.last());
 
-        versions[num_peers.max_evil()]
+        versions[num_peers.max_evil_expect()]
     }
 
     pub async fn consensus_nonce(&self, dbtx: &mut DatabaseTransaction<'_>) -> [u8; 33] {

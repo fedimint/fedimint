@@ -604,7 +604,7 @@ impl ConsensusEngine {
 
         // We collect the ordered signatures until we either obtain a threshold
         // signature or a signed session outcome arrives from our peers
-        while signatures.len() < self.num_peers().threshold() {
+        while signatures.len() < self.num_peers().threshold_expect() {
             tokio::select! {
                 // TODO: remove this branch in 0.11.0
                 result = ordered_unit_receiver.recv() => {
@@ -744,7 +744,7 @@ impl ConsensusEngine {
         outcome: &SignedSessionOutcome,
         session_index: u64,
     ) -> bool {
-        if outcome.signatures.len() != self.num_peers().threshold() {
+        if outcome.signatures.len() != self.num_peers().threshold_expect() {
             return false;
         }
 
@@ -1158,7 +1158,7 @@ impl ConsensusEngine {
     ) -> SignedSessionOutcome {
         let decoders = self.decoders();
         let keychain = Keychain::new(&self.cfg);
-        let threshold = self.num_peers().threshold();
+        let threshold = self.num_peers().threshold_expect();
 
         let filter_map = move |response: SerdeModuleEncoding<SignedSessionOutcome>| {
             let signed_session_outcome = response

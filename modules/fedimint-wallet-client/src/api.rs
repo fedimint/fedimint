@@ -107,7 +107,7 @@ where
             .request_with_strategy(
                 FilterMapThreshold::<Option<u32>, Option<u32>>::new(
                     filter_map,
-                    self.all_peers().to_num_peers().threshold().into(),
+                    self.all_peers().to_num_peers().threshold_expect().into(),
                 ),
                 BLOCK_COUNT_LOCAL_ENDPOINT.to_string(),
                 ApiRequestErased::default(),

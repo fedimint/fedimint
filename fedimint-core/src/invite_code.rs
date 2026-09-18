@@ -86,7 +86,7 @@ impl InviteCode {
         federation_id: FederationId,
         api_secret: Option<String>,
     ) -> Self {
-        let max_size = peer_to_url_map.to_num_peers().max_evil() + 1;
+        let max_size = peer_to_url_map.to_num_peers().max_evil_expect() + 1;
         let mut code_vec: Vec<InviteCodePart> = peer_to_url_map
             .iter()
             .take(max_size)
@@ -111,7 +111,7 @@ impl InviteCode {
         peer_to_url_map: &BTreeMap<PeerId, SafeUrl>,
         federation_id: FederationId,
     ) -> Self {
-        let max_size = peer_to_url_map.to_num_peers().max_evil() + 1;
+        let max_size = peer_to_url_map.to_num_peers().max_evil_expect() + 1;
         let mut code_vec: Vec<InviteCodePart> = peer_to_url_map
             .iter()
             .take(max_size)

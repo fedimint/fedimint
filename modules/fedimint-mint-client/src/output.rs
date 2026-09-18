@@ -645,7 +645,7 @@ impl MintOutputStatesCreatedMulti {
             .await;
 
         // Reorganize from per-peer to per-output
-        let threshold = api.all_peers().to_num_peers().threshold();
+        let threshold = api.all_peers().to_num_peers().threshold_expect();
         let mut ret = vec![];
 
         for (out_idx, (_amount, _issuance_request)) in issuance_requests {
