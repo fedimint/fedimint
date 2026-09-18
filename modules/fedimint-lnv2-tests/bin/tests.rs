@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::ensure;
-use bitcoin::hashes::sha256;
+use bitcoin::hashes::{Hash, sha256};
 use clap::{Parser, Subcommand};
 use devimint::devfed::DevJitFed;
 use devimint::envs::FM_CLIENT_DIR_ENV;
@@ -17,7 +17,7 @@ use fedimint_core::task::{self};
 use fedimint_core::util::{backoff_util, retry, write_overwrite_async};
 use fedimint_lnurl::{LnurlResponse, VerifyResponse, parse_lnurl};
 use fedimint_lnv2_client::FinalSendOperationState;
-use lightning_invoice::Bolt11Invoice;
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescriptionRef};
 use serde::Deserialize;
 use tokio::try_join;
 use tracing::info;
@@ -995,11 +995,14 @@ async fn verify_payment_wait(verify_url: String) -> anyhow::Result<VerifyRespons
 #[derive(Deserialize, Clone)]
 struct LnUrlPayResponse {
     callback: String,
+    metadata: String,
 }
 
 #[derive(Deserialize, Clone)]
 struct LnUrlPayInvoiceResponse {
     pr: Bolt11Invoice,
+    // LUD-06 requires this field, so parsing fails if the service omits it
+    routes: Vec<serde_json::Value>,
     verify: String,
 }
 
@@ -1010,17 +1013,32 @@ async fn fetch_invoice(lnurl: String, amount_msat: u64) -> anyhow::Result<(Bolt1
 
     let callback_url = format!("{}?amount={}", response.callback, amount_msat);
 
-    let response = reqwest::get(callback_url)
+    let invoice_response = reqwest::get(callback_url)
         .await?
         .json::<LnUrlPayInvoiceResponse>()
         .await?;
 
     ensure!(
-        response.pr.amount_milli_satoshis() == Some(amount_msat),
+        invoice_response.pr.amount_milli_satoshis() == Some(amount_msat),
         "Invoice amount is not set"
     );
 
-    Ok((response.pr, response.verify))
+    ensure!(
+        invoice_response.routes.is_empty(),
+        "LUD-06 requires routes to be an empty array"
+    );
+
+    let metadata_hash = sha256::Hash::hash(response.metadata.as_bytes());
+
+    ensure!(
+        matches!(
+            invoice_response.pr.description(),
+            Bolt11InvoiceDescriptionRef::Hash(hash) if hash.0 == metadata_hash
+        ),
+        "Invoice does not commit to the LNURL metadata via its description hash (LUD-06)"
+    );
+
+    Ok((invoice_response.pr, invoice_response.verify))
 }
 
 async fn test_iroh_payment(
