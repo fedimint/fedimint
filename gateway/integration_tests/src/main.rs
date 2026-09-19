@@ -538,7 +538,9 @@ async fn liquidity_test() -> anyhow::Result<()> {
                 .await?;
 
             let bitcoind = dev_fed.bitcoind().await?;
-            let supports_fee_aware_sweep = *VERSION_0_13_0_ALPHA <= gw_lnd.gatewayd_version;
+            let fedimintd_version = util::FedimintdCmd::version_or_default().await;
+            let supports_fee_aware_sweep = *VERSION_0_13_0_ALPHA <= gw_lnd.gatewayd_version
+                && *VERSION_0_13_0_ALPHA <= fedimintd_version;
             if supports_fee_aware_sweep {
                 info!(target: LOG_TEST, "Testing pegging-out the entire ecash balance...");
                 // Sweeping the full balance has to leave room for the federation's
@@ -569,14 +571,17 @@ async fn liquidity_test() -> anyhow::Result<()> {
                 );
             } else {
                 // Older gateways subtract only the on-chain fee from `--amount all`.
-                // They cannot reserve the current federation's per-note fees, so the
-                // sweep is deterministically rejected. Keep the test for gateways
-                // that implement fee-aware sweeps while the back-compat matrix tests
-                // the remaining liquidity operations against historical binaries.
+                // Current gateways can account for federation fees, but old
+                // federations can still fail to return a fee quote for the candidate
+                // full-balance peg-out. Keep the test for version pairs that support
+                // fee-aware sweeps while the back-compat matrix tests the remaining
+                // liquidity operations against historical binaries.
                 info!(
                     target: LOG_TEST,
                     gatewayd_version = %gw_lnd.gatewayd_version,
+                    fedimintd_version = %fedimintd_version,
                     minimum_gatewayd_version = %*VERSION_0_13_0_ALPHA,
+                    minimum_fedimintd_version = %*VERSION_0_13_0_ALPHA,
                     "Skipping full ecash sweep (requires fee-aware gateway)"
                 );
             }
