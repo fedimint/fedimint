@@ -11,6 +11,9 @@ use fedimint_meta_common::MetaCommonInit;
 use fedimint_mint_common::MintCommonInit;
 use fedimint_wallet_common::WalletCommonInit;
 
+#[cfg(test)]
+mod tests;
+
 pub fn all_standard_modules() -> fedimint_core::module::registry::ModuleRegistry<
     fedimint_core::core::Decoder,
     fedimint_core::module::registry::DecodingMode,
@@ -44,8 +47,9 @@ pub fn test_decodable_with_decoders<T>(data: &[u8], decoders: &ModuleDecoderRegi
 where
     T: Decodable + Encodable,
 {
-    if let Ok(v) = T::consensus_decode_partial(&mut &data[..], decoders) {
-        assert!(data.len() <= encoding::MAX_DECODE_SIZE);
+    let mut remaining = data;
+    if let Ok(v) = T::consensus_decode_partial(&mut remaining, decoders) {
+        assert!(data.len() - remaining.len() <= encoding::MAX_DECODE_SIZE);
 
         let encoded_vec = v.consensus_encode_to_vec();
         // helps debugging to have it standalone
@@ -62,15 +66,18 @@ pub fn test_decodable_with_decoders_vs_defaults<T>(data: &[u8], decoders: &Modul
 where
     T: Decodable + Encodable + fmt::Debug,
 {
+    let mut remaining_with_decoders = data;
+    let mut remaining_with_defaults = data;
     match (
-        T::consensus_decode_partial(&mut &data[..], decoders),
+        T::consensus_decode_partial(&mut remaining_with_decoders, decoders),
         T::consensus_decode_partial(
-            &mut &data[..],
+            &mut remaining_with_defaults,
             &ModuleDecoderRegistry::default().with_fallback(),
         ),
     ) {
         (Ok(v1), Ok(v2)) => {
-            assert!(data.len() <= encoding::MAX_DECODE_SIZE);
+            assert!(data.len() - remaining_with_decoders.len() <= encoding::MAX_DECODE_SIZE);
+            assert!(data.len() - remaining_with_defaults.len() <= encoding::MAX_DECODE_SIZE);
 
             let encoded_vec1 = v1.consensus_encode_to_vec();
             let encoded_vec2 = v2.consensus_encode_to_vec();
@@ -85,8 +92,12 @@ where
         }
 
         (Err(_e1), Err(_e2)) => {}
-        (Ok(ok), Err(e)) => panic!("ok vs err; {ok:?} vs {e:?}"),
+        (Ok(ok), Err(e)) => {
+            assert!(data.len() - remaining_with_decoders.len() <= encoding::MAX_DECODE_SIZE);
+            panic!("ok vs err; {ok:?} vs {e:?}");
+        }
         (Err(_ok), Ok(_e)) => {
+            assert!(data.len() - remaining_with_defaults.len() <= encoding::MAX_DECODE_SIZE);
             // it's OK if real decoders are more strict, defaults with fallback
             // are not doing all the parsing
         }
