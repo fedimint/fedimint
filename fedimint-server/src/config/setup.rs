@@ -19,13 +19,13 @@ use fedimint_core::endpoint_constants::{
 };
 use fedimint_core::envs::{
     FM_DISABLE_BASE_FEES_ENV, FM_IROH_API_SECRET_KEY_OVERRIDE_ENV,
-    FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV, is_env_var_set,
+    FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV, FM_WALLETV2_DESCRIPTOR_ENV, is_env_var_set,
 };
 use fedimint_core::module::{
     ApiAuth, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
     admin_api_endpoint, public_api_endpoint,
 };
-use fedimint_core::setup_code::PeerEndpoints;
+use fedimint_core::setup_code::{PeerEndpoints, WalletDescriptorKind};
 use fedimint_core::version::DkgVersion;
 use fedimint_core::{PeerId, base32, runtime};
 use fedimint_server_core::setup_ui::ISetupApi;
@@ -91,6 +91,10 @@ pub struct LocalParams {
     network: bitcoin::Network,
     /// Normalized Fedimint version used for setup and DKG compatibility
     fedimint_version: DkgVersion,
+    /// On-chain wallet descriptor for the walletv2 module. Set by the
+    /// leader from the `FM_WALLETV2_DESCRIPTOR` env var; followers always
+    /// see `None`.
+    descriptor_kind: Option<WalletDescriptorKind>,
 }
 
 impl LocalParams {
@@ -104,6 +108,7 @@ impl LocalParams {
             federation_size: self.federation_size,
             network: self.network,
             fedimint_version: self.fedimint_version.clone(),
+            descriptor_kind: self.descriptor_kind,
         }
     }
 }
@@ -324,12 +329,23 @@ impl ISetupApi for SetupApi {
         enabled_modules: Option<BTreeSet<ModuleKind>>,
         federation_size: Option<u32>,
     ) -> anyhow::Result<String> {
+        let descriptor_kind = if federation_name.is_some() {
+            std::env::var(FM_WALLETV2_DESCRIPTOR_ENV)
+                .ok()
+                .map(|v| WalletDescriptorKind::from_str(&v))
+                .transpose()
+                .with_context(|| format!("Parsing {FM_WALLETV2_DESCRIPTOR_ENV}"))?
+        } else {
+            None
+        };
+
         if let Some(existing_local_parameters) = self.state.lock().await.local_params.clone()
             && existing_local_parameters.name == name
             && existing_local_parameters.federation_name == federation_name
             && existing_local_parameters.disable_base_fees == disable_base_fees
             && existing_local_parameters.enabled_modules == enabled_modules
             && existing_local_parameters.federation_size == federation_size
+            && existing_local_parameters.descriptor_kind == descriptor_kind
         {
             return Ok(base32::encode_prefixed(
                 FEDIMINT_PREFIX,
@@ -402,6 +418,7 @@ impl ISetupApi for SetupApi {
                 federation_size,
                 network: self.settings.network,
                 fedimint_version: fedimint_version.clone(),
+                descriptor_kind,
             }
         } else {
             let (tls_cert, tls_key) =
@@ -432,6 +449,7 @@ impl ISetupApi for SetupApi {
                 federation_size,
                 network: self.settings.network,
                 fedimint_version,
+                descriptor_kind,
             }
         };
 
@@ -499,6 +517,18 @@ impl ISetupApi for SetupApi {
             ensure!(
                 info.disable_base_fees.is_none(),
                 "Base fees setting has already been configured to disabled={disable_base_fees}"
+            );
+        }
+
+        if let Some(descriptor_kind) = state
+            .setup_codes
+            .iter()
+            .chain(once(&local_params.setup_code()))
+            .find_map(|info| info.descriptor_kind)
+        {
+            ensure!(
+                info.descriptor_kind.is_none(),
+                "Wallet descriptor has already been configured to {descriptor_kind:?}"
             );
         }
 
@@ -581,6 +611,12 @@ impl ISetupApi for SetupApi {
             .find_map(|info| info.disable_base_fees)
             .unwrap_or(is_env_var_set(FM_DISABLE_BASE_FEES_ENV));
 
+        let descriptor_kind = state
+            .setup_codes
+            .iter()
+            .find_map(|info| info.descriptor_kind)
+            .unwrap_or_default();
+
         let enabled_modules = state
             .setup_codes
             .iter()
@@ -609,6 +645,7 @@ impl ISetupApi for SetupApi {
             disable_base_fees,
             enabled_modules,
             network: local_params.network,
+            descriptor_kind,
         };
 
         self.sender
