@@ -22,7 +22,7 @@ use fedimint_core::runtime::sleep;
 use fedimint_core::{Amount, OutPoint, TransactionId};
 use fedimint_ln_common::LightningInput;
 use fedimint_ln_common::contracts::incoming::IncomingContractAccount;
-use fedimint_ln_common::contracts::{ContractId, Preimage};
+use fedimint_ln_common::contracts::{ContractId, DecryptedPreimageStatus, Preimage};
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -250,22 +250,27 @@ impl DecryptingPreimageState {
     ) -> Result<Preimage, IncomingSmError> {
         loop {
             debug!("Awaiting preimage decryption for contract {contract_id:?}");
+            // Poll the prompt endpoint instead of holding an unbounded server-side
+            // wait open. Iroh gives prompt requests a finite transport budget and
+            // evicts a stalled connection, allowing the next poll to reconnect.
             match global_context
                 .module_api()
-                .wait_preimage_decrypted(contract_id)
+                .get_decrypted_preimage_status(contract_id)
                 .await
             {
-                Ok((incoming_contract_account, preimage)) => {
-                    if let Some(preimage) = preimage {
+                Ok((incoming_contract_account, status)) => match status {
+                    DecryptedPreimageStatus::Some(preimage) => {
                         debug!("Preimage decrypted for contract {contract_id:?}");
                         return Ok(preimage);
                     }
-
-                    info!("Invalid preimage for contract {contract_id:?}");
-                    return Err(IncomingSmError::InvalidPreimage {
-                        contract: Box::new(incoming_contract_account),
-                    });
-                }
+                    DecryptedPreimageStatus::Pending => {}
+                    DecryptedPreimageStatus::Invalid => {
+                        info!("Invalid preimage for contract {contract_id:?}");
+                        return Err(IncomingSmError::InvalidPreimage {
+                            contract: Box::new(incoming_contract_account),
+                        });
+                    }
+                },
                 Err(error) => {
                     warn!(
                         "Incoming contract {contract_id:?} error waiting for preimage decryption: {error:?}, will keep retrying..."

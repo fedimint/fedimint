@@ -1045,6 +1045,7 @@ mod tests {
         "list_gateways",
         "submit_transaction",
         "consensus_block_count",
+        "get_decrypted_preimage_status",
     ];
 
     #[test]
@@ -1080,7 +1081,12 @@ mod tests {
             assert_eq!(
                 request_timeout_for_method(&ApiMethod::Core((*name).to_owned())),
                 IROH_REQUEST_TIMEOUT_DEFAULT,
-                "endpoint {name} should map to the default timeout"
+                "core endpoint {name} should map to the default timeout"
+            );
+            assert_eq!(
+                request_timeout_for_method(&ApiMethod::Module(0, (*name).to_owned())),
+                IROH_REQUEST_TIMEOUT_DEFAULT,
+                "module endpoint {name} should map to the default timeout"
             );
         }
     }
