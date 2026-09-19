@@ -47,13 +47,17 @@ use crate::consensus::engine::ConsensusEngine;
 use crate::consensus::iroh_api::{IrohApiState, run_iroh_api, run_iroh_api_next};
 use crate::db::verify_server_db_integrity_dbtx;
 use crate::net::api::ApiSecrets;
-use crate::net::api::announcement::get_api_urls;
+use crate::net::api::announcement::{get_api_urls, start_api_announcement_service};
 use crate::net::api::guardian_metadata::{
     prepare_guardian_metadata_service, reconcile_guardian_metadata, start_guardian_metadata_service,
 };
+use crate::net::api::pkarr_publish::start_pkarr_publish_service;
 use crate::net::iroh::{build_iroh_v1_endpoint, derive_iroh_v1_api_secret_key};
 use crate::net::p2p::P2PStatusReceivers;
-use crate::{DashboardUiRouter, IrohNextApiSettings, net, update_server_info_version_dbtx};
+use crate::{
+    DashboardUiRouter, IrohNextApiSettings, ServerRuntimeSettings, net,
+    update_server_info_version_dbtx,
+};
 
 /// How many txs can be stored in memory before blocking the API
 const TRANSACTION_BUFFER: usize = 1000;
@@ -236,6 +240,62 @@ pub async fn run(
     iroh_api_limits: ConnectionLimits,
     iroh_next_api_settings: Option<&IrohNextApiSettings>,
 ) -> anyhow::Result<()> {
+    run_with_runtime_settings(
+        connectors,
+        auth_ui,
+        auth_api,
+        connections,
+        p2p_status_receivers,
+        api_bind,
+        iroh_dns,
+        iroh_relays,
+        cfg,
+        db,
+        module_init_registry,
+        task_group,
+        force_api_secrets,
+        data_dir,
+        code_version_str,
+        code_version_hash,
+        dyn_server_bitcoin_rpc,
+        ui_bind,
+        dashboard_ui_router,
+        db_checkpoint_retention,
+        session_timeout,
+        iroh_api_limits,
+        iroh_next_api_settings,
+        ServerRuntimeSettings::default(),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn run_with_runtime_settings(
+    connectors: ConnectorRegistry,
+    auth_ui: Option<ApiAuth>,
+    auth_api: Option<ApiAuth>,
+    connections: DynP2PConnections<P2PMessage>,
+    p2p_status_receivers: P2PStatusReceivers,
+    api_bind: SocketAddr,
+    iroh_dns: Option<SafeUrl>,
+    iroh_relays: Vec<SafeUrl>,
+    cfg: ServerConfig,
+    db: Database,
+    module_init_registry: ServerModuleInitRegistry,
+    task_group: &TaskGroup,
+    force_api_secrets: ApiSecrets,
+    data_dir: PathBuf,
+    code_version_str: String,
+    code_version_hash: String,
+    dyn_server_bitcoin_rpc: DynServerBitcoinRpc,
+    ui_bind: SocketAddr,
+    dashboard_ui_router: DashboardUiRouter,
+    db_checkpoint_retention: u64,
+    session_timeout: Duration,
+    iroh_api_limits: ConnectionLimits,
+    iroh_next_api_settings: Option<&IrohNextApiSettings>,
+    runtime_settings: ServerRuntimeSettings,
+) -> anyhow::Result<()> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
     let iroh_next_api_settings =
@@ -261,6 +321,26 @@ pub async fn run(
         verify_server_db_integrity_dbtx(&mut global_dbtx.to_ref_nc()).await;
     }
     global_dbtx.commit_tx_result().await?;
+
+    // Bind the forward-only Iroh endpoint before persisting its advertisement,
+    // then reconcile credential-bearing URLs before any consumer snapshots them.
+    let iroh_api_endpoints = prepare_iroh_api_endpoints(
+        &cfg,
+        api_bind,
+        iroh_dns,
+        iroh_relays,
+        iroh_next_api_settings,
+    )
+    .await?;
+    let guardian_metadata_updated = reconcile_guardian_metadata(
+        &db,
+        &cfg,
+        iroh_next_api_settings,
+        runtime_settings.guardian_metadata_api_url_overrides(),
+    )
+    .await?;
+    start_api_announcement_service(&db, task_group, &cfg, force_api_secrets.get_active()).await?;
+    start_pkarr_publish_service(&db, task_group, &cfg).await?;
 
     let mut modules = BTreeMap::new();
 
@@ -381,18 +461,6 @@ pub async fn run(
 
     let guardian_metadata_api =
         prepare_guardian_metadata_service(&db, &cfg, force_api_secrets.get_active()).await?;
-
-    let iroh_api_endpoints = prepare_iroh_api_endpoints(
-        &cfg,
-        api_bind,
-        iroh_dns,
-        iroh_relays,
-        iroh_next_api_settings,
-    )
-    .await?;
-
-    let guardian_metadata_updated =
-        reconcile_guardian_metadata(&db, &cfg, iroh_next_api_settings).await?;
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Api...");
 
