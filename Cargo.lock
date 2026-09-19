@@ -1296,8 +1296,8 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7bc6d6292be3a19e6379786dac800f551e5865a5bb51ebbe3064ab80433f403"
 dependencies = [
- "ff",
- "group",
+ "ff 0.13.1",
+ "group 0.13.0",
  "pairing",
  "rand_core 0.6.4",
  "subtle",
@@ -2309,7 +2309,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccc2776f0c61eca1ca32528f85548abd1a4be8fb53d1b21c013e4f18da1e7090"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -2432,7 +2432,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8ea84d0109517cc2253d4a679bdda1e8989e9bd86987e9e4f75ffdda0095fd1"
 dependencies = [
  "derive-deftly-macros 0.14.6",
- "heck 0.4.1",
+ "heck 0.5.0",
 ]
 
 [[package]]
@@ -2442,7 +2442,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "284db66a66f03c3dafbe17360d959eb76b83f77cfe191677e2a7899c0da291f3"
 dependencies = [
  "derive-deftly-macros 1.6.0",
- "heck 0.4.1",
+ "heck 0.5.0",
 ]
 
 [[package]]
@@ -2451,7 +2451,7 @@ version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "357422a457ccb850dc8f1c1680e0670079560feaad6c2e247e3f345c4fab8a3f"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "indexmap 2.9.0",
  "itertools 0.14.0",
  "proc-macro-crate",
@@ -2469,7 +2469,7 @@ version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "caef6056a5788d05d173cdc3c562ac28ae093828f851f69378b74e4e3d578e41"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "indexmap 2.9.0",
  "itertools 0.14.0",
  "proc-macro-crate",
@@ -2899,9 +2899,9 @@ dependencies = [
  "base16ct 0.2.0",
  "crypto-bigint",
  "digest 0.10.7",
- "ff",
+ "ff 0.13.1",
  "generic-array",
- "group",
+ "group 0.13.0",
  "pkcs8 0.10.2",
  "rand_core 0.6.4",
  "sec1",
@@ -3052,7 +3052,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "778e2ac28f6c47af28e4907f13ffd1e1ddbd400980a9abd7c8df189bf578a5ad"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3438,7 +3438,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.3.3",
  "gloo-timers 0.3.0",
- "group",
+ "group 0.14.0",
  "hex",
  "hex-conservative 1.0.1",
  "imbl",
@@ -4193,7 +4193,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln-common",
  "fedimint-tpe",
- "group",
+ "group 0.14.0",
  "lightning-invoice",
  "rand 0.8.5",
  "reqwest 0.12.28",
@@ -4217,7 +4217,7 @@ dependencies = [
  "fedimint-server-core",
  "fedimint-tpe",
  "futures",
- "group",
+ "group 0.14.0",
  "rand 0.8.5",
  "serde",
  "strum 0.27.1",
@@ -4497,7 +4497,7 @@ dependencies = [
  "fedimint-tbs",
  "fedimint-testing",
  "fedimint-threshold-crypto",
- "ff",
+ "ff 0.13.1",
  "futures",
  "hex",
  "rand 0.8.5",
@@ -4609,7 +4609,7 @@ dependencies = [
  "fedimint-tbs",
  "fedimint-testing",
  "fedimint-threshold-crypto",
- "ff",
+ "ff 0.13.1",
  "futures",
  "rand 0.8.5",
  "serde",
@@ -4764,7 +4764,7 @@ dependencies = [
  "fedimint-metrics",
  "fedimint-server-core",
  "futures",
- "group",
+ "group 0.14.0",
  "hex",
  "hyper 1.11.1",
  "iroh 0.35.0",
@@ -4827,7 +4827,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-logging",
  "futures",
- "group",
+ "group 0.14.0",
  "serde",
  "tokio",
  "tracing",
@@ -4888,7 +4888,7 @@ dependencies = [
  "bls12_381",
  "criterion 0.5.1",
  "fedimint-core",
- "group",
+ "group 0.14.0",
  "hex",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -4964,8 +4964,8 @@ checksum = "3e5f0913eb5fb65f83e6b503794f2eba124b542b9bdbb5cf941bc12bc7b0ea67"
 dependencies = [
  "bls12_381",
  "byteorder",
- "ff",
- "group",
+ "ff 0.13.1",
+ "group 0.13.0",
  "hex_fmt",
  "log",
  "pairing",
@@ -5004,7 +5004,7 @@ dependencies = [
  "bitcoin_hashes",
  "bls12_381",
  "fedimint-core",
- "group",
+ "group 0.14.0",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "serde",
@@ -5328,6 +5328,16 @@ checksum = "c0b50bfb653653f9ca9095b427bed08ab8d75a137839d9ad64eb11810d5b6393"
 dependencies = [
  "bitvec",
  "rand_core 0.6.4",
+ "subtle",
+]
+
+[[package]]
+name = "ff"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1f686ab92a9fb0eaf188f6c6c87b89490baa6fdb0db4544ba4dc47f7942489f"
+dependencies = [
+ "rand_core 0.10.1",
  "subtle",
 ]
 
@@ -5838,8 +5848,19 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0f9ef7462f7c099f518d754361858f86d8a07af53ba9af0fe635bbccb151a63"
 dependencies = [
- "ff",
+ "ff 0.13.1",
  "rand_core 0.6.4",
+ "subtle",
+]
+
+[[package]]
+name = "group"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fd1a1c7a5206c5b7a3f5a0d7ccd3ff85d0c8f5133d62a02680255b0004af5f4"
+dependencies = [
+ "ff 0.14.0",
+ "rand_core 0.10.1",
  "subtle",
 ]
 
@@ -6425,7 +6446,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.59.0",
+ "windows-core 0.61.2",
 ]
 
 [[package]]
@@ -7099,7 +7120,7 @@ dependencies = [
  "once_cell",
  "socket2 0.5.10",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7202,7 +7223,7 @@ checksum = "e04d7f318608d35d4b61ddd75cbdaee86b023ebe2bd5a66ee0915f0bf93095a9"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -7596,7 +7617,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.53.2",
 ]
 
 [[package]]
@@ -8558,7 +8579,7 @@ dependencies = [
  "pin-project-lite",
  "rustc-hash",
  "rustls 0.23.45",
- "socket2 0.5.10",
+ "socket2 0.6.1",
  "thiserror 2.0.20",
  "tokio",
  "tokio-stream",
@@ -8601,7 +8622,7 @@ checksum = "bde7a5d5102f1cff03d482240f0ed20551661f63663620f4b26112ed751165e9"
 dependencies = [
  "cfg_aliases",
  "libc",
- "socket2 0.5.10",
+ "socket2 0.6.1",
  "tracing",
  "windows-sys 0.61.2",
 ]
@@ -9067,7 +9088,7 @@ version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81fec4625e73cf41ef4bb6846cafa6d44736525f442ba45e407c4a000a13996f"
 dependencies = [
- "group",
+ "group 0.13.0",
 ]
 
 [[package]]
@@ -9888,7 +9909,7 @@ version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.14.0",
  "log",
  "multimap 0.10.1",
@@ -10057,7 +10078,7 @@ dependencies = [
  "once_cell",
  "socket2 0.5.10",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -10592,7 +10613,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -10605,7 +10626,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.9.4",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -10685,7 +10706,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -10925,7 +10946,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b55fb86dfd3a2f5f76ea78310a88f96c4ea21a3031f8d212443d56123fd0521"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -11357,7 +11378,7 @@ version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1961e2ef424c1424204d3a5d6975f934f56b6d50ff5732382d84ebf460e147f7"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.104",
@@ -11796,7 +11817,7 @@ dependencies = [
  "getrandom 0.3.3",
  "once_cell",
  "rustix 1.0.7",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -14100,7 +14121,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
