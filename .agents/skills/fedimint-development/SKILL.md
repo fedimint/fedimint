@@ -37,18 +37,6 @@ description: >-
 - `just build-docs` — Build Cargo documentation.
 - `just docs` — Build and open the documentation.
 
-## Code quality
-
-- Never use `unwrap()` in non-test code. Use `expect()` with a succinct message
-  that explains why the condition cannot fail.
-- Use structured logging. Break logging statements across multiple lines for
-  readability, and use tracing fields (`field = value`) instead of string
-  interpolation.
-- Group related parameters into utility structs such as `ConnectionLimits`
-  rather than passing many related function parameters.
-- Follow existing project patterns and conventions.
-- Use meaningful error messages that help with debugging.
-
 ## Adding module functionality
 
 1. Implement consensus logic in the `*-server` crate.
