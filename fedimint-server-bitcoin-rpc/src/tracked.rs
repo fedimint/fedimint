@@ -119,4 +119,12 @@ impl IServerBitcoinRpc for ServerBitcoinRpcTracked {
     async fn get_chain_id(&self) -> Result<ChainId> {
         tracked_call!(self, "get_chain_id", self.inner.get_chain_id().await)
     }
+
+    async fn is_in_initial_block_download(&self) -> Result<bool> {
+        tracked_call!(
+            self,
+            "is_in_initial_block_download",
+            self.inner.is_in_initial_block_download().await
+        )
+    }
 }

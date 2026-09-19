@@ -22,10 +22,16 @@ fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-metrics = { workspace = true }
 fedimint-server-core = { workspace = true }
+tokio = { workspace = true, features = ["macros", "sync"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = [
+    "io-util",
+    "net",
+    "rt-multi-thread",
+    "test-util",
+] }
 
 [lints]
 workspace = true
