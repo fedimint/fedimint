@@ -5,7 +5,9 @@ use clap::{Parser, Subcommand};
 use devimint::cli::CommonArgs;
 use devimint::envs::FM_TEST_DIR_ENV;
 use fedimint_core::fedimint_build_code_version_env;
-use fedimint_core::util::{handle_version_hash_command, write_overwrite_async};
+use fedimint_core::util::{
+    FmtCompactAnyhow as _, handle_version_hash_command, write_overwrite_async,
+};
 use fedimint_logging::LOG_DEVIMINT;
 use tokio::time::Instant;
 use tracing::{debug, warn};
@@ -71,7 +73,18 @@ async fn main() -> anyhow::Result<()> {
     let res = match command_result {
         Ok(r) => Ok(r),
         Err(e) => {
-            write_error_marker(setup_test_dir).await?;
+            let marker_path = setup_test_dir
+                .clone()
+                .or_else(|| env::var(FM_TEST_DIR_ENV).ok().map(PathBuf::from))
+                .map(|test_dir| test_dir.join("ready"));
+            if let Err(error) = write_error_marker(setup_test_dir).await {
+                warn!(
+                    target: LOG_DEVIMINT,
+                    ?marker_path,
+                    error = %error.fmt_compact_anyhow(),
+                    "Failed to record startup/command status"
+                );
+            }
             Err(e)
         }
     };
