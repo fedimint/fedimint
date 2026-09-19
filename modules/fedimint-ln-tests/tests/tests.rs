@@ -1263,11 +1263,13 @@ mod fedimint_migration_tests {
     use fedimint_client::module_init::DynClientModuleInit;
     use fedimint_core::config::FederationId;
     use fedimint_core::core::OperationId;
+    use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::{
         Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
     };
     use fedimint_core::encoding::Encodable;
     use fedimint_core::module::ModuleConsensusVersion;
+    use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::util::SafeUrl;
     use fedimint_core::{Amount, OutPoint, PeerId, TransactionId, secp256k1};
     use fedimint_ln_client::db::{PaymentResult, PaymentResultKey, PaymentResultPrefix};
@@ -1352,7 +1354,7 @@ mod fedimint_migration_tests {
             out_point,
         });
         dbtx.insert_new_entry(
-            &ContractKey(contract_id),
+            &ContractKey(incoming_contract.contract_id()),
             &ContractAccount {
                 amount,
                 contract: incoming_contract.clone(),
@@ -1367,7 +1369,7 @@ mod fedimint_migration_tests {
             cancelled: false,
         });
         dbtx.insert_new_entry(
-            &ContractKey(contract_id),
+            &ContractKey(outgoing_contract.contract_id()),
             &ContractAccount {
                 amount,
                 contract: outgoing_contract.clone(),
@@ -1749,6 +1751,33 @@ mod fedimint_migration_tests {
             bytes
         };
         sm_bytes
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn create_server_db_with_v0_data_inserts_both_contract_variants() {
+        let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+
+        create_server_db_with_v0_data(db.clone()).await;
+
+        let mut dbtx = db.begin_transaction_nc().await;
+        let contracts = dbtx
+            .find_by_prefix(&ContractKeyPrefix)
+            .await
+            .collect::<Vec<_>>()
+            .await;
+
+        assert!(
+            contracts
+                .iter()
+                .any(|(_, account)| matches!(&account.contract, FundedContract::Incoming(_))),
+            "fixture database should contain an incoming contract"
+        );
+        assert!(
+            contracts
+                .iter()
+                .any(|(_, account)| matches!(&account.contract, FundedContract::Outgoing(_))),
+            "fixture database should contain an outgoing contract"
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]
