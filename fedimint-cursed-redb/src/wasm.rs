@@ -6,6 +6,7 @@ use web_sys::wasm_bindgen::JsValue;
 use web_sys::{FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
 
 use crate::MemAndRedb;
+use crate::read_exact::read_exact_at;
 
 #[derive(Debug)]
 struct WasmBackend {
@@ -29,18 +30,14 @@ impl WasmBackend {
     }
 
     fn read_impl(&self, offset: u64, out: &mut [u8]) -> io::Result<()> {
-        let mut bytes_read = 0;
         let options = FileSystemReadWriteOptions::new();
-        while bytes_read != out.len() {
-            assert!(bytes_read < out.len());
-            options.set_at((offset + bytes_read as u64) as f64);
-
-            bytes_read += self
-                .sync_handle
-                .read_with_u8_array_and_options(&mut out[bytes_read..], &options)
-                .map_err(js_error_to_io_error)? as usize;
-        }
-        Ok(())
+        read_exact_at(offset, out, |offset, out| {
+            options.set_at(offset as f64);
+            self.sync_handle
+                .read_with_u8_array_and_options(out, &options)
+                .map(|read| read as usize)
+                .map_err(js_error_to_io_error)
+        })
     }
 
     fn write_impl(&self, offset: u64, data: &[u8]) -> io::Result<()> {

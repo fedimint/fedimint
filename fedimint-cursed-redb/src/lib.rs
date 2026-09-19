@@ -57,6 +57,9 @@ pub struct MemAndRedbTransaction<'a> {
 #[cfg(not(target_family = "wasm"))]
 mod native;
 
+#[cfg(any(test, target_family = "wasm"))]
+mod read_exact;
+
 #[cfg(target_family = "wasm")]
 mod wasm;
 
