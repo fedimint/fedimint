@@ -54,6 +54,30 @@ pub fn parse_address(s: &str) -> Option<String> {
         return None;
     }
 
+    // Hold both halves to the characters LUD-16 allows. Rejecting the
+    // structural ones is not enough: the URL parser percent-decodes and
+    // IDNA-maps whatever it is handed, so `a@evil%2Ecom` and
+    // `a@example.com\u{3002}evil.com` reach hosts the typed string never named.
+    if !user
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '-' | '_' | '+'))
+    {
+        return None;
+    }
+
+    if !domain
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-'))
+    {
+        return None;
+    }
+
+    // `.` and `..` are legal local parts but resolve away from
+    // `/.well-known/lnurlp/`. Longer runs of dots stay ordinary segments.
+    if matches!(user, "." | "..") {
+        return None;
+    }
+
     Some(format!("https://{domain}/.well-known/lnurlp/{user}"))
 }
 
@@ -154,6 +178,70 @@ pub async fn verify_invoice(url: &str) -> Result<VerifyResponse, String> {
         .await
         .map_err(|_| "Failed to parse lnurl verify response".to_string())?
         .into_result()
+}
+
+#[test]
+fn parse_address_lud_16() {
+    // The LUD-16 local part is `a-z0-9-_.`, plus `+` for tags.
+    for (address, expected) in [
+        (
+            "satoshi@example.com",
+            "https://example.com/.well-known/lnurlp/satoshi",
+        ),
+        (
+            "satoshi+tag@example.com",
+            "https://example.com/.well-known/lnurlp/satoshi+tag",
+        ),
+        (
+            "user-name_1@my-domain.co.uk",
+            "https://my-domain.co.uk/.well-known/lnurlp/user-name_1",
+        ),
+        (
+            "a@xn--bcher-kva.de",
+            "https://xn--bcher-kva.de/.well-known/lnurlp/a",
+        ),
+        // Only `.` and `..` are dot segments; longer runs are ordinary.
+        (
+            "...@example.com",
+            "https://example.com/.well-known/lnurlp/...",
+        ),
+    ] {
+        assert_eq!(parse_address(address).unwrap(), expected);
+    }
+}
+
+#[test]
+fn parse_address_rejects_addresses_that_move_the_request() {
+    for address in [
+        // Path, query and fragment on an arbitrary host. A fragment is the
+        // worst of the three: it swallows the well-known path entirely.
+        "a@example.com/other?x=",
+        "a@example.com?x=",
+        "a@example.com#frag",
+        "a@example.com\\evil.com",
+        // `split_once` takes the first `@`, so this would put `b` in the
+        // authority's userinfo position.
+        "a@b@host",
+        // Percent escapes and IDNA mappings both reach a host the typed
+        // string does not name: `evil.com` and `example.com.evil.com`.
+        "a@evil%2Ecom",
+        "a@example.com\u{3002}evil.com",
+        // LUD-16 allows only lowercase in the local part.
+        "Satoshi@example.com",
+        "a@exam\u{200b}ple.com",
+        // Dot segments resolve off the well-known path.
+        "..@example.com",
+        ".@example.com",
+        "a/../b@example.com",
+        // Authority syntax the address has no business carrying.
+        "a@example.com:8080",
+        "a@[::1]",
+        // Whitespace and control characters.
+        "a @example.com",
+        "a\u{0}@example.com",
+    ] {
+        assert_eq!(parse_address(address), None, "accepted {address:?}");
+    }
 }
 
 #[test]
