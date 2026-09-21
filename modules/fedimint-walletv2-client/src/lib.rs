@@ -13,6 +13,7 @@ pub mod db;
 pub mod events;
 mod receive_sm;
 mod send_sm;
+mod shared_api;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -60,12 +61,11 @@ use receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
 use secp256k1::Keypair;
 use send_sm::{SendSMCommon, SendSMState, SendStateMachine};
 use serde::{Deserialize, Serialize};
+pub use shared_api::WalletV2SharedApi;
+use shared_api::WalletV2SharedApiHandle;
 use strum::IntoEnumIterator as _;
 use thiserror::Error;
 use tracing::{debug, warn};
-
-/// Number of output info entries to scan per batch.
-const SLICE_SIZE: u64 = 1000;
 
 /// Number of event log entries to read per batch.
 const EVENT_LOG_PAGE_SIZE: u64 = 1000;
@@ -123,6 +123,8 @@ pub struct WalletClientModule {
     client_ctx: ClientContext<Self>,
     db: Database,
     module_api: DynModuleApi,
+    shared_api: WalletV2SharedApiHandle,
+    module_api_version: ApiVersion,
 }
 
 #[derive(Debug, Clone)]
@@ -178,7 +180,11 @@ impl ClientModule for WalletClientModule {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct WalletClientInit;
+pub struct WalletClientInit {
+    /// Reuse this handle across accounts of the same federation/module
+    /// instance.
+    pub shared_api: Option<Arc<WalletV2SharedApi>>,
+}
 
 impl ModuleInit for WalletClientInit {
     type Common = WalletCommonInit;
@@ -209,6 +215,11 @@ impl ClientModuleInit for WalletClientInit {
             client_ctx: args.context(),
             db: args.db().clone(),
             module_api: args.module_api().clone(),
+            shared_api: WalletV2SharedApiHandle::new(
+                self.shared_api.clone().unwrap_or_default(),
+                args.shared_api_scope(),
+            ),
+            module_api_version: *args.module_api_version(),
         };
 
         module.spawn_output_scanner(args.task_group(), args.client_span());
@@ -865,15 +876,17 @@ impl WalletClientModule {
             .map(|&i| (self.derive_address(i).script_pubkey(), i))
             .collect();
 
-        let outputs = self
-            .module_api
-            .output_info_slice(next_output_index, next_output_index + SLICE_SIZE)
+        let batch = self
+            .shared_api
+            .outputs_from(&self.module_api, self.module_api_version, next_output_index)
             .await?;
+
+        let (outputs, next_index) = batch.as_ref();
 
         let returned_num = outputs.len();
         let mut matched_num: usize = 0;
 
-        for output in &outputs {
+        for output in outputs {
             if let Some(&address_index) = address_map.get(&output.script) {
                 matched_num += 1;
 
@@ -917,6 +930,14 @@ impl WalletClientModule {
             dbtx.commit_tx_result().await?;
         }
 
+        if *next_index > next_output_index {
+            let mut dbtx = self.db.begin_transaction().await;
+
+            dbtx.insert_entry(&NextOutputIndexKey, next_index).await;
+
+            dbtx.commit_tx_result().await?;
+        }
+
         debug!(
             target: LOG_CLIENT_MODULE_WALLETV2,
             next_output_index,
@@ -926,7 +947,8 @@ impl WalletClientModule {
             "Scanning for outputs"
         );
 
-        Ok(!outputs.is_empty())
+        // A streaming request blocks until there is something to scan.
+        Ok(shared_api::streams_outputs(self.module_api_version) || returned_num > 0)
     }
 
     async fn process_unspent_output(
@@ -954,6 +976,25 @@ impl WalletClientModule {
                 "Delaying walletv2 receive claim because pending transaction chain is full"
             );
             return Ok(false);
+        }
+
+        // The batch may be served from the shared cache and predate this
+        // account's own claim, e.g. after a shutdown between claim acceptance
+        // and cursor persistence. A rejected claim would stall the scan on
+        // the same stale batch, so re-check the output before claiming it.
+        if self
+            .module_api
+            .output_info_slice(output.index, output.index + 1)
+            .await?
+            .first()
+            .is_none_or(|fresh| fresh.spent)
+        {
+            debug!(
+                target: LOG_CLIENT_MODULE_WALLETV2,
+                output_index = output.index,
+                "Skipping walletv2 receive claim; output was spent meanwhile"
+            );
+            return Ok(true);
         }
 
         let receive_fee = self

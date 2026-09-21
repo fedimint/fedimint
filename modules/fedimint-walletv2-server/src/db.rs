@@ -42,6 +42,7 @@ impl_db_record!(
     key = OutputKey,
     value = Output,
     db_prefix = DbKeyPrefix::Output,
+    notify_on_modify = true
 );
 
 impl_db_lookup!(key = OutputKey, query_prefix = OutputPrefix);

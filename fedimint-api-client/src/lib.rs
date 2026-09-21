@@ -23,6 +23,7 @@ pub mod api;
 pub mod metrics;
 /// Client query system
 pub mod query;
+pub mod shared_cache;
 
 /// Tries to download the [`ClientConfig`], attempts to retry ten times before
 /// giving up.

@@ -15,7 +15,7 @@ use config::WalletClientConfig;
 pub use fedimint_core::config::ExcessiveRelativeFeeError;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
+use fedimint_core::module::{ApiVersion, CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::{
     NumPeersExt, PeerId, extensible_associated_module_type, plugin_types_trait_impl_common,
 };
@@ -31,6 +31,9 @@ pub mod endpoint_constants;
 pub const KIND: ModuleKind = ModuleKind::from_static_str("walletv2");
 
 pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(1, 0);
+
+/// First API version serving `AWAIT_OUTPUTS_ENDPOINT`.
+pub const AWAIT_OUTPUTS_API_VERSION: ApiVersion = ApiVersion::new(0, 2);
 
 /// Returns a sleep duration of 1 second in test environments or 60 seconds in
 /// production. Used for polling intervals where faster feedback is needed

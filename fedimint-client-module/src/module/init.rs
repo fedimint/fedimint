@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use anyhow::bail;
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
+use fedimint_api_client::shared_cache::SharedApiScope;
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
@@ -142,6 +143,11 @@ where
     /// ready.
     pub fn context(&self) -> ClientContext<<C as ClientModuleInit>::Module> {
         self.context.clone()
+    }
+
+    /// Scope under which this module instance may share API results.
+    pub fn shared_api_scope(&self) -> SharedApiScope {
+        SharedApiScope::new(self.federation_id, self.context.module_instance_id)
     }
 
     pub fn task_group(&self) -> &TaskGroup {
@@ -382,6 +388,11 @@ where
     /// the client context is guaranteed to be usable immediately.
     pub fn context(&self) -> ClientContext<<C as ClientModuleInit>::Module> {
         self.context.clone()
+    }
+
+    /// Scope under which this module instance may share API results.
+    pub fn shared_api_scope(&self) -> SharedApiScope {
+        SharedApiScope::new(self.federation_id, self.context.module_instance_id)
     }
 
     pub fn update_recovery_progress(&self, progress: RecoveryProgress) {

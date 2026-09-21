@@ -9,9 +9,9 @@ use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send};
 use fedimint_walletv2_common::endpoint_constants::{
-    CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
-    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT,
-    SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
+    AWAIT_OUTPUTS_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT,
+    FEDERATION_WALLET_ENDPOINT, OUTPUT_INFO_SLICE_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT,
+    RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 };
 use fedimint_walletv2_common::{FederationWallet, OutputInfo, TxInfo};
 
@@ -48,6 +48,8 @@ pub trait WalletFederationApi {
         start_index: u64,
         end_index: u64,
     ) -> FederationResult<Vec<OutputInfo>>;
+
+    async fn await_outputs(&self, start: u64, n: u64) -> (Vec<OutputInfo>, u64);
 
     async fn tx_id(&self, outpoint: OutPoint) -> Option<bitcoin::Txid>;
 }
@@ -174,6 +176,14 @@ where
         self.request_current_consensus(
             OUTPUT_INFO_SLICE_ENDPOINT.to_string(),
             ApiRequestErased::new((start_index, end_index)),
+        )
+        .await
+    }
+
+    async fn await_outputs(&self, start: u64, n: u64) -> (Vec<OutputInfo>, u64) {
+        self.request_current_consensus_retry(
+            AWAIT_OUTPUTS_ENDPOINT.to_string(),
+            ApiRequestErased::new((start, n)),
         )
         .await
     }
