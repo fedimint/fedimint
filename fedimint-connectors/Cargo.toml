@@ -68,5 +68,8 @@ webpki-roots = { workspace = true }
 [target.'cfg(target_family = "wasm")'.dependencies]
 jsonrpsee-wasm-client = { workspace = true }
 
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+
 [lints]
 workspace = true
