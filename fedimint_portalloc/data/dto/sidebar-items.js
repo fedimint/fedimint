@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["HIGH","LOG_PORT_ALLOC","LOW"],"fn":["default_next"],"struct":["RangeData","RootData"],"type":["UnixTimestamp"]};
+window.SIDEBAR_ITEMS = {"constant":["HIGH","LOG_PORT_ALLOC","LOW"],"fn":["default_next","port_range"],"struct":["RangeData","RootData"],"type":["UnixTimestamp"]};
