@@ -37,7 +37,7 @@ pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
 
     data_dir.with_lock(|data_dir| {
         let mut data = data_dir.load_data()?;
-        let base_port = data.get_free_port_range(range_size);
+        let base_port = data.get_free_port_range(range_size)?;
         data_dir.store_data(&data)?;
         Ok(base_port)
     })
