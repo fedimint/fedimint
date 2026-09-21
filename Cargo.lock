@@ -3640,6 +3640,7 @@ dependencies = [
  "frost-secp256k1",
  "futures",
  "hex",
+ "iroh 0.35.0",
  "rand 0.8.5",
  "ring",
  "serde",
@@ -3647,6 +3648,7 @@ dependencies = [
  "strum 0.27.1",
  "strum_macros 0.27.1",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
 ]
 

@@ -1,10 +1,9 @@
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
 use fedimint_core::BitcoinHash;
 use fedimint_core::bitcoin::hashes::{HashEngine, sha256};
 use fedimint_core::config::FederationId;
-use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::secp256k1::PublicKey;
 use frost_secp256k1::keys::dkg::round1::{
@@ -17,22 +16,23 @@ use frost_secp256k1::keys::{KeyPackage, PublicKeyPackage};
 use frost_secp256k1::{Error, Identifier};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::client_db::FrostDkgSessionKey;
+use crate::client_db::{FrostDkgSessionKey, FrostDkgSessionRecordkey};
 use crate::frost::dkg::{DkgError, DkgResult, DkgRunner};
-use crate::frost::transport::file::FileTransport;
+use crate::frost::transport::DkgTransport;
 
 #[derive(Debug, Clone, Copy, Hash, Encodable, Decodable, PartialEq, Eq)]
 pub struct SessionId(pub [u8; 32]);
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct ParticipantId(pub [u8; 32]);
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct FrostParticipant {
-    pub identity: PublicKey,
     pub identifier: Identifier,
 }
 
 impl Encodable for FrostParticipant {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
-        self.identity.serialize().consensus_encode(writer)?;
         self.identifier.serialize().consensus_encode(writer)?;
         Ok(())
     }
@@ -43,22 +43,42 @@ impl Decodable for FrostParticipant {
         r: &mut R,
         modules: &fedimint_core::module::registry::ModuleDecoderRegistry,
     ) -> Result<Self, fedimint_core::encoding::DecodeError> {
-        let identity_bytes: Vec<u8> = Decodable::consensus_decode_partial(r, modules)?;
-
-        let identity = PublicKey::from_slice(&identity_bytes).map_err(|e| {
-            DecodeError::new_custom(anyhow::anyhow!("Invalid participant public key: {e}"))
-        })?;
-
         let identifier_bytes: Vec<u8> = Decodable::consensus_decode_partial(r, modules)?;
 
         let identifier = Identifier::deserialize(&identifier_bytes).map_err(|e| {
             DecodeError::new_custom(anyhow::anyhow!("Invalid FROST identifier: {e}"))
         })?;
 
-        Ok(Self {
-            identity,
-            identifier,
-        })
+        Ok(Self { identifier })
+    }
+}
+
+impl Serialize for FrostParticipant {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&hex::encode(self.identifier.serialize()))
+    }
+}
+
+impl<'de> Deserialize<'de> for FrostParticipant {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let bytes = hex::decode(&s).map_err(serde::de::Error::custom)?;
+        let identifier = Identifier::deserialize(&bytes).map_err(serde::de::Error::custom)?;
+        Ok(Self { identifier })
+    }
+}
+
+impl FrostParticipant {
+    pub fn from_pubkey(pubkey: PublicKey) -> anyhow::Result<Self> {
+        let identifier = Identifier::derive(&pubkey.serialize())?;
+
+        Ok(Self { identifier })
     }
 }
 
@@ -84,13 +104,13 @@ pub enum FrostDkgState {
     },
 }
 
-#[derive(Debug, Clone, Hash, Encodable, Decodable, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, Encodable, Decodable, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FrostDkgSessionRecord {
-    session_id: SessionId,
-    participant_id: FrostParticipant,
-    participants: Vec<FrostParticipant>,
-    max_signers: u16,
-    min_signers: u16,
+    pub session_id: SessionId,
+    pub participant_id: FrostParticipant,
+    pub participants: Vec<FrostParticipant>,
+    pub max_signers: u16,
+    pub min_signers: u16,
 }
 
 #[derive(Debug, Clone, Encodable, Decodable, Serialize, Deserialize)]
@@ -123,72 +143,98 @@ impl<'de> Deserialize<'de> for SessionId {
     }
 }
 
-fn create_session_id(participants: &[PublicKey], federation_id: &FederationId) -> SessionId {
-    let mut sorted: Vec<PublicKey> = participants.to_vec();
-    sorted.sort_by_key(|pk| pk.serialize());
+fn create_session_id(participants: &[FrostParticipant], federation_id: &FederationId) -> SessionId {
+    let mut identifiers: Vec<Vec<u8>> = participants
+        .iter()
+        .map(|p| p.identifier.serialize().to_vec())
+        .collect();
 
+    identifiers.sort();
     let mut engine = sha256::HashEngine::default();
+
     engine.input(b"fedimint_escrow_dkg_consortium");
     engine.input(&federation_id.0.to_byte_array());
-    for p in &sorted {
-        engine.input(&p.serialize());
+
+    for identifier in identifiers {
+        engine.input(&identifier);
     }
 
     SessionId(sha256::Hash::from_engine(engine).to_byte_array())
 }
 
-pub fn build_transport(args: TransportArgs) {}
-
-#[derive(Debug)]
-pub struct FrostSessionArgs {
-    participant_id: FrostParticipant,
-    participants: Vec<FrostParticipant>,
-    federation_id: FederationId,
-}
-
-#[derive(Debug)]
-pub enum TransportArgs {
-    FileTransport { path: PathBuf },
-}
-
 impl FrostDkgSessionRecord {
-    pub async fn new(args: FrostSessionArgs) -> anyhow::Result<Self> {
-        if args.participants.is_empty() {
+    pub async fn new(
+        participant_id: FrostParticipant,
+        participants: Vec<FrostParticipant>,
+        federation_id: FederationId,
+        db: &Database,
+    ) -> anyhow::Result<Self> {
+        if participants.is_empty() {
             return Err(anyhow::anyhow!("participant list cannot be empty"));
         }
 
-        let identities: Vec<PublicKey> = args.participants.iter().map(|p| p.identity).collect();
-        let session_id = create_session_id(&identities, &args.federation_id);
-        args.participants
-            .iter()
-            .find(|p| p.identity == args.participant_id.identity)
-            .ok_or_else(|| anyhow::anyhow!("own identity not found in participant list"))?;
+        let session_id = create_session_id(&participants, &federation_id);
+        let mut identities = std::collections::BTreeSet::new();
 
-        let max_signers = args.participants.len() as u16;
+        let max_signers = participants.len() as u16;
         anyhow::ensure!(max_signers > 2, "participant length must be greater than 2");
+
+        for participant in &participants {
+            anyhow::ensure!(
+                identities.insert(participant.identifier),
+                "duplicate participant identity"
+            );
+        }
+
+        anyhow::ensure!(
+            participants
+                .iter()
+                .any(|p| p.identifier == participant_id.identifier),
+            "local participant is not in participant list"
+        );
         let f = (max_signers.saturating_sub(1)) / 3;
         let min_signers = max_signers - f;
 
-        anyhow::Ok(Self {
+        let record = Self {
             session_id,
-            participant_id: args.participant_id,
-            participants: args.participants,
+            participant_id,
+            participants,
             max_signers,
             min_signers,
-        })
+        };
+        let mut dbtx = db.begin_transaction().await;
+        if let Some(existing) = dbtx.get_value(&FrostDkgSessionRecordkey(session_id)).await {
+            return Ok(existing);
+        }
+        dbtx.insert_entry(&FrostDkgSessionRecordkey(session_id), &record)
+            .await;
+        dbtx.commit_tx().await;
+
+        anyhow::Ok(record)
     }
 
-    pub async fn run(&self, dbtx: &mut DatabaseTransaction<'_>) -> Result<DkgResult, DkgError> {
-        let transport = FileTransport::new(&"path".to_string(), &self.session_id, self.max_signers)
-            .expect("Error occurred while using transport");
+    async fn persist_state(db: &Database, session_id: SessionId, state: FrostDkgState) {
+        let mut dbtx = db.begin_transaction().await;
+        dbtx.insert_entry(&FrostDkgSessionKey(session_id), &FrostDkgSession { state })
+            .await;
+        dbtx.commit_tx().await;
+    }
 
+    pub async fn run<T: DkgTransport>(
+        &self,
+        db: &Database,
+        transport: T,
+    ) -> Result<DkgResult, DkgError> {
         let dkg_runner = DkgRunner::new(transport);
 
-        let mut state: FrostDkgState = dbtx
+        let mut read_tx = db.begin_transaction_nc().await;
+        let mut state: FrostDkgState = read_tx
             .get_value(&FrostDkgSessionKey(self.session_id))
             .await
             .map(|s: FrostDkgSession| s.state)
             .unwrap_or(FrostDkgState::Created);
+
+        drop(read_tx);
 
         loop {
             state = match state {
@@ -344,13 +390,12 @@ impl FrostDkgSessionRecord {
                     });
                 }
                 FrostDkgState::Failed { round, error } => {
-                    dbtx.insert_entry(
-                        &FrostDkgSessionKey(self.session_id),
-                        &FrostDkgSession {
-                            state: FrostDkgState::Failed {
-                                round,
-                                error: error.clone(),
-                            },
+                    Self::persist_state(
+                        db,
+                        self.session_id,
+                        FrostDkgState::Failed {
+                            round,
+                            error: error.clone(),
                         },
                     )
                     .await;
@@ -359,13 +404,7 @@ impl FrostDkgSessionRecord {
                     )));
                 }
             };
-            dbtx.insert_entry(
-                &FrostDkgSessionKey(self.session_id),
-                &FrostDkgSession {
-                    state: state.clone(),
-                },
-            )
-            .await;
+            Self::persist_state(db, self.session_id, state.clone()).await;
         }
     }
 }

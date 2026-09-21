@@ -36,7 +36,10 @@ pub enum DkgError {
     TransportError(#[from] TransportError),
     #[error("frost protocol error: {0}")]
     FrostError(String),
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
+
 pub struct DkgRunner<T> {
     transport: T,
 }
@@ -54,13 +57,13 @@ impl<T: DkgTransport> DkgRunner<T> {
         min_signers: u16,
     ) -> Result<DkgRound1, DkgError> {
         let max_signers = participants.len() as u16;
-        let mut rng = OsRng;
+        let rng = OsRng;
 
         let (round1_secret_package, round1_package) = frost_secp256k1::keys::dkg::part1(
             participant_id.identifier,
             max_signers,
             min_signers,
-            &mut rng,
+            rng,
         )
         .map_err(|e| DkgError::FrostError(e.to_string()))?;
 

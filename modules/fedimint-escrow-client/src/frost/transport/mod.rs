@@ -1,7 +1,8 @@
 pub mod file;
-pub mod nostr;
+pub mod iroh;
 
 use std::collections::BTreeMap;
+use std::error::Error;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -11,26 +12,42 @@ use crate::frost::session::SessionId;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TransportError {
-    #[error("I/O error {0}")]
+    #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
 
-    #[error("Serialization error {0}")]
+    #[error("serialization error: {0}")]
     Serialization(String),
 
     #[error("invalid receiver")]
     InvalidReceiver,
 
-    #[error("missing package from participant {0:?}")]
-    MissingPackage(frost::Identifier),
+    #[error("session mismatch: expected {expected:?}, actual {actual:?}")]
+    SessionMismatch {
+        expected: SessionId,
+        actual: SessionId,
+    },
 
-    #[error("invalid package found")]
-    InvalidPackage,
-
-    #[error("package already exist")]
-    DuplicatePackage,
-
-    #[error("timeout failed")]
+    #[error("transport timeout")]
     TimeoutError,
+
+    #[error("backend transport error: {0}")]
+    Backend(#[source] Box<dyn Error + Send + Sync>),
+}
+
+impl TransportError {
+    pub fn backend<E>(error: E) -> Self
+    where
+        E: Error + Send + Sync + 'static,
+    {
+        Self::Backend(Box::new(error))
+    }
+}
+
+impl From<anyhow::Error> for TransportError {
+    fn from(e: anyhow::Error) -> Self {
+        // anyhow::Error converts into Box<dyn Error + Send + Sync>
+        Self::Backend(e.into())
+    }
 }
 
 #[async_trait]

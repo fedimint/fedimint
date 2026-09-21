@@ -1,13 +1,14 @@
 use std::collections::BTreeMap;
-use std::fs::{self, create_dir_all, remove_dir_all};
 use std::path::PathBuf;
-use std::thread::sleep;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use fedimint_core::runtime::sleep;
 use fedimint_core::time::now;
 use frost_secp256k1::Identifier;
 use frost_secp256k1::keys::dkg::{round1, round2};
+use tokio::fs;
+use tokio::io::AsyncWriteExt;
 
 use crate::frost::session::SessionId;
 use crate::frost::transport::{DkgTransport, TransportError};
@@ -15,7 +16,6 @@ use crate::frost::transport::{DkgTransport, TransportError};
 pub struct FileTransport {
     root: PathBuf,
     session_id: SessionId,
-    max_signers: u16,
     poll_interval: Duration,
 }
 
@@ -23,10 +23,12 @@ pub struct FileTransport {
 impl DkgTransport for FileTransport {
     async fn broadcast_round1(
         &self,
-        _session_id: &SessionId,
+        session_id: &SessionId,
         sender: &Identifier,
         package: round1::Package,
     ) -> Result<(), TransportError> {
+        self.check_session(session_id)?;
+
         let bytes = package
             .serialize()
             .map_err(|e| TransportError::Serialization(e.to_string()))?;
@@ -36,11 +38,13 @@ impl DkgTransport for FileTransport {
 
     async fn recv_round1_all(
         &self,
-        _session_id: &SessionId,
+        session_id: &SessionId,
         self_id: &Identifier,
         expected: &[Identifier],
         timeout: Duration,
     ) -> Result<BTreeMap<Identifier, round1::Package>, TransportError> {
+        self.check_session(session_id)?;
+
         let paths: BTreeMap<_, _> = expected
             .iter()
             .filter(|id| **id != *self_id)
@@ -56,11 +60,13 @@ impl DkgTransport for FileTransport {
 
     async fn send_round2(
         &self,
-        _session_id: &SessionId,
+        session_id: &SessionId,
         sender: &Identifier,
         receiver: &Identifier,
         package: round2::Package,
     ) -> Result<(), TransportError> {
+        self.check_session(session_id)?;
+
         let bytes = package
             .serialize()
             .map_err(|e| TransportError::Serialization(e.to_string()))?;
@@ -71,11 +77,13 @@ impl DkgTransport for FileTransport {
 
     async fn recv_round2(
         &self,
-        _session_id: &SessionId,
+        session_id: &SessionId,
         self_id: &Identifier,
         expected: &[Identifier],
         timeout: Duration,
     ) -> Result<BTreeMap<Identifier, round2::Package>, TransportError> {
+        self.check_session(session_id)?;
+
         let paths: BTreeMap<_, _> = expected
             .iter()
             .filter(|id| **id != *self_id)
@@ -91,63 +99,18 @@ impl DkgTransport for FileTransport {
 }
 
 impl FileTransport {
-    pub fn new(path: &String, session_id: &SessionId, max_signers: u16) -> std::io::Result<Self> {
-        let root = PathBuf::from(path);
+    pub async fn new(session_id: &SessionId) -> Result<Self, TransportError> {
+        let root = std::env::temp_dir()
+            .join("fedimint-escrow-dkg")
+            .join(hex::encode(session_id.0));
 
-        if !root.exists() {
-            fs::create_dir(path)?;
-        }
+        fs::create_dir_all(&root).await?;
 
-        let root_path = root.join(hex::encode(session_id.0));
-
-        let transport = Self {
-            root: root_path,
+        Ok(Self {
+            root,
             session_id: *session_id,
-            max_signers,
             poll_interval: Duration::from_millis(200),
-        };
-
-        transport.initialize()?;
-
-        Ok(transport)
-    }
-
-    fn initialize(&self) -> std::io::Result<()> {
-        let round1 = self.root.join("round1");
-        let round2 = self.root.join("round2");
-
-        create_dir_all(&round1)?;
-        create_dir_all(&round2)?;
-
-        // Round 1 files
-        for participant in 1..=self.max_signers {
-            let round1_participant_slot = round1.join(format!("participant_{}.json", participant));
-
-            if !round1_participant_slot.exists() {
-                fs::File::create(round1_participant_slot)?;
-            }
-        }
-
-        // Round 2 directories/files
-        for sender in 1..=self.max_signers {
-            let sender_dir = round2.join(format!("participant_{}", sender));
-
-            fs::create_dir_all(&sender_dir)?;
-
-            for receiver in 1..=self.max_signers {
-                if sender == receiver {
-                    continue;
-                }
-
-                let slot = sender_dir.join(format!("participant_{}.json", receiver));
-
-                if !slot.exists() {
-                    fs::File::create(slot)?;
-                }
-            }
-        }
-
-        Ok(())
+        })
     }
 
     fn round1_path(&self, id: Identifier) -> PathBuf {
@@ -162,18 +125,27 @@ impl FileTransport {
             .join(hex::encode(receiver.serialize()))
             .join(format!("{}.json", hex::encode(sender.serialize())))
     }
-
-    /// Write-to-temp-then-rename so a concurrent reader never observes a
-    /// partially written file.
     async fn write_atomic(&self, path: &PathBuf, bytes: &[u8]) -> Result<(), TransportError> {
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
+            fs::create_dir_all(parent).await?;
         }
 
         let tmp = path.with_extension("tmp");
 
-        fs::write(&tmp, bytes)?;
-        fs::rename(&tmp, path)?;
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&tmp)
+            .await?;
+
+        file.write_all(bytes).await?;
+        file.flush().await?;
+        file.sync_all().await?;
+
+        drop(file);
+
+        fs::rename(&tmp, path).await?;
 
         Ok(())
     }
@@ -194,24 +166,24 @@ impl FileTransport {
         let mut collected = BTreeMap::new();
 
         loop {
-            let mut still_missing = Vec::new();
+            let mut still_missing = false;
 
             for (id, path) in &paths {
                 if collected.contains_key(id) {
                     continue;
                 }
 
-                match fs::read(path) {
+                match fs::read(path).await {
                     Ok(bytes) => {
                         collected.insert(*id, deserialize(&bytes)?);
                     }
                     Err(_) => {
-                        still_missing.push(*id);
+                        still_missing = true;
                     }
                 }
             }
 
-            if still_missing.is_empty() {
+            if !still_missing {
                 return Ok(collected);
             }
 
@@ -219,15 +191,28 @@ impl FileTransport {
                 return Err(TransportError::TimeoutError);
             }
 
-            sleep(self.poll_interval);
+            sleep(self.poll_interval).await;
         }
     }
 
-    pub fn remove_data(&self) -> std::io::Result<()> {
-        if self.root.exists() {
-            remove_dir_all(&self.root)?;
+    fn check_session(&self, session_id: &SessionId) -> Result<(), TransportError> {
+        if *session_id != self.session_id {
+            return Err(TransportError::SessionMismatch {
+                expected: self.session_id,
+                actual: *session_id,
+            });
         }
-
         Ok(())
+    }
+
+    /// Deletes this session's entire scratch directory. Only safe to call
+    /// once every participant has independently reached a terminal state
+    /// for this session.
+    pub async fn remove_data(&self) -> Result<(), TransportError> {
+        match fs::remove_dir_all(&self.root).await {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(TransportError::IoError(e)),
+        }
     }
 }

@@ -20,13 +20,13 @@ use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation
 use fedimint_core::bitcoin::hashes::{HashEngine, sha256};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::secp256k1::{Keypair, Message, PublicKey, Secp256k1, schnorr};
 use fedimint_core::util::BoxStream;
-use fedimint_core::{Amount, BitcoinHash, apply, async_trait_maybe_send};
+use fedimint_core::{Amount, BitcoinHash, apply, async_trait_maybe_send, push_db_pair_items};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_escrow_common::config::EscrowClientConfig;
 use fedimint_escrow_common::{
@@ -35,12 +35,22 @@ use fedimint_escrow_common::{
     GetPendinFeeParams, KIND, LIST_CONTRACT_DOMAIN, ListContractParams, Outcome, Resolution,
     compute_contract_hash, compute_escrow_message, compute_proof_message,
 };
+use frost_secp256k1::Identifier;
+use futures::StreamExt;
+use iroh::{NodeAddr, SecretKey};
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
 use crate::api::EscrowFederationApi;
-use crate::client_db::{DbKeyPrefix, EscrowAction, EscrowOperationMeta};
+use crate::client_db::{
+    DbKeyPrefix, EscrowAction, EscrowOperationMeta, FrostDkgSessionKey, FrostDkgSessionPrefix,
+    FrostDkgSessionRecordPrefix, FrostDkgSessionRecordkey,
+};
+use crate::frost::dkg::{DkgError, DkgResult};
+use crate::frost::session::{FrostDkgSession, FrostDkgSessionRecord, FrostParticipant, SessionId};
+use crate::frost::transport::DkgTransport;
+use crate::frost::transport::iroh::IrohDkgTransport;
 use crate::input::{EscrowInputSMCommon, EscrowInputSMState, EscrowInputStateMachine};
 use crate::output::{EscrowOutputSMCommon, EscrowOutputSMState, EscrowOutputStateMachine};
 pub mod api;
@@ -53,6 +63,7 @@ pub mod output;
 pub mod cli;
 
 const ESCROW_FEE_CLAIM_CHILD_ID: ChildId = ChildId(1);
+const IROH_IDENTITY_CHILD_ID: ChildId = ChildId(2);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum EscrowStateMachine {
@@ -149,21 +160,40 @@ impl ModuleInit for EscrowClientInit {
 
     async fn dump_database(
         &self,
-        _dbtx: &mut DatabaseTransaction<'_>,
+        dbtx: &mut DatabaseTransaction<'_>,
         prefix_names: Vec<String>,
     ) -> Box<dyn Iterator<Item = (String, Box<dyn erased_serde::Serialize + Send>)> + '_> {
-        let contracts: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> = BTreeMap::new();
+        let mut contracts: BTreeMap<String, Box<dyn erased_serde::Serialize + Send>> =
+            BTreeMap::new();
         let filtered_prefixes = DbKeyPrefix::iter().filter(|f| {
             prefix_names.is_empty() || prefix_names.contains(&f.to_string().to_lowercase())
         });
 
         for table in filtered_prefixes {
             match table {
+                DbKeyPrefix::FrostDkgSession => {
+                    push_db_pair_items!(
+                        dbtx,
+                        FrostDkgSessionPrefix,
+                        FrostDkgSessionKey,
+                        FrostDkgSession,
+                        contracts,
+                        "Frost Consortium Session"
+                    );
+                }
+                DbKeyPrefix::FrostDkgSessionRecord => {
+                    push_db_pair_items!(
+                        dbtx,
+                        FrostDkgSessionRecordPrefix,
+                        FrostDkgSessionRecordkey,
+                        FrostDkgSessionRecord,
+                        contracts,
+                        "Frost Consortium Record"
+                    );
+                }
                 DbKeyPrefix::ExternalReservedStart
                 | DbKeyPrefix::CoreInternalReservedStart
-                | DbKeyPrefix::CoreInternalReservedEnd
-                | DbKeyPrefix::FrostDkgSession
-                | DbKeyPrefix::FrostDkgSessionRecord => {}
+                | DbKeyPrefix::CoreInternalReservedEnd => {}
             }
         }
 
@@ -389,10 +419,22 @@ pub struct CreateContractResponse {
     pub escrow_id: EscrowId,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsortiumSession {
+    record: FrostDkgSessionRecord,
+    session: FrostDkgSession,
+}
+
 impl EscrowClientModule {
     pub fn fee_claim_key(&self) -> Keypair {
         self.secret
             .child_key(ESCROW_FEE_CLAIM_CHILD_ID)
+            .to_secp_key(&Secp256k1::new())
+    }
+
+    fn iroh_identity_key(&self) -> Keypair {
+        self.secret
+            .child_key(IROH_IDENTITY_CHILD_ID)
             .to_secp_key(&Secp256k1::new())
     }
 
@@ -840,6 +882,65 @@ impl EscrowClientModule {
             .await?;
 
         Ok(operation_id)
+    }
+
+    pub fn get_frost_identity(&self) -> anyhow::Result<FrostParticipant> {
+        FrostParticipant::from_pubkey(self.keypair.public_key())
+    }
+
+    pub async fn create_arbiter_consortium(
+        &self,
+        participants: Vec<FrostParticipant>,
+        iroh_peers: BTreeMap<Identifier, NodeAddr>,
+    ) -> Result<DkgResult, DkgError> {
+        let db = self.client_ctx.module_db();
+        let self_participant_id = self.get_frost_identity()?;
+        let session =
+            FrostDkgSessionRecord::new(self_participant_id, participants, self.federation_id, db)
+                .await?;
+
+        let iroh_secret =
+            SecretKey::from_bytes(&self.iroh_identity_key().secret_key().secret_bytes());
+
+        let transport = IrohDkgTransport::new(session.session_id, iroh_secret, iroh_peers).await?;
+        let result = session.run(db, transport).await?;
+        Ok(result)
+    }
+
+    pub async fn create_arbiter_consortium_with_custom_transport<T: DkgTransport>(
+        &self,
+        participants: Vec<FrostParticipant>,
+        transport: T,
+    ) -> Result<DkgResult, DkgError> {
+        let db = self.client_ctx.module_db();
+        let self_participant_id = self.get_frost_identity()?;
+        let session =
+            FrostDkgSessionRecord::new(self_participant_id, participants, self.federation_id, db)
+                .await?;
+
+        let result = session.run(db, transport).await?;
+        Ok(result)
+    }
+
+    pub async fn get_consortium_state(
+        &self,
+        session_id: SessionId,
+    ) -> anyhow::Result<ConsortiumSession> {
+        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+        let record = dbtx
+            .get_value(&FrostDkgSessionRecordkey(session_id))
+            .await
+            .ok_or_else(|| anyhow::anyhow!("no consortium record found for {session_id:?}"))?;
+
+        let state = dbtx
+            .get_value(&FrostDkgSessionKey(session_id))
+            .await
+            .ok_or_else(|| anyhow::anyhow!("no consortium state found for {session_id:?}"))?;
+
+        anyhow::Ok(ConsortiumSession {
+            record,
+            session: state,
+        })
     }
 
     pub async fn subscribe_fee_claim(
