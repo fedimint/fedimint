@@ -855,6 +855,11 @@ impl<T: IConnection + ?Sized> ConnectionPool<T> {
             .get_or_try_init(|| async {
                 let retry_delay = pool_entry_arc.pre_reconnect_delay();
                 fedimint_core::runtime::sleep(retry_delay).await;
+                pool_entry_arc
+                    .inner
+                    .lock()
+                    .expect("Locking failed")
+                    .retry_at = None;
 
                 trace!(target: LOG_CLIENT_NET_API, %url, "Attempting to create a new connection");
                 let res = create_connection(
@@ -930,6 +935,7 @@ impl<T: IConnection + ?Sized> ConnectionPool<T> {
 struct ConnectionStateInner {
     fresh: bool,
     backoff: FibonacciBackoff,
+    retry_at: Option<fedimint_core::runtime::Instant>,
 }
 
 #[derive(Debug)]
@@ -956,6 +962,7 @@ impl<T: ?Sized> ConnectionState<T> {
             connection: OnceCell::new(),
             inner: std::sync::Mutex::new(ConnectionStateInner {
                 fresh: true,
+                retry_at: None,
                 backoff: custom_backoff(
                     // First time connections start quick
                     Duration::from_millis(5),
@@ -975,6 +982,7 @@ impl<T: ?Sized> ConnectionState<T> {
             inner: std::sync::Mutex::new(ConnectionStateInner {
                 // set the attempts to 1, indicating that
                 fresh: false,
+                retry_at: None,
                 backoff: custom_backoff(
                     // Connections after a disconnect start with some minimum delay
                     Duration::from_millis(500),
@@ -986,18 +994,127 @@ impl<T: ?Sized> ConnectionState<T> {
         }
     }
 
-    /// Record the fact that an attempt to connect is being made, and return
-    /// time the caller should wait.
+    /// Return the remaining wait, preserving its deadline across cancellation.
     pub fn pre_reconnect_delay(&self) -> Duration {
         let mut backoff_locked = self.inner.lock().expect("Locking failed");
+        let now = fedimint_core::runtime::Instant::now();
+        if let Some(retry_at) = backoff_locked.retry_at {
+            return retry_at.saturating_duration_since(now);
+        }
         let fresh = backoff_locked.fresh;
 
         backoff_locked.fresh = false;
 
-        if fresh {
+        let delay = if fresh {
             Duration::default()
         } else {
             backoff_locked.backoff.next().expect("Keeps retrying")
+        };
+        backoff_locked.retry_at = Some(now + delay);
+        delay
+    }
+}
+
+#[cfg(test)]
+mod reconnect_tests {
+    use super::*;
+
+    #[derive(Debug)]
+    struct TestConnection {
+        connected: watch::Sender<bool>,
+    }
+
+    #[apply(async_trait_maybe_send!)]
+    impl IConnection for TestConnection {
+        async fn await_disconnection(&self) {
+            self.connected
+                .subscribe()
+                .wait_for(|connected| !connected)
+                .await
+                .expect("test sender remains alive");
         }
+
+        fn is_connected(&self) -> bool {
+            *self.connected.borrow()
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn cancelled_probes_reconnect_after_server_returns() {
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+        use fedimint_core::runtime::{Instant, sleep, timeout};
+
+        let registry = ConnectorRegistry::build_from_server_defaults().bind().await;
+        let pool = ConnectionPool::<TestConnection>::new(registry);
+        let url = "ws://guardian.example/".parse().unwrap();
+        let available = Arc::new(AtomicBool::new(true));
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let create = {
+            let available = available.clone();
+            let attempts = attempts.clone();
+            move |_, _, _| {
+                let available = available.clone();
+                let attempts = attempts.clone();
+                async move {
+                    attempts.fetch_add(1, Ordering::Relaxed);
+                    if !available.load(Ordering::Relaxed) {
+                        return Err(ServerError::Connection(
+                            std::io::Error::other("server offline").into(),
+                        ));
+                    }
+                    Ok(Arc::new(TestConnection {
+                        connected: watch::channel(true).0,
+                    }))
+                }
+            }
+        };
+        let first = pool
+            .get_or_create_connection(&url, None, create.clone())
+            .await
+            .unwrap();
+        available.store(false, Ordering::Relaxed);
+        first.connected.send_replace(false);
+
+        let probe_limit = Duration::from_secs(1);
+        let interval = Duration::from_secs(5);
+        let mut cancellations = 0;
+        // Let the real backoff grow beyond the probe's deadline.
+        for _ in 0..20 {
+            let result = timeout(
+                probe_limit,
+                pool.get_or_create_connection(&url, None, create.clone()),
+            )
+            .await;
+            assert!(!matches!(result, Ok(Ok(_))));
+            cancellations += usize::from(result.is_err());
+            sleep(interval).await;
+        }
+        assert!(cancellations > 1);
+        let before = attempts.load(Ordering::Relaxed);
+        assert!(
+            before > 1,
+            "the outage must include failed connection attempts"
+        );
+        available.store(true, Ordering::Relaxed);
+
+        // Allow recovery across later probes while keeping each probe bounded.
+        for _ in 0..8 {
+            let started = Instant::now();
+            let result = timeout(
+                probe_limit,
+                pool.get_or_create_connection(&url, None, create.clone()),
+            )
+            .await;
+            assert!(started.elapsed() <= probe_limit);
+            if let Ok(Ok(connection)) = result {
+                assert!(attempts.load(Ordering::Relaxed) > before);
+                assert!(!Arc::ptr_eq(&first, &connection));
+                connection.connected.send_replace(false);
+                return;
+            }
+            sleep(interval).await;
+        }
+        panic!("bounded probes never reconnected after the server returned");
     }
 }
