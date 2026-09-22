@@ -54,6 +54,28 @@ impl FromStr for WalletDescriptorKind {
     }
 }
 
+/// Largest federation a P2WSH multisig wallet can be set up for.
+///
+/// A k-of-n `sortedmulti` P2WSH script is a `CHECKMULTISIG`, which takes at
+/// most 20 keys (miniscript's `MAX_PUBKEYS_PER_MULTISIG`). Both on-chain
+/// wallet modules build such a script over every guardian key during DKG
+/// when they use SegWit v0, so a larger federation has to be refused at
+/// setup time.
+pub const MAX_WSH_FEDERATION_SIZE: u32 = 20;
+
+impl WalletDescriptorKind {
+    /// Largest federation this descriptor can be set up for, or `None` if
+    /// it doesn't bound the size. Only [`Self::Wsh`] is bounded — see
+    /// [`MAX_WSH_FEDERATION_SIZE`]; the taproot descriptors use a `multi_a`
+    /// script (`CHECKSIGADD`) or a single aggregated FROST key.
+    pub fn max_federation_size(self) -> Option<u32> {
+        match self {
+            Self::Wsh => Some(MAX_WSH_FEDERATION_SIZE),
+            Self::Tr | Self::Frost => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable, Serialize)]
 /// Connection information sent between peers in order to start config gen
 pub struct PeerSetupCode {

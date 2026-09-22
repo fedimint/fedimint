@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use anyhow::Context as _;
 use bitcoin::Network;
 use bitcoin::secp256k1::SecretKey;
 use fedimint_core::core::ModuleKind;
@@ -113,7 +114,7 @@ impl WalletConfig {
         finality_delay: u32,
         client_default_bitcoin_rpc: BitcoinRpcConfig,
         fee_consensus: FeeConsensus,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         let peg_in_descriptor = if pubkeys.len() == 1 {
             PegInDescriptor::Wpkh(
                 Wpkh::new(
@@ -126,11 +127,13 @@ impl WalletConfig {
             )
         } else {
             PegInDescriptor::Wsh(
-                Wsh::new_sortedmulti(threshold, pubkeys.values().copied().collect()).unwrap(),
+                Wsh::new_sortedmulti(threshold, pubkeys.values().copied().collect()).context(
+                    "Building the P2WSH peg-in multisig, which supports at most 20 guardians",
+                )?,
             )
         };
 
-        Self {
+        Ok(Self {
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
                 network: NetworkLegacyEncodingWrapper(network),
@@ -141,7 +144,7 @@ impl WalletConfig {
                 fee_consensus,
                 client_default_bitcoin_rpc,
             },
-        }
+        })
     }
 }
 

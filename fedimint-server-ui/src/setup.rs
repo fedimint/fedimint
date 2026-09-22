@@ -223,13 +223,11 @@ fn descriptor_kind_from_env() -> WalletDescriptorKind {
 /// Maximum federation size offered in the size dropdown. Taproot
 /// descriptors (Tr / Frost) have constant or near-constant per-input
 /// witness cost regardless of `n`, so larger federations are
-/// economically practical; Wsh's witness grows linearly so we keep its
-/// cap conservative.
+/// economically practical; Wsh is bound by the P2WSH multisig key limit
+/// (see [`WalletDescriptorKind::max_federation_size`]), which the server
+/// enforces as well.
 fn max_federation_size(kind: WalletDescriptorKind) -> u32 {
-    match kind {
-        WalletDescriptorKind::Wsh => 20,
-        WalletDescriptorKind::Tr | WalletDescriptorKind::Frost => 50,
-    }
+    kind.max_federation_size().unwrap_or(50)
 }
 
 fn setup_form_content(
