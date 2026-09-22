@@ -5,7 +5,58 @@
 //! persist, [`crate::pay::OutgoingContractError`] and its relatives, stay in
 //! [`crate::pay`].
 
+use fedimint_client_module::TransactionSubmitError;
+use fedimint_core::core::OperationId;
+use fedimint_lightning::LightningRpcError;
+use fedimint_ln_client::incoming::IncomingSmError;
 use thiserror::Error;
+
+use crate::UnsafeHtlcExpiry;
+
+/// A failure to fund the incoming contract for an HTLC the gateway intercepted.
+///
+/// The gateway buys the payment's preimage from the federation by funding the
+/// incoming contract that the recipient offered. A replay of an HTLC circuit
+/// the gateway already handles is not a failure.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum HandleInterceptedHtlcError {
+    /// The Lightning node could not report its current block height, which
+    /// the HTLC's expiry is checked against.
+    #[error("The Lightning node's block height could not be read")]
+    BlockHeight(#[source] LightningRpcError),
+
+    /// The HTLC expires too soon for the gateway to settle it safely.
+    #[error("The HTLC expires too soon to be settled safely")]
+    UnsafeExpiry(#[from] UnsafeHtlcExpiry),
+
+    /// The federation's offer for this payment could not be turned into an
+    /// incoming contract: it did not arrive in time, violates the fee
+    /// policy, does not match the HTLC, already has a funded contract, or
+    /// the federation could not be asked.
+    #[error("The incoming contract could not be created")]
+    IncomingContract(#[from] IncomingSmError),
+
+    /// The operation id derived while funding disagrees with the one derived
+    /// from the payment hash. This is a bug in this module; it is reported
+    /// instead of panicking so that the caller can fail the HTLC back.
+    #[error(
+        "Operation id derivation must match: {} != {}",
+        .derived.fmt_short(),
+        .expected.fmt_short()
+    )]
+    OperationIdMismatch {
+        /// The id derived from the payment hash.
+        expected: OperationId,
+        /// The id the funding step derived.
+        derived: OperationId,
+    },
+
+    /// The transaction funding the incoming contract could not be built or
+    /// submitted.
+    #[error("The funding transaction could not be submitted")]
+    Transaction(#[from] TransactionSubmitError),
+}
 
 /// A failure reported by the gateway behind [`crate::IGatewayClientV1`].
 ///

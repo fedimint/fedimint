@@ -80,7 +80,7 @@ use self::pay::{
     GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
     OutgoingContractError, OutgoingPaymentError,
 };
-pub use crate::error::GatewayClientV1Error;
+pub use crate::error::{GatewayClientV1Error, HandleInterceptedHtlcError};
 
 /// Exclusive remaining-CLTV safety margin for an intercepted LNv1 HTLC.
 ///
@@ -558,11 +558,22 @@ impl GatewayClientModule {
     /// `current_block_height` resolves to the Lightning backend's absolute best
     /// Bitcoin block height. It is awaited only after replay detection, before
     /// any fresh funding.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`HandleInterceptedHtlcError::BlockHeight`] if
+    /// `current_block_height` fails,
+    /// [`HandleInterceptedHtlcError::UnsafeExpiry`] if the HTLC expires too
+    /// soon, [`HandleInterceptedHtlcError::IncomingContract`]
+    /// if the federation's offer cannot be funded, and
+    /// [`HandleInterceptedHtlcError::Transaction`] if the funding transaction
+    /// cannot be submitted. A replay of a circuit already handled does not
+    /// fail.
     pub async fn gateway_handle_intercepted_htlc(
         &self,
         htlc: Htlc,
-        current_block_height: impl Future<Output = anyhow::Result<u32>>,
-    ) -> anyhow::Result<OperationId> {
+        current_block_height: impl Future<Output = Result<u32, LightningRpcError>>,
+    ) -> Result<OperationId, HandleInterceptedHtlcError> {
         debug!("Handling intercepted HTLC {htlc:?}");
 
         let operation_id = OperationId(htlc.payment_hash.to_byte_array());
@@ -612,7 +623,9 @@ impl GatewayClientModule {
             return Ok(operation_id);
         }
 
-        let current_block_height = current_block_height.await?;
+        let current_block_height = current_block_height
+            .await
+            .map_err(HandleInterceptedHtlcError::BlockHeight)?;
         htlc.ensure_safe_expiry(current_block_height)?;
         let remaining_blocks = htlc.incoming_expiry.saturating_sub(current_block_height);
         if remaining_blocks <= u32::from(LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA) {
@@ -632,10 +645,12 @@ impl GatewayClientModule {
             .await?;
         // Keep the direct derivation above in sync with the funding helper. Return
         // an error instead of panicking so the caller can fail back the HTLC cleanly.
-        anyhow::ensure!(
-            op_id_from_funding == operation_id,
-            "operation id derivation must match: {op_id_from_funding:?} != {operation_id:?}"
-        );
+        if op_id_from_funding != operation_id {
+            return Err(HandleInterceptedHtlcError::OperationIdMismatch {
+                expected: operation_id,
+                derived: op_id_from_funding,
+            });
+        }
 
         let output = ClientOutput {
             output: LightningOutput::V0(client_output.output),

@@ -1400,7 +1400,7 @@ impl Gateway {
                 {
                     Ok(_) => Ok(()),
                     Err(e) => Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
-                        format!("Error intercepting lightning payment {e:?}"),
+                        format!("Error intercepting lightning payment {}", e.fmt_compact()),
                     ))),
                 }
             })

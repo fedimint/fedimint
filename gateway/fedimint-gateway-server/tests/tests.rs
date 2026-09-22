@@ -35,8 +35,8 @@ use fedimint_gw_client::pay::{
     OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
 };
 use fedimint_gw_client::{
-    GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, GatewayMeta, Htlc,
-    SwapParameters,
+    GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, GatewayMeta,
+    HandleInterceptedHtlcError, Htlc, SwapParameters,
 };
 use fedimint_gwv2_client::events::{
     CompleteLightningPaymentSucceeded, IncomingPaymentStarted, IncomingPaymentSucceeded,
@@ -46,8 +46,9 @@ use fedimint_gwv2_client::{
     FinalReceiveState, GatewayClientModuleV2, GatewayClientStateMachinesV2, GatewayOperationMetaV2,
     IncomingCircuitKey,
 };
-use fedimint_lightning::InterceptPaymentRequest;
+use fedimint_lightning::{InterceptPaymentRequest, LightningRpcError};
 use fedimint_ln_client::api::LnFederationApi;
+use fedimint_ln_client::incoming::IncomingSmError;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LightningOperationMeta,
@@ -718,7 +719,7 @@ async fn test_gateway_client_intercept_enforces_expiry_boundary() -> anyhow::Res
             .gateway_handle_intercepted_htlc(htlc.clone(), async { Ok(current_block_height) })
             .await
             .expect_err("HTLC at the expiry boundary must be rejected");
-        assert!(err.to_string().contains("incoming HTLC expiry is unsafe"));
+        assert_matches!(err, HandleInterceptedHtlcError::UnsafeExpiry(_));
         assert_eq!(
             gateway_client.get_balance_for_btc().await?,
             initial_gateway_balance
@@ -800,7 +801,10 @@ async fn test_gateway_client_intercept_same_circuit_replay_is_idempotent() -> an
 
         let active_replay_op = gateway_ln_module
             .gateway_handle_intercepted_htlc(htlc.clone(), async {
-                anyhow::bail!("backend info must not be queried for active replay")
+                Err(LightningRpcError::FailedToGetNodeInfo {
+                    failure_reason: "backend info must not be queried for active replay"
+                        .to_string(),
+                })
             })
             .await?;
         assert_eq!(first_op, active_replay_op);
@@ -822,7 +826,10 @@ async fn test_gateway_client_intercept_same_circuit_replay_is_idempotent() -> an
 
         let terminal_replay_op = gateway_ln_module
             .gateway_handle_intercepted_htlc(htlc, async {
-                anyhow::bail!("backend info must not be queried for inactive replay")
+                Err(LightningRpcError::FailedToGetNodeInfo {
+                    failure_reason: "backend info must not be queried for inactive replay"
+                        .to_string(),
+                })
             })
             .await?;
         assert_eq!(first_op, terminal_replay_op);
@@ -867,7 +874,12 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
             Ok(_) => panic!(
                 "Expected incoming offer validation to fail because the offer does not exist"
             ),
-            Err(e) => assert_eq!(e.to_string(), "Timed out fetching the offer".to_string()),
+            Err(e) => assert_matches!(
+                e,
+                HandleInterceptedHtlcError::IncomingContract(
+                    IncomingSmError::TimeoutFetchingOffer { .. }
+                )
+            ),
         }
 
         Ok(())
@@ -913,9 +925,9 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
         {
             Ok(_) => panic!("Expected incoming offer validation to fail due to lack of funds"),
             Err(e) => {
-                let TransactionSubmitError::PrimaryModule(cause) = e
-                    .downcast::<TransactionSubmitError>()
-                    .expect("funding the HTLC fails at transaction submission")
+                let HandleInterceptedHtlcError::Transaction(TransactionSubmitError::PrimaryModule(
+                    cause,
+                )) = e
                 else {
                     panic!("Expected the primary module to reject the funding");
                 };
