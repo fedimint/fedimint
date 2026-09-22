@@ -1743,10 +1743,35 @@ impl_frost_encodable!(
     frost_secp256k1_tr::round1::SigningNonces
 );
 
+/// Placeholder emitted in place of each secret nonce by the `Serialize` impl
+/// of [`FrostSigningNonces`].
+const REDACTED_NONCE: &str = "<redacted>";
+
+/// Diagnostic (`dump_database`) serialization only — the DB encoding goes
+/// through `impl_frost_encodable!` and is unaffected.
+///
+/// The hiding and binding nonces are this guardian's per-signature secrets:
+/// a dump captured while a nonce is still buffered, combined with the
+/// signature share later broadcast with it, reveals the guardian's
+/// long-lived FROST signing share. So this impl deliberately never emits
+/// them and only carries the public commitment (the same value the DB key
+/// holds), mirroring the redacting `Debug` impl of `SigningNonces` in
+/// `frost-core`.
 impl serde::Serialize for FrostSigningNonces {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let bytes = self.0.serialize().map_err(serde::ser::Error::custom)?;
-        serializer.serialize_str(&fedimint_core::hex::encode(bytes))
+        use serde::ser::SerializeStruct as _;
+
+        let commitments = self
+            .0
+            .commitments()
+            .serialize()
+            .map_err(serde::ser::Error::custom)?;
+
+        let mut state = serializer.serialize_struct("FrostSigningNonces", 3)?;
+        state.serialize_field("hiding", REDACTED_NONCE)?;
+        state.serialize_field("binding", REDACTED_NONCE)?;
+        state.serialize_field("commitments", &fedimint_core::hex::encode(commitments))?;
+        state.end()
     }
 }
 
@@ -1768,24 +1793,24 @@ impl serde::Serialize for FrostSigningPackage {
 
 #[cfg(test)]
 mod tests {
-    //! Determinism tests for `pick_signing_session`. Each test asserts a
-    //! specific invariant about the function's input/output relationship
-    //! over synthetic DB state. Built on `MemDatabase` so they run as
-    //! cheap unit tests.
+    //! Determinism tests for `pick_signing_session`, plus the
+    //! `dump_database` redaction contract for `FrostSigningNonces`. Each
+    //! test asserts a specific invariant over synthetic DB state. Built on
+    //! `MemDatabase` so they run as cheap unit tests.
     use std::collections::{BTreeMap, BTreeSet};
     use std::str::FromStr;
 
     use bitcoin::Txid;
-    use fedimint_core::PeerId;
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt};
+    use fedimint_core::{PeerId, hex};
     use fedimint_walletv2_common::taproot::frost::FrostSigningCommitments;
     use frost_secp256k1_tr::keys::{IdentifierList, KeyPackage, SigningShare};
     use frost_secp256k1_tr::round1;
     use rand::rngs::OsRng;
 
-    use super::pick_signing_session;
-    use crate::db::FrostSigningCommitmentsKey;
+    use super::{FrostSigningNonces, REDACTED_NONCE, pick_signing_session};
+    use crate::db::{FrostSigningCommitmentsKey, FrostSigningNoncesKey};
 
     const N: usize = 7;
     const THRESHOLD: usize = 5;
@@ -1989,5 +2014,66 @@ mod tests {
             assert_eq!(a, b, "attempt {i}: results diverge");
             suspects.insert(PeerId::from_str(&i.to_string()).unwrap());
         }
+    }
+
+    /// Regression for the dump-redaction contract: the serde output of a
+    /// `FrostSigningNonces` value — what `dump_database` emits for the
+    /// `FrostSigningNonce` prefix — must never contain the secret hiding /
+    /// binding nonces in any form. A dump captured before a nonce is
+    /// consumed, plus the signature share later broadcast with it, would
+    /// otherwise reveal this guardian's long-lived signing share. Goes
+    /// through a real DB round-trip so the value serialized is the decoded
+    /// at-rest one, exactly as in the dump.
+    #[tokio::test]
+    async fn signing_nonces_dump_never_contains_secret_nonces() {
+        let signing_share = signing_share_for_tests();
+        let (nonces, commitments) = round1::commit(&signing_share, &mut OsRng);
+
+        let hiding_hex = hex::encode(nonces.hiding().serialize());
+        let binding_hex = hex::encode(nonces.binding().serialize());
+        let full_hex = hex::encode(nonces.serialize().expect("nonces serialize"));
+        let commitments_hex = hex::encode(commitments.serialize().expect("commitments serialize"));
+
+        let db = MemDatabase::new().into_database();
+        let key = FrostSigningNoncesKey(FrostSigningCommitments(commitments));
+        let mut dbtx = db.begin_transaction().await;
+        dbtx.insert_new_entry(&key, &FrostSigningNonces(nonces))
+            .await;
+        dbtx.commit_tx().await;
+
+        let value = db
+            .begin_transaction_nc()
+            .await
+            .get_value(&key)
+            .await
+            .expect("nonce was just stored");
+
+        let json = serde_json::to_string(&value).expect("serialize nonces");
+        assert!(!json.contains(&hiding_hex), "hiding nonce leaked: {json}");
+        assert!(!json.contains(&binding_hex), "binding nonce leaked: {json}");
+        assert!(
+            !json.contains(&full_hex),
+            "serialized nonces leaked: {json}"
+        );
+        assert!(
+            json.contains(REDACTED_NONCE),
+            "missing redaction marker: {json}"
+        );
+        assert!(
+            json.contains(&commitments_hex),
+            "public commitment should survive redaction: {json}"
+        );
+
+        // `Debug` delegates to frost-core's redacting impl; pin that too so a
+        // dependency upgrade can't silently start printing secrets.
+        let debug = format!("{value:?}");
+        assert!(
+            !debug.contains(&hiding_hex),
+            "hiding nonce in Debug: {debug}"
+        );
+        assert!(
+            !debug.contains(&binding_hex),
+            "binding nonce in Debug: {debug}"
+        );
     }
 }

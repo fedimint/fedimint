@@ -298,6 +298,9 @@ impl ModuleInit for WalletInit {
                     );
                 }
                 DbKeyPrefix::FrostSigningNonce => {
+                    // The value's `Serialize` impl redacts the secret
+                    // hiding / binding nonces and only emits the public
+                    // commitment — see `FrostSigningNonces`.
                     push_db_pair_items!(
                         dbtx,
                         FrostSigningNoncesPrefix,
