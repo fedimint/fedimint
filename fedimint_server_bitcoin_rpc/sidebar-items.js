@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["bitcoind","esplora","metrics","tracked"],"struct":["BitcoindClientWithFallback"]};
+window.SIDEBAR_ITEMS = {"mod":["bitcoind","esplora","hybrid","metrics","tracked"],"struct":["BitcoindClientWithFallback"]};
