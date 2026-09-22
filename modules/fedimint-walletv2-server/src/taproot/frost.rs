@@ -518,9 +518,10 @@ impl Wallet {
     /// - any unbroadcasted commitments from our local nonce buffer,
     /// - an advance vote for any tx whose latest attempt has been waiting
     ///   longer than `LOCAL_ADVANCE_TIMEOUT`,
-    /// - our pre-computed signature share for each unsigned tx whose latest
-    ///   attempt includes us in the signing session and whose broadcast hasn't
-    ///   yet landed in `FrostSignatureShareKey`.
+    /// - our pre-computed signature share for every attempt of each unsigned tx
+    ///   that includes us in its signing session and whose broadcast hasn't yet
+    ///   landed in `FrostSignatureShareKey` — not just the latest attempt,
+    ///   since a late share clears us from the suspect set.
     ///
     /// Re-broadcasts are gated by `FROST_REBROADCAST_INTERVAL` to recover
     /// from `AlephBFT` silently dropping a unit (more likely with larger
@@ -534,10 +535,10 @@ impl Wallet {
         let mut items = self.propose_commitments(dbtx, now).await;
 
         // Per unsigned tx: an advance vote if its latest attempt is stuck,
-        // and — when we're in that attempt's signing session — our
-        // signature share. The signing_session is read from
-        // FrostSigningAttemptKey (set when the attempt was created), so
-        // the choice of signers is a per-tx fact, not a global constant.
+        // and our signature share for every attempt whose signing session
+        // we're in. The signing_session is read from FrostSigningAttemptKey
+        // (set when the attempt was created), so the choice of signers is a
+        // per-tx fact, not a global constant.
         let txids = dbtx
             .find_by_prefix(&UnsignedTxPrefix)
             .await
@@ -545,33 +546,37 @@ impl Wallet {
             .collect::<Vec<_>>()
             .await;
         for txid in txids {
-            // Find the latest attempt for this tx — attempts are
-            // append-only, so the highest attempt number is the
-            // current one. None means the tx hasn't reached the
-            // FROST signing path yet (e.g. first peg-in, which only
-            // inserts the FederationWalletKey).
-            let Some((latest_attempt, attempt)) = dbtx
+            // Every attempt of this tx. Attempts are append-only, so the
+            // highest number is the current one. Empty means the tx hasn't
+            // reached the FROST signing path yet (e.g. first peg-in, which
+            // only inserts the FederationWalletKey).
+            let attempts = dbtx
                 .find_by_prefix(&FrostSigningAttemptTxidPrefix(txid))
                 .await
                 .map(|(k, v)| (k.attempt, v))
                 .collect::<Vec<_>>()
-                .await
-                .into_iter()
-                .max_by_key(|(att, _)| *att)
-            else {
-                continue;
-            };
+                .await;
 
-            items.extend(
-                self.propose_advance_vote(dbtx, txid, latest_attempt, now)
-                    .await,
-            );
-
-            if attempt.signing_session.contains(&self.our_peer_id) {
+            // Only the latest attempt can be advanced past.
+            if let Some(latest_attempt) = attempts.iter().map(|(attempt, _)| *attempt).max() {
                 items.extend(
-                    self.propose_signature_share(dbtx, txid, latest_attempt, now)
+                    self.propose_advance_vote(dbtx, txid, latest_attempt, now)
                         .await,
                 );
+            }
+
+            // But every attempt we signed for keeps its share on offer until
+            // it's delivered. A share that lands late clears us from the
+            // suspect set (see `compute_and_store_frost_signature_shares`),
+            // which can be exactly what lets a later attempt find a viable
+            // session again.
+            for (attempt, record) in &attempts {
+                if record.signing_session.contains(&self.our_peer_id) {
+                    items.extend(
+                        self.propose_signature_share(dbtx, txid, *attempt, now)
+                            .await,
+                    );
+                }
             }
         }
 
@@ -678,11 +683,11 @@ impl Wallet {
         Some(WalletConsensusItem::FrostAdvanceVote(txid, latest_attempt))
     }
 
-    /// Broadcast our pre-computed signature share for `(txid,
-    /// latest_attempt)`. The share was computed inline in `process_input`
-    /// / `process_output` when the unsigned tx was created and stashed
-    /// under `LocalFrostSignatureShareKey`; here we surface it so the
-    /// other signers can aggregate. Receivers look up the (deterministic)
+    /// Broadcast our pre-computed signature share for `(txid, attempt)`.
+    /// The share was computed when the attempt was created (see
+    /// `compute_and_store_frost_signature_shares`) and stashed under
+    /// `LocalFrostSignatureShareKey`; here we surface it so the other
+    /// signers can aggregate. Receivers look up the (deterministic)
     /// `SigningPackage` and the `FederationTx` in their own DB by txid.
     /// Returns `None` when our share has already been delivered through
     /// consensus (also clears the pacing entry), when no share is stashed
@@ -691,7 +696,7 @@ impl Wallet {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         txid: Txid,
-        latest_attempt: u32,
+        attempt: u32,
         now: SystemTime,
     ) -> Option<WalletConsensusItem> {
         // Skip if our share has already been delivered through
@@ -699,7 +704,7 @@ impl Wallet {
         let already_delivered = dbtx
             .get_value(&FrostSignatureShareKey {
                 txid,
-                attempt: latest_attempt,
+                attempt,
                 peer_id: self.our_peer_id,
             })
             .await
@@ -707,15 +712,12 @@ impl Wallet {
         if already_delivered {
             self.frost
                 .broadcast_signature_shares
-                .clear(&(txid, latest_attempt));
+                .clear(&(txid, attempt));
             return None;
         }
 
         let shares = dbtx
-            .get_value(&LocalFrostSignatureShareKey {
-                txid,
-                attempt: latest_attempt,
-            })
+            .get_value(&LocalFrostSignatureShareKey { txid, attempt })
             .await?;
 
         // Broadcast at most once per `FROST_REBROADCAST_INTERVAL`
@@ -723,7 +725,7 @@ impl Wallet {
         if !self
             .frost
             .broadcast_signature_shares
-            .try_claim((txid, latest_attempt), now)
+            .try_claim((txid, attempt), now)
         {
             return None;
         }
@@ -733,9 +735,7 @@ impl Wallet {
             "Broadcasting our FROST signature share"
         );
         Some(WalletConsensusItem::FrostSignatureShare(
-            txid,
-            latest_attempt,
-            shares,
+            txid, attempt, shares,
         ))
     }
 
