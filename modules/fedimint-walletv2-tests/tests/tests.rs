@@ -310,12 +310,13 @@ mod db {
     use fedimint_walletv2_common::{FederationWallet, TxInfo, WalletCommonInit};
     use fedimint_walletv2_server::db::{
         BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, FederationWalletKey, FeeRateVoteKey,
-        FeeRateVotePrefix, FrostAdvanceVotePrefix, FrostFinalizationStatPrefix,
-        FrostSignatureSharePrefix, FrostSigningAttemptPrefix, FrostSigningCommitmentsPrefix,
-        FrostSigningNoncesPrefix, FrostSigningPackagesPrefix, LocalFrostSignatureSharePrefix,
-        Output, OutputKey, OutputPrefix, SchnorrSignaturesPrefix, SignaturesKey, SignaturesPrefix,
-        SpentOutputKey, SpentOutputPrefix, TxInfoIndexKey, TxInfoIndexPrefix, TxInfoKey,
-        TxInfoPrefix, UnconfirmedTxKey, UnconfirmedTxPrefix, UnsignedTxKey, UnsignedTxPrefix,
+        FeeRateVotePrefix, FrostAdvanceVotePrefix, FrostConsumedCommitmentPrefix,
+        FrostFinalizationStatPrefix, FrostSignatureSharePrefix, FrostSigningAttemptPrefix,
+        FrostSigningCommitmentsPrefix, FrostSigningNoncesPrefix, FrostSigningPackagesPrefix,
+        LocalFrostSignatureSharePrefix, Output, OutputKey, OutputPrefix, SchnorrSignaturesPrefix,
+        SignaturesKey, SignaturesPrefix, SpentOutputKey, SpentOutputPrefix, TxInfoIndexKey,
+        TxInfoIndexPrefix, TxInfoKey, TxInfoPrefix, UnconfirmedTxKey, UnconfirmedTxPrefix,
+        UnsignedTxKey, UnsignedTxPrefix,
     };
     use fedimint_walletv2_server::{FederationTx, SpentTxOut};
     use futures::StreamExt;
@@ -704,6 +705,19 @@ mod db {
                             commitments.is_empty(),
                             "the v0 snapshot predates FROST, and no migration writes signing \
                              commitments, got {commitments:?}"
+                        );
+                    }
+                    DbKeyPrefix::FrostConsumedCommitment => {
+                        let consumed = dbtx
+                            .find_by_prefix(&FrostConsumedCommitmentPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+
+                        ensure!(
+                            consumed.is_empty(),
+                            "the v0 snapshot predates FROST, and no migration writes consumed \
+                             commitments, got {consumed:?}"
                         );
                     }
                     DbKeyPrefix::FrostSigningNonce => {

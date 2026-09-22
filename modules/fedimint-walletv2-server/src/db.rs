@@ -35,6 +35,7 @@ pub enum DbKeyPrefix {
     FrostAdvanceVote = 0x40,
     LocalFrostSignatureShare = 0x41,
     FrostFinalizationStat = 0x42,
+    FrostConsumedCommitment = 0x43,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -241,6 +242,32 @@ impl_db_lookup!(
     key = FrostSigningCommitmentsKey,
     query_prefix = FrostSigningCommitmentsPrefix,
     query_prefix = FrostSigningCommitmentsPeerPrefix
+);
+
+/// Tombstone for a commitment that has been consumed into a signing package.
+/// Consumption deletes the commitment from the available pool
+/// ([`FrostSigningCommitmentsKey`]), so the pool alone can't tell a fresh
+/// commitment from a delayed retransmit of a used one — this record can.
+/// Written and read only inside consensus processing, hence replicated.
+/// Never pruned: one small key per consumed commitment.
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct FrostConsumedCommitmentKey {
+    pub peer_id: PeerId,
+    pub frost_commitments: FrostSigningCommitments,
+}
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct FrostConsumedCommitmentPrefix;
+
+impl_db_record!(
+    key = FrostConsumedCommitmentKey,
+    value = (),
+    db_prefix = DbKeyPrefix::FrostConsumedCommitment
+);
+
+impl_db_lookup!(
+    key = FrostConsumedCommitmentKey,
+    query_prefix = FrostConsumedCommitmentPrefix
 );
 
 #[derive(Debug, Clone, Encodable, Decodable)]

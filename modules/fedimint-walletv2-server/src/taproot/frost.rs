@@ -34,11 +34,11 @@ use secp256k1::{PublicKey, Scalar};
 
 use crate::db::{
     FrostAdvanceVoteAttemptPrefix, FrostAdvanceVoteKey, FrostAdvanceVoteTxidPrefix,
-    FrostFinalizationStatKey, FrostSignatureShareAttemptPrefix, FrostSignatureShareKey,
-    FrostSignatureShareTxidPrefix, FrostSigningAttempt, FrostSigningAttemptKey,
-    FrostSigningAttemptTxidPrefix, FrostSigningCommitmentsKey, FrostSigningCommitmentsPeerPrefix,
-    FrostSigningNoncesKey, FrostSigningNoncesPrefix, FrostSigningPackagesKey,
-    FrostSigningPackagesTxidPrefix, LocalFrostSignatureShareKey,
+    FrostConsumedCommitmentKey, FrostFinalizationStatKey, FrostSignatureShareAttemptPrefix,
+    FrostSignatureShareKey, FrostSignatureShareTxidPrefix, FrostSigningAttempt,
+    FrostSigningAttemptKey, FrostSigningAttemptTxidPrefix, FrostSigningCommitmentsKey,
+    FrostSigningCommitmentsPeerPrefix, FrostSigningNoncesKey, FrostSigningNoncesPrefix,
+    FrostSigningPackagesKey, FrostSigningPackagesTxidPrefix, LocalFrostSignatureShareKey,
     LocalFrostSignatureShareTxidPrefix, UnsignedTxKey, UnsignedTxPrefix,
 };
 use crate::taproot::attach_key_path_witnesses;
@@ -389,6 +389,17 @@ impl Wallet {
                 commitment.0.frost_commitments.clone(),
             );
             dbtx.remove_entry(&commitment.0).await;
+            // Remember it for good: the pool entry is gone and its owner's
+            // nonce is spent, so a delayed retransmit of this commitment
+            // must not pass for a new one — see `process_frost_commitments`.
+            dbtx.insert_new_entry(
+                &FrostConsumedCommitmentKey {
+                    peer_id: *peer_id,
+                    frost_commitments: commitment.0.frost_commitments,
+                },
+                &(),
+            )
+            .await;
         }
         Ok(commitments_map)
     }
@@ -767,7 +778,9 @@ impl Wallet {
     /// in-flight entry if it's our own broadcast coming back, and run
     /// `try_progress_pending_signings` to opportunistically advance any
     /// tx that was waiting on commitment-buffer availability. Duplicates
-    /// are rejected so they don't pollute `AcceptedItemKey` on recovery.
+    /// and retransmits of already-consumed commitments are rejected so
+    /// they don't pollute `AcceptedItemKey` on recovery, and so the pool
+    /// never holds a commitment its owner can no longer sign with.
     pub(crate) async fn process_frost_commitments(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -787,6 +800,22 @@ impl Wallet {
         ensure!(
             commitment_count < MAX_PEER_COMMITMENT_POOL,
             "FROST commitment pool for peer {peer} is full"
+        );
+
+        // A consumed commitment has left the pool, so the redundancy check
+        // below can't recognise a delayed retransmit of it — yet its owner's
+        // nonce is spent, so accepting it again would plant a commitment
+        // nobody can sign with, stalling every attempt that selects it. The
+        // tombstone written on consumption is replicated, so all guardians
+        // reject it alike.
+        ensure!(
+            dbtx.get_value(&FrostConsumedCommitmentKey {
+                peer_id: peer,
+                frost_commitments: commitments.clone(),
+            })
+            .await
+            .is_none(),
+            "FROST signing commitment from peer {peer} was already consumed"
         );
 
         // Reject duplicates so they're not stored in `AcceptedItemKey`

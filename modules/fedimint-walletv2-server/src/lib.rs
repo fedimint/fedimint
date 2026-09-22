@@ -95,11 +95,11 @@ use tracing::{debug, info};
 
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, FeeRateVoteKey, FeeRateVotePrefix,
-    FrostAdvanceVotePrefix, FrostFinalizationStatPrefix, FrostSignatureSharePrefix,
-    FrostSigningAttempt, FrostSigningAttemptPrefix, FrostSigningCommitmentsPrefix,
-    FrostSigningNoncesPrefix, FrostSigningPackagesPrefix, LocalFrostSignatureSharePrefix,
-    SchnorrSignaturesPrefix, TxInfoKey, TxInfoPrefix, UnconfirmedTxKey, UnconfirmedTxPrefix,
-    UnsignedTxKey, UnsignedTxPrefix,
+    FrostAdvanceVotePrefix, FrostConsumedCommitmentPrefix, FrostFinalizationStatPrefix,
+    FrostSignatureSharePrefix, FrostSigningAttempt, FrostSigningAttemptPrefix,
+    FrostSigningCommitmentsPrefix, FrostSigningNoncesPrefix, FrostSigningPackagesPrefix,
+    LocalFrostSignatureSharePrefix, SchnorrSignaturesPrefix, TxInfoKey, TxInfoPrefix,
+    UnconfirmedTxKey, UnconfirmedTxPrefix, UnsignedTxKey, UnsignedTxPrefix,
 };
 use crate::metrics::{
     WALLET_BLOCK_COUNT, WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS,
@@ -295,6 +295,16 @@ impl ModuleInit for WalletInit {
                         (),
                         wallet,
                         "FROST Signing Commitments"
+                    );
+                }
+                DbKeyPrefix::FrostConsumedCommitment => {
+                    push_db_pair_items!(
+                        dbtx,
+                        FrostConsumedCommitmentPrefix,
+                        FrostConsumedCommitmentKey,
+                        (),
+                        wallet,
+                        "FROST Consumed Commitments"
                     );
                 }
                 DbKeyPrefix::FrostSigningNonce => {
