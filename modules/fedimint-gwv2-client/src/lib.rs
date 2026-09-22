@@ -386,8 +386,9 @@ impl GatewayClientModuleV2 {
     /// Fails with a [`GatewaySendPaymentError`] if the request is refused
     /// before any payment starts: the contract is another gateway's, the
     /// request's signature does not verify, the federation has not confirmed
-    /// the contract or cannot be asked, the invoice has no amount or does not
-    /// match the contract, or the gateway cannot price the payment.
+    /// this contract at that outpoint or cannot be asked, the invoice has no
+    /// amount or does not match the contract, or the gateway cannot price the
+    /// payment.
     pub async fn send_payment(
         &self,
         payload: SendPaymentPayload,
@@ -933,8 +934,8 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
     /// # Errors
     ///
     /// Fails with a [`GatewayClientV2Error`] if the invoice is payable by a
-    /// direct swap but the gateway cannot fund the contract for it. The send
-    /// state machine cancels the payment on a failure.
+    /// direct swap but the gateway holds no incoming contract it can use for
+    /// it. The send state machine cancels the payment on a failure.
     async fn is_direct_swap(
         &self,
         invoice: &Bolt11Invoice,

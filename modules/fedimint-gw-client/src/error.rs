@@ -1,9 +1,7 @@
 //! Error types of the gateway's LNv1 client module.
 //!
-//! Every failure this module reports to its callers is named here, so there is
-//! one place for an integrator to look. The payment errors its state machines
-//! persist, [`crate::pay::OutgoingContractError`] and its relatives, stay in
-//! [`crate::pay`].
+//! The error types of this module's public operations live here; the payment
+//! errors its state machines persist stay in [`crate::pay`].
 
 use fedimint_client_module::{AddStateMachinesError, TransactionSubmitError};
 use fedimint_core::core::OperationId;
@@ -15,7 +13,7 @@ use thiserror::Error;
 
 use crate::UnsafeHtlcExpiry;
 
-/// A failure to fund the incoming contract for an HTLC the gateway intercepted.
+/// A failure to handle an HTLC the gateway intercepted.
 ///
 /// The gateway buys the payment's preimage from the federation by funding the
 /// incoming contract that the recipient offered. A replay of an HTLC circuit
@@ -62,10 +60,11 @@ pub enum HandleInterceptedHtlcError {
 
 /// A failure to fund the incoming contract of a direct swap.
 ///
-/// A direct swap pays an invoice issued in another federation served by this
-/// gateway by funding the matching incoming contract in this one, so the
-/// payment never touches the Lightning network. Joining a swap that is already
-/// under way, or declining to start one, is not a failure.
+/// A direct swap pays an invoice issued in this federation on behalf of a
+/// client of another federation served by the same gateway, by funding the
+/// invoice's incoming contract here, so the payment never touches the
+/// Lightning network. Joining a swap that is already under way, or declining
+/// to start one, is not a failure.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum HandleDirectSwapError {

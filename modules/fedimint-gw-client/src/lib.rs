@@ -1383,9 +1383,9 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
     ///
     /// # Errors
     ///
-    /// Fails with a [`GatewayClientV1Error`] if the gateway cannot fund an LNv2
-    /// contract for this payment. The pay state machine treats a failure like
-    /// `None` and pays the invoice some other way.
+    /// Fails with a [`GatewayClientV1Error`] if the gateway holds no LNv2
+    /// incoming contract it can use for this payment. The pay state machine
+    /// treats a failure like `None` and pays the invoice some other way.
     async fn is_lnv2_direct_swap(
         &self,
         payment_hash: sha256::Hash,

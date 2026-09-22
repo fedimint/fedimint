@@ -756,6 +756,62 @@ async fn test_gateway_client_intercept_enforces_expiry_boundary() -> anyhow::Res
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn intercepting_reports_a_failing_block_height() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, user_client, _| async move {
+        let gateway_id = gateway.http_gateway_id().await;
+        let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+        let initial_gateway_balance = sats(1000);
+        gateway_client
+            .get_first_module::<DummyClientModule>()?
+            .mock_receive(initial_gateway_balance, AmountUnit::BITCOIN)
+            .await?;
+
+        let invoice_amount = sats(100);
+        let ln_module = user_client.get_first_module::<LightningClientModule>()?;
+        let lightning_gateway = ln_module.select_gateway(&gateway_id).await;
+        let (_invoice_op, invoice, _) = ln_module
+            .create_bolt11_invoice(
+                invoice_amount,
+                Bolt11InvoiceDescription::Direct(Description::new(
+                    "failing block height".to_string(),
+                )?),
+                None,
+                "test intercept HTLC failing block height",
+                lightning_gateway,
+            )
+            .await?;
+
+        let htlc = Htlc {
+            payment_hash: *invoice.payment_hash(),
+            incoming_amount_msat: invoice_amount,
+            outgoing_amount_msat: invoice_amount,
+            incoming_expiry: fedimint_gw_client::LNV1_HTLC_EXPIRY_SAFETY_MARGIN + 1,
+            short_channel_id: Some(1),
+            incoming_chan_id: 2,
+            htlc_id: 1,
+        };
+        let gateway_ln_module = gateway_client.get_first_module::<GatewayClientModule>()?;
+
+        let err = gateway_ln_module
+            .gateway_handle_intercepted_htlc(htlc, async {
+                Err(LightningRpcError::FailedToGetNodeInfo {
+                    failure_reason: "no height".to_string(),
+                })
+            })
+            .await
+            .expect_err("a failing height lookup must not be swallowed or reported wrong");
+        assert_matches!(err, HandleInterceptedHtlcError::BlockHeight(_));
+        assert_eq!(
+            gateway_client.get_balance_for_btc().await?,
+            initial_gateway_balance
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_gateway_client_intercept_same_circuit_replay_is_idempotent() -> anyhow::Result<()> {
     single_federation_test(|gateway, _, fed, user_client, _| async move {
         let gateway_id = gateway.http_gateway_id().await;
@@ -3287,14 +3343,14 @@ async fn gateway_client_subscriptions_reject_an_unknown_operation() -> anyhow::R
         let gateway_module = gateway_client.get_first_module::<GatewayClientModule>()?;
         let unknown = OperationId::new_random();
 
-        assert!(matches!(
+        assert_matches!(
             gateway_module.gateway_subscribe_ln_pay(unknown).await,
             Err(OperationLookupError::NotFound(_))
-        ));
-        assert!(matches!(
+        );
+        assert_matches!(
             gateway_module.gateway_subscribe_ln_receive(unknown).await,
             Err(OperationLookupError::NotFound(_))
-        ));
+        );
 
         Ok(())
     })
