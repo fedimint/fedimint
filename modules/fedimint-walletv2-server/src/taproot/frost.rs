@@ -164,6 +164,18 @@ impl Wallet {
     /// produce their `SignatureShare`s, stored under their own `peer_id` for
     /// the next `consensus_proposal` to broadcast.
     ///
+    /// Two phases, strictly in this order:
+    /// 1. Replicated: pick the session, consume the commitments, persist the
+    ///    signing packages and the attempt record. This touches only
+    ///    consensus-replicated state, so every guardian ends up with the same
+    ///    DB. Its one failure — no viable session — is deterministic and
+    ///    happens before any write; it is the `Err` callers retry on.
+    /// 2. Local: if we're in the session, sign (`sign_attempt`). A failure here
+    ///    (e.g. a nonce lost to a DB restore) is this guardian's problem alone:
+    ///    it's logged, no share is stashed, and the federation advances past
+    ///    us. It never reaches replicated state or the returned `Err`, which
+    ///    would otherwise split consensus.
+    ///
     /// `attempt` is `0` when this runs from `process_input` /
     /// `process_output` (initial signing), and `prev.attempt + 1` when
     /// triggered from a successful advance vote — same body, different
@@ -224,63 +236,25 @@ impl Wallet {
         .ok_or_else(|| {
             anyhow!("Insufficient FROST commitment buffer across federation for tx {txid}")
         })?;
-        let is_signer = signing_session.contains(&self.our_peer_id);
 
-        let key_package = if is_signer {
-            Some(
-                self.cfg
-                    .private
-                    .frost_key_package
-                    .clone()
-                    .ok_or_else(|| anyhow!("FROST federation must have a frost_key_package"))?,
-            )
-        } else {
-            None
-        };
-
-        let mut signing_packages: Vec<FrostSigningPackage> =
-            Vec::with_capacity(unsigned_tx.tx.input.len());
-        let mut signature_shares: Vec<SignatureShare> = Vec::new();
-
+        // --- Phase 1: replicated ---------------------------------------
         let messages = self.build_frost_key_spend_messages(unsigned_tx);
-
-        for (input_index, message) in messages.iter().enumerate() {
-            let utxo = &unsigned_tx.spent_tx_outs[input_index];
-
+        let mut signing_packages: Vec<FrostSigningPackage> = Vec::with_capacity(messages.len());
+        for message in &messages {
+            // Can't fail after `pick_signing_session`, which only selects
+            // peers holding one commitment per input — and if it somehow
+            // did, it would fail identically on every guardian.
             let commitments_map = self
                 .consume_session_commitments(dbtx, &signing_session)
                 .await?;
-
             let signing_package_commitments: BTreeMap<Identifier, _> = commitments_map
                 .iter()
                 .map(|(id, commitment)| (*id, commitment.0))
                 .collect();
-            let signing_package = SigningPackage::new(signing_package_commitments, message);
-
-            if let Some(key_package) = &key_package {
-                let nonce = self.consume_our_nonce(dbtx, &commitments_map).await?;
-
-                let tweaked_key_package = apply_utxo_tweak_to_key_package(key_package, &utxo.tweak);
-                // Single-leaf TapTree: merkle root = leaf hash.
-                let merkle_root = self.tap_leaf_hash(&utxo.tweak).to_byte_array();
-
-                let signature_share = frost::round2::sign_with_tweak(
-                    &signing_package,
-                    &nonce,
-                    &tweaked_key_package,
-                    Some(&merkle_root),
-                )?;
-
-                tracing::info!(
-                    target: LOG_MODULE_WALLETV2,
-                    input_index,
-                    "Generated FROST signature share for input"
-                );
-
-                signature_shares.push(signature_share);
-            }
-
-            signing_packages.push(FrostSigningPackage(signing_package));
+            signing_packages.push(FrostSigningPackage(SigningPackage::new(
+                signing_package_commitments,
+                message,
+            )));
         }
 
         dbtx.insert_new_entry(
@@ -303,21 +277,94 @@ impl Wallet {
         )
         .await;
 
-        if is_signer {
-            // Local-only stash. The canonical, consensus-replicated
-            // `FrostSignatureShareKey` entry is written when our broadcast
-            // comes back through AlephBFT. Splitting these keeps
-            // `pick_signing_session`'s suspects (which reads
-            // `FrostSignatureShareKey`) a pure function of consensus state
-            // — every guardian agrees on it at every item boundary.
-            dbtx.insert_new_entry(
-                &LocalFrostSignatureShareKey { txid, attempt },
-                &FrostSignatureShares { signature_shares },
-            )
-            .await;
+        // --- Phase 2: local --------------------------------------------
+        if signing_session.contains(&self.our_peer_id) {
+            match self
+                .sign_attempt(dbtx, unsigned_tx, &signing_packages)
+                .await
+            {
+                Ok(signature_shares) => {
+                    // Local-only stash. The canonical, consensus-replicated
+                    // `FrostSignatureShareKey` entry is written when our
+                    // broadcast comes back through AlephBFT. Splitting these
+                    // keeps `pick_signing_session`'s suspects (which reads
+                    // `FrostSignatureShareKey`) a pure function of consensus
+                    // state — every guardian agrees on it at every item
+                    // boundary.
+                    dbtx.insert_new_entry(
+                        &LocalFrostSignatureShareKey { txid, attempt },
+                        &signature_shares,
+                    )
+                    .await;
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        target: LOG_MODULE_WALLETV2,
+                        ?txid,
+                        attempt,
+                        err = %err.fmt_compact_anyhow(),
+                        "Couldn't produce our FROST signature share; the federation will advance past us"
+                    );
+                }
+            }
         }
 
         Ok(())
+    }
+
+    /// The local half of attempt creation: consume our nonce for every
+    /// input's signing package and produce our per-input signature shares.
+    ///
+    /// All nonces are taken out of the buffer before any signing happens: a
+    /// commitment that has entered a (replicated) signing package must never
+    /// be signed with again, whether or not this attempt yields our share.
+    /// Errors are local faults — a nonce lost to a DB restore, a
+    /// package/nonce mismatch — and are contained by the caller.
+    async fn sign_attempt(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        unsigned_tx: &FederationTx,
+        signing_packages: &[FrostSigningPackage],
+    ) -> anyhow::Result<FrostSignatureShares> {
+        let mut nonces = Vec::with_capacity(signing_packages.len());
+        for signing_package in signing_packages {
+            nonces.push(self.consume_our_nonce(dbtx, &signing_package.0).await);
+        }
+        let nonces = nonces.into_iter().collect::<anyhow::Result<Vec<_>>>()?;
+
+        // Invariant: `Wallet::new` fails fast at startup if a FROST federation
+        // is missing its key package, and this path is FROST-only.
+        let key_package = self
+            .cfg
+            .private
+            .frost_key_package
+            .as_ref()
+            .expect("FROST federation must have a frost_key_package");
+
+        let mut signature_shares = Vec::with_capacity(signing_packages.len());
+        for ((signing_package, nonce), utxo) in signing_packages
+            .iter()
+            .zip(nonces)
+            .zip(&unsigned_tx.spent_tx_outs)
+        {
+            let tweaked_key_package = apply_utxo_tweak_to_key_package(key_package, &utxo.tweak);
+            // Single-leaf TapTree: merkle root = leaf hash.
+            let merkle_root = self.tap_leaf_hash(&utxo.tweak).to_byte_array();
+            signature_shares.push(frost::round2::sign_with_tweak(
+                &signing_package.0,
+                &nonce,
+                &tweaked_key_package,
+                Some(&merkle_root),
+            )?);
+        }
+
+        tracing::info!(
+            target: LOG_MODULE_WALLETV2,
+            inputs = signature_shares.len(),
+            "Generated FROST signature shares"
+        );
+
+        Ok(FrostSignatureShares { signature_shares })
     }
 
     /// Take the first available `FrostSigningCommitments` for each peer in
@@ -346,20 +393,22 @@ impl Wallet {
         Ok(commitments_map)
     }
 
-    /// Look up our own `SigningNonces` matching our entry in
-    /// `commitments_map` and remove it from the DB. Only signing-session
-    /// peers should call this — for non-session peers `our_peer_id` won't be
-    /// in the map.
+    /// Take our `SigningNonces` for our commitment in `signing_package` out
+    /// of the local buffer and mint a replacement. Only signing-session
+    /// peers should call this — for non-session peers we're not in the
+    /// package.
     pub(crate) async fn consume_our_nonce(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        commitments_map: &BTreeMap<Identifier, FrostSigningCommitments>,
+        signing_package: &SigningPackage,
     ) -> anyhow::Result<frost::round1::SigningNonces> {
-        let our_commitment = commitments_map
-            .get(&peer_id_to_identifier(self.our_peer_id))
+        let our_commitment = signing_package
+            .signing_commitment(&peer_id_to_identifier(self.our_peer_id))
             .ok_or_else(|| anyhow!("Our peer is not in the signing session"))?;
         let nonce = dbtx
-            .remove_entry(&FrostSigningNoncesKey(our_commitment.clone()))
+            .remove_entry(&FrostSigningNoncesKey(FrostSigningCommitments(
+                our_commitment,
+            )))
             .await
             .ok_or_else(|| {
                 anyhow!("FROST nonce for our own commitment is missing — DB inconsistency")
