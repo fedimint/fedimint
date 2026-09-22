@@ -3518,7 +3518,7 @@ impl Gateway {
         module
             .send_payment(payload)
             .await
-            .map_err(LNv2Error::OutgoingPayment)
+            .map_err(|err| LNv2Error::OutgoingPayment(err.into()))
             .map_err(PublicGatewayError::LNv2)
     }
 

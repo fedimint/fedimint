@@ -45,7 +45,7 @@ use fedimint_gwv2_client::events::{
 };
 use fedimint_gwv2_client::{
     FinalReceiveState, GatewayClientModuleV2, GatewayClientStateMachinesV2, GatewayOperationMetaV2,
-    IncomingCircuitKey,
+    GatewaySendPaymentError, IncomingCircuitKey,
 };
 use fedimint_lightning::{InterceptPaymentRequest, LightningRpcError};
 use fedimint_ln_client::api::LnFederationApi;
@@ -2693,7 +2693,7 @@ async fn lnv2_send_payment_join_requires_the_contract_auth() -> anyhow::Result<(
     };
 
     let error = gateway
-        .send_payment_v2(forged)
+        .send_payment_v2(forged.clone())
         .await
         .expect_err("a forged auth signature must not be answered with the payment in flight")
         .to_string();
@@ -2702,6 +2702,15 @@ async fn lnv2_send_payment_join_requires_the_contract_auth() -> anyhow::Result<(
     assert!(
         error.contains("Invalid auth signature for the invoice data"),
         "the request must be refused by the auth check, got: {error}"
+    );
+
+    // The module itself names the refusal.
+    assert_matches!(
+        gateway_client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .send_payment(forged)
+            .await,
+        Err(GatewaySendPaymentError::InvalidAuthSignature)
     );
 
     Ok(())
