@@ -31,8 +31,8 @@ pub fn script_pubkey_for_descriptor(
         WalletDescriptor::SinglePeer(peer_xonly) => {
             descriptor_tr_single_peer(*peer_xonly, tweak).script_pubkey()
         }
-        WalletDescriptor::Frost(internal_key) => {
-            descriptor_tr(bitcoin_pks, tweak, *internal_key).script_pubkey()
+        WalletDescriptor::Frost(pubkey_package) => {
+            descriptor_tr(bitcoin_pks, tweak, pubkey_package.internal_key()).script_pubkey()
         }
     }
 }

@@ -449,16 +449,15 @@ impl ServerModuleInit for WalletInit {
         // `WalletDescriptor::SinglePeer`.
         let needs_frost =
             matches!(args.descriptor_kind, WalletDescriptorKind::Frost) && peers.len() > 1;
-        let (frost_key_packages, frost_internal_key, frost_pubkey_package) = if needs_frost {
-            let (key_packages, internal_key, pubkey_package) =
+        let (frost_key_packages, frost_pubkey_package) = if needs_frost {
+            let (key_packages, pubkey_package) =
                 taproot::frost::trusted_setup(peers).expect("Could not execute trusted setup");
             (
                 Some(key_packages),
-                Some(internal_key),
                 Some(FrostPublicKeyPackage(pubkey_package)),
             )
         } else {
-            (None, None, None)
+            (None, None)
         };
 
         bitcoin_sks
@@ -477,7 +476,6 @@ impl ServerModuleInit for WalletInit {
                         fee_consensus.clone(),
                         args.network,
                         args.descriptor_kind,
-                        frost_internal_key,
                         frost_pubkey_package.clone(),
                     ),
                 };
@@ -508,15 +506,14 @@ impl ServerModuleInit for WalletInit {
         // `WalletDescriptor::SinglePeer`.
         let needs_frost = matches!(args.descriptor_kind, WalletDescriptorKind::Frost)
             && peers.num_peers().total() > 1;
-        let (frost_key_package, frost_internal_key, frost_pubkey_package) = if needs_frost {
-            let (key_package, internal_key, pubkey_package) = taproot::frost::dkg(peers).await?;
+        let (frost_key_package, frost_pubkey_package) = if needs_frost {
+            let (key_package, pubkey_package) = taproot::frost::dkg(peers).await?;
             (
                 Some(key_package),
-                Some(internal_key),
                 Some(FrostPublicKeyPackage(pubkey_package)),
             )
         } else {
-            (None, None, None)
+            (None, None)
         };
 
         let config = WalletConfig {
@@ -529,16 +526,15 @@ impl ServerModuleInit for WalletInit {
                 fee_consensus,
                 args.network,
                 args.descriptor_kind,
-                frost_internal_key,
                 frost_pubkey_package,
             ),
         };
 
-        if let Some(internal_key) = frost_internal_key {
+        if let WalletDescriptor::Frost(pubkey_package) = &config.consensus.descriptor {
             let descriptor = descriptor_tr(
                 &config.consensus.bitcoin_pks,
                 &sha256::Hash::all_zeros(),
-                internal_key,
+                pubkey_package.internal_key(),
             );
             tracing::info!(
                 target: LOG_MODULE_WALLETV2,
@@ -1156,19 +1152,15 @@ impl Wallet {
         Self::spawn_broadcast_unconfirmed_txs_task(btc_rpc.clone(), db.clone(), task_group);
 
         if let WalletDescriptor::Frost(_) = cfg.consensus.descriptor {
-            // Both FROST config fields are written together by config gen, but
-            // they are `#[serde(default)]` — validate here so a truncated or
-            // hand-edited config fails at startup instead of at the first
-            // signing round.
+            // The private key package is `#[serde(default)]` — validate here
+            // so a truncated or hand-edited config fails at startup instead
+            // of at the first signing round. The public key package needs no
+            // check: it lives in the descriptor itself.
             let key_package = cfg
                 .private
                 .frost_key_package
                 .clone()
                 .expect("Frost key not generated");
-            assert!(
-                cfg.consensus.frost_pubkey_package.is_some(),
-                "Frost federation is missing its public key package"
-            );
             spawn_initial_nonce_backfill(db.clone(), task_group, key_package);
         }
 

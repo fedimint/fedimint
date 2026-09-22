@@ -1,7 +1,9 @@
+use bitcoin::XOnlyPublicKey;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use frost_secp256k1_tr::keys::PublicKeyPackage;
 use frost_secp256k1_tr::round2::SignatureShare;
+use secp256k1::PublicKey;
 use serde::{Deserialize, Serialize};
 
 /// Implements `Encodable`/`Decodable` for a newtype wrapping a FROST type by
@@ -98,10 +100,37 @@ impl PartialOrd for FrostSigningCommitments {
     }
 }
 
+/// The DKG's `PublicKeyPackage`: the group verifying key plus every
+/// guardian's verifying share. Carried by `WalletDescriptor::Frost` so the
+/// internal key can be derived from it and signature shares verified against
+/// it.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct FrostPublicKeyPackage(pub PublicKeyPackage);
 
 impl_frost_encodable!(FrostPublicKeyPackage, PublicKeyPackage);
+
+impl FrostPublicKeyPackage {
+    /// The aggregated FROST verifying key as a BIP-340 x-only key — the
+    /// BIP-341 internal key of every address of a FROST federation.
+    pub fn internal_key(&self) -> XOnlyPublicKey {
+        let bytes = self
+            .0
+            .verifying_key()
+            .serialize()
+            .expect("FROST verifying key serializes to compressed secp256k1 bytes");
+        let pk =
+            PublicKey::from_slice(&bytes).expect("FROST verifying key is a valid secp256k1 point");
+        pk.x_only_public_key().0
+    }
+}
+
+// `PublicKeyPackage` doesn't implement `Hash`; hashing the consensus encoding
+// is consistent with the derived `PartialEq`, which compares the same data.
+impl std::hash::Hash for FrostPublicKeyPackage {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::hash::Hash::hash(&self.consensus_encode_to_vec(), state);
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct FrostSignatureShares {

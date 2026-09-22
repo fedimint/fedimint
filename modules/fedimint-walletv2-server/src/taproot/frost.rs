@@ -3,9 +3,9 @@ use std::sync::{LazyLock, Mutex};
 use std::time::SystemTime;
 
 use anyhow::{anyhow, ensure};
+use bitcoin::Txid;
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::sighash::{Prevouts, SighashCache};
-use bitcoin::{Txid, XOnlyPublicKey};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::envs::FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV;
@@ -703,6 +703,16 @@ impl Wallet {
         Ok(())
     }
 
+    /// This federation's FROST public key package, carried by
+    /// [`WalletDescriptor::Frost`]. Errors on any other descriptor, which
+    /// callers already rule out via [`Self::ensure_frost_federation`].
+    fn frost_pubkey_package(&self) -> anyhow::Result<&PublicKeyPackage> {
+        match &self.cfg.consensus.descriptor {
+            WalletDescriptor::Frost(pubkey_package) => Ok(&pubkey_package.0),
+            _ => Err(anyhow!("Not a FROST federation")),
+        }
+    }
+
     /// Handle a `WalletConsensusItem::FrostSigningCommitments` from `peer`:
     /// store under `FrostSigningCommitmentsKey`, drop the corresponding
     /// in-flight entry if it's our own broadcast coming back, and run
@@ -828,14 +838,7 @@ impl Wallet {
         // or buggy peer here (where we can reject just their consensus
         // item) instead of at aggregation time, where one bad share
         // would otherwise blow up the whole session.
-        let pubkey_package_base = self
-            .cfg
-            .consensus
-            .frost_pubkey_package
-            .as_ref()
-            .ok_or_else(|| anyhow!("FROST federation must have a frost_pubkey_package"))?
-            .0
-            .clone();
+        let pubkey_package_base = self.frost_pubkey_package()?.clone();
         ensure!(
             signature_shares.signature_shares.len() == unsigned_tx.tx.input.len(),
             "Wrong number of FROST signature shares from peer {peer}",
@@ -906,13 +909,7 @@ impl Wallet {
             .await;
         let threshold = self.cfg.consensus.bitcoin_pks.to_num_peers().threshold();
         if shares.len() == threshold {
-            let pubkey_package = self
-                .cfg
-                .consensus
-                .frost_pubkey_package
-                .clone()
-                .ok_or_else(|| anyhow!("FROST federation must have a frost_pubkey_package"))?
-                .0;
+            let pubkey_package = self.frost_pubkey_package()?.clone();
 
             let mut final_sigs = Vec::with_capacity(unsigned_tx.tx.input.len());
             for (input_index, signing_package) in signing_packages.iter().enumerate() {
@@ -1466,10 +1463,9 @@ pub(crate) async fn pick_signing_session(
 /// that doesn't run a real DKG). Produces:
 /// - One `KeyPackage` per peer, keyed by `PeerId`. Each peer receives only
 ///   their own package.
-/// - The aggregated verifying key as an `XOnlyPublicKey` — this is what gets
-///   stored as `WalletDescriptor::Frost(internal_key)`.
-/// - The `PublicKeyPackage` (aggregate VK + per-peer verifying shares),
-///   replicated to every peer for share verification.
+/// - The `PublicKeyPackage` (aggregate VK + per-peer verifying shares), stored
+///   as `WalletDescriptor::Frost` on every peer: the internal key is derived
+///   from it and shares are verified against it.
 ///
 /// Threshold is `peers.threshold()` (BFT majority). The dealer holds
 /// every share momentarily and so must be trusted; real federations
@@ -1477,11 +1473,7 @@ pub(crate) async fn pick_signing_session(
 /// 1` (caller collapses to `WalletDescriptor::SinglePeer`).
 pub(crate) fn trusted_setup(
     peers: &[PeerId],
-) -> anyhow::Result<(
-    BTreeMap<PeerId, KeyPackage>,
-    XOnlyPublicKey,
-    PublicKeyPackage,
-)> {
+) -> anyhow::Result<(BTreeMap<PeerId, KeyPackage>, PublicKeyPackage)> {
     let threshold = peers.to_num_peers().threshold() as u16;
     let total_peers = peers.len() as u16;
     let (shares, pubkey_package) = frost::keys::generate_with_dealer(
@@ -1490,7 +1482,6 @@ pub(crate) fn trusted_setup(
         frost::keys::IdentifierList::Default,
         OsRng,
     )?;
-    let internal_key = frost_verifying_key_to_xonly(&pubkey_package);
     let key_packages = peers
         .iter()
         .map(|peer| {
@@ -1504,7 +1495,7 @@ pub(crate) fn trusted_setup(
             (*peer, key_package)
         })
         .collect();
-    Ok((key_packages, internal_key, pubkey_package))
+    Ok((key_packages, pubkey_package))
 }
 
 /// Run a 3-round FROST distributed key generation across `peers` and
@@ -1516,10 +1507,9 @@ pub(crate) fn trusted_setup(
 /// Returns:
 /// - Our `KeyPackage` (private — only this peer's signing share + the aggregate
 ///   VK).
-/// - The aggregated verifying key as an `XOnlyPublicKey`, stored as
-///   `WalletDescriptor::Frost(internal_key)`. All honest peers compute the same
-///   value.
-/// - The `PublicKeyPackage` for share verification (replicated).
+/// - The `PublicKeyPackage`, stored as `WalletDescriptor::Frost` (replicated):
+///   the internal key is derived from it and shares are verified against it.
+///   All honest peers compute the same value.
 ///
 /// Round structure:
 /// 1. `part1` — generate our polynomial commitment + secret; broadcast the
@@ -1534,7 +1524,7 @@ pub(crate) fn trusted_setup(
 /// `part*` propagate as `Err` and abort federation setup.
 pub(crate) async fn dkg(
     peers: &(dyn PeerHandleOps + Send + Sync),
-) -> anyhow::Result<(KeyPackage, XOnlyPublicKey, PublicKeyPackage)> {
+) -> anyhow::Result<(KeyPackage, PublicKeyPackage)> {
     let our_identifier = peer_id_to_identifier(peers.identity());
     let threshold = peers.num_peers().threshold() as u16;
     let total_peers = peers.num_peers().total() as u16;
@@ -1580,9 +1570,8 @@ pub(crate) async fn dkg(
 
     let (key_package, pubkey_package) =
         frost::keys::dkg::part3(&round2_secret_package, &round1_packages, &round2_packages)?;
-    let xonly = frost_verifying_key_to_xonly(&pubkey_package);
 
-    Ok((key_package, xonly, pubkey_package))
+    Ok((key_package, pubkey_package))
 }
 
 /// Homomorphically add `tweak·G` to a compressed-serialized secp256k1 point
@@ -1711,15 +1700,6 @@ pub(crate) fn verify_signature_share(
         pubkey_package.verifying_key(),
     )
     .map_err(|e| anyhow::anyhow!("FROST signature share from peer {peer_id} is invalid: {e}"))
-}
-
-fn frost_verifying_key_to_xonly(pubkey_package: &PublicKeyPackage) -> XOnlyPublicKey {
-    let bytes = pubkey_package
-        .verifying_key()
-        .serialize()
-        .expect("FROST verifying key serializes to compressed secp256k1 bytes");
-    let pk = PublicKey::from_slice(&bytes).expect("FROST verifying key is a valid secp256k1 point");
-    pk.x_only_public_key().0
 }
 
 #[derive(Debug, Clone)]
