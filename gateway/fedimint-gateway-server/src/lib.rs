@@ -1587,7 +1587,7 @@ impl Gateway {
         let mut updates = gateway_module
             .gateway_subscribe_ln_pay(operation_id)
             .await
-            .map_err(LNv1Error::OutgoingPayment)
+            .map_err(|err| LNv1Error::OutgoingPayment(err.into()))
             .map_err(PublicGatewayError::LNv1)?
             .into_stream();
         while let Some(update) = updates.next().await {

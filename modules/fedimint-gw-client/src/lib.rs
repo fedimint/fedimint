@@ -30,7 +30,8 @@ use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client_module::{
-    AddStateMachinesError, DynGlobalClientContext, sm_enum_variant_translation,
+    AddStateMachinesError, DynGlobalClientContext, OperationLookupError,
+    sm_enum_variant_translation,
 };
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
@@ -790,10 +791,15 @@ impl GatewayClientModule {
 
     /// Subscribe to updates when the gateway is handling an intercepted HTLC,
     /// or direct swap between federations
+    ///
+    /// # Errors
+    ///
+    /// Fails with an [`OperationLookupError`] if no operation with this id
+    /// exists, or if another module started it.
     pub async fn gateway_subscribe_ln_receive(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<GatewayExtReceiveStates>> {
+    ) -> Result<UpdateStreamOrOutcome<GatewayExtReceiveStates>, OperationLookupError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
@@ -996,10 +1002,17 @@ impl GatewayClientModule {
             })
     }
 
+    /// Subscribe to updates of a payment started with
+    /// [`Self::gateway_pay_bolt11_invoice`].
+    ///
+    /// # Errors
+    ///
+    /// Fails with an [`OperationLookupError`] if no operation with this id
+    /// exists, or if another module started it.
     pub async fn gateway_subscribe_ln_pay(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<GatewayExtPayStates>> {
+    ) -> Result<UpdateStreamOrOutcome<GatewayExtPayStates>, OperationLookupError> {
         let mut stream = self.notifier.subscribe(operation_id).await;
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let client_ctx = self.client_ctx.clone();

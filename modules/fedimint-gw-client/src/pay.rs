@@ -929,14 +929,16 @@ impl GatewayPayWaitForSwapPreimage {
                     let contract_id = contract.contract.contract_id();
                     warn!(
                         ?contract_id,
-                        "Failed to subscribe to ln receive of direct swap: {e:?}"
+                        err = %e.fmt_compact(),
+                        "Failed to subscribe to ln receive of direct swap"
                     );
                     OutgoingPaymentError {
                         contract_id,
                         contract: Some(contract.clone()),
                         error_type: OutgoingPaymentErrorType::SwapFailed {
                             swap_error: format!(
-                                "Failed to subscribe to ln receive of direct swap: {e}"
+                                "Failed to subscribe to ln receive of direct swap: {}",
+                                e.fmt_compact()
                             ),
                         },
                     }

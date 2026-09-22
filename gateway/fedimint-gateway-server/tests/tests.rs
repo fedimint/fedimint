@@ -10,7 +10,7 @@ use assert_matches::assert_matches;
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_api_client::api::ServerError;
 use fedimint_client::ClientHandleArc;
-use fedimint_client::error::TransactionSubmitError;
+use fedimint_client::error::{OperationLookupError, TransactionSubmitError};
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
@@ -3249,6 +3249,29 @@ async fn test_gateway_client_direct_swap_reentry_joins_the_funded_swap() -> anyh
                 .is_some(),
             "the refusal must not have consumed the offer"
         );
+
+        Ok(())
+    })
+    .await
+}
+
+/// Following an operation that was never started is refused with the lookup
+/// failure itself, on both the pay and the receive side.
+#[tokio::test(flavor = "multi_thread")]
+async fn gateway_client_subscriptions_reject_an_unknown_operation() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, _, _| async move {
+        let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+        let gateway_module = gateway_client.get_first_module::<GatewayClientModule>()?;
+        let unknown = OperationId::new_random();
+
+        assert!(matches!(
+            gateway_module.gateway_subscribe_ln_pay(unknown).await,
+            Err(OperationLookupError::NotFound(_))
+        ));
+        assert!(matches!(
+            gateway_module.gateway_subscribe_ln_receive(unknown).await,
+            Err(OperationLookupError::NotFound(_))
+        ));
 
         Ok(())
     })
