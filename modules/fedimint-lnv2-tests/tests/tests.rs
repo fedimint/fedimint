@@ -679,6 +679,21 @@ async fn direct_htlc_claim() -> anyhow::Result<()> {
     let funder_lnv2 = funder.get_first_module::<LightningClientModule>()?;
     let claimer_lnv2 = claimer.get_first_module::<LightningClientModule>()?;
 
+    // An expiration delta that overflows the block count is rejected before
+    // anything is submitted.
+    assert_eq!(
+        funder_lnv2
+            .create_htlc(
+                sats(1_000),
+                payment_image.clone(),
+                claim_keypair.public_key(),
+                u64::MAX,
+                Value::Null,
+            )
+            .await,
+        Err(HtlcError::InvalidExpirationDelta)
+    );
+
     let (operation_id, outpoint, contract) = funder_lnv2
         .create_htlc(
             sats(1_000),
