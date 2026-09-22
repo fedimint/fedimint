@@ -18,9 +18,10 @@
 //! [`LightningClientModule::refund_htlc`].
 //!
 //! All coordination data - the contract, its funding outpoint and the forfeit
-//! signature - is exchanged between the two parties out of band. The contract
-//! expiration is measured in block count as tracked by the federation's
-//! consensus.
+//! signature - is exchanged between the two parties out of band; the CLI and
+//! the JSON representation of this data are documented in
+//! `docs/lightning_module_v2.md`. The contract expiration is measured in
+//! block count as tracked by the federation's consensus, not in unix time.
 
 use std::time::Duration;
 
