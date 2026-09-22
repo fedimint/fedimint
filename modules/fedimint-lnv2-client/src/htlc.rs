@@ -120,15 +120,47 @@ pub enum HtlcError {
 }
 
 /// The parameters of a transaction spending a direct HTLC; see
-/// [`LightningClientModule::spend_htlc`].
+/// [`LightningClientModule::spend_htlc`]. The witness is the action taken on
+/// the contract, from which the operation id and the operation meta of the
+/// spend are derived.
+#[derive(Clone)]
 struct HtlcSpend {
-    operation_id: OperationId,
     outpoint: OutPoint,
     contract: OutgoingContract,
     witness: OutgoingWitness,
     keypair: Keypair,
-    make_meta: fn(SpendHtlcOperationMeta) -> LightningOperationMeta,
     custom_meta: Value,
+}
+
+impl HtlcSpend {
+    /// The operation id of the spend, which is deterministic per action and
+    /// outpoint so that every action on a contract can be recorded only
+    /// once.
+    fn operation_id(&self) -> OperationId {
+        let action = match self.witness {
+            OutgoingWitness::Claim(..) => "lnv2-htlc-claim",
+            OutgoingWitness::Refund => "lnv2-htlc-refund",
+            OutgoingWitness::Cancel(..) => "lnv2-htlc-cancel",
+        };
+
+        OperationId::from_encodable(&(action, self.outpoint))
+    }
+
+    /// The operation meta of the spend for the given change outpoint range.
+    fn operation_meta(&self, change_outpoint_range: OutPointRange) -> LightningOperationMeta {
+        let meta = SpendHtlcOperationMeta {
+            htlc_outpoint: self.outpoint,
+            contract: self.contract.clone(),
+            change_outpoint_range,
+            custom_meta: self.custom_meta.clone(),
+        };
+
+        match self.witness {
+            OutgoingWitness::Claim(..) => LightningOperationMeta::ClaimHtlc(meta),
+            OutgoingWitness::Refund => LightningOperationMeta::RefundHtlc(meta),
+            OutgoingWitness::Cancel(..) => LightningOperationMeta::CancelHtlc(meta),
+        }
+    }
 }
 
 impl LightningClientModule {
@@ -267,12 +299,10 @@ impl LightningClientModule {
         }
 
         self.spend_htlc(HtlcSpend {
-            operation_id: OperationId::from_encodable(&("lnv2-htlc-claim", outpoint)),
             outpoint,
             contract,
             witness: OutgoingWitness::Claim(preimage),
             keypair: claim_keypair,
-            make_meta: LightningOperationMeta::ClaimHtlc,
             custom_meta,
         })
         .await
@@ -298,12 +328,10 @@ impl LightningClientModule {
         }
 
         self.spend_htlc(HtlcSpend {
-            operation_id: OperationId::from_encodable(&("lnv2-htlc-refund", outpoint)),
             outpoint,
             contract,
             witness: OutgoingWitness::Refund,
             keypair: refund_keypair,
-            make_meta: LightningOperationMeta::RefundHtlc,
             custom_meta,
         })
         .await
@@ -332,12 +360,10 @@ impl LightningClientModule {
         self.funded_contract_expiration(outpoint, &contract).await?;
 
         self.spend_htlc(HtlcSpend {
-            operation_id: OperationId::from_encodable(&("lnv2-htlc-cancel", outpoint)),
             outpoint,
             contract,
             witness: OutgoingWitness::Cancel(forfeit_signature),
             keypair: refund_keypair,
-            make_meta: LightningOperationMeta::CancelHtlc,
             custom_meta,
         })
         .await
@@ -482,24 +508,19 @@ impl LightningClientModule {
     /// operation. Callers have to verify the contract against the federation
     /// via [`Self::funded_contract_expiration`] first.
     async fn spend_htlc(&self, spend: HtlcSpend) -> Result<OperationId, HtlcError> {
-        let HtlcSpend {
-            operation_id,
-            outpoint,
-            contract,
-            witness,
-            keypair,
-            make_meta,
-            custom_meta,
-        } = spend;
+        let operation_id = spend.operation_id();
 
         if self.client_ctx.operation_exists(operation_id).await {
             return Err(HtlcError::DuplicateOperation(operation_id));
         }
 
         let client_input = ClientInput::<LightningInput> {
-            input: LightningInput::V0(LightningInputV0::Outgoing(outpoint, witness)),
-            amounts: Amounts::new_bitcoin(contract.amount),
-            keys: vec![keypair],
+            input: LightningInput::V0(LightningInputV0::Outgoing(
+                spend.outpoint,
+                spend.witness.clone(),
+            )),
+            amounts: Amounts::new_bitcoin(spend.contract.amount),
+            keys: vec![spend.keypair],
         };
 
         let client_inputs = self
@@ -513,12 +534,7 @@ impl LightningClientModule {
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
                 move |change_outpoint_range: OutPointRange| {
-                    make_meta(SpendHtlcOperationMeta {
-                        htlc_outpoint: outpoint,
-                        contract: contract.clone(),
-                        change_outpoint_range,
-                        custom_meta: custom_meta.clone(),
-                    })
+                    spend.operation_meta(change_outpoint_range)
                 },
                 transaction,
             )
