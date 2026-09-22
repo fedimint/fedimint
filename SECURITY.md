@@ -60,6 +60,49 @@ Out of scope:
 - Test and development setups, such as `devimint`.
 
 
+## Guardian Bitcoin Backends
+
+Configured Bitcoin RPC endpoints, including Esplora, are trusted inputs to a
+guardian. Esplora is a trusted chain oracle: Fedimint does not independently
+verify its chain selection, work, consensus rules, or freshness. Block payload
+integrity checks and chain-identity comparisons are defense in depth against
+inconsistent responses and misconfiguration, not the basis of this trust model.
+Use operator-controlled or explicitly trusted services, with encrypted transport
+across untrusted networks. A shared public provider can correlate guardian
+activity and influence multiple guardians at once; independent operators should
+consider this correlated trust dependency.
+
+In hybrid mode (`FM_BITCOIND_URL` and `FM_ESPLORA_URL` together), available
+endpoints are compared once at startup using the height-1 block hash. A detected
+mismatch stops startup. If either or both endpoints are unavailable, the
+comparison is skipped with a warning so backend availability does not become a
+new startup requirement. The comparison is not retried after recovery. If
+neither identity was available at startup, the first later identity needed for
+ordinary status monitoring is cached without comparing endpoints. Trusted
+endpoints are expected to keep serving their configured chain, and operators
+must restart the guardian when deliberately changing chains.
+
+Reads try bitcoind first and retry only the failed request on Esplora. Block
+count is the exception while Core is starting: until Core first reports that
+initial block download is complete, its IBD flag is checked on each count
+request and Esplora supplies the count while IBD remains active. Completion is
+then remembered for the process lifetime and normal bitcoind-first count reads
+resume. Fedimint does not compare endpoint tips or otherwise use Esplora to
+decide that a responsive Core node is stale.
+
+Broadcast is deliberately bitcoind-first: Esplora receives the transaction only
+if the primary attempt fails. A reachable, network-isolated bitcoind can accept
+a transaction without propagating it. Fedimint relies on multiple guardians
+rebroadcasting the same peg-out, assuming at least one broadcaster has working
+Bitcoin connectivity; successful local submission is not proof of propagation.
+We do not broadcast to both endpoints unconditionally. The federation's normal
+rebroadcast and confirmation handling remain necessary.
+
+Esplora sees fallback and startup/IBD queries and, when used for broadcast
+fallback, complete peg-out transactions and guardian-origin timing. Any primary
+broadcast error, including policy rejection, may trigger this disclosure. Only
+configure a fallback if these trust and privacy consequences are acceptable.
+
 ## Public Gateway Federation Status
 
 Configured gateways expose unauthenticated HTTP and Iroh `POST

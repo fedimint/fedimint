@@ -84,6 +84,16 @@ impl IServerBitcoinRpc for ServerBitcoinRpcTracked {
         tracked_call!(self, "get_block_count", self.inner.get_block_count().await)
     }
 
+    async fn get_block_count_and_initial_block_download(&self) -> Result<(u64, bool)> {
+        tracked_call!(
+            self,
+            "get_block_count_and_initial_block_download",
+            self.inner
+                .get_block_count_and_initial_block_download()
+                .await
+        )
+    }
+
     async fn get_block_hash(&self, height: u64) -> Result<BlockHash> {
         tracked_call!(
             self,
