@@ -38,7 +38,7 @@ use fedimint_lnv2_client::{
     SelectGatewayError, SendOperationState, SendPaymentError, SendWithTermsError,
     SpendableAmountError,
 };
-use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
+use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_lnv2_common::lnurl::LnurlRequest;
 use fedimint_lnv2_common::{
@@ -788,6 +788,23 @@ async fn direct_htlc_refund() -> anyhow::Result<()> {
         None
     );
 
+    // A refund with a contract other than the funded one is rejected against
+    // the federation's view of the outpoint before any operation is recorded,
+    // so it does not block the refund with the correct contract below.
+    assert_eq!(
+        funder_lnv2
+            .refund_htlc(
+                outpoint,
+                OutgoingContract {
+                    amount: contract.amount + msats(1),
+                    ..contract.clone()
+                },
+                Value::Null
+            )
+            .await,
+        Err(HtlcError::ContractMismatch)
+    );
+
     // ...and can refund it once the consensus block count catches up.
     let refund_operation_id = loop {
         match funder_lnv2
@@ -848,6 +865,30 @@ async fn direct_htlc_cancel() -> anyhow::Result<()> {
         .await?;
 
     let balance_before_cancel = funder.get_balance_for_btc().await?;
+
+    // A cancellation with a contract other than the funded one, even one the
+    // claiming side has signed off on, is rejected against the federation's
+    // view of the outpoint before any operation is recorded, so it does not
+    // block the cancellation with the correct contract below.
+    let other_contract = OutgoingContract {
+        amount: contract.amount + msats(1),
+        ..contract.clone()
+    };
+
+    assert_eq!(
+        funder_lnv2
+            .cancel_htlc(
+                outpoint,
+                other_contract.clone(),
+                LightningClientModule::create_htlc_forfeit_signature(
+                    &other_contract,
+                    &claim_keypair
+                )?,
+                Value::Null
+            )
+            .await,
+        Err(HtlcError::ContractMismatch)
+    );
 
     // The claiming side fails the HTLC cooperatively with a forfeit signature.
     let forfeit_signature =

@@ -258,18 +258,7 @@ impl LightningClientModule {
 
         self.consensus_block_count().await?;
 
-        let (contract_id, remaining_blocks) = self
-            .module_api
-            .outgoing_contract_expiration(outpoint)
-            .await
-            .map_err(|e| HtlcError::FederationApiError(e.to_string()))?
-            .ok_or(HtlcError::ContractNotFound)?;
-
-        if contract_id != contract.contract_id() {
-            return Err(HtlcError::ContractMismatch);
-        }
-
-        if remaining_blocks == 0 {
+        if self.funded_contract_expiration(outpoint, &contract).await? == 0 {
             return Err(HtlcError::Expired);
         }
 
@@ -298,12 +287,10 @@ impl LightningClientModule {
             .recover_htlc_refund_keypair(&contract)
             .ok_or(HtlcError::RefundKeyMismatch)?;
 
-        let consensus_block_count = self.consensus_block_count().await?;
+        let remaining_blocks = self.funded_contract_expiration(outpoint, &contract).await?;
 
-        if consensus_block_count < contract.expiration {
-            return Err(HtlcError::NotExpired(
-                contract.expiration - consensus_block_count,
-            ));
+        if remaining_blocks > 0 {
+            return Err(HtlcError::NotExpired(remaining_blocks));
         }
 
         self.spend_htlc(HtlcSpend {
@@ -337,6 +324,8 @@ impl LightningClientModule {
         let refund_keypair = self
             .recover_htlc_refund_keypair(&contract)
             .ok_or(HtlcError::RefundKeyMismatch)?;
+
+        self.funded_contract_expiration(outpoint, &contract).await?;
 
         self.spend_htlc(HtlcSpend {
             operation_id: OperationId::from_encodable(&("lnv2-htlc-cancel", outpoint)),
@@ -486,7 +475,8 @@ impl LightningClientModule {
     }
 
     /// Submit a transaction spending a direct HTLC and record it under a new
-    /// operation.
+    /// operation. Callers have to verify the contract against the federation
+    /// via [`Self::funded_contract_expiration`] first.
     async fn spend_htlc(&self, spend: HtlcSpend) -> Result<OperationId, HtlcError> {
         let HtlcSpend {
             operation_id,
@@ -532,6 +522,34 @@ impl LightningClientModule {
             .map_err(|e| HtlcError::FailedToSubmitTransaction(e.to_string()))?;
 
         Ok(operation_id)
+    }
+
+    /// Verify that `contract` is the unresolved contract funded at `outpoint`
+    /// and return the number of blocks remaining until its expiration, which
+    /// is zero once it has expired.
+    ///
+    /// Every spend of a contract has to pass this check before it is
+    /// recorded, since spends are recorded under operation ids derived from
+    /// the outpoint alone: a spend recorded with a mismatched contract would
+    /// be rejected by the federation while making every later attempt with
+    /// the correct contract fail as a duplicate operation.
+    async fn funded_contract_expiration(
+        &self,
+        outpoint: OutPoint,
+        contract: &OutgoingContract,
+    ) -> Result<u64, HtlcError> {
+        let (contract_id, remaining_blocks) = self
+            .module_api
+            .outgoing_contract_expiration(outpoint)
+            .await
+            .map_err(|e| HtlcError::FederationApiError(e.to_string()))?
+            .ok_or(HtlcError::ContractNotFound)?;
+
+        if contract_id != contract.contract_id() {
+            return Err(HtlcError::ContractMismatch);
+        }
+
+        Ok(remaining_blocks)
     }
 
     /// Recover the refund keypair of a direct HTLC created by this client
