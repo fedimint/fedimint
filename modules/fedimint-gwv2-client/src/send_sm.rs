@@ -236,7 +236,7 @@ impl SendStateMachine {
                         FinalReceiveState::Failure => Err(Cancelled::Failure),
                     },
                     Ok(None) => Err(Cancelled::InvoiceExpired),
-                    Err(e) => Err(Cancelled::FinalizationError(e.to_string())),
+                    Err(e) => Err(Cancelled::FinalizationError(e.fmt_compact().to_string())),
                 }
             }
             None => {

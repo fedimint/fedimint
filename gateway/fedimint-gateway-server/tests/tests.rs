@@ -3329,3 +3329,26 @@ async fn gateway_client_direct_swap_without_an_offer_is_refused() -> anyhow::Res
     })
     .await
 }
+
+/// Funding a direct swap needs the gateway's ecash, so a gateway without any
+/// is refused when the funding transaction is built.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv2_relay_direct_swap_without_funds_is_refused() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+
+    let client = gateway.select_client(fed.id()).await?.into_value();
+    let contract = decryptable_incoming_contract(&client)?;
+
+    assert_matches!(
+        client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .relay_direct_swap(contract, 900, true)
+            .await,
+        Err(TransactionSubmitError::PrimaryModule(_))
+    );
+
+    Ok(())
+}

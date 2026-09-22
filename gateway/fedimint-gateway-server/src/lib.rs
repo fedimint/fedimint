@@ -68,7 +68,7 @@ use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::task::{TaskGroup, TaskHandle, TaskShutdownToken, sleep, timeout};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::backoff_util::fibonacci_max_one_hour;
-use fedimint_core::util::{FmtCompact, FmtCompactAnyhow, SafeUrl, Spanned, retry};
+use fedimint_core::util::{FmtCompact, SafeUrl, Spanned, retry};
 use fedimint_core::{
     Amount, BitcoinAmountOrAll, PeerId, TieredCounts, crit, fedimint_build_code_version_env,
     get_network_for_address,
@@ -1327,7 +1327,11 @@ impl Gateway {
             )
             .await
         {
-            warn!(target: LOG_GATEWAY, err = %err.fmt_compact_anyhow(), "Error relaying incoming lightning payment");
+            warn!(
+                target: LOG_GATEWAY,
+                err = %err.fmt_compact(),
+                "Error relaying incoming lightning payment"
+            );
 
             let outcome = InterceptPaymentResponse {
                 action: PaymentAction::Cancel,

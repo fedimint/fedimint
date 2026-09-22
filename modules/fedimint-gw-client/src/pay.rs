@@ -355,7 +355,8 @@ impl GatewayPayInvoice {
                             contract: Some(contract.clone()),
                             error_type: OutgoingPaymentErrorType::SwapFailed {
                                 swap_error: format!(
-                                    "Failed to initiate LNv1 -> LNv2 swap. Err: {err}"
+                                    "Failed to initiate LNv1 -> LNv2 swap. Err: {}",
+                                    err.fmt_compact()
                                 ),
                             },
                         },

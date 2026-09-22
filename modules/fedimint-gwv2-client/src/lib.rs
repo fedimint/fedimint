@@ -23,7 +23,9 @@ use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, State
 use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
+use fedimint_client_module::{
+    DynGlobalClientContext, TransactionSubmitError, sm_enum_variant_translation,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::DatabaseTransaction;
@@ -544,6 +546,17 @@ impl GatewayClientModuleV2 {
         legacy_completion_in_states(&active, &inactive, circuit)
     }
 
+    /// Funds the incoming contract of an intercepted LNv2 HTLC and starts the
+    /// operation that completes the HTLC's circuit.
+    ///
+    /// A contract or circuit that is already being handled is joined rather
+    /// than started twice.
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`TransactionSubmitError`] if the funding transaction or
+    /// the completion operation could not be started and no earlier attempt
+    /// had started it.
     pub async fn relay_incoming_htlc(
         &self,
         payment_hash: sha256::Hash,
@@ -551,7 +564,7 @@ impl GatewayClientModuleV2 {
         htlc_id: u64,
         contract: IncomingContract,
         amount_msat: u64,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), TransactionSubmitError> {
         let operation_start = now();
         let receive_operation_id = OperationId::from_encodable(&contract);
         let circuit = IncomingCircuitKey {
@@ -613,7 +626,7 @@ impl GatewayClientModuleV2 {
             if let Err(error) = creation_result {
                 let operation_exists = self.client_ctx.operation_exists(receive_operation_id).await;
                 if operation_creation_failed_permanently(true, operation_exists) {
-                    return Err(error.into());
+                    return Err(error);
                 }
             } else {
                 let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
@@ -656,7 +669,7 @@ impl GatewayClientModuleV2 {
                 .operation_exists(completion_operation_id)
                 .await;
             if operation_creation_failed_permanently(true, operation_exists) {
-                return Err(error.into());
+                return Err(error);
             }
         }
 
@@ -673,12 +686,17 @@ impl GatewayClientModuleV2 {
     /// when no such operation exists: callers pass `false` when a wall-clock
     /// gate such as invoice expiry forbids starting a new swap, and receive
     /// `Ok(None)` to signal that nothing was started.
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`TransactionSubmitError`] if the funding transaction of a
+    /// fresh swap could not be submitted.
     pub async fn relay_direct_swap(
         &self,
         contract: IncomingContract,
         amount_msat: u64,
         allow_fresh_dispatch: bool,
-    ) -> anyhow::Result<Option<FinalReceiveState>> {
+    ) -> Result<Option<FinalReceiveState>, TransactionSubmitError> {
         let operation_start = now();
 
         let operation_id = OperationId::from_encodable(&contract);
