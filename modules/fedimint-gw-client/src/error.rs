@@ -5,11 +5,12 @@
 //! persist, [`crate::pay::OutgoingContractError`] and its relatives, stay in
 //! [`crate::pay`].
 
-use fedimint_client_module::TransactionSubmitError;
+use fedimint_client_module::{AddStateMachinesError, TransactionSubmitError};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{AutocommitError, DatabaseError};
 use fedimint_lightning::LightningRpcError;
 use fedimint_ln_client::incoming::IncomingSmError;
+use fedimint_ln_common::contracts::ContractId;
 use thiserror::Error;
 
 use crate::UnsafeHtlcExpiry;
@@ -100,6 +101,48 @@ pub enum HandleDirectSwapError {
 }
 
 impl From<AutocommitError<HandleDirectSwapError>> for HandleDirectSwapError {
+    fn from(e: AutocommitError<Self>) -> Self {
+        match e {
+            AutocommitError::ClosureError { error, .. } => error,
+            AutocommitError::CommitFailed { last_error, .. } => Self::Database(last_error),
+        }
+    }
+}
+
+/// A failure to start paying an invoice on behalf of a federation client.
+///
+/// These are the refusals that happen before the payment's state machine
+/// starts. Once it runs, its outcome is reported through
+/// [`crate::GatewayClientModule::gateway_subscribe_ln_pay`].
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum GatewayPayInvoiceError {
+    /// The invoice carries no amount, so there is nothing to pay.
+    #[error("Invoice is missing amount")]
+    MissingInvoiceAmount,
+
+    /// The invoice was pruned, and the gateway cannot pay a pruned invoice.
+    #[error("The gateway cannot pay the pruned invoice")]
+    PrunedInvoiceRejected(#[source] GatewayClientV1Error),
+
+    /// A payment of this contract is already under way, and the request does
+    /// not carry the authentication it was started with.
+    #[error("Not authorized to receive the preimage for contract {contract_id}")]
+    Unauthorized {
+        /// The contract the request asked to pay.
+        contract_id: ContractId,
+    },
+
+    /// The payment's state machine could not be started.
+    #[error("Failed to add the payment's state machines")]
+    StateMachines(#[source] AddStateMachinesError),
+
+    /// Recording the payment in the database kept failing.
+    #[error("Database error")]
+    Database(#[from] DatabaseError),
+}
+
+impl From<AutocommitError<GatewayPayInvoiceError>> for GatewayPayInvoiceError {
     fn from(e: AutocommitError<Self>) -> Self {
         match e {
             AutocommitError::ClosureError { error, .. } => error,

@@ -1582,7 +1582,7 @@ impl Gateway {
         let operation_id = gateway_module
             .gateway_pay_bolt11_invoice(payload)
             .await
-            .map_err(LNv1Error::OutgoingPayment)
+            .map_err(|err| LNv1Error::OutgoingPayment(err.into()))
             .map_err(PublicGatewayError::LNv1)?;
         let mut updates = gateway_module
             .gateway_subscribe_ln_pay(operation_id)

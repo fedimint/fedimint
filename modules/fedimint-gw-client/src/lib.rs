@@ -36,7 +36,7 @@ use fedimint_client_module::{
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::{AutocommitError, DatabaseTransaction};
+use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::time::duration_since_epoch;
@@ -78,9 +78,11 @@ use tracing::{debug, error, info, warn};
 use self::complete::GatewayCompleteStateMachine;
 use self::pay::{
     GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
-    OutgoingContractError, OutgoingPaymentError,
+    OutgoingPaymentError,
 };
-pub use crate::error::{GatewayClientV1Error, HandleDirectSwapError, HandleInterceptedHtlcError};
+pub use crate::error::{
+    GatewayClientV1Error, GatewayPayInvoiceError, HandleDirectSwapError, HandleInterceptedHtlcError,
+};
 
 /// Exclusive remaining-CLTV safety margin for an intercepted LNv1 HTLC.
 ///
@@ -905,10 +907,22 @@ impl GatewayClientModule {
     }
 
     /// Pay lightning invoice on behalf of federation user
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`GatewayPayInvoiceError::MissingInvoiceAmount`] if the
+    /// invoice has no amount, [`GatewayPayInvoiceError::PrunedInvoiceRejected`]
+    /// if the gateway cannot pay a pruned invoice,
+    /// [`GatewayPayInvoiceError::Unauthorized`] if a payment of this contract
+    /// is already under way and the request does not carry the
+    /// authentication it was started with,
+    /// [`GatewayPayInvoiceError::StateMachines`] if the payment cannot be
+    /// started, and [`GatewayPayInvoiceError::Database`] if it cannot be
+    /// recorded.
     pub async fn gateway_pay_bolt11_invoice(
         &self,
         pay_invoice_payload: PayInvoicePayload,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, GatewayPayInvoiceError> {
         let payload = pay_invoice_payload.clone();
 
         // `payment_data` is caller-supplied on the unauthenticated `/pay_invoice`
@@ -919,11 +933,12 @@ impl GatewayClientModule {
         let invoice_amount = pay_invoice_payload
             .payment_data
             .amount()
-            .ok_or(OutgoingContractError::InvoiceMissingAmount)?;
+            .ok_or(GatewayPayInvoiceError::MissingInvoiceAmount)?;
 
         self.lightning_manager
             .verify_pruned_invoice(pay_invoice_payload.payment_data)
-            .await?;
+            .await
+            .map_err(GatewayPayInvoiceError::PrunedInvoiceRejected)?;
 
         self.client_ctx.module_db()
             .autocommit(
@@ -954,10 +969,9 @@ impl GatewayClientModule {
                                     if PreimageAuth::new(preimage_auth)
                                         .verifies(payload.preimage_auth)
                             ) {
-                                anyhow::bail!(
-                                    "Not authorized to receive the preimage for contract {}",
-                                    payload.contract_id
-                                );
+                                return Err(GatewayPayInvoiceError::Unauthorized {
+                                    contract_id: payload.contract_id,
+                                });
                             }
 
                             debug!(
@@ -1005,21 +1019,16 @@ impl GatewayClientModule {
                                     info!("State machine for operation {} already exists, will not add a new one", operation_id.fmt_short());
                                 }
                                 Err(other) => {
-                                    anyhow::bail!("Failed to add state machines: {other:?}")
+                                    return Err(GatewayPayInvoiceError::StateMachines(other));
                                 }
                             }
-                            Ok(operation_id)
+                            Ok::<_, GatewayPayInvoiceError>(operation_id)
                     })
                 },
                 Some(100),
             )
             .await
-            .map_err(|e| match e {
-                AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    anyhow::anyhow!("Commit to DB failed: {last_error}")
-                }
-            })
+            .map_err(GatewayPayInvoiceError::from)
     }
 
     /// Subscribe to updates of a payment started with

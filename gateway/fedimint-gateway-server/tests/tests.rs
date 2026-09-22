@@ -36,7 +36,8 @@ use fedimint_gw_client::pay::{
 };
 use fedimint_gw_client::{
     GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, GatewayMeta,
-    HandleDirectSwapError, HandleInterceptedHtlcError, Htlc, SwapParameters,
+    GatewayPayInvoiceError, HandleDirectSwapError, HandleInterceptedHtlcError, Htlc,
+    SwapParameters,
 };
 use fedimint_gwv2_client::events::{
     CompleteLightningPaymentSucceeded, IncomingPaymentStarted, IncomingPaymentSucceeded,
@@ -1283,12 +1284,7 @@ async fn test_gateway_rejects_amountless_invoice() -> anyhow::Result<()> {
             .gateway_pay_bolt11_invoice(payload)
             .await
             .expect_err("Amountless invoice should be rejected");
-        assert!(
-            error
-                .downcast_ref::<OutgoingContractError>()
-                .is_some_and(|error| matches!(error, OutgoingContractError::InvoiceMissingAmount)),
-            "Expected InvoiceMissingAmount, got: {error}"
-        );
+        assert_matches!(error, GatewayPayInvoiceError::MissingInvoiceAmount);
 
         Ok(())
     })
@@ -2862,10 +2858,7 @@ async fn test_gateway_client_rejects_amountless_invoice() -> anyhow::Result<()> 
             .await
             .expect_err("an invoice without an amount is rejected");
 
-        assert_eq!(
-            error.downcast::<OutgoingContractError>()?,
-            OutgoingContractError::InvoiceMissingAmount
-        );
+        assert_matches!(error, GatewayPayInvoiceError::MissingInvoiceAmount);
 
         Ok(())
     })
@@ -2934,10 +2927,12 @@ async fn test_gateway_client_pay_invoice_is_idempotent_per_contract() -> anyhow:
             // Same contract, different `preimage_auth`: a distinct state machine
             // state, so the executor's dedupe does not catch this one.
             assert!(
-                gateway_module
-                    .gateway_pay_bolt11_invoice(payload(theirs))
-                    .await
-                    .is_err(),
+                matches!(
+                    gateway_module
+                        .gateway_pay_bolt11_invoice(payload(theirs))
+                        .await,
+                    Err(GatewayPayInvoiceError::Unauthorized { .. })
+                ),
                 "a duplicate request must not be answered with someone else's operation"
             );
 
@@ -2948,13 +2943,18 @@ async fn test_gateway_client_pay_invoice_is_idempotent_per_contract() -> anyhow:
             // buy them a join here.
             let theirs_invoice = other_lightning_client.invoice(sats(250), None)?;
             assert!(
-                gateway_module
-                    .gateway_pay_bolt11_invoice(PayInvoicePayload {
-                        payment_data: get_payment_data(selected_gateway.clone(), theirs_invoice),
-                        ..payload(theirs)
-                    })
-                    .await
-                    .is_err(),
+                matches!(
+                    gateway_module
+                        .gateway_pay_bolt11_invoice(PayInvoicePayload {
+                            payment_data: get_payment_data(
+                                selected_gateway.clone(),
+                                theirs_invoice
+                            ),
+                            ..payload(theirs)
+                        })
+                        .await,
+                    Err(GatewayPayInvoiceError::Unauthorized { .. })
+                ),
                 "an authentication for a different invoice must not join this contract"
             );
 
@@ -2990,10 +2990,12 @@ async fn test_gateway_client_pay_invoice_is_idempotent_per_contract() -> anyhow:
             // Still gated once the payment has completed and the operation has
             // the preimage sitting on it for the taking.
             assert!(
-                gateway_module
-                    .gateway_pay_bolt11_invoice(payload(theirs))
-                    .await
-                    .is_err(),
+                matches!(
+                    gateway_module
+                        .gateway_pay_bolt11_invoice(payload(theirs))
+                        .await,
+                    Err(GatewayPayInvoiceError::Unauthorized { .. })
+                ),
                 "a mismatched `preimage_auth` must not reach the preimage"
             );
             assert_eq!(
