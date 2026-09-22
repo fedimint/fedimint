@@ -196,6 +196,22 @@ function walletv2_module_frost() {
 }
 export -f walletv2_module_frost
 
+function walletv2_module_tr() {
+  # Taproot script-path multisig (NUMS internal key + `multi_a`): the third
+  # signing path next to wsh and frost.
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/walletv2-module-test.sh --descriptor tr
+}
+export -f walletv2_module_tr
+
+function walletv2_module_single_peer() {
+  # A one-guardian federation with a taproot descriptor collapses to
+  # `WalletDescriptor::SinglePeer` (plain key-path spend, no FROST/DKG). Runs
+  # the full deposit / consolidation / peg-out cycle against bitcoind on that
+  # path, which no multi-peer test reaches.
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 FM_FED_SIZE=1 ./scripts/tests/walletv2-module-test.sh --descriptor frost
+}
+export -f walletv2_module_single_peer
+
 function walletv2_frost_degraded() {
   # A 4-peer / 1-offline degraded federation exercises FROST threshold signing
   # with a guardian offline while staying fast enough for the default test
@@ -510,6 +526,8 @@ tests_to_run_in_parallel+=(
   "lnv1_lnv2_swap"
   "walletv2_module"
   "walletv2_module_frost"
+  "walletv2_module_tr"
+  "walletv2_module_single_peer"
   "walletv2_frost_degraded"
   "mintv2_module_test"
   "devimint_cli_test"
