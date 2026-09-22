@@ -2265,6 +2265,9 @@ impl Gateway {
                         runtime.clone(),
                     )
                     .map(Box::new)
+                    // `retry` logs each failure with `{:#}`, which prints the
+                    // cause chain only for `anyhow::Error`.
+                    .map_err(anyhow::Error::from)
                 })
                 .await
                 .expect("Could not create LDK Node")

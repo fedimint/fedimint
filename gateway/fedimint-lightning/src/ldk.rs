@@ -29,6 +29,7 @@ use lightning::ln::channelmanager::PaymentId;
 use lightning::offers::offer::{Offer, OfferId};
 use lightning::types::payment::{PaymentHash, PaymentPreimage};
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
+use thiserror::Error;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{RwLock, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
@@ -155,6 +156,13 @@ impl GatewayLdkClient {
     /// lightning node. All resources, including the lightning node, will be
     /// cleaned up when the returned `GatewayLdkClient` instance is dropped.
     /// There's no need to manually stop the node.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`LdkClientInitError::MissingEsploraHost`] or
+    /// [`LdkClientInitError::InvalidDataDir`] if the configuration cannot be
+    /// used, with [`LdkClientInitError::Build`] if LDK cannot build the node,
+    /// and with [`LdkClientInitError::Start`] if it cannot start it.
     pub fn new(
         data_dir: &Path,
         chain_source: ChainSource,
@@ -163,7 +171,7 @@ impl GatewayLdkClient {
         alias: String,
         mnemonic: Mnemonic,
         runtime: Arc<tokio::runtime::Runtime>,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, LdkClientInitError> {
         let mut bytes = [0u8; 32];
         let alias = if alias.is_empty() {
             "LDK Gateway".to_string()
@@ -217,15 +225,15 @@ impl GatewayLdkClient {
             }
         };
         let Some(data_dir_str) = data_dir.to_str() else {
-            return Err(anyhow::anyhow!("Invalid data dir path"));
+            return Err(LdkClientInitError::InvalidDataDir);
         };
         node_builder.set_storage_dir_path(data_dir_str.to_string());
 
         info!(chain_source = %chain_source, data_dir = %data_dir_str, alias = %alias, "Starting LDK Node...");
-        let node = Arc::new(node_builder.build()?);
+        let node = Arc::new(node_builder.build().map_err(LdkClientInitError::Build)?);
         node.start_with_runtime(runtime).map_err(|err| {
             crit!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to start LDK Node");
-            LightningRpcError::FailedToConnect
+            LdkClientInitError::Start(err)
         })?;
 
         let (htlc_stream_sender, htlc_stream_receiver) = tokio::sync::mpsc::channel(1024);
@@ -436,6 +444,32 @@ impl GatewayLdkClient {
             })),
         }
     }
+}
+
+/// A failure to create the LDK Lightning node behind a [`GatewayLdkClient`].
+///
+/// Creating the client configures an LDK node from the gateway's settings,
+/// builds it on top of the data directory and starts it.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum LdkClientInitError {
+    /// The Esplora chain source's URL names no host to connect to.
+    #[error("Missing esplora host")]
+    MissingEsploraHost,
+
+    /// The data directory's path is not valid UTF-8, which LDK needs for its
+    /// storage path.
+    #[error("Invalid data dir path")]
+    InvalidDataDir,
+
+    /// LDK could not build the node, for example because its storage could
+    /// not be read or was created for another network.
+    #[error("The LDK node could not be built")]
+    Build(#[source] ldk_node::BuildError),
+
+    /// LDK built the node but could not start it.
+    #[error("The LDK node could not be started")]
+    Start(#[source] ldk_node::NodeError),
 }
 
 /// Why an invoice must not be registered for a payment hash on the node.
@@ -1368,11 +1402,11 @@ fn get_preimage_and_payment_hash(
 ///
 /// To handle this, we explicitly construct the esplora URL when a port is
 /// specified.
-fn get_esplora_url(server_url: SafeUrl) -> anyhow::Result<String> {
+fn get_esplora_url(server_url: SafeUrl) -> Result<String, LdkClientInitError> {
     // Esplora client cannot handle trailing slashes
     let host = server_url
         .host_str()
-        .ok_or(anyhow::anyhow!("Missing esplora host"))?;
+        .ok_or(LdkClientInitError::MissingEsploraHost)?;
     let server_url = if let Some(port) = server_url.port() {
         format!("{}://{}:{}", server_url.scheme(), host, port)
     } else {
