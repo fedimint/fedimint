@@ -8,6 +8,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::Amounts;
 use fedimint_core::secp256k1::Keypair;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, OutPoint};
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, LightningInvoice, OutgoingWitness};
@@ -202,7 +203,7 @@ impl SendStateMachine {
                     FinalReceiveState::Failure => Err(Cancelled::Failure),
                 },
                 Ok(None) => Err(Cancelled::InvoiceExpired),
-                Err(e) => Err(Cancelled::FinalizationError(e.to_string())),
+                Err(e) => Err(Cancelled::FinalizationError(e.fmt_compact().to_string())),
             };
         }
 
@@ -210,7 +211,7 @@ impl SendStateMachine {
             .gateway
             .is_direct_swap(&invoice)
             .await
-            .map_err(|e| Cancelled::RegistrationError(e.to_string()))?
+            .map_err(|e| Cancelled::RegistrationError(e.fmt_compact().to_string()))?
         {
             Some((contract, client)) => {
                 match client

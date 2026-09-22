@@ -36,7 +36,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
-use anyhow::{Context, anyhow, ensure};
+use anyhow::{Context, anyhow};
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
 use bitcoin::{Address, Network, Txid, secp256k1};
@@ -94,12 +94,13 @@ pub use fedimint_gateway_ui::IAdminGateway;
 use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
 use fedimint_gw_client::{
-    GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, Htlc, IGatewayClientV1,
-    SwapParameters,
+    GatewayClientModule, GatewayClientV1Error, GatewayExtPayStates, GatewayExtReceiveStates, Htlc,
+    IGatewayClientV1, SwapParameters,
 };
 use fedimint_gwv2_client::events::compute_lnv2_stats;
 use fedimint_gwv2_client::{
-    EXPIRATION_DELTA_MINIMUM_V2, FinalReceiveState, GatewayClientModuleV2, IGatewayClientV2,
+    EXPIRATION_DELTA_MINIMUM_V2, FinalReceiveState, GatewayClientModuleV2, GatewayClientV2Error,
+    IGatewayClientV2,
 };
 use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
@@ -3875,7 +3876,8 @@ impl IGatewayClientV2 for Gateway {
     async fn is_direct_swap(
         &self,
         invoice: &Bolt11Invoice,
-    ) -> anyhow::Result<Option<(IncomingContract, ClientHandleArc)>> {
+    ) -> std::result::Result<Option<(IncomingContract, ClientHandleArc)>, GatewayClientV2Error>
+    {
         // Deciding this from a locally synthesised "not connected" would route a
         // direct swap onto the lightning network, or -- once the send state
         // machine turns the error into a cancellation -- forfeit a contract we
@@ -3889,7 +3891,8 @@ impl IGatewayClientV2 for Gateway {
                         .amount_milli_satoshis()
                         .expect("The amount invoice has been previously checked"),
                 )
-                .await?;
+                .await
+                .map_err(GatewayClientV2Error::new)?;
             Ok(Some((contract, client)))
         } else {
             Ok(None)
@@ -3920,11 +3923,12 @@ impl IGatewayClientV2 for Gateway {
         &self,
         federation_id: &FederationId,
         amount: u64,
-    ) -> anyhow::Result<Amount> {
+    ) -> std::result::Result<Amount, GatewayClientV2Error> {
         Ok(self
             .routing_info_v2(federation_id)
-            .await?
-            .ok_or(anyhow!("Routing Info not available"))?
+            .await
+            .map_err(GatewayClientV2Error::new)?
+            .ok_or_else(|| GatewayClientV2Error::new("Routing Info not available"))?
             .send_fee_minimum
             .add_to(amount))
     }
@@ -3951,27 +3955,28 @@ impl IGatewayClientV2 for Gateway {
         client: &ClientHandleArc,
         invoice: &Bolt11Invoice,
         allow_fresh_dispatch: bool,
-    ) -> anyhow::Result<Option<FinalReceiveState>> {
-        let swap_params = SwapParameters {
-            payment_hash: *invoice.payment_hash(),
-            amount_msat: Amount::from_msats(
-                invoice
-                    .amount_milli_satoshis()
-                    .ok_or(anyhow!("Amountless invoice not supported"))?,
-            ),
-        };
+    ) -> std::result::Result<Option<FinalReceiveState>, GatewayClientV2Error> {
+        let swap_params =
+            SwapParameters {
+                payment_hash: *invoice.payment_hash(),
+                amount_msat: Amount::from_msats(invoice.amount_milli_satoshis().ok_or_else(
+                    || GatewayClientV2Error::new("Amountless invoice not supported"),
+                )?),
+            };
         let lnv1 = client
             .get_first_module::<GatewayClientModule>()
             .expect("No LNv1 module");
         let Some(operation_id) = lnv1
             .gateway_handle_direct_swap(swap_params, allow_fresh_dispatch)
-            .await?
+            .await
+            .map_err(GatewayClientV2Error::new)?
         else {
             return Ok(None);
         };
         let mut stream = lnv1
             .gateway_subscribe_ln_receive(operation_id)
-            .await?
+            .await
+            .map_err(GatewayClientV2Error::new)?
             .into_stream();
         let mut final_state = FinalReceiveState::Failure;
         while let Some(update) = stream.next().await {
@@ -4062,14 +4067,21 @@ impl IGatewayClientV1 for Gateway {
         Ok(())
     }
 
-    async fn verify_pruned_invoice(&self, payment_data: PaymentData) -> anyhow::Result<()> {
+    async fn verify_pruned_invoice(
+        &self,
+        payment_data: PaymentData,
+    ) -> std::result::Result<(), GatewayClientV1Error> {
         if matches!(payment_data, PaymentData::PrunedInvoice { .. }) {
-            let lightning_context = self.get_lightning_context().await?;
+            let lightning_context = self
+                .get_lightning_context()
+                .await
+                .map_err(GatewayClientV1Error::new)?;
 
-            ensure!(
-                lightning_context.lnrpc.supports_private_payments(),
-                "Private payments are not supported by the lightning node"
-            );
+            if !lightning_context.lnrpc.supports_private_payments() {
+                return Err(GatewayClientV1Error::new(
+                    "Private payments are not supported by the lightning node",
+                ));
+            }
         }
 
         Ok(())
@@ -4166,18 +4178,20 @@ impl IGatewayClientV1 for Gateway {
         &self,
         payment_hash: sha256::Hash,
         amount: Amount,
-    ) -> anyhow::Result<
+    ) -> std::result::Result<
         Option<(
             fedimint_lnv2_common::contracts::IncomingContract,
             ClientHandleArc,
         )>,
+        GatewayClientV1Error,
     > {
         let (contract, client) = self
             .get_registered_incoming_contract_and_client_v2(
                 PaymentImage::Hash(payment_hash),
                 amount.msats,
             )
-            .await?;
+            .await
+            .map_err(GatewayClientV1Error::new)?;
         Ok(Some((contract, client)))
     }
 }

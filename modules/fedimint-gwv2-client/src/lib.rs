@@ -48,6 +48,7 @@ use receive_sm::{ReceiveSMState, ReceiveStateMachine};
 use secp256k1::schnorr::Signature;
 use send_sm::{SendSMState, SendStateMachine};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use tpe::{AggregatePublicKey, PublicKeyShare};
 use tracing::{info, warn};
 
@@ -851,10 +852,16 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
     /// are the same, then the gateway can use another client to complete
     /// the payment be swapping ecash instead of a payment over the
     /// Lightning network.
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`GatewayClientV2Error`] if the invoice is payable by a
+    /// direct swap but the gateway cannot fund the contract for it. The send
+    /// state machine cancels the payment on a failure.
     async fn is_direct_swap(
         &self,
         invoice: &Bolt11Invoice,
-    ) -> anyhow::Result<Option<(IncomingContract, ClientHandleArc)>>;
+    ) -> Result<Option<(IncomingContract, ClientHandleArc)>, GatewayClientV2Error>;
 
     /// Initiates a payment over the Lightning network.
     async fn pay(
@@ -883,11 +890,16 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
     /// gateway's transaction fee and optionally additional fee to cover the
     /// gateway's Lightning fee if the payment goes over the Lightning
     /// network.
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`GatewayClientV2Error`] if the gateway cannot price a
+    /// payment for this federation.
     async fn min_contract_amount(
         &self,
         federation_id: &FederationId,
         amount: u64,
-    ) -> anyhow::Result<Amount>;
+    ) -> Result<Amount, GatewayClientV2Error>;
 
     /// Check if this invoice was created using LNv1 and if the gateway is
     /// connected to the target federation.
@@ -901,12 +913,17 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
     /// swap exists yet. Callers pass `false` when a wall-clock gate such as
     /// invoice expiry forbids starting a new swap, and receive `Ok(None)` to
     /// signal that nothing was started.
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`GatewayClientV2Error`] if the swap could not be started
+    /// or followed. The send state machine cancels the payment on a failure.
     async fn relay_lnv1_swap(
         &self,
         client: &ClientHandleArc,
         invoice: &Bolt11Invoice,
         allow_fresh_dispatch: bool,
-    ) -> anyhow::Result<Option<FinalReceiveState>>;
+    ) -> Result<Option<FinalReceiveState>, GatewayClientV2Error>;
 
     /// Claims the given payment image for `operation_id` in the gateway's
     /// global database, returning `true` if this operation may claim the
@@ -924,6 +941,26 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
         payment_image: &PaymentImage,
         operation_id: OperationId,
     ) -> bool;
+}
+
+/// A failure reported by the gateway behind [`IGatewayClientV2`].
+///
+/// The trait is implemented by the gateway, not by this module, so the causes
+/// are the gateway's own. This type carries them unchanged: its `Display` and
+/// its `source()` are the cause's.
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct GatewayClientV2Error(Box<dyn std::error::Error + Send + Sync>);
+
+impl GatewayClientV2Error {
+    /// Wraps a failure of the gateway's [`IGatewayClientV2`] implementation,
+    /// which may be any error value or a plain message.
+    pub fn new<E>(source: E) -> Self
+    where
+        E: Into<Box<dyn std::error::Error + Send + Sync>>,
+    {
+        Self(source.into())
+    }
 }
 
 #[cfg(test)]

@@ -1,4 +1,5 @@
 mod complete;
+pub mod error;
 pub mod events;
 pub mod pay;
 #[cfg(test)]
@@ -78,6 +79,7 @@ use self::pay::{
     GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
     OutgoingContractError, OutgoingPaymentError,
 };
+pub use crate::error::GatewayClientV1Error;
 
 /// Exclusive remaining-CLTV safety margin for an intercepted LNv1 HTLC.
 ///
@@ -1269,7 +1271,15 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
 
     /// Verify that the lightning node supports private payments if a pruned
     /// invoice is supplied.
-    async fn verify_pruned_invoice(&self, payment_data: PaymentData) -> anyhow::Result<()>;
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`GatewayClientV1Error`] if the invoice is pruned and the
+    /// gateway cannot pay it.
+    async fn verify_pruned_invoice(
+        &self,
+        payment_data: PaymentData,
+    ) -> Result<(), GatewayClientV1Error>;
 
     /// Retrieves the federation's routing fees from the federation's config.
     async fn get_routing_fees(&self, federation_id: FederationId) -> Option<RoutingFees>;
@@ -1328,14 +1338,21 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
 
     /// Check if the gateway satisfy the LNv1 payment by funding an LNv2
     /// `IncomingContract`
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`GatewayClientV1Error`] if the gateway cannot fund an LNv2
+    /// contract for this payment. The pay state machine treats a failure like
+    /// `None` and pays the invoice some other way.
     async fn is_lnv2_direct_swap(
         &self,
         payment_hash: sha256::Hash,
         amount: Amount,
-    ) -> anyhow::Result<
+    ) -> Result<
         Option<(
             fedimint_lnv2_common::contracts::IncomingContract,
             ClientHandleArc,
         )>,
+        GatewayClientV1Error,
     >;
 }
