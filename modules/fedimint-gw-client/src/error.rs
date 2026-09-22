@@ -7,6 +7,7 @@
 
 use fedimint_client_module::TransactionSubmitError;
 use fedimint_core::core::OperationId;
+use fedimint_core::db::{AutocommitError, DatabaseError};
 use fedimint_lightning::LightningRpcError;
 use fedimint_ln_client::incoming::IncomingSmError;
 use thiserror::Error;
@@ -56,6 +57,55 @@ pub enum HandleInterceptedHtlcError {
     /// submitted.
     #[error("The funding transaction could not be submitted")]
     Transaction(#[from] TransactionSubmitError),
+}
+
+/// A failure to fund the incoming contract of a direct swap.
+///
+/// A direct swap pays an invoice issued in another federation served by this
+/// gateway by funding the matching incoming contract in this one, so the
+/// payment never touches the Lightning network. Joining a swap that is already
+/// under way, or declining to start one, is not a failure.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum HandleDirectSwapError {
+    /// The federation's offer for this payment could not be turned into an
+    /// incoming contract: it did not arrive in time, violates the fee
+    /// policy, does not match the swap, already has a funded contract, or
+    /// the federation could not be asked.
+    #[error("The incoming contract could not be created")]
+    IncomingContract(#[from] IncomingSmError),
+
+    /// The operation id derived while funding disagrees with the one derived
+    /// from the payment hash. This is a bug in this module.
+    #[error(
+        "Operation id derivation must match: {} != {}",
+        .derived.fmt_short(),
+        .expected.fmt_short()
+    )]
+    OperationIdMismatch {
+        /// The id derived from the payment hash.
+        expected: OperationId,
+        /// The id the funding step derived.
+        derived: OperationId,
+    },
+
+    /// The transaction funding the incoming contract could not be built or
+    /// submitted.
+    #[error("The funding transaction could not be submitted")]
+    Transaction(#[from] TransactionSubmitError),
+
+    /// Recording the swap in the database kept failing.
+    #[error("Database error")]
+    Database(#[from] DatabaseError),
+}
+
+impl From<AutocommitError<HandleDirectSwapError>> for HandleDirectSwapError {
+    fn from(e: AutocommitError<Self>) -> Self {
+        match e {
+            AutocommitError::ClosureError { error, .. } => error,
+            AutocommitError::CommitFailed { last_error, .. } => Self::Database(last_error),
+        }
+    }
 }
 
 /// A failure reported by the gateway behind [`crate::IGatewayClientV1`].

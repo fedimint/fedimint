@@ -36,7 +36,7 @@ use fedimint_gw_client::pay::{
 };
 use fedimint_gw_client::{
     GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, GatewayMeta,
-    HandleInterceptedHtlcError, Htlc, SwapParameters,
+    HandleDirectSwapError, HandleInterceptedHtlcError, Htlc, SwapParameters,
 };
 use fedimint_gwv2_client::events::{
     CompleteLightningPaymentSucceeded, IncomingPaymentStarted, IncomingPaymentSucceeded,
@@ -3284,6 +3284,44 @@ async fn gateway_client_subscriptions_reject_an_unknown_operation() -> anyhow::R
             gateway_module.gateway_subscribe_ln_receive(unknown).await,
             Err(OperationLookupError::NotFound(_))
         ));
+
+        Ok(())
+    })
+    .await
+}
+
+/// A direct swap for a payment the federation holds no offer for is refused
+/// with the offer lookup's own failure, and nothing is funded.
+#[tokio::test(flavor = "multi_thread")]
+async fn gateway_client_direct_swap_without_an_offer_is_refused() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, _, _| async move {
+        let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+        let initial_gateway_balance = sats(1000);
+        gateway_client
+            .get_first_module::<DummyClientModule>()?
+            .mock_receive(initial_gateway_balance, AmountUnit::BITCOIN)
+            .await?;
+
+        let error = gateway_client
+            .get_first_module::<GatewayClientModule>()?
+            .gateway_handle_direct_swap(
+                SwapParameters {
+                    payment_hash: sha256(&[15]),
+                    amount_msat: Amount::from_msats(100),
+                },
+                true,
+            )
+            .await
+            .expect_err("There is no offer to fund");
+
+        assert_matches!(
+            error,
+            HandleDirectSwapError::IncomingContract(IncomingSmError::TimeoutFetchingOffer { .. })
+        );
+        assert_eq!(
+            gateway_client.get_balance_for_btc().await?,
+            initial_gateway_balance
+        );
 
         Ok(())
     })

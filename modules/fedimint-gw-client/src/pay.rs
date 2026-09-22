@@ -664,12 +664,18 @@ impl GatewayPayInvoice {
                     }
                 }
                 Err(e) => {
-                    info!("Failed to initiate direct swap: {e:?} for contract {contract:?}");
+                    info!(
+                        err = %e.fmt_compact(),
+                        "Failed to initiate direct swap for contract {contract:?}"
+                    );
                     let outgoing_payment_error = OutgoingPaymentError {
                         contract_id: contract.contract.contract_id(),
                         contract: Some(contract.clone()),
                         error_type: OutgoingPaymentErrorType::SwapFailed {
-                            swap_error: format!("Failed to initiate direct swap: {e}"),
+                            swap_error: format!(
+                                "Failed to initiate direct swap: {}",
+                                e.fmt_compact()
+                            ),
                         },
                     };
                     GatewayPayStateMachine {

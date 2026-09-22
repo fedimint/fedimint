@@ -80,7 +80,7 @@ use self::pay::{
     GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
     OutgoingContractError, OutgoingPaymentError,
 };
-pub use crate::error::{GatewayClientV1Error, HandleInterceptedHtlcError};
+pub use crate::error::{GatewayClientV1Error, HandleDirectSwapError, HandleInterceptedHtlcError};
 
 /// Exclusive remaining-CLTV safety margin for an intercepted LNv1 HTLC.
 ///
@@ -700,11 +700,19 @@ impl GatewayClientModule {
     /// callers pass `false` when a wall-clock gate such as invoice expiry
     /// forbids starting a new swap, and receive `Ok(None)` to signal that
     /// nothing was started.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`HandleDirectSwapError::IncomingContract`] if the
+    /// federation's offer cannot be funded,
+    /// [`HandleDirectSwapError::Transaction`] if the funding transaction
+    /// cannot be submitted, and [`HandleDirectSwapError::Database`] if it
+    /// cannot be recorded.
     pub async fn gateway_handle_direct_swap(
         &self,
         swap_params: SwapParameters,
         allow_fresh_dispatch: bool,
-    ) -> anyhow::Result<Option<OperationId>> {
+    ) -> Result<Option<OperationId>, HandleDirectSwapError> {
         debug!("Handling direct swap {swap_params:?}");
 
         let payment_hash = swap_params.payment_hash;
@@ -732,10 +740,12 @@ impl GatewayClientModule {
             .create_funding_incoming_contract_output_from_swap(swap_params.clone())
             .await?;
         // Keep the direct derivation above in sync with the funding helper.
-        anyhow::ensure!(
-            op_id_from_funding == operation_id,
-            "operation id derivation must match: {op_id_from_funding:?} != {operation_id:?}"
-        );
+        if op_id_from_funding != operation_id {
+            return Err(HandleDirectSwapError::OperationIdMismatch {
+                expected: operation_id,
+                derived: op_id_from_funding,
+            });
+        }
 
         self.client_ctx
             .module_db()
@@ -790,18 +800,13 @@ impl GatewayClientModule {
                             "Submitted funding transaction for direct swap"
                         );
 
-                        Ok(Some(operation_id))
+                        Ok::<_, HandleDirectSwapError>(Some(operation_id))
                     })
                 },
                 Some(100),
             )
             .await
-            .map_err(|e| match e {
-                AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    anyhow::anyhow!("Commit to DB failed: {last_error}")
-                }
-            })
+            .map_err(HandleDirectSwapError::from)
     }
 
     /// Subscribe to updates when the gateway is handling an intercepted HTLC,
