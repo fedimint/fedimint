@@ -62,8 +62,8 @@ use fedimint_ln_common::{
     GatewayRegistrationAuth, KIND, LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA,
     LNV1_INCOMING_HTLC_EXPIRY_SAFETY_MARGIN, LightningCommonInit, LightningGateway,
     LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0,
-    PreimageAuth, RemoveGatewayRequest, create_gateway_registration_message,
-    create_gateway_remove_message,
+    MissingInvoiceAmountError, PreimageAuth, RemoveGatewayRequest,
+    create_gateway_registration_message, create_gateway_remove_message,
 };
 use fedimint_lnv2_common::GatewayApi;
 use futures::StreamExt;
@@ -1211,11 +1211,9 @@ impl Htlc {
     }
 }
 
-impl TryFrom<InterceptPaymentRequest> for Htlc {
-    type Error = anyhow::Error;
-
-    fn try_from(s: InterceptPaymentRequest) -> Result<Self, Self::Error> {
-        Ok(Self {
+impl From<InterceptPaymentRequest> for Htlc {
+    fn from(s: InterceptPaymentRequest) -> Self {
+        Self {
             payment_hash: s.payment_hash,
             // Keep the two amounts distinct: `incoming_amount_msat` is the real
             // value locked in the HTLC, while `amount_msat` is the sender-written
@@ -1227,7 +1225,7 @@ impl TryFrom<InterceptPaymentRequest> for Htlc {
             short_channel_id: s.short_channel_id,
             incoming_chan_id: s.incoming_chan_id,
             htlc_id: s.htlc_id,
-        })
+        }
     }
 }
 
@@ -1238,13 +1236,11 @@ pub struct SwapParameters {
 }
 
 impl TryFrom<PaymentData> for SwapParameters {
-    type Error = anyhow::Error;
+    type Error = MissingInvoiceAmountError;
 
     fn try_from(s: PaymentData) -> Result<Self, Self::Error> {
         let payment_hash = s.payment_hash();
-        let amount_msat = s
-            .amount()
-            .ok_or_else(|| anyhow::anyhow!("Amountless invoice cannot be used in direct swap"))?;
+        let amount_msat = s.amount().ok_or(MissingInvoiceAmountError)?;
         Ok(Self {
             payment_hash,
             amount_msat,

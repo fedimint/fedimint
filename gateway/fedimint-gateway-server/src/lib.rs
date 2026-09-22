@@ -94,7 +94,7 @@ pub use fedimint_gateway_ui::IAdminGateway;
 use fedimint_gw_client::events::compute_lnv1_stats;
 use fedimint_gw_client::pay::{OutgoingPaymentError, OutgoingPaymentErrorType};
 use fedimint_gw_client::{
-    GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, IGatewayClientV1,
+    GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, Htlc, IGatewayClientV1,
     SwapParameters,
 };
 use fedimint_gwv2_client::events::compute_lnv2_stats;
@@ -1383,31 +1383,23 @@ impl Gateway {
         client
             .borrow()
             .with(|client| async {
-                let htlc = htlc_request.clone().try_into();
-                match htlc {
-                    Ok(htlc) => {
-                        let lnv1 =
-                            client
-                                .get_first_module::<GatewayClientModule>()
-                                .map_err(|_| {
-                                    PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
-                                        "Federation does not have LNv1 module".to_string(),
-                                    ))
-                                })?;
-                        match lnv1
-                            .gateway_handle_intercepted_htlc(htlc, async {
-                                Ok(lightning_context.lnrpc.info().await?.block_height)
-                            })
-                            .await
-                        {
-                            Ok(_) => Ok(()),
-                            Err(e) => Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
-                                format!("Error intercepting lightning payment {e:?}"),
-                            ))),
-                        }
-                    }
-                    _ => Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
-                        "Could not convert InterceptHtlcResult into an HTLC".to_string(),
+                let htlc = Htlc::from(htlc_request.clone());
+                let lnv1 = client
+                    .get_first_module::<GatewayClientModule>()
+                    .map_err(|_| {
+                        PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
+                            "Federation does not have LNv1 module".to_string(),
+                        ))
+                    })?;
+                match lnv1
+                    .gateway_handle_intercepted_htlc(htlc, async {
+                        Ok(lightning_context.lnrpc.info().await?.block_height)
+                    })
+                    .await
+                {
+                    Ok(_) => Ok(()),
+                    Err(e) => Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment(
+                        format!("Error intercepting lightning payment {e:?}"),
                     ))),
                 }
             })
