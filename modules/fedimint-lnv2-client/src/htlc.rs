@@ -79,7 +79,7 @@ pub struct SpendHtlcOperationMeta {
 pub enum HtlcError {
     #[error("The amount must be greater than zero")]
     InvalidAmount,
-    #[error("The expiration delta must be greater than zero")]
+    #[error("The expiration delta must be greater than zero and must not overflow the block count")]
     InvalidExpirationDelta,
     #[error("Failed to request the consensus block count")]
     FailedToRequestBlockCount(String),
@@ -167,7 +167,11 @@ impl LightningClientModule {
             return Err(HtlcError::InvalidExpirationDelta);
         }
 
-        let consensus_block_count = self.consensus_block_count().await?;
+        let expiration = self
+            .consensus_block_count()
+            .await?
+            .checked_add(expiration_delta)
+            .ok_or(HtlcError::InvalidExpirationDelta)?;
 
         let (ephemeral_tweak, ephemeral_pk) = tweak::generate(self.keypair.public_key());
 
@@ -178,7 +182,7 @@ impl LightningClientModule {
         let contract = OutgoingContract {
             payment_image,
             amount,
-            expiration: consensus_block_count + expiration_delta,
+            expiration,
             claim_pk,
             refund_pk: refund_keypair.public_key(),
             ephemeral_pk,
