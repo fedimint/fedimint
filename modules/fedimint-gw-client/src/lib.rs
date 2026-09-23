@@ -1,4 +1,5 @@
 mod complete;
+pub mod error;
 pub mod events;
 pub mod pay;
 #[cfg(test)]
@@ -29,12 +30,13 @@ use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client_module::{
-    AddStateMachinesError, DynGlobalClientContext, sm_enum_variant_translation,
+    AddStateMachinesError, DynGlobalClientContext, OperationLookupError,
+    sm_enum_variant_translation,
 };
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::{AutocommitError, DatabaseTransaction};
+use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::time::duration_since_epoch;
@@ -62,8 +64,8 @@ use fedimint_ln_common::{
     GatewayRegistrationAuth, KIND, LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA,
     LNV1_INCOMING_HTLC_EXPIRY_SAFETY_MARGIN, LightningCommonInit, LightningGateway,
     LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0,
-    PreimageAuth, RemoveGatewayRequest, create_gateway_registration_message,
-    create_gateway_remove_message,
+    MissingInvoiceAmountError, PreimageAuth, RemoveGatewayRequest,
+    create_gateway_registration_message, create_gateway_remove_message,
 };
 use fedimint_lnv2_common::GatewayApi;
 use futures::StreamExt;
@@ -76,7 +78,10 @@ use tracing::{debug, error, info, warn};
 use self::complete::GatewayCompleteStateMachine;
 use self::pay::{
     GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
-    OutgoingContractError, OutgoingPaymentError,
+    OutgoingPaymentError,
+};
+pub use crate::error::{
+    GatewayClientV1Error, GatewayPayInvoiceError, HandleDirectSwapError, HandleInterceptedHtlcError,
 };
 
 /// Exclusive remaining-CLTV safety margin for an intercepted LNv1 HTLC.
@@ -555,11 +560,22 @@ impl GatewayClientModule {
     /// `current_block_height` resolves to the Lightning backend's absolute best
     /// Bitcoin block height. It is awaited only after replay detection, before
     /// any fresh funding.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`HandleInterceptedHtlcError::BlockHeight`] if
+    /// `current_block_height` fails,
+    /// [`HandleInterceptedHtlcError::UnsafeExpiry`] if the HTLC expires too
+    /// soon, [`HandleInterceptedHtlcError::IncomingContract`]
+    /// if the federation's offer cannot be funded, and
+    /// [`HandleInterceptedHtlcError::Transaction`] if the funding transaction
+    /// cannot be submitted. A replay of a circuit already handled does not
+    /// fail.
     pub async fn gateway_handle_intercepted_htlc(
         &self,
         htlc: Htlc,
-        current_block_height: impl Future<Output = anyhow::Result<u32>>,
-    ) -> anyhow::Result<OperationId> {
+        current_block_height: impl Future<Output = Result<u32, LightningRpcError>>,
+    ) -> Result<OperationId, HandleInterceptedHtlcError> {
         debug!("Handling intercepted HTLC {htlc:?}");
 
         let operation_id = OperationId(htlc.payment_hash.to_byte_array());
@@ -609,7 +625,9 @@ impl GatewayClientModule {
             return Ok(operation_id);
         }
 
-        let current_block_height = current_block_height.await?;
+        let current_block_height = current_block_height
+            .await
+            .map_err(HandleInterceptedHtlcError::BlockHeight)?;
         htlc.ensure_safe_expiry(current_block_height)?;
         let remaining_blocks = htlc.incoming_expiry.saturating_sub(current_block_height);
         if remaining_blocks <= u32::from(LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA) {
@@ -629,10 +647,12 @@ impl GatewayClientModule {
             .await?;
         // Keep the direct derivation above in sync with the funding helper. Return
         // an error instead of panicking so the caller can fail back the HTLC cleanly.
-        anyhow::ensure!(
-            op_id_from_funding == operation_id,
-            "operation id derivation must match: {op_id_from_funding:?} != {operation_id:?}"
-        );
+        if op_id_from_funding != operation_id {
+            return Err(HandleInterceptedHtlcError::OperationIdMismatch {
+                expected: operation_id,
+                derived: op_id_from_funding,
+            });
+        }
 
         let output = ClientOutput {
             output: LightningOutput::V0(client_output.output),
@@ -682,11 +702,19 @@ impl GatewayClientModule {
     /// callers pass `false` when a wall-clock gate such as invoice expiry
     /// forbids starting a new swap, and receive `Ok(None)` to signal that
     /// nothing was started.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`HandleDirectSwapError::IncomingContract`] if the
+    /// federation's offer cannot be funded,
+    /// [`HandleDirectSwapError::Transaction`] if the funding transaction
+    /// cannot be submitted, and [`HandleDirectSwapError::Database`] if it
+    /// cannot be recorded.
     pub async fn gateway_handle_direct_swap(
         &self,
         swap_params: SwapParameters,
         allow_fresh_dispatch: bool,
-    ) -> anyhow::Result<Option<OperationId>> {
+    ) -> Result<Option<OperationId>, HandleDirectSwapError> {
         debug!("Handling direct swap {swap_params:?}");
 
         let payment_hash = swap_params.payment_hash;
@@ -714,10 +742,12 @@ impl GatewayClientModule {
             .create_funding_incoming_contract_output_from_swap(swap_params.clone())
             .await?;
         // Keep the direct derivation above in sync with the funding helper.
-        anyhow::ensure!(
-            op_id_from_funding == operation_id,
-            "operation id derivation must match: {op_id_from_funding:?} != {operation_id:?}"
-        );
+        if op_id_from_funding != operation_id {
+            return Err(HandleDirectSwapError::OperationIdMismatch {
+                expected: operation_id,
+                derived: op_id_from_funding,
+            });
+        }
 
         self.client_ctx
             .module_db()
@@ -772,26 +802,26 @@ impl GatewayClientModule {
                             "Submitted funding transaction for direct swap"
                         );
 
-                        Ok(Some(operation_id))
+                        Ok::<_, HandleDirectSwapError>(Some(operation_id))
                     })
                 },
                 Some(100),
             )
             .await
-            .map_err(|e| match e {
-                AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    anyhow::anyhow!("Commit to DB failed: {last_error}")
-                }
-            })
+            .map_err(HandleDirectSwapError::from)
     }
 
     /// Subscribe to updates when the gateway is handling an intercepted HTLC,
     /// or direct swap between federations
+    ///
+    /// # Errors
+    ///
+    /// Fails with an [`OperationLookupError`] if no operation with this id
+    /// exists, or if another module started it.
     pub async fn gateway_subscribe_ln_receive(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<GatewayExtReceiveStates>> {
+    ) -> Result<UpdateStreamOrOutcome<GatewayExtReceiveStates>, OperationLookupError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
@@ -877,10 +907,22 @@ impl GatewayClientModule {
     }
 
     /// Pay lightning invoice on behalf of federation user
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`GatewayPayInvoiceError::MissingInvoiceAmount`] if the
+    /// invoice has no amount, [`GatewayPayInvoiceError::PrunedInvoiceRejected`]
+    /// if the gateway cannot pay a pruned invoice,
+    /// [`GatewayPayInvoiceError::Unauthorized`] if a payment of this contract
+    /// is already under way and the request does not carry the
+    /// authentication it was started with,
+    /// [`GatewayPayInvoiceError::StateMachines`] if the payment cannot be
+    /// started, and [`GatewayPayInvoiceError::Database`] if it cannot be
+    /// recorded.
     pub async fn gateway_pay_bolt11_invoice(
         &self,
         pay_invoice_payload: PayInvoicePayload,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, GatewayPayInvoiceError> {
         let payload = pay_invoice_payload.clone();
 
         // `payment_data` is caller-supplied on the unauthenticated `/pay_invoice`
@@ -891,11 +933,12 @@ impl GatewayClientModule {
         let invoice_amount = pay_invoice_payload
             .payment_data
             .amount()
-            .ok_or(OutgoingContractError::InvoiceMissingAmount)?;
+            .ok_or(GatewayPayInvoiceError::MissingInvoiceAmount)?;
 
         self.lightning_manager
             .verify_pruned_invoice(pay_invoice_payload.payment_data)
-            .await?;
+            .await
+            .map_err(GatewayPayInvoiceError::PrunedInvoiceRejected)?;
 
         self.client_ctx.module_db()
             .autocommit(
@@ -926,10 +969,9 @@ impl GatewayClientModule {
                                     if PreimageAuth::new(preimage_auth)
                                         .verifies(payload.preimage_auth)
                             ) {
-                                anyhow::bail!(
-                                    "Not authorized to receive the preimage for contract {}",
-                                    payload.contract_id
-                                );
+                                return Err(GatewayPayInvoiceError::Unauthorized {
+                                    contract_id: payload.contract_id,
+                                });
                             }
 
                             debug!(
@@ -977,27 +1019,29 @@ impl GatewayClientModule {
                                     info!("State machine for operation {} already exists, will not add a new one", operation_id.fmt_short());
                                 }
                                 Err(other) => {
-                                    anyhow::bail!("Failed to add state machines: {other:?}")
+                                    return Err(GatewayPayInvoiceError::StateMachines(other));
                                 }
                             }
-                            Ok(operation_id)
+                            Ok::<_, GatewayPayInvoiceError>(operation_id)
                     })
                 },
                 Some(100),
             )
             .await
-            .map_err(|e| match e {
-                AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    anyhow::anyhow!("Commit to DB failed: {last_error}")
-                }
-            })
+            .map_err(GatewayPayInvoiceError::from)
     }
 
+    /// Subscribe to updates of a payment started with
+    /// [`Self::gateway_pay_bolt11_invoice`].
+    ///
+    /// # Errors
+    ///
+    /// Fails with an [`OperationLookupError`] if no operation with this id
+    /// exists, or if another module started it.
     pub async fn gateway_subscribe_ln_pay(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<GatewayExtPayStates>> {
+    ) -> Result<UpdateStreamOrOutcome<GatewayExtPayStates>, OperationLookupError> {
         let mut stream = self.notifier.subscribe(operation_id).await;
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let client_ctx = self.client_ctx.clone();
@@ -1211,11 +1255,9 @@ impl Htlc {
     }
 }
 
-impl TryFrom<InterceptPaymentRequest> for Htlc {
-    type Error = anyhow::Error;
-
-    fn try_from(s: InterceptPaymentRequest) -> Result<Self, Self::Error> {
-        Ok(Self {
+impl From<InterceptPaymentRequest> for Htlc {
+    fn from(s: InterceptPaymentRequest) -> Self {
+        Self {
             payment_hash: s.payment_hash,
             // Keep the two amounts distinct: `incoming_amount_msat` is the real
             // value locked in the HTLC, while `amount_msat` is the sender-written
@@ -1227,7 +1269,7 @@ impl TryFrom<InterceptPaymentRequest> for Htlc {
             short_channel_id: s.short_channel_id,
             incoming_chan_id: s.incoming_chan_id,
             htlc_id: s.htlc_id,
-        })
+        }
     }
 }
 
@@ -1238,13 +1280,11 @@ pub struct SwapParameters {
 }
 
 impl TryFrom<PaymentData> for SwapParameters {
-    type Error = anyhow::Error;
+    type Error = MissingInvoiceAmountError;
 
     fn try_from(s: PaymentData) -> Result<Self, Self::Error> {
         let payment_hash = s.payment_hash();
-        let amount_msat = s
-            .amount()
-            .ok_or_else(|| anyhow::anyhow!("Amountless invoice cannot be used in direct swap"))?;
+        let amount_msat = s.amount().ok_or(MissingInvoiceAmountError)?;
         Ok(Self {
             payment_hash,
             amount_msat,
@@ -1273,7 +1313,15 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
 
     /// Verify that the lightning node supports private payments if a pruned
     /// invoice is supplied.
-    async fn verify_pruned_invoice(&self, payment_data: PaymentData) -> anyhow::Result<()>;
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`GatewayClientV1Error`] if the invoice is pruned and the
+    /// gateway cannot pay it.
+    async fn verify_pruned_invoice(
+        &self,
+        payment_data: PaymentData,
+    ) -> Result<(), GatewayClientV1Error>;
 
     /// Retrieves the federation's routing fees from the federation's config.
     async fn get_routing_fees(&self, federation_id: FederationId) -> Option<RoutingFees>;
@@ -1332,14 +1380,21 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
 
     /// Check if the gateway satisfy the LNv1 payment by funding an LNv2
     /// `IncomingContract`
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`GatewayClientV1Error`] if the gateway holds no LNv2
+    /// incoming contract it can use for this payment. The pay state machine
+    /// treats a failure like `None` and pays the invoice some other way.
     async fn is_lnv2_direct_swap(
         &self,
         payment_hash: sha256::Hash,
         amount: Amount,
-    ) -> anyhow::Result<
+    ) -> Result<
         Option<(
             fedimint_lnv2_common::contracts::IncomingContract,
             ClientHandleArc,
         )>,
+        GatewayClientV1Error,
     >;
 }

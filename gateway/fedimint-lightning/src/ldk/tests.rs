@@ -9,8 +9,8 @@ use lockable::LockPool;
 use tokio::sync::{RwLock, oneshot};
 
 use super::{
-    GatewayLdkClient, InboundRegistrationRefusal, PendingPaymentWakeup, check_inbound_registration,
-    get_esplora_url, htlc_completion_error,
+    GatewayLdkClient, InboundRegistrationRefusal, LdkClientInitError, PendingPaymentWakeup,
+    check_inbound_registration, get_esplora_url, htlc_completion_error,
 };
 use crate::LightningRpcError;
 
@@ -55,6 +55,45 @@ fn verify_ldk_esplora_url() {
     let esplora_url = get_esplora_url(url).expect("Could not get esplora URL");
     // URLs with ports are NOT allowed to have trailing slashes
     assert!(!esplora_url.ends_with("/"));
+}
+
+#[test]
+fn an_esplora_url_without_a_host_is_rejected() {
+    let url = SafeUrl::parse("unix:/run/esplora.sock").expect("Cannot parse URL");
+
+    assert!(matches!(
+        get_esplora_url(url),
+        Err(LdkClientInitError::MissingEsploraHost)
+    ));
+}
+
+/// The data directory is checked before LDK builds anything, so a path LDK
+/// cannot use is refused without touching the disk or the network.
+#[cfg(unix)]
+#[test]
+fn a_non_utf8_data_dir_is_rejected_before_the_node_is_built() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt as _;
+    use std::path::Path;
+
+    use bitcoin::Network;
+    use fedimint_bip39::Mnemonic;
+    use fedimint_gateway_common::ChainSource;
+
+    let runtime = Arc::new(tokio::runtime::Runtime::new().expect("A tokio runtime can be built"));
+    let result = GatewayLdkClient::new(
+        Path::new(OsStr::from_bytes(b"\xff")),
+        ChainSource::Esplora {
+            server_url: SafeUrl::parse("http://127.0.0.1:3002").expect("Cannot parse URL"),
+        },
+        Network::Regtest,
+        0,
+        String::new(),
+        Mnemonic::from_entropy(&[0; 16]).expect("16 bytes of entropy form a mnemonic"),
+        runtime,
+    );
+
+    assert!(matches!(result, Err(LdkClientInitError::InvalidDataDir)));
 }
 
 #[tokio::test]

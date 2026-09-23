@@ -10,7 +10,7 @@ use assert_matches::assert_matches;
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_api_client::api::ServerError;
 use fedimint_client::ClientHandleArc;
-use fedimint_client::error::TransactionSubmitError;
+use fedimint_client::error::{OperationLookupError, TransactionSubmitError};
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
@@ -35,7 +35,8 @@ use fedimint_gw_client::pay::{
     OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
 };
 use fedimint_gw_client::{
-    GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, GatewayMeta, Htlc,
+    GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, GatewayMeta,
+    GatewayPayInvoiceError, HandleDirectSwapError, HandleInterceptedHtlcError, Htlc,
     SwapParameters,
 };
 use fedimint_gwv2_client::events::{
@@ -44,10 +45,11 @@ use fedimint_gwv2_client::events::{
 };
 use fedimint_gwv2_client::{
     FinalReceiveState, GatewayClientModuleV2, GatewayClientStateMachinesV2, GatewayOperationMetaV2,
-    IncomingCircuitKey,
+    GatewaySendPaymentError, IncomingCircuitKey,
 };
-use fedimint_lightning::InterceptPaymentRequest;
+use fedimint_lightning::{InterceptPaymentRequest, LightningRpcError};
 use fedimint_ln_client::api::LnFederationApi;
+use fedimint_ln_client::incoming::IncomingSmError;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LightningOperationMeta,
@@ -718,7 +720,7 @@ async fn test_gateway_client_intercept_enforces_expiry_boundary() -> anyhow::Res
             .gateway_handle_intercepted_htlc(htlc.clone(), async { Ok(current_block_height) })
             .await
             .expect_err("HTLC at the expiry boundary must be rejected");
-        assert!(err.to_string().contains("incoming HTLC expiry is unsafe"));
+        assert_matches!(err, HandleInterceptedHtlcError::UnsafeExpiry(_));
         assert_eq!(
             gateway_client.get_balance_for_btc().await?,
             initial_gateway_balance
@@ -746,6 +748,62 @@ async fn test_gateway_client_intercept_enforces_expiry_boundary() -> anyhow::Res
         assert_eq!(
             gateway_client.get_balance_for_btc().await?,
             initial_gateway_balance.saturating_sub(invoice_amount)
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn intercepting_reports_a_failing_block_height() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, user_client, _| async move {
+        let gateway_id = gateway.http_gateway_id().await;
+        let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+        let initial_gateway_balance = sats(1000);
+        gateway_client
+            .get_first_module::<DummyClientModule>()?
+            .mock_receive(initial_gateway_balance, AmountUnit::BITCOIN)
+            .await?;
+
+        let invoice_amount = sats(100);
+        let ln_module = user_client.get_first_module::<LightningClientModule>()?;
+        let lightning_gateway = ln_module.select_gateway(&gateway_id).await;
+        let (_invoice_op, invoice, _) = ln_module
+            .create_bolt11_invoice(
+                invoice_amount,
+                Bolt11InvoiceDescription::Direct(Description::new(
+                    "failing block height".to_string(),
+                )?),
+                None,
+                "test intercept HTLC failing block height",
+                lightning_gateway,
+            )
+            .await?;
+
+        let htlc = Htlc {
+            payment_hash: *invoice.payment_hash(),
+            incoming_amount_msat: invoice_amount,
+            outgoing_amount_msat: invoice_amount,
+            incoming_expiry: fedimint_gw_client::LNV1_HTLC_EXPIRY_SAFETY_MARGIN + 1,
+            short_channel_id: Some(1),
+            incoming_chan_id: 2,
+            htlc_id: 1,
+        };
+        let gateway_ln_module = gateway_client.get_first_module::<GatewayClientModule>()?;
+
+        let err = gateway_ln_module
+            .gateway_handle_intercepted_htlc(htlc, async {
+                Err(LightningRpcError::FailedToGetNodeInfo {
+                    failure_reason: "no height".to_string(),
+                })
+            })
+            .await
+            .expect_err("a failing height lookup must not be swallowed or reported wrong");
+        assert_matches!(err, HandleInterceptedHtlcError::BlockHeight(_));
+        assert_eq!(
+            gateway_client.get_balance_for_btc().await?,
+            initial_gateway_balance
         );
 
         Ok(())
@@ -800,7 +858,10 @@ async fn test_gateway_client_intercept_same_circuit_replay_is_idempotent() -> an
 
         let active_replay_op = gateway_ln_module
             .gateway_handle_intercepted_htlc(htlc.clone(), async {
-                anyhow::bail!("backend info must not be queried for active replay")
+                Err(LightningRpcError::FailedToGetNodeInfo {
+                    failure_reason: "backend info must not be queried for active replay"
+                        .to_string(),
+                })
             })
             .await?;
         assert_eq!(first_op, active_replay_op);
@@ -822,7 +883,10 @@ async fn test_gateway_client_intercept_same_circuit_replay_is_idempotent() -> an
 
         let terminal_replay_op = gateway_ln_module
             .gateway_handle_intercepted_htlc(htlc, async {
-                anyhow::bail!("backend info must not be queried for inactive replay")
+                Err(LightningRpcError::FailedToGetNodeInfo {
+                    failure_reason: "backend info must not be queried for inactive replay"
+                        .to_string(),
+                })
             })
             .await?;
         assert_eq!(first_op, terminal_replay_op);
@@ -867,7 +931,12 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
             Ok(_) => panic!(
                 "Expected incoming offer validation to fail because the offer does not exist"
             ),
-            Err(e) => assert_eq!(e.to_string(), "Timed out fetching the offer".to_string()),
+            Err(e) => assert_matches!(
+                e,
+                HandleInterceptedHtlcError::IncomingContract(
+                    IncomingSmError::TimeoutFetchingOffer { .. }
+                )
+            ),
         }
 
         Ok(())
@@ -913,9 +982,9 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
         {
             Ok(_) => panic!("Expected incoming offer validation to fail due to lack of funds"),
             Err(e) => {
-                let TransactionSubmitError::PrimaryModule(cause) = e
-                    .downcast::<TransactionSubmitError>()
-                    .expect("funding the HTLC fails at transaction submission")
+                let HandleInterceptedHtlcError::Transaction(TransactionSubmitError::PrimaryModule(
+                    cause,
+                )) = e
                 else {
                     panic!("Expected the primary module to reject the funding");
                 };
@@ -1271,12 +1340,7 @@ async fn test_gateway_rejects_amountless_invoice() -> anyhow::Result<()> {
             .gateway_pay_bolt11_invoice(payload)
             .await
             .expect_err("Amountless invoice should be rejected");
-        assert!(
-            error
-                .downcast_ref::<OutgoingContractError>()
-                .is_some_and(|error| matches!(error, OutgoingContractError::InvoiceMissingAmount)),
-            "Expected InvoiceMissingAmount, got: {error}"
-        );
+        assert_matches!(error, GatewayPayInvoiceError::MissingInvoiceAmount);
 
         Ok(())
     })
@@ -2685,7 +2749,7 @@ async fn lnv2_send_payment_join_requires_the_contract_auth() -> anyhow::Result<(
     };
 
     let error = gateway
-        .send_payment_v2(forged)
+        .send_payment_v2(forged.clone())
         .await
         .expect_err("a forged auth signature must not be answered with the payment in flight")
         .to_string();
@@ -2694,6 +2758,15 @@ async fn lnv2_send_payment_join_requires_the_contract_auth() -> anyhow::Result<(
     assert!(
         error.contains("Invalid auth signature for the invoice data"),
         "the request must be refused by the auth check, got: {error}"
+    );
+
+    // The module itself names the refusal.
+    assert_matches!(
+        gateway_client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .send_payment(forged)
+            .await,
+        Err(GatewaySendPaymentError::InvalidAuthSignature)
     );
 
     Ok(())
@@ -2850,10 +2923,7 @@ async fn test_gateway_client_rejects_amountless_invoice() -> anyhow::Result<()> 
             .await
             .expect_err("an invoice without an amount is rejected");
 
-        assert_eq!(
-            error.downcast::<OutgoingContractError>()?,
-            OutgoingContractError::InvoiceMissingAmount
-        );
+        assert_matches!(error, GatewayPayInvoiceError::MissingInvoiceAmount);
 
         Ok(())
     })
@@ -2922,10 +2992,12 @@ async fn test_gateway_client_pay_invoice_is_idempotent_per_contract() -> anyhow:
             // Same contract, different `preimage_auth`: a distinct state machine
             // state, so the executor's dedupe does not catch this one.
             assert!(
-                gateway_module
-                    .gateway_pay_bolt11_invoice(payload(theirs))
-                    .await
-                    .is_err(),
+                matches!(
+                    gateway_module
+                        .gateway_pay_bolt11_invoice(payload(theirs))
+                        .await,
+                    Err(GatewayPayInvoiceError::Unauthorized { .. })
+                ),
                 "a duplicate request must not be answered with someone else's operation"
             );
 
@@ -2936,13 +3008,18 @@ async fn test_gateway_client_pay_invoice_is_idempotent_per_contract() -> anyhow:
             // buy them a join here.
             let theirs_invoice = other_lightning_client.invoice(sats(250), None)?;
             assert!(
-                gateway_module
-                    .gateway_pay_bolt11_invoice(PayInvoicePayload {
-                        payment_data: get_payment_data(selected_gateway.clone(), theirs_invoice),
-                        ..payload(theirs)
-                    })
-                    .await
-                    .is_err(),
+                matches!(
+                    gateway_module
+                        .gateway_pay_bolt11_invoice(PayInvoicePayload {
+                            payment_data: get_payment_data(
+                                selected_gateway.clone(),
+                                theirs_invoice
+                            ),
+                            ..payload(theirs)
+                        })
+                        .await,
+                    Err(GatewayPayInvoiceError::Unauthorized { .. })
+                ),
                 "an authentication for a different invoice must not join this contract"
             );
 
@@ -2978,10 +3055,12 @@ async fn test_gateway_client_pay_invoice_is_idempotent_per_contract() -> anyhow:
             // Still gated once the payment has completed and the operation has
             // the preimage sitting on it for the taking.
             assert!(
-                gateway_module
-                    .gateway_pay_bolt11_invoice(payload(theirs))
-                    .await
-                    .is_err(),
+                matches!(
+                    gateway_module
+                        .gateway_pay_bolt11_invoice(payload(theirs))
+                        .await,
+                    Err(GatewayPayInvoiceError::Unauthorized { .. })
+                ),
                 "a mismatched `preimage_auth` must not reach the preimage"
             );
             assert_eq!(
@@ -3253,4 +3332,88 @@ async fn test_gateway_client_direct_swap_reentry_joins_the_funded_swap() -> anyh
         Ok(())
     })
     .await
+}
+
+/// Following an operation that was never started is refused with the lookup
+/// failure itself, on both the pay and the receive side.
+#[tokio::test(flavor = "multi_thread")]
+async fn gateway_client_subscriptions_reject_an_unknown_operation() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, _, _| async move {
+        let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+        let gateway_module = gateway_client.get_first_module::<GatewayClientModule>()?;
+        let unknown = OperationId::new_random();
+
+        assert_matches!(
+            gateway_module.gateway_subscribe_ln_pay(unknown).await,
+            Err(OperationLookupError::NotFound(_))
+        );
+        assert_matches!(
+            gateway_module.gateway_subscribe_ln_receive(unknown).await,
+            Err(OperationLookupError::NotFound(_))
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+/// A direct swap for a payment the federation holds no offer for is refused
+/// with the offer lookup's own failure, and nothing is funded.
+#[tokio::test(flavor = "multi_thread")]
+async fn gateway_client_direct_swap_without_an_offer_is_refused() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, fed, _, _| async move {
+        let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+        let initial_gateway_balance = sats(1000);
+        gateway_client
+            .get_first_module::<DummyClientModule>()?
+            .mock_receive(initial_gateway_balance, AmountUnit::BITCOIN)
+            .await?;
+
+        let error = gateway_client
+            .get_first_module::<GatewayClientModule>()?
+            .gateway_handle_direct_swap(
+                SwapParameters {
+                    payment_hash: sha256(&[15]),
+                    amount_msat: Amount::from_msats(100),
+                },
+                true,
+            )
+            .await
+            .expect_err("There is no offer to fund");
+
+        assert_matches!(
+            error,
+            HandleDirectSwapError::IncomingContract(IncomingSmError::TimeoutFetchingOffer { .. })
+        );
+        assert_eq!(
+            gateway_client.get_balance_for_btc().await?,
+            initial_gateway_balance
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+/// Funding a direct swap needs the gateway's ecash, so a gateway without any
+/// is refused when the funding transaction is built.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv2_relay_direct_swap_without_funds_is_refused() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+
+    let client = gateway.select_client(fed.id()).await?.into_value();
+    let contract = decryptable_incoming_contract(&client)?;
+
+    assert_matches!(
+        client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .relay_direct_swap(contract, 900, true)
+            .await,
+        Err(TransactionSubmitError::PrimaryModule(_))
+    );
+
+    Ok(())
 }

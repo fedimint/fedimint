@@ -355,7 +355,8 @@ impl GatewayPayInvoice {
                             contract: Some(contract.clone()),
                             error_type: OutgoingPaymentErrorType::SwapFailed {
                                 swap_error: format!(
-                                    "Failed to initiate LNv1 -> LNv2 swap. Err: {err}"
+                                    "Failed to initiate LNv1 -> LNv2 swap. Err: {}",
+                                    err.fmt_compact()
                                 ),
                             },
                         },
@@ -401,9 +402,8 @@ impl GatewayPayInvoice {
         // LNv2 invoice. If this gateway also supports LNv2, the gateway can do
         // a swap between LNv1 `OutgoingContract` and an
         // LNv2 `IncomingContract`.
-        let swap_parameters: anyhow::Result<SwapParameters> =
-            payment_parameters.payment_data.clone().try_into();
-        if let Ok(swap_parameters) = swap_parameters
+        if let Ok(swap_parameters) =
+            SwapParameters::try_from(payment_parameters.payment_data.clone())
             && let Some(new_state) = Self::buy_lnv2_preimage(
                 &context,
                 contract.clone(),
@@ -665,12 +665,18 @@ impl GatewayPayInvoice {
                     }
                 }
                 Err(e) => {
-                    info!("Failed to initiate direct swap: {e:?} for contract {contract:?}");
+                    info!(
+                        err = %e.fmt_compact(),
+                        "Failed to initiate direct swap for contract {contract:?}"
+                    );
                     let outgoing_payment_error = OutgoingPaymentError {
                         contract_id: contract.contract.contract_id(),
                         contract: Some(contract.clone()),
                         error_type: OutgoingPaymentErrorType::SwapFailed {
-                            swap_error: format!("Failed to initiate direct swap: {e}"),
+                            swap_error: format!(
+                                "Failed to initiate direct swap: {}",
+                                e.fmt_compact()
+                            ),
                         },
                     };
                     GatewayPayStateMachine {
@@ -685,12 +691,15 @@ impl GatewayPayInvoice {
                 }
             },
             Err(e) => {
-                info!("Failed to initiate direct swap: {e:?} for contract {contract:?}");
+                info!(
+                    err = %e.fmt_compact(),
+                    "Failed to initiate direct swap for contract {contract:?}"
+                );
                 let outgoing_payment_error = OutgoingPaymentError {
                     contract_id: contract.contract.contract_id(),
                     contract: Some(contract.clone()),
                     error_type: OutgoingPaymentErrorType::SwapFailed {
-                        swap_error: format!("Failed to initiate direct swap: {e}"),
+                        swap_error: format!("Failed to initiate direct swap: {}", e.fmt_compact()),
                     },
                 };
                 GatewayPayStateMachine {
@@ -927,14 +936,16 @@ impl GatewayPayWaitForSwapPreimage {
                     let contract_id = contract.contract.contract_id();
                     warn!(
                         ?contract_id,
-                        "Failed to subscribe to ln receive of direct swap: {e:?}"
+                        err = %e.fmt_compact(),
+                        "Failed to subscribe to ln receive of direct swap"
                     );
                     OutgoingPaymentError {
                         contract_id,
                         contract: Some(contract.clone()),
                         error_type: OutgoingPaymentErrorType::SwapFailed {
                             swap_error: format!(
-                                "Failed to subscribe to ln receive of direct swap: {e}"
+                                "Failed to subscribe to ln receive of direct swap: {}",
+                                e.fmt_compact()
                             ),
                         },
                     }
