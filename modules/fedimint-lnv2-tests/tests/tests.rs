@@ -742,6 +742,21 @@ async fn direct_htlc_claim() -> anyhow::Result<()> {
 
     assert!(claimer.get_balance_for_btc().await? > Amount::ZERO);
 
+    // Retrying the claim after the contract is resolved yields the recorded
+    // operation.
+    assert_eq!(
+        claimer_lnv2
+            .claim_htlc(
+                outpoint,
+                contract.clone(),
+                claim_keypair,
+                preimage,
+                Value::Null,
+            )
+            .await,
+        Ok(claim_operation_id)
+    );
+
     // The funder learns the preimage from the federation.
     assert_eq!(
         funder_lnv2
@@ -842,6 +857,30 @@ async fn direct_htlc_refund() -> anyhow::Result<()> {
         .await_htlc_operation_settled(refund_operation_id)
         .await?;
 
+    // Retrying the refund after the contract is resolved yields the recorded
+    // operation.
+    assert_eq!(
+        funder_lnv2
+            .refund_htlc(outpoint, contract.clone(), Value::Null)
+            .await,
+        Ok(refund_operation_id)
+    );
+
+    // A retry with a contract other than the recorded one is rejected.
+    assert_eq!(
+        funder_lnv2
+            .refund_htlc(
+                outpoint,
+                OutgoingContract {
+                    amount: contract.amount + msats(1),
+                    ..contract.clone()
+                },
+                Value::Null
+            )
+            .await,
+        Err(HtlcError::ContractMismatch)
+    );
+
     Ok(())
 }
 
@@ -918,6 +957,15 @@ async fn direct_htlc_cancel() -> anyhow::Result<()> {
         .await?;
 
     assert!(funder.get_balance_for_btc().await? > balance_before_cancel);
+
+    // Retrying the cancellation after the contract is resolved yields the
+    // recorded operation.
+    assert_eq!(
+        funder_lnv2
+            .cancel_htlc(outpoint, contract.clone(), forfeit_signature, Value::Null)
+            .await,
+        Ok(cancel_operation_id)
+    );
 
     // The contract cannot be claimed anymore.
     assert_eq!(
