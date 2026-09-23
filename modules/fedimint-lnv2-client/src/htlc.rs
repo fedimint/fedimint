@@ -26,6 +26,7 @@
 use std::time::Duration;
 
 use bitcoin::secp256k1;
+use fedimint_client_module::OperationLookupError;
 use fedimint_client_module::module::OutPointRange;
 use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
@@ -88,8 +89,6 @@ pub enum HtlcError {
     NoBlockCountConsensus,
     #[error("Failed to submit the transaction")]
     FailedToSubmitTransaction(String),
-    #[error("An operation for this contract action already exists")]
-    DuplicateOperation(OperationId),
     #[error("The keypair does not match the contract's claim public key")]
     ClaimKeyMismatch,
     #[error("The preimage does not match the contract's payment image")]
@@ -135,8 +134,8 @@ struct HtlcSpend {
 
 impl HtlcSpend {
     /// The operation id of the spend, which is deterministic per action and
-    /// outpoint so that every action on a contract can be recorded only
-    /// once.
+    /// outpoint so that every action on a contract is recorded only once and
+    /// retrying it yields the recorded operation.
     fn operation_id(&self) -> OperationId {
         let action = match self.witness {
             OutgoingWitness::Claim(..) => "lnv2-htlc-claim",
@@ -277,6 +276,10 @@ impl LightningClientModule {
     /// remains; this method only rejects contracts that have already expired.
     /// Await the issuance of the ecash via
     /// [`Self::await_htlc_operation_settled`].
+    ///
+    /// Retrying a claim, refund or cancellation that has already been
+    /// recorded returns the recorded operation, whether or not its
+    /// transaction has been accepted yet.
     pub async fn claim_htlc(
         &self,
         outpoint: OutPoint,
@@ -293,20 +296,29 @@ impl LightningClientModule {
             return Err(HtlcError::InvalidPreimage);
         }
 
-        self.consensus_block_count().await?;
-
-        if self.funded_contract_expiration(outpoint, &contract).await? == 0 {
-            return Err(HtlcError::Expired);
-        }
-
-        self.spend_htlc(HtlcSpend {
+        let spend = HtlcSpend {
             outpoint,
             contract,
             witness: OutgoingWitness::Claim(preimage),
             keypair: claim_keypair,
             custom_meta,
-        })
-        .await
+        };
+
+        if let Some(operation_id) = self.existing_htlc_spend(&spend).await? {
+            return Ok(operation_id);
+        }
+
+        self.consensus_block_count().await?;
+
+        if self
+            .funded_contract_expiration(outpoint, &spend.contract)
+            .await?
+            == 0
+        {
+            return Err(HtlcError::Expired);
+        }
+
+        self.spend_htlc(spend).await
     }
 
     /// Refund a direct HTLC we created via [`Self::create_htlc`] after its
@@ -322,20 +334,27 @@ impl LightningClientModule {
             .recover_htlc_refund_keypair(&contract)
             .ok_or(HtlcError::RefundKeyMismatch)?;
 
-        let remaining_blocks = self.funded_contract_expiration(outpoint, &contract).await?;
-
-        if remaining_blocks > 0 {
-            return Err(HtlcError::NotExpired(remaining_blocks));
-        }
-
-        self.spend_htlc(HtlcSpend {
+        let spend = HtlcSpend {
             outpoint,
             contract,
             witness: OutgoingWitness::Refund,
             keypair: refund_keypair,
             custom_meta,
-        })
-        .await
+        };
+
+        if let Some(operation_id) = self.existing_htlc_spend(&spend).await? {
+            return Ok(operation_id);
+        }
+
+        let remaining_blocks = self
+            .funded_contract_expiration(outpoint, &spend.contract)
+            .await?;
+
+        if remaining_blocks > 0 {
+            return Err(HtlcError::NotExpired(remaining_blocks));
+        }
+
+        self.spend_htlc(spend).await
     }
 
     /// Cancel a direct HTLC we created via [`Self::create_htlc`] before its
@@ -358,16 +377,22 @@ impl LightningClientModule {
             .recover_htlc_refund_keypair(&contract)
             .ok_or(HtlcError::RefundKeyMismatch)?;
 
-        self.funded_contract_expiration(outpoint, &contract).await?;
-
-        self.spend_htlc(HtlcSpend {
+        let spend = HtlcSpend {
             outpoint,
             contract,
             witness: OutgoingWitness::Cancel(forfeit_signature),
             keypair: refund_keypair,
             custom_meta,
-        })
-        .await
+        };
+
+        if let Some(operation_id) = self.existing_htlc_spend(&spend).await? {
+            return Ok(operation_id);
+        }
+
+        self.funded_contract_expiration(outpoint, &spend.contract)
+            .await?;
+
+        self.spend_htlc(spend).await
     }
 
     /// The federation's current consensus block count, against which direct
@@ -505,15 +530,52 @@ impl LightningClientModule {
         Ok(())
     }
 
-    /// Submit a transaction spending a direct HTLC and record it under a new
-    /// operation. Callers have to verify the contract against the federation
-    /// via [`Self::funded_contract_expiration`] first.
-    async fn spend_htlc(&self, spend: HtlcSpend) -> Result<OperationId, HtlcError> {
+    /// Return the operation id of `spend` if it has already been recorded,
+    /// such that retrying a spend, e.g. after its caller was interrupted
+    /// while the transaction is in flight, yields the original operation.
+    /// Callers have to check this before they verify the contract against
+    /// the federation, since that check fails once the recorded spend has
+    /// resolved the contract. The retry's custom meta is ignored.
+    ///
+    /// Concurrent calls for the same spend may both miss the recorded
+    /// operation, in which case recording the second one fails.
+    async fn existing_htlc_spend(
+        &self,
+        spend: &HtlcSpend,
+    ) -> Result<Option<OperationId>, HtlcError> {
         let operation_id = spend.operation_id();
 
-        if self.client_ctx.operation_exists(operation_id).await {
-            return Err(HtlcError::DuplicateOperation(operation_id));
+        let operation = match self.client_ctx.get_operation(operation_id).await {
+            Ok(operation) => operation,
+            Err(OperationLookupError::NotFound(..)) => return Ok(None),
+            Err(..) => return Err(HtlcError::NotAnHtlcOperation),
+        };
+
+        let contract = match operation.meta::<LightningOperationMeta>() {
+            LightningOperationMeta::ClaimHtlc(meta)
+            | LightningOperationMeta::RefundHtlc(meta)
+            | LightningOperationMeta::CancelHtlc(meta) => meta.contract,
+            LightningOperationMeta::CreateHtlc(..)
+            | LightningOperationMeta::Send(..)
+            | LightningOperationMeta::Receive(..)
+            | LightningOperationMeta::LnurlReceive(..) => {
+                return Err(HtlcError::NotAnHtlcOperation);
+            }
+        };
+
+        if contract != spend.contract {
+            return Err(HtlcError::ContractMismatch);
         }
+
+        Ok(Some(operation_id))
+    }
+
+    /// Submit a transaction spending a direct HTLC and record it under a new
+    /// operation. Callers have to check for an existing operation via
+    /// [`Self::existing_htlc_spend`] and verify the contract against the
+    /// federation via [`Self::funded_contract_expiration`] first.
+    async fn spend_htlc(&self, spend: HtlcSpend) -> Result<OperationId, HtlcError> {
+        let operation_id = spend.operation_id();
 
         let client_input = ClientInput::<LightningInput> {
             input: LightningInput::V0(LightningInputV0::Outgoing(
@@ -553,7 +615,7 @@ impl LightningClientModule {
     /// recorded, since spends are recorded under operation ids derived from
     /// the outpoint alone: a spend recorded with a mismatched contract would
     /// be rejected by the federation while making every later attempt with
-    /// the correct contract fail as a duplicate operation.
+    /// the correct contract fail against the recorded operation.
     async fn funded_contract_expiration(
         &self,
         outpoint: OutPoint,
