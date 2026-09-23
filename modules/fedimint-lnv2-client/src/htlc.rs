@@ -26,6 +26,7 @@
 use std::time::Duration;
 
 use bitcoin::secp256k1;
+use fedimint_api_client::api::FederationError;
 use fedimint_client_module::OperationLookupError;
 use fedimint_client_module::module::OutPointRange;
 use fedimint_client_module::transaction::{
@@ -34,17 +35,20 @@ use fedimint_client_module::transaction::{
 use fedimint_core::core::OperationId;
 use fedimint_core::module::{Amounts, CommonModuleInit};
 use fedimint_core::task::sleep;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, OutPoint};
 use fedimint_lnv2_common::contracts::{OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::{
     LightningCommonInit, LightningInput, LightningInputV0, LightningOutput, LightningOutputV0,
     OutgoingWitness, tweak,
 };
+use fedimint_logging::LOG_CLIENT_MODULE_LNV2;
 use secp256k1::schnorr::Signature;
 use secp256k1::{Keypair, PublicKey, SecretKey, ecdh};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
+use tracing::debug;
 
 use crate::api::LightningFederationApi;
 use crate::{LightningClientModule, LightningOperationMeta};
@@ -130,6 +134,15 @@ struct HtlcSpend {
     witness: OutgoingWitness,
     keypair: Keypair,
     custom_meta: Value,
+}
+
+/// Whether a federation error is caused by connection failures only, such that
+/// retrying the request may succeed.
+fn is_transient(error: &FederationError) -> bool {
+    error.get_general_error().is_none()
+        && error
+            .get_peer_errors()
+            .all(|(_, peer_error)| !peer_error.is_unusual())
 }
 
 impl HtlcSpend {
@@ -440,9 +453,11 @@ impl LightningClientModule {
     /// claiming side verifies the funder's claim that the HTLC exists before
     /// taking any action of its own, e.g. sending funds on another chain.
     ///
-    /// This method polls the federation indefinitely, so callers should
-    /// enforce their own timeout; note that it will also never resolve if the
-    /// contract has already been claimed, refunded or cancelled again.
+    /// This method polls the federation indefinitely, retrying connection
+    /// failures, so callers should enforce their own timeout; note that it
+    /// will also never resolve if the contract has already been claimed,
+    /// refunded or cancelled again. Any other federation error, e.g. one of a
+    /// federation that does not support direct HTLCs, is returned.
     pub async fn await_htlc_funded(
         &self,
         outpoint: OutPoint,
@@ -457,8 +472,18 @@ impl LightningClientModule {
 
                     return Ok(remaining_blocks);
                 }
-                Ok(None) | Err(..) => sleep(Duration::from_secs(1)).await,
+                Ok(None) => {}
+                Err(error) if is_transient(&error) => {
+                    debug!(
+                        target: LOG_CLIENT_MODULE_LNV2,
+                        err = %error.fmt_compact(),
+                        "Failed to query the direct HTLC funding, retrying"
+                    );
+                }
+                Err(error) => return Err(HtlcError::FederationApiError(error.to_string())),
             }
+
+            sleep(Duration::from_secs(1)).await;
         }
     }
 
