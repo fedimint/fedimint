@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["GatewayPayInvoiceError","HandleDirectSwapError","HandleInterceptedHtlcError"],"struct":["GatewayClientV1Error"]};
