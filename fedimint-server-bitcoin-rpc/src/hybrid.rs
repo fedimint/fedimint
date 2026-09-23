@@ -198,7 +198,42 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
     }
 
     async fn get_feerate(&self) -> Result<Option<Feerate>> {
-        read_rpc!(self, get_feerate)
+        match self.bitcoind_client.get_feerate().await {
+            Ok(Some(feerate)) => Ok(Some(feerate)),
+            Ok(None) => {
+                warn!(
+                    target: LOG_SERVER,
+                    "Bitcoind fee estimate unavailable; trying Esplora"
+                );
+                match self.esplora_client.get_feerate().await {
+                    Ok(feerate) => Ok(feerate),
+                    Err(_) => {
+                        warn!(
+                            target: LOG_SERVER,
+                            "Esplora fee-estimate fallback failed; retaining the unavailable bitcoind estimate"
+                        );
+                        Ok(None)
+                    }
+                }
+            }
+            Err(primary) => {
+                warn!(
+                    target: LOG_SERVER,
+                    error = %primary.fmt_compact_anyhow(),
+                    "Bitcoind fee-estimate request failed; trying Esplora"
+                );
+                match self.esplora_client.get_feerate().await {
+                    Ok(feerate) => Ok(feerate),
+                    Err(_) => {
+                        warn!(
+                            target: LOG_SERVER,
+                            "Esplora fee-estimate fallback also failed; returning the bitcoind error"
+                        );
+                        Err(primary)
+                    }
+                }
+            }
+        }
     }
 
     async fn submit_transaction(&self, transaction: Transaction) -> Result<()> {

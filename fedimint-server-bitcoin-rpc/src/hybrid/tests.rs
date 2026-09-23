@@ -9,8 +9,10 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{ChainId, Feerate};
 use fedimint_server_core::bitcoin_rpc::{IServerBitcoinRpc, ServerBitcoinRpcMonitor};
+use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 use super::BitcoindClientWithFallback;
+use crate::esplora::EsploraClient;
 
 /// Mutable fake endpoint state used to exercise outages and recovery.
 #[derive(Debug)]
@@ -21,6 +23,7 @@ struct State {
     offline: bool,
     fail_count: bool,
     fail_reads: bool,
+    missing_feerate: bool,
     fail_broadcast: bool,
     calls: Vec<String>,
     transactions: Vec<Transaction>,
@@ -47,6 +50,7 @@ impl Fake {
                 offline: false,
                 fail_count: false,
                 fail_reads: false,
+                missing_feerate: false,
                 fail_broadcast: false,
                 calls: vec![],
                 transactions: vec![],
@@ -121,6 +125,9 @@ impl IServerBitcoinRpc for Fake {
             "{} fee read failed",
             self.url.host_str().unwrap()
         );
+        if state.missing_feerate {
+            return Ok(None);
+        }
         Ok(Some(Feerate {
             sats_per_kvb: state.count,
         }))
@@ -185,6 +192,113 @@ async fn local_node_one_block_behind_remains_preferred() {
 }
 
 #[tokio::test]
+async fn missing_local_fee_estimate_falls_back_to_esplora() {
+    let (rpc, primary, fallback) = hybrid().await;
+    primary.state.lock().unwrap().missing_feerate = true;
+    fallback.state.lock().unwrap().count = 123;
+
+    assert_eq!(rpc.get_feerate().await.unwrap().unwrap().sats_per_kvb, 123);
+    assert_eq!(primary.calls("fee"), 1);
+    assert_eq!(fallback.calls("fee"), 1);
+}
+
+#[tokio::test]
+async fn missing_local_fee_estimate_uses_existing_esplora_floor_for_empty_response() {
+    let primary = Fake::new("primary");
+    primary.state.lock().unwrap().missing_feerate = true;
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url: SafeUrl = format!("http://{}", listener.local_addr().unwrap())
+        .parse()
+        .unwrap();
+    let chain_id = chain(Network::Bitcoin).block_hash();
+    let server = fedimint_core::runtime::spawn("esplora-test-http", async move {
+        for (path, body) in [
+            ("/block-height/1", chain_id.to_string()),
+            ("/fee-estimates", "{}".to_owned()),
+        ] {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+                let mut chunk = [0; 4096];
+                let len = socket.read(&mut chunk).await.unwrap();
+                assert_ne!(len, 0, "request ended before headers");
+                request.extend_from_slice(&chunk[..len]);
+            }
+            assert!(
+                String::from_utf8_lossy(&request).starts_with(&format!("GET {path} ")),
+                "unexpected request: {}",
+                String::from_utf8_lossy(&request)
+            );
+            socket
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
+        }
+    });
+
+    let fallback = EsploraClient::new(&url).unwrap().into_dyn();
+    let rpc = BitcoindClientWithFallback::from_clients(primary.clone(), fallback)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(5), rpc.get_feerate())
+            .await
+            .unwrap()
+            .unwrap(),
+        Some(Feerate { sats_per_kvb: 1000 })
+    );
+    assert_eq!(primary.calls("fee"), 1);
+    tokio::time::timeout(Duration::from_secs(5), server)
+        .await
+        .unwrap()
+        .unwrap();
+}
+
+#[tokio::test]
+async fn failed_local_fee_request_falls_back_to_esplora() {
+    let (rpc, primary, fallback) = hybrid().await;
+    primary.state.lock().unwrap().fail_reads = true;
+    fallback.state.lock().unwrap().count = 123;
+
+    assert_eq!(rpc.get_feerate().await.unwrap().unwrap().sats_per_kvb, 123);
+    assert_eq!(primary.calls("fee"), 1);
+    assert_eq!(fallback.calls("fee"), 1);
+}
+
+#[tokio::test]
+async fn failed_local_fee_request_accepts_an_absent_esplora_estimate() {
+    let (rpc, primary, fallback) = hybrid().await;
+    primary.state.lock().unwrap().fail_reads = true;
+    fallback.state.lock().unwrap().missing_feerate = true;
+
+    assert_eq!(rpc.get_feerate().await.unwrap(), None);
+    assert_eq!(primary.calls("fee"), 1);
+    assert_eq!(fallback.calls("fee"), 1);
+}
+
+#[tokio::test]
+async fn absent_fee_estimate_is_preserved_when_esplora_cannot_supply_one() {
+    let (rpc, primary, fallback) = hybrid().await;
+    primary.state.lock().unwrap().missing_feerate = true;
+    fallback.state.lock().unwrap().missing_feerate = true;
+
+    assert_eq!(rpc.get_feerate().await.unwrap(), None);
+
+    fallback.state.lock().unwrap().fail_reads = true;
+    assert_eq!(rpc.get_feerate().await.unwrap(), None);
+    assert_eq!(primary.calls("fee"), 2);
+    assert_eq!(fallback.calls("fee"), 2);
+}
+
+#[tokio::test]
 async fn missing_local_payload_falls_back_only_for_that_request() {
     let (rpc, primary, fallback) = hybrid().await;
     primary.state.lock().unwrap().fail_reads = true;
@@ -200,10 +314,17 @@ async fn missing_local_payload_falls_back_only_for_that_request() {
 #[tokio::test]
 async fn ibd_uses_fallback_until_first_completed_report_then_latches() {
     let (rpc, primary, fallback) = hybrid().await;
-    primary.state.lock().unwrap().ibd = true;
-    assert_eq!(rpc.get_block_count().await.unwrap(), 100);
+    {
+        let mut state = primary.state.lock().unwrap();
+        state.ibd = true;
+        state.missing_feerate = true;
+    }
+    fallback.state.lock().unwrap().count = 123;
+    assert_eq!(rpc.get_block_count().await.unwrap(), 123);
+    assert_eq!(rpc.get_feerate().await.unwrap().unwrap().sats_per_kvb, 123);
     assert_eq!(primary.calls("status"), 1);
     assert_eq!(fallback.calls("count"), 1);
+    assert_eq!(fallback.calls("fee"), 1);
 
     {
         let mut state = primary.state.lock().unwrap();

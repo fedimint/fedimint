@@ -82,8 +82,12 @@ ordinary status monitoring is cached without comparing endpoints. Trusted
 endpoints are expected to keep serving their configured chain, and operators
 must restart the guardian when deliberately changing chains.
 
-Reads try bitcoind first and retry only the failed request on Esplora. Block
-count is the exception while Core is starting: until Core first reports that
+Reads try bitcoind first and retry only the failed request on Esplora. Fee
+estimation also falls back when Core successfully responds without an estimate,
+which can happen during IBD or before it has observed enough fee-estimation
+history. The fallback uses the existing Esplora fee policy, which uses 1 sat/vB
+when a successful Esplora response contains no usable estimate. Block count is
+the other exception while Core is starting: until Core first reports that
 initial block download is complete, its IBD flag is checked on each count
 request and Esplora supplies the count while IBD remains active. Completion is
 then remembered for the process lifetime and normal bitcoind-first count reads
