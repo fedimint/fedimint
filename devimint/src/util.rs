@@ -85,7 +85,11 @@ impl ProcessHandle {
     }
 
     pub async fn is_running(&self) -> bool {
-        self.0.lock().await.child.is_some()
+        let mut inner = self.0.lock().await;
+        match inner.child.as_mut() {
+            Some(child) => child.try_wait().is_ok_and(|status| status.is_none()),
+            None => false,
+        }
     }
 
     pub async fn id(&self) -> Option<u32> {

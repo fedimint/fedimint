@@ -27,6 +27,8 @@ use fedimint_ln_client::cli::LnInvoiceResponse;
 use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_client::FinalSendOperationState;
 use fedimint_logging::LOG_DEVIMINT;
+use fedimint_portalloc::port_alloc;
+use fedimint_testing_core::db::copy_directory_blocking;
 use fedimint_testing_core::node_type::LightningNodeType;
 use futures::future::try_join_all;
 use serde_json::json;
@@ -39,7 +41,7 @@ use crate::cli::{CommonArgs, cleanup_on_exit, exec_or_wait_for_shutdown, setup};
 use crate::devfed::DevJitFed;
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV};
 use crate::federation::Client;
-use crate::util::{LoadTestTool, ProcessManager, almost_equal, poll};
+use crate::util::{FedimintdCmd, LoadTestTool, ProcessHandle, ProcessManager, almost_equal, poll};
 use crate::version_constants::{
     VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA, VERSION_0_13_0_ALPHA,
     ensure_expected_fedimintd_version,
@@ -1985,6 +1987,14 @@ async fn lnv2_await_send(
 }
 
 pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
+    if is_env_var_set("FM_DUPLICATED_GUARDIAN_EXPERIMENT") {
+        anyhow::ensure!(
+            process_mgr.globals.FM_FED_SIZE == 4,
+            "duplicated guardian experiment requires a 4-guardian federation"
+        );
+        return duplicated_guardian_test(dev_fed, process_mgr).await;
+    }
+
     log_binary_versions().await?;
 
     let DevFed {
@@ -2018,6 +2028,241 @@ pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
     fed.await_all_peers().await?;
 
     info!(target: LOG_DEVIMINT, "fm success: reconnect-test");
+    Ok(())
+}
+
+async fn consensus_session_count(metrics_addr: &str) -> Result<u64> {
+    let body = reqwest::get(format!("http://{metrics_addr}/metrics"))
+        .await?
+        .error_for_status()?
+        .text()
+        .await?;
+
+    body.lines()
+        .find_map(|line| {
+            line.strip_prefix("fm_consensus_session_count ")
+                .and_then(|value| value.parse().ok())
+        })
+        .context("consensus_session_count missing from metrics")
+}
+
+async fn log_since(path: &Path, offset: u64) -> Result<String> {
+    let bytes = fs::read(path).await?;
+    let offset = usize::try_from(offset).context("log offset does not fit usize")?;
+    anyhow::ensure!(offset <= bytes.len(), "log was truncated during experiment");
+    String::from_utf8(bytes[offset..].to_vec()).context("fedimintd log is not UTF-8")
+}
+
+async fn wait_for_log_evidence(
+    description: &str,
+    path: &Path,
+    offset: u64,
+    evidence: impl Fn(&str) -> bool,
+) -> Result<()> {
+    poll(description, || async {
+        let log = log_since(path, offset)
+            .await
+            .map_err(ControlFlow::Continue)?;
+        if evidence(&log) {
+            Ok(())
+        } else {
+            Err(ControlFlow::Continue(anyhow!(
+                "required evidence not present in {}",
+                path.display()
+            )))
+        }
+    })
+    .await
+}
+
+/// Run the disposable duplicated-guardian identity experiment.
+pub async fn duplicated_guardian_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Result<()> {
+    const DUPLICATED_PEER: usize = 0;
+
+    let DevFed { mut fed, .. } = dev_fed;
+    fed.await_all_peers().await?;
+
+    let client = fed
+        .new_joined_client("duplicated-guardian-experiment-client")
+        .await?;
+    fed.pegin_client(10_000, &client).await?;
+    let baseline_session = client.get_session_count().await?;
+    client.wait_session_outcome(baseline_session).await?;
+
+    let original_env = fed.vars[&DUPLICATED_PEER].clone();
+    let snapshot_session = consensus_session_count(&original_env.FM_BIND_METRICS).await?;
+    let original_log = process_mgr
+        .globals
+        .FM_LOGS_DIR
+        .join("fedimintd-default-0.log");
+    let original_log_offset = fs::metadata(&original_log).await?.len();
+
+    fed.terminate_server(DUPLICATED_PEER).await?;
+    let duplicate_data_dir = process_mgr
+        .globals
+        .FM_DATA_DIR
+        .join("fedimintd-default-0-duplicate");
+    let source_data_dir = original_env.FM_DATA_DIR.clone();
+    let destination_data_dir = duplicate_data_dir.clone();
+    tokio::task::spawn_blocking(move || {
+        copy_directory_blocking(&source_data_dir, &destination_data_dir)
+    })
+    .await??;
+
+    // The Iroh-next API derives its bind port as API bind + 10, which is
+    // duplicate base + 11.
+    let duplicate_base_port = port_alloc(12)?;
+    let mut duplicate_env = original_env.clone();
+    duplicate_env.FM_DATA_DIR = duplicate_data_dir;
+    duplicate_env.FM_BIND_P2P = format!("127.0.0.1:{duplicate_base_port}");
+    duplicate_env.FM_BIND_API_WS = format!("127.0.0.1:{}", duplicate_base_port + 1);
+    duplicate_env.FM_BIND_API_IROH = duplicate_env.FM_BIND_API_WS.clone();
+    duplicate_env.FM_BIND_API = duplicate_env.FM_BIND_API_WS.clone();
+    duplicate_env.FM_BIND_UI = format!("127.0.0.1:{}", duplicate_base_port + 2);
+    duplicate_env.FM_BIND_METRICS_API = format!("127.0.0.1:{}", duplicate_base_port + 3);
+    duplicate_env.FM_BIND_METRICS = duplicate_env.FM_BIND_METRICS_API.clone();
+    let duplicate_log = process_mgr
+        .globals
+        .FM_LOGS_DIR
+        .join("fedimintd-default-0-duplicate.log");
+
+    fed.start_server(process_mgr, DUPLICATED_PEER).await?;
+    let duplicate_process: ProcessHandle = process_mgr
+        .spawn_daemon(
+            "fedimintd-default-0-duplicate",
+            cmd!(FedimintdCmd).envs(duplicate_env.vars()),
+        )
+        .await?;
+
+    let duplicate_start_session = poll("Waiting for duplicated guardian metrics", || async {
+        consensus_session_count(&duplicate_env.FM_BIND_METRICS)
+            .await
+            .map_err(ControlFlow::Continue)
+    })
+    .await?;
+    anyhow::ensure!(
+        duplicate_process.is_running().await,
+        "duplicated guardian exited during startup"
+    );
+    for (name, path, offset) in [
+        ("original guardian", &original_log, original_log_offset),
+        ("duplicated guardian", &duplicate_log, 0),
+    ] {
+        wait_for_log_evidence(
+            &format!("Waiting for {name} P2P connections"),
+            path,
+            offset,
+            |log| log.matches("Connected to peer").count() >= 3,
+        )
+        .await?;
+    }
+
+    fed.pegin_client(10_000, &client).await?;
+    let active_session = client.get_session_count().await?;
+    client.wait_session_outcome(active_session).await?;
+    let verification_session = active_session + 1;
+    client.wait_session_outcome(verification_session).await?;
+
+    let active_session_start = format!(
+        "Starting consensus session session_index={verification_session} is_recovery=false"
+    );
+    let active_session_processed =
+        format!("Processed all items for session session_index={verification_session} item_index=");
+    let active_session_signing =
+        format!("Signing session header... session_index={verification_session}");
+    for (name, path, offset) in [
+        ("original guardian", &original_log, original_log_offset),
+        ("duplicated guardian", &duplicate_log, 0),
+    ] {
+        wait_for_log_evidence(
+            &format!("Waiting for {name} active consensus evidence"),
+            path,
+            offset,
+            |log| {
+                log.contains(&active_session_start)
+                    && log.lines().any(|line| {
+                        line.contains(&active_session_processed) && !line.ends_with("=0")
+                    })
+                    && log.contains(&active_session_signing)
+            },
+        )
+        .await?;
+    }
+
+    let duplicate_final_session = poll("Waiting for duplicated guardian progress", || async {
+        let session = consensus_session_count(&duplicate_env.FM_BIND_METRICS)
+            .await
+            .map_err(ControlFlow::Continue)?;
+        if session > duplicate_start_session {
+            Ok(session)
+        } else {
+            Err(ControlFlow::Continue(anyhow!(
+                "duplicated guardian remains at session {session}"
+            )))
+        }
+    })
+    .await?;
+
+    let mut guardian_sessions = BTreeMap::new();
+    for (peer, env) in &fed.vars {
+        guardian_sessions.insert(*peer, consensus_session_count(&env.FM_BIND_METRICS).await?);
+    }
+    let min_honest_session = guardian_sessions
+        .values()
+        .copied()
+        .min()
+        .context("federation has no guardians")?;
+    anyhow::ensure!(
+        min_honest_session > snapshot_session,
+        "federation did not progress beyond snapshot session {snapshot_session}: \
+         {guardian_sessions:?}"
+    );
+    anyhow::ensure!(
+        duplicate_final_session > snapshot_session,
+        "duplicated guardian did not progress beyond snapshot session {snapshot_session}"
+    );
+    anyhow::ensure!(
+        duplicate_process.is_running().await,
+        "duplicated guardian exited during workload"
+    );
+
+    let mut honest_outcome = None;
+    for peer in 1..4 {
+        let outcome = cmd!(
+            &client,
+            "dev",
+            "api",
+            "await_session_outcome",
+            verification_session,
+            "--peer-id",
+            peer
+        )
+        .out_json()
+        .await?;
+        if let Some(expected) = &honest_outcome {
+            anyhow::ensure!(
+                &outcome == expected,
+                "honest peer {peer} returned a different outcome for session \
+                 {verification_session}"
+            );
+        } else {
+            honest_outcome = Some(outcome);
+        }
+    }
+
+    info!(
+        target: LOG_DEVIMINT,
+        snapshot_session,
+        duplicate_start_session,
+        duplicate_final_session,
+        ?guardian_sessions,
+        "Bounded duplicated-guardian experiment succeeded: both peer-0 processes connected, \
+         locally processed and signed the verification session, all four configured guardians \
+         advanced, peers 1-3 returned the same session outcome, and the client deposit completed. \
+         This observation does not prove safety or liveness under every connection ordering or \
+         schedule."
+    );
+    duplicate_process.terminate().await?;
     Ok(())
 }
 
