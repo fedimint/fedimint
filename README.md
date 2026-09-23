@@ -44,6 +44,7 @@ questions. [Join the Discord](https://discord.gg/cEVEmqCgWG) and say hi! We are 
 developers of all skill levels to Fedimint and associated open-source Bitcoin projects. Fedimint touches many different
 areas of Bitcoin development, so there is something for everyone. See below for more information on how to get involved.
 
+
 ## Using Fedimint
 
 To use Fedimint you only need a client application, that will allow interacting with
