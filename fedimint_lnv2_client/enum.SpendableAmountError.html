@@ -6,7 +6,7 @@
         fee: <a class="struct" href="../fedimint_lnv2_common/gateway_api/struct.PaymentFee.html" title="struct fedimint_lnv2_common::gateway_api::PaymentFee">PaymentFee</a>,
         limit: <a class="struct" href="../fedimint_lnv2_common/gateway_api/struct.PaymentFee.html" title="struct fedimint_lnv2_common::gateway_api::PaymentFee">PaymentFee</a>,
     },
-    Quote(TransactionSubmitError),
+    Quote(<a class="enum" href="../fedimint_client_module/error/enum.TransactionSubmitError.html" title="enum fedimint_client_module::error::TransactionSubmitError">TransactionSubmitError</a>),
     BalanceTooLow {
         balance: <a class="struct" href="../fedimint_core/amount/struct.Amount.html" title="struct fedimint_core::amount::Amount">Amount</a>,
     },
@@ -26,7 +26,7 @@ there is no fee schedule to compute against.</p>
 so an amount computed against it would not be payable through it.</p>
 </div><div class="sub-variant" id="variant.SendFeeExceedsLimit.fields"><h4>Fields</h4><div class="sub-variant-field"><span id="variant.SendFeeExceedsLimit.field.fee" class="section-header"><a href="#variant.SendFeeExceedsLimit.field.fee" class="anchor field">§</a><code>fee: <a class="struct" href="../fedimint_lnv2_common/gateway_api/struct.PaymentFee.html" title="struct fedimint_lnv2_common::gateway_api::PaymentFee">PaymentFee</a></code></span><div class="docblock"><p>The default send fee the gateway announced.</p>
 </div></div><div class="sub-variant-field"><span id="variant.SendFeeExceedsLimit.field.limit" class="section-header"><a href="#variant.SendFeeExceedsLimit.field.limit" class="anchor field">§</a><code>limit: <a class="struct" href="../fedimint_lnv2_common/gateway_api/struct.PaymentFee.html" title="struct fedimint_lnv2_common::gateway_api::PaymentFee">PaymentFee</a></code></span><div class="docblock"><p>The largest default send fee this module accepts.</p>
-</div></div></div><section id="variant.Quote" class="variant"><a href="#variant.Quote" class="anchor">§</a><h3 class="code-header">Quote(TransactionSubmitError)</h3></section><div class="docblock"><p>The fee probe failed for a reason unrelated to the balance.</p>
+</div></div></div><section id="variant.Quote" class="variant"><a href="#variant.Quote" class="anchor">§</a><h3 class="code-header">Quote(<a class="enum" href="../fedimint_client_module/error/enum.TransactionSubmitError.html" title="enum fedimint_client_module::error::TransactionSubmitError">TransactionSubmitError</a>)</h3></section><div class="docblock"><p>The fee probe failed for a reason unrelated to the balance.</p>
 </div><section id="variant.BalanceTooLow" class="variant"><a href="#variant.BalanceTooLow" class="anchor">§</a><h3 class="code-header">BalanceTooLow</h3></section><div class="docblock"><p>The balance cannot cover the smallest payable amount plus the gateway
 and federation fees, so there is no amount to send.</p>
 </div><div class="sub-variant" id="variant.BalanceTooLow.fields"><h4>Fields</h4><div class="sub-variant-field"><span id="variant.BalanceTooLow.field.balance" class="section-header"><a href="#variant.BalanceTooLow.field.balance" class="anchor field">§</a><code>balance: <a class="struct" href="../fedimint_core/amount/struct.Amount.html" title="struct fedimint_core::amount::Amount">Amount</a></code></span><div class="docblock"><p>The balance the answer was computed against.</p>
