@@ -156,6 +156,55 @@ impl TransactionSubmitError {
     }
 }
 
+/// A failure a client module reports to the client.
+///
+/// The methods a module implements for the client in [`ClientModule`],
+/// [`ClientModuleInit`] and [`RecoveryFromHistory`] report this type, except
+/// the JSON command handlers `handle_cli_command` and `handle_rpc`, and so do
+/// the type-erased wrappers the client calls them through. The client wraps
+/// it in the error of the operation that needed the module.
+///
+/// [`ClientModule`]: crate::module::ClientModule
+/// [`ClientModuleInit`]: crate::module::init::ClientModuleInit
+/// [`RecoveryFromHistory`]: crate::module::init::recovery::RecoveryFromHistory
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ClientModuleError {
+    /// The module does not implement the operation.
+    ///
+    /// The default bodies of the module traits report this. The client only
+    /// asks a module for an operation the module declares support for, through
+    /// `supports_backup`, `supports_being_primary` or `recovery_mode`, so the
+    /// client sees this only from a module that declares support it does not
+    /// implement. Calling the operation on a module directly can see it too.
+    #[error("Module {kind} does not implement {operation}")]
+    Unsupported {
+        /// The kind of the module.
+        kind: ModuleKind,
+        /// The name of the trait method the module does not implement.
+        operation: &'static str,
+    },
+
+    /// Any other failure, kept whole: the module's own error or the error of a
+    /// library it builds on, such as a federation, database or Bitcoin
+    /// backend failure. Its `Display` and `source()` are those of the error it
+    /// carries.
+    #[error(transparent)]
+    Other(Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl ClientModuleError {
+    /// Wraps a failure the other variants do not describe. Accepts anything
+    /// convertible into a boxed error, which includes an `anyhow::Error` and a
+    /// plain message.
+    pub fn other<E>(error: E) -> Self
+    where
+        E: Into<Box<dyn std::error::Error + Send + Sync>>,
+    {
+        Self::Other(error.into())
+    }
+}
+
 /// A failure to find a module able to serve a request.
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -251,3 +300,6 @@ pub enum MetaFetchError {
     #[error("The meta source failed")]
     Custom(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
+
+#[cfg(test)]
+mod tests;

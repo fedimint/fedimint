@@ -41,8 +41,8 @@ use transaction::{
 };
 
 pub use crate::error::{
-    AddStateMachinesError, ApiVersionDiscoveryError, MetaFetchError, ModuleLookupError,
-    OperationAlreadyExistsError, OperationLookupError, OperationNotFoundError,
+    AddStateMachinesError, ApiVersionDiscoveryError, ClientModuleError, MetaFetchError,
+    ModuleLookupError, OperationAlreadyExistsError, OperationLookupError, OperationNotFoundError,
     TransactionSubmitError,
 };
 pub use crate::module::{ClientModule, StateGenerator};
