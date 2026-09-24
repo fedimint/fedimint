@@ -447,6 +447,24 @@ impl GatewayClientModuleV2 {
             .min_contract_amount(&payload.federation_id, amount)
             .await?;
 
+        // Contracts for different invoices, on LNv1 or in other federations, can
+        // share a payment image, and paying one pays them all. So only the first
+        // operation to claim the image may ever pay it out; the claim is never
+        // released. It is taken before the state machine exists, so a refused
+        // contract has not been paid for. A retry of this operation finds its own
+        // claim.
+        //
+        // TODO(joschisan): review whether answering with a forfeit signature is
+        // safe here, so the sender is refunded immediately instead of at the
+        // contract's expiration. It should be: a refused contract can never take
+        // the claim later, so we never pay out on it.
+        ensure!(
+            self.gateway
+                .claim_payment_image(&payload.contract.payment_image, operation_id)
+                .await,
+            "Another contract for this payment image was already accepted"
+        );
+
         let send_sm = GatewayClientStateMachinesV2::Send(SendStateMachine {
             common: SendSMCommon {
                 operation_id,
