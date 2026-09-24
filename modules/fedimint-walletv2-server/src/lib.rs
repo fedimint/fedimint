@@ -46,9 +46,13 @@ use fedimint_core::envs::{
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    Amounts, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
-    ModuleInit, MultiApiVersion, TransactionItemAmounts, public_api_endpoint,
+    Amounts, ApiEndpoint, ApiError, ApiVersion, CoreConsensusVersion, InputMeta,
+    ModuleConsensusVersion, ModuleInit, MultiApiVersion, TransactionItemAmounts,
+    public_api_endpoint,
 };
+#[cfg(test)]
+mod tests;
+
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::TaskGroup;
 use fedimint_core::task::sleep;
@@ -68,13 +72,13 @@ use fedimint_walletv2_common::config::{
     FeeConsensus, WalletClientConfig, WalletConfig, WalletConfigPrivate,
 };
 use fedimint_walletv2_common::endpoint_constants::{
-    CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
-    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT,
-    SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
+    AWAIT_OUTPUTS_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT,
+    FEDERATION_WALLET_ENDPOINT, OUTPUT_INFO_SLICE_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT,
+    RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 };
 use fedimint_walletv2_common::{
-    FederationWallet, MODULE_CONSENSUS_VERSION, TxInfo, WalletInputError, WalletOutputError,
-    descriptor, is_potential_receive, tweak_public_key,
+    AWAIT_OUTPUTS_API_VERSION, FederationWallet, MODULE_CONSENSUS_VERSION, TxInfo,
+    WalletInputError, WalletOutputError, descriptor, is_potential_receive, tweak_public_key,
 };
 use futures::StreamExt;
 use miniscript::descriptor::Wsh;
@@ -110,6 +114,9 @@ const TEST_MAX_BLOCK_COUNT_INCREMENT: u64 = 100;
 /// Minimum fee rate vote of 1 sat/vB to ensure we never propose a fee rate
 /// below what Bitcoin Core will relay.
 const MIN_FEERATE_VOTE_SATS_PER_KVB: u64 = 1000;
+
+/// Largest batch `AWAIT_OUTPUTS_ENDPOINT` serves per request.
+const MAX_OUTPUTS_BATCH: u64 = 1000;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Encodable, Decodable)]
 pub struct FederationTx {
@@ -882,10 +889,23 @@ impl ServerModule for Wallet {
             public_api_endpoint! {
                 OUTPUT_INFO_SLICE_ENDPOINT,
                 ApiVersion::new(0, 0),
-                async |module: &Wallet, context, params: (u64, u64)| -> Vec<OutputInfo> {
+                async |_module: &Wallet, context, params: (u64, u64)| -> Vec<OutputInfo> {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
-                    Ok(module.get_outputs(&mut dbtx, params.0, params.1).await)
+                    Ok(get_outputs(&mut dbtx, params.0, params.1).await)
+                }
+            },
+            public_api_endpoint! {
+                AWAIT_OUTPUTS_ENDPOINT,
+                AWAIT_OUTPUTS_API_VERSION,
+                async |_module: &Wallet, context, params: (u64, u64)| -> (Vec<OutputInfo>, u64) {
+                    if params.1 == 0 || params.1 > MAX_OUTPUTS_BATCH {
+                        return Err(ApiError::bad_request(format!(
+                            "Batch size must be in 1..={MAX_OUTPUTS_BATCH}"
+                        )));
+                    }
+
+                    Ok(await_outputs(context.db(), params.0, params.1).await)
                 }
             },
             public_api_endpoint! {
@@ -910,7 +930,7 @@ impl ServerModule for Wallet {
     }
 
     fn supported_api_versions(&self) -> MultiApiVersion {
-        MultiApiVersion::try_from_iter([ApiVersion::new(0, 1)])
+        MultiApiVersion::try_from_iter([AWAIT_OUTPUTS_API_VERSION])
             .expect("walletv2 declares one API version per major version")
     }
 }
@@ -1372,34 +1392,6 @@ impl Wallet {
             .map(|entry| entry.txid)
     }
 
-    async fn get_outputs(
-        &self,
-        dbtx: &mut DatabaseTransaction<'_>,
-        start_index: u64,
-        end_index: u64,
-    ) -> Vec<OutputInfo> {
-        let spent: BTreeSet<u64> = dbtx
-            .find_by_range(SpentOutputKey(start_index)..SpentOutputKey(end_index))
-            .await
-            .map(|entry| entry.0.0)
-            .collect()
-            .await;
-
-        dbtx.find_by_range(OutputKey(start_index)..OutputKey(end_index))
-            .await
-            .filter_map(|entry| {
-                std::future::ready(entry.1.1.script_pubkey.is_p2wsh().then(|| OutputInfo {
-                    index: entry.0.0,
-                    script: entry.1.1.script_pubkey,
-                    value: entry.1.1.value,
-                    spent: spent.contains(&entry.0.0),
-                    outpoint: Some(entry.1.0),
-                }))
-            })
-            .collect()
-            .await
-    }
-
     async fn pending_tx_chain(&self, dbtx: &mut DatabaseTransaction<'_>) -> Vec<TxInfo> {
         let n_pending = pending_txs_unordered(dbtx).await.len();
 
@@ -1505,6 +1497,56 @@ impl Wallet {
 
         Some((pks, sk))
     }
+}
+
+async fn get_outputs(
+    dbtx: &mut DatabaseTransaction<'_>,
+    start_index: u64,
+    end_index: u64,
+) -> Vec<OutputInfo> {
+    let spent: BTreeSet<u64> = dbtx
+        .find_by_range(SpentOutputKey(start_index)..SpentOutputKey(end_index))
+        .await
+        .map(|entry| entry.0.0)
+        .collect()
+        .await;
+
+    dbtx.find_by_range(OutputKey(start_index)..OutputKey(end_index))
+        .await
+        .filter_map(|entry| {
+            std::future::ready(entry.1.1.script_pubkey.is_p2wsh().then(|| OutputInfo {
+                index: entry.0.0,
+                script: entry.1.1.script_pubkey,
+                value: entry.1.1.value,
+                spent: spent.contains(&entry.0.0),
+                outpoint: Some(entry.1.0),
+            }))
+        })
+        .collect()
+        .await
+}
+
+/// Blocks until output `start` exists, then returns the p2wsh outputs in
+/// `start..start + n` and the index to continue from. The latter counts
+/// all outputs, so a range ending in non-p2wsh outputs still advances.
+async fn await_outputs(db: Database, start: u64, n: u64) -> (Vec<OutputInfo>, u64) {
+    let ((), mut dbtx) = db
+        .wait_key_check(&OutputKey(start), |output| output.map(drop))
+        .await;
+
+    let end = start.saturating_add(n);
+
+    let head = dbtx
+        .find_by_prefix_sorted_descending(&OutputPrefix)
+        .await
+        .next()
+        .await
+        .map_or(0, |entry| entry.0.0 + 1);
+
+    (
+        get_outputs(&mut dbtx.to_ref_nc(), start, end).await,
+        end.min(head),
+    )
 }
 
 fn calculate_pegin_metrics(

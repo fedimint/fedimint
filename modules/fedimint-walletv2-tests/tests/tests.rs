@@ -5,18 +5,21 @@ use std::time::Duration;
 use assert_matches::assert_matches;
 use async_stream::stream;
 use bitcoin::Amount;
-use fedimint_client::ClientHandleArc;
 use fedimint_client::error::OperationLookupError;
+use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
+use fedimint_client::{Client, ClientHandleArc, RootSecret};
 use fedimint_core::core::OperationId;
+use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::task::sleep_in_test;
 use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::fixtures::Fixtures;
+use fedimint_walletv2_client::db::NextOutputIndexKey;
 use fedimint_walletv2_client::events::{
-    ReceivePaymentEvent, ReceivePaymentUpdateEvent, SendPaymentEvent, SendPaymentStatus,
-    SendPaymentUpdateEvent,
+    ReceivePaymentEvent, ReceivePaymentStatus, ReceivePaymentUpdateEvent, SendPaymentEvent,
+    SendPaymentStatus, SendPaymentUpdateEvent,
 };
 use fedimint_walletv2_client::{
     FinalSendOperationState, SendError, WalletClientInit, WalletClientModule,
@@ -81,7 +84,12 @@ fn try_parse_wallet_event(entry: &EventLogEntry) -> Option<WalletEvent> {
 }
 
 fn fixtures() -> Fixtures {
-    Fixtures::new_primary(DummyClientInit, DummyInit).with_module(WalletClientInit, WalletInit)
+    Fixtures::new_primary(DummyClientInit, DummyInit).with_module(
+        WalletClientInit {
+            shared_api: Some(Arc::default()),
+        },
+        WalletInit,
+    )
 }
 
 // We need the consensus block count to reach a non-zero value before we send in
@@ -239,6 +247,120 @@ async fn fee_exceeds_one_bitcoin_with_many_pending_txs() -> anyhow::Result<()> {
     }
 
     panic!("Transaction fee did not exceed one bitcoin")
+}
+
+/// Waits up to `timeout` for the account's scan cursor to reach `at_least`
+/// and returns it.
+async fn await_cursor(db: &Database, at_least: u64, timeout: Duration) -> anyhow::Result<u64> {
+    let deadline = fedimint_core::time::now() + timeout;
+
+    while fedimint_core::time::now() < deadline {
+        if let Some(cursor) = db
+            .begin_transaction_nc()
+            .await
+            .get_value(&NextOutputIndexKey)
+            .await
+            .filter(|cursor| *cursor >= at_least)
+        {
+            return Ok(cursor);
+        }
+
+        sleep_in_test("cursor to advance", Duration::from_secs(1)).await;
+    }
+
+    anyhow::bail!("Scan cursor did not reach {at_least}")
+}
+
+/// Accounts sharing one `WalletV2SharedApi` each claim their own deposit, and
+/// an account reopened with its scan cursor behind a cached batch does not
+/// claim its already spent output again.
+#[tokio::test(flavor = "multi_thread")]
+async fn shared_accounts_claim_their_own_deposits() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+
+    let fed = fixtures.new_fed_not_degraded().await;
+
+    let client_a = fed.new_client().await;
+    let client_b = fed.new_client().await;
+
+    let bitcoin = fixtures.bitcoin();
+
+    initialize_consensus(&client_a, &bitcoin).await?;
+
+    let mut addresses = Vec::new();
+
+    for client in [&client_a, &client_b] {
+        let address = client
+            .get_first_module::<WalletClientModule>()?
+            .receive()
+            .await;
+
+        bitcoin
+            .send_and_mine_block(&address, Amount::from_int_btc(100))
+            .await;
+
+        addresses.push(address);
+    }
+
+    await_finality_delay(&client_a, &bitcoin).await?;
+
+    for (client, address) in [&client_a, &client_b].into_iter().zip(&addresses) {
+        let mut events = pin!(wallet_event_stream(client));
+
+        let Some(WalletEvent::Receive(receive)) = events.next().await else {
+            panic!("Expected Receive event");
+        };
+        assert_eq!(&receive.address, address.as_unchecked());
+
+        let Some(WalletEvent::ReceiveStatus(status)) = events.next().await else {
+            panic!("Expected ReceiveStatus event");
+        };
+        assert_eq!(status.operation_id, receive.operation_id);
+        assert_eq!(status.status, ReceivePaymentStatus::Success);
+    }
+
+    // The cursor is persisted only after the scanner has extended its address
+    // list, a CPU-bound search that can take minutes in debug builds.
+    let module_db = client_a.get_first_module::<WalletClientModule>()?.db;
+    let cursor = await_cursor(&module_db, 0, Duration::from_secs(600)).await?;
+
+    // Reopen the account with its cursor behind the batch it fetched, as a
+    // shutdown between claim acceptance and cursor persistence leaves it. The
+    // scanner is served that batch from the shared cache, where its output is
+    // still marked unspent.
+    let db = client_a.db().clone();
+    let root_secret = RootSecret::StandardDoubleDerive(PlainRootSecretStrategy::to_root_secret(
+        &Client::load_or_generate_client_secret(&db).await,
+    ));
+
+    Arc::into_inner(client_a)
+        .expect("No other handle to the client")
+        .shutdown()
+        .await;
+
+    let mut dbtx = module_db.begin_transaction().await;
+    dbtx.remove_entry(&NextOutputIndexKey).await;
+    dbtx.commit_tx().await;
+
+    let client_a = fed.open_client_with_db(db, root_secret).await;
+
+    info!("Wait for the scan to advance past the spent output again...");
+
+    await_cursor(&module_db, cursor, Duration::from_secs(60)).await?;
+
+    let wallet_events = client_a
+        .get_event_log(None, 100)
+        .await
+        .iter()
+        .filter(|entry| try_parse_wallet_event(entry).is_some())
+        .count();
+
+    assert_eq!(
+        wallet_events, 2,
+        "the spent output must not be claimed again"
+    );
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -709,7 +831,7 @@ mod db {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_client_db_migrations() -> anyhow::Result<()> {
         let _ = TracingSetup::default().init();
-        let module = DynClientModuleInit::from(WalletClientInit);
+        let module = DynClientModuleInit::from(WalletClientInit::default());
 
         validate_migrations_client::<_, _, WalletClientModule>(
             module,

@@ -671,9 +671,9 @@ impl Gateway {
         // because the LN RPC will be injected with `GatewayClientGen`.
         let mut registry = ClientModuleInitRegistry::new();
         registry.attach(MintClientInit);
-        registry.attach(MintV2ClientInit);
+        registry.attach(MintV2ClientInit::default());
         registry.attach(WalletClientInit::new(dyn_bitcoin_rpc));
-        registry.attach(fedimint_walletv2_client::WalletClientInit);
+        registry.attach(fedimint_walletv2_client::WalletClientInit::default());
 
         let client_builder =
             GatewayClientBuilder::new(opts.data_dir.clone(), registry, opts.db_backend).await?;

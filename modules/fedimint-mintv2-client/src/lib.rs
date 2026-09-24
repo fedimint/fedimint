@@ -19,6 +19,7 @@ mod input;
 pub mod issuance;
 mod output;
 mod receive;
+mod shared_api;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::Infallible;
@@ -26,10 +27,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context as _, anyhow};
-use bitcoin_hashes::sha256;
 use client_db::{RecoveryState, RecoveryStateKey, SpendableNoteAmountPrefix, SpendableNotePrefix};
 pub use events::*;
-use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::module::ClientModule;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
@@ -59,7 +58,6 @@ use fedimint_core::module::{
 };
 use fedimint_core::secp256k1::rand::{Rng, thread_rng};
 use fedimint_core::secp256k1::{Keypair, PublicKey};
-use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{Amount, OutPoint, PeerId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::DerivableSecret;
@@ -71,6 +69,8 @@ use futures::{StreamExt, pin_mut};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+pub use shared_api::MintV2SharedApi;
+use shared_api::{MintV2SharedApiHandle, SLICE_SIZE};
 use tbs::AggregatePublicKey;
 use thiserror::Error;
 
@@ -83,21 +83,6 @@ use crate::output::{MintOutputStateMachine, OutputSMCommon, OutputSMState};
 use crate::receive::{ReceiveSMState, ReceiveStateMachine};
 
 const TARGET_PER_DENOMINATION: usize = 3;
-const SLICE_SIZE: u64 = 10000;
-/// How long a guardian sits out after failing to answer a slice request.
-const PEER_READMISSION: Duration = Duration::from_secs(60);
-/// How long a single peer is given to answer a slice request.
-///
-/// A slice takes a second or two from a healthy guardian, so waiting half a
-/// minute only delays noticing that one is not going to answer. The timeout
-/// grows on every failed attempt up to [`MAX_SLICE_TIMEOUT`], so a client
-/// on a slow connection where every guardian exceeds the initial timeout
-/// still makes progress instead of retrying forever.
-const SLICE_TIMEOUT: Duration = Duration::from_secs(10);
-/// Upper bound for the per-retry growth of [`SLICE_TIMEOUT`]; the flat
-/// timeout used before the growth was introduced.
-const MAX_SLICE_TIMEOUT: Duration = Duration::from_secs(30);
-const PARALLEL_HASH_REQUESTS: usize = 10;
 const PARALLEL_SLICE_REQUESTS: usize = 10;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable)]
@@ -145,8 +130,12 @@ pub enum MintOperationMeta {
     },
 }
 
-#[derive(Debug, Clone)]
-pub struct MintClientInit;
+#[derive(Debug, Clone, Default)]
+pub struct MintClientInit {
+    /// Reuse this handle across accounts; results are keyed by federation and
+    /// module instance.
+    pub shared_api: Option<Arc<MintV2SharedApi>>,
+}
 
 impl ModuleInit for MintClientInit {
     type Common = MintCommonInit;
@@ -224,26 +213,24 @@ impl ClientModuleInit for MintClientInit {
             return Ok(None);
         }
 
-        let peer_pool = PeerPool::new(args.api().all_peers());
+        let shared_api = MintV2SharedApiHandle::new(
+            self.shared_api.clone().unwrap_or_default(),
+            args.shared_api_scope(),
+        );
 
         let mut recovery_stream = futures::stream::iter(
-            (state.next_index..state.total_items).step_by(SLICE_SIZE as usize),
+            state.next_index / SLICE_SIZE..state.total_items.div_ceil(SLICE_SIZE),
         )
-        .map(|start| {
+        .map(|slice| {
             let api = args.module_api().clone();
-            let end = std::cmp::min(start + SLICE_SIZE, state.total_items);
-
-            async move { (start, end, api.fetch_recovery_slice_hash(start, end).await) }
-        })
-        .buffered(PARALLEL_HASH_REQUESTS)
-        .map(|(start, end, hash)| {
-            let module_api = args.module_api().clone();
-            let peer_pool = peer_pool.clone();
+            let shared_api = shared_api.clone();
 
             async move {
                 (
-                    start,
-                    download_slice(module_api, peer_pool, start, end, hash).await,
+                    slice * SLICE_SIZE,
+                    shared_api
+                        .verified_recovery_slice(&api, slice, state.total_items)
+                        .await,
                 )
             }
         })
@@ -260,7 +247,7 @@ impl ClientModuleInit for MintClientInit {
         // spends an output that has to have been seen already, so items are
         // scanned in index order however they turn up. This holds whatever
         // downloaded while a slice was outstanding, which the timeout bounds.
-        let mut pending: BTreeMap<u64, Vec<RecoveryItem>> = BTreeMap::new();
+        let mut pending: BTreeMap<u64, Arc<Vec<RecoveryItem>>> = BTreeMap::new();
 
         loop {
             let items = loop {
@@ -276,7 +263,7 @@ impl ClientModuleInit for MintClientInit {
                 pending.insert(start, items);
             };
 
-            for item in &items {
+            for item in &*items {
                 match item {
                     RecoveryItem::Output {
                         denomination,
@@ -1260,100 +1247,6 @@ impl MintClientModule {
         dbtx.remove_entry(&SpendableNoteKey(spendable_note.clone()))
             .await
             .expect("Must delete existing spendable note");
-    }
-}
-
-/// Hands out guardians so that only one slice request is outstanding to each.
-///
-/// Whichever peer finishes first takes the next slice, so a slow guardian
-/// receives less work without anyone having to measure how slow it is, and one
-/// that is not answering ties up a single request rather than a share of all
-/// of them.
-#[derive(Clone)]
-struct PeerPool {
-    receiver: async_channel::Receiver<PeerId>,
-    sender: async_channel::Sender<PeerId>,
-}
-
-impl PeerPool {
-    fn new(peers: &BTreeSet<PeerId>) -> Self {
-        let (sender, receiver) = async_channel::bounded(peers.len().max(1));
-
-        for peer in peers {
-            sender
-                .try_send(*peer)
-                .expect("Capacity was sized to hold every peer");
-        }
-
-        Self { receiver, sender }
-    }
-
-    /// Wait for a guardian with no request outstanding.
-    async fn acquire(&self) -> PeerId {
-        self.receiver
-            .recv()
-            .await
-            .expect("The sender is held for as long as the receiver")
-    }
-
-    /// Take a guardian out of rotation, putting it back once it has sat out
-    /// [`PEER_READMISSION`].
-    ///
-    /// Dropping it for good would cost a guardian that timed out once the rest
-    /// of the recovery, which on a federation of four is a quarter of the
-    /// capacity thrown away for a single bad request.
-    fn retire(&self, peer: PeerId) {
-        let pool = self.clone();
-
-        fedimint_core::runtime::spawn("mintv2 recovery peer readmission", async move {
-            fedimint_core::runtime::sleep(PEER_READMISSION).await;
-
-            pool.release(peer);
-        });
-    }
-
-    /// Put a guardian back for the next slice.
-    fn release(&self, peer: PeerId) {
-        self.sender
-            .try_send(peer)
-            .expect("Only peers taken from the pool are put back");
-    }
-}
-
-/// Download a slice, asking one guardian at a time and holding it for the
-/// duration of the request.
-async fn download_slice(
-    module_api: DynModuleApi,
-    peers: PeerPool,
-    start: u64,
-    end: u64,
-    expected_hash: sha256::Hash,
-) -> Vec<RecoveryItem> {
-    let mut timeouts = custom_backoff(SLICE_TIMEOUT, MAX_SLICE_TIMEOUT, None);
-
-    loop {
-        let peer = peers.acquire().await;
-
-        let timeout = timeouts.next().expect("The backoff never gives up");
-
-        let result = module_api
-            .fetch_recovery_slice(peer, timeout, start, end)
-            .await;
-
-        match result {
-            Ok(data) if data.consensus_hash::<sha256::Hash>() == expected_hash => {
-                peers.release(peer);
-
-                return data;
-            }
-            // Either served something the other guardians disagree with, or
-            // did not answer at all. Either way it sits out for a while: a
-            // request that reaches the timeout took many times longer than a
-            // healthy guardian needs, so asking it again mostly buys another
-            // timeout. The timeout grows in case it is the client's own
-            // connection that is too slow for the initial one.
-            Ok(_) | Err(_) => peers.retire(peer),
-        }
     }
 }
 

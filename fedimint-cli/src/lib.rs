@@ -834,11 +834,11 @@ impl FedimintCli {
     pub fn with_default_modules(self) -> Self {
         self.with_module(LightningClientInit::default())
             .with_module(MintClientInit)
-            .with_module(fedimint_mintv2_client::MintClientInit)
+            .with_module(fedimint_mintv2_client::MintClientInit::default())
             .with_module(WalletClientInit::default())
             .with_module(MetaClientInit)
             .with_module(fedimint_lnv2_client::LightningClientInit::default())
-            .with_module(fedimint_walletv2_client::WalletClientInit)
+            .with_module(fedimint_walletv2_client::WalletClientInit::default())
     }
 
     pub async fn run(&mut self) {

@@ -13,6 +13,7 @@ pub mod db;
 pub mod events;
 mod receive_sm;
 mod send_sm;
+mod shared_api;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -61,6 +62,8 @@ use lightning_invoice::{Bolt11Invoice, Currency};
 use secp256k1::{Keypair, Scalar, SecretKey, ecdh};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+pub use shared_api::LightningV2SharedApi;
+use shared_api::LightningV2SharedApiHandle;
 use strum::IntoEnumIterator as _;
 use thiserror::Error;
 use tpe::{AggregateDecryptionKey, derive_agg_dk};
@@ -228,6 +231,9 @@ pub type ReceiveResult = Result<(Bolt11Invoice, OperationId), ReceiveError>;
 
 #[derive(Clone)]
 pub struct LightningClientInit {
+    /// Reuse this handle across accounts of the same federation/module
+    /// instance.
+    pub shared_api: Option<Arc<LightningV2SharedApi>>,
     pub gateway_conn: Option<Arc<dyn GatewayConnection + Send + Sync>>,
     pub custom_meta_fn: Arc<dyn Fn() -> Value + Send + Sync>,
 }
@@ -235,6 +241,7 @@ pub struct LightningClientInit {
 impl std::fmt::Debug for LightningClientInit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LightningClientInit")
+            .field("shared_api", &self.shared_api)
             .field("gateway_conn", &self.gateway_conn)
             .field("custom_meta_fn", &"<function>")
             .finish()
@@ -244,6 +251,7 @@ impl std::fmt::Debug for LightningClientInit {
 impl Default for LightningClientInit {
     fn default() -> Self {
         LightningClientInit {
+            shared_api: None,
             gateway_conn: None,
             custom_meta_fn: Arc::new(|| Value::Null),
         }
@@ -284,6 +292,10 @@ impl ClientModuleInit for LightningClientInit {
             args.notifier().clone(),
             args.context(),
             args.module_api().clone(),
+            LightningV2SharedApiHandle::new(
+                self.shared_api.clone().unwrap_or_default(),
+                args.shared_api_scope(),
+            ),
             args.module_root_secret(),
             gateway_conn,
             self.custom_meta_fn.clone(),
@@ -324,6 +336,7 @@ pub struct LightningClientModule {
     notifier: ModuleNotifier<LightningClientStateMachines>,
     client_ctx: ClientContext<Self>,
     module_api: DynModuleApi,
+    shared_api: LightningV2SharedApiHandle,
     keypair: Keypair,
     lnurl_keypair: Keypair,
     gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
@@ -384,6 +397,7 @@ impl LightningClientModule {
         notifier: ModuleNotifier<LightningClientStateMachines>,
         client_ctx: ClientContext<Self>,
         module_api: DynModuleApi,
+        shared_api: LightningV2SharedApiHandle,
         module_root_secret: &DerivableSecret,
         gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
         custom_meta_fn: Arc<dyn Fn() -> Value + Send + Sync>,
@@ -397,6 +411,7 @@ impl LightningClientModule {
             notifier,
             client_ctx,
             module_api,
+            shared_api,
             keypair: module_root_secret
                 .child_key(ChildId(0))
                 .to_secp_key(SECP256K1),
@@ -435,7 +450,7 @@ impl LightningClientModule {
         // if possible, such that the payment does not go over lightning, reducing
         // fees and latency.
 
-        if let Ok(gateways) = self.module_api.gateways().await {
+        if let Ok(gateways) = self.shared_api.gateways(&self.module_api).await {
             let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
             for gateway in gateways {
@@ -464,8 +479,8 @@ impl LightningClientModule {
         invoice: Option<Bolt11Invoice>,
     ) -> Result<(SafeUrl, RoutingInfo), SelectGatewayError> {
         let gateways = self
-            .module_api
-            .gateways()
+            .shared_api
+            .gateways(&self.module_api)
             .await
             .map_err(|e| SelectGatewayError::FailedToRequestGateways(e.to_string()))?;
 
@@ -508,8 +523,8 @@ impl LightningClientModule {
                 .await
                 .map_err(|_| ListGatewaysError::FailedToListGateways)
         } else {
-            self.module_api
-                .gateways()
+            self.shared_api
+                .gateways(&self.module_api)
                 .await
                 .map_err(|_| ListGatewaysError::FailedToListGateways)
         }
@@ -1041,8 +1056,8 @@ impl LightningClientModule {
     /// request it would refuse.
     async fn select_receive_gateway(&self) -> Result<(SafeUrl, RoutingInfo), SelectGatewayError> {
         let gateways = self
-            .module_api
-            .gateways()
+            .shared_api
+            .gateways(&self.module_api)
             .await
             .map_err(|e| SelectGatewayError::FailedToRequestGateways(e.to_string()))?;
 
@@ -1480,8 +1495,8 @@ impl LightningClientModule {
             vec![gateway]
         } else {
             let gateways = self
-                .module_api
-                .gateways()
+                .shared_api
+                .gateways(&self.module_api)
                 .await
                 .map_err(|e| GenerateLnurlError::FailedToRequestGateways(e.to_string()))?;
 
@@ -1548,12 +1563,14 @@ impl LightningClientModule {
             .await
             .unwrap_or(0);
 
-        let (contracts, next_index) = self
-            .module_api
-            .await_incoming_contracts(stream_index, 128)
+        let batch = self
+            .shared_api
+            .await_incoming_contracts(&self.module_api, stream_index, 128)
             .await;
 
-        for contract in &contracts {
+        let (contracts, next_index) = batch.as_ref();
+
+        for contract in contracts {
             // The stream carries every incoming contract the federation funded, and
             // anyone can address one to a published lnurl key. Check that it is ours
             // before quoting - recovering the keys is local arithmetic, the quote
@@ -1603,7 +1620,7 @@ impl LightningClientModule {
         // re-fetches the same batch on the next iteration.
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
-        dbtx.insert_entry(&IncomingContractStreamIndexKey, &next_index)
+        dbtx.insert_entry(&IncomingContractStreamIndexKey, next_index)
             .await;
 
         dbtx.commit_tx().await;
