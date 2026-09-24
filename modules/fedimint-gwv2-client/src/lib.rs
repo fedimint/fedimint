@@ -69,6 +69,10 @@ use crate::send_sm::SendSMCommon;
 /// decides how quickly an unreachable one fails the HTLC back.
 const FEDERATION_LIVENESS_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Minimum number of blocks between the current height and an incoming HTLC's
+/// claim deadline for the gateway to fund its incoming contract.
+const LNV2_CLAIM_DEADLINE_MARGIN: u32 = 2;
+
 /// LNv2 CLTV Delta in blocks
 pub const EXPIRATION_DELTA_MINIMUM_V2: u64 = 144;
 
@@ -658,7 +662,8 @@ impl GatewayClientModuleV2 {
     /// # Errors
     ///
     /// Fails with a [`RelayIncomingHtlcError`] if a fresh contract is not
-    /// funded because the federation does not answer, or if the funding
+    /// funded because the HTLC's claim deadline is too close or the federation
+    /// does not answer, or if the funding
     /// transaction or the completion operation could not be started and no
     /// earlier attempt had started it.
     pub async fn relay_incoming_htlc(
@@ -668,6 +673,7 @@ impl GatewayClientModuleV2 {
         htlc_id: u64,
         contract: IncomingContract,
         amount_msat: u64,
+        blocks_to_claim_deadline: u32,
     ) -> Result<(), RelayIncomingHtlcError> {
         let operation_start = now();
         let receive_operation_id = OperationId::from_encodable(&contract);
@@ -693,6 +699,16 @@ impl GatewayClientModuleV2 {
         if plan == IncomingRelayPlan::CreateReceiveAndCompletion {
             // Only gate fresh funding: the other plans resume an already
             // funded contract and must not be cancelled.
+            //
+            // Funding is irreversible, and the gateway is only reimbursed by
+            // settling the HTLC before its claim deadline, so do not fund an
+            // HTLC that is about to expire. The margin is small because LDK's
+            // default invoices leave only 3 blocks before the claim deadline.
+            if blocks_to_claim_deadline < LNV2_CLAIM_DEADLINE_MARGIN {
+                return Err(RelayIncomingHtlcError::ClaimDeadlineTooClose {
+                    blocks_to_claim_deadline,
+                });
+            }
             self.ensure_federation_responsive(payment_hash).await?;
 
             let refund_keypair = self.keypair;
@@ -1019,6 +1035,14 @@ pub enum RelayIncomingHtlcError {
     FederationTimeout {
         /// How long the probe waited.
         timeout_secs: u64,
+    },
+
+    /// The HTLC's claim deadline is too close to fund a fresh incoming
+    /// contract and still settle the HTLC in time.
+    #[error("HTLC claim deadline is only {blocks_to_claim_deadline} blocks away")]
+    ClaimDeadlineTooClose {
+        /// Blocks left until the HTLC's claim deadline.
+        blocks_to_claim_deadline: u32,
     },
 
     /// The funding transaction or the completion operation could not be
