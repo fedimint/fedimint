@@ -1172,6 +1172,12 @@ impl Gateway {
             )
             .await?;
 
+        // Without the current height the deadline cannot be checked, so treat
+        // it as reached and refuse to fund.
+        let blocks_to_claim_deadline = lightning_context.lnrpc.info().await.map_or(0, |info| {
+            htlc_request.expiry.saturating_sub(info.block_height)
+        });
+
         if let Err(err) = client
             .get_first_module::<GatewayClientModuleV2>()
             .expect("Must have client module")
@@ -1181,6 +1187,7 @@ impl Gateway {
                 htlc_request.htlc_id,
                 contract,
                 htlc_request.incoming_amount_msat,
+                blocks_to_claim_deadline,
             )
             .await
         {

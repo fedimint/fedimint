@@ -33,9 +33,9 @@ use tonic_lnd::lnrpc::invoice::InvoiceState;
 use tonic_lnd::lnrpc::payment::PaymentStatus;
 use tonic_lnd::lnrpc::{
     ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest, ConnectPeerRequest,
-    GetInfoRequest, Invoice, InvoiceSubscription, LightningAddress, ListChannelsRequest,
-    ListInvoiceRequest, ListPaymentsRequest, ListPeersRequest, OpenChannelRequest,
-    SendCoinsRequest, WalletBalanceRequest,
+    GetInfoRequest, Invoice, InvoiceHtlcState, InvoiceSubscription, LightningAddress,
+    ListChannelsRequest, ListInvoiceRequest, ListPaymentsRequest, ListPeersRequest,
+    OpenChannelRequest, SendCoinsRequest, WalletBalanceRequest,
 };
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -278,9 +278,16 @@ impl GatewayLndClient {
                         // two amounts coincide here.
                         amount_msat: hold.amt_paid_msat as u64,
                         incoming_amount_msat: hold.amt_paid_msat as u64,
-                        // The rest of the fields are not used in LNv2 and can be removed once LNv1
-                        // support is over
-                        expiry: hold.expiry as u32,
+                        // LND cancels a held HTLC `holdexpirydelta` (default 12)
+                        // blocks before its expiry, so that is when the gateway can
+                        // no longer settle it; the earliest accepted HTLC decides.
+                        expiry: hold
+                            .htlcs
+                            .iter()
+                            .filter(|htlc| htlc.state() == InvoiceHtlcState::Accepted)
+                            .map(|htlc| (htlc.expiry_height as u32).saturating_sub(12))
+                            .min()
+                            .unwrap_or_default(),
                         short_channel_id: Some(0),
                         // The payment is held by a HOLD invoice on our own
                         // node rather than by an intercepted forward, which is

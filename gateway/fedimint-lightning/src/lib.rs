@@ -397,6 +397,7 @@ pub struct InterceptPaymentRequest {
     /// The amount actually locked in the incoming HTLC -- the real value the
     /// gateway receives on settlement. Funding and fee checks must use this.
     pub incoming_amount_msat: u64,
+    /// Block height at which the HTLC can no longer be claimed; `0` if unknown.
     pub expiry: u32,
     pub incoming_chan_id: u64,
     pub short_channel_id: Option<u64>,
