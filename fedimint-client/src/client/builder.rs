@@ -854,7 +854,7 @@ impl ClientBuilder {
                                     .inspect_err(|err| {
                                         warn!(
                                             target: LOG_CLIENT,
-                                            module_id = module_instance_id, %kind, err = %err.fmt_compact_anyhow(), "Module failed to recover"
+                                            module_id = module_instance_id, %kind, err = %err.fmt_compact(), "Module failed to recover"
                                         );
                                     })
                             }),

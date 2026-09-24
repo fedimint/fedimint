@@ -4,12 +4,11 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::anyhow;
 use bitcoin::key::Secp256k1;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
 use fedimint_client_module::OperationId;
-use fedimint_client_module::error::OperationNotFoundError;
+use fedimint_client_module::error::{ClientModuleError, OperationNotFoundError};
 use fedimint_client_module::meta::LegacyMetaSource;
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{ClientModuleRegistry, FinalClientIface};
@@ -42,8 +41,18 @@ use crate::sm::notifier::Notifier;
 
 const FAILING_MODULE_INSTANCE_ID: ModuleInstanceId = 1;
 const RECOVERING_MODULE_INSTANCE_ID: ModuleInstanceId = 2;
-const RECOVERY_ERROR: &str = "module recovery went wrong";
 const WAIT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// The failure the failing module's recovery reports. A type of its own, so
+/// the assertions can tell it apart from any failure the client produces.
+#[derive(Debug, thiserror::Error)]
+#[error("module recovery went wrong")]
+struct RecoveryFailure;
+
+/// Whether `error` is the [`RecoveryFailure`] the failing module reported.
+fn is_recovery_failure(error: &ClientModuleError) -> bool {
+    matches!(error, ClientModuleError::Other(source) if source.is::<RecoveryFailure>())
+}
 
 struct ModuleRecoveries {
     task: Pin<Box<dyn Future<Output = ()>>>,
@@ -59,7 +68,8 @@ fn run_module_recoveries() -> ModuleRecoveries {
     let module_recoveries: BTreeMap<ModuleInstanceId, ModuleRecoveryFuture> = [
         (
             FAILING_MODULE_INSTANCE_ID,
-            Box::pin(async { Err(anyhow!(RECOVERY_ERROR)) }) as ModuleRecoveryFuture,
+            Box::pin(async { Err(ClientModuleError::other(RecoveryFailure)) })
+                as ModuleRecoveryFuture,
         ),
         (
             RECOVERING_MODULE_INSTANCE_ID,
@@ -309,15 +319,15 @@ async fn persisted_recovery_progress(db: &Database) -> Option<RecoveryProgress> 
 }
 
 /// Asserts that `err` is the terminal failure of `module_instance_id`,
-/// carrying the message the module's recovery failed with.
+/// carrying the error the module's recovery failed with.
 fn assert_module_recovery_failed(err: &RecoveryError, module_instance_id: ModuleInstanceId) {
     match err {
         RecoveryError::Failed {
             module_instance_id: failed,
-            error,
+            source,
         } => {
             assert_eq!(*failed, module_instance_id, "{err:?}");
-            assert!(error.contains(RECOVERY_ERROR), "{error}");
+            assert!(is_recovery_failure(source), "{source:?}");
         }
         other => panic!("Expected a failed module recovery, got {other:?}"),
     }
@@ -349,7 +359,7 @@ async fn forged_done_recovery_progress_does_not_mask_a_later_failure() {
             failure_released
                 .await
                 .expect("Release channel must stay open");
-            Err(anyhow!(RECOVERY_ERROR))
+            Err(ClientModuleError::other(RecoveryFailure))
         }) as ModuleRecoveryFuture,
     );
     let client = client_for_recovery_test(status_receiver.clone(), recovery_module_kinds()).await;
@@ -623,7 +633,7 @@ async fn recovery_failure_wins_if_completion_is_also_observable() {
                         complete: 0,
                         total: 10,
                     },
-                    error: RECOVERY_ERROR.to_string(),
+                    error: Arc::new(ClientModuleError::other(RecoveryFailure)),
                 },
             ),
             (
@@ -672,7 +682,7 @@ async fn failed_status_is_not_overwritten_by_late_module_progress() {
             failure_released
                 .await
                 .expect("Release channel must stay open");
-            Err(anyhow!(RECOVERY_ERROR))
+            Err(ClientModuleError::other(RecoveryFailure))
         }) as ModuleRecoveryFuture,
     );
 
@@ -714,7 +724,7 @@ async fn failed_status_is_not_overwritten_by_late_module_progress() {
                 progress_tuple(initial_progress),
                 "A late progress update must not advance a failed recovery"
             );
-            assert!(error.contains(RECOVERY_ERROR), "{error}");
+            assert!(is_recovery_failure(error), "{error:?}");
         }
         RecoveryStatus::InProgress(_) => {
             panic!("A late progress update must not erase a recorded recovery failure")
@@ -777,7 +787,7 @@ async fn wait_for_module_kind_recovery_reports_failure_despite_other_kind_failin
             FAILING_MODULE_INSTANCE_ID,
             RecoveryStatus::Failed {
                 last_progress: in_progress,
-                error: RECOVERY_ERROR.to_string(),
+                error: Arc::new(ClientModuleError::other(RecoveryFailure)),
             },
         );
     });
@@ -789,7 +799,7 @@ async fn wait_for_module_kind_recovery_reports_failure_despite_other_kind_failin
             OTHER_FAILING_MODULE_INSTANCE_ID,
             RecoveryStatus::Failed {
                 last_progress: in_progress,
-                error: "other module recovery went wrong".to_string(),
+                error: Arc::new(ClientModuleError::other("other module recovery went wrong")),
             },
         );
     });

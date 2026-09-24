@@ -860,12 +860,15 @@ impl ClientModuleInit for MintClientInit {
         &self,
         args: &ClientModuleRecoverArgs<Self>,
         snapshot: Option<&<Self::Module as ClientModule>::Backup>,
-    ) -> anyhow::Result<Option<Amount>> {
+    ) -> Result<Option<Amount>, ClientModuleError> {
         let mut dbtx = args.db().begin_transaction_nc().await;
 
         // Check if V2 (slice-based) recovery state exists
         if dbtx.get_value(&RecoveryStateV2Key).await.is_some() {
-            return self.recover_from_slices(args).await;
+            return self
+                .recover_from_slices(args)
+                .await
+                .map_err(ClientModuleError::other);
         }
 
         // Check if V1 (session-based) recovery state exists
@@ -879,7 +882,9 @@ impl ClientModuleInit for MintClientInit {
         // availability
         if args.module_api().fetch_recovery_count().await.is_ok() {
             // New endpoint available - use V2 slice-based recovery
-            self.recover_from_slices(args).await
+            self.recover_from_slices(args)
+                .await
+                .map_err(ClientModuleError::other)
         } else {
             // Old federation - use V1 session-based recovery
             args.recover_from_history::<MintRecovery>(self, snapshot)

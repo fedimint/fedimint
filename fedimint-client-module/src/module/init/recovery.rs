@@ -7,7 +7,7 @@ use fedimint_api_client::api::{
     DynGlobalApi, VERSION_THAT_INTRODUCED_GET_SESSION_STATUS,
     VERSION_THAT_INTRODUCED_GET_SESSION_STATUS_V2,
 };
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiVersion, ModuleCommon};
@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
 
 use super::{ClientModuleInit, ClientModuleRecoverArgs};
+use crate::error::ClientModuleError;
 use crate::module::recovery::RecoveryProgress;
 use crate::module::{ClientContext, ClientModule};
 
@@ -58,7 +59,7 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
         init: &Self::Init,
         args: &ClientModuleRecoverArgs<Self::Init>,
         snapshot: Option<&<<Self::Init as ClientModuleInit>::Module as ClientModule>::Backup>,
-    ) -> anyhow::Result<(Self, u64)>;
+    ) -> Result<(Self, u64), ClientModuleError>;
 
     /// Try to load the existing state previously stored with
     /// [`RecoveryFromHistory::store_dbtx`].
@@ -69,7 +70,7 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
         init: &Self::Init,
         dbtx: &mut DatabaseTransaction<'_>,
         args: &ClientModuleRecoverArgs<Self::Init>,
-    ) -> anyhow::Result<Option<(Self, RecoveryFromHistoryCommon)>>;
+    ) -> Result<Option<(Self, RecoveryFromHistoryCommon)>, ClientModuleError>;
 
     /// Store the current recovery state in the database
     ///
@@ -109,7 +110,7 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
         client_ctx: &ClientContext<<Self::Init as ClientModuleInit>::Module>,
         session_idx: u64,
         session_items: &Vec<AcceptedItem>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ClientModuleError> {
         for accepted_item in session_items {
             if let ConsensusItem::Transaction(ref transaction) = accepted_item.item {
                 self.handle_transaction(client_ctx, transaction, session_idx)
@@ -134,7 +135,7 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
         client_ctx: &ClientContext<<Self::Init as ClientModuleInit>::Module>,
         transaction: &Transaction,
         session_idx: u64,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ClientModuleError> {
         trace!(
             target: LOG_CLIENT_RECOVERY,
             tx_hash = %transaction.tx_hash(),
@@ -190,7 +191,7 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
         _idx: usize,
         _input: &<<<Self::Init as ClientModuleInit>::Module as ClientModule>::Common as ModuleCommon>::Input,
         _session_idx: u64,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ClientModuleError> {
         Ok(())
     }
 
@@ -203,13 +204,13 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
         _out_point: OutPoint,
         _output: &<<<Self::Init as ClientModuleInit>::Module as ClientModule>::Common as ModuleCommon>::Output,
         _session_idx: u64,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ClientModuleError> {
         Ok(())
     }
 
     /// Called before `finalize_dbtx`, to allow final state changes outside
     /// of retriable database transaction.
-    async fn pre_finalize(&mut self) -> anyhow::Result<()> {
+    async fn pre_finalize(&mut self) -> Result<(), ClientModuleError> {
         Ok(())
     }
 
@@ -228,7 +229,7 @@ pub trait RecoveryFromHistory: std::fmt::Debug + MaybeSend + MaybeSync + Clone {
     async fn finalize_dbtx(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> anyhow::Result<Option<Amount>>;
+    ) -> Result<Option<Amount>, ClientModuleError>;
 }
 
 impl<Init> ClientModuleRecoverArgs<Init>
@@ -242,11 +243,18 @@ where
     /// state. This function implement such a recovery by being generic
     /// over [`RecoveryFromHistory`] trait, which provides module-specific
     /// parts of recovery logic.
+    ///
+    /// # Errors
+    ///
+    /// Fails with whatever the [`RecoveryFromHistory`] implementation fails
+    /// with, or with [`ClientModuleError::Other`] if the federation cannot say
+    /// how many sessions to recover or the client shuts down while the
+    /// sessions are being fetched.
     pub async fn recover_from_history<Recovery>(
         &self,
         init: &Init,
         snapshot: Option<&<<Init as ClientModuleInit>::Module as ClientModule>::Backup>,
-    ) -> anyhow::Result<Option<Amount>>
+    ) -> Result<Option<Amount>, ClientModuleError>
     where
         Recovery: RecoveryFromHistory<Init = Init> + std::fmt::Debug,
     {
@@ -336,7 +344,7 @@ where
             block_stream: &mut (
                      impl Stream<Item = Result<(u64, Vec<AcceptedItem>), ShuttingDownError>> + Unpin
                  ),
-        ) -> anyhow::Result<()>
+        ) -> Result<(), ClientModuleError>
         where
             Init: ClientModuleInit,
         {
@@ -361,7 +369,7 @@ where
                     break;
                 };
 
-                let (session_idx, accepted_items) = res?;
+                let (session_idx, accepted_items) = res.map_err(ClientModuleError::other)?;
 
                 assert_eq!(common_state.next_session, session_idx);
                 state
@@ -415,7 +423,11 @@ where
             );
             return Ok(None);
         }
-        let current_session_count = client_ctx.global_api().session_count().await?;
+        let current_session_count = client_ctx
+            .global_api()
+            .session_count()
+            .await
+            .map_err(ClientModuleError::other)?;
         debug!(target: LOG_CLIENT_RECOVERY, session_count = current_session_count, "Current session count");
 
         let (mut state, mut common_state) =
@@ -498,13 +510,19 @@ where
                             let recovered_amount = state.finalize_dbtx(dbtx).await?;
                             Recovery::store_finalized(dbtx, true).await;
 
-                            Ok::<_, anyhow::Error>(recovered_amount)
+                            Ok::<_, ClientModuleError>(recovered_amount)
                         })
                     }
                 },
                 None,
             )
-            .await?;
+            .await
+            .map_err(|error| match error {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    ClientModuleError::other(last_error)
+                }
+            })?;
 
         Ok(recovered_amount)
     }

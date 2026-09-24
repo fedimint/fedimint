@@ -25,7 +25,7 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context as _, anyhow};
+use anyhow::anyhow;
 use bitcoin_hashes::sha256;
 use client_db::{RecoveryState, RecoveryStateKey, SpendableNoteAmountPrefix, SpendableNotePrefix};
 pub use events::*;
@@ -218,7 +218,7 @@ impl ClientModuleInit for MintClientInit {
         &self,
         args: &ClientModuleRecoverArgs<Self>,
         _snapshot: Option<&NoModuleBackup>,
-    ) -> anyhow::Result<Option<Amount>> {
+    ) -> Result<Option<Amount>, ClientModuleError> {
         let mut state = args
             .db()
             .begin_transaction_nc()
@@ -275,10 +275,9 @@ impl ClientModuleInit for MintClientInit {
                     break items;
                 }
 
-                let (start, items) = recovery_stream
-                    .next()
-                    .await
-                    .context("Recovery stream finished before recovery is complete")?;
+                let (start, items) = recovery_stream.next().await.ok_or_else(|| {
+                    ClientModuleError::other("Recovery stream finished before recovery is complete")
+                })?;
 
                 pending.insert(start, items);
             };

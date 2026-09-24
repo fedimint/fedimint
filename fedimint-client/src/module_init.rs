@@ -73,7 +73,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + fmt::Debug + MaybeSend + May
         client_span: Span,
         user_bitcoind_rpc: Option<DynBitcoindRpc>,
         user_bitcoind_rpc_no_chain_id: Option<BitcoindRpcNoChainIdFactory>,
-    ) -> anyhow::Result<Option<Amount>>;
+    ) -> Result<Option<Amount>, ClientModuleError>;
 
     #[allow(clippy::too_many_arguments)]
     async fn init(
@@ -167,8 +167,10 @@ where
         client_span: Span,
         user_bitcoind_rpc: Option<DynBitcoindRpc>,
         user_bitcoind_rpc_no_chain_id: Option<BitcoindRpcNoChainIdFactory>,
-    ) -> anyhow::Result<Option<Amount>> {
-        let typed_cfg: &<<T as fedimint_core::module::ModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
+    ) -> Result<Option<Amount>, ClientModuleError> {
+        let typed_cfg = cfg
+            .cast::<<<T as ModuleInit>::Common as CommonModuleInit>::ClientConfig>()
+            .map_err(ClientModuleError::other)?;
         let snapshot: Option<&<<Self as ClientModuleInit>::Module as ClientModule>::Backup> =
             snapshot.map(|s| {
                 s.as_any()

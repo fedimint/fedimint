@@ -5,7 +5,6 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use anyhow::bail;
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_connectors::ConnectorRegistry;
@@ -478,15 +477,18 @@ pub trait ClientModuleInit: ModuleInit + Sized {
     ///
     /// If `Err` is returned, the higher level client/application might try
     /// again at a different time (client restarted, code version changed, etc.)
+    ///
+    /// The default body fails with [`ClientModuleError::Unsupported`]: a
+    /// module that declares a [`Self::recovery_mode`] must implement this.
     async fn recover(
         &self,
         _args: &ClientModuleRecoverArgs<Self>,
         _snapshot: Option<&<Self::Module as ClientModule>::Backup>,
-    ) -> anyhow::Result<Option<Amount>> {
-        bail!(
-            "Module kind {} declares a recovery mode without implementing a recovery",
-            <Self::Module as ClientModule>::kind()
-        )
+    ) -> Result<Option<Amount>, ClientModuleError> {
+        Err(ClientModuleError::Unsupported {
+            kind: <Self::Module as ClientModule>::kind(),
+            operation: "recover",
+        })
     }
 
     /// Initialize a [`ClientModule`] instance from its config

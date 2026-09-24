@@ -219,7 +219,7 @@ impl WalletClientInit {
         &self,
         args: &ClientModuleRecoverArgs<Self>,
         total_items: u64,
-    ) -> anyhow::Result<Option<fedimint_core::Amount>> {
+    ) -> Result<Option<fedimint_core::Amount>, ClientModuleError> {
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),
             module_root_secret: args.module_root_secret().clone(),
@@ -436,7 +436,7 @@ impl ClientModuleInit for WalletClientInit {
         &self,
         args: &ClientModuleRecoverArgs<Self>,
         snapshot: Option<&<Self::Module as ClientModule>::Backup>,
-    ) -> anyhow::Result<Option<fedimint_core::Amount>> {
+    ) -> Result<Option<fedimint_core::Amount>, ClientModuleError> {
         // Check if V1 (session-based) recovery state exists (resuming interrupted
         // recovery)
         if args

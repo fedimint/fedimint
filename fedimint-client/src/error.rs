@@ -4,11 +4,15 @@
 //! [`fedimint_client_module::error`] and re-exported here, so this module is
 //! the single place to look.
 
+use std::sync::Arc;
+
 use fedimint_api_client::api::{ClientConfigDownloadError, FederationError};
 pub use fedimint_client_module::error::*;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{DatabaseError, DbMigrationError};
 use fedimint_core::encoding::DecodeError;
+#[cfg(feature = "uniffi")]
+use fedimint_core::util::FmtCompact as _;
 pub use fedimint_eventlog::EventHandlerError;
 use thiserror::Error;
 
@@ -153,14 +157,14 @@ pub enum RecoveryError {
     ///
     /// The failure is in-memory only and is never persisted: reopening the
     /// client retries the recovery from its last persisted progress.
-    // `error` is the module's already-stringified failure; it becomes a typed
-    // `ClientModuleError` in #8821 part E.
-    #[error("Recovery of module {module_instance_id} failed: {error}")]
+    #[error("Recovery of module {module_instance_id} failed")]
     Failed {
         /// The module whose recovery failed.
         module_instance_id: ModuleInstanceId,
-        /// What the module reported.
-        error: String,
+        /// The failure the module reported, shared by everyone waiting on the
+        /// recovery.
+        #[source]
+        source: Arc<ClientModuleError>,
     },
 
     /// The client shut down before the recovery reached an outcome.
@@ -171,6 +175,6 @@ pub enum RecoveryError {
 #[cfg(feature = "uniffi")]
 impl From<RecoveryError> for fedimint_core::util::ffi::UniffiError {
     fn from(e: RecoveryError) -> Self {
-        Self::General(e.to_string())
+        Self::General(e.fmt_compact().to_string())
     }
 }

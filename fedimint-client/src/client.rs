@@ -58,9 +58,7 @@ use fedimint_core::task::{
 };
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::backoff_util::custom_backoff;
-use fedimint_core::util::{
-    BoxStream, FmtCompact as _, FmtCompactAnyhow as _, SafeUrl, backoff_util, retry,
-};
+use fedimint_core::util::{BoxStream, FmtCompact as _, SafeUrl, backoff_util, retry};
 use fedimint_core::{
     Amount, ChainId, NumPeers, OutPoint, PeerId, apply, async_trait_maybe_send, maybe_add_send,
     maybe_add_send_sync, runtime,
@@ -92,8 +90,9 @@ use crate::db::{
     apply_migrations_core_client_dbtx, verify_client_db_integrity_dbtx,
 };
 use crate::error::{
-    ApiVersionDiscoveryError, ClientSecretError, InsufficientBalanceError, ModuleLookupError,
-    OperationAlreadyExistsError, OperationNotFoundError, RecoveryError, TransactionSubmitError,
+    ApiVersionDiscoveryError, ClientModuleError, ClientSecretError, InsufficientBalanceError,
+    ModuleLookupError, OperationAlreadyExistsError, OperationNotFoundError, RecoveryError,
+    TransactionSubmitError,
 };
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
@@ -136,7 +135,7 @@ pub(crate) struct PrimaryModuleCandidates {
 /// An in-progress module recovery future, resolving to the amount recovered
 /// from the module (if it tracks one) once recovery completes.
 pub(crate) type ModuleRecoveryFuture =
-    Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<Option<Amount>>>)>>;
+    Pin<Box<maybe_add_send!(dyn Future<Output = Result<Option<Amount>, ClientModuleError>>)>>;
 
 /// The state of a single module's recovery, as tracked by the client.
 ///
@@ -169,10 +168,11 @@ pub(crate) enum RecoveryStatus {
     /// A successfully completed recovery is represented by a done progress.
     InProgress(RecoveryProgress),
     /// The recovery terminally failed at `last_progress`, which is kept so the
-    /// progress-reporting APIs can keep describing the module.
+    /// progress-reporting APIs can keep describing the module. `error` is
+    /// shared, because every waiter on the recovery is handed the same failure.
     Failed {
         last_progress: RecoveryProgress,
-        error: String,
+        error: Arc<ClientModuleError>,
     },
 }
 
@@ -2056,9 +2056,9 @@ impl Client {
             });
 
         match failure {
-            Some((module_instance_id, error)) => Err(RecoveryError::Failed {
+            Some((module_instance_id, source)) => Err(RecoveryError::Failed {
                 module_instance_id,
-                error,
+                source,
             }),
             None => Ok(()),
         }
@@ -2185,11 +2185,11 @@ impl Client {
                 match f.await {
                     Ok(amount) => (module_instance_id, RecoveryUpdate::Completed(amount)),
                     Err(err) => {
-                        let error = err.fmt_compact_anyhow().to_string();
                         warn!(
                             target: LOG_CLIENT,
-                            err = %error.as_str(), module_instance_id, "Module recovery failed"
+                            err = %err.fmt_compact(), module_instance_id, "Module recovery failed"
                         );
+                        let error = Arc::new(err);
                         // since the progress a module reports can't express a
                         // failure, record it as the terminal state of this
                         // module's recovery for anyone waiting on the outcome.
