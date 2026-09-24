@@ -33,7 +33,10 @@ async fn cancelled_probes_reconnect_after_server_returns() {
 
     use fedimint_core::runtime::{Instant, sleep, timeout};
 
-    let registry = ConnectorRegistry::build_from_server_defaults().bind().await;
+    let registry = ConnectorRegistry::build_from_server_defaults()
+        .bind()
+        .await
+        .expect("default connector registry binds");
     let pool = ConnectionPool::<TestConnection>::new(registry);
     let url = "ws://guardian.example/".parse().unwrap();
     let available = Arc::new(AtomicBool::new(true));
