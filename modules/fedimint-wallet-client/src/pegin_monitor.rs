@@ -1,7 +1,7 @@
 use std::cmp;
 use std::time::{Duration, SystemTime};
 
-use anyhow::anyhow;
+use anyhow::{Context as _, anyhow};
 use bitcoin::ScriptBuf;
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_bitcoind::DynBitcoindRpc;
@@ -469,14 +469,19 @@ async fn claim_peg_in(
         txout_proof: TxOutProof,
         operation_id: OperationId,
         federation_knows_utxo: bool,
-    ) -> Option<OutPointRange> {
+    ) -> anyhow::Result<Option<OutPointRange>> {
+        // A proof the Bitcoin backend built for a different transaction fails
+        // here without anyone forging anything, and the backend is federation
+        // suggested by default. Returning the error leaves the deposit
+        // unclaimed so the monitor retries it, where `None` would record it as
+        // claimed for good.
         let pegin_proof = PegInProof::new(
             txout_proof,
             btc_transaction.clone(),
             out_idx,
             tweak_key.public_key(),
         )
-        .expect("TODO: handle API returning faulty proofs");
+        .context("Bitcoin backend returned a proof that does not cover this deposit")?;
 
         let amount = pegin_proof.tx_output().value.into();
         let wallet_input = if federation_knows_utxo {
@@ -493,7 +498,7 @@ async fn claim_peg_in(
 
         if amount <= client_ctx.self_ref().cfg().fee_consensus.peg_in_abs {
             warn!(target: LOG_CLIENT_MODULE_WALLET, "We won't claim a deposit lower than the deposit fee");
-            return None;
+            return Ok(None);
         }
 
         let txid = btc_transaction.compute_txid();
@@ -520,7 +525,7 @@ async fn claim_peg_in(
             )
             .await;
 
-        Some(
+        Ok(Some(
             client_ctx
                 .claim_inputs(
                     dbtx,
@@ -529,7 +534,7 @@ async fn claim_peg_in(
                 )
                 .await
                 .expect("Cannot claim input, additional funding needed"),
-        )
+        ))
     }
 
     let tx_out_proof = &tx_out_proof;
@@ -551,7 +556,7 @@ async fn claim_peg_in(
                         operation_id,
                         federation_knows_utxo,
                     )
-                    .await;
+                    .await?;
 
                     let claimed_pegin_data = if let Some(change_range) = maybe_change_range {
                         ClaimedPegInData {

@@ -227,14 +227,20 @@ pub enum PegInProofError {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr as _;
+
+    use bitcoin::absolute::LockTime;
+    use bitcoin::secp256k1::PublicKey;
+    use bitcoin::transaction::Version;
+    use bitcoin::{Amount, ScriptBuf, Transaction, TxOut};
     use fedimint_core::encoding::Decodable;
     use fedimint_core::module::registry::ModuleDecoderRegistry;
     use fedimint_core::txoproof::TxOutProof;
     use hex::FromHex;
 
-    #[test_log::test]
-    fn test_txoutproof_happy_path() {
-        let txoutproof_hex = "0000a020c7f74cb7d4cbf90a40f38b8194d17996d29ad8cb8d42030000000000000\
+    use super::{PegInProof, PegInProofError};
+
+    const TXOUTPROOF_HEX: &str = "0000a020c7f74cb7d4cbf90a40f38b8194d17996d29ad8cb8d42030000000000000\
         0000045e274cbfff8fe34e6df61079ae8c8cf5af6d53ff158488e26df5a072363693be15a6760482a0c1731b169\
         074a0a00000dc525bdf029c9d77ac1039826be603bf08837d5dfd58b763590fb3f2db32693eacd2a8b13842289e\
         d8b6b10ffbae3498987ca510d6b54a278bb85a9b6f2daa0efa52ae55f39842e890144f998258b365ae903fd5b8e\
@@ -247,9 +253,11 @@ mod tests {
         9602cb7c776730435c1713a1ca57c0c6761576fbfb17da642aae2a4ce874e32b5c0cba450163b14b6b94bc479cb\
         58a30f7ae5b909ffdd020073f04ff370000";
 
+    #[test_log::test]
+    fn test_txoutproof_happy_path() {
         let empty_module_registry = ModuleDecoderRegistry::default();
         let txoutproof = TxOutProof::consensus_decode_whole(
-            &Vec::from_hex(txoutproof_hex).unwrap(),
+            &Vec::from_hex(TXOUTPROOF_HEX).unwrap(),
             &empty_module_registry,
         )
         .unwrap();
@@ -268,5 +276,40 @@ mod tests {
                     .unwrap()
             )
         );
+    }
+
+    /// A proof the Bitcoin backend built for some other transaction is well
+    /// formed and still cannot support this deposit, so `PegInProof::new`
+    /// reports it instead of the caller treating the error as impossible.
+    #[test_log::test]
+    fn test_pegin_proof_rejects_transaction_not_in_proof() {
+        let empty_module_registry = ModuleDecoderRegistry::default();
+        let txoutproof = TxOutProof::consensus_decode_whole(
+            &Vec::from_hex(TXOUTPROOF_HEX).unwrap(),
+            &empty_module_registry,
+        )
+        .unwrap();
+
+        let unrelated_transaction = Transaction {
+            version: Version::TWO,
+            lock_time: LockTime::ZERO,
+            input: vec![],
+            output: vec![TxOut {
+                value: Amount::from_sat(1_000),
+                script_pubkey: ScriptBuf::new(),
+            }],
+        };
+
+        assert!(!txoutproof.contains_tx(unrelated_transaction.compute_txid()));
+
+        let tweak_contract_key = PublicKey::from_str(
+            "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        )
+        .unwrap();
+
+        assert!(matches!(
+            PegInProof::new(txoutproof, unrelated_transaction, 0, tweak_contract_key),
+            Err(PegInProofError::TransactionNotInProof)
+        ));
     }
 }
