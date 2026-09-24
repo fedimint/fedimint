@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashSet};
+use std::convert::Infallible;
 use std::fmt::{self, Formatter};
 use std::future::{Future, pending};
 use std::ops::Range;
@@ -1958,7 +1959,7 @@ impl Client {
     /// Set the client [`Metadata`]
     pub async fn set_metadata(&self, metadata: &Metadata) {
         self.db
-            .autocommit::<_, _, anyhow::Error>(
+            .autocommit::<_, _, Infallible>(
                 |dbtx, _| {
                     Box::pin(async {
                         Self::set_metadata_dbtx(dbtx, metadata).await;
@@ -2481,14 +2482,12 @@ impl Client {
             "Fetching guardian public keys",
             backoff_util::background_backoff(),
             || async {
-                anyhow::Ok(
-                    self.api
-                        .request_current_consensus::<ClientConfig>(
-                            CLIENT_CONFIG_ENDPOINT.to_owned(),
-                            ApiRequestErased::default(),
-                        )
-                        .await?,
-                )
+                self.api
+                    .request_current_consensus::<ClientConfig>(
+                        CLIENT_CONFIG_ENDPOINT.to_owned(),
+                        ApiRequestErased::default(),
+                    )
+                    .await
             },
         )
         .await

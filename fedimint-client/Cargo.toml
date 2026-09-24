@@ -32,7 +32,6 @@ name = "fedimint_client"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true, features = ["rand-std"] }
@@ -60,6 +59,7 @@ tracing = { workspace = true }
 uniffi = { workspace = true, optional = true, features = ["tokio"] }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 assert_matches = { workspace = true }
 tracing-test = { workspace = true }
 

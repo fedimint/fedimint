@@ -3,7 +3,6 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::bail;
 use bitcoin::key::Secp256k1;
 use fedimint_api_client::api::global_api::with_cache::GlobalFederationApiWithCacheExt as _;
 use fedimint_api_client::api::global_api::with_request_hook::{
@@ -42,7 +41,7 @@ use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiRequestErased, ApiVersion, SupportedApiVersionsSummary};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::task::jit::{Jit, JitTry};
-use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, SafeUrl};
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{ChainId, NumPeers, PeerId, fedimint_build_code_version_env};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
@@ -1318,7 +1317,7 @@ impl ClientBuilder {
         if let Err(error) = Self::refresh_client_config_static_try(config, api, db).await {
             warn!(
                 target: LOG_CLIENT,
-                err = %error.fmt_compact_anyhow(), "Failed to refresh client config"
+                err = %error.fmt_compact(), "Failed to refresh client config"
             );
         }
     }
@@ -1327,10 +1326,10 @@ impl ClientBuilder {
     fn validate_config_update(
         current_config: &ClientConfig,
         new_config: &ClientConfig,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ConfigUpdateError> {
         // Global config must not change
         if current_config.global != new_config.global {
-            bail!("Global configuration changes are not allowed in config updates");
+            return Err(ConfigUpdateError::GlobalChanged);
         }
 
         // Modules can only be added, existing ones must stay the same
@@ -1338,17 +1337,15 @@ impl ClientBuilder {
             match new_config.modules.get(module_id) {
                 Some(new_module_config) => {
                     if current_module_config != new_module_config {
-                        bail!(
-                            "Module {} configuration changes are not allowed, only additions are permitted",
-                            module_id
-                        );
+                        return Err(ConfigUpdateError::ModuleChanged {
+                            module_id: *module_id,
+                        });
                     }
                 }
                 None => {
-                    bail!(
-                        "Module {} was removed in new config, only additions are allowed",
-                        module_id
-                    );
+                    return Err(ConfigUpdateError::ModuleRemoved {
+                        module_id: *module_id,
+                    });
                 }
             }
         }
@@ -1361,7 +1358,7 @@ impl ClientBuilder {
         current_config: &ClientConfig,
         api: &DynGlobalApi,
         db: &Database,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), RefreshClientConfigError> {
         debug!(target: LOG_CLIENT, "Refreshing client config");
 
         // Fetch latest config from federation
@@ -1581,4 +1578,34 @@ impl ClientPreview {
         )
         .await
     }
+}
+
+/// Why the federation's latest client config was not saved as pending.
+#[derive(Debug, thiserror::Error)]
+enum RefreshClientConfigError {
+    /// The federation could not be asked for its config.
+    #[error(transparent)]
+    Federation(#[from] FederationError),
+
+    /// The fetched config changes more than a config update may.
+    #[error(transparent)]
+    InvalidUpdate(#[from] ConfigUpdateError),
+}
+
+/// Why a fetched client config is not a valid update of the current one.
+#[derive(Debug, thiserror::Error)]
+enum ConfigUpdateError {
+    /// The global part of the config changed.
+    #[error("Global configuration changes are not allowed in config updates")]
+    GlobalChanged,
+
+    /// The config of an existing module changed.
+    #[error(
+        "Module {module_id} configuration changes are not allowed, only additions are permitted"
+    )]
+    ModuleChanged { module_id: ModuleInstanceId },
+
+    /// An existing module is missing from the fetched config.
+    #[error("Module {module_id} was removed in new config, only additions are allowed")]
+    ModuleRemoved { module_id: ModuleInstanceId },
 }
