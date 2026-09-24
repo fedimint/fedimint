@@ -4498,7 +4498,6 @@ dependencies = [
 name = "fedimint-mintv2-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "aquamarine",
  "async-channel",
  "async-stream",

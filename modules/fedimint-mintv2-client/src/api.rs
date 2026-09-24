@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use bitcoin_hashes::sha256;
-use fedimint_api_client::api::{DynModuleApi, FederationApiExt, ServerError};
+use fedimint_api_client::api::{DynModuleApi, FederationApiExt, FederationResult, ServerError};
 use fedimint_api_client::query::FilterMapThreshold;
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::util::FmtCompactAnyhow as _;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{NumPeersExt, OutPointRange, PeerId, apply, async_trait_maybe_send, runtime};
 use fedimint_mintv2_common::endpoint_constants::{
     RECOVERY_COUNT_ENDPOINT, RECOVERY_SLICE_ENDPOINT, RECOVERY_SLICE_HASH_ENDPOINT,
@@ -32,7 +32,7 @@ pub trait MintV2ModuleApi {
         tbs_pks: BTreeMap<Denomination, BTreeMap<PeerId, PublicKeyShare>>,
     ) -> BTreeMap<PeerId, Vec<BlindedSignatureShare>>;
 
-    async fn fetch_recovery_count(&self) -> anyhow::Result<u64>;
+    async fn fetch_recovery_count(&self) -> FederationResult<u64>;
 
     async fn fetch_recovery_slice_hash(&self, start: u64, end: u64) -> sha256::Hash;
 
@@ -42,7 +42,7 @@ pub trait MintV2ModuleApi {
         timeout: Duration,
         start: u64,
         end: u64,
-    ) -> anyhow::Result<Vec<RecoveryItem>>;
+    ) -> Result<Vec<RecoveryItem>, FetchRecoverySliceError>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -58,9 +58,7 @@ impl MintV2ModuleApi for DynModuleApi {
             FilterMapThreshold::new(
                 move |peer, signature_shares| {
                     verify_blind_shares(peer, signature_shares, &issuance_requests, &tbs_pks)
-                        .map_err(|err| {
-                            ServerError::InvalidResponse(err.fmt_compact_anyhow().to_string())
-                        })
+                        .map_err(|err| ServerError::InvalidResponse(err.fmt_compact().to_string()))
                 },
                 self.all_peers().to_num_peers(),
             ),
@@ -85,9 +83,7 @@ impl MintV2ModuleApi for DynModuleApi {
             FilterMapThreshold::new(
                 move |peer, signature_shares| {
                     verify_blind_shares(peer, signature_shares, &issuance_requests, &tbs_pks)
-                        .map_err(|err| {
-                            ServerError::InvalidResponse(err.fmt_compact_anyhow().to_string())
-                        })
+                        .map_err(|err| ServerError::InvalidResponse(err.fmt_compact().to_string()))
                 },
                 self.all_peers().to_num_peers(),
             ),
@@ -97,13 +93,12 @@ impl MintV2ModuleApi for DynModuleApi {
         .await
     }
 
-    async fn fetch_recovery_count(&self) -> anyhow::Result<u64> {
+    async fn fetch_recovery_count(&self) -> FederationResult<u64> {
         self.request_current_consensus::<u64>(
             RECOVERY_COUNT_ENDPOINT.to_string(),
             ApiRequestErased::default(),
         )
         .await
-        .map_err(|e| anyhow::anyhow!("{e}"))
     }
 
     async fn fetch_recovery_slice_hash(&self, start: u64, end: u64) -> sha256::Hash {
@@ -120,7 +115,7 @@ impl MintV2ModuleApi for DynModuleApi {
         timeout: Duration,
         start: u64,
         end: u64,
-    ) -> anyhow::Result<Vec<RecoveryItem>> {
+    ) -> Result<Vec<RecoveryItem>, FetchRecoverySliceError> {
         let result = runtime::timeout(
             timeout,
             self.request_single_peer::<Vec<RecoveryItem>>(
@@ -133,4 +128,16 @@ impl MintV2ModuleApi for DynModuleApi {
 
         Ok(result)
     }
+}
+
+/// Why a guardian did not serve a slice of the recovery log.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum FetchRecoverySliceError {
+    /// The guardian did not answer in time.
+    #[error(transparent)]
+    Timeout(#[from] runtime::Elapsed),
+
+    /// The guardian answered with an error.
+    #[error(transparent)]
+    Peer(#[from] ServerError),
 }
