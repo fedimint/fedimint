@@ -501,12 +501,17 @@ impl ClientModule for MintClientModule {
         unit: AmountUnit,
         mut input_amount: Amount,
         mut output_amount: Amount,
-    ) -> anyhow::Result<(
-        ClientInputBundle<MintInput, MintClientStateMachines>,
-        ClientOutputBundle<MintOutput, MintClientStateMachines>,
-    )> {
+    ) -> Result<
+        (
+            ClientInputBundle<MintInput, MintClientStateMachines>,
+            ClientOutputBundle<MintOutput, MintClientStateMachines>,
+        ),
+        ClientModuleError,
+    > {
         if unit != self.cfg.amount_unit {
-            anyhow::bail!("Module can only handle its configured amount unit");
+            return Err(ClientModuleError::other(
+                "Module can only handle its configured amount unit",
+            ));
         }
 
         let requested_amount = output_amount.saturating_sub(input_amount);
@@ -592,8 +597,10 @@ impl ClientModule for MintClientModule {
         &self,
         operation_id: OperationId,
         outpoint: OutPoint,
-    ) -> anyhow::Result<()> {
-        self.await_output_sm_success(operation_id, outpoint).await
+    ) -> Result<(), ClientModuleError> {
+        self.await_output_sm_success(operation_id, outpoint)
+            .await
+            .map_err(ClientModuleError::other)
     }
 
     async fn get_balance(&self, dbtx: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {

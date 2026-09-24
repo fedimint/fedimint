@@ -1084,14 +1084,20 @@ impl ClientModule for MintClientModule {
         unit: AmountUnit,
         mut input_amount: Amount,
         mut output_amount: Amount,
-    ) -> anyhow::Result<(
-        ClientInputBundle<MintInput, MintClientStateMachines>,
-        ClientOutputBundle<MintOutput, MintClientStateMachines>,
-    )> {
-        let consolidation_inputs = self.consolidate_notes(dbtx).await?;
+    ) -> Result<
+        (
+            ClientInputBundle<MintInput, MintClientStateMachines>,
+            ClientOutputBundle<MintOutput, MintClientStateMachines>,
+        ),
+        ClientModuleError,
+    > {
+        let consolidation_inputs = self
+            .consolidate_notes(dbtx)
+            .await
+            .map_err(ClientModuleError::other)?;
 
         if unit != AmountUnit::BITCOIN {
-            bail!("Module can only handle Bitcoin");
+            return Err(ClientModuleError::other("Module can only handle Bitcoin"));
         }
 
         input_amount += consolidation_inputs
@@ -1140,9 +1146,10 @@ impl ClientModule for MintClientModule {
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<()> {
-        self.await_output_finalized(operation_id, out_point).await?;
-        Ok(())
+    ) -> Result<(), ClientModuleError> {
+        self.await_output_finalized(operation_id, out_point)
+            .await
+            .map_err(ClientModuleError::other)
     }
 
     async fn get_balance(&self, dbtx: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
@@ -1343,7 +1350,7 @@ impl MintClientModule {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         min_amount: Amount,
-    ) -> anyhow::Result<Vec<(ClientInput<MintInput>, SpendableNote)>> {
+    ) -> Result<Vec<(ClientInput<MintInput>, SpendableNote)>, ClientModuleError> {
         if min_amount == Amount::ZERO {
             return Ok(vec![]);
         }
@@ -1354,7 +1361,15 @@ impl MintClientModule {
             min_amount,
             self.cfg.fee_consensus.clone(),
         )
-        .await?;
+        .await
+        .map_err(|error| match error {
+            // The one failure the client acts on: it tells "the wallet is too
+            // poor for this transaction" apart from every other failure.
+            SelectNotesError::InsufficientBalance(error) => {
+                ClientModuleError::InsufficientBalance(error)
+            }
+            other => ClientModuleError::other(other),
+        })?;
 
         for (amount, note) in selected_notes.iter_items() {
             debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Spending note as sufficient input to fund a tx");
@@ -1364,7 +1379,9 @@ impl MintClientModule {
         let sender = self.balance_update_sender.clone();
         dbtx.on_commit(move || sender.send_replace(()));
 
-        let inputs = self.create_input_from_notes(selected_notes)?;
+        let inputs = self
+            .create_input_from_notes(selected_notes)
+            .map_err(ClientModuleError::other)?;
 
         assert!(!inputs.is_empty());
 

@@ -129,10 +129,8 @@ pub enum TransactionSubmitError {
     /// The primary module failed to balance the transaction or to complete
     /// its outputs. An insufficient balance is reported as
     /// [`Self::InsufficientFunds`] instead.
-    // The boxed cause narrows to `ClientModuleError` once the module->client
-    // trait boundary is typed (#8821 part E).
     #[error("The primary module failed")]
-    PrimaryModule(#[source] Box<dyn std::error::Error + Send + Sync>),
+    PrimaryModule(#[source] ClientModuleError),
 
     /// Writing the transaction to the database failed.
     #[error("Database error")]
@@ -156,6 +154,20 @@ impl TransactionSubmitError {
     }
 }
 
+/// A primary module's failure to balance a transaction, as the failure of
+/// that transaction: a balance too low to fund it becomes
+/// [`TransactionSubmitError::InsufficientFunds`], so callers can tell it apart
+/// from any other failure of the module, which becomes
+/// [`TransactionSubmitError::PrimaryModule`].
+impl From<ClientModuleError> for TransactionSubmitError {
+    fn from(error: ClientModuleError) -> Self {
+        match error {
+            ClientModuleError::InsufficientBalance(error) => Self::InsufficientFunds(error),
+            other => Self::PrimaryModule(other),
+        }
+    }
+}
+
 /// A failure a client module reports to the client.
 ///
 /// The methods a module implements for the client in [`ClientModule`],
@@ -170,6 +182,15 @@ impl TransactionSubmitError {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum ClientModuleError {
+    /// The primary module's balance cannot fund the transaction it was asked
+    /// to balance.
+    ///
+    /// A primary module reports this from `create_final_inputs_and_outputs`,
+    /// and the client passes it on as
+    /// [`TransactionSubmitError::InsufficientFunds`].
+    #[error("The primary module's balance cannot fund the transaction")]
+    InsufficientBalance(#[from] InsufficientBalanceError),
+
     /// The module does not implement the operation.
     ///
     /// The default bodies of the module traits report this. The client only

@@ -7,7 +7,7 @@ use fedimint_client::ClientHandleArc;
 use fedimint_client::backup::{ClientBackup, Metadata};
 use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
 use fedimint_client_module::ClientModule;
-use fedimint_client_module::error::OperationLookupError;
+use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
@@ -285,6 +285,23 @@ async fn send_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
             "iteration {i}: quoted fee {quote:?} != actual fee {actual_fee:?}"
         );
     }
+
+    Ok(())
+}
+
+/// An empty wallet cannot fund a send, and the fee quote says so with the
+/// insufficient-funds condition rather than as a failure of the mint module,
+/// which is what lets the "send everything" helpers probe a smaller amount.
+#[tokio::test(flavor = "multi_thread")]
+async fn send_fee_quote_without_funds_reports_insufficient_funds() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let mint = client.get_first_module::<MintClientModule>()?;
+
+    assert_matches!(
+        mint.send_fee_quote(sats(1_000)).await,
+        Err(TransactionSubmitError::InsufficientFunds(_))
+    );
 
     Ok(())
 }
