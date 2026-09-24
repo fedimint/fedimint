@@ -19,7 +19,6 @@ name = "fedimint_lnv2_client"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 aquamarine = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }

@@ -1,5 +1,5 @@
-use anyhow::ensure;
 use bitcoin::hashes::sha256;
+use fedimint_api_client::api::ServerError;
 use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
@@ -205,10 +205,9 @@ impl SendStateMachine {
                 )
                 .await?;
 
-            ensure!(
-                contract.verify_gateway_response(&payment_result),
-                "Invalid gateway response: {payment_result:?}"
-            );
+            if !contract.verify_gateway_response(&payment_result) {
+                return Err(SendPaymentAttemptError::InvalidResponse(payment_result));
+            }
 
             Ok(payment_result)
         })
@@ -330,4 +329,18 @@ impl SendStateMachine {
 
         old_state.update(SendSMState::Refunding(change_range.into_iter().collect()))
     }
+}
+
+/// Why one attempt to have the gateway pay the invoice failed, so that it is
+/// made again.
+#[derive(Debug, thiserror::Error)]
+enum SendPaymentAttemptError {
+    /// The gateway could not be reached, or answered with an error.
+    #[error(transparent)]
+    Gateway(#[from] ServerError),
+
+    /// The gateway's answer neither proves the payment nor cancels the
+    /// contract.
+    #[error("Invalid gateway response: {0:?}")]
+    InvalidResponse(Result<[u8; 32], Signature>),
 }
