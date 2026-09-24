@@ -986,22 +986,39 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     /// access to global client is allowed.
     async fn start(&self) {}
 
+    /// Runs a `fedimint-cli module` command, given as its arguments.
+    ///
+    /// # Errors
+    ///
+    /// The default body fails with [`ClientModuleError::Unsupported`], for a
+    /// module that has no commands.
     async fn handle_cli_command(
         &self,
         _args: &[ffi::OsString],
-    ) -> anyhow::Result<serde_json::Value> {
-        Err(anyhow::format_err!(
-            "This module does not implement cli commands"
-        ))
+    ) -> Result<serde_json::Value, ClientModuleError> {
+        Err(ClientModuleError::Unsupported {
+            kind: <Self as ClientModule>::kind(),
+            operation: "handle_cli_command",
+        })
     }
 
+    /// Serves a JSON request, such as one `fedimint-client-rpc` forwards.
+    ///
+    /// # Errors
+    ///
+    /// The stream yields the module's failures. The default body yields a
+    /// single [`ClientModuleError::Unsupported`], for a module that serves no
+    /// requests.
     async fn handle_rpc(
         &self,
         _method: String,
         _request: serde_json::Value,
-    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
+    ) -> BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
         Box::pin(futures::stream::once(std::future::ready(Err(
-            anyhow::format_err!("This module does not implement rpc"),
+            ClientModuleError::Unsupported {
+                kind: <Self as ClientModule>::kind(),
+                operation: "handle_rpc",
+            },
         ))))
     }
 
@@ -1226,14 +1243,16 @@ pub trait IClientModule: Debug {
 
     async fn start(&self);
 
-    async fn handle_cli_command(&self, args: &[ffi::OsString])
-    -> anyhow::Result<serde_json::Value>;
+    async fn handle_cli_command(
+        &self,
+        args: &[ffi::OsString],
+    ) -> Result<serde_json::Value, ClientModuleError>;
 
     async fn handle_rpc(
         &self,
         method: String,
         request: serde_json::Value,
-    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>>;
+    ) -> BoxStream<'_, Result<serde_json::Value, ClientModuleError>>;
 
     fn input_fee(&self, amount: &Amounts, input: &DynInput) -> Option<Amounts>;
 
@@ -1302,7 +1321,7 @@ where
     async fn handle_cli_command(
         &self,
         args: &[ffi::OsString],
-    ) -> anyhow::Result<serde_json::Value> {
+    ) -> Result<serde_json::Value, ClientModuleError> {
         <T as ClientModule>::handle_cli_command(self, args).await
     }
 
@@ -1310,7 +1329,7 @@ where
         &self,
         method: String,
         request: serde_json::Value,
-    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
+    ) -> BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
         <T as ClientModule>::handle_rpc(self, method, request).await
     }
 

@@ -171,10 +171,11 @@ impl From<ClientModuleError> for TransactionSubmitError {
 /// A failure a client module reports to the client.
 ///
 /// The methods a module implements for the client in [`ClientModule`],
-/// [`ClientModuleInit`] and [`RecoveryFromHistory`] report this type, except
-/// the JSON command handlers `handle_cli_command` and `handle_rpc`, and so do
-/// the type-erased wrappers the client calls them through. The client wraps
-/// it in the error of the operation that needed the module.
+/// [`ClientModuleInit`] and [`RecoveryFromHistory`] report this type, and so
+/// do the type-erased wrappers the client calls them through. The client wraps
+/// it in the error of the operation that needed the module; the JSON command
+/// handlers `handle_cli_command` and `handle_rpc` hand it to the command-line
+/// or RPC caller as it is.
 ///
 /// [`ClientModule`]: crate::module::ClientModule
 /// [`ClientModuleInit`]: crate::module::init::ClientModuleInit
@@ -199,7 +200,9 @@ pub enum ClientModuleError {
     /// declares support for, through `supports_backup`,
     /// `supports_being_primary` or `recovery_mode`, so the client sees this
     /// only from a module that declares support it does not implement.
-    /// Calling the operation on a module directly can see it too.
+    /// Calling the operation on a module directly can see it too. The default
+    /// bodies of `handle_cli_command` and `handle_rpc` report it as well, to a
+    /// caller that sends a command or a request to a module that has none.
     #[error("Module {kind} does not implement {operation}")]
     Unsupported {
         /// The kind of the module.

@@ -42,7 +42,7 @@ use fedimint_core::{PeerId, apply, async_trait_maybe_send};
 use fedimint_logging::LOG_CLIENT_MODULE_META;
 pub use fedimint_meta_common as common;
 use fedimint_meta_common::{DEFAULT_META_KEY, MetaCommonInit, MetaModuleTypes};
-use futures::stream;
+use futures::{TryStreamExt as _, stream};
 use serde::Deserialize;
 use serde_json::json;
 use states::MetaStateMachine;
@@ -248,25 +248,30 @@ impl ClientModule for MetaClientModule {
         &self,
         method: String,
         request: serde_json::Value,
-    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
-        Box::pin(stream::once(async move {
-            match method.as_str() {
-                "get_consensus_value" => {
-                    let req: GetConsensusValueRequest = serde_json::from_value(request)?;
-                    let maybe_consensus_value = self.get_consensus_value(req.key).await?;
-                    format_rpc_consensus_value_response(maybe_consensus_value)
+    ) -> BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
+        Box::pin(
+            stream::once(async move {
+                match method.as_str() {
+                    "get_consensus_value" => {
+                        let req: GetConsensusValueRequest = serde_json::from_value(request)?;
+                        let maybe_consensus_value = self.get_consensus_value(req.key).await?;
+                        format_rpc_consensus_value_response(maybe_consensus_value)
+                    }
+                    _ => Err(anyhow::format_err!("Unknown method: {method}")),
                 }
-                _ => Err(anyhow::format_err!("Unknown method: {method}")),
-            }
-        }))
+            })
+            .map_err(ClientModuleError::other),
+        )
     }
 
     #[cfg(feature = "cli")]
     async fn handle_cli_command(
         &self,
         args: &[std::ffi::OsString],
-    ) -> anyhow::Result<serde_json::Value> {
-        cli::handle_cli_command(self, args).await
+    ) -> Result<serde_json::Value, ClientModuleError> {
+        cli::handle_cli_command(self, args)
+            .await
+            .map_err(ClientModuleError::other)
     }
 }
 

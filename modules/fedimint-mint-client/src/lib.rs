@@ -105,7 +105,7 @@ pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{FeeConsensus, MintClientConfig};
 pub use fedimint_mint_common::*;
 use futures::future::try_join_all;
-use futures::{StreamExt, pin_mut};
+use futures::{StreamExt, TryStreamExt as _, pin_mut};
 use hex::ToHex;
 use input::MintInputStateCreatedBundle;
 use itertools::Itertools as _;
@@ -1047,8 +1047,10 @@ impl ClientModule for MintClientModule {
     async fn handle_cli_command(
         &self,
         args: &[std::ffi::OsString],
-    ) -> anyhow::Result<serde_json::Value> {
-        cli::handle_cli_command(self, args).await
+    ) -> Result<serde_json::Value, ClientModuleError> {
+        cli::handle_cli_command(self, args)
+            .await
+            .map_err(ClientModuleError::other)
     }
 
     fn supports_backup(&self) -> bool {
@@ -1194,8 +1196,8 @@ impl ClientModule for MintClientModule {
         &self,
         method: String,
         request: serde_json::Value,
-    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
-        Box::pin(try_stream! {
+    ) -> BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
+        let stream: BoxStream<'_, anyhow::Result<serde_json::Value>> = Box::pin(try_stream! {
             match method.as_str() {
                 "reissue_external_notes" => {
                     let req: ReissueExternalNotesRequest = serde_json::from_value(request)?;
@@ -1263,7 +1265,8 @@ impl ClientModule for MintClientModule {
                     unreachable!()
                 },
             }
-        })
+        });
+        Box::pin(stream.map_err(ClientModuleError::other))
     }
 }
 

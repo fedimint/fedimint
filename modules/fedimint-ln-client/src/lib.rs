@@ -88,7 +88,7 @@ use fedimint_ln_common::{
     LightningModuleTypes, LightningOutput, LightningOutputV0,
 };
 use fedimint_logging::LOG_CLIENT_MODULE_LN;
-use futures::{Future, StreamExt};
+use futures::{Future, StreamExt, TryStreamExt as _};
 use incoming::IncomingSmError;
 use itertools::Itertools;
 use lightning_invoice::{
@@ -524,16 +524,18 @@ impl ClientModule for LightningClientModule {
     async fn handle_cli_command(
         &self,
         args: &[std::ffi::OsString],
-    ) -> anyhow::Result<serde_json::Value> {
-        cli::handle_cli_command(self, args).await
+    ) -> Result<serde_json::Value, ClientModuleError> {
+        cli::handle_cli_command(self, args)
+            .await
+            .map_err(ClientModuleError::other)
     }
 
     async fn handle_rpc(
         &self,
         method: String,
         payload: serde_json::Value,
-    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
-        Box::pin(try_stream! {
+    ) -> BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
+        let stream: BoxStream<'_, anyhow::Result<serde_json::Value>> = Box::pin(try_stream! {
             match method.as_str() {
                 "create_bolt11_invoice" => {
                     let req: CreateBolt11InvoiceRequest = serde_json::from_value(payload)?;
@@ -651,7 +653,8 @@ impl ClientModule for LightningClientModule {
                     unreachable!()
                 },
             }
-        })
+        });
+        Box::pin(stream.map_err(ClientModuleError::other))
     }
 }
 

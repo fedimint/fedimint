@@ -78,7 +78,7 @@ pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig};
 use fedimint_wallet_common::tweakable::Tweakable;
 pub use fedimint_wallet_common::*;
-use futures::{Stream, StreamExt};
+use futures::{Stream, StreamExt, TryStreamExt as _};
 use rand::{Rng, thread_rng};
 use secp256k1::Keypair;
 use serde::{Deserialize, Serialize};
@@ -692,8 +692,8 @@ impl ClientModule for WalletClientModule {
         &self,
         method: String,
         request: serde_json::Value,
-    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
-        Box::pin(try_stream! {
+    ) -> BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
+        let stream: BoxStream<'_, anyhow::Result<serde_json::Value>> = Box::pin(try_stream! {
             match method.as_str() {
                 "get_wallet_summary" => {
                     let _req: WalletSummaryRequest = serde_json::from_value(request)?;
@@ -741,15 +741,18 @@ impl ClientModule for WalletClientModule {
                     Err(anyhow::format_err!("Unknown method: {method}"))?;
                 }
             }
-        })
+        });
+        Box::pin(stream.map_err(ClientModuleError::other))
     }
 
     #[cfg(feature = "cli")]
     async fn handle_cli_command(
         &self,
         args: &[std::ffi::OsString],
-    ) -> anyhow::Result<serde_json::Value> {
-        cli::handle_cli_command(self, args).await
+    ) -> Result<serde_json::Value, ClientModuleError> {
+        cli::handle_cli_command(self, args)
+            .await
+            .map_err(ClientModuleError::other)
     }
 }
 

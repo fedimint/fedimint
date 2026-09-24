@@ -1044,6 +1044,38 @@ async fn default_module_operations_are_unsupported() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// A module without its own JSON command handlers refuses commands and RPC
+/// requests with a typed error: the LNv2 module serves no RPC requests, and the
+/// dummy module has no commands.
+#[tokio::test(flavor = "multi_thread")]
+async fn json_handlers_without_an_implementation_are_unsupported() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+    let dummy = client.get_first_module::<DummyClientModule>()?;
+
+    assert_matches!(
+        ClientModule::handle_rpc(&*lightning, "no_such_method".to_owned(), Value::Null)
+            .await
+            .next()
+            .await,
+        Some(Err(ClientModuleError::Unsupported {
+            kind,
+            operation: "handle_rpc",
+        })) if kind == KIND
+    );
+    assert_matches!(
+        ClientModule::handle_cli_command(&*dummy, &[]).await,
+        Err(ClientModuleError::Unsupported {
+            kind,
+            operation: "handle_cli_command",
+        }) if kind == DummyClientModule::kind()
+    );
+
+    Ok(())
+}
+
 /// Looking a primary module up by type finds one only among the unit's
 /// primary modules, and names the kind it looked for when there is none.
 #[tokio::test(flavor = "multi_thread")]
