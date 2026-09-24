@@ -35,8 +35,8 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::task::timeout;
 use fedimint_core::time::now;
-use fedimint_core::util::{FmtCompact, Spanned};
-use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send, secp256k1};
+use fedimint_core::util::{FmtCompact, Spanned, backoff_util, retry};
+use fedimint_core::{Amount, OutPoint, PeerId, apply, async_trait_maybe_send, secp256k1};
 use fedimint_lightning::{InterceptPaymentResponse, LightningRpcError};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -421,6 +421,16 @@ impl GatewayClientModuleV2 {
             return Ok(self.subscribe_send(operation_id).await);
         }
 
+        // A send accepted while the lightning node is unreachable would sit
+        // waiting for it, and nothing about the payment is known until then.
+        // Refusing up front keeps the sender free to use another gateway. Only
+        // new sends are refused: joining an existing operation above resumes
+        // one already started.
+        ensure!(
+            self.gateway.is_lightning_connected().await,
+            "The gateway is not connected to its lightning node"
+        );
+
         // We need to check that the contract has been confirmed by the federation
         // before we start the state machine to prevent DOS attacks.
         let (contract_id, expiration) = self
@@ -512,6 +522,29 @@ impl GatewayClientModuleV2 {
         dbtx.commit_tx().await;
 
         Ok(self.subscribe_send(operation_id).await)
+    }
+
+    /// Returns the timelock budget, in blocks, that the outgoing contract at
+    /// `outpoint` leaves for a payment dispatched now, retrying until the
+    /// federation answers. A contract the federation no longer knows leaves
+    /// no budget.
+    async fn await_outgoing_contract_max_delay(&self, outpoint: OutPoint) -> u64 {
+        let expiration = retry(
+            "outgoing contract expiration",
+            backoff_util::background_backoff(),
+            || async {
+                self.module_api
+                    .outgoing_contract_expiration(outpoint)
+                    .await
+                    .map_err(|err| anyhow!(err.fmt_compact().to_string()))
+            },
+        )
+        .await
+        .expect("Retries until the federation answers");
+
+        expiration.map_or(0, |(_, expiration)| {
+            expiration.saturating_sub(EXPIRATION_DELTA_MINIMUM_V2)
+        })
     }
 
     pub async fn subscribe_send(&self, operation_id: OperationId) -> Result<[u8; 32], Signature> {
@@ -990,6 +1023,14 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
         payment_image: &PaymentImage,
         operation_id: OperationId,
     ) -> bool;
+
+    /// Returns whether the gateway currently holds a connection to its
+    /// lightning node. Only suitable for refusing new work: the answer is
+    /// local, so it must not decide the fate of a payment already started.
+    async fn is_lightning_connected(&self) -> bool;
+
+    /// Waits until the gateway holds a connection to its lightning node.
+    async fn await_lightning_connected(&self);
 }
 
 #[cfg(test)]
