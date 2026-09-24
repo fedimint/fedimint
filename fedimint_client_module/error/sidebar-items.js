@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["AddStateMachinesError","MetaFetchError","ModuleLookupError","OperationLookupError","TransactionSubmitError"],"struct":["ApiVersionDiscoveryError","InsufficientBalanceError","OperationAlreadyExistsError","OperationNotFoundError"]};
+window.SIDEBAR_ITEMS = {"enum":["AddStateMachinesError","ClientModuleError","MetaFetchError","ModuleLookupError","OperationLookupError","TransactionSubmitError"],"struct":["ApiVersionDiscoveryError","InsufficientBalanceError","OperationAlreadyExistsError","OperationNotFoundError"]};
