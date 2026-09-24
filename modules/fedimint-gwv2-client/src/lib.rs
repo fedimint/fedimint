@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{anyhow, ensure};
 use async_trait::async_trait;
@@ -32,8 +33,9 @@ use fedimint_core::module::{
     Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::secp256k1::Keypair;
+use fedimint_core::task::timeout;
 use fedimint_core::time::now;
-use fedimint_core::util::Spanned;
+use fedimint_core::util::{FmtCompact, Spanned};
 use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send, secp256k1};
 use fedimint_lightning::{InterceptPaymentResponse, LightningRpcError};
 use fedimint_lnv2_common::config::LightningClientConfig;
@@ -58,6 +60,11 @@ use crate::complete_sm::{
 };
 use crate::receive_sm::ReceiveSMCommon;
 use crate::send_sm::SendSMCommon;
+
+/// Bound on the federation liveness probe that gates funding a fresh incoming
+/// contract. A healthy federation answers well within this; the bound only
+/// decides how quickly an unreachable one fails the HTLC back.
+const FEDERATION_LIVENESS_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// LNv2 CLTV Delta in blocks
 pub const EXPIRATION_DELTA_MINIMUM_V2: u64 = 144;
@@ -561,6 +568,43 @@ impl GatewayClientModuleV2 {
         legacy_completion_in_states(&active, &inactive, circuit)
     }
 
+    /// Refuses to fund a fresh incoming contract unless a threshold of
+    /// guardians is answering. LNv1 gets this check implicitly by fetching the
+    /// offer from the federation first; LNv2 reads the contract from the
+    /// gateway's own database, so it has to probe explicitly.
+    async fn ensure_federation_responsive(&self, payment_hash: sha256::Hash) -> anyhow::Result<()> {
+        match timeout(
+            FEDERATION_LIVENESS_TIMEOUT,
+            self.module_api.consensus_block_count(),
+        )
+        .await
+        {
+            Ok(Ok(_consensus_block_count)) => Ok(()),
+            Ok(Err(err)) => {
+                warn!(
+                    %payment_hash,
+                    err = %err.fmt_compact(),
+                    "Federation liveness probe failed, refusing to fund incoming contract"
+                );
+                Err(anyhow!(
+                    "federation liveness probe failed: {}",
+                    err.fmt_compact()
+                ))
+            }
+            Err(_elapsed) => {
+                warn!(
+                    %payment_hash,
+                    timeout_secs = FEDERATION_LIVENESS_TIMEOUT.as_secs(),
+                    "Federation liveness probe timed out, refusing to fund incoming contract"
+                );
+                Err(anyhow!(
+                    "federation did not answer the liveness probe within {}s",
+                    FEDERATION_LIVENESS_TIMEOUT.as_secs()
+                ))
+            }
+        }
+    }
+
     pub async fn relay_incoming_htlc(
         &self,
         payment_hash: sha256::Hash,
@@ -591,6 +635,10 @@ impl GatewayClientModuleV2 {
 
         let commitment = contract.commitment.clone();
         if plan == IncomingRelayPlan::CreateReceiveAndCompletion {
+            // Only gate fresh funding: the other plans resume an already
+            // funded contract and must not be cancelled.
+            self.ensure_federation_responsive(payment_hash).await?;
+
             let refund_keypair = self.keypair;
             let client_output = ClientOutput::<LightningOutput> {
                 output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
