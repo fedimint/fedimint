@@ -1026,6 +1026,20 @@ async fn default_module_operations_are_unsupported() -> anyhow::Result<()> {
             operation: "await_primary_module_output",
         }) if kind == KIND
     );
+    assert_matches!(
+        ClientModule::backup(&*lightning).await,
+        Err(ClientModuleError::Unsupported {
+            kind,
+            operation: "backup",
+        }) if kind == KIND
+    );
+    assert_matches!(
+        ClientModule::leave(&*lightning, &mut dbtx).await,
+        Err(ClientModuleError::Unsupported {
+            kind,
+            operation: "leave",
+        }) if kind == KIND
+    );
 
     Ok(())
 }

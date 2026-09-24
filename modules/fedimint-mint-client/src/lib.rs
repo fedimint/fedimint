@@ -46,7 +46,7 @@ use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use anyhow::{Context as _, anyhow, bail};
+use anyhow::Context as _;
 use api::MintFederationApi;
 use async_stream::{stream, try_stream};
 use backup::recovery::{MintRecovery, RecoveryStateV2};
@@ -1055,7 +1055,7 @@ impl ClientModule for MintClientModule {
         true
     }
 
-    async fn backup(&self) -> anyhow::Result<EcashBackup> {
+    async fn backup(&self) -> Result<EcashBackup, ClientModuleError> {
         self.client_ctx
             .module_db()
             .autocommit(
@@ -1066,9 +1066,9 @@ impl ClientModule for MintClientModule {
             )
             .await
             .map_err(|e| match e {
-                AutocommitError::ClosureError { error, .. } => anyhow::Error::from(error),
+                AutocommitError::ClosureError { error, .. } => ClientModuleError::other(error),
                 AutocommitError::CommitFailed { last_error, .. } => {
-                    anyhow!("Commit to DB failed: {last_error}")
+                    ClientModuleError::other(last_error)
                 }
             })
     }
@@ -1173,17 +1173,19 @@ impl ClientModule for MintClientModule {
         ))
     }
 
-    async fn leave(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
+    async fn leave(&self, dbtx: &mut DatabaseTransaction<'_>) -> Result<(), ClientModuleError> {
         let balance = ClientModule::get_balances(self, dbtx).await;
 
         for (unit, amount) in balance {
             if Amount::from_units(0) < amount {
-                bail!("Outstanding balance: {amount}, unit: {unit:?}");
+                return Err(ClientModuleError::other(format!(
+                    "Outstanding balance: {amount}, unit: {unit:?}"
+                )));
             }
         }
 
         if !self.client_ctx.get_own_active_states().await.is_empty() {
-            bail!("Pending operations")
+            return Err(ClientModuleError::other("Pending operations"));
         }
         Ok(())
     }

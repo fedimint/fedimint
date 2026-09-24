@@ -6,7 +6,6 @@ use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::{ffi, marker, ops};
 
-use anyhow::bail;
 use bitcoin::secp256k1::PublicKey;
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::ClientConfig;
@@ -1038,8 +1037,17 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         false
     }
 
-    async fn backup(&self) -> anyhow::Result<Self::Backup> {
-        anyhow::bail!("Backup not supported");
+    /// The module's part of a client backup.
+    ///
+    /// # Errors
+    ///
+    /// The default body fails with [`ClientModuleError::Unsupported`]; a
+    /// module whose [`Self::supports_backup`] is `true` must override it.
+    async fn backup(&self) -> Result<Self::Backup, ClientModuleError> {
+        Err(ClientModuleError::Unsupported {
+            kind: <Self as ClientModule>::kind(),
+            operation: "backup",
+        })
     }
 
     /// Does this module support being a primary module
@@ -1191,8 +1199,15 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     /// Calling code should allow the user to override and ignore any
     /// outstanding errors, after sufficient amount of warnings. Ideally,
     /// this should be done on per-module basis, to avoid mistakes.
-    async fn leave(&self, _dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
-        bail!("Unable to determine if safe to leave the federation: Not implemented")
+    ///
+    /// The default body fails with [`ClientModuleError::Unsupported`], since a
+    /// module that does not implement this cannot tell whether leaving is
+    /// safe.
+    async fn leave(&self, _dbtx: &mut DatabaseTransaction<'_>) -> Result<(), ClientModuleError> {
+        Err(ClientModuleError::Unsupported {
+            kind: <Self as ClientModule>::kind(),
+            operation: "leave",
+        })
     }
 }
 
@@ -1224,8 +1239,10 @@ pub trait IClientModule: Debug {
 
     fn supports_backup(&self) -> bool;
 
-    async fn backup(&self, module_instance_id: ModuleInstanceId)
-    -> anyhow::Result<DynModuleBackup>;
+    async fn backup(
+        &self,
+        module_instance_id: ModuleInstanceId,
+    ) -> Result<DynModuleBackup, ClientModuleError>;
 
     fn supports_being_primary(&self) -> PrimaryModuleSupport;
 
@@ -1324,7 +1341,7 @@ where
     async fn backup(
         &self,
         module_instance_id: ModuleInstanceId,
-    ) -> anyhow::Result<DynModuleBackup> {
+    ) -> Result<DynModuleBackup, ClientModuleError> {
         Ok(DynModuleBackup::from_typed(
             module_instance_id,
             <T as ClientModule>::backup(self).await?,

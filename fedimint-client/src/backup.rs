@@ -290,10 +290,13 @@ impl Client {
         for (id, kind, module) in self.modules.iter_modules() {
             debug!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Preparing module backup");
             if module.supports_backup() {
-                let backup = module.backup(id).await.map_err(|err| BackupError::Module {
-                    instance_id: id,
-                    source: err.into(),
-                })?;
+                let backup = module
+                    .backup(id)
+                    .await
+                    .map_err(|source| BackupError::Module {
+                        instance_id: id,
+                        source,
+                    })?;
 
                 debug!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Prepared module backup");
                 modules.insert(id, backup);

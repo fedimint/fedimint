@@ -639,9 +639,14 @@ impl ClientModule for WalletClientModule {
         true
     }
 
-    async fn backup(&self) -> anyhow::Result<backup::WalletModuleBackup> {
+    async fn backup(&self) -> Result<backup::WalletModuleBackup, ClientModuleError> {
         // fetch consensus height first
-        let session_count = self.client_ctx.global_api().session_count().await?;
+        let session_count = self
+            .client_ctx
+            .global_api()
+            .session_count()
+            .await
+            .map_err(ClientModuleError::other)?;
 
         let mut dbtx = self.db.begin_transaction_nc().await;
         let next_pegin_tweak_idx = dbtx

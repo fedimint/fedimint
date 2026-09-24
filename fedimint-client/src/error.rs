@@ -115,14 +115,13 @@ pub enum BackupError {
     Federation(#[source] Box<FederationError>),
 
     /// A module failed to produce its part of the backup.
-    // The boxed cause narrows to `ClientModuleError` in #8821 part E.
     #[error("Module {instance_id} failed to produce its backup")]
     Module {
         /// The module that failed.
         instance_id: ModuleInstanceId,
         /// The failure the module reported.
         #[source]
-        source: Box<dyn std::error::Error + Send + Sync>,
+        source: ClientModuleError,
     },
 
     /// The encrypted backup is larger than the federation stores.
