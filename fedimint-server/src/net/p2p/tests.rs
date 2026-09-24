@@ -611,3 +611,132 @@ async fn replacement_connection_does_not_cancel_in_flight_send() {
     drop(connection_sender);
     let _ = task.await;
 }
+
+/// A frame that parks inside `read_to_end`, which the trait documents as not
+/// cancel-safe, until it is released.
+struct SlowFrame {
+    entered: Arc<Notify>,
+    release: Arc<Notify>,
+    message: u64,
+}
+
+#[async_trait]
+impl IP2PFrame<u64> for SlowFrame {
+    async fn read_to_end(&mut self) -> anyhow::Result<u64> {
+        self.entered.notify_one();
+        self.release.notified().await;
+
+        Ok(self.message)
+    }
+}
+
+/// A connection that hands out one slow frame and never completes a send.
+struct SlowReceiveConnection {
+    frame: Mutex<Option<SlowFrame>>,
+}
+
+#[async_trait]
+impl IP2PConnection<u64> for SlowReceiveConnection {
+    async fn send(&self, _message: u64) -> anyhow::Result<()> {
+        future::pending().await
+    }
+
+    async fn receive(&self) -> anyhow::Result<DynIP2PFrame<u64>> {
+        let frame = self.frame.lock().expect("lock is not poisoned").take();
+
+        match frame {
+            Some(frame) => Ok(frame.into_dyn()),
+            None => future::pending().await,
+        }
+    }
+
+    fn rtt(&self) -> Option<Duration> {
+        None
+    }
+
+    fn connection_type(&self) -> Option<ConnectionType> {
+        Some(ConnectionType::Direct)
+    }
+}
+
+/// A replacement connection halts the send half, which used to return from the
+/// connected state and drop the receive half with a frame still being read. The
+/// message was lost, and the DKG sends each message exactly once.
+#[tokio::test]
+async fn replacement_connection_does_not_cancel_in_flight_receive() {
+    let (connection_sender, incoming_connections) = async_channel::bounded(1);
+    let (_outgoing_sender, outgoing_receiver) = async_channel::bounded(1);
+    let (incoming_sender, incoming_receiver) = async_channel::bounded(1);
+    let (status_sender, _status_receiver) = watch::channel(P2PConnectionState {
+        connected: None,
+        last_error: None,
+    });
+
+    let entered = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+
+    let connection = SlowReceiveConnection {
+        frame: Mutex::new(Some(SlowFrame {
+            entered: entered.clone(),
+            release: release.clone(),
+            message: 42,
+        })),
+    };
+
+    let mut state_machine = P2PConnectionStateMachine {
+        state: P2PConnectionSMState::Connected(Arc::new(connection)),
+        common: P2PConnectionSMCommon {
+            incoming_sender,
+            outgoing_receiver,
+            our_id: PeerId::from(1),
+            our_id_str: "1".to_owned(),
+            peer_id: PeerId::from(0),
+            peer_id_str: "0".to_owned(),
+            connector: Arc::new(PendingConnector { fallback: None }),
+            incoming_connections,
+            status_sender,
+            max_connection_age: None,
+            connection_deadline: None,
+        },
+    };
+
+    let task = runtime::spawn("p2p-in-flight-receive-test", async move {
+        while let Some(next) = state_machine.state_transition().await {
+            state_machine = next;
+        }
+    });
+
+    // The frame is being read before the replacement arrives.
+    timeout(Duration::from_secs(5), entered.notified())
+        .await
+        .expect("the receive half is inside read_to_end");
+
+    connection_sender
+        .send(Arc::new(FakeConnection::new(FakeConnectionControl::new(
+            ConnectionType::Relay,
+        ))))
+        .await
+        .expect("replacement queued");
+
+    // The send half has to take the replacement off the queue before the frame
+    // is released, so the transition really does race the read in flight.
+    timeout(Duration::from_secs(5), async {
+        while !connection_sender.is_empty() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the send half observes the replacement");
+
+    release.notify_one();
+
+    let message = timeout(Duration::from_secs(5), incoming_receiver.recv())
+        .await
+        .expect("the parked read is allowed to finish")
+        .expect("incoming channel is open");
+
+    assert_eq!(message, 42);
+
+    drop(connection_sender);
+    let _ = task.await;
+}
