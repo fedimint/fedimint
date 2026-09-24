@@ -1,21 +1,22 @@
 use std::cmp;
+use std::convert::Infallible;
 use std::time::{Duration, SystemTime};
 
-use anyhow::anyhow;
 use bitcoin::ScriptBuf;
-use fedimint_api_client::api::DynModuleApi;
-use fedimint_bitcoind::DynBitcoindRpc;
+use fedimint_api_client::api::{DynModuleApi, FederationError};
+use fedimint_bitcoind::{BitcoinRpcError, DynBitcoindRpc};
 use fedimint_client_module::module::{ClientContext, OutPointRange};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
+    AutocommitError, Database, DatabaseError, DatabaseTransaction,
+    IDatabaseTransactionOpsCoreTyped as _,
 };
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::module::Amounts;
 use fedimint_core::task::sleep;
 use fedimint_core::txoproof::TxOutProof;
-use fedimint_core::util::FmtCompactAnyhow as _;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{BitcoinHash, TransactionId, secp256k1, time};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::WalletInput;
@@ -127,7 +128,7 @@ pub(crate) async fn run_peg_in_monitor(
             }
         };
 
-        if let Err(err) = check_for_deposits(
+        check_for_deposits(
             &db,
             &data,
             &btc_rpc,
@@ -135,14 +136,7 @@ pub(crate) async fn run_peg_in_monitor(
             &client_ctx,
             &pegin_claimed_sender,
         )
-        .await
-        {
-            warn!(target: LOG_CLIENT_MODULE_WALLET, error = %err.fmt_compact_anyhow(), "Error checking for deposits");
-            // Retry after `min_sleep`. The next iteration's select still
-            // honours signals, so a manual recheck wakes us up sooner.
-            next_wakeup_duration = min_sleep;
-            continue;
-        }
+        .await;
 
         let now = time::now();
         let next_wakeup = NextActions::from_db_state(&db).await.next.unwrap_or_else(||
@@ -172,7 +166,7 @@ async fn check_for_deposits(
     module_api: &DynModuleApi,
     client_ctx: &ClientContext<WalletClientModule>,
     pengin_claimed_sender: &watch::Sender<()>,
-) -> Result<(), anyhow::Error> {
+) {
     let due = NextActions::from_db_state(db).await.due;
     trace!(target: LOG_CLIENT_MODULE_WALLET, ?due, "Checking for deposists");
     for (due_key, due_val) in due {
@@ -186,10 +180,8 @@ async fn check_for_deposits(
             due_val,
             pengin_claimed_sender,
         )
-        .await?;
+        .await;
     }
-
-    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -202,7 +194,7 @@ async fn check_and_claim_idx_pegins(
     client_ctx: &ClientContext<WalletClientModule>,
     due_val: PegInTweakIndexData,
     pengin_claimed_sender: &watch::Sender<()>,
-) -> Result<(), anyhow::Error> {
+) {
     let now = time::now();
     match check_idx_pegins(data, due_key.0, btc_rpc, module_api, db, client_ctx).await {
         Ok(outcomes) => {
@@ -262,18 +254,23 @@ async fn check_and_claim_idx_pegins(
                                 .insert_entry(&due_key, &peg_in_tweak_index_data)
                                 .await;
 
-                            Ok::<_, anyhow::Error>(())
+                            Ok::<_, Infallible>(())
                         })
                     },
                     None,
                 )
-                .await?;
+                .await
+                .expect("Autocommit retries forever and the closure cannot fail");
         }
         Err(err) => {
-            debug!(target: LOG_CLIENT_MODULE_WALLET, err = %err.fmt_compact_anyhow(), tweak_idx=%due_key.0, "Error checking tweak_idx");
+            debug!(
+                target: LOG_CLIENT_MODULE_WALLET,
+                err = %err.fmt_compact(),
+                tweak_idx = %due_key.0,
+                "Error checking tweak_idx"
+            );
         }
     }
-    Ok(())
 }
 
 /// Outcome of checking a single deposit Bitcoin transaction output
@@ -371,7 +368,7 @@ async fn check_idx_pegins(
     module_rpc: &DynModuleApi,
     db: &Database,
     client_ctx: &ClientContext<WalletClientModule>,
-) -> Result<Vec<CheckOutcome>, anyhow::Error> {
+) -> Result<Vec<CheckOutcome>, CheckPegInsError> {
     let current_consensus_block_count = module_rpc.fetch_consensus_block_count().await?;
     let (script, address, tweak_key, operation_id) = data.derive_peg_in_script(tweak_idx);
     btc_rpc.watch_script_history(&script).await?;
@@ -457,7 +454,7 @@ async fn claim_peg_in(
     out_point: bitcoin::OutPoint,
     tx_out_proof: TxOutProof,
     federation_knows_utxo: bool,
-) -> anyhow::Result<()> {
+) -> Result<(), CheckPegInsError> {
     /// Returns the claim transactions output range if a claim happened or
     /// `None` otherwise if the deposit was smaller than the deposit fee.
     async fn claim_peg_in_inner(
@@ -574,7 +571,7 @@ async fn claim_peg_in(
                     )
                     .await;
 
-                    Ok(())
+                    Ok::<_, Infallible>(())
                 })
             },
             Some(100),
@@ -584,8 +581,11 @@ async fn claim_peg_in(
             AutocommitError::CommitFailed {
                 last_error,
                 attempts,
-            } => anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
-            AutocommitError::ClosureError { error, .. } => error,
+            } => CheckPegInsError::ClaimCommit {
+                attempts,
+                source: last_error,
+            },
+            AutocommitError::ClosureError { error, .. } => match error {},
         })?;
 
     Ok(())
@@ -608,4 +608,26 @@ pub(crate) fn filter_onchain_deposit_outputs<'a>(
                 }
             })
     })
+}
+
+/// A failure to check one peg-in address and claim its confirmed deposits.
+#[derive(Debug, thiserror::Error)]
+enum CheckPegInsError {
+    /// The federation could not report its block count or whether it knows a
+    /// deposit.
+    #[error(transparent)]
+    Federation(#[from] FederationError),
+
+    /// The Bitcoin backend could not report the address's history or a
+    /// deposit's proof.
+    #[error(transparent)]
+    BitcoinRpc(#[from] BitcoinRpcError),
+
+    /// The claim of a confirmed deposit could not be committed.
+    #[error("Failed to commit after {attempts} attempts")]
+    ClaimCommit {
+        attempts: usize,
+        #[source]
+        source: DatabaseError,
+    },
 }

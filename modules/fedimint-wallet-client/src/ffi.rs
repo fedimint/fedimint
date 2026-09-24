@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use anyhow::anyhow;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Amount, OutPoint, Txid};
 use fedimint_core::core::OperationId;
@@ -10,6 +9,7 @@ use fedimint_core::util::ffi::UniffiError;
 use fedimint_wallet_common::WalletSummary;
 use futures::StreamExt as _;
 use serde_json::Value;
+use uniffi::deps::anyhow::anyhow;
 
 use crate::{
     DepositStateV2, PegInRequest, PegInResponse, PegOutRequest, PegOutResponse, WalletClientModule,

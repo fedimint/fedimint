@@ -21,7 +21,6 @@ name = "fedimint_wallet_client"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 aquamarine = { workspace = true }
 assert_matches = { workspace = true }
 async-stream = { workspace = true }

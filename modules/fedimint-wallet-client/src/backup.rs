@@ -3,7 +3,9 @@ mod recovery_history_tracker;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
-use fedimint_bitcoind::{BitcoindTracked, DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
+use fedimint_bitcoind::{
+    BitcoinRpcError, BitcoindTracked, DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc,
+};
 use fedimint_client_module::error::ClientModuleError;
 use fedimint_client_module::module::ClientContext;
 use fedimint_client_module::module::init::ClientModuleRecoverArgs;
@@ -448,7 +450,7 @@ impl RecoveryFromHistory for WalletRecovery {
                             btc_rpc.watch_script_history(decoy).await?;
                             let _ = btc_rpc.get_script_history(decoy).await?;
                         }
-                        Ok::<_, anyhow::Error>(())
+                        Ok::<_, BitcoinRpcError>(())
                     };
 
                     if use_decoy_before_real_query {
@@ -556,10 +558,10 @@ pub(crate) async fn recover_scan_idxes_for_activity<F, FF, T>(
     scan_from_idx: TweakIdx,
     used_tweak_idxes: &BTreeSet<TweakIdx>,
     check_addr_history: F,
-) -> anyhow::Result<RecoverScanOutcome>
+) -> Result<RecoverScanOutcome, BitcoinRpcError>
 where
     F: Fn(TweakIdx) -> FF,
-    FF: Future<Output = anyhow::Result<Vec<T>>>,
+    FF: Future<Output = Result<Vec<T>, BitcoinRpcError>>,
 {
     let tweak_indexes_to_scan = (scan_from_idx.0..).map(TweakIdx).filter(|tweak_idx| {
         let already_used = used_tweak_idxes.contains(tweak_idx);

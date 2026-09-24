@@ -33,7 +33,6 @@ use std::future;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use anyhow::Context as AnyhowContext;
 use async_stream::{stream, try_stream};
 use backup::WalletModuleBackup;
 use bitcoin::address::NetworkUnchecked;
@@ -41,7 +40,9 @@ use bitcoin::secp256k1::{All, SECP256K1, Secp256k1};
 use bitcoin::{Address, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, SupportsSafeDepositKey, TweakIdx};
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
-use fedimint_bitcoind::{BitcoindTracked, DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
+use fedimint_bitcoind::{
+    BitcoinRpcError, BitcoindTracked, DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc,
+};
 use fedimint_client_module::error::{ClientModuleError, TransactionSubmitError};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs, RecoveryMode,
@@ -693,7 +694,7 @@ impl ClientModule for WalletClientModule {
         method: String,
         request: serde_json::Value,
     ) -> BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
-        let stream: BoxStream<'_, anyhow::Result<serde_json::Value>> = Box::pin(try_stream! {
+        let stream: BoxStream<'_, Result<serde_json::Value, RpcError>> = Box::pin(try_stream! {
             match method.as_str() {
                 "get_wallet_summary" => {
                     let _req: WalletSummaryRequest = serde_json::from_value(request)?;
@@ -713,7 +714,7 @@ impl ClientModule for WalletClientModule {
                     let req: PegInRequest = serde_json::from_value(request)?;
                     let response = self.peg_in(req)
                         .await
-                        .map_err(|e| anyhow::anyhow!("peg_in failed: {}", e.fmt_compact()))?;
+                        .map_err(RpcError::PegIn)?;
                     let result = serde_json::to_value(&response)?;
                     yield result;
                 },
@@ -721,7 +722,7 @@ impl ClientModule for WalletClientModule {
                     let req: PegOutRequest = serde_json::from_value(request)?;
                     let response = self.peg_out(req)
                         .await
-                        .map_err(|e| anyhow::anyhow!("peg_out failed: {}", e.fmt_compact()))?;
+                        .map_err(RpcError::PegOut)?;
                     let result = serde_json::to_value(&response)?;
                     yield result;
                 },
@@ -738,7 +739,7 @@ impl ClientModule for WalletClientModule {
                     }
                 }
                 _ => {
-                    Err(anyhow::format_err!("Unknown method: {method}"))?;
+                    Err(RpcError::UnknownMethod { method: method.clone() })?;
                 }
             }
         });
@@ -754,6 +755,35 @@ impl ClientModule for WalletClientModule {
             .await
             .map_err(ClientModuleError::other)
     }
+}
+
+/// A failure of a wallet module RPC request.
+#[derive(Debug, thiserror::Error)]
+enum RpcError {
+    /// The request's parameters do not fit the method, or its response could
+    /// not be serialized.
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+
+    /// The peg-in could not be started.
+    #[error("peg_in failed")]
+    PegIn(#[source] DepositAddressError),
+
+    /// The peg-out could not be started.
+    #[error("peg_out failed")]
+    PegOut(#[source] PegOutError),
+
+    /// The deposit's updates could not be followed.
+    #[error(transparent)]
+    SubscribeDeposit(#[from] SubscribeDepositError),
+
+    /// The withdrawal's updates could not be followed.
+    #[error(transparent)]
+    SubscribeWithdraw(#[from] SubscribeWithdrawError),
+
+    /// The request names a method the module does not have.
+    #[error("Unknown method: {method}")]
+    UnknownMethod { method: String },
 }
 
 #[derive(Deserialize)]
@@ -777,7 +807,7 @@ pub struct PegInRequest {
 uniffi::custom_type!(PegInRequest, String, {
     lower: |v| serde_json::to_string(&v).expect("PegInRequest serialization cannot fail"),
     try_lift: |s| serde_json::from_str::<PegInRequest>(&s)
-        .map_err(|e| anyhow::anyhow!("Failed to parse PegInRequest: {e}")),
+        .map_err(|e| uniffi::deps::anyhow::anyhow!("Failed to parse PegInRequest: {e}")),
 });
 
 #[derive(Deserialize)]
@@ -1579,7 +1609,7 @@ impl WalletClientModule {
                                 },
                                 amount
                             ))
-                        }).context("No deposit transaction found")
+                        }).ok_or(FetchDepositTransactionError::NotFound)
                     }
                 ).await.expect("Will never give up");
 
@@ -2019,6 +2049,19 @@ impl WalletClientModule {
 
         Ok(())
     }
+}
+
+/// Why a deposit address's funding transaction was not found, so that it is
+/// looked up again.
+#[derive(Debug, thiserror::Error)]
+enum FetchDepositTransactionError {
+    /// The Bitcoin backend could not report the address's history.
+    #[error(transparent)]
+    BitcoinRpc(#[from] BitcoinRpcError),
+
+    /// The address's history holds no transaction paying to it yet.
+    #[error("No deposit transaction found")]
+    NotFound,
 }
 
 /// Polls the federation checking if the activated module consensus version
