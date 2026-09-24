@@ -160,7 +160,7 @@ async fn test_can_attach_extra_meta_to_receive_operation() -> anyhow::Result<()>
     // Give client2 initial balance
     client2_dummy_module
         .mock_receive(sats(1000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let extra_meta = "internal payment with no gateway registered".to_string();
     let desc = Description::new("with-markers".to_string())?;
@@ -223,7 +223,7 @@ async fn cannot_pay_same_internal_invoice_twice() -> anyhow::Result<()> {
     // Give client2 initial balance
     client2_dummy_module
         .mock_receive(sats(1000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     // TEST internal payment when there are no gateways registered
     let desc = Description::new("with-markers".to_string())?;
@@ -359,7 +359,7 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
     // Give client initial balance
     dummy_module
         .mock_receive(sats(1000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let other_ln = FakeLightningTest::new();
     let invoice = other_ln.invoice(Amount::from_sats(100), None)?;
@@ -427,7 +427,7 @@ async fn makes_internal_payments_within_federation() -> anyhow::Result<()> {
     // Give client2 initial balance
     client2_dummy_module
         .mock_receive(sats(1000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     // TEST internal payment when there are no gateways registered
     let desc = Description::new("with-markers".to_string())?;
@@ -531,7 +531,7 @@ async fn can_receive_for_other_user() -> anyhow::Result<()> {
     // Give client2 initial balance
     client2_dummy_module
         .mock_receive(sats(1000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     // TEST internal payment when there are no gateways registered
     let desc = Description::new("with-markers".to_string())?;
@@ -660,7 +660,7 @@ async fn can_receive_for_other_user_tweaked() -> anyhow::Result<()> {
     // Give client2 initial balance
     client2_dummy_module
         .mock_receive(sats(1000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     // generate a new keypair
     let keypair = Keypair::new_global(&mut OsRng);
@@ -777,7 +777,7 @@ async fn rejects_expired_invoice() -> anyhow::Result<()> {
     // Give client2 initial balance
     client2_dummy_module
         .mock_receive(sats(1000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     // Create an invoice with a 1-second expiry.
     let desc = Description::new("expired-invoice".to_string())?;
@@ -821,7 +821,7 @@ async fn returns_completed_payment_for_expired_invoice_already_paid() -> anyhow:
     // Give client2 initial balance
     client2_dummy_module
         .mock_receive(sats(1000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     // An invoice with a short expiry, paid (internally) well before it lapses.
     let desc = Description::new("paid-then-expired".to_string())?;
@@ -906,7 +906,7 @@ async fn can_reclaim_receive_funded_after_invoice_expiry() -> anyhow::Result<()>
 
     client2_dummy_module
         .mock_receive(sats(1000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let ln_module = client1.get_first_module::<LightningClientModule>()?;
     let amount = sats(250);
@@ -1063,7 +1063,7 @@ async fn funder_refuses_to_fund_an_already_funded_payment_hash() -> anyhow::Resu
     client2
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(1000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let ln_module = client1.get_first_module::<LightningClientModule>()?;
     let threshold_pub_key = ln_module.cfg.threshold_pub_key;

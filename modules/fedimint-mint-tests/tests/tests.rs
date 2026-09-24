@@ -574,7 +574,7 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
     client1_dummy_module
         .mock_receive(sats(1000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     // We currently have a limit on DB retries, if this number is increased too much
     // we might hit it
@@ -676,7 +676,7 @@ async fn backup_encode_decode_roundtrip() -> anyhow::Result<()> {
     let client_dummy_module = client.get_first_module::<DummyClientModule>()?;
     client_dummy_module
         .mock_receive(sats(1000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let metadata = Metadata::from_json_serialized(BackupTestMetadata {
         custom_key: "custom_value".into(),
@@ -704,7 +704,7 @@ async fn ecash_backup_can_recover_metadata() -> anyhow::Result<()> {
     let client_dummy_module = client.get_first_module::<DummyClientModule>()?;
     client_dummy_module
         .mock_receive(sats(1000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let metadata = Metadata::from_json_serialized(BackupTestMetadata {
         custom_key: "custom_value".into(),
@@ -862,7 +862,7 @@ async fn error_zero_value_oob_spend() -> anyhow::Result<()> {
     let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
     client1_dummy_module
         .mock_receive(sats(1000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     // Spend from client1 to client2
     let err = client1
@@ -889,7 +889,7 @@ async fn error_zero_value_oob_receive() -> anyhow::Result<()> {
     let client1_dummy_module = client1.get_first_module::<DummyClientModule>()?;
     client1_dummy_module
         .mock_receive(sats(1000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     // Spend from client1 to client2
     let err = client1

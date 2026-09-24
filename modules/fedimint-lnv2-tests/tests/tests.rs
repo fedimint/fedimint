@@ -131,7 +131,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let gateway_api = mock::gateway();
     let invoice = mock::payable_invoice();
@@ -214,7 +214,7 @@ async fn send_with_terms_funds_the_contract_at_the_checked_terms() -> anyhow::Re
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let lightning = client.get_first_module::<LightningClientModule>()?;
     let gateway = mock::gateway();
@@ -276,7 +276,7 @@ async fn send_with_terms_refuses_when_the_gateway_terms_changed() -> anyhow::Res
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let lightning = client.get_first_module::<LightningClientModule>()?;
     let gateway = mock::gateway();
@@ -347,7 +347,7 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let mut events = pin!(ln_event_stream(&client));
 
@@ -409,7 +409,7 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let mut events = pin!(ln_event_stream(&client));
 
@@ -473,7 +473,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let mut events = pin!(ln_event_stream(&client));
 
@@ -603,7 +603,7 @@ async fn receive_refuses_a_gateway_with_receives_turned_off() -> anyhow::Result<
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let operation_id = lightning
         .send(mock::payable_invoice(), Some(mock::gateway()), Value::Null)
@@ -837,7 +837,7 @@ async fn unsolicited_dust_contract_does_not_wedge_the_client() -> anyhow::Result
     attacker
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     // Everything the attacker needs is in what the victim publishes.
     let lnurl = victim
