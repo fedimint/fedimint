@@ -60,7 +60,9 @@ use events::{NoteSpent, OOBNotesReissued, OOBNotesSpent, ReceivePaymentEvent, Se
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 pub use fedimint_client_module::error::InsufficientBalanceError;
-use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
+use fedimint_client_module::error::{
+    ClientModuleError, OperationLookupError, TransactionSubmitError,
+};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs, RecoveryMode,
 };
@@ -835,7 +837,10 @@ impl ClientModuleInit for MintClientInit {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         Ok(MintClientModule {
             federation_id: *args.federation_id(),
             cfg: args.cfg().clone(),

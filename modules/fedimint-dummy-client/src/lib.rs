@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use db::{DbKeyPrefix, DummyClientFundsKey, DummyClientFundsKeyPrefixAll};
 use fedimint_client_module::db::ClientModuleMigrationFn;
+use fedimint_client_module::error::ClientModuleError;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{
@@ -413,7 +414,10 @@ impl ClientModuleInit for DummyClientInit {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         Ok(DummyClientModule {
             key: args
                 .module_root_secret()

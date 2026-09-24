@@ -60,7 +60,6 @@ pub enum ClientBuildError {
     Migration(#[from] DbMigrationError),
 
     /// A module could not prepare its recovery.
-    // The boxed cause narrows to `ClientModuleError` in #8821 part E.
     #[error("Module {instance_id} ({kind}) failed to prepare its recovery")]
     ModuleRecoveryPrepare {
         /// The kind of the module that failed.
@@ -69,11 +68,10 @@ pub enum ClientBuildError {
         instance_id: ModuleInstanceId,
         /// The failure the module reported.
         #[source]
-        source: Box<dyn std::error::Error + Send + Sync>,
+        source: ClientModuleError,
     },
 
     /// A module could not be initialized.
-    // The boxed cause narrows to `ClientModuleError` in #8821 part E.
     #[error("Module {instance_id} ({kind}) failed to initialize")]
     ModuleInit {
         /// The kind of the module that failed.
@@ -82,7 +80,7 @@ pub enum ClientBuildError {
         instance_id: ModuleInstanceId,
         /// The failure the module reported.
         #[source]
-        source: Box<dyn std::error::Error + Send + Sync>,
+        source: ClientModuleError,
     },
 
     /// The database write failed.

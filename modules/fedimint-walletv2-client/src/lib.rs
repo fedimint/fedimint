@@ -31,7 +31,9 @@ use fedimint_client::transaction::{
     ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder, max_affordable_send_amount,
 };
 use fedimint_client_module::db::ClientModuleMigrationFn;
-use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
+use fedimint_client_module::error::{
+    ClientModuleError, OperationLookupError, TransactionSubmitError,
+};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
@@ -201,7 +203,10 @@ impl ClientModuleInit for WalletClientInit {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         let module = WalletClientModule {
             root_secret: args.module_root_secret().clone(),
             cfg: args.cfg().clone(),

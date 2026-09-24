@@ -41,7 +41,7 @@ use db::{
 };
 use fedimint_api_client::api::{DynModuleApi, FederationResult, ServerError};
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
-use fedimint_client_module::error::TransactionSubmitError;
+use fedimint_client_module::error::{ClientModuleError, TransactionSubmitError};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
@@ -404,7 +404,10 @@ impl ClientModuleInit for LightningClientInit {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         let gateway_conn = if let Some(gateway_conn) = self.gateway_conn.clone() {
             gateway_conn
         } else {

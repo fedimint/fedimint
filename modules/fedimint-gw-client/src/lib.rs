@@ -21,6 +21,7 @@ use complete::{GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageStat
 use events::{IncomingPaymentStarted, OutgoingPaymentStarted};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::ClientHandleArc;
+use fedimint_client_module::error::ClientModuleError;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
@@ -179,7 +180,10 @@ impl ClientModuleInit for GatewayClientInit {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         Ok(GatewayClientModule {
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),

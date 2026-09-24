@@ -880,10 +880,10 @@ impl ClientBuilder {
                     module_init
                         .prepare_recovery(db.clone(), module_instance_id, api.clone())
                         .await
-                        .map_err(|err| ClientBuildError::ModuleRecoveryPrepare {
+                        .map_err(|source| ClientBuildError::ModuleRecoveryPrepare {
                             kind: kind.clone(),
                             instance_id: module_instance_id,
-                            source: err.into(),
+                            source,
                         })?;
                 }
 
@@ -984,10 +984,10 @@ impl ClientBuilder {
                             self.bitcoind_rpc_no_chain_id_factory.clone(),
                         )
                         .await
-                        .map_err(|err| ClientBuildError::ModuleInit {
+                        .map_err(|source| ClientBuildError::ModuleInit {
                             kind: kind.clone(),
                             instance_id: module_instance_id,
-                            source: err.into(),
+                            source,
                         })?;
 
                     modules.register_module(module_instance_id, kind, module);

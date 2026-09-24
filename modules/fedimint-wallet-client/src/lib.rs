@@ -42,7 +42,7 @@ use bitcoin::{Address, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, SupportsSafeDepositKey, TweakIdx};
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_bitcoind::{BitcoindTracked, DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
-use fedimint_client_module::error::TransactionSubmitError;
+use fedimint_client_module::error::{ClientModuleError, TransactionSubmitError};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs, RecoveryMode,
 };
@@ -366,7 +366,10 @@ impl ClientModuleInit for WalletClientInit {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),
             module_root_secret: args.module_root_secret().clone(),
@@ -388,14 +391,14 @@ impl ClientModuleInit for WalletClientInit {
             if let Some(rpc) = factory(rpc_config.url.clone()).await {
                 rpc
             } else {
-                self.0
-                    .clone()
-                    .unwrap_or(create_esplora_rpc(&rpc_config.url)?)
+                self.0.clone().unwrap_or(
+                    create_esplora_rpc(&rpc_config.url).map_err(ClientModuleError::other)?,
+                )
             }
         } else {
             self.0
                 .clone()
-                .unwrap_or(create_esplora_rpc(&rpc_config.url)?)
+                .unwrap_or(create_esplora_rpc(&rpc_config.url).map_err(ClientModuleError::other)?)
         };
         let btc_rpc = BitcoindTracked::new(btc_rpc, "wallet-client").into_dyn();
 

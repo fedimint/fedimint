@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use db::DbKeyPrefix;
 use fedimint_client_module::db::ClientModuleMigrationFn;
+use fedimint_client_module::error::ClientModuleError;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule};
@@ -117,7 +118,10 @@ impl ClientModuleInit for EmptyClientInit {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         Ok(EmptyClientModule {
             cfg: args.cfg().clone(),
             client_ctx: args.context(),

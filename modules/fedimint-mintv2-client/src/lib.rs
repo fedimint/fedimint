@@ -37,7 +37,7 @@ use fedimint_client::transaction::{
 };
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::error::{
-    InsufficientBalanceError, OperationLookupError, TransactionSubmitError,
+    ClientModuleError, InsufficientBalanceError, OperationLookupError, TransactionSubmitError,
 };
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
@@ -173,7 +173,10 @@ impl ClientModuleInit for MintClientInit {
         RecoveryMode::Usable
     }
 
-    async fn prepare_recovery(&self, args: &ClientModuleRecoveryPrepareArgs) -> anyhow::Result<()> {
+    async fn prepare_recovery(
+        &self,
+        args: &ClientModuleRecoveryPrepareArgs,
+    ) -> Result<(), ClientModuleError> {
         if args
             .db()
             .begin_transaction_nc()
@@ -193,7 +196,11 @@ impl ClientModuleInit for MintClientInit {
         // arrive at the same note.
         let state = RecoveryState {
             next_index: 0,
-            total_items: args.module_api().fetch_recovery_count().await?,
+            total_items: args
+                .module_api()
+                .fetch_recovery_count()
+                .await
+                .map_err(ClientModuleError::other)?,
             requests: BTreeMap::new(),
             nonces: BTreeSet::new(),
         };
@@ -366,7 +373,10 @@ impl ClientModuleInit for MintClientInit {
         }
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         let (tweak_sender, tweak_receiver) = async_channel::bounded(50);
 
         let filter = issuance::tweak_filter(args.module_root_secret());
