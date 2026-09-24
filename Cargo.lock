@@ -3224,6 +3224,7 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "bitcoincore-rpc",
+ "esplora-client 0.12.3",
  "esplora-client 0.13.0",
  "fedimint-core",
  "fedimint-logging",
