@@ -66,6 +66,10 @@ use crate::send_sm::SendSMCommon;
 /// decides how quickly an unreachable one fails the HTLC back.
 const FEDERATION_LIVENESS_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Minimum number of blocks between the current height and an incoming HTLC's
+/// claim deadline for the gateway to fund its incoming contract.
+const LNV2_CLAIM_DEADLINE_MARGIN: u32 = 2;
+
 /// LNv2 CLTV Delta in blocks
 pub const EXPIRATION_DELTA_MINIMUM_V2: u64 = 144;
 
@@ -645,6 +649,7 @@ impl GatewayClientModuleV2 {
         htlc_id: u64,
         contract: IncomingContract,
         amount_msat: u64,
+        blocks_to_claim_deadline: u32,
     ) -> anyhow::Result<()> {
         let operation_start = now();
         let receive_operation_id = OperationId::from_encodable(&contract);
@@ -670,6 +675,15 @@ impl GatewayClientModuleV2 {
         if plan == IncomingRelayPlan::CreateReceiveAndCompletion {
             // Only gate fresh funding: the other plans resume an already
             // funded contract and must not be cancelled.
+            //
+            // Funding is irreversible, and the gateway is only reimbursed by
+            // settling the HTLC before its claim deadline, so do not fund an
+            // HTLC that is about to expire. The margin is small because LDK's
+            // default invoices leave only 3 blocks before the claim deadline.
+            ensure!(
+                blocks_to_claim_deadline >= LNV2_CLAIM_DEADLINE_MARGIN,
+                "HTLC claim deadline is only {blocks_to_claim_deadline} blocks away"
+            );
             self.ensure_federation_responsive(payment_hash).await?;
 
             let refund_keypair = self.keypair;

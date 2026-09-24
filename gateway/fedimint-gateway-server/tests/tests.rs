@@ -1640,6 +1640,7 @@ async fn lnv2_relay_persists_every_distinct_incoming_circuit() -> anyhow::Result
             hold.htlc_id,
             contract.clone(),
             1_000_000,
+            u32::MAX,
         ),
         module.relay_incoming_htlc(
             payment_hash,
@@ -1647,6 +1648,7 @@ async fn lnv2_relay_persists_every_distinct_incoming_circuit() -> anyhow::Result
             forward.htlc_id,
             contract.clone(),
             1_000_000,
+            u32::MAX,
         ),
     );
     hold_result?;
@@ -1660,6 +1662,7 @@ async fn lnv2_relay_persists_every_distinct_incoming_circuit() -> anyhow::Result
             forward.htlc_id,
             contract,
             1_000_000,
+            u32::MAX,
         )
         .await?;
 
