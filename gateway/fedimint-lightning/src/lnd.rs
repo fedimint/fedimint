@@ -655,31 +655,47 @@ impl GatewayLndClient {
 
             match payments {
                 Ok(payments) => {
-                    // Block until LND returns the completed payment
-                    match payments.into_inner().message().await {
-                        Ok(Some(payment)) => {
-                            if payment.status() == PaymentStatus::Succeeded {
+                    let mut updates = payments.into_inner();
+
+                    // Block until LND reports a terminal status. `no_inflight_updates`
+                    // asks LND to hold back everything else, but a payment still in
+                    // flight must never be read as failed, so only `Failed` counts as
+                    // a failure here: `InFlight`, `Initiated` (with
+                    // `routerrpc.usestatusinitiated`) and any status this build does
+                    // not know, which prost decodes as `Unknown`, keep us waiting.
+                    let outcome = loop {
+                        match updates.message().await {
+                            Ok(Some(payment)) if payment.status() == PaymentStatus::Succeeded => {
                                 return Ok(Some(payment.payment_preimage));
                             }
+                            Ok(Some(payment)) if payment.status() == PaymentStatus::Failed => {
+                                let failure_reason = payment.failure_reason();
+                                return Err(LightningRpcError::FailedPayment {
+                                    failure_reason: format!("{failure_reason:?}"),
+                                });
+                            }
+                            Ok(Some(payment)) => {
+                                debug!(
+                                    target: LOG_LIGHTNING,
+                                    payment_hash = %PrettyPaymentHash(&payment_hash),
+                                    status = ?payment.status(),
+                                    "Tracked payment is not terminal yet, waiting",
+                                );
+                            }
+                            outcome => break outcome,
+                        }
+                    };
 
-                            let failure_reason = payment.failure_reason();
-                            return Err(LightningRpcError::FailedPayment {
-                                failure_reason: format!("{failure_reason:?}"),
-                            });
-                        }
-                        // A premature end of stream (`Ok(None)`) or a transport
-                        // fault (`Err`) is not a payment outcome. Retry rather than
-                        // reporting a failure the node never produced.
-                        outcome => {
-                            warn!(
-                                target: LOG_LIGHTNING,
-                                payment_hash = %PrettyPaymentHash(&payment_hash),
-                                outcome = ?outcome,
-                                "Payment tracking stream ended or faulted. Trying again in 5 seconds"
-                            );
-                            sleep(Duration::from_secs(5)).await;
-                        }
-                    }
+                    // A premature end of stream (`Ok(None)`) or a transport fault
+                    // (`Err`) is not a payment outcome. Retry rather than reporting a
+                    // failure the node never produced.
+                    warn!(
+                        target: LOG_LIGHTNING,
+                        payment_hash = %PrettyPaymentHash(&payment_hash),
+                        outcome = ?outcome,
+                        "Payment tracking stream ended or faulted. Trying again in 5 seconds"
+                    );
+                    sleep(Duration::from_secs(5)).await;
                 }
                 Err(err) => {
                     // Break if we got a response back from the LND node that indicates the payment
@@ -1016,7 +1032,7 @@ impl ILnRpcClient for GatewayLndClient {
                     }
                 })?
             }
-            _ => {
+            _ => 'dispatch: {
                 // LND API allows fee limits in the `i64` range, but we use `u64` for
                 // max_fee_msat. This means we can only set an enforceable fee limit
                 // between 0 and i64::MAX
@@ -1069,7 +1085,7 @@ impl ILnRpcClient for GatewayLndClient {
                     payment_hash = %PrettyPaymentHash(&payment_hash),
                     "LND payment does not exist, will attempt to pay",
                 );
-                let payments = client
+                let payments = match client
                     .router()
                     .send_payment_v2(SendPaymentRequest {
                         amt_msat,
@@ -1086,17 +1102,41 @@ impl ILnRpcClient for GatewayLndClient {
                         ..Default::default()
                     })
                     .await
-                    .map_err(|status| {
+                {
+                    Ok(payments) => payments,
+                    // An error here is not proof that nothing was paid. LND
+                    // registers the payment before its first status update,
+                    // so a transport fault on the way back can surface as an
+                    // error for a payment that is now in flight. Reporting
+                    // failure would forfeit the outgoing contract while the
+                    // payment may still settle, so only the node's own record
+                    // decides.
+                    Err(status) => {
                         warn!(
                             target: LOG_LIGHTNING,
                             status = %status,
                             payment_hash = %PrettyPaymentHash(&payment_hash),
-                            "LND payment request failed",
+                            "LND payment request failed, checking whether LND registered the payment",
                         );
-                        LightningRpcError::FailedPayment {
-                            failure_reason: format!("Failed to make outgoing payment {status:?}"),
-                        }
-                    })?;
+
+                        let Some(preimage) = self
+                            .lookup_payment(payment_hash.clone(), &mut client)
+                            .await?
+                        else {
+                            return Err(LightningRpcError::FailedPayment {
+                                failure_reason: format!(
+                                    "Failed to make outgoing payment {status:?}"
+                                ),
+                            });
+                        };
+
+                        break 'dispatch hex::FromHex::from_hex(preimage.as_str()).map_err(
+                            |error| LightningRpcError::FailedPayment {
+                                failure_reason: format!("Failed to convert preimage {error:?}"),
+                            },
+                        )?;
+                    }
+                };
 
                 debug!(
                     target: LOG_LIGHTNING,
