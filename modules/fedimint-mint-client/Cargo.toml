@@ -30,7 +30,6 @@ name = "notes"
 path = "benches/notes.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 aquamarine = { workspace = true }
 assert_matches = { workspace = true }
 async-stream = { workspace = true }

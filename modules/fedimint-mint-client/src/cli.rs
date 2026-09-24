@@ -3,9 +3,10 @@ use std::str::FromStr;
 use std::time::Duration;
 use std::{ffi, iter};
 
-use anyhow::{Context, bail};
 use clap::{Parser, Subcommand};
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_api_client::api::FederationError;
+use fedimint_core::config::FederationIdPrefix;
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, PeerId, TieredMulti};
@@ -17,8 +18,9 @@ use tracing::{info, warn};
 
 use crate::api::MintFederationApi;
 use crate::{
-    BlindNonce, MintClientModule, Nonce, OOBNotes, ReissueExternalNotesState,
-    SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
+    BlindNonce, MintClientModule, Nonce, OOBNotes, OOBNotesParseError, ReissueExternalNotesError,
+    ReissueExternalNotesState, SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
+    SpendOOBError, ValidateNotesError,
 };
 
 #[derive(Parser, Serialize)]
@@ -147,7 +149,10 @@ async fn check_blind_nonce_used(
     .collect()
 }
 
-async fn check_nonce(mint: &MintClientModule, nonce: &str) -> anyhow::Result<serde_json::Value> {
+async fn check_nonce(
+    mint: &MintClientModule,
+    nonce: &str,
+) -> Result<serde_json::Value, CliCommandError> {
     if let Ok(nonce) = Nonce::consensus_decode_hex(nonce, &ModuleDecoderRegistry::default()) {
         return Ok(json!({
             "nonce": nonce.consensus_encode_to_hex(),
@@ -155,8 +160,7 @@ async fn check_nonce(mint: &MintClientModule, nonce: &str) -> anyhow::Result<ser
         }));
     }
 
-    let oob_notes = OOBNotes::from_str(nonce)
-        .context("Argument is neither a hex-encoded nonce nor an e-cash notes string")?;
+    let oob_notes = OOBNotes::from_str(nonce).map_err(CliCommandError::InvalidNonceArgument)?;
 
     let mut nonces = Vec::new();
     for (amount, note) in oob_notes.notes().iter_items() {
@@ -174,10 +178,10 @@ async fn check_nonce(mint: &MintClientModule, nonce: &str) -> anyhow::Result<ser
 async fn check_blind_nonce(
     mint: &MintClientModule,
     blind_nonce: &str,
-) -> anyhow::Result<serde_json::Value> {
+) -> Result<serde_json::Value, CliCommandError> {
     let blind_nonce =
         BlindNonce::consensus_decode_hex(blind_nonce, &ModuleDecoderRegistry::default())
-            .context("Argument is not a hex-encoded blind nonce")?;
+            .map_err(CliCommandError::InvalidBlindNonce)?;
 
     Ok(json!({
         "blind_nonce": blind_nonce.consensus_encode_to_hex(),
@@ -191,7 +195,7 @@ async fn spend(
     allow_overpay: bool,
     timeout: u64,
     include_invite: bool,
-) -> anyhow::Result<serde_json::Value> {
+) -> Result<serde_json::Value, CliCommandError> {
     warn!(
         "The client will try to double-spend these notes after the timeout to reclaim \
         any unclaimed e-cash."
@@ -252,7 +256,7 @@ fn split(oob_notes: &OOBNotes) -> serde_json::Value {
     json!({ "notes": notes })
 }
 
-fn combine(oob_notes: &[OOBNotes]) -> anyhow::Result<serde_json::Value> {
+fn combine(oob_notes: &[OOBNotes]) -> Result<serde_json::Value, CliCommandError> {
     let federation_id_prefix = {
         let mut prefixes = oob_notes.iter().map(OOBNotes::federation_id_prefix);
         let first = prefixes
@@ -260,7 +264,10 @@ fn combine(oob_notes: &[OOBNotes]) -> anyhow::Result<serde_json::Value> {
             .expect("At least one e-cash notes string expected");
         for prefix in prefixes {
             if prefix != first {
-                bail!("Trying to combine e-cash from different federations: {first} and {prefix}");
+                return Err(CliCommandError::MixedFederations {
+                    first,
+                    other: prefix,
+                });
             }
         }
         first
@@ -279,7 +286,7 @@ fn combine(oob_notes: &[OOBNotes]) -> anyhow::Result<serde_json::Value> {
 pub(crate) async fn handle_cli_command(
     mint: &MintClientModule,
     args: &[ffi::OsString],
-) -> anyhow::Result<serde_json::Value> {
+) -> Result<serde_json::Value, CliCommandError> {
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("mint")).chain(args.iter()));
 
     match opts {
@@ -296,7 +303,7 @@ pub(crate) async fn handle_cli_command(
 
             while let Some(update) = updates.next().await {
                 if let ReissueExternalNotesState::Failed(e) = update {
-                    bail!("Reissue failed: {e}");
+                    return Err(CliCommandError::ReissueFailed(e));
                 }
             }
 
@@ -328,6 +335,45 @@ pub(crate) async fn handle_cli_command(
             DevOpts::CheckBlindNonce { blind_nonce } => check_blind_nonce(mint, &blind_nonce).await,
         },
     }
+}
+
+/// A failure of a `mint` module command.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum CliCommandError {
+    /// The notes could not be reissued.
+    #[error(transparent)]
+    Reissue(#[from] ReissueExternalNotesError),
+
+    /// The reissue transaction failed.
+    #[error("Reissue failed: {0}")]
+    ReissueFailed(String),
+
+    /// The notes to spend could not be selected or prepared.
+    #[error(transparent)]
+    Spend(#[from] SpendOOBError),
+
+    /// Notes of different federations were given to combine.
+    #[error("Trying to combine e-cash from different federations: {first} and {other}")]
+    MixedFederations {
+        first: FederationIdPrefix,
+        other: FederationIdPrefix,
+    },
+
+    /// The notes to validate are invalid.
+    #[error(transparent)]
+    Validate(#[from] ValidateNotesError),
+
+    /// The federation could not say whether the notes are spent.
+    #[error(transparent)]
+    Federation(#[from] FederationError),
+
+    /// The argument of `dev check-nonce` is neither a nonce nor e-cash.
+    #[error("Argument is neither a hex-encoded nonce nor an e-cash notes string")]
+    InvalidNonceArgument(#[source] OOBNotesParseError),
+
+    /// The argument of `dev check-blind-nonce` is not a blind nonce.
+    #[error("Argument is not a hex-encoded blind nonce")]
+    InvalidBlindNonce(#[source] DecodeError),
 }
 
 #[cfg(test)]

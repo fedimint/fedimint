@@ -498,30 +498,14 @@ impl GatewayClientModule {
         }
     }
 
-    /// Attempts to remove a gateway's registration from the federation. Since
-    /// removing gateway registrations is best effort, this does not return
-    /// an error and simply emits a warning when the registration cannot be
-    /// removed.
+    /// Attempts to remove a gateway's registration from the federation.
+    ///
+    /// Each peer keeps its own list of registered gateways, so the gateway
+    /// signs every peer's removal challenge with the private key of its
+    /// gateway id. Removal is best effort and reports nothing: a peer that
+    /// fails or does not answer within a second is skipped, and one that
+    /// declines the removal is logged.
     pub async fn remove_from_federation(&self, gateway_keypair: Keypair) {
-        // Removing gateway registrations is best effort, so just emit a warning if it
-        // fails
-        if let Err(e) = self.remove_from_federation_inner(gateway_keypair).await {
-            let gateway_id = gateway_keypair.public_key();
-            let federation_id = self
-                .client_ctx
-                .get_config()
-                .await
-                .global
-                .calculate_federation_id();
-            warn!("Failed to remove gateway {gateway_id} from federation {federation_id}: {e:?}");
-        }
-    }
-
-    /// Retrieves the signing challenge from each federation peer. Since each
-    /// peer maintains their own list of registered gateways, the gateway
-    /// needs to provide a signature that is signed by the private key of the
-    /// gateway id to remove the registration.
-    async fn remove_from_federation_inner(&self, gateway_keypair: Keypair) -> anyhow::Result<()> {
         let gateway_id = gateway_keypair.public_key();
         let challenges = self
             .module_api
@@ -544,8 +528,6 @@ impl GatewayClientModule {
         };
 
         self.module_api.remove_gateway(remove_gateway_request).await;
-
-        Ok(())
     }
 
     /// Attempt to fulfill an HTLC by buying its preimage from the federation.

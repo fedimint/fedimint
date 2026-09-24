@@ -19,7 +19,7 @@ use super::{
     EventLogTrimableId, EventLogTrimableIdPrefixAll, TRIMABLE_EVENTLOG_MIN_ID_AGE,
     TRIMABLE_EVENTLOG_MIN_TS_AGE, handle_events, run_event_log_ordering_task, trim_trimable_log,
 };
-use crate::EventLogNonTrimableTracker;
+use crate::{EventLogNonTrimableTracker, EventLogTrackerError};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
 pub struct TestEventLogIdKey;
@@ -39,7 +39,7 @@ impl EventLogNonTrimableTracker for TestEventLogTracker {
         &mut self,
         dbtx: &mut DatabaseTransaction<NonCommittable>,
         pos: EventLogId,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), EventLogTrackerError> {
         dbtx.insert_entry(&TestEventLogIdKey, &pos).await;
         Ok(())
     }
@@ -48,7 +48,7 @@ impl EventLogNonTrimableTracker for TestEventLogTracker {
     async fn load(
         &mut self,
         dbtx: &mut DatabaseTransaction<NonCommittable>,
-    ) -> anyhow::Result<Option<EventLogId>> {
+    ) -> Result<Option<EventLogId>, EventLogTrackerError> {
         Ok(dbtx.get_value(&TestEventLogIdKey).await)
     }
 }
@@ -74,9 +74,9 @@ impl EventLogNonTrimableTracker for FailingTracker {
         &mut self,
         dbtx: &mut DatabaseTransaction<NonCommittable>,
         pos: EventLogId,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), EventLogTrackerError> {
         if matches!(self.fail_on, FailOn::Store) {
-            return Err(anyhow::anyhow!("tracker failed"));
+            return Err(EventLogTrackerError::new("tracker failed"));
         }
         dbtx.insert_entry(&TestEventLogIdKey, &pos).await;
         Ok(())
@@ -85,9 +85,9 @@ impl EventLogNonTrimableTracker for FailingTracker {
     async fn load(
         &mut self,
         dbtx: &mut DatabaseTransaction<NonCommittable>,
-    ) -> anyhow::Result<Option<EventLogId>> {
+    ) -> Result<Option<EventLogId>, EventLogTrackerError> {
         if matches!(self.fail_on, FailOn::Load) {
-            return Err(anyhow::anyhow!("tracker failed"));
+            return Err(EventLogTrackerError::new("tracker failed"));
         }
         Ok(dbtx.get_value(&TestEventLogIdKey).await)
     }

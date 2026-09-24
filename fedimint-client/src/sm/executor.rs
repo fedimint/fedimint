@@ -22,7 +22,7 @@ use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::fmt_utils::AbbreviateJson;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::{BoxFuture, FmtCompactAnyhow as _};
+use fedimint_core::util::BoxFuture;
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_eventlog::{DBTransactionEventLogExt as _, Event, EventKind, EventPersistence};
 use fedimint_logging::LOG_CLIENT_REACTOR;
@@ -477,16 +477,8 @@ impl ExecutorInner {
         sm_update_rx: tokio::sync::mpsc::UnboundedReceiver<DynState>,
     ) {
         debug!(target: LOG_CLIENT_REACTOR, "Starting state machine executor task");
-        if let Err(err) = self
-            .run_state_machines_executor_inner(global_context_gen, sm_update_rx)
-            .await
-        {
-            warn!(
-                target: LOG_CLIENT_REACTOR,
-                err = %err.fmt_compact_anyhow(),
-                "An unexpected error occurred during a state transition"
-            );
-        }
+        self.run_state_machines_executor_inner(global_context_gen, sm_update_rx)
+            .await;
     }
 
     async fn get_transition_for(
@@ -532,7 +524,7 @@ impl ExecutorInner {
                 module_id = module_instance, "A terminal state where only active states are expected. Please report this bug upstream."
             );
             self.db
-                .autocommit::<_, _, anyhow::Error>(
+                .autocommit::<_, _, Infallible>(
                     |dbtx, _| {
                         Box::pin(async {
                             let k = InactiveStateKey::from_state(state.clone());
@@ -558,7 +550,7 @@ impl ExecutorInner {
         &self,
         global_context_gen: ContextGen,
         mut sm_update_rx: tokio::sync::mpsc::UnboundedReceiver<DynState>,
-    ) -> anyhow::Result<()> {
+    ) {
         /// All futures in the executor resolve to this type, so the handling
         /// code can tell them apart.
         enum ExecutorLoopEvent {
@@ -847,7 +839,6 @@ impl ExecutorInner {
         }
 
         info!(target: LOG_CLIENT_REACTOR, "Terminated.");
-        Ok(())
     }
 
     async fn get_active_states(&self) -> Vec<(DynState, ActiveStateMeta)> {

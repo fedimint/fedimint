@@ -341,7 +341,7 @@ impl DummyClientModule {
     }
 
     /// Add funds to the local balance (for testing)
-    pub async fn mock_receive(&self, amount: Amount, unit: AmountUnit) -> anyhow::Result<()> {
+    pub async fn mock_receive(&self, amount: Amount, unit: AmountUnit) {
         let mut dbtx = self.db.begin_transaction().await;
 
         let current = dbtx
@@ -353,8 +353,6 @@ impl DummyClientModule {
             .await;
 
         dbtx.commit_tx().await;
-
-        Ok(())
     }
 }
 

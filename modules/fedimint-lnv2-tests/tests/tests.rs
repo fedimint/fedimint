@@ -8,6 +8,7 @@ use assert_matches::assert_matches;
 use async_stream::stream;
 use bitcoin::hashes::{Hash as _, sha256};
 use fedimint_client::ClientHandleArc;
+use fedimint_client::error::GlobalRpcError;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
@@ -130,7 +131,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let gateway_api = mock::gateway();
     let invoice = mock::payable_invoice();
@@ -213,7 +214,7 @@ async fn send_with_terms_funds_the_contract_at_the_checked_terms() -> anyhow::Re
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let lightning = client.get_first_module::<LightningClientModule>()?;
     let gateway = mock::gateway();
@@ -275,7 +276,7 @@ async fn send_with_terms_refuses_when_the_gateway_terms_changed() -> anyhow::Res
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let lightning = client.get_first_module::<LightningClientModule>()?;
     let gateway = mock::gateway();
@@ -346,7 +347,7 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let mut events = pin!(ln_event_stream(&client));
 
@@ -408,7 +409,7 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let mut events = pin!(ln_event_stream(&client));
 
@@ -472,7 +473,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let mut events = pin!(ln_event_stream(&client));
 
@@ -602,7 +603,7 @@ async fn receive_refuses_a_gateway_with_receives_turned_off() -> anyhow::Result<
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let operation_id = lightning
         .send(mock::payable_invoice(), Some(mock::gateway()), Value::Null)
@@ -836,7 +837,7 @@ async fn unsolicited_dust_contract_does_not_wedge_the_client() -> anyhow::Result
     attacker
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     // Everything the attacker needs is in what the victim publishes.
     let lnurl = victim
@@ -1039,6 +1040,56 @@ async fn default_module_operations_are_unsupported() -> anyhow::Result<()> {
             kind,
             operation: "leave",
         }) if kind == KIND
+    );
+
+    Ok(())
+}
+
+/// A module without its own JSON command handlers refuses commands and RPC
+/// requests with a typed error: the LNv2 module serves no RPC requests, and the
+/// dummy module has no commands.
+#[tokio::test(flavor = "multi_thread")]
+async fn json_handlers_without_an_implementation_are_unsupported() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+    let dummy = client.get_first_module::<DummyClientModule>()?;
+
+    assert_matches!(
+        ClientModule::handle_rpc(&*lightning, "no_such_method".to_owned(), Value::Null)
+            .await
+            .next()
+            .await,
+        Some(Err(ClientModuleError::Unsupported {
+            kind,
+            operation: "handle_rpc",
+        })) if kind == KIND
+    );
+    assert_matches!(
+        ClientModule::handle_cli_command(&*dummy, &[]).await,
+        Err(ClientModuleError::Unsupported {
+            kind,
+            operation: "handle_cli_command",
+        }) if kind == DummyClientModule::kind()
+    );
+
+    Ok(())
+}
+
+/// The client's own JSON request handler names a method it does not have.
+#[tokio::test(flavor = "multi_thread")]
+async fn global_rpc_rejects_an_unknown_method() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    assert_matches!(
+        client
+            .handle_global_rpc("no_such_method".to_owned(), Value::Null)
+            .next()
+            .await,
+        Some(Err(GlobalRpcError::UnknownMethod { method })) if method == "no_such_method"
     );
 
     Ok(())

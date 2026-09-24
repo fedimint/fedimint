@@ -46,7 +46,6 @@ use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use anyhow::Context as _;
 use api::MintFederationApi;
 use async_stream::{stream, try_stream};
 use backup::recovery::{MintRecovery, RecoveryStateV2};
@@ -57,11 +56,11 @@ use client_db::{
     ReusedNoteIndices, migrate_state_to_v2, migrate_to_v1,
 };
 use events::{NoteSpent, OOBNotesReissued, OOBNotesSpent, ReceivePaymentEvent, SendPaymentEvent};
-use fedimint_api_client::api::{DynModuleApi, FederationResult};
+use fedimint_api_client::api::{DynModuleApi, FederationError, FederationResult};
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 pub use fedimint_client_module::error::InsufficientBalanceError;
 use fedimint_client_module::error::{
-    ClientModuleError, OperationLookupError, TransactionSubmitError,
+    AddStateMachinesError, ClientModuleError, OperationLookupError, TransactionSubmitError,
 };
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs, RecoveryMode,
@@ -105,7 +104,7 @@ pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{FeeConsensus, MintClientConfig};
 pub use fedimint_mint_common::*;
 use futures::future::try_join_all;
-use futures::{StreamExt, pin_mut};
+use futures::{StreamExt, TryStreamExt as _, pin_mut};
 use hex::ToHex;
 use input::MintInputStateCreatedBundle;
 use itertools::Itertools as _;
@@ -613,7 +612,7 @@ impl MintClientInit {
     async fn recover_from_slices(
         &self,
         args: &ClientModuleRecoverArgs<Self>,
-    ) -> anyhow::Result<Option<Amount>> {
+    ) -> Result<Option<Amount>, RecoverFromSlicesError> {
         // Try to load existing state or create new one if we can fetch recovery count
         let mut state = if let Some(state) = args
             .db()
@@ -711,7 +710,7 @@ impl MintClientInit {
                     args.module_api()
                         .fetch_blind_nonce_outpoints(blind_nonces)
                         .await
-                        .context("Failed to fetch blind nonce outpoints")?
+                        .map_err(RecoverFromSlicesError::BlindNonceOutpoints)?
                 };
 
                 // Create state machines for pending notes
@@ -762,6 +761,23 @@ impl MintClientInit {
             });
         }
     }
+}
+
+/// A failure of the mint's slice-based recovery.
+#[derive(Debug, thiserror::Error)]
+enum RecoverFromSlicesError {
+    /// The federation could not say how many recovery items it has.
+    #[error(transparent)]
+    RecoveryCount(#[from] FederationError),
+
+    /// The federation could not say where the recovered notes were issued.
+    #[error("Failed to fetch blind nonce outpoints")]
+    BlindNonceOutpoints(#[source] FederationError),
+
+    /// The state machines that finalize the recovered notes could not be
+    /// added.
+    #[error(transparent)]
+    StateMachines(#[from] AddStateMachinesError),
 }
 
 impl ModuleInit for MintClientInit {
@@ -1047,8 +1063,10 @@ impl ClientModule for MintClientModule {
     async fn handle_cli_command(
         &self,
         args: &[std::ffi::OsString],
-    ) -> anyhow::Result<serde_json::Value> {
-        cli::handle_cli_command(self, args).await
+    ) -> Result<serde_json::Value, ClientModuleError> {
+        cli::handle_cli_command(self, args)
+            .await
+            .map_err(ClientModuleError::other)
     }
 
     fn supports_backup(&self) -> bool {
@@ -1194,8 +1212,8 @@ impl ClientModule for MintClientModule {
         &self,
         method: String,
         request: serde_json::Value,
-    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
-        Box::pin(try_stream! {
+    ) -> BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
+        let stream: BoxStream<'_, Result<serde_json::Value, RpcError>> = Box::pin(try_stream! {
             match method.as_str() {
                 "reissue_external_notes" => {
                     let req: ReissueExternalNotesRequest = serde_json::from_value(request)?;
@@ -1259,12 +1277,46 @@ impl ClientModule for MintClientModule {
                     yield serde_json::to_value(note_counts)?;
                 }
                 _ => {
-                    Err(anyhow::format_err!("Unknown method: {method}"))?;
+                    Err(RpcError::UnknownMethod { method: method.clone() })?;
                     unreachable!()
                 },
             }
-        })
+        });
+        Box::pin(stream.map_err(ClientModuleError::other))
     }
+}
+
+/// A failure of a mint module RPC request.
+#[derive(Debug, thiserror::Error)]
+enum RpcError {
+    /// The request's parameters do not fit the method, or its response could
+    /// not be serialized.
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+
+    /// The notes could not be reissued.
+    #[error(transparent)]
+    Reissue(#[from] ReissueExternalNotesError),
+
+    /// The reissue's updates could not be followed.
+    #[error(transparent)]
+    SubscribeReissue(#[from] SubscribeReissueExternalNotesError),
+
+    /// The notes to spend could not be selected or prepared.
+    #[error(transparent)]
+    Spend(#[from] SpendOOBError),
+
+    /// The notes to validate are invalid.
+    #[error(transparent)]
+    Validate(#[from] ValidateNotesError),
+
+    /// The spend's updates could not be followed.
+    #[error(transparent)]
+    SubscribeSpend(#[from] SubscribeSpendNotesError),
+
+    /// The request names a method the module does not have.
+    #[error("Unknown method: {method}")]
+    UnknownMethod { method: String },
 }
 
 #[derive(Deserialize)]

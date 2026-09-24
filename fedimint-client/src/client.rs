@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashSet};
+use std::convert::Infallible;
 use std::fmt::{self, Formatter};
 use std::future::{Future, pending};
 use std::ops::Range;
@@ -66,8 +67,8 @@ use fedimint_core::{
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
     DBTransactionEventLogExt as _, DynEventLogTrimableTracker, Event, EventHandlerError, EventKind,
-    EventLogEntry, EventLogId, EventLogTrimableId, EventLogTrimableTracker, EventPersistence,
-    PersistedLogEntry,
+    EventLogEntry, EventLogId, EventLogTrackerError, EventLogTrimableId, EventLogTrimableTracker,
+    EventPersistence, PersistedLogEntry,
 };
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
 use futures::stream::FuturesUnordered;
@@ -90,8 +91,9 @@ use crate::db::{
     apply_migrations_core_client_dbtx, verify_client_db_integrity_dbtx,
 };
 use crate::error::{
-    ApiVersionDiscoveryError, ClientModuleError, ClientSecretError, ModuleLookupError,
-    OperationAlreadyExistsError, OperationNotFoundError, RecoveryError, TransactionSubmitError,
+    ApiVersionDiscoveryError, ClientModuleError, ClientSecretError, GlobalRpcError,
+    ModuleLookupError, OperationAlreadyExistsError, OperationNotFoundError, RecoveryError,
+    TransactionSubmitError,
 };
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
@@ -1957,7 +1959,7 @@ impl Client {
     /// Set the client [`Metadata`]
     pub async fn set_metadata(&self, metadata: &Metadata) {
         self.db
-            .autocommit::<_, _, anyhow::Error>(
+            .autocommit::<_, _, Infallible>(
                 |dbtx, _| {
                     Box::pin(async {
                         Self::set_metadata_dbtx(dbtx, metadata).await;
@@ -2480,14 +2482,12 @@ impl Client {
             "Fetching guardian public keys",
             backoff_util::background_backoff(),
             || async {
-                anyhow::Ok(
-                    self.api
-                        .request_current_consensus::<ClientConfig>(
-                            CLIENT_CONFIG_ENDPOINT.to_owned(),
-                            ApiRequestErased::default(),
-                        )
-                        .await?,
-                )
+                self.api
+                    .request_current_consensus::<ClientConfig>(
+                        CLIENT_CONFIG_ENDPOINT.to_owned(),
+                        ApiRequestErased::default(),
+                    )
+                    .await
             },
         )
         .await
@@ -2512,11 +2512,17 @@ impl Client {
         (guardian_pub_keys, new_config)
     }
 
+    /// Serves a JSON request that is not addressed to a module, such as one
+    /// `fedimint-client-rpc` forwards.
+    ///
+    /// # Errors
+    ///
+    /// The stream yields a [`GlobalRpcError`] for a request it cannot serve.
     pub fn handle_global_rpc(
         &self,
         method: String,
         params: serde_json::Value,
-    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
+    ) -> BoxStream<'_, Result<serde_json::Value, GlobalRpcError>> {
         Box::pin(try_stream! {
             match method.as_str() {
                 "get_balance" => {
@@ -2601,7 +2607,7 @@ impl Client {
                     yield serde_json::Value::Null;
                 }
                 _ => {
-                    Err(anyhow::format_err!("Unknown method: {}", method))?;
+                    Err(GlobalRpcError::UnknownMethod { method: method.clone() })?;
                     unreachable!()
                 },
             }
@@ -2674,7 +2680,7 @@ impl Client {
                 &mut self,
                 dbtx: &mut DatabaseTransaction<NonCommittable>,
                 pos: EventLogTrimableId,
-            ) -> anyhow::Result<()> {
+            ) -> Result<(), EventLogTrackerError> {
                 dbtx.insert_entry(&DefaultApplicationEventLogKey, &pos)
                     .await;
                 Ok(())
@@ -2684,7 +2690,7 @@ impl Client {
             async fn load(
                 &mut self,
                 dbtx: &mut DatabaseTransaction<NonCommittable>,
-            ) -> anyhow::Result<Option<EventLogTrimableId>> {
+            ) -> Result<Option<EventLogTrimableId>, EventLogTrackerError> {
                 Ok(dbtx.get_value(&DefaultApplicationEventLogKey).await)
             }
         }

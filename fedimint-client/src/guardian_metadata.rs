@@ -2,16 +2,15 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, bail};
-use fedimint_api_client::api::DynGlobalApi;
+use fedimint_api_client::api::{DynGlobalApi, ServerError};
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::is_running_in_test_env;
-use fedimint_core::net::guardian_metadata::SignedGuardianMetadata;
+use fedimint_core::net::guardian_metadata::{SignedGuardianMetadata, VerificationError};
 use fedimint_core::runtime::{self, sleep};
 use fedimint_core::secp256k1::SECP256K1;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::util::backoff_util::custom_backoff;
-use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _};
 use fedimint_core::{NumPeersExt as _, PeerId, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT;
 use futures::stream::{FuturesUnordered, StreamExt as _};
@@ -43,28 +42,20 @@ pub(crate) async fn run_guardian_metadata_refresh_task(client_inner: Arc<Client>
     // Wait for the guardian keys to be available
     let guardian_pub_keys = client_inner.get_guardian_public_keys_blocking().await;
     loop {
-        if let Err(err) = {
-            let api: &DynGlobalApi = &client_inner.api;
-            let results = fetch_guardian_metadata_from_at_least_num_of_peers(
-                1,
-                api,
-                &guardian_pub_keys,
-                if is_running_in_test_env() {
-                    Duration::from_millis(1)
-                } else {
-                    Duration::from_secs(30)
-                },
-            )
+        let api: &DynGlobalApi = &client_inner.api;
+        let results = fetch_guardian_metadata_from_at_least_num_of_peers(
+            1,
+            api,
+            &guardian_pub_keys,
+            if is_running_in_test_env() {
+                Duration::from_millis(1)
+            } else {
+                Duration::from_secs(30)
+            },
+        )
+        .await;
+        store_guardian_metadata_updates_from_peers(client_inner.db(), &guardian_pub_keys, &results)
             .await;
-            store_guardian_metadata_updates_from_peers(
-                client_inner.db(),
-                &guardian_pub_keys,
-                &results,
-            )
-            .await
-        } {
-            debug!(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), "Refreshing guardian metadata failed");
-        }
 
         let duration = if is_running_in_test_env() {
             Duration::from_secs(1)
@@ -80,12 +71,10 @@ pub(crate) async fn store_guardian_metadata_updates_from_peers(
     db: &Database,
     guardian_pub_keys: &BTreeMap<PeerId, bitcoin::secp256k1::PublicKey>,
     updates: &[BTreeMap<PeerId, SignedGuardianMetadata>],
-) -> Result<(), anyhow::Error> {
+) {
     for metadata_map in updates {
         store_guardian_metadata_updates(db, guardian_pub_keys, metadata_map).await;
     }
-
-    Ok(())
 }
 
 pub(crate) type PeersSignedGuardianMetadata = BTreeMap<PeerId, SignedGuardianMetadata>;
@@ -111,24 +100,31 @@ pub(crate) async fn fetch_guardian_metadata_from_at_least_num_of_peers(
         peer_id: PeerId,
         api: &DynGlobalApi,
         guardian_pub_keys: &BTreeMap<PeerId, bitcoin::secp256k1::PublicKey>,
-    ) -> (PeerId, anyhow::Result<PeersSignedGuardianMetadata>) {
+    ) -> (
+        PeerId,
+        Result<PeersSignedGuardianMetadata, FetchGuardianMetadataError>,
+    ) {
         runtime::sleep(delay).await;
 
         let result = async {
-            let metadata_map = api.guardian_metadata(peer_id).await.with_context(move || {
-                format!("Fetching guardian metadata from peer {peer_id} failed")
-            })?;
+            let metadata_map = api
+                .guardian_metadata(peer_id)
+                .await
+                .map_err(|source| FetchGuardianMetadataError::Request { peer_id, source })?;
 
             // If any of the metadata is invalid something is fishy with that
             // guardian and we ignore all its responses
             for (peer_id, metadata) in &metadata_map {
                 let Some(guardian_pub_key) = guardian_pub_keys.get(peer_id) else {
-                    bail!("Guardian public key not found for peer {}", peer_id);
+                    return Err(FetchGuardianMetadataError::UnknownGuardian { peer_id: *peer_id });
                 };
 
                 let now = fedimint_core::time::duration_since_epoch();
-                if let Err(e) = metadata.verify(SECP256K1, guardian_pub_key, now) {
-                    bail!("Failed to verify metadata for peer {}: {}", peer_id, e);
+                if let Err(source) = metadata.verify(SECP256K1, guardian_pub_key, now) {
+                    return Err(FetchGuardianMetadataError::InvalidMetadata {
+                        peer_id: *peer_id,
+                        source,
+                    });
                 }
             }
             Ok(metadata_map)
@@ -174,7 +170,7 @@ pub(crate) async fn fetch_guardian_metadata_from_at_least_num_of_peers(
                 debug!(
                     target: LOG_CLIENT,
                     %peer_id,
-                    err = %err.fmt_compact_anyhow(),
+                    err = %err.fmt_compact(),
                     "Failed to fetch guardian metadata from peer"
                 );
                 requests.push(make_request(
@@ -248,4 +244,28 @@ pub(crate) async fn store_guardian_metadata_updates(
     )
     .await
     .expect("Will never return an error");
+}
+
+/// Why a peer's guardian metadata was not accepted.
+#[derive(Debug, thiserror::Error)]
+enum FetchGuardianMetadataError {
+    /// The peer could not be asked.
+    #[error("Fetching guardian metadata from peer {peer_id} failed")]
+    Request {
+        peer_id: PeerId,
+        #[source]
+        source: ServerError,
+    },
+
+    /// The peer sent metadata of a guardian the client does not know.
+    #[error("Guardian public key not found for peer {peer_id}")]
+    UnknownGuardian { peer_id: PeerId },
+
+    /// The peer sent metadata that does not verify.
+    #[error("Failed to verify metadata for peer {peer_id}")]
+    InvalidMetadata {
+        peer_id: PeerId,
+        #[source]
+        source: VerificationError,
+    },
 }

@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use anyhow::ensure;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_client_module::module::OutPointRange;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -166,11 +165,10 @@ pub fn verify_blind_shares(
     signature_shares: Vec<BlindedSignatureShare>,
     issuance_requests: &[NoteIssuanceRequest],
     tbs_pks: &BTreeMap<Denomination, BTreeMap<PeerId, PublicKeyShare>>,
-) -> anyhow::Result<Vec<BlindedSignatureShare>> {
-    ensure!(
-        signature_shares.len() == issuance_requests.len(),
-        "Invalid number of signatures shares"
-    );
+) -> Result<Vec<BlindedSignatureShare>, VerifyBlindSharesError> {
+    if signature_shares.len() != issuance_requests.len() {
+        return Err(VerifyBlindSharesError::ShareCount);
+    }
 
     for (request, share) in issuance_requests.iter().zip(signature_shares.iter()) {
         let amount_key = tbs_pks
@@ -179,11 +177,23 @@ pub fn verify_blind_shares(
             .get(&peer)
             .expect("No pk share found for peer");
 
-        ensure!(
-            tbs::verify_signature_share(request.blinded_message(), *share, *amount_key),
-            "Invalid blind signature"
-        );
+        if !tbs::verify_signature_share(request.blinded_message(), *share, *amount_key) {
+            return Err(VerifyBlindSharesError::InvalidShare);
+        }
     }
 
     Ok(signature_shares)
+}
+
+/// Why a guardian's blind signature shares were rejected.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum VerifyBlindSharesError {
+    /// The guardian sent a different number of shares than notes were
+    /// requested.
+    #[error("Invalid number of signatures shares")]
+    ShareCount,
+
+    /// A share does not verify against the guardian's public key share.
+    #[error("Invalid blind signature")]
+    InvalidShare,
 }

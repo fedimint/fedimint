@@ -1,6 +1,8 @@
 use std::{ffi, iter};
 
 use clap::{Parser, Subcommand};
+use fedimint_api_client::api::FederationError;
+use fedimint_client_module::error::OperationLookupError;
 use fedimint_core::core::OperationId;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, PeerId};
@@ -9,7 +11,10 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::api::LightningFederationApi;
-use crate::{Bolt11InvoiceDescription, LightningClientModule};
+use crate::{
+    Bolt11InvoiceDescription, GenerateLnurlError, LightningClientModule, ListGatewaysError,
+    ReceiveError, SelectGatewayError, SendPaymentError,
+};
 
 #[derive(Parser, Serialize)]
 enum Opts {
@@ -75,7 +80,7 @@ enum GatewaysOpts {
 pub(crate) async fn handle_cli_command(
     lightning: &LightningClientModule,
     args: &[ffi::OsString],
-) -> anyhow::Result<serde_json::Value> {
+) -> Result<serde_json::Value, CliCommandError> {
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("lnv2")).chain(args.iter()));
 
     let value = match opts {
@@ -118,7 +123,7 @@ pub(crate) async fn handle_cli_command(
                 let auth = lightning
                     .admin_auth
                     .clone()
-                    .ok_or(anyhow::anyhow!("Admin auth not set"))?;
+                    .ok_or(CliCommandError::AdminAuthNotSet)?;
 
                 json(lightning.module_api.add_gateway(auth, gateway).await?)
             }
@@ -126,7 +131,7 @@ pub(crate) async fn handle_cli_command(
                 let auth = lightning
                     .admin_auth
                     .clone()
-                    .ok_or(anyhow::anyhow!("Admin auth not set"))?;
+                    .ok_or(CliCommandError::AdminAuthNotSet)?;
 
                 json(lightning.module_api.remove_gateway(auth, gateway).await?)
             }
@@ -138,4 +143,41 @@ pub(crate) async fn handle_cli_command(
 
 fn json<T: Serialize>(value: T) -> Value {
     serde_json::to_value(value).expect("JSON serialization failed")
+}
+
+/// A failure of an `lnv2` module command.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum CliCommandError {
+    /// The payment could not be started.
+    #[error(transparent)]
+    Send(#[from] SendPaymentError),
+
+    /// The operation to await could not be looked up.
+    #[error(transparent)]
+    OperationLookup(#[from] OperationLookupError),
+
+    /// The invoice could not be created.
+    #[error(transparent)]
+    Receive(#[from] ReceiveError),
+
+    /// The LNURL could not be generated.
+    #[error(transparent)]
+    GenerateLnurl(#[from] GenerateLnurlError),
+
+    /// No gateway could be selected.
+    #[error(transparent)]
+    SelectGateway(#[from] SelectGatewayError),
+
+    /// The vetted gateways could not be listed.
+    #[error(transparent)]
+    ListGateways(#[from] ListGatewaysError),
+
+    /// The federation did not serve an admin request.
+    #[error(transparent)]
+    Federation(#[from] FederationError),
+
+    /// The client has no admin credentials, which adding or removing a vetted
+    /// gateway needs.
+    #[error("Admin auth not set")]
+    AdminAuthNotSet,
 }

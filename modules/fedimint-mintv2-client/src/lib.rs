@@ -25,7 +25,6 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::anyhow;
 use bitcoin_hashes::sha256;
 use client_db::{RecoveryState, RecoveryStateKey, SpendableNoteAmountPrefix, SpendableNotePrefix};
 pub use events::*;
@@ -486,8 +485,10 @@ impl ClientModule for MintClientModule {
     async fn handle_cli_command(
         &self,
         args: &[std::ffi::OsString],
-    ) -> anyhow::Result<serde_json::Value> {
-        cli::handle_cli_command(self, args).await
+    ) -> Result<serde_json::Value, ClientModuleError> {
+        cli::handle_cli_command(self, args)
+            .await
+            .map_err(ClientModuleError::other)
     }
 
     fn supports_being_primary(&self) -> PrimaryModuleSupport {
@@ -830,7 +831,7 @@ impl MintClientModule {
         &self,
         operation_id: OperationId,
         outpoint: OutPoint,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), AwaitOutputError> {
         let stream = self
             .notifier
             .subscribe(operation_id)
@@ -847,8 +848,8 @@ impl MintClientModule {
                 match state.state {
                     OutputSMState::Pending => None,
                     OutputSMState::Success => Some(Ok(())),
-                    OutputSMState::Aborted => Some(Err(anyhow!("Transaction was rejected"))),
-                    OutputSMState::Failure => Some(Err(anyhow!("Failed to finalize notes",))),
+                    OutputSMState::Aborted => Some(Err(AwaitOutputError::Rejected)),
+                    OutputSMState::Failure => Some(Err(AwaitOutputError::Failed)),
                 }
             });
 
@@ -1419,6 +1420,18 @@ pub enum ReceiveECashError {
     /// to funding.
     #[error("The reissue transaction could not be submitted")]
     Failed(#[source] TransactionSubmitError),
+}
+
+/// Why an output's state machine did not issue its notes.
+#[derive(Debug, Error)]
+enum AwaitOutputError {
+    /// The transaction that creates the output was rejected.
+    #[error("Transaction was rejected")]
+    Rejected,
+
+    /// The notes of the output could not be finalized.
+    #[error("Failed to finalize notes")]
+    Failed,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]

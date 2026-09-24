@@ -635,11 +635,11 @@ pub async fn handle_command(
             if let Some(module) = module {
                 let module_instance_id = module.resolve(&client)?;
 
-                client
+                Ok(client
                     .get_module_client_dyn(module_instance_id)
                     .context("Module not found")?
                     .handle_cli_command(&args)
-                    .await
+                    .await?)
             } else {
                 let module_list: Vec<ModuleInfo> = client
                     .config()

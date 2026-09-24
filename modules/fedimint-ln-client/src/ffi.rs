@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use anyhow::anyhow;
 use bitcoin::secp256k1::SecretKey;
 use fedimint_core::Amount;
 use fedimint_core::runtime::ffi_spawn_subscription;
@@ -10,6 +9,7 @@ use fedimint_core::util::ffi::UniffiError;
 use fedimint_ln_common::{LightningGateway, LightningGatewayAnnouncement};
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription};
+use uniffi::deps::anyhow::anyhow;
 
 use crate::{
     IDatabaseTransactionOpsCoreTyped, InternalPayState, LightningClientModule,

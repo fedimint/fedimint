@@ -3569,7 +3569,6 @@ version = "0.13.0-alpha"
 name = "fedimint-dummy-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "erased-serde",
  "fedimint-api-client",
@@ -3657,7 +3656,6 @@ dependencies = [
 name = "fedimint-eventlog"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "fedimint-core",
  "fedimint-logging",
@@ -3888,7 +3886,6 @@ dependencies = [
 name = "fedimint-gw-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "aquamarine",
  "async-stream",
  "async-trait",
@@ -4147,7 +4144,6 @@ dependencies = [
 name = "fedimint-lnv2-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "aquamarine",
  "async-stream",
  "async-trait",
@@ -4304,7 +4300,6 @@ dependencies = [
 name = "fedimint-meta-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "clap",
  "erased-serde",
@@ -4386,7 +4381,6 @@ dependencies = [
 name = "fedimint-mint-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "aquamarine",
  "assert_matches",
  "async-stream",
@@ -4504,7 +4498,6 @@ dependencies = [
 name = "fedimint-mintv2-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "aquamarine",
  "async-channel",
  "async-stream",
@@ -5050,7 +5043,6 @@ dependencies = [
 name = "fedimint-wallet-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "aquamarine",
  "assert_matches",
  "async-stream",
@@ -5159,7 +5151,6 @@ dependencies = [
 name = "fedimint-walletv2-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-stream",
  "async-trait",
  "bitcoin",

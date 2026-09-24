@@ -28,7 +28,6 @@ harness = false
 name = "recovery"
 
 [dependencies]
-anyhow = { workspace = true }
 aquamarine = { workspace = true }
 async-channel = { workspace = true }
 async-stream = { workspace = true }

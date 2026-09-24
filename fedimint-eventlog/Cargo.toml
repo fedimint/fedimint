@@ -19,7 +19,6 @@ name = "fedimint_eventlog"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 async-trait = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }

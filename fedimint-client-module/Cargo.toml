@@ -25,7 +25,6 @@ name = "fedimint_client_module"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 aquamarine = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
@@ -52,6 +51,7 @@ tracing = { workspace = true }
 uniffi = { workspace = true, optional = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
 assert_matches = { workspace = true }
 
 [build-dependencies]
