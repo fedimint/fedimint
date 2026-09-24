@@ -1000,17 +1000,20 @@ impl Client {
     /// ## Errors
     /// Every variant of [`TransactionSubmitError`] can come back from here:
     /// [`OperationAlreadyExists`] if an operation with this id is already
-    /// recorded; [`NoPrimaryModule`] and [`PrimaryModule`] if the transaction
-    /// cannot be balanced, because no primary module holds the unit or because
-    /// the one that does fails to fund it; [`TransactionTooLarge`] if the
-    /// finalized transaction exceeds the federation's size limit;
-    /// [`StateMachines`] if the transaction's state machines cannot be
-    /// registered; and [`Database`] if the transaction keeps colliding with
-    /// others and cannot be committed within its retry budget, which should not
-    /// happen except in excessively concurrent scenarios.
+    /// recorded; [`NoPrimaryModule`] if no primary module holds the unit, so
+    /// the transaction cannot be balanced; [`InsufficientFunds`] if a genuine
+    /// shortfall of the primary module leaves it unable to fund the
+    /// transaction, and [`PrimaryModule`] for every other failure of that
+    /// module; [`TransactionTooLarge`] if the finalized transaction exceeds
+    /// the federation's size limit; [`StateMachines`] if the transaction's
+    /// state machines cannot be registered; and [`Database`] if the
+    /// transaction keeps colliding with others and cannot be committed within
+    /// its retry budget, which should not happen except in excessively
+    /// concurrent scenarios.
     ///
     /// [`OperationAlreadyExists`]: TransactionSubmitError::OperationAlreadyExists
     /// [`NoPrimaryModule`]: TransactionSubmitError::NoPrimaryModule
+    /// [`InsufficientFunds`]: TransactionSubmitError::InsufficientFunds
     /// [`PrimaryModule`]: TransactionSubmitError::PrimaryModule
     /// [`TransactionTooLarge`]: TransactionSubmitError::TransactionTooLarge
     /// [`StateMachines`]: TransactionSubmitError::StateMachines
@@ -2880,13 +2883,19 @@ impl Client {
     ///
     /// # Errors
     ///
-    /// Fails with [`ModuleLookupError::NoPrimaryModuleOfKind`] if no primary
-    /// module for `unit` is of type `M`.
+    /// Fails with [`ModuleLookupError::NoPrimaryModule`] if `unit` has no
+    /// primary module at all, or with
+    /// [`ModuleLookupError::NoPrimaryModuleOfKind`] if it has one or more, but
+    /// none of them is of type `M`.
     pub fn get_primary_module_for_unit<M: ClientModule>(
         &self,
         unit: AmountUnit,
     ) -> Result<&M, ModuleLookupError> {
-        self.primary_modules_for_unit(unit)
+        let mut modules = self.primary_modules_for_unit(unit).peekable();
+        if modules.peek().is_none() {
+            return Err(ModuleLookupError::NoPrimaryModule { unit });
+        }
+        modules
             .find_map(|(_, module)| module.as_any().downcast_ref::<M>())
             .ok_or_else(|| ModuleLookupError::NoPrimaryModuleOfKind {
                 kind: M::kind(),

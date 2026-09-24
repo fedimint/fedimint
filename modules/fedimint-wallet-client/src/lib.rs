@@ -219,7 +219,7 @@ impl WalletClientInit {
         &self,
         args: &ClientModuleRecoverArgs<Self>,
         total_items: u64,
-    ) -> Result<Option<fedimint_core::Amount>, ClientModuleError> {
+    ) -> Option<fedimint_core::Amount> {
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),
             module_root_secret: args.module_root_secret().clone(),
@@ -280,7 +280,7 @@ impl WalletClientInit {
         // The wallet only discovers which on-chain outputs belonged to the
         // client during recovery; their value isn't known until the deposits
         // are later claimed, so no amount is reported here.
-        Ok(None)
+        None
     }
 }
 
@@ -456,7 +456,7 @@ impl ClientModuleInit for WalletClientInit {
         // count fetched here is reused by the slice recovery so that it is not
         // requested a second time (and cannot transiently fail there).
         match args.module_api().fetch_recovery_count().await {
-            Ok(total_items) => self.recover_from_slices(args, total_items).await,
+            Ok(total_items) => Ok(self.recover_from_slices(args, total_items).await),
             Err(_) => {
                 args.recover_from_history::<WalletRecovery>(self, snapshot)
                     .await

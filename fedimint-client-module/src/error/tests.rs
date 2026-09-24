@@ -1,6 +1,7 @@
 use assert_matches::assert_matches;
 use fedimint_core::Amount;
 use fedimint_core::core::{ModuleKind, OperationId};
+use fedimint_core::util::FmtCompact as _;
 
 use super::{
     ClientModuleError, InsufficientBalanceError, OperationNotFoundError, TransactionSubmitError,
@@ -26,10 +27,18 @@ fn other_keeps_the_error_it_wraps() {
 
 #[test]
 fn other_accepts_a_plain_message() {
-    assert_matches!(
-        ClientModuleError::other("The module gave up"),
-        ClientModuleError::Other(_)
-    );
+    let error = ClientModuleError::other("The module gave up");
+
+    assert_matches!(error, ClientModuleError::Other(_));
+    assert_eq!(error.to_string(), "The module gave up");
+}
+
+#[test]
+fn other_keeps_an_anyhow_chain_intact() {
+    let error = ClientModuleError::other(anyhow::anyhow!("inner").context("outer"));
+
+    assert_eq!(error.to_string(), "outer");
+    assert_eq!(error.fmt_compact().to_string(), "outer: inner");
 }
 
 #[test]

@@ -843,7 +843,9 @@ impl ClientBuilder {
                                         notifier.clone(),
                                         api.clone(),
                                         admin_auth,
-                                        snapshot.as_ref().and_then(|s| s.modules.get(&module_instance_id)),
+                                        snapshot
+                                            .as_ref()
+                                            .and_then(|s| s.modules.get(&module_instance_id)),
                                         progress_tx,
                                         task_group,
                                         client_span,
@@ -854,7 +856,10 @@ impl ClientBuilder {
                                     .inspect_err(|err| {
                                         warn!(
                                             target: LOG_CLIENT,
-                                            module_id = module_instance_id, %kind, err = %err.fmt_compact(), "Module failed to recover"
+                                            module_id = module_instance_id,
+                                            %kind,
+                                            err = %err.fmt_compact(),
+                                            "Module failed to recover"
                                         );
                                     })
                             }),

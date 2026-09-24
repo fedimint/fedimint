@@ -127,8 +127,8 @@ pub enum TransactionSubmitError {
     },
 
     /// The primary module failed to balance the transaction or to complete
-    /// its outputs. An insufficient balance is reported as
-    /// [`Self::InsufficientFunds`] instead.
+    /// its outputs. An insufficient balance reported while balancing the
+    /// transaction is reported as [`Self::InsufficientFunds`] instead.
     #[error("The primary module failed")]
     PrimaryModule(#[source] ClientModuleError),
 
@@ -193,11 +193,13 @@ pub enum ClientModuleError {
 
     /// The module does not implement the operation.
     ///
-    /// The default bodies of the module traits report this. The client only
-    /// asks a module for an operation the module declares support for, through
-    /// `supports_backup`, `supports_being_primary` or `recovery_mode`, so the
-    /// client sees this only from a module that declares support it does not
-    /// implement. Calling the operation on a module directly can see it too.
+    /// The default bodies of `backup`, `create_final_inputs_and_outputs`,
+    /// `await_primary_module_output`, `leave` and `ClientModuleInit::recover`
+    /// report this. The client only asks a module for an operation the module
+    /// declares support for, through `supports_backup`,
+    /// `supports_being_primary` or `recovery_mode`, so the client sees this
+    /// only from a module that declares support it does not implement.
+    /// Calling the operation on a module directly can see it too.
     #[error("Module {kind} does not implement {operation}")]
     Unsupported {
         /// The kind of the module.
@@ -218,6 +220,9 @@ impl ClientModuleError {
     /// Wraps a failure the other variants do not describe. Accepts anything
     /// convertible into a boxed error, which includes an `anyhow::Error` and a
     /// plain message.
+    ///
+    /// A primary module's shortfall must be [`Self::InsufficientBalance`]
+    /// instead: the client does not look inside the error this carries.
     pub fn other<E>(error: E) -> Self
     where
         E: Into<Box<dyn std::error::Error + Send + Sync>>,

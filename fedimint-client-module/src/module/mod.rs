@@ -1200,6 +1200,8 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     /// outstanding errors, after sufficient amount of warnings. Ideally,
     /// this should be done on per-module basis, to avoid mistakes.
     ///
+    /// # Errors
+    ///
     /// The default body fails with [`ClientModuleError::Unsupported`], since a
     /// module that does not implement this cannot tell whether leaving is
     /// safe.

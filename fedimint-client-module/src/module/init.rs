@@ -479,7 +479,8 @@ pub trait ClientModuleInit: ModuleInit + Sized {
     /// again at a different time (client restarted, code version changed, etc.)
     ///
     /// The default body fails with [`ClientModuleError::Unsupported`]: a
-    /// module that declares a [`Self::recovery_mode`] must implement this.
+    /// module that declares a recovery mode other than [`RecoveryMode::None`]
+    /// must implement this.
     async fn recover(
         &self,
         _args: &ClientModuleRecoverArgs<Self>,
