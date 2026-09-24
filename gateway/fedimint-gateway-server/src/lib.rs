@@ -3822,9 +3822,10 @@ impl IGatewayClientV2 for Gateway {
                     .ok_or(anyhow!("Amountless invoice not supported"))?,
             ),
         };
+        // Nothing has been paid out yet, so failing here only cancels the send.
         let lnv1 = client
             .get_first_module::<GatewayClientModule>()
-            .expect("No LNv1 module");
+            .map_err(|_| anyhow!("Federation does not have an LNv1 module"))?;
         let Some(operation_id) = lnv1
             .gateway_handle_direct_swap(swap_params, allow_fresh_dispatch)
             .await?
