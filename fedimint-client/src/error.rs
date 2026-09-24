@@ -119,8 +119,8 @@ pub enum GlobalRpcError {
     #[error(transparent)]
     Federation(#[from] FederationError),
 
-    /// A module's recovery failed while the request waited for all
-    /// recoveries.
+    /// A module's recovery failed, or the client stopped, while the request
+    /// waited for all recoveries.
     #[error(transparent)]
     Recovery(#[from] RecoveryError),
 
