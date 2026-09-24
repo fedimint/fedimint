@@ -5,7 +5,6 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use anyhow::bail;
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_connectors::ConnectorRegistry;
@@ -24,6 +23,7 @@ use tracing::{Span, warn};
 use super::ClientContext;
 use super::recovery::RecoveryProgress;
 use crate::db::ClientModuleMigrationFn;
+use crate::error::ClientModuleError;
 use crate::module::ClientModule;
 use crate::sm::ModuleNotifier;
 
@@ -460,7 +460,7 @@ pub trait ClientModuleInit: ModuleInit + Sized {
     async fn prepare_recovery(
         &self,
         _args: &ClientModuleRecoveryPrepareArgs,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ClientModuleError> {
         Ok(())
     }
 
@@ -477,19 +477,28 @@ pub trait ClientModuleInit: ModuleInit + Sized {
     ///
     /// If `Err` is returned, the higher level client/application might try
     /// again at a different time (client restarted, code version changed, etc.)
+    ///
+    /// The default body fails with [`ClientModuleError::Unsupported`]: a
+    /// module that declares a recovery mode other than [`RecoveryMode::None`]
+    /// must implement this.
     async fn recover(
         &self,
         _args: &ClientModuleRecoverArgs<Self>,
         _snapshot: Option<&<Self::Module as ClientModule>::Backup>,
-    ) -> anyhow::Result<Option<Amount>> {
-        bail!(
-            "Module kind {} declares a recovery mode without implementing a recovery",
-            <Self::Module as ClientModule>::kind()
-        )
+    ) -> Result<Option<Amount>, ClientModuleError> {
+        Err(ClientModuleError::Unsupported {
+            kind: <Self::Module as ClientModule>::kind(),
+            operation: "recover",
+        })
     }
 
     /// Initialize a [`ClientModule`] instance from its config
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module>;
+    ///
+    /// If this fails the client fails to open.
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError>;
 
     /// Retrieves the database migrations from the module to be applied to the
     /// database before the module is initialized. The database migrations map

@@ -46,7 +46,7 @@ use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use anyhow::{Context as _, anyhow, bail};
+use anyhow::Context as _;
 use api::MintFederationApi;
 use async_stream::{stream, try_stream};
 use backup::recovery::{MintRecovery, RecoveryStateV2};
@@ -60,7 +60,9 @@ use events::{NoteSpent, OOBNotesReissued, OOBNotesSpent, ReceivePaymentEvent, Se
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 pub use fedimint_client_module::error::InsufficientBalanceError;
-use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
+use fedimint_client_module::error::{
+    ClientModuleError, OperationLookupError, TransactionSubmitError,
+};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs, RecoveryMode,
 };
@@ -835,7 +837,10 @@ impl ClientModuleInit for MintClientInit {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         Ok(MintClientModule {
             federation_id: *args.federation_id(),
             cfg: args.cfg().clone(),
@@ -855,12 +860,15 @@ impl ClientModuleInit for MintClientInit {
         &self,
         args: &ClientModuleRecoverArgs<Self>,
         snapshot: Option<&<Self::Module as ClientModule>::Backup>,
-    ) -> anyhow::Result<Option<Amount>> {
+    ) -> Result<Option<Amount>, ClientModuleError> {
         let mut dbtx = args.db().begin_transaction_nc().await;
 
         // Check if V2 (slice-based) recovery state exists
         if dbtx.get_value(&RecoveryStateV2Key).await.is_some() {
-            return self.recover_from_slices(args).await;
+            return self
+                .recover_from_slices(args)
+                .await
+                .map_err(ClientModuleError::other);
         }
 
         // Check if V1 (session-based) recovery state exists
@@ -874,7 +882,9 @@ impl ClientModuleInit for MintClientInit {
         // availability
         if args.module_api().fetch_recovery_count().await.is_ok() {
             // New endpoint available - use V2 slice-based recovery
-            self.recover_from_slices(args).await
+            self.recover_from_slices(args)
+                .await
+                .map_err(ClientModuleError::other)
         } else {
             // Old federation - use V1 session-based recovery
             args.recover_from_history::<MintRecovery>(self, snapshot)
@@ -1045,7 +1055,7 @@ impl ClientModule for MintClientModule {
         true
     }
 
-    async fn backup(&self) -> anyhow::Result<EcashBackup> {
+    async fn backup(&self) -> Result<EcashBackup, ClientModuleError> {
         self.client_ctx
             .module_db()
             .autocommit(
@@ -1056,9 +1066,9 @@ impl ClientModule for MintClientModule {
             )
             .await
             .map_err(|e| match e {
-                AutocommitError::ClosureError { error, .. } => anyhow::Error::from(error),
+                AutocommitError::ClosureError { error, .. } => ClientModuleError::other(error),
                 AutocommitError::CommitFailed { last_error, .. } => {
-                    anyhow!("Commit to DB failed: {last_error}")
+                    ClientModuleError::other(last_error)
                 }
             })
     }
@@ -1074,14 +1084,20 @@ impl ClientModule for MintClientModule {
         unit: AmountUnit,
         mut input_amount: Amount,
         mut output_amount: Amount,
-    ) -> anyhow::Result<(
-        ClientInputBundle<MintInput, MintClientStateMachines>,
-        ClientOutputBundle<MintOutput, MintClientStateMachines>,
-    )> {
-        let consolidation_inputs = self.consolidate_notes(dbtx).await?;
+    ) -> Result<
+        (
+            ClientInputBundle<MintInput, MintClientStateMachines>,
+            ClientOutputBundle<MintOutput, MintClientStateMachines>,
+        ),
+        ClientModuleError,
+    > {
+        let consolidation_inputs = self
+            .consolidate_notes(dbtx)
+            .await
+            .map_err(ClientModuleError::other)?;
 
         if unit != AmountUnit::BITCOIN {
-            bail!("Module can only handle Bitcoin");
+            return Err(ClientModuleError::other("Module can only handle Bitcoin"));
         }
 
         input_amount += consolidation_inputs
@@ -1130,9 +1146,10 @@ impl ClientModule for MintClientModule {
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<()> {
-        self.await_output_finalized(operation_id, out_point).await?;
-        Ok(())
+    ) -> Result<(), ClientModuleError> {
+        self.await_output_finalized(operation_id, out_point)
+            .await
+            .map_err(ClientModuleError::other)
     }
 
     async fn get_balance(&self, dbtx: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {
@@ -1156,17 +1173,19 @@ impl ClientModule for MintClientModule {
         ))
     }
 
-    async fn leave(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
+    async fn leave(&self, dbtx: &mut DatabaseTransaction<'_>) -> Result<(), ClientModuleError> {
         let balance = ClientModule::get_balances(self, dbtx).await;
 
         for (unit, amount) in balance {
             if Amount::from_units(0) < amount {
-                bail!("Outstanding balance: {amount}, unit: {unit:?}");
+                return Err(ClientModuleError::other(format!(
+                    "Outstanding balance: {amount}, unit: {unit:?}"
+                )));
             }
         }
 
         if !self.client_ctx.get_own_active_states().await.is_empty() {
-            bail!("Pending operations")
+            return Err(ClientModuleError::other("Pending operations"));
         }
         Ok(())
     }
@@ -1333,7 +1352,7 @@ impl MintClientModule {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         min_amount: Amount,
-    ) -> anyhow::Result<Vec<(ClientInput<MintInput>, SpendableNote)>> {
+    ) -> Result<Vec<(ClientInput<MintInput>, SpendableNote)>, ClientModuleError> {
         if min_amount == Amount::ZERO {
             return Ok(vec![]);
         }
@@ -1344,7 +1363,15 @@ impl MintClientModule {
             min_amount,
             self.cfg.fee_consensus.clone(),
         )
-        .await?;
+        .await
+        .map_err(|error| match error {
+            // The one failure the client acts on: it tells "the wallet is too
+            // poor for this transaction" apart from every other failure.
+            SelectNotesError::InsufficientBalance(error) => {
+                ClientModuleError::InsufficientBalance(error)
+            }
+            other => ClientModuleError::other(other),
+        })?;
 
         for (amount, note) in selected_notes.iter_items() {
             debug!(target: LOG_CLIENT_MODULE_MINT, %amount, %note, "Spending note as sufficient input to fund a tx");
@@ -1354,7 +1381,9 @@ impl MintClientModule {
         let sender = self.balance_update_sender.clone();
         dbtx.on_commit(move || sender.send_replace(()));
 
-        let inputs = self.create_input_from_notes(selected_notes)?;
+        let inputs = self
+            .create_input_from_notes(selected_notes)
+            .map_err(ClientModuleError::other)?;
 
         assert!(!inputs.is_empty());
 

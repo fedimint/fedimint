@@ -843,7 +843,9 @@ impl ClientBuilder {
                                         notifier.clone(),
                                         api.clone(),
                                         admin_auth,
-                                        snapshot.as_ref().and_then(|s| s.modules.get(&module_instance_id)),
+                                        snapshot
+                                            .as_ref()
+                                            .and_then(|s| s.modules.get(&module_instance_id)),
                                         progress_tx,
                                         task_group,
                                         client_span,
@@ -854,7 +856,10 @@ impl ClientBuilder {
                                     .inspect_err(|err| {
                                         warn!(
                                             target: LOG_CLIENT,
-                                            module_id = module_instance_id, %kind, err = %err.fmt_compact_anyhow(), "Module failed to recover"
+                                            module_id = module_instance_id,
+                                            %kind,
+                                            err = %err.fmt_compact(),
+                                            "Module failed to recover"
                                         );
                                     })
                             }),
@@ -880,10 +885,10 @@ impl ClientBuilder {
                     module_init
                         .prepare_recovery(db.clone(), module_instance_id, api.clone())
                         .await
-                        .map_err(|err| ClientBuildError::ModuleRecoveryPrepare {
+                        .map_err(|source| ClientBuildError::ModuleRecoveryPrepare {
                             kind: kind.clone(),
                             instance_id: module_instance_id,
-                            source: err.into(),
+                            source,
                         })?;
                 }
 
@@ -984,10 +989,10 @@ impl ClientBuilder {
                             self.bitcoind_rpc_no_chain_id_factory.clone(),
                         )
                         .await
-                        .map_err(|err| ClientBuildError::ModuleInit {
+                        .map_err(|source| ClientBuildError::ModuleInit {
                             kind: kind.clone(),
                             instance_id: module_instance_id,
-                            source: err.into(),
+                            source,
                         })?;
 
                     modules.register_module(module_instance_id, kind, module);

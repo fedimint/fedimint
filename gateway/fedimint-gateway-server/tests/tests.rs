@@ -981,15 +981,12 @@ async fn test_gateway_client_intercept_htlc_no_funds() -> anyhow::Result<()> {
             .await
         {
             Ok(_) => panic!("Expected incoming offer validation to fail due to lack of funds"),
-            Err(e) => {
-                let HandleInterceptedHtlcError::Transaction(TransactionSubmitError::PrimaryModule(
-                    cause,
-                )) = e
-                else {
-                    panic!("Expected the primary module to reject the funding");
-                };
-                assert_eq!(cause.to_string(), "Insufficient funds");
-            }
+            Err(e) => assert_matches!(
+                e,
+                HandleInterceptedHtlcError::Transaction(TransactionSubmitError::InsufficientFunds(
+                    _
+                ))
+            ),
         }
 
         Ok(())
@@ -3412,7 +3409,7 @@ async fn lnv2_relay_direct_swap_without_funds_is_refused() -> anyhow::Result<()>
             .get_first_module::<GatewayClientModuleV2>()?
             .relay_direct_swap(contract, 900, true)
             .await,
-        Err(TransactionSubmitError::PrimaryModule(_))
+        Err(TransactionSubmitError::InsufficientFunds(_))
     );
 
     Ok(())

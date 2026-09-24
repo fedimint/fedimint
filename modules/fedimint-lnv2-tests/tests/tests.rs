@@ -11,7 +11,7 @@ use fedimint_client::ClientHandleArc;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
-use fedimint_client_module::error::OperationLookupError;
+use fedimint_client_module::error::{ClientModuleError, ModuleLookupError, OperationLookupError};
 use fedimint_client_module::module::ClientModule;
 use fedimint_core::base32::{FEDIMINT_PREFIX, decode_prefixed};
 use fedimint_core::core::{IntoDynInstance, OperationId};
@@ -20,7 +20,7 @@ use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::secp256k1::{PublicKey, Scalar};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{NextOrPending as _, SafeUrl, backoff_util, retry};
-use fedimint_core::{Amount, OutPoint, msats, sats, secp256k1};
+use fedimint_core::{Amount, OutPoint, TransactionId, msats, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
@@ -980,6 +980,87 @@ async fn spendable_amount_names_the_reason_it_has_no_answer() -> anyhow::Result<
         Err(SpendableAmountError::BalanceTooLow {
             balance: Amount::ZERO
         })
+    );
+
+    Ok(())
+}
+
+/// The LNv2 module is not a primary module and keeps no backup, so it leaves
+/// those operations to the module traits' default bodies, which refuse them
+/// with a typed error instead of panicking.
+#[tokio::test(flavor = "multi_thread")]
+async fn default_module_operations_are_unsupported() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+    let mut dbtx = lightning.db.begin_transaction_nc().await;
+
+    assert_matches!(
+        ClientModule::create_final_inputs_and_outputs(
+            &*lightning,
+            &mut dbtx,
+            OperationId::new_random(),
+            AmountUnit::BITCOIN,
+            Amount::ZERO,
+            sats(1),
+        )
+        .await,
+        Err(ClientModuleError::Unsupported {
+            kind,
+            operation: "create_final_inputs_and_outputs",
+        }) if kind == KIND
+    );
+    assert_matches!(
+        ClientModule::await_primary_module_output(
+            &*lightning,
+            OperationId::new_random(),
+            OutPoint {
+                txid: TransactionId::all_zeros(),
+                out_idx: 0,
+            },
+        )
+        .await,
+        Err(ClientModuleError::Unsupported {
+            kind,
+            operation: "await_primary_module_output",
+        }) if kind == KIND
+    );
+    assert_matches!(
+        ClientModule::backup(&*lightning).await,
+        Err(ClientModuleError::Unsupported {
+            kind,
+            operation: "backup",
+        }) if kind == KIND
+    );
+    assert_matches!(
+        ClientModule::leave(&*lightning, &mut dbtx).await,
+        Err(ClientModuleError::Unsupported {
+            kind,
+            operation: "leave",
+        }) if kind == KIND
+    );
+
+    Ok(())
+}
+
+/// Looking a primary module up by type finds one only among the unit's
+/// primary modules, and names the kind it looked for when there is none.
+#[tokio::test(flavor = "multi_thread")]
+async fn primary_module_for_unit_is_looked_up_by_type() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    assert!(
+        client
+            .get_primary_module_for_unit::<DummyClientModule>(AmountUnit::BITCOIN)
+            .is_ok()
+    );
+    assert_matches!(
+        client.get_primary_module_for_unit::<LightningClientModule>(AmountUnit::BITCOIN),
+        Err(ModuleLookupError::NoPrimaryModuleOfKind { kind, unit })
+            if kind == KIND && unit == AmountUnit::BITCOIN
     );
 
     Ok(())

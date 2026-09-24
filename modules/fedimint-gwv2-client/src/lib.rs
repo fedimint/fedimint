@@ -15,6 +15,7 @@ use bitcoin::secp256k1::Message;
 use events::{IncomingPaymentStarted, OutgoingPaymentStarted};
 use fedimint_api_client::api::{DynModuleApi, FederationError};
 use fedimint_client::ClientHandleArc;
+use fedimint_client_module::error::ClientModuleError;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
@@ -200,7 +201,10 @@ impl ClientModuleInit for GatewayClientInitV2 {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         Ok(GatewayClientModuleV2 {
             federation_id: *args.federation_id(),
             cfg: args.cfg().clone(),

@@ -58,9 +58,7 @@ use fedimint_core::task::{
 };
 use fedimint_core::transaction::Transaction;
 use fedimint_core::util::backoff_util::custom_backoff;
-use fedimint_core::util::{
-    BoxStream, FmtCompact as _, FmtCompactAnyhow as _, SafeUrl, backoff_util, retry,
-};
+use fedimint_core::util::{BoxStream, FmtCompact as _, SafeUrl, backoff_util, retry};
 use fedimint_core::{
     Amount, ChainId, NumPeers, OutPoint, PeerId, apply, async_trait_maybe_send, maybe_add_send,
     maybe_add_send_sync, runtime,
@@ -92,7 +90,7 @@ use crate::db::{
     apply_migrations_core_client_dbtx, verify_client_db_integrity_dbtx,
 };
 use crate::error::{
-    ApiVersionDiscoveryError, ClientSecretError, InsufficientBalanceError, ModuleLookupError,
+    ApiVersionDiscoveryError, ClientModuleError, ClientSecretError, ModuleLookupError,
     OperationAlreadyExistsError, OperationNotFoundError, RecoveryError, TransactionSubmitError,
 };
 use crate::meta::MetaService;
@@ -136,7 +134,7 @@ pub(crate) struct PrimaryModuleCandidates {
 /// An in-progress module recovery future, resolving to the amount recovered
 /// from the module (if it tracks one) once recovery completes.
 pub(crate) type ModuleRecoveryFuture =
-    Pin<Box<maybe_add_send!(dyn Future<Output = anyhow::Result<Option<Amount>>>)>>;
+    Pin<Box<maybe_add_send!(dyn Future<Output = Result<Option<Amount>, ClientModuleError>>)>>;
 
 /// The state of a single module's recovery, as tracked by the client.
 ///
@@ -169,10 +167,11 @@ pub(crate) enum RecoveryStatus {
     /// A successfully completed recovery is represented by a done progress.
     InProgress(RecoveryProgress),
     /// The recovery terminally failed at `last_progress`, which is kept so the
-    /// progress-reporting APIs can keep describing the module.
+    /// progress-reporting APIs can keep describing the module. `error` is
+    /// shared, because every waiter on the recovery is handed the same failure.
     Failed {
         last_progress: RecoveryProgress,
-        error: String,
+        error: Arc<ClientModuleError>,
     },
 }
 
@@ -788,8 +787,7 @@ impl Client {
                     input_amount,
                     output_amount,
                 )
-                .await
-                .map_err(primary_module_error)?;
+                .await?;
 
             added_inputs_bundles.push(added_input_bundle);
             added_outputs_bundles.push(added_output_bundle);
@@ -932,8 +930,7 @@ impl Client {
                     balance_input_amount,
                     balance_output_amount,
                 )
-                .await
-                .map_err(primary_module_error)?;
+                .await?;
 
             // Fold the change into the totals. These are a disjoint set of items
             // from the explicit ones (the primary module only sees the scalar
@@ -1003,17 +1000,20 @@ impl Client {
     /// ## Errors
     /// Every variant of [`TransactionSubmitError`] can come back from here:
     /// [`OperationAlreadyExists`] if an operation with this id is already
-    /// recorded; [`NoPrimaryModule`] and [`PrimaryModule`] if the transaction
-    /// cannot be balanced, because no primary module holds the unit or because
-    /// the one that does fails to fund it; [`TransactionTooLarge`] if the
-    /// finalized transaction exceeds the federation's size limit;
-    /// [`StateMachines`] if the transaction's state machines cannot be
-    /// registered; and [`Database`] if the transaction keeps colliding with
-    /// others and cannot be committed within its retry budget, which should not
-    /// happen except in excessively concurrent scenarios.
+    /// recorded; [`NoPrimaryModule`] if no primary module holds the unit, so
+    /// the transaction cannot be balanced; [`InsufficientFunds`] if a genuine
+    /// shortfall of the primary module leaves it unable to fund the
+    /// transaction, and [`PrimaryModule`] for every other failure of that
+    /// module; [`TransactionTooLarge`] if the finalized transaction exceeds
+    /// the federation's size limit; [`StateMachines`] if the transaction's
+    /// state machines cannot be registered; and [`Database`] if the
+    /// transaction keeps colliding with others and cannot be committed within
+    /// its retry budget, which should not happen except in excessively
+    /// concurrent scenarios.
     ///
     /// [`OperationAlreadyExists`]: TransactionSubmitError::OperationAlreadyExists
     /// [`NoPrimaryModule`]: TransactionSubmitError::NoPrimaryModule
+    /// [`InsufficientFunds`]: TransactionSubmitError::InsufficientFunds
     /// [`PrimaryModule`]: TransactionSubmitError::PrimaryModule
     /// [`TransactionTooLarge`]: TransactionSubmitError::TransactionTooLarge
     /// [`StateMachines`]: TransactionSubmitError::StateMachines
@@ -1298,7 +1298,7 @@ impl Client {
             .1
             .await_primary_module_output(operation_id, out_point)
             .await
-            .map_err(|err| TransactionSubmitError::PrimaryModule(err.into()))
+            .map_err(TransactionSubmitError::PrimaryModule)
     }
 
     /// Returns a reference to a typed module client instance by kind
@@ -2056,9 +2056,9 @@ impl Client {
             });
 
         match failure {
-            Some((module_instance_id, error)) => Err(RecoveryError::Failed {
+            Some((module_instance_id, source)) => Err(RecoveryError::Failed {
                 module_instance_id,
-                error,
+                source,
             }),
             None => Ok(()),
         }
@@ -2185,11 +2185,11 @@ impl Client {
                 match f.await {
                     Ok(amount) => (module_instance_id, RecoveryUpdate::Completed(amount)),
                     Err(err) => {
-                        let error = err.fmt_compact_anyhow().to_string();
                         warn!(
                             target: LOG_CLIENT,
-                            err = %error.as_str(), module_instance_id, "Module recovery failed"
+                            err = %err.fmt_compact(), module_instance_id, "Module recovery failed"
                         );
+                        let error = Arc::new(err);
                         // since the progress a module reports can't express a
                         // failure, record it as the terminal state of this
                         // module's recovery for anyone waiting on the outcome.
@@ -2880,13 +2880,27 @@ impl Client {
     /// Unlike [`Self::get_first_module`], which picks the first instance of a
     /// kind regardless of asset, this selects by `unit` so a federation with
     /// several mints for different assets routes to the right one.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`ModuleLookupError::NoPrimaryModule`] if `unit` has no
+    /// primary module at all, or with
+    /// [`ModuleLookupError::NoPrimaryModuleOfKind`] if it has one or more, but
+    /// none of them is of type `M`.
     pub fn get_primary_module_for_unit<M: ClientModule>(
         &self,
         unit: AmountUnit,
-    ) -> anyhow::Result<&M> {
-        self.primary_modules_for_unit(unit)
+    ) -> Result<&M, ModuleLookupError> {
+        let mut modules = self.primary_modules_for_unit(unit).peekable();
+        if modules.peek().is_none() {
+            return Err(ModuleLookupError::NoPrimaryModule { unit });
+        }
+        modules
             .find_map(|(_, module)| module.as_any().downcast_ref::<M>())
-            .ok_or_else(|| anyhow::format_err!("No {} module for unit {unit:?}", M::kind()))
+            .ok_or_else(|| ModuleLookupError::NoPrimaryModuleOfKind {
+                kind: M::kind(),
+                unit,
+            })
     }
 }
 
@@ -3058,25 +3072,6 @@ impl ClientContextIface for Client {
             .await
             .map(move |(k, v)| (k.0, v)),
         )
-    }
-}
-
-/// Classifies a primary module's failure to balance a transaction.
-///
-/// The module -> client trait boundary is still `anyhow` (#8821 part E
-/// narrows it), so this walks the error's `source()` chain for the one
-/// condition callers must be able to act on: an [`InsufficientBalanceError`]
-/// means the primary module cannot fund the transaction, as opposed to a
-/// failure of the client, the database or the federation, which stays
-/// [`TransactionSubmitError::PrimaryModule`].
-fn primary_module_error(err: anyhow::Error) -> TransactionSubmitError {
-    let insufficient_balance = err
-        .chain()
-        .find_map(|source| source.downcast_ref::<InsufficientBalanceError>().copied());
-
-    match insufficient_balance {
-        Some(found) => TransactionSubmitError::InsufficientFunds(found),
-        None => TransactionSubmitError::PrimaryModule(err.into()),
     }
 }
 

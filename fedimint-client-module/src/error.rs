@@ -127,12 +127,10 @@ pub enum TransactionSubmitError {
     },
 
     /// The primary module failed to balance the transaction or to complete
-    /// its outputs. An insufficient balance is reported as
-    /// [`Self::InsufficientFunds`] instead.
-    // The boxed cause narrows to `ClientModuleError` once the module->client
-    // trait boundary is typed (#8821 part E).
+    /// its outputs. An insufficient balance reported while balancing the
+    /// transaction is reported as [`Self::InsufficientFunds`] instead.
     #[error("The primary module failed")]
-    PrimaryModule(#[source] Box<dyn std::error::Error + Send + Sync>),
+    PrimaryModule(#[source] ClientModuleError),
 
     /// Writing the transaction to the database failed.
     #[error("Database error")]
@@ -153,6 +151,83 @@ impl TransactionSubmitError {
     /// the federation.
     pub fn is_insufficient_funds(&self) -> bool {
         matches!(self, Self::InsufficientFunds(_))
+    }
+}
+
+/// A primary module's failure to balance a transaction, as the failure of
+/// that transaction: a balance too low to fund it becomes
+/// [`TransactionSubmitError::InsufficientFunds`], so callers can tell it apart
+/// from any other failure of the module, which becomes
+/// [`TransactionSubmitError::PrimaryModule`].
+impl From<ClientModuleError> for TransactionSubmitError {
+    fn from(error: ClientModuleError) -> Self {
+        match error {
+            ClientModuleError::InsufficientBalance(error) => Self::InsufficientFunds(error),
+            other => Self::PrimaryModule(other),
+        }
+    }
+}
+
+/// A failure a client module reports to the client.
+///
+/// The methods a module implements for the client in [`ClientModule`],
+/// [`ClientModuleInit`] and [`RecoveryFromHistory`] report this type, except
+/// the JSON command handlers `handle_cli_command` and `handle_rpc`, and so do
+/// the type-erased wrappers the client calls them through. The client wraps
+/// it in the error of the operation that needed the module.
+///
+/// [`ClientModule`]: crate::module::ClientModule
+/// [`ClientModuleInit`]: crate::module::init::ClientModuleInit
+/// [`RecoveryFromHistory`]: crate::module::init::recovery::RecoveryFromHistory
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ClientModuleError {
+    /// The primary module's balance cannot fund the transaction it was asked
+    /// to balance.
+    ///
+    /// A primary module reports this from `create_final_inputs_and_outputs`,
+    /// and the client passes it on as
+    /// [`TransactionSubmitError::InsufficientFunds`].
+    #[error("The primary module's balance cannot fund the transaction")]
+    InsufficientBalance(#[from] InsufficientBalanceError),
+
+    /// The module does not implement the operation.
+    ///
+    /// The default bodies of `backup`, `create_final_inputs_and_outputs`,
+    /// `await_primary_module_output`, `leave` and `ClientModuleInit::recover`
+    /// report this. The client only asks a module for an operation the module
+    /// declares support for, through `supports_backup`,
+    /// `supports_being_primary` or `recovery_mode`, so the client sees this
+    /// only from a module that declares support it does not implement.
+    /// Calling the operation on a module directly can see it too.
+    #[error("Module {kind} does not implement {operation}")]
+    Unsupported {
+        /// The kind of the module.
+        kind: ModuleKind,
+        /// The name of the trait method the module does not implement.
+        operation: &'static str,
+    },
+
+    /// Any other failure, kept whole: the module's own error or the error of a
+    /// library it builds on, such as a federation, database or Bitcoin
+    /// backend failure. Its `Display` and `source()` are those of the error it
+    /// carries.
+    #[error(transparent)]
+    Other(Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl ClientModuleError {
+    /// Wraps a failure the other variants do not describe. Accepts anything
+    /// convertible into a boxed error, which includes an `anyhow::Error` and a
+    /// plain message.
+    ///
+    /// A primary module's shortfall must be [`Self::InsufficientBalance`]
+    /// instead: the client does not look inside the error this carries.
+    pub fn other<E>(error: E) -> Self
+    where
+        E: Into<Box<dyn std::error::Error + Send + Sync>>,
+    {
+        Self::Other(error.into())
     }
 }
 
@@ -188,6 +263,15 @@ pub enum ModuleLookupError {
     #[error("No primary module for unit {unit}")]
     NoPrimaryModule {
         /// The unit that has no primary module.
+        unit: AmountUnit,
+    },
+
+    /// None of the primary modules for this unit is of the requested kind.
+    #[error("No primary {kind} module for unit {unit}")]
+    NoPrimaryModuleOfKind {
+        /// The kind of module that was asked for.
+        kind: ModuleKind,
+        /// The unit whose primary modules were searched.
         unit: AmountUnit,
     },
 }
@@ -251,3 +335,6 @@ pub enum MetaFetchError {
     #[error("The meta source failed")]
     Custom(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
+
+#[cfg(test)]
+mod tests;

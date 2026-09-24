@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use db::{DbKeyPrefix, DummyClientFundsKey, DummyClientFundsKeyPrefixAll};
 use fedimint_client_module::db::ClientModuleMigrationFn;
+use fedimint_client_module::error::{ClientModuleError, InsufficientBalanceError};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{
@@ -164,10 +165,13 @@ impl ClientModule for DummyClientModule {
         unit: AmountUnit,
         input_amount: Amount,
         output_amount: Amount,
-    ) -> anyhow::Result<(
-        ClientInputBundle<DummyInput, DummyStateMachine>,
-        ClientOutputBundle<DummyOutput, DummyStateMachine>,
-    )> {
+    ) -> Result<
+        (
+            ClientInputBundle<DummyInput, DummyStateMachine>,
+            ClientOutputBundle<DummyOutput, DummyStateMachine>,
+        ),
+        ClientModuleError,
+    > {
         dbtx.ensure_isolated().expect("must be isolated");
 
         match input_amount.cmp(&output_amount) {
@@ -178,7 +182,11 @@ impl ClientModule for DummyClientModule {
                 let our_funds = get_funds(dbtx, unit).await;
 
                 if our_funds < missing_input_amount {
-                    return Err(anyhow::format_err!("Insufficient funds"));
+                    return Err(InsufficientBalanceError {
+                        requested_amount: missing_input_amount,
+                        total_amount: our_funds,
+                    }
+                    .into());
                 }
 
                 let updated = our_funds.saturating_sub(missing_input_amount);
@@ -271,7 +279,7 @@ impl ClientModule for DummyClientModule {
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ClientModuleError> {
         let mut stream = self.notifier.subscribe(operation_id).await;
 
         loop {
@@ -291,7 +299,7 @@ impl ClientModule for DummyClientModule {
                 DummyOutputSMState::Created => {}
                 DummyOutputSMState::Accepted => return Ok(()),
                 DummyOutputSMState::Rejected => {
-                    return Err(anyhow::anyhow!("Transaction was rejected"));
+                    return Err(ClientModuleError::other("Transaction was rejected"));
                 }
             }
         }
@@ -413,7 +421,10 @@ impl ClientModuleInit for DummyClientInit {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         Ok(DummyClientModule {
             key: args
                 .module_root_secret()

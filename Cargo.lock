@@ -3616,7 +3616,6 @@ dependencies = [
 name = "fedimint-empty-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "erased-serde",
  "fedimint-api-client",
@@ -3920,7 +3919,6 @@ dependencies = [
 name = "fedimint-gwv2-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "aquamarine",
  "async-stream",
  "async-trait",

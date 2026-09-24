@@ -6,7 +6,6 @@ use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::{ffi, marker, ops};
 
-use anyhow::bail;
 use bitcoin::secp256k1::PublicKey;
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::ClientConfig;
@@ -35,8 +34,8 @@ use tracing::warn;
 
 use self::init::ClientModuleInit;
 use crate::error::{
-    ModuleLookupError, OperationAlreadyExistsError, OperationLookupError, OperationNotFoundError,
-    TransactionSubmitError,
+    ClientModuleError, ModuleLookupError, OperationAlreadyExistsError, OperationLookupError,
+    OperationNotFoundError, TransactionSubmitError,
 };
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::oplog::{IOperationLog, OperationLogEntry, UpdateStreamOrOutcome};
@@ -1038,8 +1037,17 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         false
     }
 
-    async fn backup(&self) -> anyhow::Result<Self::Backup> {
-        anyhow::bail!("Backup not supported");
+    /// The module's part of a client backup.
+    ///
+    /// # Errors
+    ///
+    /// The default body fails with [`ClientModuleError::Unsupported`]; a
+    /// module whose [`Self::supports_backup`] is `true` must override it.
+    async fn backup(&self) -> Result<Self::Backup, ClientModuleError> {
+        Err(ClientModuleError::Unsupported {
+            kind: <Self as ClientModule>::kind(),
+            operation: "backup",
+        })
     }
 
     /// Does this module support being a primary module
@@ -1055,8 +1063,6 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     }
 
     /// Creates all inputs and outputs necessary to balance the transaction.
-    /// The function returns an error if and only if the client's funds are not
-    /// sufficient to create the inputs necessary to fully fund the transaction.
     ///
     /// A returned input also contains:
     /// * A set of private keys belonging to the input for signing the
@@ -1071,6 +1077,14 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     ///   takes the transaction id of the transaction in which the output was
     ///   used and the output index as input since these cannot be known at time
     ///   of calling `create_change_output` and have to be injected later.
+    ///
+    /// # Errors
+    ///
+    /// A module whose funds cannot cover the transaction must fail with
+    /// [`ClientModuleError::InsufficientBalance`]: the client reports that as
+    /// [`TransactionSubmitError::InsufficientFunds`], and any other failure as
+    /// [`TransactionSubmitError::PrimaryModule`]. The default body fails with
+    /// [`ClientModuleError::Unsupported`].
     async fn create_final_inputs_and_outputs(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
@@ -1078,23 +1092,38 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         _unit: AmountUnit,
         _input_amount: Amount,
         _output_amount: Amount,
-    ) -> anyhow::Result<(
-        ClientInputBundle<<Self::Common as ModuleCommon>::Input, Self::States>,
-        ClientOutputBundle<<Self::Common as ModuleCommon>::Output, Self::States>,
-    )> {
-        unimplemented!()
+    ) -> Result<
+        (
+            ClientInputBundle<<Self::Common as ModuleCommon>::Input, Self::States>,
+            ClientOutputBundle<<Self::Common as ModuleCommon>::Output, Self::States>,
+        ),
+        ClientModuleError,
+    > {
+        Err(ClientModuleError::Unsupported {
+            kind: <Self as ClientModule>::kind(),
+            operation: "create_final_inputs_and_outputs",
+        })
     }
 
     /// Waits for the funds from an output created by
     /// [`Self::create_final_inputs_and_outputs`] to become available. This
     /// function returning typically implies a change in the output of
     /// [`Self::get_balance`].
+    ///
+    /// # Errors
+    ///
+    /// Fails if the output does not become available, for example because
+    /// the federation rejected its transaction. The default body fails with
+    /// [`ClientModuleError::Unsupported`].
     async fn await_primary_module_output(
         &self,
         _operation_id: OperationId,
         _out_point: OutPoint,
-    ) -> anyhow::Result<()> {
-        unimplemented!()
+    ) -> Result<(), ClientModuleError> {
+        Err(ClientModuleError::Unsupported {
+            kind: <Self as ClientModule>::kind(),
+            operation: "await_primary_module_output",
+        })
     }
 
     /// Returns the balance held by this module and available for funding
@@ -1170,8 +1199,17 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     /// Calling code should allow the user to override and ignore any
     /// outstanding errors, after sufficient amount of warnings. Ideally,
     /// this should be done on per-module basis, to avoid mistakes.
-    async fn leave(&self, _dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
-        bail!("Unable to determine if safe to leave the federation: Not implemented")
+    ///
+    /// # Errors
+    ///
+    /// The default body fails with [`ClientModuleError::Unsupported`], since a
+    /// module that does not implement this cannot tell whether leaving is
+    /// safe.
+    async fn leave(&self, _dbtx: &mut DatabaseTransaction<'_>) -> Result<(), ClientModuleError> {
+        Err(ClientModuleError::Unsupported {
+            kind: <Self as ClientModule>::kind(),
+            operation: "leave",
+        })
     }
 }
 
@@ -1203,8 +1241,10 @@ pub trait IClientModule: Debug {
 
     fn supports_backup(&self) -> bool;
 
-    async fn backup(&self, module_instance_id: ModuleInstanceId)
-    -> anyhow::Result<DynModuleBackup>;
+    async fn backup(
+        &self,
+        module_instance_id: ModuleInstanceId,
+    ) -> Result<DynModuleBackup, ClientModuleError>;
 
     fn supports_being_primary(&self) -> PrimaryModuleSupport;
 
@@ -1216,13 +1256,13 @@ pub trait IClientModule: Debug {
         unit: AmountUnit,
         input_amount: Amount,
         output_amount: Amount,
-    ) -> anyhow::Result<(ClientInputBundle, ClientOutputBundle)>;
+    ) -> Result<(ClientInputBundle, ClientOutputBundle), ClientModuleError>;
 
     async fn await_primary_module_output(
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<()>;
+    ) -> Result<(), ClientModuleError>;
 
     async fn get_balance(
         &self,
@@ -1303,7 +1343,7 @@ where
     async fn backup(
         &self,
         module_instance_id: ModuleInstanceId,
-    ) -> anyhow::Result<DynModuleBackup> {
+    ) -> Result<DynModuleBackup, ClientModuleError> {
         Ok(DynModuleBackup::from_typed(
             module_instance_id,
             <T as ClientModule>::backup(self).await?,
@@ -1322,7 +1362,7 @@ where
         unit: AmountUnit,
         input_amount: Amount,
         output_amount: Amount,
-    ) -> anyhow::Result<(ClientInputBundle, ClientOutputBundle)> {
+    ) -> Result<(ClientInputBundle, ClientOutputBundle), ClientModuleError> {
         let (inputs, outputs) = <T as ClientModule>::create_final_inputs_and_outputs(
             self,
             &mut dbtx.to_ref_with_prefix_module_id(module_instance).0,
@@ -1344,7 +1384,7 @@ where
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ClientModuleError> {
         <T as ClientModule>::await_primary_module_output(self, operation_id, out_point).await
     }
 

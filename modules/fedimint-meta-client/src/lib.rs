@@ -20,7 +20,7 @@ use common::{KIND, MetaConsensusValue, MetaKey, MetaValue};
 use db::DbKeyPrefix;
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi, FederationError};
 use fedimint_client_module::db::ClientModuleMigrationFn;
-use fedimint_client_module::error::MetaFetchError;
+use fedimint_client_module::error::{ClientModuleError, MetaFetchError};
 use fedimint_client_module::meta::{FetchKind, LegacyMetaSource, MetaSource, MetaValues};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
@@ -306,7 +306,10 @@ impl ClientModuleInit for MetaClientInit {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         Ok(MetaClientModule {
             module_api: args.module_api().clone(),
             admin_auth: args.admin_auth().cloned(),

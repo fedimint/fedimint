@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 
 use fedimint_bitcoind::{BitcoindTracked, DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
+use fedimint_client_module::error::ClientModuleError;
 use fedimint_client_module::module::ClientContext;
 use fedimint_client_module::module::init::ClientModuleRecoverArgs;
 use fedimint_client_module::module::init::recovery::{
@@ -203,7 +204,7 @@ impl RecoveryFromHistory for WalletRecovery {
         init: &WalletClientInit,
         args: &ClientModuleRecoverArgs<Self::Init>,
         snapshot: Option<&WalletModuleBackup>,
-    ) -> anyhow::Result<(Self, u64)> {
+    ) -> Result<(Self, u64), ClientModuleError> {
         trace!(target: LOG_CLIENT_MODULE_WALLET, "Starting new recovery");
 
         let rpc_config = WalletClientModule::get_rpc_config(args.cfg());
@@ -220,14 +221,14 @@ impl RecoveryFromHistory for WalletRecovery {
             if let Some(rpc) = factory(rpc_config.url.clone()).await {
                 rpc
             } else {
-                init.0
-                    .clone()
-                    .unwrap_or(create_esplora_rpc(&rpc_config.url)?)
+                init.0.clone().unwrap_or(
+                    create_esplora_rpc(&rpc_config.url).map_err(ClientModuleError::other)?,
+                )
             }
         } else {
             init.0
                 .clone()
-                .unwrap_or(create_esplora_rpc(&rpc_config.url)?)
+                .unwrap_or(create_esplora_rpc(&rpc_config.url).map_err(ClientModuleError::other)?)
         };
         let btc_rpc = BitcoindTracked::new(btc_rpc, "wallet-recovery").into_dyn();
 
@@ -271,7 +272,8 @@ impl RecoveryFromHistory for WalletRecovery {
             .context()
             .global_api()
             .session_count()
-            .await?
+            .await
+            .map_err(ClientModuleError::other)?
             // In case something is off, at least don't panic due to start not being before end
             .max(start_session_idx);
 
@@ -303,7 +305,7 @@ impl RecoveryFromHistory for WalletRecovery {
         init: &WalletClientInit,
         dbtx: &mut DatabaseTransaction<'_>,
         args: &ClientModuleRecoverArgs<Self::Init>,
-    ) -> anyhow::Result<Option<(Self, RecoveryFromHistoryCommon)>> {
+    ) -> Result<Option<(Self, RecoveryFromHistoryCommon)>, ClientModuleError> {
         trace!(target: LOG_CLIENT_MODULE_WALLET, "Loading recovery state");
 
         let rpc_config = WalletClientModule::get_rpc_config(args.cfg());
@@ -320,14 +322,14 @@ impl RecoveryFromHistory for WalletRecovery {
             if let Some(rpc) = factory(rpc_config.url.clone()).await {
                 rpc
             } else {
-                init.0
-                    .clone()
-                    .unwrap_or(create_esplora_rpc(&rpc_config.url)?)
+                init.0.clone().unwrap_or(
+                    create_esplora_rpc(&rpc_config.url).map_err(ClientModuleError::other)?,
+                )
             }
         } else {
             init.0
                 .clone()
-                .unwrap_or(create_esplora_rpc(&rpc_config.url)?)
+                .unwrap_or(create_esplora_rpc(&rpc_config.url).map_err(ClientModuleError::other)?)
         };
         let btc_rpc = BitcoindTracked::new(btc_rpc, "wallet-recovery").into_dyn();
 
@@ -388,7 +390,7 @@ impl RecoveryFromHistory for WalletRecovery {
         _idx: usize,
         input: &WalletInput,
         session_idx: u64,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ClientModuleError> {
         let script_pubkey = match input {
             WalletInput::V0(WalletInputV0(input)) => &input.tx_output().script_pubkey,
             WalletInput::V1(input) => &input.tx_out.script_pubkey,
@@ -407,7 +409,7 @@ impl RecoveryFromHistory for WalletRecovery {
         Ok(())
     }
 
-    async fn pre_finalize(&mut self) -> anyhow::Result<()> {
+    async fn pre_finalize(&mut self) -> Result<(), ClientModuleError> {
         let data = &self.data;
         let btc_rpc = &self.btc_rpc;
         // Due to lifetime in async context issue, this one is cloned and wrapped in a
@@ -462,7 +464,7 @@ impl RecoveryFromHistory for WalletRecovery {
                     debug!(target: LOG_CLIENT_MODULE_WALLET, %cur_tweak_idx, %address, history_len=history.len(), "Checked address");
 
                     Ok(history)
-                }).await?;
+                }).await.map_err(ClientModuleError::other)?;
 
         self.state.new_start_idx = Some(new_start_idx);
         self.state.tweak_idxes_with_pegins = Some(tweak_idxes_with_pegins);
@@ -473,7 +475,7 @@ impl RecoveryFromHistory for WalletRecovery {
     async fn finalize_dbtx(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> anyhow::Result<Option<fedimint_core::Amount>> {
+    ) -> Result<Option<fedimint_core::Amount>, ClientModuleError> {
         let now = fedimint_core::time::now();
 
         let mut tweak_idx = TweakIdx(0);

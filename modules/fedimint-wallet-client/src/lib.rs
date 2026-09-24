@@ -42,7 +42,7 @@ use bitcoin::{Address, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, SupportsSafeDepositKey, TweakIdx};
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
 use fedimint_bitcoind::{BitcoindTracked, DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
-use fedimint_client_module::error::TransactionSubmitError;
+use fedimint_client_module::error::{ClientModuleError, TransactionSubmitError};
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs, RecoveryMode,
 };
@@ -219,7 +219,7 @@ impl WalletClientInit {
         &self,
         args: &ClientModuleRecoverArgs<Self>,
         total_items: u64,
-    ) -> anyhow::Result<Option<fedimint_core::Amount>> {
+    ) -> Option<fedimint_core::Amount> {
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),
             module_root_secret: args.module_root_secret().clone(),
@@ -280,7 +280,7 @@ impl WalletClientInit {
         // The wallet only discovers which on-chain outputs belonged to the
         // client during recovery; their value isn't known until the deposits
         // are later claimed, so no amount is reported here.
-        Ok(None)
+        None
     }
 }
 
@@ -366,7 +366,10 @@ impl ClientModuleInit for WalletClientInit {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),
             module_root_secret: args.module_root_secret().clone(),
@@ -388,14 +391,14 @@ impl ClientModuleInit for WalletClientInit {
             if let Some(rpc) = factory(rpc_config.url.clone()).await {
                 rpc
             } else {
-                self.0
-                    .clone()
-                    .unwrap_or(create_esplora_rpc(&rpc_config.url)?)
+                self.0.clone().unwrap_or(
+                    create_esplora_rpc(&rpc_config.url).map_err(ClientModuleError::other)?,
+                )
             }
         } else {
             self.0
                 .clone()
-                .unwrap_or(create_esplora_rpc(&rpc_config.url)?)
+                .unwrap_or(create_esplora_rpc(&rpc_config.url).map_err(ClientModuleError::other)?)
         };
         let btc_rpc = BitcoindTracked::new(btc_rpc, "wallet-client").into_dyn();
 
@@ -433,7 +436,7 @@ impl ClientModuleInit for WalletClientInit {
         &self,
         args: &ClientModuleRecoverArgs<Self>,
         snapshot: Option<&<Self::Module as ClientModule>::Backup>,
-    ) -> anyhow::Result<Option<fedimint_core::Amount>> {
+    ) -> Result<Option<fedimint_core::Amount>, ClientModuleError> {
         // Check if V1 (session-based) recovery state exists (resuming interrupted
         // recovery)
         if args
@@ -453,7 +456,7 @@ impl ClientModuleInit for WalletClientInit {
         // count fetched here is reused by the slice recovery so that it is not
         // requested a second time (and cannot transiently fail there).
         match args.module_api().fetch_recovery_count().await {
-            Ok(total_items) => self.recover_from_slices(args, total_items).await,
+            Ok(total_items) => Ok(self.recover_from_slices(args, total_items).await),
             Err(_) => {
                 args.recover_from_history::<WalletRecovery>(self, snapshot)
                     .await
@@ -636,9 +639,14 @@ impl ClientModule for WalletClientModule {
         true
     }
 
-    async fn backup(&self) -> anyhow::Result<backup::WalletModuleBackup> {
+    async fn backup(&self) -> Result<backup::WalletModuleBackup, ClientModuleError> {
         // fetch consensus height first
-        let session_count = self.client_ctx.global_api().session_count().await?;
+        let session_count = self
+            .client_ctx
+            .global_api()
+            .session_count()
+            .await
+            .map_err(ClientModuleError::other)?;
 
         let mut dbtx = self.db.begin_transaction_nc().await;
         let next_pegin_tweak_idx = dbtx

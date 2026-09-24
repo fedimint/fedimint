@@ -25,7 +25,7 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context as _, anyhow};
+use anyhow::anyhow;
 use bitcoin_hashes::sha256;
 use client_db::{RecoveryState, RecoveryStateKey, SpendableNoteAmountPrefix, SpendableNotePrefix};
 pub use events::*;
@@ -37,7 +37,7 @@ use fedimint_client::transaction::{
 };
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::error::{
-    InsufficientBalanceError, OperationLookupError, TransactionSubmitError,
+    ClientModuleError, InsufficientBalanceError, OperationLookupError, TransactionSubmitError,
 };
 use fedimint_client_module::module::init::{
     ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
@@ -173,7 +173,10 @@ impl ClientModuleInit for MintClientInit {
         RecoveryMode::Usable
     }
 
-    async fn prepare_recovery(&self, args: &ClientModuleRecoveryPrepareArgs) -> anyhow::Result<()> {
+    async fn prepare_recovery(
+        &self,
+        args: &ClientModuleRecoveryPrepareArgs,
+    ) -> Result<(), ClientModuleError> {
         if args
             .db()
             .begin_transaction_nc()
@@ -193,7 +196,11 @@ impl ClientModuleInit for MintClientInit {
         // arrive at the same note.
         let state = RecoveryState {
             next_index: 0,
-            total_items: args.module_api().fetch_recovery_count().await?,
+            total_items: args
+                .module_api()
+                .fetch_recovery_count()
+                .await
+                .map_err(ClientModuleError::other)?,
             requests: BTreeMap::new(),
             nonces: BTreeSet::new(),
         };
@@ -211,7 +218,7 @@ impl ClientModuleInit for MintClientInit {
         &self,
         args: &ClientModuleRecoverArgs<Self>,
         _snapshot: Option<&NoModuleBackup>,
-    ) -> anyhow::Result<Option<Amount>> {
+    ) -> Result<Option<Amount>, ClientModuleError> {
         let mut state = args
             .db()
             .begin_transaction_nc()
@@ -268,10 +275,9 @@ impl ClientModuleInit for MintClientInit {
                     break items;
                 }
 
-                let (start, items) = recovery_stream
-                    .next()
-                    .await
-                    .context("Recovery stream finished before recovery is complete")?;
+                let (start, items) = recovery_stream.next().await.ok_or_else(|| {
+                    ClientModuleError::other("Recovery stream finished before recovery is complete")
+                })?;
 
                 pending.insert(start, items);
             };
@@ -366,7 +372,10 @@ impl ClientModuleInit for MintClientInit {
         }
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         let (tweak_sender, tweak_receiver) = async_channel::bounded(50);
 
         let filter = issuance::tweak_filter(args.module_root_secret());
@@ -492,12 +501,17 @@ impl ClientModule for MintClientModule {
         unit: AmountUnit,
         mut input_amount: Amount,
         mut output_amount: Amount,
-    ) -> anyhow::Result<(
-        ClientInputBundle<MintInput, MintClientStateMachines>,
-        ClientOutputBundle<MintOutput, MintClientStateMachines>,
-    )> {
+    ) -> Result<
+        (
+            ClientInputBundle<MintInput, MintClientStateMachines>,
+            ClientOutputBundle<MintOutput, MintClientStateMachines>,
+        ),
+        ClientModuleError,
+    > {
         if unit != self.cfg.amount_unit {
-            anyhow::bail!("Module can only handle its configured amount unit");
+            return Err(ClientModuleError::other(
+                "Module can only handle its configured amount unit",
+            ));
         }
 
         let requested_amount = output_amount.saturating_sub(input_amount);
@@ -583,8 +597,10 @@ impl ClientModule for MintClientModule {
         &self,
         operation_id: OperationId,
         outpoint: OutPoint,
-    ) -> anyhow::Result<()> {
-        self.await_output_sm_success(operation_id, outpoint).await
+    ) -> Result<(), ClientModuleError> {
+        self.await_output_sm_success(operation_id, outpoint)
+            .await
+            .map_err(ClientModuleError::other)
     }
 
     async fn get_balance(&self, dbtx: &mut DatabaseTransaction<'_>, unit: AmountUnit) -> Amount {

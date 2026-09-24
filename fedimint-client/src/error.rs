@@ -4,11 +4,15 @@
 //! [`fedimint_client_module::error`] and re-exported here, so this module is
 //! the single place to look.
 
+use std::sync::Arc;
+
 use fedimint_api_client::api::{ClientConfigDownloadError, FederationError};
 pub use fedimint_client_module::error::*;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{DatabaseError, DbMigrationError};
 use fedimint_core::encoding::DecodeError;
+#[cfg(feature = "uniffi")]
+use fedimint_core::util::FmtCompact as _;
 pub use fedimint_eventlog::EventHandlerError;
 use thiserror::Error;
 
@@ -60,7 +64,6 @@ pub enum ClientBuildError {
     Migration(#[from] DbMigrationError),
 
     /// A module could not prepare its recovery.
-    // The boxed cause narrows to `ClientModuleError` in #8821 part E.
     #[error("Module {instance_id} ({kind}) failed to prepare its recovery")]
     ModuleRecoveryPrepare {
         /// The kind of the module that failed.
@@ -69,11 +72,10 @@ pub enum ClientBuildError {
         instance_id: ModuleInstanceId,
         /// The failure the module reported.
         #[source]
-        source: Box<dyn std::error::Error + Send + Sync>,
+        source: ClientModuleError,
     },
 
     /// A module could not be initialized.
-    // The boxed cause narrows to `ClientModuleError` in #8821 part E.
     #[error("Module {instance_id} ({kind}) failed to initialize")]
     ModuleInit {
         /// The kind of the module that failed.
@@ -82,7 +84,7 @@ pub enum ClientBuildError {
         instance_id: ModuleInstanceId,
         /// The failure the module reported.
         #[source]
-        source: Box<dyn std::error::Error + Send + Sync>,
+        source: ClientModuleError,
     },
 
     /// The database write failed.
@@ -113,14 +115,13 @@ pub enum BackupError {
     Federation(#[source] Box<FederationError>),
 
     /// A module failed to produce its part of the backup.
-    // The boxed cause narrows to `ClientModuleError` in #8821 part E.
     #[error("Module {instance_id} failed to produce its backup")]
     Module {
         /// The module that failed.
         instance_id: ModuleInstanceId,
         /// The failure the module reported.
         #[source]
-        source: Box<dyn std::error::Error + Send + Sync>,
+        source: ClientModuleError,
     },
 
     /// The encrypted backup is larger than the federation stores.
@@ -155,14 +156,14 @@ pub enum RecoveryError {
     ///
     /// The failure is in-memory only and is never persisted: reopening the
     /// client retries the recovery from its last persisted progress.
-    // `error` is the module's already-stringified failure; it becomes a typed
-    // `ClientModuleError` in #8821 part E.
-    #[error("Recovery of module {module_instance_id} failed: {error}")]
+    #[error("Recovery of module {module_instance_id} failed")]
     Failed {
         /// The module whose recovery failed.
         module_instance_id: ModuleInstanceId,
-        /// What the module reported.
-        error: String,
+        /// The failure the module reported, shared by everyone waiting on the
+        /// recovery.
+        #[source]
+        source: Arc<ClientModuleError>,
     },
 
     /// The client shut down before the recovery reached an outcome.
@@ -173,6 +174,6 @@ pub enum RecoveryError {
 #[cfg(feature = "uniffi")]
 impl From<RecoveryError> for fedimint_core::util::ffi::UniffiError {
     fn from(e: RecoveryError) -> Self {
-        Self::General(e.to_string())
+        Self::General(e.fmt_compact().to_string())
     }
 }
