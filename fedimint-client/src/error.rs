@@ -102,6 +102,40 @@ impl From<ClientConfigDownloadError> for ClientBuildError {
     }
 }
 
+/// A failure of a request to [`crate::Client::handle_global_rpc`].
+///
+/// Every variant but [`Self::UnknownMethod`] carries the error of the
+/// operation the request ran, whole: its `Display` and `source()` are that
+/// error's.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum GlobalRpcError {
+    /// The request's parameters do not fit the method, or its response could
+    /// not be serialized.
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+
+    /// The federation could not report its session count.
+    #[error(transparent)]
+    Federation(#[from] FederationError),
+
+    /// A module's recovery failed while the request waited for all
+    /// recoveries.
+    #[error(transparent)]
+    Recovery(#[from] RecoveryError),
+
+    /// The backup could not be made or uploaded.
+    #[error(transparent)]
+    Backup(#[from] BackupError),
+
+    /// The client has no method of this name.
+    #[error("Unknown method: {method}")]
+    UnknownMethod {
+        /// The method the request named.
+        method: String,
+    },
+}
+
 /// A failure to create, encrypt, upload or read back a client backup.
 #[derive(Debug, Error)]
 #[non_exhaustive]

@@ -8,6 +8,7 @@ use assert_matches::assert_matches;
 use async_stream::stream;
 use bitcoin::hashes::{Hash as _, sha256};
 use fedimint_client::ClientHandleArc;
+use fedimint_client::error::GlobalRpcError;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
@@ -1071,6 +1072,24 @@ async fn json_handlers_without_an_implementation_are_unsupported() -> anyhow::Re
             kind,
             operation: "handle_cli_command",
         }) if kind == DummyClientModule::kind()
+    );
+
+    Ok(())
+}
+
+/// The client's own JSON request handler names a method it does not have.
+#[tokio::test(flavor = "multi_thread")]
+async fn global_rpc_rejects_an_unknown_method() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    assert_matches!(
+        client
+            .handle_global_rpc("no_such_method".to_owned(), Value::Null)
+            .next()
+            .await,
+        Some(Err(GlobalRpcError::UnknownMethod { method })) if method == "no_such_method"
     );
 
     Ok(())

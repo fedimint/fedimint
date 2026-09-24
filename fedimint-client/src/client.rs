@@ -90,8 +90,9 @@ use crate::db::{
     apply_migrations_core_client_dbtx, verify_client_db_integrity_dbtx,
 };
 use crate::error::{
-    ApiVersionDiscoveryError, ClientModuleError, ClientSecretError, ModuleLookupError,
-    OperationAlreadyExistsError, OperationNotFoundError, RecoveryError, TransactionSubmitError,
+    ApiVersionDiscoveryError, ClientModuleError, ClientSecretError, GlobalRpcError,
+    ModuleLookupError, OperationAlreadyExistsError, OperationNotFoundError, RecoveryError,
+    TransactionSubmitError,
 };
 use crate::meta::MetaService;
 use crate::module_init::{ClientModuleInitRegistry, DynClientModuleInit, IClientModuleInit};
@@ -2512,11 +2513,17 @@ impl Client {
         (guardian_pub_keys, new_config)
     }
 
+    /// Serves a JSON request that is not addressed to a module, such as one
+    /// `fedimint-client-rpc` forwards.
+    ///
+    /// # Errors
+    ///
+    /// The stream yields a [`GlobalRpcError`] for a request it cannot serve.
     pub fn handle_global_rpc(
         &self,
         method: String,
         params: serde_json::Value,
-    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
+    ) -> BoxStream<'_, Result<serde_json::Value, GlobalRpcError>> {
         Box::pin(try_stream! {
             match method.as_str() {
                 "get_balance" => {
@@ -2601,7 +2608,7 @@ impl Client {
                     yield serde_json::Value::Null;
                 }
                 _ => {
-                    Err(anyhow::format_err!("Unknown method: {}", method))?;
+                    Err(GlobalRpcError::UnknownMethod { method: method.clone() })?;
                     unreachable!()
                 },
             }
