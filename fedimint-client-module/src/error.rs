@@ -260,6 +260,15 @@ pub enum ModuleLookupError {
         /// The unit that has no primary module.
         unit: AmountUnit,
     },
+
+    /// None of the primary modules for this unit is of the requested kind.
+    #[error("No primary {kind} module for unit {unit}")]
+    NoPrimaryModuleOfKind {
+        /// The kind of module that was asked for.
+        kind: ModuleKind,
+        /// The unit whose primary modules were searched.
+        unit: AmountUnit,
+    },
 }
 
 #[cfg(feature = "uniffi")]

@@ -11,7 +11,7 @@ use fedimint_client::ClientHandleArc;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
-use fedimint_client_module::error::{ClientModuleError, OperationLookupError};
+use fedimint_client_module::error::{ClientModuleError, ModuleLookupError, OperationLookupError};
 use fedimint_client_module::module::ClientModule;
 use fedimint_core::base32::{FEDIMINT_PREFIX, decode_prefixed};
 use fedimint_core::core::{IntoDynInstance, OperationId};
@@ -1039,6 +1039,28 @@ async fn default_module_operations_are_unsupported() -> anyhow::Result<()> {
             kind,
             operation: "leave",
         }) if kind == KIND
+    );
+
+    Ok(())
+}
+
+/// Looking a primary module up by type finds one only among the unit's
+/// primary modules, and names the kind it looked for when there is none.
+#[tokio::test(flavor = "multi_thread")]
+async fn primary_module_for_unit_is_looked_up_by_type() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    assert!(
+        client
+            .get_primary_module_for_unit::<DummyClientModule>(AmountUnit::BITCOIN)
+            .is_ok()
+    );
+    assert_matches!(
+        client.get_primary_module_for_unit::<LightningClientModule>(AmountUnit::BITCOIN),
+        Err(ModuleLookupError::NoPrimaryModuleOfKind { kind, unit })
+            if kind == KIND && unit == AmountUnit::BITCOIN
     );
 
     Ok(())
