@@ -37,8 +37,8 @@ use fedimint_core::module::{
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::task::timeout;
 use fedimint_core::time::now;
-use fedimint_core::util::{FmtCompact, Spanned};
-use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send, secp256k1};
+use fedimint_core::util::{FmtCompact, Spanned, backoff_util, retry};
+use fedimint_core::{Amount, OutPoint, PeerId, apply, async_trait_maybe_send, secp256k1};
 use fedimint_lightning::{InterceptPaymentResponse, LightningRpcError};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -395,7 +395,8 @@ impl GatewayClientModuleV2 {
     /// # Errors
     ///
     /// Fails with a [`GatewaySendPaymentError`] if the request is refused
-    /// before any payment starts: the contract is another gateway's, the
+    /// before any payment starts: the gateway is not connected to its
+    /// lightning node, the contract is another gateway's, the
     /// request's signature does not verify, the federation has not confirmed
     /// this contract at that outpoint or cannot be asked, the invoice has no
     /// amount or does not match the contract, the gateway cannot price the
@@ -437,6 +438,15 @@ impl GatewayClientModuleV2 {
         // the join belongs behind the signature above.
         if self.client_ctx.operation_exists(operation_id).await {
             return Ok(self.subscribe_send(operation_id).await);
+        }
+
+        // A send accepted while the lightning node is unreachable would sit
+        // waiting for it, and nothing about the payment is known until then.
+        // Refusing up front keeps the sender free to use another gateway. Only
+        // new sends are refused: joining an existing operation above resumes
+        // one already started.
+        if !self.gateway.is_lightning_connected().await {
+            return Err(GatewaySendPaymentError::LightningNotConnected);
         }
 
         // We need to check that the contract has been confirmed by the federation
@@ -529,6 +539,24 @@ impl GatewayClientModuleV2 {
         dbtx.commit_tx().await;
 
         Ok(self.subscribe_send(operation_id).await)
+    }
+
+    /// Returns the timelock budget, in blocks, that the outgoing contract at
+    /// `outpoint` leaves for a payment dispatched now, retrying until the
+    /// federation answers. A contract the federation no longer knows leaves
+    /// no budget.
+    async fn await_outgoing_contract_max_delay(&self, outpoint: OutPoint) -> u64 {
+        let expiration = retry(
+            "outgoing contract expiration",
+            backoff_util::background_backoff(),
+            || self.module_api.outgoing_contract_expiration(outpoint),
+        )
+        .await
+        .expect("Retries until the federation answers");
+
+        expiration.map_or(0, |(_, expiration)| {
+            expiration.saturating_sub(EXPIRATION_DELTA_MINIMUM_V2)
+        })
     }
 
     pub async fn subscribe_send(&self, operation_id: OperationId) -> Result<[u8; 32], Signature> {
@@ -930,6 +958,11 @@ impl GatewayClientModuleV2 {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum GatewaySendPaymentError {
+    /// The gateway is not connected to its lightning node, so a new send
+    /// would sit waiting for it.
+    #[error("The gateway is not connected to its lightning node")]
+    LightningNotConnected,
+
     /// The outgoing contract names another gateway's key, so this gateway
     /// could never claim it.
     #[error("The outgoing contract is keyed to another gateway")]
@@ -1117,6 +1150,14 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
         payment_image: &PaymentImage,
         operation_id: OperationId,
     ) -> bool;
+
+    /// Returns whether the gateway currently holds a connection to its
+    /// lightning node. Only suitable for refusing new work: the answer is
+    /// local, so it must not decide the fate of a payment already started.
+    async fn is_lightning_connected(&self) -> bool;
+
+    /// Waits until the gateway holds a connection to its lightning node.
+    async fn await_lightning_connected(&self);
 }
 
 /// A failure reported by the gateway behind [`IGatewayClientV2`].

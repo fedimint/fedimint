@@ -4034,6 +4034,14 @@ impl IGatewayClientV2 for Gateway {
             .await
             .expect("Retries until the transaction commits")
     }
+
+    async fn is_lightning_connected(&self) -> bool {
+        self.get_lightning_context().await.is_ok()
+    }
+
+    async fn await_lightning_connected(&self) {
+        self.await_lightning_context().await;
+    }
 }
 
 #[async_trait]
