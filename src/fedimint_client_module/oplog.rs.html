@@ -187,7 +187,7 @@
 <a href=#187 id=187 data-nosnippet>187</a>    /// [`OperationLogEntry::meta`] should tell you the which operation type of
 <a href=#188 id=188 data-nosnippet>188</a>    /// a given module the outcome belongs to. The operation type will have a
 <a href=#189 id=189 data-nosnippet>189</a>    /// corresponding `async fn subscribe_type(&amp;self, operation_id:
-<a href=#190 id=190 data-nosnippet>190</a>    /// OperationId) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;TypeState&gt;&gt;;`
+<a href=#190 id=190 data-nosnippet>190</a>    /// OperationId) -&gt; Result&lt;UpdateStreamOrOutcome&lt;TypeState&gt;, E&gt;;`
 <a href=#191 id=191 data-nosnippet>191</a>    /// function that returns a `UpdateStreamOrOutcome&lt;S&gt;` where `S` is the
 <a href=#192 id=192 data-nosnippet>192</a>    /// high-level state the operation is in. If this state is terminal, i.e.
 <a href=#193 id=193 data-nosnippet>193</a>    /// the stream closes after returning it, it will be cached as the `outcome`

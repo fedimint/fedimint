@@ -635,12 +635,12 @@
 <a href=#635 id=635 data-nosnippet>635</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(module) = module {
 <a href=#636 id=636 data-nosnippet>636</a>                <span class="kw">let </span>module_instance_id = module.resolve(<span class="kw-2">&amp;</span>client)<span class="question-mark">?</span>;
 <a href=#637 id=637 data-nosnippet>637</a>
-<a href=#638 id=638 data-nosnippet>638</a>                client
+<a href=#638 id=638 data-nosnippet>638</a>                <span class="prelude-val">Ok</span>(client
 <a href=#639 id=639 data-nosnippet>639</a>                    .get_module_client_dyn(module_instance_id)
 <a href=#640 id=640 data-nosnippet>640</a>                    .context(<span class="string">"Module not found"</span>)<span class="question-mark">?
 <a href=#641 id=641 data-nosnippet>641</a>                    </span>.handle_cli_command(<span class="kw-2">&amp;</span>args)
-<a href=#642 id=642 data-nosnippet>642</a>                    .<span class="kw">await
-<a href=#643 id=643 data-nosnippet>643</a>            </span>} <span class="kw">else </span>{
+<a href=#642 id=642 data-nosnippet>642</a>                    .<span class="kw">await</span><span class="question-mark">?</span>)
+<a href=#643 id=643 data-nosnippet>643</a>            } <span class="kw">else </span>{
 <a href=#644 id=644 data-nosnippet>644</a>                <span class="kw">let </span>module_list: Vec&lt;ModuleInfo&gt; = client
 <a href=#645 id=645 data-nosnippet>645</a>                    .config()
 <a href=#646 id=646 data-nosnippet>646</a>                    .<span class="kw">await

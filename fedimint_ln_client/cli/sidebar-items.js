@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["LnurlCommands","Opts"],"fn":["handle_cli_command"],"struct":["LnInvoiceResponse"]};
+window.SIDEBAR_ITEMS = {"enum":["CliCommandError","LnurlCommands","Opts"],"fn":["handle_cli_command"],"struct":["LnInvoiceResponse"]};

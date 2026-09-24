@@ -5,7 +5,7 @@
 <a href=#5 id=5 data-nosnippet>5</a>
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_core::TransactionId;
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::encoding::{Decodable, Encodable};
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_core::time::duration_since_epoch;
 <a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_core::util::backoff_util::custom_backoff;
@@ -284,7 +284,7 @@
 <a href=#284 id=284 data-nosnippet>284</a>                            .<span class="kw">await</span>;
 <a href=#285 id=285 data-nosnippet>285</a>                    }
 <a href=#286 id=286 data-nosnippet>286</a>
-<a href=#287 id=287 data-nosnippet>287</a>                    <span class="prelude-val">Err</span>(<span class="macro">anyhow::anyhow!</span>(<span class="string">"Transaction is still valid"</span>))
+<a href=#287 id=287 data-nosnippet>287</a>                    <span class="prelude-val">Err</span>(SubmitAttemptError::StillValid)
 <a href=#288 id=288 data-nosnippet>288</a>                }
 <a href=#289 id=289 data-nosnippet>289</a>            },
 <a href=#290 id=290 data-nosnippet>290</a>        )
@@ -303,17 +303,31 @@
 <a href=#303 id=303 data-nosnippet>303</a>    }
 <a href=#304 id=304 data-nosnippet>304</a>}
 <a href=#305 id=305 data-nosnippet>305</a>
-<a href=#306 id=306 data-nosnippet>306</a><span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>TxSubmissionStatesSM {
-<a href=#307 id=307 data-nosnippet>307</a>    <span class="kw">type </span>DynType = DynState;
-<a href=#308 id=308 data-nosnippet>308</a>
-<a href=#309 id=309 data-nosnippet>309</a>    <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
-<a href=#310 id=310 data-nosnippet>310</a>        DynState::from_typed(instance_id, <span class="self">self</span>)
-<a href=#311 id=311 data-nosnippet>311</a>    }
-<a href=#312 id=312 data-nosnippet>312</a>}
+<a href=#306 id=306 data-nosnippet>306</a><span class="doccomment">/// Why one attempt to submit a transaction did not settle it, so that it is
+<a href=#307 id=307 data-nosnippet>307</a>/// submitted again.
+<a href=#308 id=308 data-nosnippet>308</a></span><span class="attr">#[derive(Debug, thiserror::Error)]
+<a href=#309 id=309 data-nosnippet>309</a></span><span class="kw">enum </span>SubmitAttemptError {
+<a href=#310 id=310 data-nosnippet>310</a>    <span class="doccomment">/// A peer's answer to the submission could not be decoded.
+<a href=#311 id=311 data-nosnippet>311</a>    </span><span class="attr">#[error(transparent)]
+<a href=#312 id=312 data-nosnippet>312</a>    </span>Decode(<span class="attr">#[from] </span>DecodeError),
 <a href=#313 id=313 data-nosnippet>313</a>
-<a href=#314 id=314 data-nosnippet>314</a><span class="kw">pub fn </span>tx_submission_sm_decoder() -&gt; Decoder {
-<a href=#315 id=315 data-nosnippet>315</a>    <span class="kw">let </span><span class="kw-2">mut </span>decoder_builder = Decoder::builder_system();
-<a href=#316 id=316 data-nosnippet>316</a>    decoder_builder.with_decodable_type::&lt;TxSubmissionStatesSM&gt;();
-<a href=#317 id=317 data-nosnippet>317</a>    decoder_builder.build()
+<a href=#314 id=314 data-nosnippet>314</a>    <span class="doccomment">/// The peer accepted the submission, so the transaction is still valid;
+<a href=#315 id=315 data-nosnippet>315</a>    /// it is submitted again until it is rejected or accepted in consensus.
+<a href=#316 id=316 data-nosnippet>316</a>    </span><span class="attr">#[error(<span class="string">"Transaction is still valid"</span>)]
+<a href=#317 id=317 data-nosnippet>317</a>    </span>StillValid,
 <a href=#318 id=318 data-nosnippet>318</a>}
+<a href=#319 id=319 data-nosnippet>319</a>
+<a href=#320 id=320 data-nosnippet>320</a><span class="kw">impl </span>IntoDynInstance <span class="kw">for </span>TxSubmissionStatesSM {
+<a href=#321 id=321 data-nosnippet>321</a>    <span class="kw">type </span>DynType = DynState;
+<a href=#322 id=322 data-nosnippet>322</a>
+<a href=#323 id=323 data-nosnippet>323</a>    <span class="kw">fn </span>into_dyn(<span class="self">self</span>, instance_id: ModuleInstanceId) -&gt; <span class="self">Self</span>::DynType {
+<a href=#324 id=324 data-nosnippet>324</a>        DynState::from_typed(instance_id, <span class="self">self</span>)
+<a href=#325 id=325 data-nosnippet>325</a>    }
+<a href=#326 id=326 data-nosnippet>326</a>}
+<a href=#327 id=327 data-nosnippet>327</a>
+<a href=#328 id=328 data-nosnippet>328</a><span class="kw">pub fn </span>tx_submission_sm_decoder() -&gt; Decoder {
+<a href=#329 id=329 data-nosnippet>329</a>    <span class="kw">let </span><span class="kw-2">mut </span>decoder_builder = Decoder::builder_system();
+<a href=#330 id=330 data-nosnippet>330</a>    decoder_builder.with_decodable_type::&lt;TxSubmissionStatesSM&gt;();
+<a href=#331 id=331 data-nosnippet>331</a>    decoder_builder.build()
+<a href=#332 id=332 data-nosnippet>332</a>}
 </code></pre></div></section></main></body></html>

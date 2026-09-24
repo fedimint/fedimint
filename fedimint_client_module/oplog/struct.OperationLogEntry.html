@@ -44,7 +44,7 @@ appropriate update stream.</p>
 <h6 id="determining-the-return-type"><a class="doc-anchor" href="#determining-the-return-type">§</a>Determining the return type</h6>
 <p><a href="struct.OperationLogEntry.html#method.meta" title="method fedimint_client_module::oplog::OperationLogEntry::meta"><code>OperationLogEntry::meta</code></a> should tell you the which operation type of
 a given module the outcome belongs to. The operation type will have a
-corresponding <code>async fn subscribe_type(&amp;self, operation_id: OperationId) -&gt; anyhow::Result&lt;UpdateStreamOrOutcome&lt;TypeState&gt;&gt;;</code>
+corresponding <code>async fn subscribe_type(&amp;self, operation_id: OperationId) -&gt; Result&lt;UpdateStreamOrOutcome&lt;TypeState&gt;, E&gt;;</code>
 function that returns a <code>UpdateStreamOrOutcome&lt;S&gt;</code> where <code>S</code> is the
 high-level state the operation is in. If this state is terminal, i.e.
 the stream closes after returning it, it will be cached as the <code>outcome</code>

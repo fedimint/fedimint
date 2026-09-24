@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["OutputSMState"],"fn":["verify_blind_shares"],"struct":["MintOutputStateMachine","OutputSMCommon"]};
+window.SIDEBAR_ITEMS = {"enum":["OutputSMState","VerifyBlindSharesError"],"fn":["verify_blind_shares"],"struct":["MintOutputStateMachine","OutputSMCommon"]};

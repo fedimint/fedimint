@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["RootSecret"],"struct":["ClientBuilder","ClientPreview"]};
+window.SIDEBAR_ITEMS = {"enum":["ConfigUpdateError","RefreshClientConfigError","RootSecret"],"struct":["ClientBuilder","ClientPreview"]};

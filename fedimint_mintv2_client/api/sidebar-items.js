@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"trait":["MintV2ModuleApi"]};
+window.SIDEBAR_ITEMS = {"enum":["FetchRecoverySliceError"],"trait":["MintV2ModuleApi"]};
