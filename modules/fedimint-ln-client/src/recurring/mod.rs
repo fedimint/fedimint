@@ -12,6 +12,7 @@ use async_stream::stream;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::SECP256K1;
 use fedimint_client_module::OperationId;
+use fedimint_client_module::error::OperationAlreadyExistsError;
 use fedimint_client_module::module::ClientContext;
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_core::BitcoinHash;
@@ -296,7 +297,7 @@ impl LightningClientModule {
         payment_code: &RecurringPaymentCodeEntry,
         invoice_index: u64,
         invoice: lightning_invoice::Bolt11Invoice,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, OperationAlreadyExistsError> {
         // TODO: pipe secure secp context to here
         let invoice_key =
             tweak_user_secret_key(SECP256K1, payment_code.root_keypair, invoice_index);
@@ -351,7 +352,7 @@ impl LightningClientModule {
                 err = %e.fmt_compact(),
                 "Failed to create recurring receive operation"
             );
-            Err(e.into())
+            Err(e)
         } else {
             Ok(operation_id)
         }

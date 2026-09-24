@@ -39,7 +39,7 @@ use db::{
     DbKeyPrefix, LightningGatewayKey, LightningGatewayKeyPrefix, PaymentResult, PaymentResultKey,
     RecurringPaymentCodeKeyPrefix,
 };
-use fedimint_api_client::api::{DynModuleApi, FederationResult, ServerError};
+use fedimint_api_client::api::{DynModuleApi, FederationError, FederationResult, ServerError};
 use fedimint_client_module::db::{ClientModuleMigrationFn, migrate_state};
 use fedimint_client_module::error::{ClientModuleError, TransactionSubmitError};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
@@ -535,7 +535,7 @@ impl ClientModule for LightningClientModule {
         method: String,
         payload: serde_json::Value,
     ) -> BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
-        let stream: BoxStream<'_, anyhow::Result<serde_json::Value>> = Box::pin(try_stream! {
+        let stream: BoxStream<'_, Result<serde_json::Value, RpcError>> = Box::pin(try_stream! {
             match method.as_str() {
                 "create_bolt11_invoice" => {
                     let req: CreateBolt11InvoiceRequest = serde_json::from_value(payload)?;
@@ -649,13 +649,58 @@ impl ClientModule for LightningClientModule {
                     yield serde_json::to_value(output)?;
                 }
                 _ => {
-                    Err(anyhow::format_err!("Unknown method: {method}"))?;
+                    Err(RpcError::UnknownMethod { method: method.clone() })?;
                     unreachable!()
                 },
             }
         });
         Box::pin(stream.map_err(ClientModuleError::other))
     }
+}
+
+/// A failure of an `ln` module RPC request.
+#[derive(Debug, thiserror::Error)]
+enum RpcError {
+    /// The request's parameters do not fit the method, or its response could
+    /// not be serialized.
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+
+    /// The invoice description is not valid.
+    #[error(transparent)]
+    InvoiceDescription(#[from] lightning_invoice::CreationError),
+
+    /// The invoice could not be created.
+    #[error(transparent)]
+    CreateInvoice(#[from] CreateBolt11InvoiceError),
+
+    /// The invoice could not be paid.
+    #[error(transparent)]
+    Pay(#[from] PayBolt11InvoiceError),
+
+    /// No gateway could be selected.
+    #[error(transparent)]
+    GatewaySelection(#[from] GatewaySelectionError),
+
+    /// An operation's updates could not be followed.
+    #[error(transparent)]
+    Subscribe(#[from] LnSubscribeError),
+
+    /// The incoming payment could not be reclaimed.
+    #[error(transparent)]
+    Reclaim(#[from] ReclaimLnReceiveError),
+
+    /// The federation could not be asked for its gateways.
+    #[error(transparent)]
+    Federation(#[from] FederationError),
+
+    /// The Lightning address could not be resolved to an invoice.
+    #[error(transparent)]
+    PaymentInfo(#[from] PaymentInfoError),
+
+    /// The request names a method the module does not have.
+    #[error("Unknown method: {method}")]
+    UnknownMethod { method: String },
 }
 
 #[derive(Deserialize)]
@@ -2534,7 +2579,7 @@ async fn fetch_and_validate_offer(
     module_api: &DynModuleApi,
     payment_hash: sha256::Hash,
     amount_msat: Amount,
-) -> anyhow::Result<IncomingContractOffer, IncomingSmError> {
+) -> Result<IncomingContractOffer, IncomingSmError> {
     let offer = timeout(Duration::from_secs(5), module_api.fetch_offer(payment_hash))
         .await
         .map_err(|_| IncomingSmError::TimeoutFetchingOffer { payment_hash })?
