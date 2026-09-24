@@ -2,10 +2,10 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 
-use anyhow::ensure;
+use anyhow::{bail, ensure};
 use bitcoin::hashes::sha256;
 use clap::{Parser, Subcommand};
-use devimint::devfed::DevJitFed;
+use devimint::devfed::{DevFed, DevJitFed};
 use devimint::envs::FM_CLIENT_DIR_ENV;
 use devimint::federation::{Client, Federation};
 use devimint::util::{ProcessManager, almost_equal, poll_simple};
@@ -66,6 +66,9 @@ enum Commands {
     LnurlRecovery,
     /// Two clients racing to pay the same invoice settle exactly once
     DuplicatePayment,
+    /// The gateway refuses to fund a receive while the federation cannot
+    /// reach consensus
+    FederationOutage,
 }
 
 #[tokio::main]
@@ -107,6 +110,11 @@ async fn main() -> anyhow::Result<()> {
                     pegin_gateways(&dev_fed).await?;
                     test_duplicate_payment(&dev_fed, &process_mgr).await?;
                 }
+                Some(Commands::FederationOutage) => {
+                    pegin_gateways(&dev_fed).await?;
+                    let dev_fed = dev_fed.to_dev_fed(&process_mgr).await?;
+                    test_federation_outage(dev_fed, &process_mgr).await?;
+                }
                 None => {
                     // Run all tests if no subcommand is specified
                     test_gateway_registration(&dev_fed).await?;
@@ -114,6 +122,11 @@ async fn main() -> anyhow::Result<()> {
                     test_duplicate_payment(&dev_fed, &process_mgr).await?;
                     test_lnurl_pay(&dev_fed).await?;
                     test_lnurl_recovery(&dev_fed).await?;
+                    // Last, since it takes ownership of the federation to
+                    // stop and restart guardians.
+                    pegin_gateways(&dev_fed).await?;
+                    let dev_fed = dev_fed.to_dev_fed(&process_mgr).await?;
+                    test_federation_outage(dev_fed, &process_mgr).await?;
                 }
             }
 
@@ -737,6 +750,116 @@ async fn await_send_within(
         Ok(state) => state.map(Some),
         Err(_) => Ok(None),
     }
+}
+
+/// Stops enough guardians that no threshold of them can answer, checks that
+/// a receive is refused without the gateway funding anything, then checks
+/// that receives work again once the guardians are back.
+async fn test_federation_outage(
+    dev_fed: DevFed,
+    process_mgr: &ProcessManager,
+) -> anyhow::Result<()> {
+    info!("Testing that the gateway refuses to fund a receive during a federation outage...");
+
+    let DevFed {
+        mut fed,
+        gw_lnd,
+        gw_ldk,
+        ..
+    } = dev_fed;
+
+    if gw_lnd.gatewayd_version < *VERSION_0_12_2_ALPHA {
+        info!(
+            gatewayd_version = %gw_lnd.gatewayd_version,
+            "Skipping: gateway predates the federation liveness probe"
+        );
+        return Ok(());
+    }
+
+    let client = fed
+        .new_joined_client("lnv2-federation-outage-client")
+        .await?;
+    fed.await_all_peers().await?;
+
+    let federation_id = fed.calculate_federation_id();
+    let gateway = gw_lnd.client().address();
+
+    // Register the invoice while the federation is healthy so that only the
+    // funding decision is exercised below.
+    let (invoice, _) = common::receive(&client, &gateway, 100_000).await?;
+    let balance_before = gw_lnd.client().ecash_balance(federation_id.clone()).await?;
+
+    // Stop the smallest number of guardians that leaves fewer than a
+    // threshold of them running.
+    let fed_size = process_mgr.globals.FM_FED_SIZE;
+    let max_evil = (fed_size - 1) / 3;
+    let stopped: Vec<usize> = (fed_size - max_evil - 1..fed_size).collect();
+    for peer in &stopped {
+        fed.terminate_server(*peer).await?;
+    }
+
+    info!(
+        ?stopped,
+        "Paying invoice while the federation cannot reach consensus"
+    );
+    // The payment runs concurrently: a gateway that funds anyway holds the
+    // HTLC until the guardians are back, so awaiting it here would block the
+    // restart below.
+    let payment = fedimint_core::runtime::spawn("lnv2-outage-payment", {
+        let gw_ldk = gw_ldk.client();
+        async move { gw_ldk.pay_invoice(invoice).await }
+    });
+
+    // Bring the guardians back only once the gateway has acted on the HTLC:
+    // a refusal fails the payment, while funding consumes ecash at submission
+    // even though the transaction cannot land yet.
+    poll_simple("Waiting for the gateway to act on the HTLC", || async {
+        if payment.is_finished() {
+            return Ok(());
+        }
+        let balance = gw_lnd.client().ecash_balance(federation_id.clone()).await?;
+        if balance < balance_before {
+            return Ok(());
+        }
+        bail!("gateway has not acted on the HTLC yet")
+    })
+    .await?;
+
+    for peer in &stopped {
+        fed.start_server(process_mgr, *peer).await?;
+    }
+    fed.await_all_peers().await?;
+
+    // Funding queued during the outage would land now that the guardians are
+    // back, and the payment would complete against it. The probe exists so
+    // that it does not.
+    let outcome = payment.await?;
+    info!(?outcome, "Payment outcome once the guardians are back");
+    ensure!(
+        outcome.is_err(),
+        "payment must fail: the gateway funded an incoming contract during the outage"
+    );
+    ensure!(
+        gw_lnd.client().ecash_balance(federation_id.clone()).await? == balance_before,
+        "gateway must not fund an incoming contract while the federation cannot reach consensus"
+    );
+
+    // The gateway's own connections to the restarted guardians come back on
+    // their own schedule, and the probe refuses receives until they do, so
+    // retry with a fresh invoice each time; a refused invoice is cancelled.
+    info!("Paying a fresh invoice after the guardians are back");
+    poll_simple("Waiting for receives to succeed again", || async {
+        let (invoice, _) = common::receive(&client, &gateway, 100_000).await?;
+        gw_ldk.client().pay_invoice(invoice).await
+    })
+    .await?;
+    ensure!(
+        gw_lnd.client().ecash_balance(federation_id).await? < balance_before,
+        "gateway must fund the incoming contract once the federation is back"
+    );
+
+    info!("Federation outage test complete");
+    Ok(())
 }
 
 async fn test_fees(

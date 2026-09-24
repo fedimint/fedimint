@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
@@ -34,8 +35,9 @@ use fedimint_core::module::{
     Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::secp256k1::Keypair;
+use fedimint_core::task::timeout;
 use fedimint_core::time::now;
-use fedimint_core::util::Spanned;
+use fedimint_core::util::{FmtCompact, Spanned};
 use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send, secp256k1};
 use fedimint_lightning::{InterceptPaymentResponse, LightningRpcError};
 use fedimint_lnv2_common::config::LightningClientConfig;
@@ -61,6 +63,11 @@ use crate::complete_sm::{
 };
 use crate::receive_sm::ReceiveSMCommon;
 use crate::send_sm::SendSMCommon;
+
+/// Bound on the federation liveness probe that gates funding a fresh incoming
+/// contract. A healthy federation answers well within this; the bound only
+/// decides how quickly an unreachable one fails the HTLC back.
+const FEDERATION_LIVENESS_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// LNv2 CLTV Delta in blocks
 pub const EXPIRATION_DELTA_MINIMUM_V2: u64 = 144;
@@ -578,6 +585,42 @@ impl GatewayClientModuleV2 {
         legacy_completion_in_states(&active, &inactive, circuit)
     }
 
+    /// Refuses to fund a fresh incoming contract unless a threshold of
+    /// guardians is answering. LNv1 gets this check implicitly by fetching the
+    /// offer from the federation first; LNv2 reads the contract from the
+    /// gateway's own database, so it has to probe explicitly.
+    async fn ensure_federation_responsive(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<(), RelayIncomingHtlcError> {
+        match timeout(
+            FEDERATION_LIVENESS_TIMEOUT,
+            self.module_api.consensus_block_count(),
+        )
+        .await
+        {
+            Ok(Ok(_consensus_block_count)) => Ok(()),
+            Ok(Err(err)) => {
+                warn!(
+                    %payment_hash,
+                    err = %err.fmt_compact(),
+                    "Federation liveness probe failed, refusing to fund incoming contract"
+                );
+                Err(RelayIncomingHtlcError::FederationUnreachable(Box::new(err)))
+            }
+            Err(_elapsed) => {
+                warn!(
+                    %payment_hash,
+                    timeout_secs = FEDERATION_LIVENESS_TIMEOUT.as_secs(),
+                    "Federation liveness probe timed out, refusing to fund incoming contract"
+                );
+                Err(RelayIncomingHtlcError::FederationTimeout {
+                    timeout_secs: FEDERATION_LIVENESS_TIMEOUT.as_secs(),
+                })
+            }
+        }
+    }
+
     /// Funds the incoming contract of an intercepted LNv2 HTLC and starts the
     /// operation that completes the HTLC's circuit.
     ///
@@ -586,9 +629,10 @@ impl GatewayClientModuleV2 {
     ///
     /// # Errors
     ///
-    /// Fails with a [`TransactionSubmitError`] if the funding transaction or
-    /// the completion operation could not be started and no earlier attempt
-    /// had started it.
+    /// Fails with a [`RelayIncomingHtlcError`] if a fresh contract is not
+    /// funded because the federation does not answer, or if the funding
+    /// transaction or the completion operation could not be started and no
+    /// earlier attempt had started it.
     pub async fn relay_incoming_htlc(
         &self,
         payment_hash: sha256::Hash,
@@ -596,7 +640,7 @@ impl GatewayClientModuleV2 {
         htlc_id: u64,
         contract: IncomingContract,
         amount_msat: u64,
-    ) -> Result<(), TransactionSubmitError> {
+    ) -> Result<(), RelayIncomingHtlcError> {
         let operation_start = now();
         let receive_operation_id = OperationId::from_encodable(&contract);
         let circuit = IncomingCircuitKey {
@@ -619,6 +663,10 @@ impl GatewayClientModuleV2 {
 
         let commitment = contract.commitment.clone();
         if plan == IncomingRelayPlan::CreateReceiveAndCompletion {
+            // Only gate fresh funding: the other plans resume an already
+            // funded contract and must not be cancelled.
+            self.ensure_federation_responsive(payment_hash).await?;
+
             let refund_keypair = self.keypair;
             let client_output = ClientOutput::<LightningOutput> {
                 output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
@@ -658,7 +706,7 @@ impl GatewayClientModuleV2 {
             if let Err(error) = creation_result {
                 let operation_exists = self.client_ctx.operation_exists(receive_operation_id).await;
                 if operation_creation_failed_permanently(true, operation_exists) {
-                    return Err(error);
+                    return Err(error.into());
                 }
             } else {
                 let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
@@ -701,7 +749,7 @@ impl GatewayClientModuleV2 {
                 .operation_exists(completion_operation_id)
                 .await;
             if operation_creation_failed_permanently(true, operation_exists) {
-                return Err(error);
+                return Err(error.into());
             }
         }
 
@@ -922,6 +970,28 @@ pub enum GatewaySendPaymentError {
     /// gateway will never pay it out for this contract.
     #[error("Another contract for this payment image was already accepted")]
     PaymentImageAlreadyClaimed,
+}
+
+/// Why the gateway did not relay an intercepted LNv2 HTLC.
+#[derive(Debug, Error)]
+pub enum RelayIncomingHtlcError {
+    /// The federation liveness probe failed, so a fresh incoming contract is
+    /// not funded.
+    #[error("The federation did not answer the liveness probe")]
+    FederationUnreachable(#[source] Box<FederationError>),
+
+    /// The federation liveness probe did not complete in time, so a fresh
+    /// incoming contract is not funded.
+    #[error("The federation did not answer the liveness probe within {timeout_secs}s")]
+    FederationTimeout {
+        /// How long the probe waited.
+        timeout_secs: u64,
+    },
+
+    /// The funding transaction or the completion operation could not be
+    /// started.
+    #[error("The incoming contract could not be funded")]
+    Transaction(#[from] TransactionSubmitError),
 }
 
 impl From<FederationError> for GatewaySendPaymentError {
