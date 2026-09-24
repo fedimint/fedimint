@@ -12,6 +12,7 @@ pub mod metrics;
 use std::env;
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::time::Duration;
 
 use bitcoin::{ScriptBuf, Transaction, Txid};
 use esplora_client::{AsyncClient, Builder};
@@ -195,15 +196,20 @@ impl IBitcoindRpc for BitcoindTracked {
     }
 }
 
-#[derive(Debug)]
 pub struct EsploraClient {
     client: AsyncClient,
+}
+
+impl Debug for EsploraClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EsploraClient").finish_non_exhaustive()
+    }
 }
 
 impl EsploraClient {
     pub fn new(url: &SafeUrl) -> Result<Self, BitcoinRpcError> {
         let client = Builder::new(url.as_str().trim_end_matches('/'))
-            .timeout(ESPLORA_CLIENT_TIMEOUT_SECONDS)
+            .timeout(Duration::from_secs(ESPLORA_CLIENT_TIMEOUT_SECONDS))
             .build_async()
             .map_err(|source| BitcoinRpcError::InvalidUrl {
                 url: url.to_string(),
@@ -243,7 +249,7 @@ impl IBitcoindRpc for EsploraClient {
         loop {
             let page = self
                 .client
-                .scripthash_txs(script, last_seen)
+                .get_scripthash_txs(script, last_seen)
                 .await
                 .map_err(|err| BitcoinRpcError::Backend(Box::new(err)))?;
 
