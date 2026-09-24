@@ -274,36 +274,6 @@ impl SendStateMachine {
     ) -> SendStateMachine {
         match result {
             Ok(payment_response) => {
-                // A single Lightning payment yields a single preimage, so the gateway
-                // must claim at most one outgoing contract per payment image. If another
-                // contract for the same invoice has already been claimed, e.g. two
-                // clients racing to pay it, forfeit this one so the sender is refunded
-                // rather than the gateway being reimbursed twice for a single payment.
-                // The claim is recorded in the gateway's global database so it spans all
-                // of the gateway's federations, not just the one funding this contract.
-                if !client_ctx
-                    .gateway
-                    .claim_payment_image(
-                        &old_state.common.contract.payment_image,
-                        old_state.common.operation_id,
-                    )
-                    .await
-                {
-                    client_ctx
-                        .module
-                        .client_ctx
-                        .log_event(
-                            &mut dbtx.module_tx(),
-                            OutgoingPaymentFailed {
-                                payment_image: old_state.common.contract.payment_image.clone(),
-                                error: Cancelled::DuplicatePayment,
-                            },
-                        )
-                        .await;
-
-                    return old_state.update(SendSMState::Cancelled(Cancelled::DuplicatePayment));
-                }
-
                 client_ctx
                     .module
                     .client_ctx

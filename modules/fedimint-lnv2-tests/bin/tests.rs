@@ -1,4 +1,6 @@
 use std::path::PathBuf;
+use std::str::FromStr;
+use std::time::Duration;
 
 use anyhow::ensure;
 use bitcoin::hashes::sha256;
@@ -6,9 +8,9 @@ use clap::{Parser, Subcommand};
 use devimint::devfed::DevJitFed;
 use devimint::envs::FM_CLIENT_DIR_ENV;
 use devimint::federation::{Client, Federation};
-use devimint::util::{ProcessManager, almost_equal};
+use devimint::util::{ProcessManager, almost_equal, poll_simple};
 use devimint::version_constants::{
-    VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA,
+    VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA, VERSION_0_12_2_ALPHA,
 };
 use devimint::{Gatewayd, cmd, util};
 use fedimint_core::core::OperationId;
@@ -454,8 +456,10 @@ async fn join_client(name: &str, invite_code: &str) -> anyhow::Result<Client> {
 /// Three independent clients — two in the primary federation and one in a
 /// second federation, all served by the same gateway — race to pay the *same*
 /// invoice. The gateway pays the invoice only once, so it may claim only one of
-/// the three outgoing contracts regardless of which federation funded them; the
-/// other two must be forfeited and refunded. Exactly one payment settles.
+/// the three outgoing contracts regardless of which federation funded them.
+/// Exactly one payment settles; how the other two end depends on the gateway
+/// version, see [`assert_duplicates_refunded`] and
+/// [`assert_duplicates_refused`].
 async fn test_duplicate_payment(
     dev_fed: &DevJitFed,
     process_mgr: &ProcessManager,
@@ -533,6 +537,11 @@ async fn test_duplicate_payment(
     // the gateway on its own. This proves the gateway serves the second
     // federation, so any refund of the shared invoice below is caused by the
     // duplicate payment rather than a second-federation setup problem.
+    let second_federation_id = second_federation.calculate_federation_id();
+    let second_balance_before_control = gw_send
+        .client()
+        .ecash_balance(second_federation_id.clone())
+        .await?;
     let control_invoice = gw_receive
         .client()
         .create_invoice(1_000_000)
@@ -544,23 +553,75 @@ async fn test_duplicate_payment(
         "second-federation control payment must succeed, got {control:?}"
     );
 
+    // The sender sees the preimage once the gateway's claim is accepted, which
+    // can be before the claimed ecash reaches the gateway. Wait for it, so the
+    // gateway's balances only move below because of the shared invoice.
+    poll_simple(
+        "Waiting for the gateway to claim the control payment",
+        || async {
+            let balance = gw_send
+                .client()
+                .ecash_balance(second_federation_id.clone())
+                .await?;
+            ensure!(
+                balance > second_balance_before_control,
+                "gateway has not claimed the control payment yet"
+            );
+            Ok(())
+        },
+    )
+    .await?;
+
     let invoice = gw_receive
         .client()
         .create_invoice(1_000_000)
         .await?
         .to_string();
 
+    // Before 0.12.2 the gateway claimed the payment image only after paying,
+    // and forfeited every later contract for it, so those were refunded at once.
+    // Since then it claims the image when it accepts a send and refuses the
+    // others outright, so their senders are only refunded at contract expiry.
+    if gw_send.gatewayd_version < *VERSION_0_12_2_ALPHA {
+        return assert_duplicates_refunded(&client_a, &client_b, &client_c, gw_send, &invoice)
+            .await;
+    }
+
+    assert_duplicates_refused(
+        [&client_a, &client_b, &client_c],
+        gw_send,
+        [
+            first_federation.calculate_federation_id(),
+            second_federation_id,
+        ],
+        &invoice,
+    )
+    .await
+}
+
+/// How long a send refused by the gateway is watched to stay unresolved.
+const REFUSED_SEND_WATCH: Duration = Duration::from_secs(30);
+
+/// The duplicate-payment assertions for gateways that claim the payment image
+/// only after paying and forfeit the duplicates: one settles, two are refunded.
+async fn assert_duplicates_refunded(
+    client_a: &Client,
+    client_b: &Client,
+    client_c: &Client,
+    gw_send: &Gatewayd,
+    invoice: &str,
+) -> anyhow::Result<()> {
     // The two clients in the first federation race for the invoice; the
     // per-federation dedup settles exactly one of them and refunds the other.
     let (state_a, state_b) = try_join!(
-        common::send(&client_a, &gw_send.addr, &invoice),
-        common::send(&client_b, &gw_send.addr, &invoice),
+        common::send(client_a, &gw_send.addr, invoice),
+        common::send(client_b, &gw_send.addr, invoice),
     )?;
 
     // The second-federation client then pays the same, now-settled invoice. The
     // gateway already holds the preimage, so without cross-federation dedup it
     // claims this contract too, being reimbursed twice for one Lightning payment.
-    let state_c = common::send(&client_c, &gw_send.addr, &invoice).await?;
+    let state_c = common::send(client_c, &gw_send.addr, invoice).await?;
 
     let states = [state_a, state_b, state_c];
 
@@ -583,6 +644,99 @@ async fn test_duplicate_payment(
     );
 
     Ok(())
+}
+
+/// The duplicate-payment assertions for gateways that claim the payment image
+/// at intake: one send settles, the gateway refuses the other two without
+/// paying or forfeiting anything, so they stay unresolved until their contracts
+/// expire, and the gateway is reimbursed exactly once.
+async fn assert_duplicates_refused(
+    [client_a, client_b, client_c]: [&Client; 3],
+    gw_send: &Gatewayd,
+    [first_federation_id, second_federation_id]: [String; 2],
+    invoice: &str,
+) -> anyhow::Result<()> {
+    let first_balance_before = gw_send
+        .client()
+        .ecash_balance(first_federation_id.clone())
+        .await?;
+    let second_balance_before = gw_send
+        .client()
+        .ecash_balance(second_federation_id.clone())
+        .await?;
+
+    // The two clients in the first federation race for the invoice. Whichever
+    // the gateway accepts first settles; the other is refused and stays funded.
+    let (op_a, op_b) = try_join!(
+        common::start_send(client_a, &gw_send.addr, invoice),
+        common::start_send(client_b, &gw_send.addr, invoice),
+    )?;
+
+    let (state_a, state_b) = tokio::join!(
+        await_send_within(client_a, op_a, REFUSED_SEND_WATCH),
+        await_send_within(client_b, op_b, REFUSED_SEND_WATCH),
+    );
+
+    // The second-federation client then pays the same, now-settled invoice. The
+    // claim is global to the gateway, so it is refused as well.
+    let op_c = common::start_send(client_c, &gw_send.addr, invoice).await?;
+    let state_c = await_send_within(client_c, op_c, REFUSED_SEND_WATCH).await;
+
+    let states = [state_a?, state_b?, state_c?];
+
+    info!("shared-invoice send states (None = unresolved): {states:?}");
+
+    let successes = states
+        .iter()
+        .filter(|state| matches!(state, Some(FinalSendOperationState::Success(_))))
+        .count();
+
+    let unresolved = states.iter().filter(|state| state.is_none()).count();
+
+    assert_eq!(
+        (successes, unresolved),
+        (1, 2),
+        "exactly one payment must settle and the other two stay unresolved, got {states:?}"
+    );
+
+    // A contract costs at least the invoice amount, so reimbursement for a
+    // second one would at least double the gain.
+    let invoice_msats = Bolt11Invoice::from_str(invoice)?
+        .amount_milli_satoshis()
+        .expect("the invoice has an amount");
+
+    let first_gain = gw_send
+        .client()
+        .ecash_balance(first_federation_id)
+        .await?
+        .checked_sub(first_balance_before)
+        .expect("the gateway's balance in the first federation must not shrink");
+
+    assert!(
+        (invoice_msats..2 * invoice_msats).contains(&first_gain),
+        "the gateway must be reimbursed for exactly one contract, gained {first_gain} msat"
+    );
+
+    assert_eq!(
+        gw_send.client().ecash_balance(second_federation_id).await?,
+        second_balance_before,
+        "the gateway must not claim the second federation's contract"
+    );
+
+    Ok(())
+}
+
+/// Waits up to `watch` for a send to reach its final state, returning `None`
+/// if it is still unresolved by then.
+async fn await_send_within(
+    client: &Client,
+    operation_id: OperationId,
+    watch: Duration,
+) -> anyhow::Result<Option<FinalSendOperationState>> {
+    match tokio::time::timeout(watch, common::await_send(client, operation_id)).await {
+        Ok(state) => state.map(Some),
+        Err(_) => Ok(None),
+    }
 }
 
 async fn test_fees(

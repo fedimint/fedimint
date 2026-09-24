@@ -4038,6 +4038,14 @@ impl IGatewayClientV2 for Gateway {
 
 #[async_trait]
 impl IGatewayClientV1 for Gateway {
+    async fn claim_payment_image(
+        &self,
+        payment_image: &PaymentImage,
+        operation_id: OperationId,
+    ) -> bool {
+        IGatewayClientV2::claim_payment_image(self, payment_image, operation_id).await
+    }
+
     async fn verify_preimage_authentication(
         &self,
         payment_hash: sha256::Hash,

@@ -391,8 +391,8 @@ impl GatewayClientModuleV2 {
     /// before any payment starts: the contract is another gateway's, the
     /// request's signature does not verify, the federation has not confirmed
     /// this contract at that outpoint or cannot be asked, the invoice has no
-    /// amount or does not match the contract, or the gateway cannot price the
-    /// payment.
+    /// amount or does not match the contract, the gateway cannot price the
+    /// payment, or another contract already claimed the payment image.
     pub async fn send_payment(
         &self,
         payload: SendPaymentPayload,
@@ -462,6 +462,25 @@ impl GatewayClientModuleV2 {
             .min_contract_amount(&payload.federation_id, amount)
             .await
             .map_err(GatewaySendPaymentError::MinContractAmount)?;
+
+        // Contracts for different invoices, on LNv1 or in other federations, can
+        // share a payment image, and paying one pays them all. So only the first
+        // operation to claim the image may ever pay it out; the claim is never
+        // released. It is taken before the state machine exists, so a refused
+        // contract has not been paid for. A retry of this operation finds its own
+        // claim.
+        //
+        // TODO(joschisan): review whether answering with a forfeit signature is
+        // safe here, so the sender is refunded immediately instead of at the
+        // contract's expiration. It should be: a refused contract can never take
+        // the claim later, so we never pay out on it.
+        if !self
+            .gateway
+            .claim_payment_image(&payload.contract.payment_image, operation_id)
+            .await
+        {
+            return Err(GatewaySendPaymentError::PaymentImageAlreadyClaimed);
+        }
 
         let send_sm = GatewayClientStateMachinesV2::Send(SendStateMachine {
             common: SendSMCommon {
@@ -898,6 +917,11 @@ pub enum GatewaySendPaymentError {
     /// for this payment.
     #[error("The minimum contract amount could not be computed")]
     MinContractAmount(#[source] GatewayClientV2Error),
+
+    /// Another operation already claimed the contract's payment image, so this
+    /// gateway will never pay it out for this contract.
+    #[error("Another contract for this payment image was already accepted")]
+    PaymentImageAlreadyClaimed,
 }
 
 impl From<FederationError> for GatewaySendPaymentError {
