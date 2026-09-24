@@ -2,7 +2,10 @@
 
 ## Reporting a Vulnerability
 
-Do **not** open a public GitHub issue for security bugs.
+Do **not** open a public GitHub issue for security bugs that affect released
+code. Bugs confined to unreleased code may be reported and discussed publicly.
+If an unreleased change exposes a vulnerability that also affects a released
+version, report it privately.
 
 Send a report to **security@fedimint.org** (this address forwards to the
 maintainers listed below) or message **`@elsirion.21`** on Signal.
@@ -34,8 +37,9 @@ gpg --fetch-keys 'https://api.protonmail.ch/pks/lookup?op=get&search=elsirion@pr
 
 Check the fingerprints against the table above before you use the keys.
 
-Please keep the bug private until a fix is released and federation operators
-had time to upgrade.
+Please keep vulnerabilities affecting released code private until a fix is
+released and federation operators had time to upgrade. Bugs confined to
+unreleased code do not require private handling.
 
 ## Supported Versions
 
