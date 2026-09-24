@@ -21,7 +21,6 @@ name = "fedimint_meta_client"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 async-trait = { workspace = true }
 clap = { workspace = true, optional = true }
 erased-serde = { workspace = true }

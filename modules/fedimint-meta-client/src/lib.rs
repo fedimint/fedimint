@@ -14,7 +14,6 @@ pub mod states;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use anyhow::Context as _;
 use api::MetaFederationApi;
 use common::{KIND, MetaConsensusValue, MetaKey, MetaValue};
 use db::DbKeyPrefix;
@@ -187,12 +186,12 @@ struct GetConsensusValueRequest {
 
 fn format_rpc_consensus_value_response(
     maybe_consensus_value: Option<MetaConsensusValue>,
-) -> anyhow::Result<serde_json::Value> {
+) -> Result<serde_json::Value, RpcError> {
     Ok(match maybe_consensus_value {
         Some(MetaConsensusValue { revision, value }) => {
             let value = value
                 .to_json_lossy()
-                .context("deserializing consensus value as json")?;
+                .map_err(RpcError::ConsensusValueJson)?;
 
             json!({
                 "revision": revision,
@@ -257,7 +256,9 @@ impl ClientModule for MetaClientModule {
                         let maybe_consensus_value = self.get_consensus_value(req.key).await?;
                         format_rpc_consensus_value_response(maybe_consensus_value)
                     }
-                    _ => Err(anyhow::format_err!("Unknown method: {method}")),
+                    _ => Err(RpcError::UnknownMethod {
+                        method: method.clone(),
+                    }),
                 }
             })
             .map_err(ClientModuleError::other),
@@ -273,6 +274,26 @@ impl ClientModule for MetaClientModule {
             .await
             .map_err(ClientModuleError::other)
     }
+}
+
+/// A failure of a meta module RPC request.
+#[derive(Debug, Error)]
+enum RpcError {
+    /// The request's parameters do not fit the method.
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+
+    /// The federation did not serve the request.
+    #[error(transparent)]
+    Federation(#[from] FederationError),
+
+    /// The consensus value is not valid JSON.
+    #[error("deserializing consensus value as json")]
+    ConsensusValueJson(#[source] serde_json::Error),
+
+    /// The request names a method the module does not have.
+    #[error("Unknown method: {method}")]
+    UnknownMethod { method: String },
 }
 
 #[derive(Debug, Clone)]
@@ -390,7 +411,7 @@ async fn get_meta_module_value(
             let meta_api = api.with_module(instance_id);
 
             let overrides_res = retry("fetch_meta_values", backoff, || async {
-                anyhow::Ok(meta_api.get_consensus(DEFAULT_META_KEY).await?)
+                meta_api.get_consensus(DEFAULT_META_KEY).await
             })
             .await;
 

@@ -4300,7 +4300,6 @@ dependencies = [
 name = "fedimint-meta-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "clap",
  "erased-serde",

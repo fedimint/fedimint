@@ -1,13 +1,14 @@
-use std::str::FromStr as _;
+use std::str::FromStr;
 use std::{ffi, iter};
 
-use anyhow::Context as _;
 use clap::Parser;
+use fedimint_api_client::api::FederationError;
 use fedimint_meta_common::{DEFAULT_META_KEY, MetaConsensusValue, MetaKey, MetaValue};
 use serde::Serialize;
 use serde_json::json;
 
 use super::MetaClientModule;
+use crate::MetaAdminError;
 use crate::api::MetaFederationApi;
 
 #[derive(Parser, Serialize)]
@@ -44,7 +45,7 @@ enum Opts {
 pub(crate) async fn handle_cli_command(
     meta: &MetaClientModule,
     args: &[ffi::OsString],
-) -> anyhow::Result<serde_json::Value> {
+) -> Result<serde_json::Value, CliCommandError> {
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("meta")).chain(args.iter()));
 
     let res = match opts {
@@ -55,7 +56,7 @@ pub(crate) async fn handle_cli_command(
                 } else {
                     value
                         .to_json_lossy()
-                        .context("deserializing consensus value as json")?
+                        .map_err(CliCommandError::ConsensusValueJson)?
                 };
                 json!({
                     "revision": revision,
@@ -79,26 +80,26 @@ pub(crate) async fn handle_cli_command(
                 .await?;
             let submissions: serde_json::Map<String, serde_json::Value> = submissions
                 .into_iter()
-                .map(|(peer_id, value)| -> anyhow::Result<_> {
+                .map(|(peer_id, value)| -> Result<_, CliCommandError> {
                     let value = if hex {
                         serde_json::Value::String(value.to_string())
                     } else {
                         serde_json::from_reader(value.as_slice())
-                            .context("deserializing submission value")?
+                            .map_err(CliCommandError::SubmissionValueJson)?
                     };
 
                     Ok((peer_id.to_string(), value))
                 })
-                .collect::<anyhow::Result<_, _>>()?;
+                .collect::<Result<_, _>>()?;
 
             serde_json::Value::Object(submissions)
         }
         Opts::Submit { key, value, hex } => {
             let value: MetaValue = if hex {
-                MetaValue::from_str(&value).context("value not a valid hex string")?
+                MetaValue::from_str(&value).map_err(CliCommandError::InvalidHexValue)?
             } else {
                 let _valid_json: serde_json::Value =
-                    serde_json::from_str(&value).context("value not a valid json string")?;
+                    serde_json::from_str(&value).map_err(CliCommandError::InvalidJsonValue)?;
                 MetaValue::from(value.as_bytes())
             };
 
@@ -111,4 +112,32 @@ pub(crate) async fn handle_cli_command(
     };
 
     Ok(res)
+}
+
+/// A failure of a `meta` module command.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum CliCommandError {
+    /// The federation did not serve the request.
+    #[error(transparent)]
+    Federation(#[from] FederationError),
+
+    /// The client has no admin credentials for a guardian-only request.
+    #[error(transparent)]
+    Admin(#[from] MetaAdminError),
+
+    /// The consensus value is not valid JSON.
+    #[error("deserializing consensus value as json")]
+    ConsensusValueJson(#[source] serde_json::Error),
+
+    /// A submitted value is not valid JSON.
+    #[error("deserializing submission value")]
+    SubmissionValueJson(#[source] serde_json::Error),
+
+    /// The value to submit is not a valid hex string.
+    #[error("value not a valid hex string")]
+    InvalidHexValue(#[source] <MetaValue as FromStr>::Err),
+
+    /// The value to submit is not a valid JSON string.
+    #[error("value not a valid json string")]
+    InvalidJsonValue(#[source] serde_json::Error),
 }
