@@ -187,7 +187,7 @@ impl OperationLogEntry {
     /// [`OperationLogEntry::meta`] should tell you the which operation type of
     /// a given module the outcome belongs to. The operation type will have a
     /// corresponding `async fn subscribe_type(&self, operation_id:
-    /// OperationId) -> anyhow::Result<UpdateStreamOrOutcome<TypeState>>;`
+    /// OperationId) -> Result<UpdateStreamOrOutcome<TypeState>, E>;`
     /// function that returns a `UpdateStreamOrOutcome<S>` where `S` is the
     /// high-level state the operation is in. If this state is terminal, i.e.
     /// the stream closes after returning it, it will be cached as the `outcome`
