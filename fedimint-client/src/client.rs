@@ -66,8 +66,8 @@ use fedimint_core::{
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{
     DBTransactionEventLogExt as _, DynEventLogTrimableTracker, Event, EventHandlerError, EventKind,
-    EventLogEntry, EventLogId, EventLogTrimableId, EventLogTrimableTracker, EventPersistence,
-    PersistedLogEntry,
+    EventLogEntry, EventLogId, EventLogTrackerError, EventLogTrimableId, EventLogTrimableTracker,
+    EventPersistence, PersistedLogEntry,
 };
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_NET_API, LOG_CLIENT_RECOVERY};
 use futures::stream::FuturesUnordered;
@@ -2681,7 +2681,7 @@ impl Client {
                 &mut self,
                 dbtx: &mut DatabaseTransaction<NonCommittable>,
                 pos: EventLogTrimableId,
-            ) -> anyhow::Result<()> {
+            ) -> Result<(), EventLogTrackerError> {
                 dbtx.insert_entry(&DefaultApplicationEventLogKey, &pos)
                     .await;
                 Ok(())
@@ -2691,7 +2691,7 @@ impl Client {
             async fn load(
                 &mut self,
                 dbtx: &mut DatabaseTransaction<NonCommittable>,
-            ) -> anyhow::Result<Option<EventLogTrimableId>> {
+            ) -> Result<Option<EventLogTrimableId>, EventLogTrackerError> {
                 Ok(dbtx.get_value(&DefaultApplicationEventLogKey).await)
             }
         }

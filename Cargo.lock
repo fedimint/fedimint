@@ -3656,7 +3656,6 @@ dependencies = [
 name = "fedimint-eventlog"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "fedimint-core",
  "fedimint-logging",

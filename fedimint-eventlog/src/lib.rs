@@ -823,13 +823,13 @@ pub trait EventLogNonTrimableTracker {
         &mut self,
         dbtx: &mut DatabaseTransaction<NonCommittable>,
         pos: EventLogId,
-    ) -> anyhow::Result<()>;
+    ) -> Result<(), EventLogTrackerError>;
 
     /// Load the last previous stored position (or None if never stored)
     async fn load(
         &mut self,
         dbtx: &mut DatabaseTransaction<NonCommittable>,
-    ) -> anyhow::Result<Option<EventLogId>>;
+    ) -> Result<Option<EventLogId>, EventLogTrackerError>;
 }
 pub type DynEventLogTracker = Box<dyn EventLogNonTrimableTracker>;
 
@@ -841,15 +841,36 @@ pub trait EventLogTrimableTracker {
         &mut self,
         dbtx: &mut DatabaseTransaction<NonCommittable>,
         pos: EventLogTrimableId,
-    ) -> anyhow::Result<()>;
+    ) -> Result<(), EventLogTrackerError>;
 
     /// Load the last previous stored position (or None if never stored)
     async fn load(
         &mut self,
         dbtx: &mut DatabaseTransaction<NonCommittable>,
-    ) -> anyhow::Result<Option<EventLogTrimableId>>;
+    ) -> Result<Option<EventLogTrimableId>, EventLogTrackerError>;
 }
 pub type DynEventLogTrimableTracker = Box<dyn EventLogTrimableTracker>;
+
+/// A failure of an event log tracker to load or store its position in the
+/// log.
+///
+/// Trackers are implemented by applications, so the causes are their own.
+/// This type carries them unchanged: its `Display` and its `source()` are the
+/// cause's.
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct EventLogTrackerError(Box<dyn std::error::Error + Send + Sync>);
+
+impl EventLogTrackerError {
+    /// Wraps a failure of an event log tracker, which may be any error value
+    /// or a plain message.
+    pub fn new<E>(source: E) -> Self
+    where
+        E: Into<Box<dyn std::error::Error + Send + Sync>>,
+    {
+        Self(source.into())
+    }
+}
 
 /// A failure while handling entries from the event log.
 #[derive(Debug, Error)]
