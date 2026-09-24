@@ -20,7 +20,6 @@ name = "fedimint_walletv2_client"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }

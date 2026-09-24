@@ -18,7 +18,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::anyhow;
 use api::WalletFederationApi;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, ScriptBuf};
@@ -41,7 +40,7 @@ use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, State
 use fedimint_client_module::sm_enum_variant_translation;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    Database, DatabaseError, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -855,7 +854,7 @@ impl WalletClientModule {
         });
     }
 
-    async fn check_outputs(&self, handle: &TaskHandle) -> anyhow::Result<bool> {
+    async fn check_outputs(&self, handle: &TaskHandle) -> Result<bool, CheckOutputsError> {
         let mut dbtx = self.db.begin_transaction_nc().await;
 
         let next_output_index = dbtx.get_value(&NextOutputIndexKey).await.unwrap_or(0);
@@ -940,7 +939,7 @@ impl WalletClientModule {
         &self,
         output: &OutputInfo,
         address_index: u64,
-    ) -> anyhow::Result<bool> {
+    ) -> Result<bool, ProcessOutputError> {
         debug!(
             target: LOG_CLIENT_MODULE_WALLETV2,
             output_index = output.index,
@@ -967,7 +966,7 @@ impl WalletClientModule {
             .module_api
             .receive_fee()
             .await?
-            .ok_or(anyhow!("No consensus feerate is available"))?;
+            .ok_or(ProcessOutputError::NoFeerate)?;
 
         if let Some((operation_id, txid)) = self
             .receive_output(
@@ -991,7 +990,7 @@ impl WalletClientModule {
                 .await
                 .await_tx_accepted(txid)
                 .await
-                .map_err(|e| anyhow!("Claim transaction was rejected: {e}"))?;
+                .map_err(ProcessOutputError::ClaimRejected)?;
             debug!(
                 target: LOG_CLIENT_MODULE_WALLETV2,
                 output_index = output.index,
@@ -1073,6 +1072,40 @@ pub enum AwaitReceiveError {
     /// The deposit was claimed, but the ecash it mints was never issued.
     #[error("The ecash for the claimed deposit could not be issued")]
     Issuance(#[from] TransactionSubmitError),
+}
+
+/// A failure while scanning the federation's outputs for payments to this
+/// client.
+#[derive(Debug, Error)]
+enum CheckOutputsError {
+    /// The federation did not serve the scan.
+    #[error(transparent)]
+    Federation(#[from] FederationError),
+
+    /// The scan's progress could not be committed.
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+
+    /// An unspent output paid to this client could not be claimed.
+    #[error(transparent)]
+    ProcessOutput(#[from] ProcessOutputError),
+}
+
+/// A failure to claim an unspent output paid to this client.
+#[derive(Debug, Error)]
+enum ProcessOutputError {
+    /// The federation could not report its pending transactions or the
+    /// receive fee.
+    #[error(transparent)]
+    Federation(#[from] FederationError),
+
+    /// The federation has no consensus feerate to price the claim with.
+    #[error("No consensus feerate is available")]
+    NoFeerate,
+
+    /// The claim transaction was rejected.
+    #[error("Claim transaction was rejected: {0}")]
+    ClaimRejected(String),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
