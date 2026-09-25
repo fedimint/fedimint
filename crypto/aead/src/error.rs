@@ -18,8 +18,10 @@ pub enum DecryptError {
         len: usize,
     },
 
-    /// The ciphertext does not authenticate under the key: the key is wrong,
-    /// the ciphertext was altered, or it is too short to hold the tag.
+    /// The ciphertext could not be opened: it does not authenticate under
+    /// the key (the key is wrong or the ciphertext was altered), it is too
+    /// short to hold the tag, or it is longer than the cipher can process
+    /// as one message.
     #[error("Decryption failed due to unspecified aead error")]
     Open,
 }
