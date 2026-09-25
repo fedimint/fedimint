@@ -3287,7 +3287,6 @@ dependencies = [
 name = "fedimint-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "assert_matches",
  "async-stream",
  "async-trait",
@@ -3322,7 +3321,6 @@ dependencies = [
 name = "fedimint-client-module"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "aquamarine",
  "assert_matches",
  "async-stream",

@@ -34,8 +34,8 @@ fn other_accepts_a_plain_message() {
 }
 
 #[test]
-fn other_keeps_an_anyhow_chain_intact() {
-    let error = ClientModuleError::other(anyhow::anyhow!("inner").context("outer"));
+fn other_keeps_a_source_chain_intact() {
+    let error = ClientModuleError::other(OuterError(std::io::Error::other("inner")));
 
     assert_eq!(error.to_string(), "outer");
     assert_eq!(error.fmt_compact().to_string(), "outer: inner");
@@ -68,3 +68,8 @@ fn any_other_module_failure_fails_the_transaction_as_primary_module() {
         TransactionSubmitError::PrimaryModule(ClientModuleError::Unsupported { .. })
     );
 }
+
+/// A failure with a cause, so that the wrapped error has a chain of two.
+#[derive(Debug, thiserror::Error)]
+#[error("outer")]
+struct OuterError(#[source] std::io::Error);

@@ -59,7 +59,6 @@ tracing = { workspace = true }
 uniffi = { workspace = true, optional = true, features = ["tokio"] }
 
 [dev-dependencies]
-anyhow = { workspace = true }
 assert_matches = { workspace = true }
 tracing-test = { workspace = true }
 
