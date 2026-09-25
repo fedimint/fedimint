@@ -58,7 +58,9 @@ pub struct OperationId(pub [u8; 32]);
 #[cfg(feature = "uniffi")]
 uniffi::custom_type!(OperationId, String, {
     lower: |obj| obj.fmt_full().to_string(),
-    try_lift: |s| OperationId::from_str(&s).map_err(|e| uniffi::deps::anyhow::anyhow!("Failed to parse OperationId from hex: {e}")),
+    try_lift: |s| OperationId::from_str(&s).map_err(|e| {
+        uniffi::deps::anyhow::anyhow!("Failed to parse OperationId from hex: {e}")
+    }),
     }
 );
 

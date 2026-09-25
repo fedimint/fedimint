@@ -392,7 +392,9 @@ pub struct FederationId(pub sha256::Hash);
 uniffi::custom_type!(FederationId, String, {
     lower: |obj| obj.to_string(),
     try_lift: |bytes| {
-        let obj: FederationId = bytes.parse().map_err(|e| uniffi::deps::anyhow::anyhow!("Failed to parse FederationId from string: {e}"))?;
+        let obj: FederationId = bytes.parse().map_err(|e| {
+            uniffi::deps::anyhow::anyhow!("Failed to parse FederationId from string: {e}")
+        })?;
         Ok(obj)
     },
 });
@@ -719,7 +721,9 @@ uniffi::custom_type!(ClientModuleConfigRaw, String, {
     lower: |v| v.consensus_encode_to_hex(),
     try_lift: |s| {
         ClientModuleConfigRaw::consensus_decode_hex(&s, &ModuleDecoderRegistry::default())
-            .map_err(|e| uniffi::deps::anyhow::anyhow!("Failed to decode client module config: {e}"))
+            .map_err(|e| {
+                uniffi::deps::anyhow::anyhow!("Failed to decode client module config: {e}")
+            })
     },
 });
 
