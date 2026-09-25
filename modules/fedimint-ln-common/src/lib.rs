@@ -403,7 +403,7 @@ use std::str::FromStr;
 uniffi::custom_type!(Signature, String, {
     remote,
     lower: |sig| sig.to_string(),
-    try_lift: |s| Signature::from_str(&s).map_err(|e| anyhow::anyhow!(e)),
+    try_lift: |s| Signature::from_str(&s).map_err(Into::into),
 });
 
 /// Upper bound guardians place on a registration's lifetime. Gateways announce
@@ -601,7 +601,7 @@ pub mod route_hints {
     uniffi::custom_type!(PublicKey, String, {
     remote,
     lower: |pk| pk.to_string(),
-    try_lift: |s| PublicKey::from_str(&s).map_err(|e| anyhow::anyhow!(e)),
+    try_lift: |s| PublicKey::from_str(&s).map_err(Into::into),
     });
 
     /// A list of hops along a payment path terminating with a channel to the
