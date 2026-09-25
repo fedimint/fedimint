@@ -436,6 +436,7 @@ pub async fn run(
         RocksDb::build(server_opts.data_dir.join(DB_FILE))
             .open()
             .await
+            .map_err(anyhow::Error::from)
             .unwrap(),
         ModuleRegistry::default(),
     );

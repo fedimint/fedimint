@@ -133,7 +133,7 @@ impl GatewayClientBuilder {
                     let rocksdb = fedimint_rocksdb::RocksDb::build(db_path.clone())
                         .open()
                         .await
-                        .map_err(AdminGatewayError::ClientCreationError)?;
+                        .map_err(|err| AdminGatewayError::ClientCreationError(err.into()))?;
                     Database::new(rocksdb, ModuleDecoderRegistry::default())
                 }
                 DatabaseBackend::CursedRedb => {

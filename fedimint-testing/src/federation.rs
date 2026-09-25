@@ -74,6 +74,7 @@ impl FederationTest {
             RocksDb::build(tempfile::tempdir().expect("Couldn't create temp dir"))
                 .open()
                 .await
+                .map_err(anyhow::Error::from)
                 .expect("Couldn't open DB")
                 .into(),
             None,

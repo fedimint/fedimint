@@ -4741,7 +4741,6 @@ dependencies = [
 name = "fedimint-rocksdb"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "bon",
  "fedimint-core",
@@ -4750,6 +4749,7 @@ dependencies = [
  "futures",
  "rocksdb",
  "tempfile",
+ "thiserror 2.0.20",
  "tokio",
  "tracing",
 ]
