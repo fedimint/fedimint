@@ -9,7 +9,7 @@ use fedimint_client::db::DbKeyPrefix;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::impl_db_record;
-use fedimint_core::task::sleep_in_test;
+use fedimint_core::task::{sleep, sleep_in_test};
 use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
@@ -313,12 +313,15 @@ async fn first_address_search_survives_concurrent_db_writes() -> anyhow::Result<
     // the writes have to land while the scanner's first address search runs,
     // and that search starts as soon as the module is initialized
     let db = client.db().clone();
-    let value = FillerValue(vec![0xab; 1024 * 1024]);
+    let value = FillerValue(vec![0xab; 64 * 1024]);
 
-    for index in 0..32u32 {
+    // 8 MiB is twice the write history RocksDB keeps. the pauses keep the
+    // short transactions other client tasks commit from spanning that history
+    for index in 0..128u32 {
         let mut dbtx = db.begin_transaction().await;
         dbtx.insert_entry(&FillerKey(index), &value).await;
         dbtx.commit_tx().await;
+        sleep(Duration::from_millis(1)).await;
     }
 
     let wallet = client.get_first_module::<WalletClientModule>()?;
