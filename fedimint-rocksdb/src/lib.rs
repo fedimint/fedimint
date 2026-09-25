@@ -226,12 +226,13 @@ pub enum RocksDbOpenError {
     #[error(transparent)]
     Lock(#[from] DbLockError),
 
-    /// A size override in the environment is not a number.
+    /// A size override in the environment is not a number, or is too large
+    /// for a `usize`.
     #[error("Could not parse {var}")]
     EnvParse {
         /// The environment variable.
         var: &'static str,
-        /// Why its value is not a number.
+        /// Why its value could not be parsed.
         #[source]
         source: std::num::ParseIntError,
     },
