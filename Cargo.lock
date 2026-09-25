@@ -5066,9 +5066,6 @@ dependencies = [
 [[package]]
 name = "fedimint-util-error"
 version = "0.13.0-alpha"
-dependencies = [
- "anyhow",
-]
 
 [[package]]
 name = "fedimint-wallet-client"

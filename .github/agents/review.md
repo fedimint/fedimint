@@ -319,7 +319,7 @@ Prefer and suggest:
   - `LOG_CLIENT_NET_API` vs `LOG_CLIENT_NET` — pick the one matching the
     surrounding module
   - `fedimint_core::envs::FM_*` constants — don't hard-code env var names
-  - `fmt_compact_anyhow` for error display parity
+  - `fmt_compact` for error display parity (it prints an `anyhow::Error`'s chain too)
 - **Dependency coherence.** Every new dependency must earn its place. A
   crate that logically does one thing shouldn't pull in a web framework, a
   second serializer, or a large JS bundle "just to avoid passing two

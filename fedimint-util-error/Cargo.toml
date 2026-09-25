@@ -12,8 +12,5 @@ version = { workspace = true }
 name = "fedimint_util_error"
 path = "src/lib.rs"
 
-[dependencies]
-anyhow = { workspace = true }
-
 [lints]
 workspace = true
