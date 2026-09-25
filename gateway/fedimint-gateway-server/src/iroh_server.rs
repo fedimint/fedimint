@@ -10,7 +10,7 @@ use bitcoin::hashes::sha256;
 use fedimint_core::module::{FEDIMINT_GATEWAY_ALPN, IrohGatewayRequest, IrohGatewayResponse};
 use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::FmtCompactAnyhow as _;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_gateway_common::STOP_ENDPOINT;
 use fedimint_logging::LOG_GATEWAY;
 use futures::FutureExt as _;
@@ -261,7 +261,7 @@ async fn run_handler(
         warn!(
             target: LOG_GATEWAY,
             route,
-            err = %err.fmt_compact_anyhow(),
+            err = %err.fmt_compact(),
             "Gateway API handler returned an error"
         );
 

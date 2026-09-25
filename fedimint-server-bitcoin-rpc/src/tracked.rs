@@ -2,7 +2,7 @@ use anyhow::Result;
 use bitcoin::{Block, BlockHash, Transaction};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::time::now;
-use fedimint_core::util::{FmtCompactResultAnyhow as _, SafeUrl};
+use fedimint_core::util::{FmtCompactResult as _, SafeUrl};
 use fedimint_core::{ChainId, Feerate};
 use fedimint_logging::LOG_BITCOIND;
 use fedimint_metrics::HistogramExt as _;
@@ -63,7 +63,7 @@ macro_rules! tracked_call {
             method = $method,
             name = $self.name,
             duration_ms,
-            error = %result.fmt_compact_result_anyhow(),
+            error = %result.as_ref().map_err(|e| &**e).fmt_compact_result(),
             "completed bitcoind rpc"
         );
         result

@@ -28,7 +28,7 @@ use fedimint_core::session_outcome::{
 };
 use fedimint_core::task::{TaskGroup, TaskHandle, sleep};
 use fedimint_core::timing::TimeReporter;
-use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _};
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{NumPeers, NumPeersExt, PeerId, timing};
 use fedimint_server_core::{ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
@@ -863,7 +863,7 @@ impl ConsensusEngine {
             // Check if any old checkpoint need to be cleaned up
             let _timing /* logs on drop */ = timing::TimeReporter::new("remove-database-checkpoint").level(Level::TRACE);
             if let Err(err) = self.delete_old_database_checkpoint(session_index, &checkpoint_dir) {
-                warn!(target: LOG_CONSENSUS, err = %err.fmt_compact_anyhow(), "Could not delete old checkpoints");
+                warn!(target: LOG_CONSENSUS, err = %err.fmt_compact(), "Could not delete old checkpoints");
             }
         }
     }
@@ -1004,7 +1004,7 @@ impl ConsensusEngine {
                 target: LOG_CONSENSUS,
                 %peer,
                 item = ?DebugConsensusItem(item),
-                err = %err.fmt_compact_anyhow(),
+                err = %err.fmt_compact(),
                 "Rejected consensus item"
             );
 

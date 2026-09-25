@@ -15,7 +15,7 @@ use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::util::{BoxFuture, BoxStream, FmtCompactAnyhow as _};
+use fedimint_core::util::{BoxFuture, BoxStream, FmtCompact as _};
 use fedimint_core::{Amount, TieredCounts, impl_db_record};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_ln_client::{LightningClientInit, LightningClientModule};
@@ -534,7 +534,7 @@ impl RpcGlobalState {
                     Err(e) => RpcResponse {
                         request_id,
                         kind: RpcResponseKind::Error {
-                            error: e.fmt_compact_anyhow().to_string(),
+                            error: e.fmt_compact().to_string(),
                         },
                     },
                 };

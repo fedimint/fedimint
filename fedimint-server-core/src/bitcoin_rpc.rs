@@ -6,7 +6,7 @@ use anyhow::{Result, ensure};
 use fedimint_core::bitcoin::{Block, BlockHash, Network, Transaction};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{ChainId, Feerate};
 use fedimint_logging::LOG_SERVER;
 use tokio::sync::watch;
@@ -80,7 +80,7 @@ impl ServerBitcoinRpcMonitor {
                     Err(err) => {
                         warn!(
                             target: LOG_SERVER,
-                            err = %err.fmt_compact_anyhow(),
+                            err = %err.fmt_compact(),
                             "Bitcoin status update failed"
                         );
                         status_sender.send_replace(None);

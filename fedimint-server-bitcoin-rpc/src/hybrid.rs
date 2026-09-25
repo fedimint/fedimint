@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use anyhow::{Result, anyhow};
 use bitcoin::{BlockHash, Transaction};
 use fedimint_core::envs::BitcoinRpcConfig;
-use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{ChainId, Feerate};
 use fedimint_logging::LOG_SERVER;
 use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, IServerBitcoinRpc};
@@ -109,7 +109,7 @@ impl BitcoindClientWithFallback {
     async fn fallback_block_count(&self, primary: anyhow::Error) -> Result<u64> {
         warn!(
             target: LOG_SERVER,
-            error = %primary.fmt_compact_anyhow(),
+            error = %primary.fmt_compact(),
             "Bitcoind block count unavailable; falling back to Esplora"
         );
         match self.esplora_client.get_block_count().await {
@@ -135,7 +135,7 @@ macro_rules! read_rpc {
                 warn!(
                     target: LOG_SERVER,
                     method = stringify!($method),
-                    error = %primary.fmt_compact_anyhow(),
+                    error = %primary.fmt_compact(),
                     "Bitcoind read failed; trying Esplora"
                 );
                 match $self.esplora_client.$method($($arg),*).await {
@@ -219,7 +219,7 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
             Err(primary) => {
                 warn!(
                     target: LOG_SERVER,
-                    error = %primary.fmt_compact_anyhow(),
+                    error = %primary.fmt_compact(),
                     "Bitcoind fee-estimate request failed; trying Esplora"
                 );
                 match self.esplora_client.get_feerate().await {
@@ -244,7 +244,7 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
         {
             Ok(()) => Ok(()),
             Err(primary) => {
-                warn!(target: LOG_SERVER, error = %primary.fmt_compact_anyhow(), "Bitcoind broadcast failed; trying Esplora");
+                warn!(target: LOG_SERVER, error = %primary.fmt_compact(), "Bitcoind broadcast failed; trying Esplora");
                 match self.esplora_client.submit_transaction(transaction).await {
                     Ok(()) => Ok(()),
                     Err(_) => {
@@ -273,7 +273,7 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
             Err(primary) => {
                 warn!(
                     target: LOG_SERVER,
-                    error = %primary.fmt_compact_anyhow(),
+                    error = %primary.fmt_compact(),
                     "Bitcoind chain identity unavailable; trying Esplora"
                 );
                 self.esplora_client.get_chain_id().await?
