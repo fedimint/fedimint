@@ -254,11 +254,12 @@ struct P2PConnectionSMCommon<M> {
     connector: DynP2PConnector<M>,
     incoming_connections: Receiver<DynP2PConnection<M>>,
     status_sender: watch::Sender<P2PConnectionState>,
-    /// Drop a connection once it exceeds this age so it is re-established;
-    /// disabled if `None`.
+    /// Request connection retirement after this age so it is re-established.
+    ///
+    /// The send loop checks the deadline between sends; disabled if `None`.
     max_connection_age: Option<Duration>,
-    /// Point in time at which the current connection exceeds the maximum
-    /// age; set whenever a new connection is established.
+    /// Deadline after which the send loop requests max-age retirement; set when
+    /// a new connection is established.
     connection_deadline: Option<Instant>,
 }
 
@@ -325,20 +326,24 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
         connection: DynP2PConnection<M>,
         mut status_updates: Option<DynConnectionStatusUpdates>,
     ) -> Option<P2PConnectionSMState<M>> {
-        // The send and receive halves are driven as two long-lived futures that
-        // are never cancelled part-way through a message. Multiplexing a single
-        // send and a single receive in one `select!` meant that a send parked on
-        // transport flow control could no longer poll `receive`, so two peers
-        // that both started writing a message larger than the transport window
-        // deadlocked permanently and silently.
+        // The send and receive halves are driven as two long-lived futures during
+        // ordinary operation. Multiplexing a single send and a single receive in
+        // one `select!` meant that a send parked on transport flow control could
+        // no longer poll `receive`, so two peers that both started writing a
+        // message larger than the transport window deadlocked permanently and
+        // silently.
         //
         // Interleaving reads inside the parked send is *not* sufficient: it just
         // turns a write/write deadlock into a read/read one. The halves have to
         // be genuinely concurrent.
         //
-        // Replacement connections and the max-age deadline are observed inside
-        // the send half, between messages, so they can never cancel a send that
-        // is already in flight.
+        // Connection failure, replacement, max-age retirement, or shutdown can
+        // stop this transition and discard in-flight receive work. See
+        // `SPEC-guardian-p2p-delivery`.
+        //
+        // Replacement and max-age retirement are observed inside the send half,
+        // between messages, so they do not cancel an active non-cancel-safe send.
+        // A send that remains pending defers retirement.
         let send_loop = Self::send_loop(
             &connection,
             &self.outgoing_receiver,
@@ -397,12 +402,13 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
         }
     }
 
-    /// Drains the outgoing queue onto the connection. Replacement connections
-    /// and the max-age deadline are observed here, between sends, so they can
-    /// never cancel the non-cancel-safe `send` and silently drop a message
-    /// that the DKG would not resend. Only a failure of the connection itself
-    /// can still lose the message in flight; the networking layer is
-    /// unreliable by design.
+    /// Drains the outgoing queue onto the connection.
+    ///
+    /// Replacement and max-age retirement are observed between sends, avoiding
+    /// cancellation of an active non-cancel-safe `send`. This does not
+    /// acknowledge delivery or recover messages after reconnecting, and a send
+    /// that remains pending defers retirement. See
+    /// `SPEC-guardian-p2p-delivery`.
     async fn send_loop(
         connection: &DynP2PConnection<M>,
         outgoing_receiver: &Receiver<M>,

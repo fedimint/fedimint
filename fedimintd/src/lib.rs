@@ -226,9 +226,10 @@ struct ServerOpts {
     #[arg(long, env = FM_SESSION_TIMEOUT_SECS_ENV, default_value = "3600")]
     session_timeout_secs: u64,
 
-    /// Drop a p2p connection to a peer once it exceeds this age in seconds,
-    /// relying on the reconnection logic to re-establish it. Unset by
-    /// default, in which case connections are never dropped due to their age.
+    /// Request P2P connection retirement after this many seconds. The manager
+    /// checks the limit between sends, so it is not a timeout for stalled I/O.
+    /// Unset by default, in which case age does not request retirement. See
+    /// `SPEC-guardian-p2p-delivery`.
     #[arg(long, env = FM_P2P_MAX_CONNECTION_AGE_SECS_ENV)]
     p2p_max_connection_age_secs: Option<u64>,
 
