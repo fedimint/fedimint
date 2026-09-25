@@ -4399,7 +4399,6 @@ dependencies = [
 name = "fedimint-metrics"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "axum 0.8.9",
  "fedimint-core",
  "prometheus",

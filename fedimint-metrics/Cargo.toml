@@ -15,7 +15,6 @@ name = "fedimint_metrics"
 path = "./src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true, features = ["backtrace"] }
 fedimint-core = { workspace = true }
 prometheus = { workspace = true }
 tracing = { workspace = true }
