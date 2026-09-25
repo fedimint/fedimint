@@ -3151,11 +3151,11 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 name = "fedimint-aead"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "argon2",
  "hex",
  "rand 0.8.5",
  "ring",
+ "thiserror 2.0.20",
 ]
 
 [[package]]

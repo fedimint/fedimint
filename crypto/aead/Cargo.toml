@@ -16,11 +16,11 @@ name = "fedimint_aead"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
-argon2 = { workspace = true, features = ["password-hash", "alloc"] }
+argon2 = { workspace = true, features = ["password-hash", "alloc", "std"] }
 hex = { workspace = true }
 rand = { workspace = true }
 ring = { workspace = true }
+thiserror = { workspace = true }
 
 [lints]
 workspace = true
