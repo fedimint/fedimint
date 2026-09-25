@@ -1,7 +1,7 @@
 use super::{Duration, JoinAllError, TaskGroup, sleep};
 
 #[test_log::test(tokio::test)]
-async fn shutdown_task_group_after() -> anyhow::Result<()> {
+async fn shutdown_task_group_after() -> Result<(), JoinAllError> {
     let tg = TaskGroup::new();
     tg.spawn("shutdown waiter", |handle| async move {
         handle.make_shutdown_rx().await;
@@ -12,7 +12,7 @@ async fn shutdown_task_group_after() -> anyhow::Result<()> {
 }
 
 #[test_log::test(tokio::test)]
-async fn shutdown_task_group_before() -> anyhow::Result<()> {
+async fn shutdown_task_group_before() -> Result<(), JoinAllError> {
     let tg = TaskGroup::new();
     tg.spawn("shutdown waiter", |handle| async move {
         sleep(Duration::from_millis(10)).await;
@@ -23,7 +23,7 @@ async fn shutdown_task_group_before() -> anyhow::Result<()> {
 }
 
 #[test_log::test(tokio::test)]
-async fn shutdown_task_subgroup_after() -> anyhow::Result<()> {
+async fn shutdown_task_subgroup_after() -> Result<(), JoinAllError> {
     let tg = TaskGroup::new();
     tg.make_subgroup()
         .spawn("shutdown waiter", |handle| async move {
@@ -35,7 +35,7 @@ async fn shutdown_task_subgroup_after() -> anyhow::Result<()> {
 }
 
 #[test_log::test(tokio::test)]
-async fn shutdown_task_subgroup_before() -> anyhow::Result<()> {
+async fn shutdown_task_subgroup_before() -> Result<(), JoinAllError> {
     let tg = TaskGroup::new();
     tg.make_subgroup()
         .spawn("shutdown waiter", |handle| async move {

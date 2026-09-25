@@ -92,7 +92,7 @@ pub struct SafeUrl(Url);
 #[cfg(feature = "uniffi")]
 uniffi::custom_type!(SafeUrl, String, {
     lower: |u| u.0.to_string(),
-    try_lift: |s| SafeUrl::parse(&s).map_err(|e| anyhow::anyhow!("Invalid URL: {e}")),
+    try_lift: |s| SafeUrl::parse(&s).map_err(|e| uniffi::deps::anyhow::anyhow!("Invalid URL: {e}")),
 });
 
 impl SafeUrl {
@@ -415,7 +415,7 @@ pub fn handle_version_hash_command(version_hash: &str) {
 ///     backoff_util::background_backoff(),
 ///     || async {
 ///         // Fallible network calls …
-///         anyhow::Ok(())
+///         Ok::<(), std::io::Error>(())
 ///     },
 /// )
 /// .await

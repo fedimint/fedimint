@@ -13,7 +13,6 @@ use std::io::Read;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -59,7 +58,7 @@ pub struct OperationId(pub [u8; 32]);
 #[cfg(feature = "uniffi")]
 uniffi::custom_type!(OperationId, String, {
     lower: |obj| obj.fmt_full().to_string(),
-    try_lift: |s| OperationId::from_str(&s).map_err(|e| anyhow::anyhow!("Failed to parse OperationId from hex: {e}")),
+    try_lift: |s| OperationId::from_str(&s).map_err(|e| uniffi::deps::anyhow::anyhow!("Failed to parse OperationId from hex: {e}")),
     }
 );
 
@@ -379,17 +378,14 @@ impl Decoder {
         module_id: ModuleInstanceId,
         decoders: &ModuleDecoderRegistry,
     ) -> Result<DynType, DecodeError> {
-        let decode_fn = self
-            .decode_fns
-            .get(&TypeId::of::<DynType>())
-            .ok_or_else(|| {
-                anyhow!(
-                    "Type unknown to decoder: {}, (registered decoders={})",
-                    std::any::type_name::<DynType>(),
-                    self.decode_fns.len()
-                )
-            })
-            .expect("Types being decoded must be registered");
+        let Some(decode_fn) = self.decode_fns.get(&TypeId::of::<DynType>()) else {
+            panic!(
+                "Types being decoded must be registered: Type unknown to decoder: {}, \
+                 (registered decoders={})",
+                std::any::type_name::<DynType>(),
+                self.decode_fns.len()
+            );
+        };
         Ok(*decode_fn(Box::new(reader), module_id, decoders)?
             .downcast::<DynType>()
             .expect("Decode fn returned wrong type, can't happen due to with_decodable_type"))

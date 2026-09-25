@@ -1,8 +1,9 @@
+use assert_matches::assert_matches;
 use tokio::sync::oneshot;
 
 use super::mem_impl::MemDatabase;
 use super::{
-    Database, DatabaseKey, DatabaseRecord, DecodingError, GlobalDBTxAccessToken,
+    Database, DatabaseKey, DatabaseRecord, DbMigrationError, DecodingError, GlobalDBTxAccessToken,
     IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt, TestKey, TestVal, future_returns_shortly,
 };
 use crate::module::registry::ModuleDecoderRegistry;
@@ -228,4 +229,15 @@ fn key_with_a_truncated_payload_is_a_decode_error() {
     let err = TestKey::from_bytes(&bytes, &ModuleDecoderRegistry::default())
         .expect_err("a u64 cannot be decoded from zero bytes");
     assert!(matches!(err, DecodingError::Decode(_)), "{err:?}");
+}
+
+#[test]
+fn db_migration_error_other_keeps_its_source() {
+    let err = DbMigrationError::other(std::io::Error::other("legacy"));
+
+    assert_matches!(
+        &err,
+        DbMigrationError::Other(source) if source.to_string() == "legacy"
+    );
+    assert!(std::error::Error::source(&err).is_some());
 }

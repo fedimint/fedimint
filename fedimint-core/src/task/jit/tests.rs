@@ -1,7 +1,5 @@
 use std::time::Duration;
 
-use anyhow::bail;
-
 use super::{Jit, JitTry};
 
 #[test_log::test(tokio::test)]
@@ -18,7 +16,7 @@ async fn sanity_jit() {
 
 #[test_log::test(tokio::test)]
 async fn sanity_jit_try_ok() {
-    let v = JitTry::<_, anyhow::Error>::new_try(|| async {
+    let v = JitTry::<_, std::io::Error>::new_try(|| async {
         fedimint_core::runtime::sleep(Duration::from_millis(0)).await;
         Ok(3)
     });
@@ -32,9 +30,7 @@ async fn sanity_jit_try_ok() {
 async fn sanity_jit_try_err() {
     let v = JitTry::new_try(|| async {
         fedimint_core::runtime::sleep(Duration::from_millis(0)).await;
-        bail!("BOOM");
-        #[allow(unreachable_code)]
-        Ok(3)
+        Err::<u32, _>(std::io::Error::other("BOOM"))
     });
 
     assert!(v.get_try().await.is_err());

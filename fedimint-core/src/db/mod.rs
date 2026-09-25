@@ -58,7 +58,7 @@
 //!     |dbtx, _| {
 //!         Box::pin(async move {
 //!             dbtx.insert_entry(&TestKey(1), &TestVal(100)).await;
-//!             anyhow::Ok(())
+//!             Ok::<(), std::convert::Infallible>(())
 //!         })
 //!     },
 //!     None,
@@ -3390,18 +3390,6 @@ mod test_utils {
                 ..
             }
         ));
-    }
-
-    #[cfg(test)]
-    #[test]
-    fn db_migration_error_other_accepts_anyhow() {
-        let err = DbMigrationError::other(anyhow::anyhow!("legacy"));
-
-        assert!(matches!(
-            &err,
-            DbMigrationError::Other(source) if source.to_string() == "legacy"
-        ));
-        assert!(std::error::Error::source(&err).is_some());
     }
 
     #[allow(dead_code)]

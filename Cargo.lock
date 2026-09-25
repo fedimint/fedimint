@@ -3438,7 +3438,6 @@ dependencies = [
 name = "fedimint-core"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "assert_matches",
  "async-channel",
  "async-lock",
