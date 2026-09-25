@@ -1,27 +1,24 @@
 use std::io;
 
-use anyhow::{Context as _, Result};
 use redb::{Database, StorageBackend};
 use web_sys::wasm_bindgen::JsValue;
 use web_sys::{FileSystemReadWriteOptions, FileSystemSyncAccessHandle};
 
-use crate::MemAndRedb;
 use crate::read_exact::read_exact_at;
+use crate::{MemAndRedb, MemAndRedbOpenError};
 
 #[derive(Debug)]
 struct WasmBackend {
     sync_handle: FileSystemSyncAccessHandle,
 }
 
-fn js_error_to_anyhow(unknown_error: impl Into<JsValue>) -> anyhow::Error {
-    match gloo_utils::errors::JsError::try_from(unknown_error.into()) {
-        Ok(error) => error.into(),
-        Err(error) => anyhow::format_err!(error.to_string()),
+fn js_error_to_io_error(err: impl Into<JsValue>) -> io::Error {
+    match gloo_utils::errors::JsError::try_from(err.into()) {
+        Ok(error) => io::Error::other(error),
+        // A thrown value that is not an `Error` object is not `Send`; keep its
+        // text.
+        Err(error) => io::Error::other(error.to_string()),
     }
-}
-
-fn js_error_to_io_error(err: impl Into<JsValue>) -> std::io::Error {
-    std::io::Error::other(js_error_to_anyhow(err))
 }
 
 impl WasmBackend {
@@ -127,7 +124,7 @@ unsafe impl Send for WasmBackend {}
 unsafe impl Sync for WasmBackend {}
 
 impl MemAndRedb {
-    pub fn new(file: FileSystemSyncAccessHandle) -> Result<Self> {
+    pub fn new(file: FileSystemSyncAccessHandle) -> Result<Self, MemAndRedbOpenError> {
         let backend = WasmBackend::new(file.clone());
         match Database::builder().create_with_backend(backend) {
             Ok(db) => Ok(Self::new_from_redb(db)?),
@@ -136,21 +133,21 @@ impl MemAndRedb {
                 let backend = WasmBackend::new(file);
                 let db = Database::builder()
                     .create_with_backend(backend)
-                    .context("Failed to open redb database after v2->v3 migration")?;
+                    .map_err(|e| MemAndRedbOpenError::OpenMigrated(e.into()))?;
                 Ok(Self::new_from_redb(db)?)
             }
-            Err(e) => Err(anyhow::Error::from(e).context("Failed to create/open redb database")),
+            Err(e) => Err(MemAndRedbOpenError::Open(e.into())),
         }
     }
 
-    fn migrate_v2_to_v3(file: &FileSystemSyncAccessHandle) -> Result<()> {
+    fn migrate_v2_to_v3(file: &FileSystemSyncAccessHandle) -> Result<(), MemAndRedbOpenError> {
         tracing::info!("Migrating redb database from v2 to v3 file format");
         let backend = WasmBackend::new(file.clone());
         let mut db = redb2::Database::builder()
             .create_with_backend(backend)
-            .context("Failed to open redb v2 database for migration")?;
+            .map_err(|e| MemAndRedbOpenError::OpenV2(e.into()))?;
         db.upgrade()
-            .context("Failed to upgrade redb database to v3 format")?;
+            .map_err(|e| MemAndRedbOpenError::UpgradeV2(e.into()))?;
         tracing::info!("Successfully migrated redb database to v3 format");
         Ok(())
     }

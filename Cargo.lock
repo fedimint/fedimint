@@ -3384,7 +3384,6 @@ dependencies = [
 name = "fedimint-client-wasm"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "console_error_panic_hook",
  "fedimint-client-rpc",
@@ -3506,7 +3505,6 @@ dependencies = [
 name = "fedimint-cursed-redb"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "fedimint-core",
  "fedimint-db-locked",
@@ -3517,6 +3515,7 @@ dependencies = [
  "redb 2.6.0",
  "redb 3.1.1",
  "tempfile",
+ "thiserror 2.0.20",
  "tokio",
  "tracing",
  "web-sys",
