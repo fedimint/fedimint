@@ -713,7 +713,8 @@ enum RpcRequestError {
     #[error(transparent)]
     InviteCode(#[from] InviteCodeParseError),
 
-    /// The federation's config could not be downloaded.
+    /// The federation's config could not be downloaded, or it belongs to a
+    /// different federation than the invite code names.
     #[error(transparent)]
     ConfigDownload(#[from] ClientConfigDownloadError),
 
@@ -745,7 +746,7 @@ enum RpcRequestError {
     #[error("module not found: {module}")]
     UnknownModule { module: String },
 
-    /// The client has no module of the kind the request addresses.
+    /// The client has no usable module of the kind the request addresses.
     #[error(transparent)]
     ModuleLookup(#[from] ModuleLookupError),
 
