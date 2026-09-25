@@ -4041,7 +4041,6 @@ dependencies = [
 name = "fedimint-ln-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "aquamarine",
  "assert_matches",
  "async-stream",

@@ -9,7 +9,6 @@ use fedimint_core::util::ffi::UniffiError;
 use fedimint_ln_common::{LightningGateway, LightningGatewayAnnouncement};
 use futures::StreamExt;
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription};
-use uniffi::deps::anyhow::anyhow;
 
 use crate::{
     IDatabaseTransactionOpsCoreTyped, InternalPayState, LightningClientModule,
@@ -22,20 +21,20 @@ uniffi::use_remote_type!(fedimint_ln_common::PublicKey);
 uniffi::custom_type!(Bolt11Invoice, String, {
     remote,
     lower: |invoice| invoice.to_string(),
-    try_lift: |s| Bolt11Invoice::from_str(&s).map_err(|e| anyhow!(e)),
+    try_lift: |s| Bolt11Invoice::from_str(&s).map_err(Into::into),
 });
 
 uniffi::custom_type!(Bolt11InvoiceDescription, String, {
     remote,
     lower: |desc| desc.to_string(),
     try_lift: |s| Ok(Bolt11InvoiceDescription::Direct(
-                    lightning_invoice::Description::new(s).map_err(|e| anyhow!(e))?)),
+                    lightning_invoice::Description::new(s)?)),
 });
 
 uniffi::custom_type!(SecretKey, String, {
     remote,
     lower: |sk| sk.display_secret().to_string(),
-    try_lift: |s| SecretKey::from_str(&s).map_err(|e| anyhow!(e)),
+    try_lift: |s| SecretKey::from_str(&s).map_err(Into::into),
 });
 
 type Result<T> = std::result::Result<T, UniffiError>;
