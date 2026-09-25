@@ -3725,7 +3725,6 @@ dependencies = [
 name = "fedimint-gateway-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "bcrypt",
  "bitcoin",
  "chrono",
