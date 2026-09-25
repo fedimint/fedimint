@@ -3353,9 +3353,9 @@ dependencies = [
 name = "fedimint-client-rpc"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-stream",
  "async-trait",
+ "bip39",
  "fedimint-api-client",
  "fedimint-bip39",
  "fedimint-client",
@@ -3373,6 +3373,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "thiserror 2.0.20",
  "tokio",
  "tracing",
 ]
