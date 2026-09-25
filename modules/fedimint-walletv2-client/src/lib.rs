@@ -804,24 +804,30 @@ impl WalletClientModule {
         let handle = task_group.make_handle();
 
         task_group.spawn_cancellable_with_span(client_span.clone(), "output-scanner", async move {
-            let mut dbtx = module.db.begin_transaction().await;
-
-            if dbtx
+            // A transaction held across the search fails its commit once other
+            // writes exhaust RocksDB's retained write history.
+            let has_valid_index = module
+                .db
+                .begin_transaction_nc()
+                .await
                 .find_by_prefix(&ValidAddressIndexPrefix)
                 .await
                 .next()
                 .await
-                .is_none()
-            {
+                .is_some();
+
+            if !has_valid_index {
                 let Some(index) = module.next_valid_index(0, &handle).await else {
                     return;
                 };
 
+                let mut dbtx = module.db.begin_transaction().await;
+
                 dbtx.insert_new_entry(&ValidAddressIndexKey(index), &())
                     .await;
-            }
 
-            dbtx.commit_tx().await;
+                dbtx.commit_tx().await;
+            }
 
             loop {
                 match module.check_outputs(&handle).await {
