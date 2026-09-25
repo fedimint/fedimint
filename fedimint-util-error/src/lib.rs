@@ -3,7 +3,7 @@ use std::{error, fmt};
 
 /// A wrapper with `fmt::Display` for any `E : Error`, unsized ones such as
 /// `dyn Error` included, that prints the error and its chain of causes,
-/// joined with `": "`
+/// joined with `": "`.
 pub struct FmtErrorCompact<'e, E>(pub &'e E)
 where
     E: ?Sized;
