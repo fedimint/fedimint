@@ -3152,6 +3152,7 @@ name = "fedimint-aead"
 version = "0.13.0-alpha"
 dependencies = [
  "argon2",
+ "assert_matches",
  "hex",
  "rand 0.8.5",
  "ring",
