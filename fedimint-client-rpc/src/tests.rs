@@ -133,16 +133,30 @@ async fn invalid_invoice_names_its_cause() {
 
 #[tokio::test]
 async fn invite_code_parse_failure_is_forwarded_unchanged() {
-    let cause = "not-an-invite"
+    let err = "not-an-invite"
         .parse::<fedimint_core::invite_code::InviteCode>()
         .expect_err("not a valid invite code");
+    // Matched, rather than derived wholesale via `fmt_compact()`, so the case fails
+    // loudly if "not-an-invite" ever starts producing a different
+    // `InviteCodeParseError` variant.
+    let fedimint_core::invite_code::InviteCodeParseError::Bech32(inner) = err else {
+        panic!("\"not-an-invite\" is expected to fail bech32 decoding");
+    };
 
     let responses = run(RpcRequestKind::ParseInviteCode {
         invite_code: "not-an-invite".to_string(),
     })
     .await;
 
-    assert_error_response(&responses, &cause.fmt_compact().to_string());
+    // `Bech32`'s message is fedimint's own text and is pinned as a literal here;
+    // `{0}` in that message already embeds the cause, and the `#[from]` field
+    // is also the variant's `source()`, so the chain printer renders the cause
+    // a second time. That repetition is pre-existing and unrelated to #8821;
+    // this pins it as it is, not as it should be.
+    assert_error_response(
+        &responses,
+        &format!("Invalid bech32 encoding: {inner}: {}", inner.fmt_compact()),
+    );
 }
 
 #[tokio::test]
