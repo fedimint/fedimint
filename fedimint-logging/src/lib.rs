@@ -137,7 +137,7 @@ impl TracingSetup {
     }
 
     /// Initialize the logging, must be called for tracing to begin
-    pub fn init(&mut self) -> anyhow::Result<()> {
+    pub fn init(&mut self) -> Result<(), TracingInitError> {
         use tracing_subscriber::fmt::writer::{BoxMakeWriter, Tee};
 
         let var = env::var(tracing_subscriber::EnvFilter::DEFAULT_ENV).unwrap_or_default();
@@ -231,6 +231,20 @@ impl TracingSetup {
             .try_init()?;
         Ok(())
     }
+}
+
+/// Why [`TracingSetup::init`] could not start the logging.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum TracingInitError {
+    /// The log filter, built from the base level, `RUST_LOG` and the extra
+    /// directives, has a directive that does not parse.
+    #[error(transparent)]
+    Filter(#[from] tracing_subscriber::filter::ParseError),
+
+    /// A global tracing subscriber, or a `log` logger, is already installed.
+    #[error(transparent)]
+    Install(#[from] tracing_subscriber::util::TryInitError),
 }
 
 pub fn shutdown() {

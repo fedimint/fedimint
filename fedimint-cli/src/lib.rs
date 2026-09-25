@@ -812,6 +812,7 @@ impl FedimintCli {
         TracingSetup::default()
             .with_base_level(base_level)
             .init()
+            .map_err(anyhow::Error::from)
             .expect("tracing initializes");
 
         let version = env!("CARGO_PKG_VERSION");

@@ -4318,11 +4318,11 @@ dependencies = [
 name = "fedimint-logging"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "console-subscriber",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "thiserror 2.0.20",
  "tracing-opentelemetry",
  "tracing-subscriber",
 ]

@@ -371,7 +371,7 @@ pub async fn run(
         .tokio_console_bind(server_opts.bind_tokio_console)
         .with_jaeger(server_opts.with_jaeger);
 
-    tracing_builder.init().unwrap();
+    tracing_builder.init().map_err(anyhow::Error::from).unwrap();
 
     info!("Starting fedimintd (version: {fedimint_version} version_hash: {code_version_hash})");
 
