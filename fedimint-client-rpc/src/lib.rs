@@ -779,3 +779,6 @@ enum RpcRequestError {
     #[error(transparent)]
     Json(#[from] serde_json::Error),
 }
+
+#[cfg(test)]
+mod tests;
