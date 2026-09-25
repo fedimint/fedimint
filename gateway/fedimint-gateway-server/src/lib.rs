@@ -1172,11 +1172,16 @@ impl Gateway {
             )
             .await?;
 
-        // Without the current height the deadline cannot be checked, so treat
-        // it as reached and refuse to fund.
-        let blocks_to_claim_deadline = lightning_context.lnrpc.info().await.map_or(0, |info| {
-            htlc_request.expiry.saturating_sub(info.block_height)
-        });
+        // An intercepted forward, or an unknown current height, leaves no time
+        // to fund a fresh contract; see `lnv2_blocks_to_claim_deadline`.
+        let current_block_height = lightning_context
+            .lnrpc
+            .info()
+            .await
+            .ok()
+            .map(|info| info.block_height);
+        let blocks_to_claim_deadline =
+            htlc_request.lnv2_blocks_to_claim_deadline(current_block_height);
 
         if let Err(err) = client
             .get_first_module::<GatewayClientModuleV2>()
