@@ -3526,11 +3526,11 @@ dependencies = [
 name = "fedimint-db-locked"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "fedimint-core",
  "fedimint-logging",
  "fs-lock",
+ "thiserror 2.0.20",
  "tracing",
 ]
 
