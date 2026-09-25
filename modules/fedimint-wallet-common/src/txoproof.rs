@@ -1,7 +1,6 @@
 use std::convert::Infallible;
 use std::hash::Hash;
 
-use anyhow::format_err;
 use bitcoin::secp256k1::{PublicKey, Secp256k1, Signing, Verification};
 use bitcoin::{Amount, BlockHash, OutPoint, Transaction};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -170,30 +169,50 @@ impl Tweakable for Descriptor<CompressedPublicKey> {
     }
 }
 
-fn validate_peg_in_proof(proof: &PegInProof) -> Result<(), anyhow::Error> {
+fn validate_peg_in_proof(proof: &PegInProof) -> Result<(), PegInProofValidationError> {
     if !proof
         .txout_proof
         .contains_tx(proof.transaction.compute_txid())
     {
-        return Err(format_err!("Supplied transaction is not included in proof",));
+        return Err(PegInProofValidationError::TransactionNotInProof);
     }
 
     if proof.transaction.output.len() > u32::MAX as usize {
-        return Err(format_err!("Supplied transaction has too many outputs",));
+        return Err(PegInProofValidationError::TooManyOutputs);
     }
 
     match proof.transaction.output.get(proof.output_idx as usize) {
         Some(txo) => {
             if txo.value > Amount::MAX_MONEY {
-                return Err(format_err!("Txout amount out of range"));
+                return Err(PegInProofValidationError::AmountOutOfRange);
             }
         }
         None => {
-            return Err(format_err!("Output index out of range"));
+            return Err(PegInProofValidationError::OutputIndexOutOfRange);
         }
     }
 
     Ok(())
+}
+
+/// Why a decoded [`PegInProof`] is not valid.
+#[derive(Debug, Error)]
+enum PegInProofValidationError {
+    /// The proof does not contain the transaction.
+    #[error("Supplied transaction is not included in proof")]
+    TransactionNotInProof,
+
+    /// The transaction has more outputs than an output index can address.
+    #[error("Supplied transaction has too many outputs")]
+    TooManyOutputs,
+
+    /// The proven output's amount is more than all bitcoin there can be.
+    #[error("Txout amount out of range")]
+    AmountOutOfRange,
+
+    /// The transaction has no output at the proof's output index.
+    #[error("Output index out of range")]
+    OutputIndexOutOfRange,
 }
 
 impl Decodable for PegInProof {

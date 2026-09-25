@@ -5097,7 +5097,6 @@ dependencies = [
 name = "fedimint-wallet-common"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "bitcoin",
  "fedimint-core",
  "hex",
