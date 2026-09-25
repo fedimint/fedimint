@@ -133,9 +133,8 @@ pub struct GatewayLdkClient {
     /// A map keyed by the `UserChannelId` of a channel that is currently
     /// opening. The `Sender` is used to communicate the `OutPoint` back to
     /// the API handler from the event handler when the channel has been
-    /// opened and is now pending.
-    pending_channels:
-        Arc<RwLock<BTreeMap<UserChannelId, oneshot::Sender<anyhow::Result<OutPoint>>>>>,
+    /// opened and is now pending, or the reason it closed before that.
+    pending_channels: Arc<RwLock<BTreeMap<UserChannelId, PendingChannelSender>>>,
 
     /// Waiters for outgoing LDK payments that are woken by terminal payment
     /// events (`PaymentSuccessful` / `PaymentFailed`). This lets `pay()` block
@@ -144,6 +143,10 @@ pub struct GatewayLdkClient {
     /// map only signals that a terminal event has arrived.
     pending_payments: Arc<RwLock<HashMap<PaymentId, oneshot::Sender<()>>>>,
 }
+
+/// Sends a channel's funding outpoint once the channel is pending, or the
+/// reason the channel closed before that.
+type PendingChannelSender = oneshot::Sender<Result<OutPoint, String>>;
 
 impl std::fmt::Debug for GatewayLdkClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -273,9 +276,7 @@ impl GatewayLdkClient {
         node: &ldk_node::Node,
         htlc_stream_sender: &Sender<InterceptPaymentRequest>,
         handle: &TaskHandle,
-        pending_channels: Arc<
-            RwLock<BTreeMap<UserChannelId, oneshot::Sender<anyhow::Result<OutPoint>>>>,
-        >,
+        pending_channels: Arc<RwLock<BTreeMap<UserChannelId, PendingChannelSender>>>,
         pending_payments: Arc<RwLock<HashMap<PaymentId, oneshot::Sender<()>>>>,
     ) {
         // We manually check for task termination in case we receive a payment while the
@@ -350,7 +351,7 @@ impl GatewayLdkClient {
                     } else {
                         "Channel has been closed".to_string()
                     };
-                    let _ = sender.send(Err(anyhow::anyhow!(reason)));
+                    let _ = sender.send(Err(reason));
                 } else {
                     debug!(
                         ?user_channel_id,
@@ -927,7 +928,7 @@ impl ILnRpcClient for GatewayLdkClient {
             }
         };
 
-        let (tx, rx) = oneshot::channel::<anyhow::Result<OutPoint>>();
+        let (tx, rx) = oneshot::channel::<Result<OutPoint, String>>();
 
         {
             let mut channels = self.pending_channels.write().await;
@@ -963,9 +964,7 @@ impl ILnRpcClient for GatewayLdkClient {
                     funding_txid: funding_txid.to_string(),
                 })
             }
-            Err(err) => Err(LightningRpcError::FailedToOpenChannel {
-                failure_reason: err.to_string(),
-            }),
+            Err(failure_reason) => Err(LightningRpcError::FailedToOpenChannel { failure_reason }),
         }
     }
 

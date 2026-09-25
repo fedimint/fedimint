@@ -4017,7 +4017,6 @@ dependencies = [
 name = "fedimint-lightning"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "bitcoin",
  "fedimint-bip39",

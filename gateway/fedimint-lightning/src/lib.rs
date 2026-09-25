@@ -15,7 +15,7 @@ use fedimint_core::envs::{FM_IN_DEVIMINT_ENV, is_env_var_set};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::now;
-use fedimint_core::util::{FmtCompactResult as _, backoff_util, retry};
+use fedimint_core::util::{FmtCompact as _, FmtCompactResult as _, backoff_util, retry};
 use fedimint_gateway_common::{
     ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectPeerRequest,
     GetInvoiceRequest, GetInvoiceResponse, LightningInfo, ListTransactionsResponse,
@@ -362,13 +362,13 @@ impl dyn ILnRpcClient {
                     Ok(())
                 } else {
                     warn!(target: LOG_LIGHTNING, block_height = %block_height, "Lightning node is not synced yet");
-                    Err(anyhow::anyhow!("Not synced yet"))
+                    Err(ChainSyncAttemptError::NotSynced)
                 }
             },
         )
         .await
         .map_err(|e| LightningRpcError::FailedToSyncToChain {
-            failure_reason: format!("Failed to sync to chain: {e:?}"),
+            failure_reason: format!("Failed to sync to chain: {}", e.fmt_compact()),
         })?;
 
         info!(target: LOG_LIGHTNING, "Gateway successfully synced with the chain");
@@ -776,6 +776,18 @@ impl ILnRpcClient for LnRpcTracked {
     fn sync_wallet(&self) -> Result<(), LightningRpcError> {
         tracked_call!(self, "sync_wallet", self.inner.sync_wallet())
     }
+}
+
+/// Why one check of `wait_for_chain_sync` did not find the node synced.
+#[derive(Debug, Error)]
+enum ChainSyncAttemptError {
+    /// The node's info could not be read.
+    #[error(transparent)]
+    Info(#[from] LightningRpcError),
+
+    /// The node is not synced to the chain yet.
+    #[error("Not synced yet")]
+    NotSynced,
 }
 
 #[cfg(test)]
