@@ -30,6 +30,7 @@ fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
+fedimint-gateway-common = { workspace = true }
 fedimint-lightning = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
 fedimint-logging = { workspace = true }

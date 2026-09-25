@@ -420,7 +420,7 @@ pub fn render<E: Display>(
                                             input type="hidden" name="receive_enabled" value="false";
                                             button type="submit"
                                                 class="btn btn-sm btn-outline-danger"
-                                                onclick=("return confirm('Turn off receives for this federation? Incoming Lightning payments will be rejected, including payments of invoices that were already issued.');")
+                                                onclick=("return confirm('Turn off receives for this federation? Incoming payments will be rejected, including swaps from other federations and payments of invoices that were already issued.');")
                                             { "Disable Receives" }
                                         } @else {
                                             input type="hidden" name="receive_enabled" value="true";
