@@ -1,25 +1,24 @@
 use std::fmt::Formatter;
 use std::{error, fmt};
 
-/// A wrapper with `fmt::Display` for any `E : Error` that will print chain
-/// of causes
-pub struct FmtErrorCompact<'e, E>(pub &'e E);
+/// A wrapper with `fmt::Display` for any `E : Error`, unsized ones such as
+/// `dyn Error` included, that prints the error and its chain of causes,
+/// joined with `": "`
+pub struct FmtErrorCompact<'e, E>(pub &'e E)
+where
+    E: ?Sized;
 
 impl<E> fmt::Display for FmtErrorCompact<'_, E>
 where
-    E: error::Error,
+    E: error::Error + ?Sized,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut source_opt: Option<&dyn std::error::Error> = Some(self.0);
+        write!(f, "{}", self.0)?;
 
-        while source_opt.is_some() {
-            let source = source_opt.take().expect("Just checked");
-            f.write_fmt(format_args!("{source}"))?;
-
-            source_opt = source.source();
-            if source_opt.is_some() {
-                f.write_str(": ")?;
-            }
+        let mut source = self.0.source();
+        while let Some(error) = source {
+            write!(f, ": {error}")?;
+            source = error.source();
         }
         Ok(())
     }
@@ -37,6 +36,10 @@ impl fmt::Display for FmtCompactErrorAnyhow<'_> {
 }
 
 /// Simple utility trait to print error chains
+///
+/// Implemented for a reference to any error, `dyn Error` included, so method
+/// calls also reach the error behind a `Box<dyn Error>` or any other pointer
+/// that derefs to one.
 pub trait FmtCompact<'a> {
     type Report: fmt::Display + 'a;
     fn fmt_compact(self) -> Self::Report;
@@ -50,7 +53,7 @@ pub trait FmtCompactAnyhow<'a> {
 
 impl<'e, E> FmtCompact<'e> for &'e E
 where
-    E: error::Error,
+    E: error::Error + ?Sized,
 {
     type Report = FmtErrorCompact<'e, E>;
 
