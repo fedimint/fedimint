@@ -3,10 +3,12 @@ mod tests;
 
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use bitcoin::{BlockHash, Transaction};
 use fedimint_core::envs::BitcoinRpcConfig;
+use fedimint_core::task::timeout;
 use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
 use fedimint_core::{ChainId, Feerate};
 use fedimint_logging::LOG_SERVER;
@@ -23,6 +25,11 @@ use crate::esplora::EsploraClient;
 /// endpoints are available; it is not SPV or reconnection verification.
 /// Reads remain bitcoind-first, except block counts use Esplora while Core
 /// explicitly reports initial block download. Broadcast remains primary-first.
+/// How long the startup identity check waits on each backend. A backend that
+/// never answers must not hold up the server, and an unanswered probe is
+/// already handled as an unknown identity below.
+const STARTUP_CHAIN_ID_TIMEOUT: Duration = Duration::from_secs(10);
+
 #[derive(Debug)]
 pub struct BitcoindClientWithFallback {
     /// Primary full-node RPC.
@@ -62,8 +69,8 @@ impl BitcoindClientWithFallback {
         esplora_client: DynServerBitcoinRpc,
     ) -> Result<Self> {
         let (primary, fallback) = tokio::join!(
-            bitcoind_client.get_chain_id(),
-            esplora_client.get_chain_id(),
+            Self::probe_chain_id(&bitcoind_client),
+            Self::probe_chain_id(&esplora_client),
         );
         let chain_id = match (primary, fallback) {
             (Ok(primary), Ok(fallback)) => {
@@ -104,6 +111,15 @@ impl BitcoindClientWithFallback {
             chain_id: cached_chain_id,
             bitcoind_ibd_complete: AtomicBool::new(false),
         })
+    }
+
+    /// Reads one backend's chain identity for the startup check, bounded so a
+    /// backend that never answers cannot hold up startup. Each probe is bounded
+    /// on its own, so a slow backend does not discard the other's answer.
+    async fn probe_chain_id(client: &DynServerBitcoinRpc) -> Result<ChainId> {
+        timeout(STARTUP_CHAIN_ID_TIMEOUT, client.get_chain_id())
+            .await
+            .unwrap_or_else(|_| Err(anyhow!("Timed out reading the chain identity")))
     }
 
     async fn fallback_block_count(&self, primary: anyhow::Error) -> Result<u64> {

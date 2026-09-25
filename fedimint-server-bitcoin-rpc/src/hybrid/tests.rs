@@ -25,6 +25,7 @@ struct State {
     fail_reads: bool,
     missing_feerate: bool,
     fail_broadcast: bool,
+    hang_chain_id: bool,
     calls: Vec<String>,
     transactions: Vec<Transaction>,
 }
@@ -52,6 +53,7 @@ impl Fake {
                 fail_reads: false,
                 missing_feerate: false,
                 fail_broadcast: false,
+                hang_chain_id: false,
                 calls: vec![],
                 transactions: vec![],
             }),
@@ -149,6 +151,10 @@ impl IServerBitcoinRpc for Fake {
     }
 
     async fn get_chain_id(&self) -> Result<ChainId> {
+        if self.state.lock().unwrap().hang_chain_id {
+            std::future::pending::<()>().await;
+        }
+
         Ok(self.call("chain")?.chain)
     }
 }
@@ -476,4 +482,24 @@ async fn monitor_read_failure_does_not_suppress_broadcast() {
         .shutdown_join_all(Duration::from_secs(1))
         .await
         .unwrap();
+}
+
+/// A backend that accepts the connection and then never answers used to hold
+/// the startup identity check open, and with it the server.
+#[tokio::test(start_paused = true)]
+async fn startup_survives_a_backend_that_never_answers() {
+    let primary = Fake::new("primary");
+    primary.state.lock().unwrap().hang_chain_id = true;
+    let fallback = Fake::new("fallback");
+
+    let rpc = tokio::time::timeout(
+        Duration::from_secs(60),
+        BitcoindClientWithFallback::from_clients(primary.clone(), fallback.clone()),
+    )
+    .await
+    .expect("startup finishes without the backend that never answers")
+    .unwrap();
+
+    assert_eq!(rpc.get_chain_id().await.unwrap(), chain(Network::Bitcoin));
+    assert_eq!(fallback.calls("chain"), 1);
 }
