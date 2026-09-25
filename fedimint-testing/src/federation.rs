@@ -69,9 +69,14 @@ impl FederationTest {
             .to_client_config(&self.server_init)
             .unwrap();
 
+        // a dropped TempDir deletes the directory under the open database
+        let db_dir = tempfile::tempdir()
+            .expect("Couldn't create temp dir")
+            .keep();
+
         self.new_client_with(
             client_config,
-            RocksDb::build(tempfile::tempdir().expect("Couldn't create temp dir"))
+            RocksDb::build(db_dir)
                 .open()
                 .await
                 .expect("Couldn't open DB")
