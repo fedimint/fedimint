@@ -134,7 +134,7 @@ impl IrohConnector {
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
         path_change: Arc<watch::Sender<u64>>,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, ConnectorError> {
         let mut s = Self::new_no_overrides(iroh_dns, iroh_enable_dht, path_change).await?;
 
         // Overrides are `<node-id>=<socket-addr>` pairs: the node id is the key
@@ -160,7 +160,7 @@ impl IrohConnector {
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
         path_change: Arc<watch::Sender<u64>>,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, ConnectorError> {
         let endpoint_stable = Box::pin({
             let iroh_dns = iroh_dns.clone();
             async {
@@ -208,14 +208,15 @@ impl IrohConnector {
                 let endpoint = builder
                     .transport_config(quic_transport_config())
                     .bind()
-                    .await?;
+                    .await
+                    .map_err(|err| ConnectorError::Transport(err.into()))?;
                 debug!(
                     target: LOG_NET_IROH,
                     node_id = %endpoint.node_id(),
                     node_id_pkarr = %z32::encode(endpoint.node_id().as_bytes()),
                     "Iroh api client endpoint (stable)"
                 );
-                Ok::<_, anyhow::Error>(endpoint)
+                Ok::<_, ConnectorError>(endpoint)
             }
         });
         let endpoint_next = Box::pin(async {
@@ -255,7 +256,8 @@ impl IrohConnector {
             let endpoint = builder
                 .transport_config(quic_transport_config_next())
                 .bind()
-                .await?;
+                .await
+                .map_err(|err| ConnectorError::Transport(err.into()))?;
             debug!(
                 target: LOG_NET_IROH,
                 node_id = %endpoint.id(),

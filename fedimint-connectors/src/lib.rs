@@ -197,8 +197,7 @@ impl ConnectorRegistryBuilder {
         }
         let connector =
             iroh::IrohConnector::new(self.iroh_dns.clone(), self.iroh_pkarr_dht, path_change)
-                .await
-                .map_err(|err| ConnectorError::Transport(err.into()))?;
+                .await?;
 
         Ok(Arc::new(connector) as DynConnector)
     }
