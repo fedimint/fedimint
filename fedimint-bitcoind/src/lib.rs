@@ -195,15 +195,27 @@ impl IBitcoindRpc for BitcoindTracked {
     }
 }
 
-#[derive(Debug)]
 pub struct EsploraClient {
     client: AsyncClient,
 }
 
+impl Debug for EsploraClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EsploraClient").finish_non_exhaustive()
+    }
+}
+
 impl EsploraClient {
     pub fn new(url: &SafeUrl) -> Result<Self, BitcoinRpcError> {
-        let client = Builder::new(url.as_str().trim_end_matches('/'))
-            .timeout(ESPLORA_CLIENT_TIMEOUT_SECONDS)
+        let builder = Builder::new(url.as_str().trim_end_matches('/'));
+        #[cfg(not(target_family = "wasm"))]
+        let builder = builder.timeout(std::time::Duration::from_secs(
+            ESPLORA_CLIENT_TIMEOUT_SECONDS,
+        ));
+        #[cfg(target_family = "wasm")]
+        let builder = builder.timeout(ESPLORA_CLIENT_TIMEOUT_SECONDS);
+
+        let client = builder
             .build_async()
             .map_err(|source| BitcoinRpcError::InvalidUrl {
                 url: url.to_string(),
@@ -241,9 +253,11 @@ impl IBitcoindRpc for EsploraClient {
         let mut last_seen: Option<Txid> = None;
 
         loop {
-            let page = self
-                .client
-                .scripthash_txs(script, last_seen)
+            #[cfg(not(target_family = "wasm"))]
+            let page = self.client.get_scripthash_txs(script, last_seen);
+            #[cfg(target_family = "wasm")]
+            let page = self.client.scripthash_txs(script, last_seen);
+            let page = page
                 .await
                 .map_err(|err| BitcoinRpcError::Backend(Box::new(err)))?;
 

@@ -6,6 +6,50 @@ use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
 use super::{EsploraClient, validate_block};
 
+#[tokio::test]
+async fn converts_http_fee_estimates_to_sats_per_kvb() {
+    for (response, expected) in [
+        (r#"{"1":2.5,"6":1.0}"#, 2500),
+        (r#"{"1":1.5}"#, 1500),
+        (r#"{"6":1.5}"#, 1000),
+        (r#"{}"#, 1000),
+    ] {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url: SafeUrl = format!("http://{}", listener.local_addr().unwrap())
+            .parse()
+            .unwrap();
+        let server = fedimint_core::runtime::spawn("esplora-test-fees", async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = Vec::new();
+            while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+                let mut chunk = [0; 4096];
+                let len = socket.read(&mut chunk).await.unwrap();
+                assert_ne!(len, 0, "request ended before headers");
+                request.extend_from_slice(&chunk[..len]);
+            }
+            assert!(String::from_utf8_lossy(&request).starts_with("GET /fee-estimates "));
+            socket
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response}",
+                        response.len()
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
+        });
+        let fee = EsploraClient::new(&url)
+            .unwrap()
+            .get_feerate()
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(fee.sats_per_kvb, expected, "{response}");
+        server.await.unwrap();
+    }
+}
+
 #[test]
 fn accepts_matching_block() {
     let block = genesis_block(Network::Bitcoin);

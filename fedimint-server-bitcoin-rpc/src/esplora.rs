@@ -1,8 +1,9 @@
 #[cfg(test)]
 mod tests;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use anyhow::{Context, ensure};
 use bitcoin::{BlockHash, Transaction};
@@ -41,11 +42,19 @@ fn validate_block(block: bitcoin::Block, requested: &BlockHash) -> anyhow::Resul
     Ok(block)
 }
 
-#[derive(Debug)]
 pub struct EsploraClient {
     client: esplora_client::AsyncClient,
     url: SafeUrl,
     cached_chain_id: OnceLock<ChainId>,
+}
+
+impl std::fmt::Debug for EsploraClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EsploraClient")
+            .field("url", &self.url)
+            .field("cached_chain_id", &self.cached_chain_id)
+            .finish_non_exhaustive()
+    }
 }
 
 impl EsploraClient {
@@ -58,8 +67,8 @@ impl EsploraClient {
         // URL needs to have any trailing path including '/' removed
         let without_trailing = url.as_str().trim_end_matches('/');
 
-        let builder =
-            esplora_client::Builder::new(without_trailing).timeout(ESPLORA_CLIENT_TIMEOUT_SECONDS);
+        let builder = esplora_client::Builder::new(without_trailing)
+            .timeout(Duration::from_secs(ESPLORA_CLIENT_TIMEOUT_SECONDS));
         let client = builder.build_async()?;
         Ok(Self {
             client,
@@ -103,14 +112,16 @@ impl IServerBitcoinRpc for EsploraClient {
     }
 
     async fn get_feerate(&self) -> anyhow::Result<Option<Feerate>> {
-        let fee_estimates: HashMap<u16, f64> = self.client.get_fee_estimates().await?;
-
-        let fee_rate_vb = esplora_client::convert_fee_rate(1, fee_estimates).unwrap_or(1.0);
-
-        let fee_rate_kvb = fee_rate_vb * 1_000f32;
+        let fee_estimates = self.client.get_fee_estimates().await?;
+        let fee_rate = esplora_client::convert_fee_rate(1, fee_estimates)
+            .unwrap_or(bitcoin::FeeRate::BROADCAST_MIN);
 
         Ok(Some(Feerate {
-            sats_per_kvb: (fee_rate_kvb).ceil() as u64,
+            // One virtual byte is four weight units.
+            sats_per_kvb: fee_rate
+                .to_sat_per_kwu()
+                .checked_mul(4)
+                .context("Esplora fee rate exceeds sats/kvB range")?,
         }))
     }
 
