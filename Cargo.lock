@@ -1306,8 +1306,8 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7bc6d6292be3a19e6379786dac800f551e5865a5bb51ebbe3064ab80433f403"
 dependencies = [
- "ff",
- "group",
+ "ff 0.13.1",
+ "group 0.13.0",
  "pairing",
  "rand_core 0.6.4",
  "subtle",
@@ -2909,9 +2909,9 @@ dependencies = [
  "base16ct 0.2.0",
  "crypto-bigint",
  "digest 0.10.7",
- "ff",
+ "ff 0.13.1",
  "generic-array",
- "group",
+ "group 0.13.0",
  "pkcs8 0.10.2",
  "rand_core 0.6.4",
  "sec1",
@@ -3459,7 +3459,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.3.3",
  "gloo-timers 0.3.0",
- "group",
+ "group 0.14.0",
  "hex",
  "hex-conservative 1.0.1",
  "imbl",
@@ -4204,7 +4204,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-ln-common",
  "fedimint-tpe",
- "group",
+ "group 0.14.0",
  "lightning-invoice",
  "rand 0.8.5",
  "reqwest 0.12.28",
@@ -4228,7 +4228,7 @@ dependencies = [
  "fedimint-server-core",
  "fedimint-tpe",
  "futures",
- "group",
+ "group 0.14.0",
  "rand 0.8.5",
  "serde",
  "strum 0.27.1",
@@ -4505,7 +4505,7 @@ dependencies = [
  "fedimint-tbs",
  "fedimint-testing",
  "fedimint-threshold-crypto",
- "ff",
+ "ff 0.13.1",
  "futures",
  "hex",
  "rand 0.8.5",
@@ -4616,7 +4616,7 @@ dependencies = [
  "fedimint-tbs",
  "fedimint-testing",
  "fedimint-threshold-crypto",
- "ff",
+ "ff 0.13.1",
  "futures",
  "rand 0.8.5",
  "serde",
@@ -4771,7 +4771,7 @@ dependencies = [
  "fedimint-metrics",
  "fedimint-server-core",
  "futures",
- "group",
+ "group 0.14.0",
  "hex",
  "hyper 1.11.1",
  "iroh 0.35.0",
@@ -4834,7 +4834,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-logging",
  "futures",
- "group",
+ "group 0.14.0",
  "serde",
  "tokio",
  "tracing",
@@ -4895,7 +4895,7 @@ dependencies = [
  "bls12_381",
  "criterion 0.5.1",
  "fedimint-core",
- "group",
+ "group 0.14.0",
  "hex",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -4971,8 +4971,8 @@ checksum = "3e5f0913eb5fb65f83e6b503794f2eba124b542b9bdbb5cf941bc12bc7b0ea67"
 dependencies = [
  "bls12_381",
  "byteorder",
- "ff",
- "group",
+ "ff 0.13.1",
+ "group 0.13.0",
  "hex_fmt",
  "log",
  "pairing",
@@ -5011,7 +5011,7 @@ dependencies = [
  "bitcoin_hashes",
  "bls12_381",
  "fedimint-core",
- "group",
+ "group 0.14.0",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "serde",
@@ -5329,6 +5329,16 @@ checksum = "c0b50bfb653653f9ca9095b427bed08ab8d75a137839d9ad64eb11810d5b6393"
 dependencies = [
  "bitvec",
  "rand_core 0.6.4",
+ "subtle",
+]
+
+[[package]]
+name = "ff"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1f686ab92a9fb0eaf188f6c6c87b89490baa6fdb0db4544ba4dc47f7942489f"
+dependencies = [
+ "rand_core 0.10.1",
  "subtle",
 ]
 
@@ -5839,8 +5849,19 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0f9ef7462f7c099f518d754361858f86d8a07af53ba9af0fe635bbccb151a63"
 dependencies = [
- "ff",
+ "ff 0.13.1",
  "rand_core 0.6.4",
+ "subtle",
+]
+
+[[package]]
+name = "group"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fd1a1c7a5206c5b7a3f5a0d7ccd3ff85d0c8f5133d62a02680255b0004af5f4"
+dependencies = [
+ "ff 0.14.0",
+ "rand_core 0.10.1",
  "subtle",
 ]
 
@@ -9066,7 +9087,7 @@ version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81fec4625e73cf41ef4bb6846cafa6d44736525f442ba45e407c4a000a13996f"
 dependencies = [
- "group",
+ "group 0.13.0",
 ]
 
 [[package]]
