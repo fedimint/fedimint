@@ -157,7 +157,7 @@ declare_vars! {
         FM_PORT_BTC_ZMQ_PUB_RAW_TX: u16 = port_alloc(1)?; env: "FM_PORT_BTC_ZMQ_PUB_RAW_TX";
         FM_PORT_LND_LISTEN: u16 = port_alloc(1)?; env: "FM_PORT_LND_LISTEN";
         FM_PORT_LDK: u16 = port_alloc(1)?; env: "FM_PORT_LDK";
-        FM_PORT_LDK2: u16 = port_alloc(1)?; env: "FM_PORT_LDK";
+        FM_PORT_LDK2: u16 = port_alloc(1)?; env: "FM_PORT_LDK2";
         FM_PORT_LND_RPC: u16 = port_alloc(1)?; env: "FM_PORT_LND_RPC";
         FM_PORT_LND_REST: u16 = port_alloc(1)?; env: "FM_PORT_LND_REST";
         FM_PORT_ESPLORA: u16 = port_alloc(1)?; env: "FM_PORT_ESPLORA";
@@ -260,6 +260,9 @@ declare_vars! {
         FM_ROCKSDB_WRITE_BUFFER_SIZE : String = (1 << 20).to_string(); env: "FM_ROCKSDB_WRITE_BUFFER_SIZE";
     }
 }
+
+#[cfg(test)]
+mod tests;
 
 impl Global {
     pub async fn new(
