@@ -28,7 +28,7 @@
 <a href=#28 id=28 data-nosnippet>28</a>};
 <a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>fedimint_core::task::{TaskGroup, TaskHandle, sleep};
 <a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span>fedimint_core::timing::TimeReporter;
-<a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>fedimint_core::util::{FmtCompact <span class="kw">as _</span>, FmtCompactAnyhow <span class="kw">as _</span>};
+<a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>fedimint_core::util::FmtCompact <span class="kw">as _</span>;
 <a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span>fedimint_core::{NumPeers, NumPeersExt, PeerId, timing};
 <a href=#33 id=33 data-nosnippet>33</a><span class="kw">use </span>fedimint_server_core::{ServerModuleRegistry, ServerModuleRegistryExt};
 <a href=#34 id=34 data-nosnippet>34</a><span class="kw">use </span>futures::StreamExt;
@@ -863,7 +863,7 @@
 <a href=#863 id=863 data-nosnippet>863</a>            <span class="comment">// Check if any old checkpoint need to be cleaned up
 <a href=#864 id=864 data-nosnippet>864</a>            </span><span class="kw">let </span>_timing <span class="comment">/* logs on drop */ </span>= timing::TimeReporter::new(<span class="string">"remove-database-checkpoint"</span>).level(Level::TRACE);
 <a href=#865 id=865 data-nosnippet>865</a>            <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">self</span>.delete_old_database_checkpoint(session_index, <span class="kw-2">&amp;</span>checkpoint_dir) {
-<a href=#866 id=866 data-nosnippet>866</a>                <span class="macro">warn!</span>(target: LOG_CONSENSUS, err = %err.fmt_compact_anyhow(), <span class="string">"Could not delete old checkpoints"</span>);
+<a href=#866 id=866 data-nosnippet>866</a>                <span class="macro">warn!</span>(target: LOG_CONSENSUS, err = %err.fmt_compact(), <span class="string">"Could not delete old checkpoints"</span>);
 <a href=#867 id=867 data-nosnippet>867</a>            }
 <a href=#868 id=868 data-nosnippet>868</a>        }
 <a href=#869 id=869 data-nosnippet>869</a>    }
@@ -1004,7 +1004,7 @@
 <a href=#1004 id=1004 data-nosnippet>1004</a>                target: LOG_CONSENSUS,
 <a href=#1005 id=1005 data-nosnippet>1005</a>                %peer,
 <a href=#1006 id=1006 data-nosnippet>1006</a>                item = <span class="question-mark">?</span>DebugConsensusItem(item),
-<a href=#1007 id=1007 data-nosnippet>1007</a>                err = %err.fmt_compact_anyhow(),
+<a href=#1007 id=1007 data-nosnippet>1007</a>                err = %err.fmt_compact(),
 <a href=#1008 id=1008 data-nosnippet>1008</a>                <span class="string">"Rejected consensus item"
 <a href=#1009 id=1009 data-nosnippet>1009</a>            </span>);
 <a href=#1010 id=1010 data-nosnippet>1010</a>

@@ -16,7 +16,7 @@ retry(
     backoff_util::background_backoff(),
     || <span class="kw">async </span>{
         <span class="comment">// Fallible network calls …
-        </span>anyhow::Ok(())
+        </span>Ok::&lt;(), std::io::Error&gt;(())
     },
 )
 .<span class="kw">await

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DecryptError","EncryptedReadError","EncryptedWriteError"],"struct":["EncryptError","EncryptionKeyError"]};

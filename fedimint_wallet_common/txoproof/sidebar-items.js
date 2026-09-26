@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["PegInProofError"],"fn":["validate_peg_in_proof"],"struct":["PegInProof"]};
+window.SIDEBAR_ITEMS = {"enum":["PegInProofError","PegInProofValidationError"],"fn":["validate_peg_in_proof"],"struct":["PegInProof"]};

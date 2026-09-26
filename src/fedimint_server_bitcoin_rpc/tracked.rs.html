@@ -2,7 +2,7 @@
 <a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>bitcoin::{Block, BlockHash, Transaction};
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>fedimint_core::envs::BitcoinRpcConfig;
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>fedimint_core::time::now;
-<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>fedimint_core::util::{FmtCompactResultAnyhow <span class="kw">as _</span>, SafeUrl};
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>fedimint_core::util::{FmtCompactResult <span class="kw">as _</span>, SafeUrl};
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>fedimint_core::{ChainId, Feerate};
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_logging::LOG_BITCOIND;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_metrics::HistogramExt <span class="kw">as _</span>;
@@ -63,7 +63,7 @@
 <a href=#63 id=63 data-nosnippet>63</a>            method = <span class="macro-nonterminal">$method</span>,
 <a href=#64 id=64 data-nosnippet>64</a>            name = <span class="macro-nonterminal">$self</span>.name,
 <a href=#65 id=65 data-nosnippet>65</a>            duration_ms,
-<a href=#66 id=66 data-nosnippet>66</a>            error = %result.fmt_compact_result_anyhow(),
+<a href=#66 id=66 data-nosnippet>66</a>            error = %result.as_ref().map_err(|e| <span class="kw-2">&amp;**</span>e).fmt_compact_result(),
 <a href=#67 id=67 data-nosnippet>67</a>            <span class="string">"completed bitcoind rpc"
 <a href=#68 id=68 data-nosnippet>68</a>        </span>);
 <a href=#69 id=69 data-nosnippet>69</a>        result

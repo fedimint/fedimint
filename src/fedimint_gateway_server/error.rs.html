@@ -7,7 +7,7 @@
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>fedimint_core::crit;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>fedimint_core::envs::is_env_var_set;
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>fedimint_core::fmt_utils::OptStacktrace;
-<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_core::util::FmtCompactAnyhow;
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>fedimint_core::util::FmtCompact;
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_gw_client::pay::OutgoingPaymentError;
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_lightning::LightningRpcError;
 <a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_logging::LOG_GATEWAY;
@@ -147,9 +147,9 @@
 <a href=#147 id=147 data-nosnippet>147</a>    </span>ClientCreationError(anyhow::Error),
 <a href=#148 id=148 data-nosnippet>148</a>    <span class="attr">#[error(<span class="string">"Failed to remove a federation client: {0}"</span>)]
 <a href=#149 id=149 data-nosnippet>149</a>    </span>ClientRemovalError(String),
-<a href=#150 id=150 data-nosnippet>150</a>    <span class="attr">#[error(<span class="string">"There was an error with the Gateway's mnemonic: {}"</span>, .<span class="number">0</span>.fmt_compact_anyhow())]
+<a href=#150 id=150 data-nosnippet>150</a>    <span class="attr">#[error(<span class="string">"There was an error with the Gateway's mnemonic: {}"</span>, .<span class="number">0</span>.fmt_compact())]
 <a href=#151 id=151 data-nosnippet>151</a>    </span>MnemonicError(anyhow::Error),
-<a href=#152 id=152 data-nosnippet>152</a>    <span class="attr">#[error(<span class="string">"Unexpected Error: {}"</span>, .<span class="number">0</span>.fmt_compact_anyhow())]
+<a href=#152 id=152 data-nosnippet>152</a>    <span class="attr">#[error(<span class="string">"Unexpected Error: {}"</span>, .<span class="number">0</span>.fmt_compact())]
 <a href=#153 id=153 data-nosnippet>153</a>    </span>Unexpected(<span class="attr">#[from] </span>anyhow::Error),
 <a href=#154 id=154 data-nosnippet>154</a>    <span class="attr">#[error(<span class="string">"{}"</span>, .<span class="number">0</span>)]
 <a href=#155 id=155 data-nosnippet>155</a>    </span>FederationNotConnected(<span class="attr">#[from] </span>FederationNotConnected),

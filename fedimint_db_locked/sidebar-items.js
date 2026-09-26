@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["Locked","LockedBuilder"]};
+window.SIDEBAR_ITEMS = {"enum":["DbLockError"],"struct":["Locked","LockedBuilder"]};

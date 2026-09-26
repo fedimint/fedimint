@@ -67,7 +67,7 @@
 <a href=#67 id=67 data-nosnippet>67</a><span class="kw">use </span>fedimint_core::task::TaskGroup;
 <a href=#68 id=68 data-nosnippet>68</a><span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 <a href=#69 id=69 data-nosnippet>69</a></span><span class="kw">use </span>fedimint_core::task::sleep;
-<a href=#70 id=70 data-nosnippet>70</a><span class="kw">use </span>fedimint_core::util::{FmtCompact, FmtCompactAnyhow <span class="kw">as _</span>, backoff_util, retry};
+<a href=#70 id=70 data-nosnippet>70</a><span class="kw">use </span>fedimint_core::util::{FmtCompact, backoff_util, retry};
 <a href=#71 id=71 data-nosnippet>71</a><span class="kw">use </span>fedimint_core::{
 <a href=#72 id=72 data-nosnippet>72</a>    Feerate, InPoint, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
 <a href=#73 id=73 data-nosnippet>73</a>    get_network_for_address, push_db_key_items, push_db_pair_items, weight_to_vbytes,
@@ -572,7 +572,7 @@
 <a href=#572 id=572 data-nosnippet>572</a>                items.push(WalletConsensusItem::BlockCount(block_count_vote));
 <a href=#573 id=573 data-nosnippet>573</a>            }
 <a href=#574 id=574 data-nosnippet>574</a>            <span class="prelude-val">Err</span>(err) =&gt; {
-<a href=#575 id=575 data-nosnippet>575</a>                <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, err = %err.fmt_compact_anyhow(), <span class="string">"Can't update block count"</span>);
+<a href=#575 id=575 data-nosnippet>575</a>                <span class="macro">warn!</span>(target: LOG_MODULE_WALLET, err = %err.fmt_compact(), <span class="string">"Can't update block count"</span>);
 <a href=#576 id=576 data-nosnippet>576</a>            }
 <a href=#577 id=577 data-nosnippet>577</a>        }
 <a href=#578 id=578 data-nosnippet>578</a>
@@ -2115,7 +2115,7 @@
 <a href=#2115 id=2115 data-nosnippet>2115</a>            <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = rpc.submit_transaction(tx).<span class="kw">await </span>{
 <a href=#2116 id=2116 data-nosnippet>2116</a>                <span class="macro">debug!</span>(
 <a href=#2117 id=2117 data-nosnippet>2117</a>                    target: LOG_MODULE_WALLET,
-<a href=#2118 id=2118 data-nosnippet>2118</a>                    err = %err.fmt_compact_anyhow(),
+<a href=#2118 id=2118 data-nosnippet>2118</a>                    err = %err.fmt_compact(),
 <a href=#2119 id=2119 data-nosnippet>2119</a>                    <span class="string">"Error broadcasting peg-out transaction"
 <a href=#2120 id=2120 data-nosnippet>2120</a>                </span>);
 <a href=#2121 id=2121 data-nosnippet>2121</a>            }

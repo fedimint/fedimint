@@ -18,7 +18,7 @@
 <a href=#18 id=18 data-nosnippet>18</a><span class="kw">use </span>fedimint_core::module::ApiAuth;
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>fedimint_core::task::{<span class="self">self</span>};
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>fedimint_core::time::now;
-<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_core::util::FmtCompactAnyhow <span class="kw">as _</span>;
+<a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_core::util::FmtCompact <span class="kw">as _</span>;
 <a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>fedimint_core::util::backoff_util::custom_backoff;
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>fedimint_logging::LOG_DEVIMINT;
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>semver::Version;
@@ -483,7 +483,7 @@
 <a href=#483 id=483 data-nosnippet>483</a>                    .expect(<span class="string">"time goes forward"</span>)
 <a href=#484 id=484 data-nosnippet>484</a>                    &lt; timeout =&gt;
 <a href=#485 id=485 data-nosnippet>485</a>            {
-<a href=#486 id=486 data-nosnippet>486</a>                <span class="macro">debug!</span>(target: LOG_DEVIMINT, %attempt, err = %err.fmt_compact_anyhow(), <span class="string">"Polling {name} failed, will retry..."</span>);
+<a href=#486 id=486 data-nosnippet>486</a>                <span class="macro">debug!</span>(target: LOG_DEVIMINT, %attempt, err = %err.fmt_compact(), <span class="string">"Polling {name} failed, will retry..."</span>);
 <a href=#487 id=487 data-nosnippet>487</a>                task::sleep(backoff.next().unwrap_or(MAX_BACKOFF)).<span class="kw">await</span>;
 <a href=#488 id=488 data-nosnippet>488</a>            }
 <a href=#489 id=489 data-nosnippet>489</a>            <span class="prelude-val">Err</span>(ControlFlow::Continue(err)) =&gt; {

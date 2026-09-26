@@ -403,7 +403,7 @@
 <a href=#403 id=403 data-nosnippet>403</a></span><span class="macro">uniffi::custom_type!</span>(Signature, String, {
 <a href=#404 id=404 data-nosnippet>404</a>    remote,
 <a href=#405 id=405 data-nosnippet>405</a>    lower: |sig| sig.to_string(),
-<a href=#406 id=406 data-nosnippet>406</a>    try_lift: |s| Signature::from_str(<span class="kw-2">&amp;</span>s).map_err(|e| <span class="macro">anyhow::anyhow!</span>(e)),
+<a href=#406 id=406 data-nosnippet>406</a>    try_lift: |s| Signature::from_str(<span class="kw-2">&amp;</span>s).map_err(Into::into),
 <a href=#407 id=407 data-nosnippet>407</a>});
 <a href=#408 id=408 data-nosnippet>408</a>
 <a href=#409 id=409 data-nosnippet>409</a><span class="doccomment">/// Upper bound guardians place on a registration's lifetime. Gateways announce
@@ -601,7 +601,7 @@
 <a href=#601 id=601 data-nosnippet>601</a>    </span><span class="macro">uniffi::custom_type!</span>(PublicKey, String, {
 <a href=#602 id=602 data-nosnippet>602</a>    remote,
 <a href=#603 id=603 data-nosnippet>603</a>    lower: |pk| pk.to_string(),
-<a href=#604 id=604 data-nosnippet>604</a>    try_lift: |s| PublicKey::from_str(<span class="kw-2">&amp;</span>s).map_err(|e| <span class="macro">anyhow::anyhow!</span>(e)),
+<a href=#604 id=604 data-nosnippet>604</a>    try_lift: |s| PublicKey::from_str(<span class="kw-2">&amp;</span>s).map_err(Into::into),
 <a href=#605 id=605 data-nosnippet>605</a>    });
 <a href=#606 id=606 data-nosnippet>606</a>
 <a href=#607 id=607 data-nosnippet>607</a>    <span class="doccomment">/// A list of hops along a payment path terminating with a channel to the

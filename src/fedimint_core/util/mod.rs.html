@@ -92,7 +92,7 @@
 <a href=#92 id=92 data-nosnippet>92</a><span class="attr">#[cfg(feature = <span class="string">"uniffi"</span>)]
 <a href=#93 id=93 data-nosnippet>93</a></span><span class="macro">uniffi::custom_type!</span>(SafeUrl, String, {
 <a href=#94 id=94 data-nosnippet>94</a>    lower: |u| u.<span class="number">0</span>.to_string(),
-<a href=#95 id=95 data-nosnippet>95</a>    try_lift: |s| SafeUrl::parse(<span class="kw-2">&amp;</span>s).map_err(|e| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Invalid URL: {e}"</span>)),
+<a href=#95 id=95 data-nosnippet>95</a>    try_lift: |s| SafeUrl::parse(<span class="kw-2">&amp;</span>s).map_err(|e| <span class="macro">uniffi::deps::anyhow::anyhow!</span>(<span class="string">"Invalid URL: {e}"</span>)),
 <a href=#96 id=96 data-nosnippet>96</a>});
 <a href=#97 id=97 data-nosnippet>97</a>
 <a href=#98 id=98 data-nosnippet>98</a><span class="kw">impl </span>SafeUrl {
@@ -415,7 +415,7 @@
 <a href=#415 id=415 data-nosnippet>415</a>///     backoff_util::background_backoff(),
 <a href=#416 id=416 data-nosnippet>416</a>///     || async {
 <a href=#417 id=417 data-nosnippet>417</a>///         // Fallible network calls …
-<a href=#418 id=418 data-nosnippet>418</a>///         anyhow::Ok(())
+<a href=#418 id=418 data-nosnippet>418</a>///         Ok::&lt;(), std::io::Error&gt;(())
 <a href=#419 id=419 data-nosnippet>419</a>///     },
 <a href=#420 id=420 data-nosnippet>420</a>/// )
 <a href=#421 id=421 data-nosnippet>421</a>/// .await

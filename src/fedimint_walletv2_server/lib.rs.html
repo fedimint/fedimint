@@ -52,7 +52,7 @@
 <a href=#52 id=52 data-nosnippet>52</a><span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 <a href=#53 id=53 data-nosnippet>53</a></span><span class="kw">use </span>fedimint_core::task::TaskGroup;
 <a href=#54 id=54 data-nosnippet>54</a><span class="kw">use </span>fedimint_core::task::sleep;
-<a href=#55 id=55 data-nosnippet>55</a><span class="kw">use </span>fedimint_core::util::FmtCompactAnyhow <span class="kw">as _</span>;
+<a href=#55 id=55 data-nosnippet>55</a><span class="kw">use </span>fedimint_core::util::FmtCompact <span class="kw">as _</span>;
 <a href=#56 id=56 data-nosnippet>56</a><span class="kw">use </span>fedimint_core::{
 <a href=#57 id=57 data-nosnippet>57</a>    InPoint, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send, push_db_pair_items, util,
 <a href=#58 id=58 data-nosnippet>58</a>};
@@ -958,7 +958,7 @@
 <a href=#958 id=958 data-nosnippet>958</a>                    <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = btc_rpc.submit_transaction(unconfirmed_tx.tx).<span class="kw">await </span>{
 <a href=#959 id=959 data-nosnippet>959</a>                        <span class="macro">debug!</span>(
 <a href=#960 id=960 data-nosnippet>960</a>                            target: LOG_MODULE_WALLETV2,
-<a href=#961 id=961 data-nosnippet>961</a>                            err = %err.fmt_compact_anyhow(),
+<a href=#961 id=961 data-nosnippet>961</a>                            err = %err.fmt_compact(),
 <a href=#962 id=962 data-nosnippet>962</a>                            <span class="string">"Error broadcasting unconfirmed transaction"
 <a href=#963 id=963 data-nosnippet>963</a>                        </span>);
 <a href=#964 id=964 data-nosnippet>964</a>                    }
@@ -1148,7 +1148,7 @@
 <a href=#1148 id=1148 data-nosnippet>1148</a>            <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = <span class="self">self</span>.btc_rpc.submit_transaction(unsigned.tx).<span class="kw">await </span>{
 <a href=#1149 id=1149 data-nosnippet>1149</a>                <span class="macro">debug!</span>(
 <a href=#1150 id=1150 data-nosnippet>1150</a>                    target: LOG_MODULE_WALLETV2,
-<a href=#1151 id=1151 data-nosnippet>1151</a>                    err = %err.fmt_compact_anyhow(),
+<a href=#1151 id=1151 data-nosnippet>1151</a>                    err = %err.fmt_compact(),
 <a href=#1152 id=1152 data-nosnippet>1152</a>                    <span class="string">"Error broadcasting finalized transaction"
 <a href=#1153 id=1153 data-nosnippet>1153</a>                </span>);
 <a href=#1154 id=1154 data-nosnippet>1154</a>            }

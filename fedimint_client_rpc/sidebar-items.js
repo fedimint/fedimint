@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["DbKeyPrefix","RpcRequestKind","RpcResponseKind"],"fn":["parse_oob_notes"],"struct":["HandledRpc","MnemonicKey","ParsedNoteDetails","RpcGlobalState","RpcRequest","RpcResponse"],"trait":["RpcResponseHandler"]};
+window.SIDEBAR_ITEMS = {"enum":["DbKeyPrefix","RpcRequestError","RpcRequestKind","RpcResponseKind"],"fn":["parse_oob_notes"],"struct":["HandledRpc","MnemonicKey","ParsedNoteDetails","RpcGlobalState","RpcRequest","RpcResponse"],"trait":["RpcResponseHandler"]};

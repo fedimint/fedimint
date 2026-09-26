@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["KV_TABLE"],"enum":["DatabaseOperation"],"mod":["native"],"struct":["DatabaseDeleteOperation","DatabaseInsertOperation","MemAndRedb","MemAndRedbTransaction"]};
+window.SIDEBAR_ITEMS = {"constant":["KV_TABLE"],"enum":["DatabaseOperation","MemAndRedbOpenError"],"mod":["error","native"],"struct":["DatabaseDeleteOperation","DatabaseInsertOperation","MemAndRedb","MemAndRedbTransaction"]};

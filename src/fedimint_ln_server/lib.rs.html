@@ -28,7 +28,7 @@
 <a href=#28 id=28 data-nosnippet>28</a>};
 <a href=#29 id=29 data-nosnippet>29</a><span class="kw">use </span>fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
 <a href=#30 id=30 data-nosnippet>30</a><span class="kw">use </span>fedimint_core::task::{TaskGroup, sleep};
-<a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>fedimint_core::util::{FmtCompact, FmtCompactAnyhow};
+<a href=#31 id=31 data-nosnippet>31</a><span class="kw">use </span>fedimint_core::util::FmtCompact;
 <a href=#32 id=32 data-nosnippet>32</a><span class="kw">use </span>fedimint_core::{
 <a href=#33 id=33 data-nosnippet>33</a>    Amount, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
 <a href=#34 id=34 data-nosnippet>34</a>    push_db_pair_items,
@@ -1144,7 +1144,7 @@
 <a href=#1144 id=1144 data-nosnippet>1144</a>                    <span class="kw">let </span><span class="kw-2">mut </span>dbtx = db.begin_transaction().<span class="kw">await</span>;
 <a href=#1145 id=1145 data-nosnippet>1145</a>                    <span class="kw">let </span>gateway_id = gateway.info.gateway_id;
 <a href=#1146 id=1146 data-nosnippet>1146</a>                    module.register_gateway(<span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(), gateway).<span class="kw">await</span>.map_err(|err| {
-<a href=#1147 id=1147 data-nosnippet>1147</a>                        <span class="macro">warn!</span>(target: LOG_MODULE_LN, err = %err.fmt_compact_anyhow(), %gateway_id, <span class="string">"Rejected gateway registration"</span>);
+<a href=#1147 id=1147 data-nosnippet>1147</a>                        <span class="macro">warn!</span>(target: LOG_MODULE_LN, err = %err.fmt_compact(), %gateway_id, <span class="string">"Rejected gateway registration"</span>);
 <a href=#1148 id=1148 data-nosnippet>1148</a>                        ApiError::bad_request(err.to_string())
 <a href=#1149 id=1149 data-nosnippet>1149</a>                    })<span class="question-mark">?</span>;
 <a href=#1150 id=1150 data-nosnippet>1150</a>                    dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1173,7 +1173,7 @@
 <a href=#1173 id=1173 data-nosnippet>1173</a>                            <span class="prelude-val">Ok</span>(<span class="bool-val">true</span>)
 <a href=#1174 id=1174 data-nosnippet>1174</a>                        },
 <a href=#1175 id=1175 data-nosnippet>1175</a>                        <span class="prelude-val">Err</span>(err) =&gt; {
-<a href=#1176 id=1176 data-nosnippet>1176</a>                            <span class="macro">warn!</span>(target: LOG_MODULE_LN, err = %err.fmt_compact_anyhow(), gateway_id = %remove_gateway_request.gateway_id, <span class="string">"Unable to remove gateway registration"</span>);
+<a href=#1176 id=1176 data-nosnippet>1176</a>                            <span class="macro">warn!</span>(target: LOG_MODULE_LN, err = %err.fmt_compact(), gateway_id = %remove_gateway_request.gateway_id, <span class="string">"Unable to remove gateway registration"</span>);
 <a href=#1177 id=1177 data-nosnippet>1177</a>                            <span class="prelude-val">Ok</span>(<span class="bool-val">false</span>)
 <a href=#1178 id=1178 data-nosnippet>1178</a>                        },
 <a href=#1179 id=1179 data-nosnippet>1179</a>                    }
