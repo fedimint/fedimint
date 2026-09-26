@@ -270,7 +270,7 @@ jaq-json = { version = "1.1.1", features = ["serde_json"] }
 js-sys = "0.3.83"
 jsonrpsee = "0.24.9"
 jsonrpsee-core = "0.24.9"
-jsonrpsee-types = "0.24.8"
+jsonrpsee-types = "0.26.0"
 jsonrpsee-wasm-client = "0.24.9"
 jsonrpsee-ws-client = { version = "0.24.9", default-features = false }
 ldk-node = { version = "0.6.1", package = "fedimint-ldk-node" }
