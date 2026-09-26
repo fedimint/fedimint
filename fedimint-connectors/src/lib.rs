@@ -650,6 +650,11 @@ impl<T: IConnection + ?Sized> ConnectionPool<T> {
             .get_or_try_init(|| async {
                 let retry_delay = pool_entry_arc.pre_reconnect_delay();
                 fedimint_core::runtime::sleep(retry_delay).await;
+                pool_entry_arc
+                    .inner
+                    .lock()
+                    .expect("Locking failed")
+                    .retry_at = None;
 
                 trace!(target: LOG_CLIENT_NET_API, %url, "Attempting to create a new connection");
                 let res = create_connection(
@@ -714,6 +719,7 @@ impl<T: IConnection + ?Sized> ConnectionPool<T> {
 struct ConnectionStateInner {
     fresh: bool,
     backoff: FibonacciBackoff,
+    retry_at: Option<fedimint_core::runtime::Instant>,
 }
 
 #[derive(Debug)]
@@ -740,6 +746,7 @@ impl<T: ?Sized> ConnectionState<T> {
             connection: OnceCell::new(),
             inner: std::sync::Mutex::new(ConnectionStateInner {
                 fresh: true,
+                retry_at: None,
                 backoff: custom_backoff(
                     // First time connections start quick
                     Duration::from_millis(5),
@@ -759,6 +766,7 @@ impl<T: ?Sized> ConnectionState<T> {
             inner: std::sync::Mutex::new(ConnectionStateInner {
                 // set the attempts to 1, indicating that
                 fresh: false,
+                retry_at: None,
                 backoff: custom_backoff(
                     // Connections after a disconnect start with some minimum delay
                     Duration::from_millis(500),
@@ -770,18 +778,26 @@ impl<T: ?Sized> ConnectionState<T> {
         }
     }
 
-    /// Record the fact that an attempt to connect is being made, and return
-    /// time the caller should wait.
+    /// Return the remaining wait, preserving its deadline across cancellation.
     pub fn pre_reconnect_delay(&self) -> Duration {
         let mut backoff_locked = self.inner.lock().expect("Locking failed");
+        let now = fedimint_core::runtime::Instant::now();
+        if let Some(retry_at) = backoff_locked.retry_at {
+            return retry_at.saturating_duration_since(now);
+        }
         let fresh = backoff_locked.fresh;
 
         backoff_locked.fresh = false;
 
-        if fresh {
+        let delay = if fresh {
             Duration::default()
         } else {
             backoff_locked.backoff.next().expect("Keeps retrying")
-        }
+        };
+        backoff_locked.retry_at = Some(now + delay);
+        delay
     }
 }
+
+#[cfg(test)]
+mod reconnect_tests;
