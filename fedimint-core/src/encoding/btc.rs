@@ -30,6 +30,18 @@ fn from_psbt_error(error: bitcoin::psbt::Error) -> DecodeError {
     }
 }
 
+fn consensus_encode_with_buffer<T: bitcoin::consensus::Encodable, W: std::io::Write>(
+    value: &T,
+    writer: &mut W,
+) -> Result<(), std::io::Error> {
+    let mut buffered_writer = std::io::BufWriter::new(writer);
+    bitcoin::consensus::Encodable::consensus_encode(value, &mut buffered_writer)?;
+    buffered_writer
+        .into_inner()
+        .map_err(std::io::IntoInnerError::into_error)?;
+    Ok(())
+}
+
 macro_rules! impl_encode_decode_bridge {
     ($btc_type:ty) => {
         impl crate::encoding::Encodable for $btc_type {
@@ -37,11 +49,7 @@ macro_rules! impl_encode_decode_bridge {
                 &self,
                 writer: &mut W,
             ) -> Result<(), std::io::Error> {
-                bitcoin::consensus::Encodable::consensus_encode(
-                    self,
-                    &mut std::io::BufWriter::new(writer),
-                )?;
-                Ok(())
+                consensus_encode_with_buffer(self, writer)
             }
         }
 
@@ -85,11 +93,7 @@ impl crate::encoding::Decodable for bitcoin::psbt::Psbt {
 
 impl crate::encoding::Encodable for bitcoin::Txid {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
-        bitcoin::consensus::Encodable::consensus_encode(
-            self,
-            &mut std::io::BufWriter::new(writer),
-        )?;
-        Ok(())
+        consensus_encode_with_buffer(self, writer)
     }
 
     fn consensus_encode_to_hex(&self) -> String {
@@ -456,6 +460,7 @@ impl<W: Write> bitcoin_io::Write for BitoinIoWriteAdapter<W> {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{Error, ErrorKind, Write};
     use std::str::FromStr;
 
     use bitcoin::hashes::Hash as BitcoinHash;
@@ -466,6 +471,100 @@ mod tests {
     use crate::encoding::btc::NetworkLegacyEncodingWrapper;
     use crate::encoding::tests::{test_roundtrip, test_roundtrip_expected};
     use crate::encoding::{Decodable, DecodeError, Encodable};
+
+    struct FailAfter {
+        bytes_remaining: usize,
+        bytes_written: Vec<u8>,
+    }
+
+    impl FailAfter {
+        fn new(bytes_remaining: usize) -> Self {
+            Self {
+                bytes_remaining,
+                bytes_written: Vec::new(),
+            }
+        }
+    }
+
+    impl Write for FailAfter {
+        fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+            if self.bytes_remaining == 0 {
+                return Err(Error::new(ErrorKind::BrokenPipe, "injected write failure"));
+            }
+
+            let bytes_to_write = buffer.len().min(self.bytes_remaining);
+            self.bytes_written
+                .extend_from_slice(&buffer[..bytes_to_write]);
+            self.bytes_remaining -= bytes_to_write;
+            Ok(bytes_to_write)
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            panic!("encoding must not flush the caller's writer");
+        }
+    }
+
+    struct ShortWriter {
+        max_write_size: usize,
+        bytes_written: Vec<u8>,
+    }
+
+    impl Write for ShortWriter {
+        fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+            let bytes_to_write = buffer.len().min(self.max_write_size);
+            self.bytes_written
+                .extend_from_slice(&buffer[..bytes_to_write]);
+            Ok(bytes_to_write)
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            panic!("encoding must not flush the caller's writer");
+        }
+    }
+
+    #[test_log::test]
+    fn bitcoin_encoding_propagates_buffer_drain_errors() {
+        let blockhash = bitcoin::BlockHash::from_str(
+            "0000000000000000000065bda8f8a88f2e1e00d9a6887a43d640e52a4c7660f2",
+        )
+        .unwrap();
+        let error = blockhash
+            .consensus_encode(&mut FailAfter::new(0))
+            .unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::BrokenPipe);
+
+        let txid = bitcoin::Txid::from_str(
+            "51f7ed2f23e58cc6e139e715e9ce304a1e858416edc9079dd7b74fa8d2efc09a",
+        )
+        .unwrap();
+        let mut partial_writer = FailAfter::new(7);
+        let error = txid.consensus_encode(&mut partial_writer).unwrap_err();
+        assert_eq!(error.kind(), ErrorKind::BrokenPipe);
+        assert_eq!(partial_writer.bytes_written.len(), 7);
+    }
+
+    #[test_log::test]
+    fn large_transaction_encoding_matches_bitcoin_consensus() {
+        let transaction = bitcoin::Transaction {
+            version: bitcoin::transaction::Version::TWO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+            input: Vec::new(),
+            output: vec![bitcoin::TxOut {
+                value: bitcoin::Amount::from_sat(1),
+                script_pubkey: bitcoin::ScriptBuf::from_bytes(vec![0xab; 16 * 1024]),
+            }],
+        };
+        let expected = bitcoin::consensus::serialize(&transaction);
+        let mut short_writer = ShortWriter {
+            max_write_size: 257,
+            bytes_written: Vec::new(),
+        };
+
+        transaction.consensus_encode(&mut short_writer).unwrap();
+
+        assert_eq!(transaction.consensus_encode_to_vec(), expected);
+        assert_eq!(short_writer.bytes_written, expected);
+    }
 
     #[test_log::test]
     fn block_hash_roundtrip() {
