@@ -1844,7 +1844,8 @@ mod tests {
         Lightning {
             cfg: cfg.clone(),
             our_peer_id: 0.into(),
-            num_peers: NumPeers::from(usize::from(MINTS)),
+            num_peers: NumPeers::try_from(usize::from(MINTS))
+                .expect("test mint count must be nonzero"),
             // No peer has reported a supported version, so no upgrade is ever
             // proposed. None of these tests exercise version voting.
             peer_supported_consensus_version: watch::channel(None).1,

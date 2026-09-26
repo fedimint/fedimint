@@ -811,7 +811,8 @@ impl ClientBuilder {
                 let start_module_recover_fn =
                     |snapshot: Option<ClientBackup>, progress: RecoveryProgress| {
                         let module_config = module_config.clone();
-                        let num_peers = NumPeers::from(config.global.api_endpoints.len());
+                        let num_peers = NumPeers::try_from(config.global.api_endpoints.len())
+                            .expect("client config must contain at least one guardian");
                         let db = db.clone();
                         let kind = kind.clone();
                         let notifier = notifier.clone();

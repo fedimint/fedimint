@@ -357,7 +357,7 @@ impl Federation {
         fed_index: usize,
         federation_name: String,
     ) -> Result<Self> {
-        let num_peers = NumPeers::from(process_mgr.globals.FM_FED_SIZE);
+        let num_peers = NumPeers::try_from(process_mgr.globals.FM_FED_SIZE)?;
         let mut members = BTreeMap::new();
         let mut peer_to_env_vars_map = BTreeMap::new();
 

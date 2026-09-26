@@ -316,7 +316,8 @@ pub async fn run(
 
                 let module = module_init
                     .init(
-                        NumPeers::from(cfg.consensus.api_endpoints().len()),
+                        NumPeers::try_from(cfg.consensus.api_endpoints().len())
+                            .expect("server config must contain at least one guardian"),
                         cfg.get_module_config(*module_id)?,
                         db.with_prefix_module_id(*module_id).0,
                         task_group,
