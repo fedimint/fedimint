@@ -602,6 +602,30 @@ jobs:
             fi
           done
 
+      - name: Smoke test bundled Linux binaries
+        if: matrix.platform.build-bundled
+        run: |
+          set -euo pipefail
+          smoke_root="$(mktemp -d)"
+          trap 'rm -rf "$smoke_root"' EXIT
+          bins="${{ matrix.build.bins }}"
+          for bin in ${bins//,/ } ; do
+            bundle="$PWD/bins/$bin-$BUILD_ID"
+            test -x "$bundle"
+            # Use a separate empty home for each executable, then reuse it to
+            # exercise both cold and warm bundle startup/cache paths.
+            home="$smoke_root/$bin"
+            mkdir "$home"
+            for run in cold warm ; do
+              >&2 echo "Smoke testing $bin ($run cache)"
+              actual="$(HOME="$home" XDG_CACHE_HOME="$home/.cache" "$bundle" version-hash)"
+              if [ "$actual" != "$GITHUB_SHA" ]; then
+                >&2 echo "Bundled $bin returned unexpected version-hash: $actual (expected $GITHUB_SHA)"
+                exit 1
+              fi
+            done
+          done
+
       - name: Build macOS tarball with bundled dylibs
         if: matrix.platform.build-tarball
         run: |
