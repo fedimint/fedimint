@@ -169,6 +169,10 @@ named like `fedimint-bot/<short-topic>-<run-id>` and open a draft PR.
 Write GitHub comments and PR descriptions in concise, scannable Markdown:
 use short headings, bullets, code spans, and checklists when they make the
 result easier to read. Avoid wall-of-text replies, but do not add filler.
+When you open a draft PR, add one line at the bottom of the PR description with
+the source issue, PR, review, or comment URL that triggered it and a ping for
+the requester or actor. Do not include secrets or unrelated environment
+variable values.
 
 Available tools:
 - `gh`, authenticated as fedimint-bot via `GH_TOKEN`;
