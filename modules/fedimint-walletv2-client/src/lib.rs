@@ -803,24 +803,31 @@ impl WalletClientModule {
         let handle = task_group.make_handle();
 
         task_group.spawn_cancellable_with_span(client_span.clone(), "output-scanner", async move {
-            let mut dbtx = module.db.begin_transaction().await;
+            // Read the stored index with a short-lived transaction, runs the search
+            // with no transaction open, and inserts the result in its own short
+            // transaction. This avoids holding a transaction snapshot across a
+            // long-running CPU-bound search that might outlive RocksDB's retained
+            // write history, causing a SnapshotTooOld error and panic on commit.
+            // See: https://github.com/fedimint/fedimint/issues/9202
+            let address_index_exists = {
+                let mut dbtx = module.db.begin_transaction().await;
+                dbtx.find_by_prefix(&ValidAddressIndexPrefix)
+                    .await
+                    .next()
+                    .await
+                    .is_some()
+            };
 
-            if dbtx
-                .find_by_prefix(&ValidAddressIndexPrefix)
-                .await
-                .next()
-                .await
-                .is_none()
-            {
+            if !address_index_exists {
                 let Some(index) = module.next_valid_index(0, &handle).await else {
                     return;
                 };
 
+                let mut dbtx = module.db.begin_transaction().await;
                 dbtx.insert_new_entry(&ValidAddressIndexKey(index), &())
                     .await;
+                dbtx.commit_tx().await;
             }
-
-            dbtx.commit_tx().await;
 
             loop {
                 match module.check_outputs(&handle).await {
