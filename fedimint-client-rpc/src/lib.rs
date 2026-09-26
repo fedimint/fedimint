@@ -3,9 +3,12 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::Context;
 use async_stream::try_stream;
+use fedimint_api_client::api::{ClientConfigDownloadError, FederationError};
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
+use fedimint_client::error::{
+    ClientBuildError, ClientModuleError, GlobalRpcError, ModuleLookupError,
+};
 use fedimint_client::module::ClientModule;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{ClientHandleArc, ClientPreview, RootSecret};
@@ -13,9 +16,9 @@ use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::invite_code::InviteCode;
+use fedimint_core::invite_code::{InviteCode, InviteCodeParseError};
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::util::{BoxFuture, BoxStream, FmtCompactAnyhow as _};
+use fedimint_core::util::{BoxFuture, BoxStream, FmtCompact as _};
 use fedimint_core::{Amount, TieredCounts, impl_db_record};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_ln_client::{LightningClientInit, LightningClientModule};
@@ -24,7 +27,7 @@ use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes, OOBNotesP
 use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
 use futures::StreamExt;
 use futures::future::{AbortHandle, Abortable};
-use lightning_invoice::Bolt11InvoiceDescriptionRef;
+use lightning_invoice::{Bolt11InvoiceDescriptionRef, ParseOrSemanticError};
 use rand::thread_rng;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -184,23 +187,23 @@ impl RpcGlobalState {
         handles.remove(&request_id)
     }
 
-    async fn client_builder() -> Result<fedimint_client::ClientBuilder, anyhow::Error> {
+    async fn client_builder() -> fedimint_client::ClientBuilder {
         let mut builder = fedimint_client::Client::builder().await;
         builder.with_module(MintClientInit);
         builder.with_module(LightningClientInit::default());
         builder.with_module(WalletClientInit(None));
         builder.with_module(MetaClientInit);
-        Ok(builder)
+        builder
     }
 
     /// Get client-specific database with proper prefix
-    async fn client_db(&self, client_name: String) -> anyhow::Result<Database> {
+    async fn client_db(&self, client_name: String) -> Database {
         assert_eq!(client_name.len(), 36);
 
         let unified_db = &self.unified_database;
         let mut client_prefix = vec![DbKeyPrefix::ClientDatabase as u8];
         client_prefix.extend_from_slice(client_name.as_bytes());
-        Ok(unified_db.with_prefix(client_prefix))
+        unified_db.with_prefix(client_prefix)
     }
 
     /// Handle joining federation using unified database
@@ -210,14 +213,14 @@ impl RpcGlobalState {
         invite_code: String,
         client_name: String,
         force_recover: bool,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), RpcRequestError> {
         // Check if wallet mnemonic is set
         let mnemonic = self
             .get_mnemonic_from_db()
             .await?
-            .context("No wallet mnemonic set. Please set or generate a mnemonic first.")?;
+            .ok_or(RpcRequestError::NoMnemonic)?;
 
-        let client_db = self.client_db(client_name.clone()).await?;
+        let client_db = self.client_db(client_name.clone()).await;
 
         let invite_code = InviteCode::from_str(&invite_code)?;
         let federation_id = invite_code.federation_id();
@@ -230,7 +233,7 @@ impl RpcGlobalState {
         let preview = match cached_preview {
             Some(preview) if preview.config().calculate_federation_id() == federation_id => preview,
             _ => {
-                let builder = Self::client_builder().await?;
+                let builder = Self::client_builder().await;
                 builder
                     .preview(self.connectors.clone(), &invite_code)
                     .await?
@@ -270,30 +273,30 @@ impl RpcGlobalState {
         Ok(())
     }
 
-    async fn handle_open_client(&self, client_name: String) -> anyhow::Result<()> {
+    async fn handle_open_client(&self, client_name: String) -> Result<(), RpcRequestError> {
         // Check if wallet mnemonic is set
         let mnemonic = self
             .get_mnemonic_from_db()
             .await?
-            .context("No wallet mnemonic set. Please set or generate a mnemonic first.")?;
+            .ok_or(RpcRequestError::NoMnemonic)?;
 
-        let client_db = self.client_db(client_name.clone()).await?;
+        let client_db = self.client_db(client_name.clone()).await;
 
         if !fedimint_client::Client::is_initialized(&client_db).await {
-            anyhow::bail!("client is not initialized for this database");
+            return Err(RpcRequestError::ClientNotInitialized);
         }
 
         // Get the client config to retrieve the federation ID
         let client_config = fedimint_client::Client::get_config_from_db(&client_db)
             .await
-            .context("Client config not found in database")?;
+            .ok_or(RpcRequestError::NoClientConfig)?;
 
         let federation_id = client_config.calculate_federation_id();
 
         // Derive federation-specific secret from wallet mnemonic
         let federation_secret = self.derive_federation_secret(&mnemonic, &federation_id);
 
-        let builder = Self::client_builder().await?;
+        let builder = Self::client_builder().await;
         let client = Arc::new(
             builder
                 .open(
@@ -308,9 +311,11 @@ impl RpcGlobalState {
         Ok(())
     }
 
-    async fn handle_close_client(&self, client_name: String) -> anyhow::Result<()> {
+    async fn handle_close_client(&self, client_name: String) -> Result<(), RpcRequestError> {
         let mut clients = self.clients.lock().await;
-        let mut client = clients.remove(&client_name).context("client not found")?;
+        let mut client = clients
+            .remove(&client_name)
+            .ok_or(RpcRequestError::ClientToCloseNotFound)?;
 
         // RPC calls might have cloned the client Arc before we remove the client.
         for attempt in 0.. {
@@ -333,12 +338,14 @@ impl RpcGlobalState {
         module: String,
         method: String,
         payload: serde_json::Value,
-    ) -> BoxStream<'static, anyhow::Result<serde_json::Value>> {
+    ) -> BoxStream<'static, Result<serde_json::Value, RpcRequestError>> {
         Box::pin(try_stream! {
             let client = self
                 .get_client(&client_name)
                 .await
-                .with_context(|| format!("Client not found: {client_name}"))?;
+                .ok_or_else(|| RpcRequestError::ClientNotFound {
+                    client_name: client_name.clone(),
+                })?;
             match module.as_str() {
                 "" => {
                     let mut stream = client.handle_global_rpc(method, payload);
@@ -377,13 +384,16 @@ impl RpcGlobalState {
                     }
                 }
                 _ => {
-                    Err(anyhow::format_err!("module not found: {module}"))?;
+                    Err(RpcRequestError::UnknownModule { module: module.clone() })?;
                 },
             };
         })
     }
 
-    fn parse_invite_code(&self, invite_code: String) -> anyhow::Result<serde_json::Value> {
+    fn parse_invite_code(
+        &self,
+        invite_code: String,
+    ) -> Result<serde_json::Value, InviteCodeParseError> {
         let invite_code = InviteCode::from_str(&invite_code)?;
 
         Ok(json!({
@@ -392,9 +402,12 @@ impl RpcGlobalState {
         }))
     }
 
-    fn parse_bolt11_invoice(&self, invoice_str: String) -> anyhow::Result<serde_json::Value> {
+    fn parse_bolt11_invoice(
+        &self,
+        invoice_str: String,
+    ) -> Result<serde_json::Value, RpcRequestError> {
         let invoice = lightning_invoice::Bolt11Invoice::from_str(&invoice_str)
-            .map_err(|e| anyhow::anyhow!("Failed to parse Lightning invoice: {}", e))?;
+            .map_err(RpcRequestError::InvalidInvoice)?;
 
         let amount_msat = invoice.amount_milli_satoshis().unwrap_or(0);
         let amount_sat = amount_msat as f64 / 1000.0;
@@ -414,11 +427,14 @@ impl RpcGlobalState {
         }))
     }
 
-    async fn preview_federation(&self, invite_code: String) -> anyhow::Result<serde_json::Value> {
+    async fn preview_federation(
+        &self,
+        invite_code: String,
+    ) -> Result<serde_json::Value, RpcRequestError> {
         let invite = InviteCode::from_str(&invite_code)?;
         let federation_id = invite.federation_id();
 
-        let builder = Self::client_builder().await?;
+        let builder = Self::client_builder().await;
         let preview = builder.preview(self.connectors.clone(), &invite).await?;
 
         let json_config = preview.config().to_json();
@@ -434,7 +450,7 @@ impl RpcGlobalState {
     fn handle_rpc_inner(
         self: Arc<Self>,
         request: RpcRequest,
-    ) -> Option<BoxStream<'static, anyhow::Result<serde_json::Value>>> {
+    ) -> Option<BoxStream<'static, Result<serde_json::Value, RpcRequestError>>> {
         match request.kind {
             RpcRequestKind::SetMnemonic { words } => Some(Box::pin(try_stream! {
                 self.set_mnemonic(words).await?;
@@ -493,9 +509,9 @@ impl RpcGlobalState {
             })),
             RpcRequestKind::ParseLightningAddress { address } => Some(Box::pin(try_stream! {
                 let url = fedimint_lnurl::parse_address(&address)
-                    .context("Invalid Lightning Address")?;
+                    .ok_or(RpcRequestError::InvalidLightningAddress)?;
                 let metadata = fedimint_lnurl::request(&url).await
-                    .map_err(|e| anyhow::anyhow!(e))?;
+                    .map_err(RpcRequestError::LnurlRequest)?;
 
                 yield serde_json::to_value(metadata)?;
             })),
@@ -534,7 +550,7 @@ impl RpcGlobalState {
                     Err(e) => RpcResponse {
                         request_id,
                         kind: RpcResponseKind::Error {
-                            error: e.fmt_compact_anyhow().to_string(),
+                            error: e.fmt_compact().to_string(),
                         },
                     },
                 };
@@ -559,7 +575,7 @@ impl RpcGlobalState {
     /// Retrieve the wallet-level mnemonic words.
     /// Returns the mnemonic as a vector of words, or None if no mnemonic is
     /// set.
-    async fn get_mnemonic_words(&self) -> anyhow::Result<Option<Vec<String>>> {
+    async fn get_mnemonic_words(&self) -> Result<Option<Vec<String>>, bip39::Error> {
         let mnemonic = self.get_mnemonic_from_db().await?;
 
         if let Some(mnemonic) = mnemonic {
@@ -571,7 +587,7 @@ impl RpcGlobalState {
     }
     /// Set a mnemonic from user-provided words
     /// Returns an error if a mnemonic is already set
-    async fn set_mnemonic(&self, words: Vec<String>) -> anyhow::Result<()> {
+    async fn set_mnemonic(&self, words: Vec<String>) -> Result<(), RpcRequestError> {
         let all_words = words.join(" ");
         let mnemonic =
             Mnemonic::parse_in_normalized(fedimint_bip39::Language::English, &all_words)?;
@@ -579,9 +595,7 @@ impl RpcGlobalState {
         let mut dbtx = self.unified_database.begin_transaction().await;
 
         if dbtx.get_value(&MnemonicKey).await.is_some() {
-            anyhow::bail!(
-                "Wallet mnemonic already exists. Please clear existing data before setting a new mnemonic."
-            );
+            return Err(RpcRequestError::MnemonicExistsOnSet);
         }
 
         dbtx.insert_new_entry(&MnemonicKey, &mnemonic.to_entropy())
@@ -594,16 +608,14 @@ impl RpcGlobalState {
 
     /// Generate a new random mnemonic and set it
     /// Returns an error if a mnemonic is already set
-    async fn generate_mnemonic(&self) -> anyhow::Result<Vec<String>> {
+    async fn generate_mnemonic(&self) -> Result<Vec<String>, RpcRequestError> {
         let mnemonic = Bip39RootSecretStrategy::<12>::random(&mut thread_rng());
         let words: Vec<String> = mnemonic.words().map(|w| w.to_string()).collect();
 
         let mut dbtx = self.unified_database.begin_transaction().await;
 
         if dbtx.get_value(&MnemonicKey).await.is_some() {
-            anyhow::bail!(
-                "Wallet mnemonic already exists. Please clear existing data before generating a new mnemonic."
-            );
+            return Err(RpcRequestError::MnemonicExistsOnGenerate);
         }
 
         dbtx.insert_new_entry(&MnemonicKey, &mnemonic.to_entropy())
@@ -628,7 +640,7 @@ impl RpcGlobalState {
     }
 
     /// Fetch mnemonic from database
-    async fn get_mnemonic_from_db(&self) -> anyhow::Result<Option<Mnemonic>> {
+    async fn get_mnemonic_from_db(&self) -> Result<Option<Mnemonic>, bip39::Error> {
         let mut dbtx = self.unified_database.begin_transaction_nc().await;
 
         if let Some(mnemonic_entropy) = dbtx.get_value(&MnemonicKey).await {
@@ -640,7 +652,7 @@ impl RpcGlobalState {
     }
 
     /// Check if mnemonic is set
-    async fn has_mnemonic_set(&self) -> anyhow::Result<bool> {
+    async fn has_mnemonic_set(&self) -> Result<bool, bip39::Error> {
         let mnemonic = self.get_mnemonic_from_db().await?;
         Ok(mnemonic.is_some())
     }
@@ -669,3 +681,104 @@ pub fn parse_oob_notes(oob_notes_str: &str) -> Result<ParsedNoteDetails, OOBNote
         note_counts,
     })
 }
+
+/// Why a request to [`RpcGlobalState::handle_rpc`] failed; the chain of this
+/// error is the text of the response's `error`.
+#[derive(Debug, thiserror::Error)]
+enum RpcRequestError {
+    /// No wallet mnemonic is set yet.
+    #[error("No wallet mnemonic set. Please set or generate a mnemonic first.")]
+    NoMnemonic,
+
+    /// A wallet mnemonic is already set, so another cannot be set.
+    #[error(
+        "Wallet mnemonic already exists. Please clear existing data before setting a new \
+         mnemonic."
+    )]
+    MnemonicExistsOnSet,
+
+    /// A wallet mnemonic is already set, so another cannot be generated.
+    #[error(
+        "Wallet mnemonic already exists. Please clear existing data before generating a new \
+         mnemonic."
+    )]
+    MnemonicExistsOnGenerate,
+
+    /// The words are not a valid mnemonic, or the stored mnemonic entropy is
+    /// not.
+    #[error(transparent)]
+    Mnemonic(#[from] bip39::Error),
+
+    /// The invite code does not parse.
+    #[error(transparent)]
+    InviteCode(#[from] InviteCodeParseError),
+
+    /// The federation's config could not be downloaded, or it belongs to a
+    /// different federation than the invite code names.
+    #[error(transparent)]
+    ConfigDownload(#[from] ClientConfigDownloadError),
+
+    /// The federation could not be asked for a backup of the wallet.
+    #[error(transparent)]
+    Federation(#[from] FederationError),
+
+    /// The client could not be joined, recovered or opened.
+    #[error(transparent)]
+    ClientBuild(#[from] ClientBuildError),
+
+    /// The client's database was never joined to a federation.
+    #[error("client is not initialized for this database")]
+    ClientNotInitialized,
+
+    /// The client's database has no federation config.
+    #[error("Client config not found in database")]
+    NoClientConfig,
+
+    /// No open client has the name the request closes.
+    #[error("client not found")]
+    ClientToCloseNotFound,
+
+    /// No open client has the name the request addresses.
+    #[error("Client not found: {client_name}")]
+    ClientNotFound { client_name: String },
+
+    /// The request addresses a module the RPC does not serve.
+    #[error("module not found: {module}")]
+    UnknownModule { module: String },
+
+    /// The client has no usable module of the kind the request addresses.
+    #[error(transparent)]
+    ModuleLookup(#[from] ModuleLookupError),
+
+    /// The client failed a request that is not addressed to a module.
+    #[error(transparent)]
+    GlobalRpc(#[from] GlobalRpcError),
+
+    /// The module failed the request.
+    #[error(transparent)]
+    Module(#[from] ClientModuleError),
+
+    /// The Lightning invoice does not parse.
+    #[error("Failed to parse Lightning invoice")]
+    InvalidInvoice(#[source] ParseOrSemanticError),
+
+    /// The OOB notes do not parse.
+    #[error(transparent)]
+    OobNotes(#[from] OOBNotesParseError),
+
+    /// The input is not a Lightning address.
+    #[error("Invalid Lightning Address")]
+    InvalidLightningAddress,
+
+    /// The LNURL request of a Lightning address failed; the payload is the
+    /// reason it gives.
+    #[error("{0}")]
+    LnurlRequest(String),
+
+    /// A response could not be converted to JSON.
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+}
+
+#[cfg(test)]
+mod tests;

@@ -135,7 +135,9 @@ pub struct TxOutputSummary {
 uniffi::custom_type!(OutPoint, String, {
     remote,
     lower: |out_point| out_point.to_string(),
-    try_lift: |s| OutPoint::from_str(&s).map_err(|e| anyhow::anyhow!("Failed to parse OutPoint: {e}")),
+    try_lift: |s| OutPoint::from_str(&s).map_err(|e| {
+        uniffi::deps::anyhow::anyhow!("Failed to parse OutPoint: {e}")
+    }),
 });
 
 #[cfg(feature = "uniffi")]

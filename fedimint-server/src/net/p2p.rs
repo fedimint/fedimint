@@ -17,7 +17,7 @@ use async_trait::async_trait;
 use fedimint_core::PeerId;
 use fedimint_core::net::{IP2PConnections, Recipient};
 use fedimint_core::task::{TaskGroup, sleep};
-use fedimint_core::util::FmtCompactAnyhow;
+use fedimint_core::util::FmtCompact;
 use fedimint_core::util::backoff_util::{FibonacciBackoff, api_networking_backoff};
 use fedimint_logging::{LOG_CONSENSUS, LOG_NET_PEER};
 use fedimint_server_core::dashboard_ui::P2PConnectionStatus;
@@ -114,7 +114,7 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
                         }
                     },
                     Err(err) => {
-                        warn!(target: LOG_NET_PEER, our_id = %identity, err = %err.fmt_compact_anyhow(), "Error while opening incoming connection");
+                        warn!(target: LOG_NET_PEER, our_id = %identity, err = %err.fmt_compact(), "Error while opening incoming connection");
                     }
                 }
             }
@@ -489,7 +489,7 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
     }
 
     fn disconnect(&self, error: anyhow::Error) -> P2PConnectionSMState<M> {
-        let last_error = error.fmt_compact_anyhow().to_string();
+        let last_error = error.fmt_compact().to_string();
 
         info!(
             target: LOG_NET_PEER,
@@ -540,7 +540,7 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
                         Some(P2PConnectionSMState::Connected(connection))
                     }
                     Err(e) => {
-                        let last_error = e.fmt_compact_anyhow().to_string();
+                        let last_error = e.fmt_compact().to_string();
 
                         warn!(
                             target: LOG_CONSENSUS,

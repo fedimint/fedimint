@@ -119,6 +119,7 @@ async fn get_db(path: &Path, module_decoders: ModuleDecoderRegistry) -> Database
     Database::new(
         RocksDbReadOnly::open_read_only(path)
             .await
+            .map_err(anyhow::Error::from)
             .expect("Error opening readonly DB"),
         module_decoders,
     )

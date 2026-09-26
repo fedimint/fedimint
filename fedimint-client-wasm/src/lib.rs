@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use fedimint_client_rpc::{RpcGlobalState, RpcRequest, RpcResponse, RpcResponseHandler};
 use fedimint_core::db::Database;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_cursed_redb::MemAndRedb;
 use wasm_bindgen::prelude::{JsError, JsValue, wasm_bindgen};
 use web_sys::FileSystemSyncAccessHandle;
@@ -54,8 +55,12 @@ impl RpcHandler {
         // Return errors instead of panicking: a panic in an async export
         // leaves the returned `Promise` unsettled forever, so the caller
         // would hang instead of getting a rejection it can catch.
-        let cursed_db = MemAndRedb::new(sync_handle)
-            .map_err(|err| JsError::new(&format!("Failed to open client database: {err:#}")))?;
+        let cursed_db = MemAndRedb::new(sync_handle).map_err(|err| {
+            JsError::new(&format!(
+                "Failed to open client database: {}",
+                err.fmt_compact()
+            ))
+        })?;
         let database = Database::new(cursed_db, Default::default());
         let connectors = fedimint_connectors::ConnectorRegistry::build_from_client_defaults()
             .bind()

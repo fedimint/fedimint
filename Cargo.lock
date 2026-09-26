@@ -3151,11 +3151,12 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 name = "fedimint-aead"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "argon2",
+ "assert_matches",
  "hex",
  "rand 0.8.5",
  "ring",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -3183,7 +3184,6 @@ dependencies = [
 name = "fedimint-api-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "assert_matches",
  "async-channel",
  "async-trait",
@@ -3288,7 +3288,6 @@ dependencies = [
 name = "fedimint-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "assert_matches",
  "async-stream",
  "async-trait",
@@ -3323,7 +3322,6 @@ dependencies = [
 name = "fedimint-client-module"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "aquamarine",
  "assert_matches",
  "async-stream",
@@ -3356,9 +3354,9 @@ dependencies = [
 name = "fedimint-client-rpc"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-stream",
  "async-trait",
+ "bip39",
  "fedimint-api-client",
  "fedimint-bip39",
  "fedimint-client",
@@ -3376,6 +3374,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "thiserror 2.0.20",
  "tokio",
  "tracing",
 ]
@@ -3384,7 +3383,6 @@ dependencies = [
 name = "fedimint-client-wasm"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "console_error_panic_hook",
  "fedimint-client-rpc",
@@ -3403,7 +3401,6 @@ dependencies = [
 name = "fedimint-connectors"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "arti-client",
  "async-trait",
  "aws-lc-sys 0.41.0",
@@ -3438,7 +3435,6 @@ dependencies = [
 name = "fedimint-core"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "assert_matches",
  "async-channel",
  "async-lock",
@@ -3507,7 +3503,6 @@ dependencies = [
 name = "fedimint-cursed-redb"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "fedimint-core",
  "fedimint-db-locked",
@@ -3518,6 +3513,7 @@ dependencies = [
  "redb 2.6.0",
  "redb 3.1.1",
  "tempfile",
+ "thiserror 2.0.20",
  "tokio",
  "tracing",
  "web-sys",
@@ -3527,11 +3523,11 @@ dependencies = [
 name = "fedimint-db-locked"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "fedimint-core",
  "fedimint-logging",
  "fs-lock",
+ "thiserror 2.0.20",
  "tracing",
 ]
 
@@ -3730,7 +3726,6 @@ dependencies = [
 name = "fedimint-gateway-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "bcrypt",
  "bitcoin",
  "chrono",
@@ -4021,7 +4016,6 @@ dependencies = [
 name = "fedimint-lightning"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "bitcoin",
  "fedimint-bip39",
@@ -4048,7 +4042,6 @@ dependencies = [
 name = "fedimint-ln-client"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "aquamarine",
  "assert_matches",
  "async-stream",
@@ -4083,7 +4076,6 @@ dependencies = [
 name = "fedimint-ln-common"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "bitcoin",
  "fedimint-connectors",
@@ -4318,11 +4310,11 @@ dependencies = [
 name = "fedimint-logging"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "console-subscriber",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "thiserror 2.0.20",
  "tracing-opentelemetry",
  "tracing-subscriber",
 ]
@@ -4400,7 +4392,6 @@ dependencies = [
 name = "fedimint-metrics"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "axum 0.8.9",
  "fedimint-core",
  "prometheus",
@@ -4743,7 +4734,6 @@ dependencies = [
 name = "fedimint-rocksdb"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "async-trait",
  "bon",
  "fedimint-core",
@@ -4752,6 +4742,7 @@ dependencies = [
  "futures",
  "rocksdb",
  "tempfile",
+ "thiserror 2.0.20",
  "tokio",
  "tracing",
 ]
@@ -5066,9 +5057,6 @@ dependencies = [
 [[package]]
 name = "fedimint-util-error"
 version = "0.13.0-alpha"
-dependencies = [
- "anyhow",
-]
 
 [[package]]
 name = "fedimint-wallet-client"
@@ -5105,7 +5093,6 @@ dependencies = [
 name = "fedimint-wallet-common"
 version = "0.13.0-alpha"
 dependencies = [
- "anyhow",
  "bitcoin",
  "fedimint-core",
  "hex",

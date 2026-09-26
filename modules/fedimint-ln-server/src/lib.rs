@@ -28,7 +28,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::secp256k1::{Message, PublicKey, SECP256K1};
 use fedimint_core::task::{TaskGroup, sleep};
-use fedimint_core::util::{FmtCompact, FmtCompactAnyhow};
+use fedimint_core::util::FmtCompact;
 use fedimint_core::{
     Amount, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
     push_db_pair_items,
@@ -1144,7 +1144,7 @@ impl ServerModule for Lightning {
                     let mut dbtx = db.begin_transaction().await;
                     let gateway_id = gateway.info.gateway_id;
                     module.register_gateway(&mut dbtx.to_ref_nc(), gateway).await.map_err(|err| {
-                        warn!(target: LOG_MODULE_LN, err = %err.fmt_compact_anyhow(), %gateway_id, "Rejected gateway registration");
+                        warn!(target: LOG_MODULE_LN, err = %err.fmt_compact(), %gateway_id, "Rejected gateway registration");
                         ApiError::bad_request(err.to_string())
                     })?;
                     dbtx.commit_tx_result().await?;
@@ -1173,7 +1173,7 @@ impl ServerModule for Lightning {
                             Ok(true)
                         },
                         Err(err) => {
-                            warn!(target: LOG_MODULE_LN, err = %err.fmt_compact_anyhow(), gateway_id = %remove_gateway_request.gateway_id, "Unable to remove gateway registration");
+                            warn!(target: LOG_MODULE_LN, err = %err.fmt_compact(), gateway_id = %remove_gateway_request.gateway_id, "Unable to remove gateway registration");
                             Ok(false)
                         },
                     }

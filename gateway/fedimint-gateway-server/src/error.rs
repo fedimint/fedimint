@@ -7,7 +7,7 @@ use fedimint_core::config::{FederationId, FederationIdPrefix};
 use fedimint_core::crit;
 use fedimint_core::envs::is_env_var_set;
 use fedimint_core::fmt_utils::OptStacktrace;
-use fedimint_core::util::FmtCompactAnyhow;
+use fedimint_core::util::FmtCompact;
 use fedimint_gw_client::pay::OutgoingPaymentError;
 use fedimint_lightning::LightningRpcError;
 use fedimint_logging::LOG_GATEWAY;
@@ -147,9 +147,9 @@ pub enum AdminGatewayError {
     ClientCreationError(anyhow::Error),
     #[error("Failed to remove a federation client: {0}")]
     ClientRemovalError(String),
-    #[error("There was an error with the Gateway's mnemonic: {}", .0.fmt_compact_anyhow())]
+    #[error("There was an error with the Gateway's mnemonic: {}", .0.fmt_compact())]
     MnemonicError(anyhow::Error),
-    #[error("Unexpected Error: {}", .0.fmt_compact_anyhow())]
+    #[error("Unexpected Error: {}", .0.fmt_compact())]
     Unexpected(#[from] anyhow::Error),
     #[error("{}", .0)]
     FederationNotConnected(#[from] FederationNotConnected),

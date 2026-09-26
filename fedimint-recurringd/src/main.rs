@@ -16,7 +16,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiAuth;
-use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, SafeUrl};
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_ln_client::recurring::api::{
     RecurringPaymentRegistrationRequest, RecurringPaymentRegistrationResponse,
 };
@@ -300,7 +300,7 @@ struct ApiError(anyhow::Error);
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response<Body> {
-        debug!("ApiError: {}", self.0.fmt_compact_anyhow());
+        debug!("ApiError: {}", self.0.fmt_compact());
 
         (
             StatusCode::INTERNAL_SERVER_ERROR,

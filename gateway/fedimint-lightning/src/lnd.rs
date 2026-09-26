@@ -4,7 +4,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, UNIX_EPOCH};
 
-use anyhow::ensure;
 use async_trait::async_trait;
 use bitcoin::OutPoint;
 use bitcoin::hashes::{Hash, sha256};
@@ -2219,11 +2218,12 @@ fn route_hints_to_lnd(
         .collect()
 }
 
-fn wire_features_to_lnd_feature_vec(features_wire_encoded: &[u8]) -> anyhow::Result<Vec<i32>> {
-    ensure!(
-        features_wire_encoded.len() <= 1_000,
-        "Will not process feature bit vectors larger than 1000 byte"
-    );
+fn wire_features_to_lnd_feature_vec(
+    features_wire_encoded: &[u8],
+) -> Result<Vec<i32>, FeatureVectorTooLargeError> {
+    if features_wire_encoded.len() > 1_000 {
+        return Err(FeatureVectorTooLargeError);
+    }
 
     let lnd_features = features_wire_encoded
         .iter()
@@ -2254,6 +2254,11 @@ impl Display for PrettyPaymentHash<'_> {
         write!(f, "payment_hash={}", self.0.encode_hex::<String>())
     }
 }
+
+/// An invoice's destination feature bits are too long to convert for LND.
+#[derive(Debug, thiserror::Error)]
+#[error("Will not process feature bit vectors larger than 1000 byte")]
+struct FeatureVectorTooLargeError;
 
 #[cfg(test)]
 mod tests;

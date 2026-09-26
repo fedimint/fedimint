@@ -67,7 +67,7 @@ use fedimint_core::module::{
 use fedimint_core::task::TaskGroup;
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::sleep;
-use fedimint_core::util::{FmtCompact, FmtCompactAnyhow as _, backoff_util, retry};
+use fedimint_core::util::{FmtCompact, backoff_util, retry};
 use fedimint_core::{
     Feerate, InPoint, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
     get_network_for_address, push_db_key_items, push_db_pair_items, weight_to_vbytes,
@@ -572,7 +572,7 @@ impl ServerModule for Wallet {
                 items.push(WalletConsensusItem::BlockCount(block_count_vote));
             }
             Err(err) => {
-                warn!(target: LOG_MODULE_WALLET, err = %err.fmt_compact_anyhow(), "Can't update block count");
+                warn!(target: LOG_MODULE_WALLET, err = %err.fmt_compact(), "Can't update block count");
             }
         }
 
@@ -2115,7 +2115,7 @@ pub async fn broadcast_pending_tx(
             if let Err(err) = rpc.submit_transaction(tx).await {
                 debug!(
                     target: LOG_MODULE_WALLET,
-                    err = %err.fmt_compact_anyhow(),
+                    err = %err.fmt_compact(),
                     "Error broadcasting peg-out transaction"
                 );
             }

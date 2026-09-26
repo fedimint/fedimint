@@ -29,9 +29,7 @@ use fedimint_core::module::{ApiAuth, CORE_CONSENSUS_VERSION};
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::timing;
-use fedimint_core::util::{
-    FmtCompact as _, FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command,
-};
+use fedimint_core::util::{FmtCompact as _, SafeUrl, handle_version_hash_command};
 use fedimint_ln_server::LightningInit;
 use fedimint_logging::{LOG_CORE, LOG_SERVER, TracingSetup};
 use fedimint_meta_server::MetaInit;
@@ -373,7 +371,7 @@ pub async fn run(
         .tokio_console_bind(server_opts.bind_tokio_console)
         .with_jaeger(server_opts.with_jaeger);
 
-    tracing_builder.init().unwrap();
+    tracing_builder.init().map_err(anyhow::Error::from).unwrap();
 
     info!("Starting fedimintd (version: {fedimint_version} version_hash: {code_version_hash})");
 
@@ -438,6 +436,7 @@ pub async fn run(
         RocksDb::build(server_opts.data_dir.join(DB_FILE))
             .open()
             .await
+            .map_err(anyhow::Error::from)
             .unwrap(),
         ModuleRegistry::default(),
     );
@@ -531,7 +530,7 @@ pub async fn run(
             iroh_next_api_settings,
         )
         .await
-        .unwrap_or_else(|err| panic!("Main task returned error: {}", err.fmt_compact_anyhow()));
+        .unwrap_or_else(|err| panic!("Main task returned error: {}", err.fmt_compact()));
     });
 
     let shutdown_future = root_task_group

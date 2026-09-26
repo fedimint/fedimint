@@ -8,7 +8,7 @@ use std::time::Duration;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::module::{ApiEndpoint, ApiError, ApiMethod, IrohApiRequest};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::FmtCompactAnyhow as _;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_logging::LOG_NET_API;
 use fedimint_metrics::prometheus::HistogramTimer;
 use fedimint_server_core::DynServerModule;
@@ -67,7 +67,7 @@ pub(super) async fn run_iroh_api(
                     )
                     .then(|result| async {
                         if let Err(err) = result {
-                            warn!(target: LOG_NET_API, err = %err.fmt_compact_anyhow(), "Failed to handle iroh connection");
+                            warn!(target: LOG_NET_API, err = %err.fmt_compact(), "Failed to handle iroh connection");
                         }
                     }),
                 );
@@ -334,7 +334,7 @@ async fn handle_iroh_api_connection(
             )
             .then(|result| async {
                 if let Err(err) = result {
-                    warn!(target: LOG_NET_API, err = %err.fmt_compact_anyhow(), "Failed to handle Iroh API request");
+                    warn!(target: LOG_NET_API, err = %err.fmt_compact(), "Failed to handle Iroh API request");
                 }
             }),
         );
@@ -516,7 +516,7 @@ pub(super) async fn run_iroh_api_next(
                     )
                     .then(|result| async {
                         if let Err(err) = result {
-                            warn!(target: LOG_NET_API, err = %err.fmt_compact_anyhow(), "Failed to handle iroh-next connection");
+                            warn!(target: LOG_NET_API, err = %err.fmt_compact(), "Failed to handle iroh-next connection");
                         }
                     }),
                 );

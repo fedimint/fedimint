@@ -8,7 +8,6 @@ use std::pin::Pin;
 use std::result;
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use bitcoin::secp256k1;
 pub use error::{
     ClientConfigDownloadError, FederationError, FederationGeneralError, OutputOutcomeError,
@@ -289,7 +288,6 @@ pub trait FederationApiExt: IRawFederationApi {
                                 .inspect_err(|e| {
                                     e.report_if_unusual(*peer, "QueryWithStrategyRetry");
                                 })
-                                .map_err(|e| anyhow!(e.to_string()))
                         },
                     )
                     .await
@@ -328,7 +326,6 @@ pub trait FederationApiExt: IRawFederationApi {
                                                 debug!(target: LOG_CLIENT_NET_API, err = %err.fmt_compact(), "Unusual peer error");
                                             }
                                         })
-                                        .map_err(|e| anyhow!(e.to_string()))
                                     },
                                 )
                                 .await

@@ -19,7 +19,6 @@ name = "fedimint_wallet_common"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 bitcoin = { workspace = true }
 fedimint-core = { workspace = true }
 hex = { workspace = true }

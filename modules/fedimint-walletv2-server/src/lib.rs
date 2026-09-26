@@ -52,7 +52,7 @@ use fedimint_core::module::{
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::TaskGroup;
 use fedimint_core::task::sleep;
-use fedimint_core::util::FmtCompactAnyhow as _;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{
     InPoint, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send, push_db_pair_items, util,
 };
@@ -958,7 +958,7 @@ impl Wallet {
                     if let Err(err) = btc_rpc.submit_transaction(unconfirmed_tx.tx).await {
                         debug!(
                             target: LOG_MODULE_WALLETV2,
-                            err = %err.fmt_compact_anyhow(),
+                            err = %err.fmt_compact(),
                             "Error broadcasting unconfirmed transaction"
                         );
                     }
@@ -1148,7 +1148,7 @@ impl Wallet {
             if let Err(err) = self.btc_rpc.submit_transaction(unsigned.tx).await {
                 debug!(
                     target: LOG_MODULE_WALLETV2,
-                    err = %err.fmt_compact_anyhow(),
+                    err = %err.fmt_compact(),
                     "Error broadcasting finalized transaction"
                 );
             }

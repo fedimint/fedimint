@@ -1437,7 +1437,7 @@ impl ClientPreview {
     /// # use fedimint_core::config::META_FEDERATION_NAME_KEY;
     /// #
     /// # #[tokio::main]
-    /// # async fn main() -> anyhow::Result<()> {
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let root_secret: DerivableSecret = unimplemented!();
     /// // Create a root secret, e.g. via fedimint-bip39, see also:
     /// // https://github.com/fedimint/fedimint/blob/master/docs/secret_derivation.md

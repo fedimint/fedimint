@@ -14,6 +14,8 @@ use futures::stream;
 use imbl::OrdMap;
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition};
 
+pub use crate::error::MemAndRedbOpenError;
+
 const KV_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("fedimint_kv");
 
 #[derive(Debug, Default)]
@@ -53,6 +55,8 @@ pub struct MemAndRedbTransaction<'a> {
     tx_data: OrdMap<Vec<u8>, Vec<u8>>,
     db: &'a MemAndRedb,
 }
+
+mod error;
 
 #[cfg(not(target_family = "wasm"))]
 mod native;

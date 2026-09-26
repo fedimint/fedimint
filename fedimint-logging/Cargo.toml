@@ -22,11 +22,11 @@ name = "fedimint_logging"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 console-subscriber = { workspace = true, optional = true }
 opentelemetry = { workspace = true, optional = true }
 opentelemetry-otlp = { workspace = true, optional = true }
 opentelemetry_sdk = { workspace = true, optional = true }
+thiserror = { workspace = true }
 tracing-opentelemetry = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 

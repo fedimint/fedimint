@@ -20,7 +20,7 @@ use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::task::block_in_place;
 use fedimint_core::util::backoff_util::aggressive_backoff;
-use fedimint_core::util::{FmtCompactAnyhow, retry, write_overwrite_async};
+use fedimint_core::util::{FmtCompact as _, retry, write_overwrite_async};
 use fedimint_core::{Amount, PeerId};
 use fedimint_ln_client::LightningPaymentOutcome;
 use fedimint_ln_client::cli::LnInvoiceResponse;
@@ -2903,7 +2903,7 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
                         if let Err(err) =
                             crate::faucet::run(faucet, faucet_listener, gw_lnd_port).await
                         {
-                            error!(err = %err.fmt_compact_anyhow(), "Faucet failed");
+                            error!(err = %err.fmt_compact(), "Faucet failed");
                         }
                     });
                     dev_fed

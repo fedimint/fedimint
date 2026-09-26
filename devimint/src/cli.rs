@@ -8,7 +8,7 @@ use anyhow::{Context, Result, anyhow, ensure};
 use clap::builder::BoolishValueParser;
 use clap::{Parser, Subcommand};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _, write_overwrite_async};
+use fedimint_core::util::{FmtCompact as _, write_overwrite_async};
 use fedimint_logging::LOG_DEVIMINT;
 use rand::Rng as _;
 use rand::distributions::Alphanumeric;
@@ -247,7 +247,7 @@ pub async fn cleanup_on_exit(
         Ok(Err(err)) => {
             warn!(
                 target: LOG_DEVIMINT,
-                err = %err.fmt_compact_anyhow(),
+                err = %err.fmt_compact(),
                 "Main process failed, will shutdown"
             );
             Err(err)

@@ -1,7 +1,6 @@
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::Duration;
 
-use anyhow::anyhow;
 use assert_matches::assert_matches;
 use fedimint_core::runtime::Elapsed;
 use futures::FutureExt;
@@ -88,7 +87,7 @@ async fn retry_succeed_with_one_attempt() {
     let closure = || async {
         counter.fetch_add(1, Ordering::SeqCst);
         // Always return a success.
-        anyhow::Ok(42)
+        Ok::<_, std::io::Error>(42)
     };
 
     let _ = retry(
@@ -108,7 +107,7 @@ async fn retry_fail_with_three_attempts() {
     let closure = || async {
         counter.fetch_add(1, Ordering::SeqCst);
         // always fail
-        Err::<(), anyhow::Error>(anyhow!("42"))
+        Err::<(), _>(std::io::Error::other("42"))
     };
 
     let _ = retry(
