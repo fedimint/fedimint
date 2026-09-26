@@ -2024,7 +2024,9 @@ pub async fn reconnect_test(dev_fed: DevFed, process_mgr: &ProcessManager) -> Re
 pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     log_binary_versions().await?;
 
-    let DevFed { bitcoind, fed, .. } = dev_fed;
+    let DevFed {
+        bitcoind, mut fed, ..
+    } = dev_fed;
 
     let data_dir = env::var(FM_DATA_DIR_ENV)?;
     let client = fed.new_joined_client("recoverytool-test-client").await?;
@@ -2096,6 +2098,12 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     // a session is generated we don't wait for another.
     let last_tx_session = client.get_session_count().await?;
 
+    // The recovery tool opens the guardian RocksDB directory directly. Stop the
+    // federation first so RocksDB cannot rotate WAL files while the read-only DB
+    // handle is being opened.
+    client.wait_session_outcome(last_tx_session).await?;
+    fed.terminate_all_servers().await?;
+
     info!("Recovering using utxos method");
     let output = cmd!(
         crate::util::Recoverytool,
@@ -2151,12 +2159,6 @@ pub async fn recoverytool_test(dev_fed: DevFed) -> Result<()> {
     let diff = balances_after.mine.immature + balances_after.mine.trusted
         - balances_before.mine.immature
         - balances_before.mine.trusted;
-
-    // We need to wait for a session to be generated to make sure we have the signed
-    // session outcome in our DB. If there ever is another problem here: wait for
-    // fedimintd-0 specifically to acknowledge the session switch. In practice this
-    // should be sufficiently synchronous though.
-    client.wait_session_outcome(last_tx_session).await?;
 
     // Funds from descriptors should match the fed's utxos
     assert_eq!(diff.to_sat(), total_fed_sats);
