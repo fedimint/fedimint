@@ -3,7 +3,7 @@ use fedimint_client_module::sm::{State, StateTransition};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{Amount, OutPoint};
-use fedimint_escrow_common::{EscrowId, Outcome, Resolution};
+use fedimint_escrow_common::{EscrowId, FallbackPolicy, Outcome, Resolution};
 use serde::{Deserialize, Serialize};
 
 use crate::EscrowClientContext;
@@ -28,6 +28,7 @@ pub struct EscrowInputSMCommon {
 pub enum EscrowInputSMState {
     Refunded,
     Released,
+    Split,
     Pending,
     Disputed,
     FeeClaimed,
@@ -73,6 +74,14 @@ impl State for EscrowInputStateMachine {
                                     Resolution::ArbiterOutcome { outcome, .. } => match outcome {
                                         Outcome::Release => EscrowInputSMState::Released,
                                         Outcome::Refund => EscrowInputSMState::Refunded,
+                                        Outcome::Split { .. } => EscrowInputSMState::Split,
+                                    },
+                                    Resolution::ResolveFallbackPolicy {
+                                        claimer_pubkey: _,
+                                        fallback,
+                                    } => match fallback {
+                                        FallbackPolicy::Refund => EscrowInputSMState::Refunded,
+                                        FallbackPolicy::Split { .. } => EscrowInputSMState::Split,
                                     },
                                     Resolution::ArbiterFeeClaim { .. } => {
                                         EscrowInputSMState::Failed {

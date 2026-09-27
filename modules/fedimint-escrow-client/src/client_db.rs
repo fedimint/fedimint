@@ -63,6 +63,7 @@ pub struct EscrowOperationMeta {
 pub enum EscrowAction {
     Refunded,
     Released,
+    Split,
     Created,
     ArbiterEngaged,
     ArbiterFeeClaimed,

@@ -13,7 +13,7 @@ use fedimint_escrow_client::input::EscrowInputSMState;
 use fedimint_escrow_client::output::EscrowOutputSMState;
 use fedimint_escrow_client::{EscrowClientInit, EscrowClientModule};
 use fedimint_escrow_common::{
-    EscrowContract, EscrowId, EscrowMessage, EscrowStatus, GET_PENDING_FEE_DOMAIN,
+    EscrowContract, EscrowId, EscrowMessage, EscrowStatus, FallbackPolicy, GET_PENDING_FEE_DOMAIN,
     GetPendinFeeParams, Outcome, compute_escrow_message, compute_proof_message,
 };
 use fedimint_escrow_server::EscrowInit;
@@ -34,6 +34,7 @@ async fn fund_client(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn create_test_escrow(
     funder_escrow: &EscrowClientModule,
     recipient_keypair: Keypair,
@@ -41,6 +42,8 @@ async fn create_test_escrow(
     amount: Amount,
     arbiter_fee: Amount,
     timeout: Duration,
+    resolution_timeout: Duration,
+    default_fallback: FallbackPolicy,
 ) -> anyhow::Result<(OperationId, EscrowId)> {
     let result = funder_escrow
         .create_escrow(
@@ -49,6 +52,8 @@ async fn create_test_escrow(
             arbiter_fee,
             amount,
             timeout,
+            resolution_timeout,
+            default_fallback,
         )
         .await?;
     let mut stream = funder_escrow
@@ -95,6 +100,8 @@ async fn test_funder_resolution() -> anyhow::Result<()> {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         Duration::from_secs(3600),
+        Duration::from_secs(4000),
+        FallbackPolicy::Refund,
     )
     .await?;
 
@@ -158,6 +165,8 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         Duration::from_secs(2),
+        Duration::from_secs(100),
+        FallbackPolicy::Refund,
     )
     .await?;
 
@@ -265,6 +274,8 @@ async fn test_arbiter_should_not_act_before_timeout() -> anyhow::Result<()> {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         Duration::from_secs(9999),
+        Duration::from_secs(3000),
+        FallbackPolicy::Refund,
     )
     .await?;
 
@@ -311,6 +322,8 @@ async fn test_funder_signature_with_invalid_inputs() -> anyhow::Result<()> {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         Duration::from_secs(9999),
+        Duration::from_secs(3000),
+        FallbackPolicy::Refund,
     )
     .await?;
 
@@ -361,6 +374,8 @@ async fn test_arbiter_signature_with_invalid_inputs() -> anyhow::Result<()> {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         Duration::from_secs(2),
+        Duration::from_secs(100),
+        FallbackPolicy::Refund,
     )
     .await?;
 
@@ -411,6 +426,8 @@ async fn test_contract_status_updated_after_funder_release() -> anyhow::Result<(
         Amount::from_sats(1000),
         Amount::from_sats(20),
         Duration::from_secs(3600),
+        Duration::from_secs(3000),
+        FallbackPolicy::Refund,
     )
     .await?;
 

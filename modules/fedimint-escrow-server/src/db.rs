@@ -1,7 +1,7 @@
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{OutPoint, impl_db_lookup, impl_db_record};
 use fedimint_escrow_common::{
-    EscrowContract, EscrowId, EscrowOutputOutcome, PendingArbiterFeePool,
+    EscrowContract, EscrowId, EscrowOutputOutcome, PendingArbiterFeePool, PendingSplitPool,
 };
 use serde::Serialize;
 use strum_macros::EnumIter;
@@ -11,6 +11,7 @@ use strum_macros::EnumIter;
 pub enum DbKeyPrefix {
     EscrowContract = 0x01,
     PendingArbiterFeePool = 0x02,
+    PendingSplitPool = 0x03,
     OutputOutcome = 0x04,
 }
 
@@ -19,6 +20,23 @@ pub struct EscrowContractKey(pub EscrowId);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct EscrowContractPrefix;
+
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
+pub struct PendingSplitPoolKey(pub EscrowId);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct PendingSplitPoolPrefix;
+
+impl_db_record!(
+    key = PendingSplitPoolKey,
+    value = PendingSplitPool,
+    db_prefix = DbKeyPrefix::PendingSplitPool
+);
+
+impl_db_lookup!(
+    key = PendingSplitPoolKey,
+    query_prefix = PendingSplitPoolPrefix
+);
 
 impl_db_record!(
     key = EscrowContractKey,

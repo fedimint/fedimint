@@ -31,9 +31,9 @@ use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_escrow_common::config::EscrowClientConfig;
 use fedimint_escrow_common::{
     EscrowCommonInit, EscrowContract, EscrowId, EscrowInput, EscrowMessage, EscrowModuleTypes,
-    EscrowOutput, EscrowStatus, GET_CONTRACT_DOMAIN, GET_PENDING_FEE_DOMAIN, GetContractParams,
-    GetPendinFeeParams, KIND, LIST_CONTRACT_DOMAIN, ListContractParams, Outcome, Resolution,
-    compute_contract_hash, compute_escrow_message, compute_proof_message,
+    EscrowOutput, EscrowStatus, FallbackPolicy, GET_CONTRACT_DOMAIN, GET_PENDING_FEE_DOMAIN,
+    GetContractParams, GetPendinFeeParams, KIND, LIST_CONTRACT_DOMAIN, ListContractParams, Outcome,
+    Resolution, compute_contract_hash, compute_escrow_message, compute_proof_message,
 };
 use frost_secp256k1::Identifier;
 use futures::StreamExt;
@@ -292,7 +292,9 @@ impl ClientModule for EscrowClientModule {
                         req.arbiter_key,
                         req.arbiter_fee,
                         req.amount,
-                        req.timeout
+                        req.timeout,
+                        req.resolution_timeout,
+                        req.default_fallback
                     ).await?;
                     yield serde_json::to_value(result)?;
                 }
@@ -372,6 +374,8 @@ struct CreateContractRequest {
     arbiter_fee: Amount,
     amount: Amount,
     timeout: Duration,
+    resolution_timeout: Duration,
+    default_fallback: FallbackPolicy,
 }
 
 #[derive(Deserialize)]
@@ -438,6 +442,7 @@ impl EscrowClientModule {
             .to_secp_key(&Secp256k1::new())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_escrow(
         &self,
         recipient_key: PublicKey,
@@ -445,10 +450,13 @@ impl EscrowClientModule {
         arbiter_fee: Amount,
         amount: Amount,
         timeout: Duration,
+        resolution_timeout: Duration,
+        default_fallback: FallbackPolicy,
     ) -> Result<CreateContractResponse, anyhow::Error> {
         let funder_key = self.keypair.public_key();
         let timeout_deadline =
             fedimint_core::time::duration_since_epoch().as_secs() + timeout.as_secs();
+        let resolution_timeout = timeout_deadline + resolution_timeout.as_secs();
 
         anyhow::ensure!(
             funder_key != recipient_key,
@@ -473,6 +481,8 @@ impl EscrowClientModule {
             &amount,
             &timeout_deadline,
             &self.federation_id,
+            &resolution_timeout,
+            &default_fallback,
         );
 
         let rng = SystemRandom::new();
@@ -499,6 +509,8 @@ impl EscrowClientModule {
             timeout: timeout_deadline,
             federation_id: self.federation_id,
             status: EscrowStatus::Active,
+            resolution_timeout,
+            default_fallback,
         };
 
         let output_sm = ClientOutputSM {
@@ -735,14 +747,39 @@ impl EscrowClientModule {
             .checked_sub(contract.arbiter_fee)
             .ok_or_else(|| anyhow::anyhow!("arbiter fee exceeds contract amount"))?;
 
+        let claimer_pubkey = self.keypair.public_key();
+
+        let claim_amount = match outcome {
+            Outcome::Release | Outcome::Refund => payout_amount,
+            Outcome::Split {
+                funder_split_bps, ..
+            } => {
+                let funder_amount = Amount::from_msats(
+                    payout_amount
+                        .msats
+                        .saturating_mul(u64::from(funder_split_bps))
+                        / 10_000,
+                );
+                let recipient_amount = payout_amount
+                    .checked_sub(funder_amount)
+                    .ok_or_else(|| anyhow::anyhow!("split overflow"))?;
+                if claimer_pubkey == contract.funder_key {
+                    funder_amount
+                } else {
+                    recipient_amount
+                }
+            }
+        };
+
         let input = ClientInput {
-            amounts: Amounts::new_bitcoin(payout_amount),
+            amounts: Amounts::new_bitcoin(claim_amount),
             keys: vec![self.keypair],
             input: EscrowInput {
                 escrow_id,
                 resolution: Resolution::ArbiterOutcome {
                     arbiter_signature,
                     outcome,
+                    claimer_pubkey,
                 },
             },
         };
@@ -757,10 +794,11 @@ impl EscrowClientModule {
                                 operation_id,
                                 out_point,
                                 escrow_id,
-                                amount: contract.amount,
+                                amount: claim_amount,
                                 resolution: Resolution::ArbiterOutcome {
                                     arbiter_signature,
                                     outcome,
+                                    claimer_pubkey,
                                 },
                             },
                             state: EscrowInputSMState::Pending,
@@ -784,10 +822,11 @@ impl EscrowClientModule {
 
             EscrowOperationMeta {
                 escrow_id,
-                amount: contract.amount,
+                amount: claim_amount,
                 action: match outcome {
                     Outcome::Release => EscrowAction::Released,
                     Outcome::Refund => EscrowAction::Refunded,
+                    Outcome::Split { .. } => EscrowAction::Split,
                 },
                 txid,
                 out_point_indices,
@@ -1118,6 +1157,7 @@ impl EscrowClientModule {
                             match meta.action {
                                 EscrowAction::Released => yield EscrowInputSMState::Released,
                                 EscrowAction::Refunded  => yield EscrowInputSMState::Refunded,
+                                EscrowAction::Split => yield EscrowInputSMState::Split,
                                 EscrowAction::ArbiterEngaged=>yield EscrowInputSMState::Disputed,
                                 EscrowAction::Created | EscrowAction::ArbiterFeeClaimed => {
                                     yield EscrowInputSMState::Failed {

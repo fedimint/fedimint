@@ -1,6 +1,5 @@
 use std::fmt;
 
-use clap::ValueEnum;
 use fedimint_core::bitcoin::hashes::{Hash, HashEngine, sha256};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -19,6 +18,9 @@ pub mod config;
 pub const KIND: ModuleKind = ModuleKind::from_static_str("escrow");
 
 pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(1, 0);
+
+/// Splits are expressed in basis points (parts per 10,000)
+pub const SPLIT_BPS_DENOMINATOR: u16 = 10_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Encodable, Decodable)]
 pub struct EscrowId(pub [u8; 32]);
@@ -100,6 +102,17 @@ pub struct EscrowContract {
     pub timeout: u64,
     pub federation_id: FederationId,
     pub status: EscrowStatus,
+    pub resolution_timeout: u64,
+    pub default_fallback: FallbackPolicy,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Hash, Eq, PartialEq, Deserialize, Encodable, Decodable)]
+pub enum FallbackPolicy {
+    Refund,
+    Split {
+        funder_split_bps: u16,
+        recipient_split_bps: u16,
+    },
 }
 
 impl EscrowContract {
@@ -107,8 +120,10 @@ impl EscrowContract {
         match (self.status.clone(), new_status.clone()) {
             (EscrowStatus::Active, EscrowStatus::Released)
             | (EscrowStatus::Active, EscrowStatus::Disputed)
+            | (EscrowStatus::Active, EscrowStatus::Split)
             | (EscrowStatus::Disputed, EscrowStatus::Released)
-            | (EscrowStatus::Disputed, EscrowStatus::Refunded) => {
+            | (EscrowStatus::Disputed, EscrowStatus::Refunded)
+            | (EscrowStatus::Disputed, EscrowStatus::Split) => {
                 self.status = new_status;
                 Ok(())
             }
@@ -141,6 +156,7 @@ pub enum EscrowStatus {
     Released,
     Refunded,
     Disputed,
+    Split,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -157,12 +173,75 @@ pub struct EscrowInput {
     pub resolution: Resolution,
 }
 
-#[derive(
-    Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable, ValueEnum,
-)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub enum Outcome {
-    Release = 0,
-    Refund = 1,
+    Release,
+    Refund,
+    Split {
+        funder_split_bps: u16,
+        recipient_split_bps: u16,
+    },
+}
+
+use std::str::FromStr;
+
+impl FromStr for Outcome {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "release" => Ok(Outcome::Release),
+            "refund" => Ok(Outcome::Refund),
+            other => {
+                let rest = other
+                    .strip_prefix("split:")
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "invalid outcome '{s}', expected 'release', 'refund', or 'split:<funder_bps>:<recipient_bps>'"
+                    ))?;
+                let mut parts = rest.split(':');
+                let funder_split_bps: u16 = parts
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("missing funder_split"))?
+                    .parse()?;
+                let recipient_split_bps: u16 = parts
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("missing recipient_split"))?
+                    .parse()?;
+                Ok(Outcome::Split {
+                    funder_split_bps,
+                    recipient_split_bps,
+                })
+            }
+        }
+    }
+}
+
+impl FromStr for FallbackPolicy {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "refund" => Ok(FallbackPolicy::Refund),
+            other => {
+                let rest = other
+                    .strip_prefix("split:")
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "invalid fallback '{s}', expected 'refund' or 'split:<funder_bps>:<recipient_bps>'"
+                    ))?;
+                let mut parts = rest.split(':');
+                let funder_split_bps: u16 = parts
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("missing funder_split"))?
+                    .parse()?;
+                let recipient_split_bps: u16 = parts
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("missing recipient_split"))?
+                    .parse()?;
+                Ok(FallbackPolicy::Split {
+                    funder_split_bps,
+                    recipient_split_bps,
+                })
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -178,10 +257,15 @@ pub enum Resolution {
     ArbiterOutcome {
         arbiter_signature: Signature,
         outcome: Outcome,
+        claimer_pubkey: PublicKey,
     },
     ArbiterFeeClaim {
         arbiter_claim_pubkey: PublicKey,
         arbiter_signature: Signature,
+    },
+    ResolveFallbackPolicy {
+        claimer_pubkey: PublicKey,
+        fallback: FallbackPolicy,
     },
 }
 
@@ -213,6 +297,13 @@ pub struct PendingArbiterFeePool {
     pub remaining_amount: Amount,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
+pub struct PendingSplitPool {
+    pub escrow_id: EscrowId,
+    pub claimant_key: PublicKey,
+    pub amount: Amount,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub enum EscrowConsensusItem {
     #[encodable_default]
@@ -233,6 +324,14 @@ pub enum EscrowInputError {
     ContractHashMismatch,
     #[error("Invalid contract state transition")]
     InvalidStateTransition,
+    #[error("Contract is under dispute; funder release is no longer valid")]
+    ContractDisputed,
+    #[error("No pending split claim for this key")]
+    NoPendingSplitClaim,
+    #[error("Invalid split ratio")]
+    InvalidSplitRatio,
+    #[error("Fallback resolution is not yet available")]
+    FallbackNotAvailable,
     #[error("Internal error: {0}")]
     InternalError(String),
 }
@@ -335,18 +434,25 @@ fn compute_resolution_message(
     contract_hash: &ContractHash,
     engine: &mut sha256::HashEngine,
 ) {
-    let outcome_byte = match outcome {
-        Outcome::Release => 0u8,
-        Outcome::Refund => 1u8,
-    };
-
     engine.input(b"escrow_resolution_message");
     engine.input(&federation_id.0.to_byte_array());
     engine.input(&escrow_id.0);
-    engine.input(&[outcome_byte]);
+    match outcome {
+        Outcome::Release => engine.input(&[0u8]),
+        Outcome::Refund => engine.input(&[1u8]),
+        Outcome::Split {
+            funder_split_bps,
+            recipient_split_bps,
+        } => {
+            engine.input(&[2u8]);
+            engine.input(&funder_split_bps.to_le_bytes());
+            engine.input(&recipient_split_bps.to_le_bytes());
+        }
+    }
     engine.input(&contract_hash.0);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn compute_contract_hash(
     funder_key: &PublicKey,
     recipient_key: &PublicKey,
@@ -354,6 +460,8 @@ pub fn compute_contract_hash(
     amount: &Amount,
     timeout: &u64,
     federation_id: &FederationId,
+    resolution_timeout: &u64,
+    default_fallback: &FallbackPolicy,
 ) -> ContractHash {
     let mut engine = sha256::HashEngine::default();
     engine.input(b"escrow_contract_hash");
@@ -363,6 +471,10 @@ pub fn compute_contract_hash(
     engine.input(&amount.msats.to_le_bytes());
     engine.input(&timeout.to_le_bytes());
     engine.input(&federation_id.0.to_byte_array());
+    engine.input(&resolution_timeout.to_le_bytes());
+    default_fallback
+        .consensus_encode(&mut engine)
+        .expect("hash engine writes can't fail");
     ContractHash(sha256::Hash::from_engine(engine).to_byte_array())
 }
 
@@ -423,4 +535,8 @@ pub fn compute_escrow_message(message: &EscrowMessage) -> [u8; 32] {
     }
 
     sha256::Hash::from_engine(engine).to_byte_array()
+}
+
+pub fn validate_split_bps(funder_split: u16, recipient_split: u16) -> bool {
+    u32::from(funder_split) + u32::from(recipient_split) == u32::from(SPLIT_BPS_DENOMINATOR)
 }

@@ -5,7 +5,7 @@ use anyhow::Ok;
 use clap::Parser;
 use fedimint_core::secp256k1::schnorr;
 use fedimint_core::{Amount, secp256k1};
-use fedimint_escrow_common::{ContractHash, EscrowId, EscrowMessage, Outcome};
+use fedimint_escrow_common::{ContractHash, EscrowId, EscrowMessage, FallbackPolicy, Outcome};
 use futures::StreamExt;
 use serde::Serialize;
 
@@ -27,6 +27,10 @@ enum Opts {
         amount_sats: u64,
         #[clap(long)]
         timeout: u64,
+        #[clap(long)]
+        resolution_timeout: u64,
+        #[clap(long)]
+        default_fallback: FallbackPolicy,
     },
 
     /// Get the created contract for the escrow_id
@@ -102,6 +106,8 @@ pub(crate) async fn handle_cli_command(
             arbiter_fee_msats,
             amount_sats,
             timeout,
+            resolution_timeout,
+            default_fallback,
         } => {
             let result = client
                 .create_escrow(
@@ -110,6 +116,8 @@ pub(crate) async fn handle_cli_command(
                     arbiter_fee_msats,
                     Amount::from_sats(amount_sats),
                     Duration::from_secs(timeout),
+                    Duration::from_secs(resolution_timeout),
+                    default_fallback,
                 )
                 .await?;
 
@@ -181,6 +189,7 @@ pub(crate) async fn handle_cli_command(
                     EscrowInputSMState::Released => {
                         break;
                     }
+                    EscrowInputSMState::Split => {}
                     EscrowInputSMState::Failed { reason } => {
                         return Err(anyhow::anyhow!("Escrow creation failed: {reason}"));
                     }
@@ -228,6 +237,9 @@ pub(crate) async fn handle_cli_command(
                     EscrowInputSMState::Released => {
                         break;
                     }
+                    EscrowInputSMState::Split => {
+                        break;
+                    }
                     EscrowInputSMState::Failed { reason } => {
                         return Err(anyhow::anyhow!("Escrow creation failed: {reason}"));
                     }
@@ -273,6 +285,7 @@ pub(crate) async fn handle_cli_command(
                         break;
                     }
                     EscrowInputSMState::Disputed => {}
+                    EscrowInputSMState::Split => {}
                     EscrowInputSMState::Refunded => {}
                     EscrowInputSMState::Released => {}
                     EscrowInputSMState::Failed { reason } => {

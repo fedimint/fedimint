@@ -10,8 +10,8 @@ use fedimint_core::{Amount, BitcoinHash, InPoint, OutPoint, TransactionId};
 use fedimint_escrow_common::config::{EscrowConfig, EscrowConfigConsensus, EscrowConfigPrivate};
 use fedimint_escrow_common::{
     ContractHash, EscrowContract, EscrowId, EscrowInput, EscrowInputError, EscrowMessage,
-    EscrowOutput, EscrowOutputError, EscrowStatus, Outcome, PendingArbiterFeePool, Resolution,
-    compute_contract_hash, compute_escrow_message,
+    EscrowOutput, EscrowOutputError, EscrowStatus, FallbackPolicy, Outcome, PendingArbiterFeePool,
+    Resolution, compute_contract_hash, compute_escrow_message,
 };
 use fedimint_server_core::ServerModule;
 use rand::rngs::OsRng;
@@ -34,6 +34,7 @@ fn dummy_federation_id() -> FederationId {
     FederationId(fedimint_core::bitcoin::hashes::sha256::Hash::all_zeros())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn make_contract(
     funder_kp: &Keypair,
     recipient_kp: &Keypair,
@@ -41,6 +42,8 @@ fn make_contract(
     amount: Amount,
     arbiter_fee: Amount,
     timeout: u64,
+    resolution_timeout: u64,
+    default_fallback: FallbackPolicy,
 ) -> EscrowContract {
     let funder_key = funder_kp.public_key();
     let recipient_key = recipient_kp.public_key();
@@ -54,6 +57,8 @@ fn make_contract(
         &amount,
         &timeout,
         &federation_id,
+        &resolution_timeout,
+        &default_fallback,
     );
 
     let escrow_id = EscrowId(contract_hash.0);
@@ -69,6 +74,8 @@ fn make_contract(
         timeout,
         federation_id,
         status: EscrowStatus::Active,
+        resolution_timeout,
+        default_fallback,
     }
 }
 
@@ -126,6 +133,8 @@ async fn test_process_output_valid_contract_stored() {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         future_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
     let output = EscrowOutput {
         contract: contract.clone(),
@@ -179,6 +188,8 @@ async fn test_process_output_duplicate_rejected() {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         future_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
     let output = EscrowOutput { contract };
 
@@ -220,6 +231,8 @@ async fn test_process_output_arbiter_fee_equals_amount_rejected() {
         Amount::from_sats(100),
         Amount::from_sats(100),
         future_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
     let output = EscrowOutput { contract };
 
@@ -249,6 +262,8 @@ async fn test_process_output_expired_timeout_rejected() {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         past_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
     let output = EscrowOutput { contract };
 
@@ -278,6 +293,8 @@ async fn test_process_output_duplicate_keys_rejected() {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         future_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
     let output = EscrowOutput { contract };
 
@@ -307,6 +324,8 @@ async fn test_process_output_tampered_contract_hash_rejected() {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         future_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
     contract.contract_hash = ContractHash([0xff; 32]);
     let output = EscrowOutput { contract };
@@ -337,6 +356,8 @@ async fn test_funder_release_valid() {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         future_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -385,6 +406,8 @@ async fn test_funder_release_wrong_signature_rejected() {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         future_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -422,6 +445,8 @@ async fn test_funder_release_signs_refund_outcome_rejected() {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         future_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -460,6 +485,8 @@ async fn test_funder_release_already_released_rejected() {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         future_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
     contract.status = EscrowStatus::Released;
 
@@ -498,6 +525,8 @@ async fn test_arbiter_release_after_timeout_valid() {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         past_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -512,6 +541,7 @@ async fn test_arbiter_release_after_timeout_valid() {
         resolution: Resolution::ArbiterOutcome {
             arbiter_signature: sig,
             outcome: Outcome::Release,
+            claimer_pubkey: recipient_kp.public_key(),
         },
     };
 
@@ -555,6 +585,8 @@ async fn test_arbiter_refund_after_timeout_valid() {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         past_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -569,6 +601,7 @@ async fn test_arbiter_refund_after_timeout_valid() {
         resolution: Resolution::ArbiterOutcome {
             arbiter_signature: sig,
             outcome: Outcome::Refund,
+            claimer_pubkey: funder_kp.public_key(),
         },
     };
 
@@ -601,6 +634,8 @@ async fn test_arbiter_wrong_signature_rejected() {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         past_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -616,6 +651,7 @@ async fn test_arbiter_wrong_signature_rejected() {
         resolution: Resolution::ArbiterOutcome {
             arbiter_signature: sig,
             outcome: Outcome::Release,
+            claimer_pubkey: funder_kp.public_key(),
         },
     };
 
@@ -641,6 +677,8 @@ async fn test_arbiter_outcome_mismatch_rejected() {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         past_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -655,6 +693,7 @@ async fn test_arbiter_outcome_mismatch_rejected() {
         resolution: Resolution::ArbiterOutcome {
             arbiter_signature: sig,
             outcome: Outcome::Refund,
+            claimer_pubkey: funder_kp.public_key(),
         },
     };
 
@@ -679,6 +718,8 @@ async fn test_fee_claim_valid() {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         past_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -737,6 +778,8 @@ async fn test_fee_claim_wrong_signature_rejected() {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         past_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -783,6 +826,8 @@ async fn test_fee_claim_wrong_amount_signature_rejected() {
         Amount::from_sats(1000),
         Amount::from_sats(20),
         past_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -826,6 +871,8 @@ fn test_contract_transition_active_to_released() {
         Amount::from_sats(100),
         Amount::from_sats(5),
         future_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
     assert!(contract.transition(EscrowStatus::Released).is_ok());
     assert_eq!(contract.status, EscrowStatus::Released);
@@ -843,6 +890,8 @@ fn test_contract_transition_active_to_refunded() {
         Amount::from_sats(100),
         Amount::from_sats(5),
         future_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
     assert!(contract.transition(EscrowStatus::Refunded).is_ok());
     assert_eq!(contract.status, EscrowStatus::Refunded);
@@ -860,6 +909,8 @@ fn test_contract_transition_released_to_released_rejected() {
         Amount::from_sats(100),
         Amount::from_sats(5),
         future_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
     contract.status = EscrowStatus::Released;
     assert_matches!(
@@ -880,6 +931,8 @@ fn test_contract_transition_refunded_to_released_rejected() {
         Amount::from_sats(100),
         Amount::from_sats(5),
         future_timeout(),
+        future_timeout(),
+        FallbackPolicy::Refund,
     );
     contract.status = EscrowStatus::Refunded;
     assert_matches!(

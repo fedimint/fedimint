@@ -24,11 +24,12 @@ use fedimint_escrow_common::config::{
 use fedimint_escrow_common::{
     ContractHash, EscrowCommonInit, EscrowConsensusItem, EscrowContract, EscrowId, EscrowInput,
     EscrowInputError, EscrowMessage, EscrowModuleTypes, EscrowOutput, EscrowOutputError,
-    EscrowOutputOutcome, EscrowStatus, GET_CONTRACT_DOMAIN, GET_CONTRACT_ENDPOINT,
+    EscrowOutputOutcome, EscrowStatus, FallbackPolicy, GET_CONTRACT_DOMAIN, GET_CONTRACT_ENDPOINT,
     GET_PENDING_ARBITER_FEE_ENDPOINT, GET_PENDING_FEE_DOMAIN, GetContractParams,
     GetPendinFeeParams, KIND, LIST_CONTRACT_BY_KEY_ENDPOINT, LIST_CONTRACT_DOMAIN,
-    ListContractParams, MODULE_CONSENSUS_VERSION, Outcome, PendingArbiterFeePool, Resolution,
-    compute_contract_hash, compute_escrow_message, compute_proof_message,
+    ListContractParams, MODULE_CONSENSUS_VERSION, Outcome, PendingArbiterFeePool, PendingSplitPool,
+    Resolution, compute_contract_hash, compute_escrow_message, compute_proof_message,
+    validate_split_bps,
 };
 use fedimint_logging::LOG_MODULE_ESCROW;
 use fedimint_server_core::config::PeerHandleOps;
@@ -44,6 +45,7 @@ mod db;
 use crate::db::{
     DbKeyPrefix, EscrowContractKey, EscrowContractPrefix, EscrowOutputOutcomeKey,
     EscrowOutputOutcomePrefix, PendingArbiterFeePoolKey, PendingArbiterFeePrefix,
+    PendingSplitPoolKey, PendingSplitPoolPrefix,
 };
 
 #[derive(Debug, Clone)]
@@ -83,6 +85,16 @@ impl ModuleInit for EscrowInit {
                         PendingArbiterFeePool,
                         contracts,
                         "Pending Arbiter Fee Claim"
+                    );
+                }
+                DbKeyPrefix::PendingSplitPool => {
+                    push_db_pair_items!(
+                        dbtx,
+                        PendingSplitPoolPrefix,
+                        PendingSplitPoolKey,
+                        PendingSplitPool,
+                        contracts,
+                        "Pending Split Pool"
                     );
                 }
                 DbKeyPrefix::OutputOutcome => {
@@ -228,9 +240,16 @@ impl ServerModule for Escrow {
             Resolution::ArbiterOutcome {
                 arbiter_signature,
                 outcome,
+                claimer_pubkey,
             } => {
-                self.handle_arbiter_decision(input, dbtx, arbiter_signature, outcome)
-                    .await
+                self.handle_arbiter_decision(
+                    input,
+                    dbtx,
+                    arbiter_signature,
+                    outcome,
+                    claimer_pubkey,
+                )
+                .await
             }
             Resolution::ArbiterEngaged {
                 disputant_pubkey,
@@ -253,6 +272,13 @@ impl ServerModule for Escrow {
                 self.handle_fee_claim(dbtx, input, arbiter_claim_pubkey, arbiter_signature)
                     .await
             }
+            Resolution::ResolveFallbackPolicy {
+                claimer_pubkey,
+                fallback: _,
+            } => {
+                self.handle_fallback_resolution(input, dbtx, claimer_pubkey)
+                    .await
+            }
         }
     }
 
@@ -273,6 +299,18 @@ impl ServerModule for Escrow {
         }
         let now = fedimint_core::time::duration_since_epoch().as_secs();
         if contract.timeout <= now {
+            return Err(EscrowOutputError::InvalidInputs);
+        }
+        if contract.resolution_timeout <= contract.timeout {
+            return Err(EscrowOutputError::InvalidInputs);
+        }
+        // in process_output, alongside the other contract.* checks
+        if let FallbackPolicy::Split {
+            funder_split_bps,
+            recipient_split_bps,
+        } = contract.default_fallback
+            && !validate_split_bps(funder_split_bps, recipient_split_bps)
+        {
             return Err(EscrowOutputError::InvalidInputs);
         }
         if contract.funder_key == contract.recipient_key
@@ -337,7 +375,7 @@ impl ServerModule for Escrow {
                     EscrowStatus::Active | EscrowStatus::Disputed => {
                         -(contract.amount.msats as i64)
                     }
-                    EscrowStatus::Released | EscrowStatus::Refunded => 0,
+                    EscrowStatus::Released | EscrowStatus::Refunded | EscrowStatus::Split => 0,
                 },
             )
             .await;
@@ -482,6 +520,8 @@ fn verify_contract_hash(contract_hash: &[u8; 32], contract: &EscrowContract) -> 
         &contract.amount,
         &contract.timeout,
         &contract.federation_id,
+        &contract.resolution_timeout,
+        &contract.default_fallback,
     ) == ContractHash(*contract_hash)
 }
 
@@ -551,6 +591,9 @@ impl Escrow {
         funder_signature: &Signature,
     ) -> Result<InputMeta, EscrowInputError> {
         let mut contract = self.load_contract(input.escrow_id, dbtx).await?;
+        if contract.status == EscrowStatus::Disputed {
+            return Err(EscrowInputError::ContractDisputed);
+        }
 
         let resolution_message = contract.resolution_message(Outcome::Release);
 
@@ -573,6 +616,146 @@ impl Escrow {
             },
             pub_key: contract.recipient_key,
         })
+    }
+
+    async fn resolve_dispute(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        outcome: Outcome,
+        contract: &mut EscrowContract,
+        claimer_pubkey: PublicKey,
+        arbiter_fee: Amount,
+    ) -> Result<InputMeta, EscrowInputError> {
+        let payout_amount = contract.amount.checked_sub(arbiter_fee).ok_or_else(|| {
+            EscrowInputError::InternalError("arbiter fee exceeds contract amount".into())
+        })?;
+
+        match outcome {
+            Outcome::Release | Outcome::Refund => {
+                let recipient_key = match outcome {
+                    Outcome::Release => contract.recipient_key,
+                    Outcome::Refund => contract.funder_key,
+                    Outcome::Split { .. } => unreachable!(),
+                };
+
+                if claimer_pubkey != recipient_key {
+                    return Err(EscrowInputError::InvalidArbiterSignature);
+                }
+
+                self.set_pending_arbiter_fee(dbtx, contract, arbiter_fee)
+                    .await;
+
+                let new_status = match outcome {
+                    Outcome::Release => EscrowStatus::Released,
+                    Outcome::Refund => EscrowStatus::Refunded,
+                    Outcome::Split { .. } => unreachable!(),
+                };
+                contract.transition(new_status)?;
+                dbtx.insert_entry(&EscrowContractKey(contract.escrow_id), contract)
+                    .await;
+
+                Ok(InputMeta {
+                    amount: TransactionItemAmounts {
+                        amounts: Amounts::new_bitcoin(payout_amount),
+                        fees: Amounts::ZERO,
+                    },
+                    pub_key: recipient_key,
+                })
+            }
+            Outcome::Split {
+                funder_split_bps,
+                recipient_split_bps,
+            } => {
+                if claimer_pubkey != contract.funder_key && claimer_pubkey != contract.recipient_key
+                {
+                    return Err(EscrowInputError::InvalidArbiterSignature);
+                }
+                if !validate_split_bps(funder_split_bps, recipient_split_bps) {
+                    return Err(EscrowInputError::InvalidSplitRatio);
+                }
+
+                if let Some(pending) = dbtx
+                    .get_value(&PendingSplitPoolKey(contract.escrow_id))
+                    .await
+                {
+                    if pending.claimant_key != claimer_pubkey {
+                        return Err(EscrowInputError::NoPendingSplitClaim);
+                    }
+                    dbtx.remove_entry(&PendingSplitPoolKey(contract.escrow_id))
+                        .await;
+
+                    return Ok(InputMeta {
+                        amount: TransactionItemAmounts {
+                            amounts: Amounts::new_bitcoin(pending.amount),
+                            fees: Amounts::ZERO,
+                        },
+                        pub_key: claimer_pubkey,
+                    });
+                }
+
+                let funder_amount = Amount::from_msats(
+                    payout_amount
+                        .msats
+                        .saturating_mul(u64::from(funder_split_bps))
+                        / 10_000u64,
+                );
+                let recipient_amount = payout_amount
+                    .checked_sub(funder_amount)
+                    .ok_or_else(|| EscrowInputError::InternalError("split overflow".into()))?;
+
+                let (claim_amount, other_pubkey, other_amount) =
+                    if claimer_pubkey == contract.funder_key {
+                        (funder_amount, contract.recipient_key, recipient_amount)
+                    } else {
+                        (recipient_amount, contract.funder_key, funder_amount)
+                    };
+
+                contract.transition(EscrowStatus::Split)?;
+                dbtx.insert_entry(&EscrowContractKey(contract.escrow_id), contract)
+                    .await;
+
+                self.set_pending_arbiter_fee(dbtx, contract, arbiter_fee)
+                    .await;
+
+                dbtx.insert_entry(
+                    &PendingSplitPoolKey(contract.escrow_id),
+                    &PendingSplitPool {
+                        escrow_id: contract.escrow_id,
+                        claimant_key: other_pubkey,
+                        amount: other_amount,
+                    },
+                )
+                .await;
+
+                Ok(InputMeta {
+                    amount: TransactionItemAmounts {
+                        amounts: Amounts::new_bitcoin(claim_amount),
+                        fees: Amounts::ZERO,
+                    },
+                    pub_key: claimer_pubkey,
+                })
+            }
+        }
+    }
+
+    async fn set_pending_arbiter_fee(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        contract: &EscrowContract,
+        arbiter_fee: Amount,
+    ) {
+        if arbiter_fee == Amount::ZERO {
+            return;
+        }
+        dbtx.insert_entry(
+            &PendingArbiterFeePoolKey(contract.escrow_id),
+            &PendingArbiterFeePool {
+                escrow_id: contract.escrow_id,
+                remaining_arbiters: vec![contract.arbiter_key],
+                remaining_amount: arbiter_fee,
+            },
+        )
+        .await;
     }
 
     async fn handle_arbiter_engage(
@@ -624,19 +807,13 @@ impl Escrow {
         dbtx: &mut DatabaseTransaction<'_>,
         arbiter_signature: &Signature,
         outcome: &Outcome,
+        claimer_pubkey: &PublicKey,
     ) -> Result<InputMeta, EscrowInputError> {
         let mut contract = self.load_contract(input.escrow_id, dbtx).await?;
         let now = fedimint_core::time::duration_since_epoch().as_secs();
         if now < contract.timeout {
             return Err(EscrowInputError::TimeoutNotReached);
         }
-
-        let payout_amount = contract
-            .amount
-            .checked_sub(contract.arbiter_fee)
-            .ok_or_else(|| {
-                EscrowInputError::InternalError("arbiter fee exceeds contract amount".into())
-            })?;
 
         let resolution_message = contract.resolution_message(*outcome);
 
@@ -645,37 +822,38 @@ impl Escrow {
             return Err(EscrowInputError::InvalidArbiterSignature);
         }
 
-        let recipient_key = match outcome {
-            Outcome::Release => contract.recipient_key,
-            Outcome::Refund => contract.funder_key,
+        let arbiter_fee = contract.arbiter_fee;
+        self.resolve_dispute(dbtx, *outcome, &mut contract, *claimer_pubkey, arbiter_fee)
+            .await
+    }
+
+    async fn handle_fallback_resolution(
+        &self,
+        input: &EscrowInput,
+        dbtx: &mut DatabaseTransaction<'_>,
+        claimer_pubkey: &PublicKey,
+    ) -> Result<InputMeta, EscrowInputError> {
+        let mut contract = self.load_contract(input.escrow_id, dbtx).await?;
+
+        let now = fedimint_core::time::duration_since_epoch().as_secs();
+        if now <= contract.resolution_timeout {
+            return Err(EscrowInputError::FallbackNotAvailable);
+        }
+
+        let outcome = match contract.default_fallback {
+            FallbackPolicy::Refund => Outcome::Refund,
+            FallbackPolicy::Split {
+                funder_split_bps,
+                recipient_split_bps,
+            } => Outcome::Split {
+                funder_split_bps,
+                recipient_split_bps,
+            },
         };
 
-        dbtx.insert_entry(
-            &PendingArbiterFeePoolKey(input.escrow_id),
-            &PendingArbiterFeePool {
-                escrow_id: input.escrow_id,
-                remaining_arbiters: vec![contract.arbiter_key],
-                remaining_amount: contract.arbiter_fee,
-            },
-        )
-        .await;
-
-        let new_status = match outcome {
-            Outcome::Release => EscrowStatus::Released,
-            Outcome::Refund => EscrowStatus::Refunded,
-        };
-        contract.transition(new_status)?;
-        dbtx.insert_entry(&EscrowContractKey(input.escrow_id), &contract)
-            .await;
-
-        info!(target: LOG_MODULE_ESCROW, "Escrow contract resolved");
-        Ok(InputMeta {
-            amount: TransactionItemAmounts {
-                amounts: Amounts::new_bitcoin(payout_amount),
-                fees: Amounts::ZERO,
-            },
-            pub_key: recipient_key,
-        })
+        // No arbiter fee: they didn't do the work, they don't get paid.
+        self.resolve_dispute(dbtx, outcome, &mut contract, *claimer_pubkey, Amount::ZERO)
+            .await
     }
 
     async fn handle_fee_claim(
