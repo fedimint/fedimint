@@ -5093,7 +5093,6 @@ dependencies = [
  "test-log",
  "thiserror 2.0.20",
  "tracing",
- "uniffi",
 ]
 
 [[package]]
