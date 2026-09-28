@@ -11,8 +11,6 @@ use fedimint_client_module::error::{
 use fedimint_core::config::FederationIdPrefix;
 use fedimint_core::db::DatabaseError;
 use fedimint_core::encoding::DecodeError;
-#[cfg(feature = "uniffi")]
-use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, PeerId};
 use thiserror::Error;
 
@@ -182,41 +180,6 @@ pub enum ValidateNotesError {
     /// A note held in the wallet could not be decoded.
     #[error("A stored note could not be decoded")]
     Decode(#[from] DecodeError),
-}
-
-#[cfg(feature = "uniffi")]
-impl From<ValidateNotesError> for fedimint_core::util::ffi::UniffiError {
-    fn from(e: ValidateNotesError) -> Self {
-        Self::General(e.fmt_compact().to_string())
-    }
-}
-
-#[cfg(feature = "uniffi")]
-impl From<SpendOOBError> for fedimint_core::util::ffi::UniffiError {
-    fn from(e: SpendOOBError) -> Self {
-        Self::General(e.fmt_compact().to_string())
-    }
-}
-
-#[cfg(feature = "uniffi")]
-impl From<ReissueExternalNotesError> for fedimint_core::util::ffi::UniffiError {
-    fn from(e: ReissueExternalNotesError) -> Self {
-        Self::General(e.fmt_compact().to_string())
-    }
-}
-
-#[cfg(feature = "uniffi")]
-impl From<SubscribeReissueExternalNotesError> for fedimint_core::util::ffi::UniffiError {
-    fn from(e: SubscribeReissueExternalNotesError) -> Self {
-        Self::General(e.fmt_compact().to_string())
-    }
-}
-
-#[cfg(feature = "uniffi")]
-impl From<SubscribeSpendNotesError> for fedimint_core::util::ffi::UniffiError {
-    fn from(e: SubscribeSpendNotesError) -> Self {
-        Self::General(e.fmt_compact().to_string())
-    }
 }
 
 /// A string that is not a valid serialization of out-of-band e-cash notes.

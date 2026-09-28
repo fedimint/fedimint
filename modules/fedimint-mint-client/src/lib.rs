@@ -6,9 +6,6 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::return_self_not_must_use)]
 
-#[cfg(feature = "uniffi")]
-::uniffi::setup_scaffolding!();
-
 // Backup and restore logic
 pub mod backup;
 /// Modularized Cli for sending and receiving out-of-band ecash
@@ -18,9 +15,6 @@ mod cli;
 pub mod client_db;
 /// Error types of the mint client
 pub mod error;
-/// FFI for the mint client module
-#[cfg(feature = "uniffi")]
-pub mod ffi;
 /// State machines for mint inputs
 mod input;
 /// State machines for out-of-band transmitted e-cash notes
@@ -223,12 +217,6 @@ async fn download_slice_with_hash(
 /// * Has to contain at least one `FederationIdPrefix` item
 #[derive(Clone, Debug, Encodable, PartialEq, Eq)]
 pub struct OOBNotes(Vec<OOBNotesPart>);
-
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(OOBNotes, String, {
-    lower: |n| n.to_string(),
-    try_lift: |s| Ok(OOBNotes::from_str(&s)?),
-});
 
 /// For extendability [`OOBNotes`] consists of parts, where client can ignore
 /// ones they don't understand.
@@ -524,7 +512,6 @@ impl OOBNotes {
 /// The high-level state of a reissue operation started with
 /// [`MintClientModule::reissue_external_notes`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum ReissueExternalNotesState {
     /// The operation has been created and is waiting to be accepted by the
     /// federation.
@@ -545,7 +532,6 @@ pub type SubscribeReissueExternalNotesResult =
 /// The high-level state of a raw e-cash spend operation started with
 /// [`MintClientModule::spend_notes_with_selector`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum SpendOOBState {
     /// The e-cash has been selected and given to the caller
     Created,
@@ -958,7 +944,6 @@ impl ClientModuleInit for MintClientInit {
 /// spend the e-cash note. Only the client that possesses the `DerivableSecret`
 /// can derive the correct spend key to spend the e-cash note. This ensures that
 /// only the owner of the e-cash note can spend it.
-#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct MintClientModule {
     federation_id: FederationId,
     cfg: MintClientConfig,
@@ -2883,7 +2868,6 @@ pub fn spendable_notes_to_operation_id(
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct SpendOOBRefund {
     pub user_triggered: bool,
     /// Empty when the spend disabled automatic refunds and no refund was
