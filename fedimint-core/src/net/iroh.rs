@@ -194,13 +194,4 @@ fn add_n0_pkarr_resolver(builder: Builder) -> Builder {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn default_iroh_relays_are_valid_urls() {
-        for relay in DEFAULT_IROH_RELAYS {
-            Url::parse(relay).expect("default Iroh relay URL is valid");
-        }
-    }
-}
+mod tests;
