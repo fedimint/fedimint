@@ -14,7 +14,6 @@ rustc-args = ["--cfg", "tokio_unstable"]
 [features]
 cli = ["dep:clap"]
 default = []
-uniffi = ["dep:uniffi", "fedimint-core/uniffi", "fedimint-meta-common/uniffi"]
 
 [lib]
 name = "fedimint_meta_client"
@@ -36,7 +35,6 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-uniffi = { workspace = true, optional = true, features = ["tokio"] }
 
 [lints]
 workspace = true

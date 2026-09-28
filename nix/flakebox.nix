@@ -1084,7 +1084,7 @@ in
     };
 
     cargoCheckUniffi = cargoCheckCommand {
-      args = "--locked --all-targets --package fedimint-api-client --package fedimint-client --package fedimint-core --package fedimint-eventlog --package fedimint-meta-client --features uniffi";
+      args = "--locked --all-targets --package fedimint-api-client --package fedimint-client --package fedimint-core --package fedimint-eventlog --features uniffi";
     };
 
     cargoWorkspacesCheckDefaultFeatures = cargoWorkspacesCommand {

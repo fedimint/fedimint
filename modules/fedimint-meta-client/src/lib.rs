@@ -2,9 +2,6 @@
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::module_name_repetitions)]
 
-#[cfg(feature = "uniffi")]
-::uniffi::setup_scaffolding!();
-
 pub mod api;
 #[cfg(feature = "cli")]
 pub mod cli;
@@ -31,11 +28,7 @@ use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::{
     Amounts, ApiAuth, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-#[cfg(feature = "uniffi")]
-use fedimint_core::util::FmtCompact as _;
 use fedimint_core::util::backoff_util::FibonacciBackoff;
-#[cfg(feature = "uniffi")]
-use fedimint_core::util::ffi::UniffiError;
 use fedimint_core::util::{BoxStream, backoff_util, retry};
 use fedimint_core::{PeerId, apply, async_trait_maybe_send};
 use fedimint_logging::LOG_CLIENT_MODULE_META;
@@ -50,7 +43,6 @@ use thiserror::Error;
 use tracing::{debug, warn};
 
 #[derive(Debug)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct MetaClientModule {
     module_api: DynModuleApi,
     admin_auth: Option<ApiAuth>,
@@ -162,20 +154,6 @@ pub enum MetaAdminError {
 impl From<FederationError> for MetaAdminError {
     fn from(source: FederationError) -> Self {
         Self::Federation(Box::new(source))
-    }
-}
-
-#[cfg(feature = "uniffi")]
-#[uniffi::export(async_runtime = "tokio")]
-impl MetaClientModule {
-    #[uniffi::method(name = "get_consensus_value")]
-    pub async fn get_consensus_value_uniffi(
-        &self,
-        key: MetaKey,
-    ) -> Result<Option<MetaConsensusValue>, UniffiError> {
-        self.get_consensus_value(key)
-            .await
-            .map_err(|e| UniffiError::General(e.fmt_compact().to_string()))
     }
 }
 

@@ -4337,7 +4337,6 @@ dependencies = [
  "strum_macros 0.27.1",
  "thiserror 2.0.20",
  "tracing",
- "uniffi",
 ]
 
 [[package]]
