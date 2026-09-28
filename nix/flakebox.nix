@@ -1083,10 +1083,6 @@ in
       args = "--package fedimint-client --package fedimint-client-wasm --package fedimint-wasm-tests --package fedimint-mintv2-client --package fedimint-walletv2-client --no-default-features";
     };
 
-    cargoCheckUniffi = cargoCheckCommand {
-      args = "--locked --all-targets --package fedimint-core --features uniffi";
-    };
-
     cargoWorkspacesCheckDefaultFeatures = cargoWorkspacesCommand {
       cmd = "cargo check";
       pnameSuffix = "default-feats";
