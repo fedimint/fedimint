@@ -3346,7 +3346,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
- "uniffi",
 ]
 
 [[package]]

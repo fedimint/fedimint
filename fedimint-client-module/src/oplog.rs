@@ -21,15 +21,6 @@ use serde::{Deserialize, Serialize};
 #[serde(transparent)]
 pub struct JsonStringed(pub serde_json::Value);
 
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(JsonStringed, String, {
-    lower: |j| serde_json::to_string(&j.0).expect("JSON serialization should not fail"),
-    try_lift: |s| {
-        let value = serde_json::from_str(&s).map_err(|e| DecodeError::from_err(e))?;
-        Ok(JsonStringed(value))
-    },
-});
-
 impl Encodable for JsonStringed {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         let json_str = serde_json::to_string(&self.0).expect("JSON serialization should not fail");
@@ -84,7 +75,6 @@ pub trait IOperationLog {
 /// Represents the outcome of an operation, combining both the outcome value and
 /// its timestamp
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct OperationOutcome {
     pub time: SystemTime,
     pub outcome: JsonStringed,
@@ -136,7 +126,6 @@ impl Decodable for OperationOutcome {
 ///        has to be called. See the respective client extension trait for these
 ///        functions.
 #[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct OperationLogEntry {
     pub(crate) operation_module_kind: String,
     pub(crate) meta: JsonStringed,
