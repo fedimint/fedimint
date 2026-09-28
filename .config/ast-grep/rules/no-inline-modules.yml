@@ -1,0 +1,9 @@
+id: no-inline-modules
+language: rust
+severity: error
+message: Inline module bodies are not allowed; preserve the module’s attributes and visibility, move its body to the Rust-resolved standalone module file, and replace `{ ... }` with `;`.
+rule:
+  kind: mod_item
+  has:
+    kind: declaration_list
+    stopBy: neighbor
