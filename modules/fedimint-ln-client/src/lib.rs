@@ -6,9 +6,6 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::too_many_lines)]
 
-#[cfg(feature = "uniffi")]
-uniffi::setup_scaffolding!();
-
 pub use fedimint_ln_common as common;
 
 pub mod api;
@@ -17,8 +14,6 @@ pub mod cli;
 pub mod db;
 pub mod error;
 pub mod events;
-#[cfg(feature = "uniffi")]
-pub mod ffi;
 pub mod incoming;
 pub mod pay;
 pub mod receive;
@@ -134,7 +129,6 @@ const DEFAULT_INVOICE_EXPIRY_TIME: Duration = Duration::from_hours(24);
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
 #[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum PayType {
     // Payment from this client to another user within the federation
     Internal(OperationId),
@@ -189,7 +183,6 @@ pub enum LightningPaymentOutcome {
 /// started with [`LightningClientModule::pay_bolt11_invoice`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum InternalPayState {
     Funding,
     Preimage(Preimage),
@@ -211,7 +204,6 @@ pub enum InternalPayState {
 /// started with [`LightningClientModule::pay_bolt11_invoice`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum LnPayState {
     Created,
     Canceled,
@@ -227,7 +219,6 @@ pub enum LnPayState {
 /// [`LightningClientModule::create_bolt11_invoice`].
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum LnReceiveState {
     Created,
     WaitingForPayment { invoice: String, timeout: Duration },
@@ -464,7 +455,6 @@ impl ClientModuleInit for LightningClientInit {
 ///
 /// Note that lightning gateways use a different version
 /// of client side module.
-#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 #[derive(Debug)]
 pub struct LightningClientModule {
     pub cfg: LightningClientConfig,
@@ -2646,7 +2636,6 @@ pub async fn create_incoming_contract_output(
 }
 
 #[derive(Debug, Encodable, Decodable, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct OutgoingLightningPayment {
     pub payment_type: PayType,
     pub contract_id: ContractId,
