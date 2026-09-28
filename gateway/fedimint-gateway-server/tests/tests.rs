@@ -60,7 +60,7 @@ use fedimint_ln_server::LightningInit;
 use fedimint_lnv2_common::LightningInvoice;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::{
-    GatewayConnection, PaymentFee, RoutingInfo, SendPaymentPayload,
+    CreateBolt11InvoicePayload, GatewayConnection, PaymentFee, RoutingInfo, SendPaymentPayload,
 };
 use fedimint_logging::LOG_TEST;
 use fedimint_testing::btc::BitcoinTest;
@@ -1936,6 +1936,8 @@ impl CapturingGatewayConnection {
         });
     }
 
+    /// Takes the payload, so the next send through this connection is
+    /// captured afresh.
     async fn captured(&self) -> SendPaymentPayload {
         retry(
             "waiting for the client to send its payment to the gateway",
@@ -1944,7 +1946,7 @@ impl CapturingGatewayConnection {
                 self.captured
                     .lock()
                     .expect("Not poisoned")
-                    .clone()
+                    .take()
                     .context("The client has not sent its payment yet")
             },
         )
@@ -2517,4 +2519,200 @@ async fn test_gateway_client_direct_swap_reentry_joins_the_funded_swap() -> anyh
         Ok(())
     })
     .await
+}
+
+/// One preimage settles every contract for an invoice, on either protocol.
+/// This gateway keeps no per-payment-image claim, so it never forfeits a
+/// contract it paid out for: each contract for the same payment hash is paid
+/// and then claimed, and the gateway is reimbursed for every payout.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv2_then_lnv1_payment_of_same_hash_are_both_claimed() -> anyhow::Result<()> {
+    let gateway_conn = Arc::new(CapturingGatewayConnection::default());
+    let fixtures = capturing_lnv2_fixtures(gateway_conn.clone());
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+    let invoice = FakeLightningTest::new().invoice(sats(250), None)?;
+
+    let payload =
+        captured_lnv2_send_payload(&gateway, &gateway_conn, &fed, invoice.clone()).await?;
+    gateway
+        .send_payment_v2(payload)
+        .await?
+        .expect("the gateway pays the invoice over LNv2 and claims the contract");
+
+    let user_client = fed.new_client().await;
+    user_client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
+        .await?;
+    user_client
+        .get_first_module::<LightningClientModule>()?
+        .update_gateway_cache()
+        .await?;
+    // Asserts that the gateway claims the LNv1 contract as well.
+    gateway_pay_valid_invoice(
+        invoice,
+        &user_client,
+        &gateway.select_client(fed.id()).await?.into_value(),
+        &gateway.http_gateway_id().await,
+    )
+    .await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv1_then_lnv2_payment_of_same_hash_are_both_claimed() -> anyhow::Result<()> {
+    let gateway_conn = Arc::new(CapturingGatewayConnection::default());
+    let fixtures = capturing_lnv2_fixtures(gateway_conn.clone());
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+    let invoice = FakeLightningTest::new().invoice(sats(250), None)?;
+
+    let user_client = fed.new_client().await;
+    user_client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
+        .await?;
+    user_client
+        .get_first_module::<LightningClientModule>()?
+        .update_gateway_cache()
+        .await?;
+    gateway_pay_valid_invoice(
+        invoice.clone(),
+        &user_client,
+        &gateway.select_client(fed.id()).await?.into_value(),
+        &gateway.http_gateway_id().await,
+    )
+    .await?;
+
+    let payload = captured_lnv2_send_payload(&gateway, &gateway_conn, &fed, invoice).await?;
+    gateway
+        .send_payment_v2(payload)
+        .await?
+        .expect("the gateway pays the invoice over LNv2 and claims the contract");
+
+    Ok(())
+}
+
+/// Has the gateway issue, from its own node, the invoice for an LNv2 receive in
+/// `fed` whose contract decrypts to the mock preimage. Paying it from another
+/// federation is a direct swap, and it shares its payment hash with every
+/// invoice `FakeLightningTest` issues.
+async fn direct_swap_invoice(
+    gateway: &Gateway,
+    fed: &FederationTest,
+    amount: Amount,
+) -> anyhow::Result<Bolt11Invoice> {
+    let client = gateway.select_client(fed.id()).await?.into_value();
+    let module = client.get_first_module::<GatewayClientModuleV2>()?;
+    let routing_info = gateway
+        .routing_info_v2(&fed.id())
+        .await?
+        .context("The gateway is connected to the federation")?;
+    let contract = IncomingContract::new(
+        module.cfg.tpe_agg_pk,
+        [42; 32],
+        MOCK_INVOICE_PREIMAGE,
+        PaymentImage::Hash(sha256::Hash::hash(&MOCK_INVOICE_PREIMAGE)),
+        routing_info.receive_fee.subtract_from(amount.msats),
+        u64::MAX,
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+        module.keypair.public_key(),
+        Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
+    );
+
+    Ok(gateway
+        .create_bolt11_invoice_v2(CreateBolt11InvoicePayload {
+            federation_id: fed.id(),
+            contract,
+            amount,
+            description: fedimint_lnv2_common::Bolt11InvoiceDescription::Direct(String::new()),
+            expiry_secs: 3600,
+        })
+        .await?)
+}
+
+/// The same-hash pair seen in the wild: a small contract paid by a direct swap
+/// into another federation, and a larger one for an invoice of the same hash
+/// paid over Lightning. Both payouts reveal the one preimage, and the gateway
+/// claims each contract with it instead of forfeiting the second.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv2_direct_swap_then_lightning_payment_of_same_hash_are_both_claimed()
+-> anyhow::Result<()> {
+    let gateway_conn = Arc::new(CapturingGatewayConnection::default());
+    let fixtures = capturing_lnv2_fixtures(gateway_conn.clone());
+    let fed1 = fixtures.new_fed_degraded().await;
+    let fed2 = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed1.connect_gateway(&gateway).await;
+    fed2.connect_gateway(&gateway).await;
+    send_msats_to_gateway(&gateway, fed2.id(), 1_000_000).await;
+
+    assert_direct_swap_is_claimed(&gateway, &gateway_conn, &fed1, &fed2).await?;
+
+    let lightning_invoice = FakeLightningTest::new().invoice(sats(250), None)?;
+    let payload =
+        captured_lnv2_send_payload(&gateway, &gateway_conn, &fed1, lightning_invoice).await?;
+    assert_eq!(
+        gateway.send_payment_v2(payload).await?,
+        Ok(MOCK_INVOICE_PREIMAGE),
+        "the gateway pays over Lightning and claims the contract"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv2_lightning_payment_then_direct_swap_of_same_hash_are_both_claimed()
+-> anyhow::Result<()> {
+    let gateway_conn = Arc::new(CapturingGatewayConnection::default());
+    let fixtures = capturing_lnv2_fixtures(gateway_conn.clone());
+    let fed1 = fixtures.new_fed_degraded().await;
+    let fed2 = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed1.connect_gateway(&gateway).await;
+    fed2.connect_gateway(&gateway).await;
+    send_msats_to_gateway(&gateway, fed2.id(), 1_000_000).await;
+
+    let lightning_invoice = FakeLightningTest::new().invoice(sats(250), None)?;
+    let payload =
+        captured_lnv2_send_payload(&gateway, &gateway_conn, &fed1, lightning_invoice).await?;
+    assert_eq!(
+        gateway.send_payment_v2(payload).await?,
+        Ok(MOCK_INVOICE_PREIMAGE),
+        "the gateway pays over Lightning and claims the contract"
+    );
+
+    assert_direct_swap_is_claimed(&gateway, &gateway_conn, &fed1, &fed2).await?;
+
+    Ok(())
+}
+
+/// Pays a direct-swap invoice from `fed1` into `fed2` and asserts the gateway
+/// claimed the outgoing contract. `FakeLightningTest` answers with the same
+/// preimage, so the gateway's balance in `fed2` shows the swap, rather than
+/// a Lightning payment, funded the incoming contract.
+async fn assert_direct_swap_is_claimed(
+    gateway: &Gateway,
+    gateway_conn: &CapturingGatewayConnection,
+    fed1: &FederationTest,
+    fed2: &FederationTest,
+) -> anyhow::Result<()> {
+    let swap_invoice = direct_swap_invoice(gateway, fed2, sats(100)).await?;
+    let balance_before = get_balances(gateway, vec![fed2.id()]).await[0];
+    let payload = captured_lnv2_send_payload(gateway, gateway_conn, fed1, swap_invoice).await?;
+    assert_eq!(
+        gateway.send_payment_v2(payload).await?,
+        Ok(MOCK_INVOICE_PREIMAGE),
+        "the gateway swaps into the second federation and claims the contract"
+    );
+    assert!(
+        get_balances(gateway, vec![fed2.id()]).await[0] < balance_before,
+        "the swap funded the incoming contract in the second federation"
+    );
+
+    Ok(())
 }

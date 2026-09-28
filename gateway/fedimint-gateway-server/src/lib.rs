@@ -3078,7 +3078,7 @@ impl Gateway {
     /// the connected Lightning node, then save the payment hash so that
     /// incoming lightning payments can be matched as a receive attempt to a
     /// specific federation.
-    async fn create_bolt11_invoice_v2(
+    pub async fn create_bolt11_invoice_v2(
         &self,
         payload: CreateBolt11InvoicePayload,
     ) -> Result<Bolt11Invoice> {
