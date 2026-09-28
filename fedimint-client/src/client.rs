@@ -1331,31 +1331,6 @@ impl Client {
         })
     }
 
-    /// Returns an owned `Arc` to a typed module client instance by kind.
-    ///
-    /// Unlike [`Self::get_first_module`], this hands out a cloned `Arc` so the
-    /// caller can hold the module independently of the `Client`'s lifetime.
-    #[cfg(not(target_family = "wasm"))]
-    pub fn get_first_module_arc<M: ClientModule>(&self) -> Result<Arc<M>, ModuleLookupError> {
-        let module_kind = M::kind();
-        let id = self.get_first_instance(&module_kind).ok_or_else(|| {
-            ModuleLookupError::NoModuleOfKind {
-                kind: module_kind.clone(),
-            }
-        })?;
-        let dyn_module = self
-            .modules
-            .get(id)
-            .ok_or(ModuleLookupError::UnknownInstance { instance_id: id })?;
-        dyn_module
-            .as_any_arc()
-            .downcast::<M>()
-            .map_err(|_| ModuleLookupError::WrongModuleType {
-                instance_id: id,
-                expected: std::any::type_name::<M>(),
-            })
-    }
-
     pub fn get_module_client_dyn(
         &self,
         instance_id: ModuleInstanceId,

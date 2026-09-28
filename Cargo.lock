@@ -3315,7 +3315,6 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "tracing-test",
- "uniffi",
 ]
 
 [[package]]
@@ -13613,7 +13612,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8b1c62ee415b805f063c82e8ef6bbcaa1b87f8eed360cf217537b7724e05601"
 dependencies = [
  "anyhow",
- "async-compat",
  "bytes",
  "once_cell",
  "static_assertions",
