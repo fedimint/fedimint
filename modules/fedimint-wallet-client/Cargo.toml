@@ -14,7 +14,6 @@ rustc-args = ["--cfg", "tokio_unstable"]
 [features]
 cli = ["dep:clap"]
 default = []
-uniffi = ["dep:uniffi", "fedimint-core/uniffi", "fedimint-wallet-common/uniffi"]
 
 [lib]
 name = "fedimint_wallet_client"
@@ -45,7 +44,6 @@ strum_macros = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-uniffi = { workspace = true, optional = true, features = ["tokio"] }
 
 [lints]
 workspace = true

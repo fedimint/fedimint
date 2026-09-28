@@ -279,13 +279,6 @@ pub enum ModuleLookupError {
     },
 }
 
-#[cfg(feature = "uniffi")]
-impl From<ModuleLookupError> for fedimint_core::util::ffi::UniffiError {
-    fn from(e: ModuleLookupError) -> Self {
-        Self::General(e.to_string())
-    }
-}
-
 /// The client and the federation's peers share no core API version.
 ///
 /// Module version mismatches are not an error: a module whose versions do not

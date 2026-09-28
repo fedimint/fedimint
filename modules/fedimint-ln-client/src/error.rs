@@ -10,8 +10,6 @@ use fedimint_client_module::error::{
 use fedimint_core::core::OperationId;
 use fedimint_core::db::DatabaseError;
 use fedimint_core::secp256k1::PublicKey;
-#[cfg(feature = "uniffi")]
-use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, secp256k1};
 use fedimint_ln_common::contracts::ContractId;
 use lightning_invoice::{CreationError, Currency, ParseOrSemanticError};
@@ -53,13 +51,6 @@ pub enum GatewaySelectionError {
 impl From<FederationError> for GatewaySelectionError {
     fn from(source: FederationError) -> Self {
         Self::Federation(Box::new(source))
-    }
-}
-
-#[cfg(feature = "uniffi")]
-impl From<GatewaySelectionError> for fedimint_core::util::ffi::UniffiError {
-    fn from(e: GatewaySelectionError) -> Self {
-        Self::General(e.fmt_compact().to_string())
     }
 }
 
@@ -142,13 +133,6 @@ pub enum LnSubscribeError {
     NoFinalState,
 }
 
-#[cfg(feature = "uniffi")]
-impl From<LnSubscribeError> for fedimint_core::util::ffi::UniffiError {
-    fn from(e: LnSubscribeError) -> Self {
-        Self::General(e.fmt_compact().to_string())
-    }
-}
-
 /// A failure to pay a BOLT11 invoice.
 ///
 /// The first three variants predate this type's move into this module and are
@@ -158,8 +142,6 @@ impl From<LnSubscribeError> for fedimint_core::util::ffi::UniffiError {
 /// into one opaque message: the invoice itself being unusable, the gateway or
 /// the federation refusing, and the transaction failing to submit.
 #[derive(Debug, Error)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Error))]
-#[cfg_attr(feature = "uniffi", uniffi(flat_error))]
 #[non_exhaustive]
 pub enum PayBolt11InvoiceError {
     /// An earlier attempt to pay this same invoice has not finished.
@@ -244,13 +226,6 @@ impl From<FederationError> for PayBolt11InvoiceError {
     }
 }
 
-#[cfg(feature = "uniffi")]
-impl From<PayBolt11InvoiceError> for fedimint_core::util::ffi::UniffiError {
-    fn from(e: PayBolt11InvoiceError) -> Self {
-        Self::General(e.fmt_compact().to_string())
-    }
-}
-
 /// A failure to create a BOLT11 invoice to be paid into this federation.
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -278,13 +253,6 @@ pub enum CreateBolt11InvoiceError {
         /// What the submission reported.
         reason: String,
     },
-}
-
-#[cfg(feature = "uniffi")]
-impl From<CreateBolt11InvoiceError> for fedimint_core::util::ffi::UniffiError {
-    fn from(e: CreateBolt11InvoiceError) -> Self {
-        Self::General(e.fmt_compact().to_string())
-    }
 }
 
 /// A failure to claim an incoming contract the federation already holds.
@@ -414,11 +382,4 @@ pub enum PaymentInfoError {
     /// decoded.
     #[error("The LNURL or lightning address could not be decoded")]
     LnurlDecode(#[source] lnurl::Error),
-}
-
-#[cfg(feature = "uniffi")]
-impl From<PaymentInfoError> for fedimint_core::util::ffi::UniffiError {
-    fn from(e: PaymentInfoError) -> Self {
-        Self::General(e.fmt_compact().to_string())
-    }
 }

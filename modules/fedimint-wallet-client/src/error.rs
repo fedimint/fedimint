@@ -11,8 +11,6 @@ use fedimint_client_module::error::{
 };
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{AutocommitError, DatabaseError};
-#[cfg(feature = "uniffi")]
-use fedimint_core::util::FmtCompact as _;
 use thiserror::Error;
 
 use crate::client_db::TweakIdx;
@@ -124,13 +122,6 @@ impl From<AutocommitError<DepositAddressError>> for DepositAddressError {
     }
 }
 
-#[cfg(feature = "uniffi")]
-impl From<DepositAddressError> for fedimint_core::util::ffi::UniffiError {
-    fn from(e: DepositAddressError) -> Self {
-        Self::General(e.fmt_compact().to_string())
-    }
-}
-
 /// A failure to follow a deposit operation.
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -161,13 +152,6 @@ pub enum SubscribeDepositError {
     /// not one of the final ones.
     #[error("The recorded outcome of an old deposit is not final")]
     NonFinalOutcome,
-}
-
-#[cfg(feature = "uniffi")]
-impl From<SubscribeDepositError> for fedimint_core::util::ffi::UniffiError {
-    fn from(e: SubscribeDepositError) -> Self {
-        Self::General(e.fmt_compact().to_string())
-    }
 }
 
 /// A failure to quote the on-chain fees of a peg-out.
@@ -235,13 +219,6 @@ pub enum PegOutError {
     Transaction(#[from] TransactionSubmitError),
 }
 
-#[cfg(feature = "uniffi")]
-impl From<PegOutError> for fedimint_core::util::ffi::UniffiError {
-    fn from(e: PegOutError) -> Self {
-        Self::General(e.fmt_compact().to_string())
-    }
-}
-
 /// A failure to follow a withdrawal operation.
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -254,13 +231,6 @@ pub enum SubscribeWithdrawError {
     /// rather than a withdrawal.
     #[error("The operation is not a withdrawal")]
     NotAWithdrawal,
-}
-
-#[cfg(feature = "uniffi")]
-impl From<SubscribeWithdrawError> for fedimint_core::util::ffi::UniffiError {
-    fn from(e: SubscribeWithdrawError) -> Self {
-        Self::General(e.fmt_compact().to_string())
-    }
 }
 
 /// A failure to vote for activating the next wallet module consensus version.

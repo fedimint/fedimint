@@ -282,7 +282,6 @@ impl Decodable for LightningPayFunded {
     Error, Debug, Hash, Serialize, Deserialize, Encodable, Decodable, Clone, Eq, PartialEq,
 )]
 #[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Error))]
 pub enum GatewayPayError {
     #[error(
         "Lightning Gateway failed to pay invoice. ErrorCode: {error_code:?} ErrorMessage: {error_message}"

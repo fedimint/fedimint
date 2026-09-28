@@ -11,8 +11,6 @@ pub use fedimint_client_module::error::*;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{DatabaseError, DbMigrationError};
 use fedimint_core::encoding::DecodeError;
-#[cfg(feature = "uniffi")]
-use fedimint_core::util::FmtCompact as _;
 pub use fedimint_eventlog::EventHandlerError;
 use thiserror::Error;
 
@@ -203,11 +201,4 @@ pub enum RecoveryError {
     /// The client shut down before the recovery reached an outcome.
     #[error("The client shut down before the recovery finished")]
     ClientStopped,
-}
-
-#[cfg(feature = "uniffi")]
-impl From<RecoveryError> for fedimint_core::util::ffi::UniffiError {
-    fn from(e: RecoveryError) -> Self {
-        Self::General(e.fmt_compact().to_string())
-    }
 }
