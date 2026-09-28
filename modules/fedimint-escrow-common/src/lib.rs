@@ -115,23 +115,41 @@ pub enum FallbackPolicy {
     },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EscrowTransition {
+    FunderRelease,
+    ArbiterEngaged,
+    ArbiterOutcome(Outcome),
+    Fallback,
+}
+
 impl EscrowContract {
-    pub fn transition(&mut self, new_status: EscrowStatus) -> Result<(), EscrowInputError> {
-        match (self.status.clone(), new_status.clone()) {
-            (EscrowStatus::Active, EscrowStatus::Released)
-            | (EscrowStatus::Active, EscrowStatus::Disputed)
-            | (EscrowStatus::Active, EscrowStatus::Split)
-            | (EscrowStatus::Disputed, EscrowStatus::Released)
-            | (EscrowStatus::Disputed, EscrowStatus::Refunded)
-            | (EscrowStatus::Disputed, EscrowStatus::Split) => {
-                self.status = new_status;
-                Ok(())
-            }
+    pub fn transition(&mut self, transition: EscrowTransition) -> Result<(), EscrowInputError> {
+        let new_status = match (&self.status, transition) {
+            // Funder can release an active contract.
+            (EscrowStatus::Active, EscrowTransition::FunderRelease) => EscrowStatus::Released,
 
-            _ => Err(EscrowInputError::InvalidStateTransition),
-        }
+            // Active -> Disputed transitions by arbiter engagement.
+            (EscrowStatus::Active, EscrowTransition::ArbiterEngaged) => EscrowStatus::Disputed,
+
+            // Arbiter can only resolve an already-disputed contract.
+            (EscrowStatus::Disputed, EscrowTransition::ArbiterOutcome(outcome)) => match outcome {
+                Outcome::Release => EscrowStatus::Released,
+                Outcome::Refund => EscrowStatus::Refunded,
+                Outcome::Split { .. } => EscrowStatus::Split,
+            },
+
+            (EscrowStatus::Active, EscrowTransition::Fallback) => match self.default_fallback {
+                FallbackPolicy::Refund => EscrowStatus::Refunded,
+                FallbackPolicy::Split { .. } => EscrowStatus::Split,
+            },
+
+            _ => return Err(EscrowInputError::InvalidStateTransition),
+        };
+
+        self.status = new_status;
+        Ok(())
     }
-
     pub fn engage_message(&self) -> EscrowMessage {
         EscrowMessage::ArbiterEngaged {
             escrow_id: self.escrow_id,
@@ -326,6 +344,8 @@ pub enum EscrowInputError {
     InvalidStateTransition,
     #[error("Contract is under dispute; funder release is no longer valid")]
     ContractDisputed,
+    #[error("Contract not disputed")]
+    ContractNotDisputed,
     #[error("No pending split claim for this key")]
     NoPendingSplitClaim,
     #[error("Invalid split ratio")]

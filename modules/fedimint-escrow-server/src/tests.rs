@@ -10,8 +10,8 @@ use fedimint_core::{Amount, BitcoinHash, InPoint, OutPoint, TransactionId};
 use fedimint_escrow_common::config::{EscrowConfig, EscrowConfigConsensus, EscrowConfigPrivate};
 use fedimint_escrow_common::{
     ContractHash, EscrowContract, EscrowId, EscrowInput, EscrowInputError, EscrowMessage,
-    EscrowOutput, EscrowOutputError, EscrowStatus, FallbackPolicy, Outcome, PendingArbiterFeePool,
-    Resolution, compute_contract_hash, compute_escrow_message,
+    EscrowOutput, EscrowOutputError, EscrowStatus, EscrowTransition, FallbackPolicy, Outcome,
+    PendingArbiterFeePool, Resolution, compute_contract_hash, compute_escrow_message,
 };
 use fedimint_server_core::ServerModule;
 use rand::rngs::OsRng;
@@ -874,7 +874,7 @@ fn test_contract_transition_active_to_released() {
         future_timeout(),
         FallbackPolicy::Refund,
     );
-    assert!(contract.transition(EscrowStatus::Released).is_ok());
+    assert!(contract.transition(EscrowTransition::FunderRelease).is_ok());
     assert_eq!(contract.status, EscrowStatus::Released);
 }
 
@@ -893,7 +893,11 @@ fn test_contract_transition_active_to_refunded() {
         future_timeout(),
         FallbackPolicy::Refund,
     );
-    assert!(contract.transition(EscrowStatus::Refunded).is_ok());
+    assert!(
+        contract
+            .transition(EscrowTransition::ArbiterOutcome(Outcome::Refund))
+            .is_ok()
+    );
     assert_eq!(contract.status, EscrowStatus::Refunded);
 }
 
@@ -914,7 +918,7 @@ fn test_contract_transition_released_to_released_rejected() {
     );
     contract.status = EscrowStatus::Released;
     assert_matches!(
-        contract.transition(EscrowStatus::Released),
+        contract.transition(EscrowTransition::FunderRelease),
         Err(EscrowInputError::InvalidStateTransition)
     );
 }
@@ -936,7 +940,7 @@ fn test_contract_transition_refunded_to_released_rejected() {
     );
     contract.status = EscrowStatus::Refunded;
     assert_matches!(
-        contract.transition(EscrowStatus::Released),
+        contract.transition(EscrowTransition::FunderRelease),
         Err(EscrowInputError::InvalidStateTransition)
     );
 }
