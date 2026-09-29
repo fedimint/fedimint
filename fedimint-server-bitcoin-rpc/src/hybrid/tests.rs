@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -36,6 +37,24 @@ struct State {
 struct Fake {
     state: Mutex<State>,
     url: SafeUrl,
+    /// Set as the identity probe enters the blocking section, so a test can
+    /// tell "the probe was cut short" apart from "the probe never got there".
+    entered_blocking: AtomicBool,
+}
+
+/// Waits briefly for a probe to reach its blocking section.
+///
+/// The probe runs in its own task, so it may still be on its way there when the
+/// bounded wait has already returned. Without this a green test could mean the
+/// probe never started.
+async fn await_blocking_entry(fake: &Fake) -> bool {
+    for _ in 0..40 {
+        if fake.entered_blocking.load(AtomicOrdering::SeqCst) {
+            return true;
+        }
+        fedimint_core::runtime::sleep(Duration::from_millis(50)).await;
+    }
+    false
 }
 
 fn chain(network: Network) -> ChainId {
@@ -60,6 +79,7 @@ impl Fake {
                 transactions: vec![],
             }),
             url: format!("http://{name}.invalid").parse().unwrap(),
+            entered_blocking: AtomicBool::new(false),
         })
     }
 
@@ -162,6 +182,7 @@ impl IServerBitcoinRpc for Fake {
         // parking the future. This reproduces that boundary.
         let block_ms = self.state.lock().unwrap().block_chain_id_ms;
         if block_ms > 0 {
+            self.entered_blocking.store(true, AtomicOrdering::SeqCst);
             fedimint_core::runtime::block_in_place(|| {
                 std::thread::sleep(Duration::from_millis(block_ms));
             });
@@ -540,6 +561,10 @@ async fn startup_is_not_held_by_a_blocking_identity_probe() {
     assert!(
         waited < Duration::from_secs(1),
         "startup waited out the blocking probe: {waited:?}"
+    );
+    assert!(
+        await_blocking_entry(&primary).await,
+        "the probe never reached the blocking call, so the timing above proves nothing"
     );
     assert_eq!(rpc.get_chain_id().await.unwrap(), chain(Network::Bitcoin));
 }
