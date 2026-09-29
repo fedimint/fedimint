@@ -4,16 +4,19 @@ use fedimint_api_client::api::{
     FederationApiExt, FederationResult, IModuleFederationApi, ServerResult,
 };
 use fedimint_api_client::query::FilterMapThreshold;
-use fedimint_core::module::{ApiAuth, ApiRequestErased};
+#[cfg(feature = "cli")]
+use fedimint_core::module::ApiAuth;
+use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send};
 use fedimint_lnv2_common::ContractId;
 use fedimint_lnv2_common::contracts::IncomingContract;
+#[cfg(feature = "cli")]
+use fedimint_lnv2_common::endpoint_constants::{ADD_GATEWAY_ENDPOINT, REMOVE_GATEWAY_ENDPOINT};
 use fedimint_lnv2_common::endpoint_constants::{
-    ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_INCOMING_CONTRACTS_ENDPOINT,
-    AWAIT_PREIMAGE_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT,
-    REMOVE_GATEWAY_ENDPOINT,
+    AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_INCOMING_CONTRACTS_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
+    CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT,
 };
 use rand::seq::SliceRandom;
 
@@ -35,8 +38,10 @@ pub trait LightningFederationApi {
 
     async fn gateways_from_peer(&self, peer: PeerId) -> ServerResult<Vec<SafeUrl>>;
 
+    #[cfg(feature = "cli")]
     async fn add_gateway(&self, auth: ApiAuth, gateway: SafeUrl) -> FederationResult<bool>;
 
+    #[cfg(feature = "cli")]
     async fn remove_gateway(&self, auth: ApiAuth, gateway: SafeUrl) -> FederationResult<bool>;
 }
 
@@ -127,6 +132,7 @@ where
         Ok(gateways)
     }
 
+    #[cfg(feature = "cli")]
     async fn add_gateway(&self, auth: ApiAuth, gateway: SafeUrl) -> FederationResult<bool> {
         let is_new_entry: bool = self
             .request_admin(ADD_GATEWAY_ENDPOINT, ApiRequestErased::new(gateway), auth)
@@ -135,6 +141,7 @@ where
         Ok(is_new_entry)
     }
 
+    #[cfg(feature = "cli")]
     async fn remove_gateway(&self, auth: ApiAuth, gateway: SafeUrl) -> FederationResult<bool> {
         let entry_existed: bool = self
             .request_admin(
