@@ -410,37 +410,5 @@
 <a href=#410 id=410 data-nosnippet>410</a>}
 <a href=#411 id=411 data-nosnippet>411</a>
 <a href=#412 id=412 data-nosnippet>412</a><span class="attr">#[cfg(test)]
-<a href=#413 id=413 data-nosnippet>413</a></span><span class="kw">mod </span>tests {
-<a href=#414 id=414 data-nosnippet>414</a>    <span class="kw">use </span>fedimint_meta_common::MetaValue;
-<a href=#415 id=415 data-nosnippet>415</a>    <span class="kw">use </span>serde_json::json;
-<a href=#416 id=416 data-nosnippet>416</a>
-<a href=#417 id=417 data-nosnippet>417</a>    <span class="kw">use </span>super::{MetaConsensusValue, format_rpc_consensus_value_response};
-<a href=#418 id=418 data-nosnippet>418</a>
-<a href=#419 id=419 data-nosnippet>419</a>    <span class="attr">#[test]
-<a href=#420 id=420 data-nosnippet>420</a>    </span><span class="kw">fn </span>formats_consensus_value_as_json() {
-<a href=#421 id=421 data-nosnippet>421</a>        <span class="kw">let </span>response = format_rpc_consensus_value_response(<span class="prelude-val">Some</span>(MetaConsensusValue {
-<a href=#422 id=422 data-nosnippet>422</a>            revision: <span class="number">7</span>,
-<a href=#423 id=423 data-nosnippet>423</a>            value: MetaValue::from(<span class="string">br#"{"welcome_message":"hello"}"#</span>.as_slice()),
-<a href=#424 id=424 data-nosnippet>424</a>        }))
-<a href=#425 id=425 data-nosnippet>425</a>        .expect(<span class="string">"valid json meta value should format"</span>);
-<a href=#426 id=426 data-nosnippet>426</a>
-<a href=#427 id=427 data-nosnippet>427</a>        <span class="macro">assert_eq!</span>(
-<a href=#428 id=428 data-nosnippet>428</a>            response,
-<a href=#429 id=429 data-nosnippet>429</a>            <span class="macro">json!</span>({
-<a href=#430 id=430 data-nosnippet>430</a>                <span class="string">"revision"</span>: <span class="number">7</span>,
-<a href=#431 id=431 data-nosnippet>431</a>                <span class="string">"value"</span>: {
-<a href=#432 id=432 data-nosnippet>432</a>                    <span class="string">"welcome_message"</span>: <span class="string">"hello"</span>,
-<a href=#433 id=433 data-nosnippet>433</a>                },
-<a href=#434 id=434 data-nosnippet>434</a>            })
-<a href=#435 id=435 data-nosnippet>435</a>        );
-<a href=#436 id=436 data-nosnippet>436</a>    }
-<a href=#437 id=437 data-nosnippet>437</a>
-<a href=#438 id=438 data-nosnippet>438</a>    <span class="attr">#[test]
-<a href=#439 id=439 data-nosnippet>439</a>    </span><span class="kw">fn </span>formats_missing_consensus_value_as_null() {
-<a href=#440 id=440 data-nosnippet>440</a>        <span class="kw">let </span>response =
-<a href=#441 id=441 data-nosnippet>441</a>            format_rpc_consensus_value_response(<span class="prelude-val">None</span>).expect(<span class="string">"null response should format"</span>);
-<a href=#442 id=442 data-nosnippet>442</a>
-<a href=#443 id=443 data-nosnippet>443</a>        <span class="macro">assert_eq!</span>(response, serde_json::Value::Null);
-<a href=#444 id=444 data-nosnippet>444</a>    }
-<a href=#445 id=445 data-nosnippet>445</a>}
+<a href=#413 id=413 data-nosnippet>413</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
