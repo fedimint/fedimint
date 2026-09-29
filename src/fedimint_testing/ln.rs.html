@@ -393,45 +393,5 @@
 <a href=#393 id=393 data-nosnippet>393</a>}
 <a href=#394 id=394 data-nosnippet>394</a>
 <a href=#395 id=395 data-nosnippet>395</a><span class="attr">#[cfg(test)]
-<a href=#396 id=396 data-nosnippet>396</a></span><span class="kw">mod </span>tests {
-<a href=#397 id=397 data-nosnippet>397</a>    <span class="kw">use </span>super::<span class="kw-2">*</span>;
-<a href=#398 id=398 data-nosnippet>398</a>
-<a href=#399 id=399 data-nosnippet>399</a>    <span class="doccomment">/// The fake's outbound record backs `outbound_payment_exists`, which the
-<a href=#400 id=400 data-nosnippet>400</a>    /// gateway state machines use to distinguish a payment dispatched before
-<a href=#401 id=401 data-nosnippet>401</a>    /// a restart from one that never left the gateway. A record that answered
-<a href=#402 id=402 data-nosnippet>402</a>    /// wrongly would make the resume-past-expiry tests pass or fail for the
-<a href=#403 id=403 data-nosnippet>403</a>    /// wrong reason.
-<a href=#404 id=404 data-nosnippet>404</a>    </span><span class="attr">#[tokio::test]
-<a href=#405 id=405 data-nosnippet>405</a>    </span><span class="kw">async fn </span>outbound_record_tracks_dispatched_payments() {
-<a href=#406 id=406 data-nosnippet>406</a>        <span class="kw">let </span>ln = FakeLightningTest::new();
-<a href=#407 id=407 data-nosnippet>407</a>        <span class="kw">let </span>invoice = ln
-<a href=#408 id=408 data-nosnippet>408</a>            .invoice(Amount::from_sats(<span class="number">1000</span>), <span class="prelude-val">None</span>)
-<a href=#409 id=409 data-nosnippet>409</a>            .expect(<span class="string">"can create invoice"</span>);
-<a href=#410 id=410 data-nosnippet>410</a>        <span class="kw">let </span>payment_hash = <span class="kw-2">*</span>invoice.payment_hash();
-<a href=#411 id=411 data-nosnippet>411</a>
-<a href=#412 id=412 data-nosnippet>412</a>        <span class="macro">assert!</span>(
-<a href=#413 id=413 data-nosnippet>413</a>            !ln.outbound_payment_exists(payment_hash)
-<a href=#414 id=414 data-nosnippet>414</a>                .<span class="kw">await
-<a href=#415 id=415 data-nosnippet>415</a>                </span>.expect(<span class="string">"fake lookup cannot fail"</span>),
-<a href=#416 id=416 data-nosnippet>416</a>            <span class="string">"no payment has been dispatched yet"
-<a href=#417 id=417 data-nosnippet>417</a>        </span>);
-<a href=#418 id=418 data-nosnippet>418</a>
-<a href=#419 id=419 data-nosnippet>419</a>        ln.pay(invoice, <span class="number">0</span>, Amount::ZERO)
-<a href=#420 id=420 data-nosnippet>420</a>            .<span class="kw">await
-<a href=#421 id=421 data-nosnippet>421</a>            </span>.expect(<span class="string">"fake payment succeeds"</span>);
-<a href=#422 id=422 data-nosnippet>422</a>
-<a href=#423 id=423 data-nosnippet>423</a>        <span class="macro">assert!</span>(
-<a href=#424 id=424 data-nosnippet>424</a>            ln.outbound_payment_exists(payment_hash)
-<a href=#425 id=425 data-nosnippet>425</a>                .<span class="kw">await
-<a href=#426 id=426 data-nosnippet>426</a>                </span>.expect(<span class="string">"fake lookup cannot fail"</span>),
-<a href=#427 id=427 data-nosnippet>427</a>            <span class="string">"the dispatched payment must be on record"
-<a href=#428 id=428 data-nosnippet>428</a>        </span>);
-<a href=#429 id=429 data-nosnippet>429</a>        <span class="macro">assert!</span>(
-<a href=#430 id=430 data-nosnippet>430</a>            !ln.outbound_payment_exists(sha256::Hash::hash(<span class="string">b"never dispatched"</span>))
-<a href=#431 id=431 data-nosnippet>431</a>                .<span class="kw">await
-<a href=#432 id=432 data-nosnippet>432</a>                </span>.expect(<span class="string">"fake lookup cannot fail"</span>),
-<a href=#433 id=433 data-nosnippet>433</a>            <span class="string">"an unrelated hash must not be reported as dispatched"
-<a href=#434 id=434 data-nosnippet>434</a>        </span>);
-<a href=#435 id=435 data-nosnippet>435</a>    }
-<a href=#436 id=436 data-nosnippet>436</a>}
+<a href=#396 id=396 data-nosnippet>396</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
