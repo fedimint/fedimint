@@ -245,48 +245,5 @@
 <a href=#245 id=245 data-nosnippet>245</a>}
 <a href=#246 id=246 data-nosnippet>246</a>
 <a href=#247 id=247 data-nosnippet>247</a><span class="attr">#[cfg(test)]
-<a href=#248 id=248 data-nosnippet>248</a></span><span class="kw">mod </span>tests {
-<a href=#249 id=249 data-nosnippet>249</a>    <span class="kw">use </span>fedimint_core::encoding::Decodable;
-<a href=#250 id=250 data-nosnippet>250</a>    <span class="kw">use </span>fedimint_core::module::registry::ModuleDecoderRegistry;
-<a href=#251 id=251 data-nosnippet>251</a>    <span class="kw">use </span>fedimint_core::txoproof::TxOutProof;
-<a href=#252 id=252 data-nosnippet>252</a>    <span class="kw">use </span>hex::FromHex;
-<a href=#253 id=253 data-nosnippet>253</a>
-<a href=#254 id=254 data-nosnippet>254</a>    <span class="attr">#[test_log::test]
-<a href=#255 id=255 data-nosnippet>255</a>    </span><span class="kw">fn </span>test_txoutproof_happy_path() {
-<a href=#256 id=256 data-nosnippet>256</a>        <span class="kw">let </span>txoutproof_hex = <span class="string">"0000a020c7f74cb7d4cbf90a40f38b8194d17996d29ad8cb8d42030000000000000\
-<a href=#257 id=257 data-nosnippet>257</a>        0000045e274cbfff8fe34e6df61079ae8c8cf5af6d53ff158488e26df5a072363693be15a6760482a0c1731b169\
-<a href=#258 id=258 data-nosnippet>258</a>        074a0a00000dc525bdf029c9d77ac1039826be603bf08837d5dfd58b763590fb3f2db32693eacd2a8b13842289e\
-<a href=#259 id=259 data-nosnippet>259</a>        d8b6b10ffbae3498987ca510d6b54a278bb85a9b6f2daa0efa52ae55f39842e890144f998258b365ae903fd5b8e\
-<a href=#260 id=260 data-nosnippet>260</a>        32b651acc65682378db2ac8376b8a8ed3777f297e5ec354ff31b80c79fd40e0aa8e961b582959db470a25db8bb8\
-<a href=#261 id=261 data-nosnippet>261</a>        0f87602a7b53fe0d0ecd3597d03b75e1af64cb229eb680daec7848e78fcf822717de5268738d49b610dd8f8eb22\
-<a href=#262 id=262 data-nosnippet>262</a>        2fa477bc85d46582c4aaa659848c8aac9440e429110c5848517b8459fd91fc8bf5ec6740c708e2980ddf4070f7f\
-<a href=#263 id=263 data-nosnippet>263</a>        c2c14247830c014b559c6fb3dad9408237a78bb2bca0b2016a3c4cac2e450a09b78e1a78fcb9fd1edc4989a5ae6\
-<a href=#264 id=264 data-nosnippet>264</a>        ba438b81a400a22fa172da6e2bec5b67e21841e975a696b51dff22d12dcc27417f9017b0fedcf7bbf7ae4c1d278\
-<a href=#265 id=265 data-nosnippet>265</a>        d92c364b1a1675855927a8a8f22e1e3441bb3389d7d82e57d68b46fe946546e7aea7f58ed3ae5aec4b3b99ca87e\
-<a href=#266 id=266 data-nosnippet>266</a>        9602cb7c776730435c1713a1ca57c0c6761576fbfb17da642aae2a4ce874e32b5c0cba450163b14b6b94bc479cb\
-<a href=#267 id=267 data-nosnippet>267</a>        58a30f7ae5b909ffdd020073f04ff370000"</span>;
-<a href=#268 id=268 data-nosnippet>268</a>
-<a href=#269 id=269 data-nosnippet>269</a>        <span class="kw">let </span>empty_module_registry = ModuleDecoderRegistry::default();
-<a href=#270 id=270 data-nosnippet>270</a>        <span class="kw">let </span>txoutproof = TxOutProof::consensus_decode_whole(
-<a href=#271 id=271 data-nosnippet>271</a>            <span class="kw-2">&amp;</span>Vec::from_hex(txoutproof_hex).unwrap(),
-<a href=#272 id=272 data-nosnippet>272</a>            <span class="kw-2">&amp;</span>empty_module_registry,
-<a href=#273 id=273 data-nosnippet>273</a>        )
-<a href=#274 id=274 data-nosnippet>274</a>        .unwrap();
-<a href=#275 id=275 data-nosnippet>275</a>
-<a href=#276 id=276 data-nosnippet>276</a>        <span class="macro">assert_eq!</span>(
-<a href=#277 id=277 data-nosnippet>277</a>            txoutproof.block(),
-<a href=#278 id=278 data-nosnippet>278</a>            <span class="string">"0000000000000000000761505b672f2f7fc3822a5a95089fa469c3fb16ee574b"
-<a href=#279 id=279 data-nosnippet>279</a>                </span>.parse()
-<a href=#280 id=280 data-nosnippet>280</a>                .unwrap()
-<a href=#281 id=281 data-nosnippet>281</a>        );
-<a href=#282 id=282 data-nosnippet>282</a>
-<a href=#283 id=283 data-nosnippet>283</a>        <span class="macro">assert!</span>(
-<a href=#284 id=284 data-nosnippet>284</a>            txoutproof.contains_tx(
-<a href=#285 id=285 data-nosnippet>285</a>                <span class="string">"efa0daf2b6a985bb78a2546b0d51ca878949e3baff106b8bed892284138b2acd"
-<a href=#286 id=286 data-nosnippet>286</a>                    </span>.parse()
-<a href=#287 id=287 data-nosnippet>287</a>                    .unwrap()
-<a href=#288 id=288 data-nosnippet>288</a>            )
-<a href=#289 id=289 data-nosnippet>289</a>        );
-<a href=#290 id=290 data-nosnippet>290</a>    }
-<a href=#291 id=291 data-nosnippet>291</a>}
+<a href=#248 id=248 data-nosnippet>248</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
