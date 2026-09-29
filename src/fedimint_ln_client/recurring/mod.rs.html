@@ -673,31 +673,5 @@
 <a href=#673 id=673 data-nosnippet>673</a>}
 <a href=#674 id=674 data-nosnippet>674</a>
 <a href=#675 id=675 data-nosnippet>675</a><span class="attr">#[cfg(test)]
-<a href=#676 id=676 data-nosnippet>676</a></span><span class="kw">mod </span>tests {
-<a href=#677 id=677 data-nosnippet>677</a>    <span class="kw">use </span>std::str::FromStr <span class="kw">as _</span>;
-<a href=#678 id=678 data-nosnippet>678</a>
-<a href=#679 id=679 data-nosnippet>679</a>    <span class="kw">use </span>super::{PaymentCodeId, PaymentCodeRootKey};
-<a href=#680 id=680 data-nosnippet>680</a>
-<a href=#681 id=681 data-nosnippet>681</a>    <span class="doccomment">/// A payment code id that is not hex says so through the hex parser's own
-<a href=#682 id=682 data-nosnippet>682</a>    /// error, which is what clap and any other `FromStr` consumer prints.
-<a href=#683 id=683 data-nosnippet>683</a>    </span><span class="attr">#[test]
-<a href=#684 id=684 data-nosnippet>684</a>    </span><span class="kw">fn </span>payment_code_id_rejects_non_hex() {
-<a href=#685 id=685 data-nosnippet>685</a>        <span class="comment">// The type annotation on `_err` is the assertion: the compiler only
-<a href=#686 id=686 data-nosnippet>686</a>        // accepts it if `from_str` actually failed with the hex parser's own
-<a href=#687 id=687 data-nosnippet>687</a>        // error.
-<a href=#688 id=688 data-nosnippet>688</a>        </span><span class="kw">let </span>_err: bitcoin::hashes::hex::HexToArrayError =
-<a href=#689 id=689 data-nosnippet>689</a>            PaymentCodeId::from_str(<span class="string">"not hex"</span>).expect_err(<span class="string">"not hex"</span>);
-<a href=#690 id=690 data-nosnippet>690</a>    }
-<a href=#691 id=691 data-nosnippet>691</a>
-<a href=#692 id=692 data-nosnippet>692</a>    <span class="doccomment">/// A payment code root key that is not a public key says so through
-<a href=#693 id=693 data-nosnippet>693</a>    /// secp256k1's own error.
-<a href=#694 id=694 data-nosnippet>694</a>    </span><span class="attr">#[test]
-<a href=#695 id=695 data-nosnippet>695</a>    </span><span class="kw">fn </span>payment_code_root_key_rejects_non_key() {
-<a href=#696 id=696 data-nosnippet>696</a>        <span class="comment">// The type annotation on `_err` is the assertion: the compiler only
-<a href=#697 id=697 data-nosnippet>697</a>        // accepts it if `from_str` actually failed with secp256k1's own
-<a href=#698 id=698 data-nosnippet>698</a>        // error.
-<a href=#699 id=699 data-nosnippet>699</a>        </span><span class="kw">let </span>_err: fedimint_core::secp256k1::Error =
-<a href=#700 id=700 data-nosnippet>700</a>            PaymentCodeRootKey::from_str(<span class="string">"not a key"</span>).expect_err(<span class="string">"not a key"</span>);
-<a href=#701 id=701 data-nosnippet>701</a>    }
-<a href=#702 id=702 data-nosnippet>702</a>}
+<a href=#676 id=676 data-nosnippet>676</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
