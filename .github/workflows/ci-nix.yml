@@ -495,6 +495,7 @@ jobs:
       contents: write # softprops/action-gh-release creates GitHub releases on tags
 
     strategy:
+      fail-fast: false # An unrelated matrix failure must not cancel Linux bundle uploads.
       matrix:
         platform:
           - name: linux
@@ -595,31 +596,8 @@ jobs:
               # Note: keep in sync with sign.sh
               >&2 echo "Building bundled: $bin"
               nix bundle --bundler .# ".#$bin" -o "bins/$bin-$BUILD_ID" && ${{ matrix.platform.shasum-cmd }} "bins/$bin-$BUILD_ID"
+              (cd bins && sha256sum "$bin-$BUILD_ID" >> bundles.sha256)
             fi
-          done
-
-      - name: Smoke test bundled Linux binaries
-        if: matrix.platform.build-bundled
-        run: |
-          set -euo pipefail
-          smoke_root="$(mktemp -d)"
-          trap 'rm -rf "$smoke_root"' EXIT
-          bins="${{ matrix.build.bins }}"
-          for bin in ${bins//,/ } ; do
-            bundle="$PWD/bins/$bin-$BUILD_ID"
-            test -x "$bundle"
-            # Use a separate empty home for each executable, then reuse it to
-            # exercise both cold and warm bundle startup/cache paths.
-            home="$smoke_root/$bin"
-            mkdir "$home"
-            for run in cold warm ; do
-              >&2 echo "Smoke testing $bin ($run cache)"
-              actual="$(HOME="$home" XDG_CACHE_HOME="$home/.cache" "$bundle" version-hash)"
-              if [ "$actual" != "$GITHUB_SHA" ]; then
-                >&2 echo "Bundled $bin returned unexpected version-hash: $actual (expected $GITHUB_SHA)"
-                exit 1
-              fi
-            done
           done
 
       - name: Build macOS tarball with bundled dylibs
@@ -709,7 +687,7 @@ jobs:
 
       - name: Release Binaries
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && !matrix.platform.build-bundled
         with:
           files: "bins/**"
           prerelease: ${{ env.IS_PRERELEASE }}
@@ -745,7 +723,7 @@ jobs:
           path: "debs/**.deb"
 
       - name: Release DEB packages
-        if: startsWith(github.ref, 'refs/tags/') && matrix.platform.build-deb
+        if: startsWith(github.ref, 'refs/tags/') && matrix.platform.build-deb && !matrix.platform.build-bundled
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           files: "debs/**.deb"
@@ -760,7 +738,118 @@ jobs:
           path: "rpms/**.rpm"
 
       - name: Release RPM packages
-        if: startsWith(github.ref, 'refs/tags/') && matrix.platform.build-rpm
+        if: startsWith(github.ref, 'refs/tags/') && matrix.platform.build-rpm && !matrix.platform.build-bundled
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          files: "rpms/**.rpm"
+          prerelease: ${{ env.IS_PRERELEASE }}
+          body: ${{ fromJSON(env.IS_PRERELEASE) && env.PRERELEASE_MESSAGE || '' }}
+
+  smoke-linux-bundles:
+    # A failed macOS or other Linux build must not skip smoke testing bundles
+    # successfully uploaded by another matrix cell. A missing bundle fails the
+    # corresponding download step before it can be released.
+    if: ${{ !cancelled() && needs.pkgs.result != 'skipped' }}
+    name: "Smoke test Linux bundles: ${{ matrix.build.flake-output }}"
+    needs: pkgs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write # softprops/action-gh-release publishes verified bundles on tags
+    strategy:
+      fail-fast: false # A missing bundle must not cancel other verified releases.
+      matrix:
+        build:
+          - flake-output: fedimint-pkgs
+            bins: fedimintd,fedimint-cli,fedimint-dbtool,fedimint-recoverytool
+          - flake-output: gateway-pkgs
+            bins: gateway-cli,gatewayd
+          - flake-output: devimint
+            bins: devimint
+    env:
+      IS_PRERELEASE: ${{
+          startsWith(github.ref, 'refs/tags/')
+          && (contains(github.ref, 'beta') || contains(github.ref, 'rc'))
+        }}
+      PRERELEASE_MESSAGE: |
+        ⚠️ **Pre-release Notice**
+
+        - This is a release candidate version
+        - Features may be unstable
+        - You may not be able to upgrade to the final release
+        - Not recommended for mainnet use
+
+        Please report any issues you encounter.
+    steps:
+      - name: Download Linux bundles
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: "${{ matrix.build.flake-output }}-linux"
+          path: bins
+
+      - name: Smoke test bundled Linux binaries
+        run: |
+          set -euo pipefail
+          test ! -e /nix/store
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            build_id="$GITHUB_REF_NAME"
+          else
+            build_id="$GITHUB_SHA"
+          fi
+          cd bins
+          sha256sum -c bundles.sha256
+          rm bundles.sha256 # Keep the checksum manifest out of release assets.
+          smoke_root="$(mktemp -d)"
+          trap 'rm -rf "$smoke_root"' EXIT
+          bins="${{ matrix.build.bins }}"
+          for bin in ${bins//,/ } ; do
+            bundle="$PWD/$bin-$build_id"
+            test -f "$bundle"
+            chmod +x "$bundle" # Artifact downloads do not preserve executable bits.
+            home="$smoke_root/$bin"
+            mkdir "$home"
+            for run in cold warm ; do
+              >&2 echo "Smoke testing $bin ($run cache)"
+              actual="$(HOME="$home" XDG_CACHE_HOME="$home/.cache" "$bundle" version-hash)"
+              if [ "$actual" != "$GITHUB_SHA" ]; then
+                >&2 echo "Bundled $bin returned unexpected version-hash: $actual (expected $GITHUB_SHA)"
+                exit 1
+              fi
+            done
+          done
+
+      - name: Release Binaries
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          files: "bins/**"
+          prerelease: ${{ env.IS_PRERELEASE }}
+          body: ${{ fromJSON(env.IS_PRERELEASE) && env.PRERELEASE_MESSAGE || '' }}
+
+      - name: Download DEB packages
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: "${{ matrix.build.flake-output }}-linux-deb-bundle"
+          path: debs
+
+      - name: Release DEB packages
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          files: "debs/**.deb"
+          prerelease: ${{ env.IS_PRERELEASE }}
+          body: ${{ fromJSON(env.IS_PRERELEASE) && env.PRERELEASE_MESSAGE || '' }}
+
+      - name: Download RPM packages
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: "${{ matrix.build.flake-output }}-linux-rpm-bundle"
+          path: rpms
+
+      - name: Release RPM packages
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           files: "rpms/**.rpm"
