@@ -48,5 +48,8 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 uniffi = { workspace = true, optional = true, features = ["tokio"] }
 
+[dev-dependencies]
+fedimint-connectors = { workspace = true }
+
 [lints]
 workspace = true
