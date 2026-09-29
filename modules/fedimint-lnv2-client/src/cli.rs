@@ -1,17 +1,16 @@
 use std::{ffi, iter};
 
 use clap::{Parser, Subcommand};
-use fedimint_api_client::api::{FederationApiExt, FederationError};
+use fedimint_api_client::api::FederationError;
 use fedimint_client_module::error::OperationLookupError;
 use fedimint_core::core::OperationId;
-use fedimint_core::module::ApiRequestErased;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, PeerId};
-use fedimint_lnv2_common::endpoint_constants::{ADD_GATEWAY_ENDPOINT, REMOVE_GATEWAY_ENDPOINT};
 use lightning_invoice::Bolt11Invoice;
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::api::LightningFederationApi;
 use crate::{
     Bolt11InvoiceDescription, GenerateLnurlError, LightningClientModule, ListGatewaysError,
     ReceiveError, SelectGatewayError, SendPaymentError,
@@ -126,12 +125,7 @@ pub(crate) async fn handle_cli_command(
                     .clone()
                     .ok_or(CliCommandError::AdminAuthNotSet)?;
 
-                let is_new_entry: bool = lightning
-                    .module_api
-                    .request_admin(ADD_GATEWAY_ENDPOINT, ApiRequestErased::new(gateway), auth)
-                    .await?;
-
-                json(is_new_entry)
+                json(lightning.module_api.add_gateway(auth, gateway).await?)
             }
             GatewaysOpts::Remove { gateway } => {
                 let auth = lightning
@@ -139,16 +133,7 @@ pub(crate) async fn handle_cli_command(
                     .clone()
                     .ok_or(CliCommandError::AdminAuthNotSet)?;
 
-                let entry_existed: bool = lightning
-                    .module_api
-                    .request_admin(
-                        REMOVE_GATEWAY_ENDPOINT,
-                        ApiRequestErased::new(gateway),
-                        auth,
-                    )
-                    .await?;
-
-                json(entry_existed)
+                json(lightning.module_api.remove_gateway(auth, gateway).await?)
             }
         },
     };
