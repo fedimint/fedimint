@@ -377,35 +377,5 @@
 <a href=#377 id=377 data-nosnippet>377</a>}
 <a href=#378 id=378 data-nosnippet>378</a>
 <a href=#379 id=379 data-nosnippet>379</a><span class="attr">#[cfg(test)]
-<a href=#380 id=380 data-nosnippet>380</a></span><span class="kw">mod </span>tests {
-<a href=#381 id=381 data-nosnippet>381</a>    <span class="kw">use </span>bls12_381::G1Affine;
-<a href=#382 id=382 data-nosnippet>382</a>    <span class="kw">use </span>tbs::BlindedMessage;
-<a href=#383 id=383 data-nosnippet>383</a>
-<a href=#384 id=384 data-nosnippet>384</a>    <span class="kw">use </span>super::<span class="kw-2">*</span>;
-<a href=#385 id=385 data-nosnippet>385</a>
-<a href=#386 id=386 data-nosnippet>386</a>    <span class="doccomment">/// The hex `dev check-nonce` accepts is the plain compressed public key, so
-<a href=#387 id=387 data-nosnippet>387</a>    /// it matches what the JSON representation of a nonce shows.
-<a href=#388 id=388 data-nosnippet>388</a>    </span><span class="attr">#[test]
-<a href=#389 id=389 data-nosnippet>389</a>    </span><span class="kw">fn </span>nonce_hex_round_trip() {
-<a href=#390 id=390 data-nosnippet>390</a>        <span class="kw">let </span>nonce_hex = <span class="string">"0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"</span>;
-<a href=#391 id=391 data-nosnippet>391</a>        <span class="kw">let </span>nonce = Nonce::consensus_decode_hex(nonce_hex, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
-<a href=#392 id=392 data-nosnippet>392</a>            .expect(<span class="string">"Valid compressed public key"</span>);
-<a href=#393 id=393 data-nosnippet>393</a>
-<a href=#394 id=394 data-nosnippet>394</a>        <span class="macro">assert_eq!</span>(nonce.consensus_encode_to_hex(), nonce_hex);
-<a href=#395 id=395 data-nosnippet>395</a>    }
-<a href=#396 id=396 data-nosnippet>396</a>
-<a href=#397 id=397 data-nosnippet>397</a>    <span class="doccomment">/// Same for `dev check-blind-nonce` and the compressed G1 point.
-<a href=#398 id=398 data-nosnippet>398</a>    </span><span class="attr">#[test]
-<a href=#399 id=399 data-nosnippet>399</a>    </span><span class="kw">fn </span>blind_nonce_hex_round_trip() {
-<a href=#400 id=400 data-nosnippet>400</a>        <span class="kw">let </span>blind_nonce = BlindNonce(BlindedMessage(G1Affine::generator()));
-<a href=#401 id=401 data-nosnippet>401</a>        <span class="kw">let </span>blind_nonce_hex = blind_nonce.consensus_encode_to_hex();
-<a href=#402 id=402 data-nosnippet>402</a>
-<a href=#403 id=403 data-nosnippet>403</a>        <span class="macro">assert_eq!</span>(blind_nonce_hex.len(), <span class="number">96</span>);
-<a href=#404 id=404 data-nosnippet>404</a>        <span class="macro">assert_eq!</span>(
-<a href=#405 id=405 data-nosnippet>405</a>            BlindNonce::consensus_decode_hex(<span class="kw-2">&amp;</span>blind_nonce_hex, <span class="kw-2">&amp;</span>ModuleDecoderRegistry::default())
-<a href=#406 id=406 data-nosnippet>406</a>                .expect(<span class="string">"Valid compressed G1 point"</span>),
-<a href=#407 id=407 data-nosnippet>407</a>            blind_nonce
-<a href=#408 id=408 data-nosnippet>408</a>        );
-<a href=#409 id=409 data-nosnippet>409</a>    }
-<a href=#410 id=410 data-nosnippet>410</a>}
+<a href=#380 id=380 data-nosnippet>380</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
