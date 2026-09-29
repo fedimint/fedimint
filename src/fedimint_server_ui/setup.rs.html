@@ -880,41 +880,5 @@
 <a href=#880 id=880 data-nosnippet>880</a>}
 <a href=#881 id=881 data-nosnippet>881</a>
 <a href=#882 id=882 data-nosnippet>882</a><span class="attr">#[cfg(test)]
-<a href=#883 id=883 data-nosnippet>883</a></span><span class="kw">mod </span>tests {
-<a href=#884 id=884 data-nosnippet>884</a>    <span class="kw">use </span>super::<span class="kw-2">*</span>;
-<a href=#885 id=885 data-nosnippet>885</a>
-<a href=#886 id=886 data-nosnippet>886</a>    <span class="attr">#[test]
-<a href=#887 id=887 data-nosnippet>887</a>    </span><span class="kw">fn </span>setup_form_targets_error_container() {
-<a href=#888 id=888 data-nosnippet>888</a>        <span class="kw">let </span>content = setup_form_content(<span class="kw-2">&amp;</span>BTreeSet::new(), <span class="kw-2">&amp;</span>BTreeSet::new()).into_string();
-<a href=#889 id=889 data-nosnippet>889</a>
-<a href=#890 id=890 data-nosnippet>890</a>        <span class="macro">assert!</span>(content.contains(<span class="string">r##"hx-target="#setup-error""##</span>));
-<a href=#891 id=891 data-nosnippet>891</a>        <span class="macro">assert!</span>(content.contains(<span class="string">r#"&lt;div id="setup-error"&gt;&lt;/div&gt;"#</span>));
-<a href=#892 id=892 data-nosnippet>892</a>    }
-<a href=#893 id=893 data-nosnippet>893</a>
-<a href=#894 id=894 data-nosnippet>894</a>    <span class="attr">#[test]
-<a href=#895 id=895 data-nosnippet>895</a>    </span><span class="kw">fn </span>setup_error_message_is_partial() {
-<a href=#896 id=896 data-nosnippet>896</a>        <span class="kw">let </span>content = setup_error_message(<span class="string">"Invalid federation size"</span>).into_string();
-<a href=#897 id=897 data-nosnippet>897</a>
-<a href=#898 id=898 data-nosnippet>898</a>        <span class="macro">assert!</span>(content.contains(<span class="string">"Invalid federation size"</span>));
-<a href=#899 id=899 data-nosnippet>899</a>        <span class="macro">assert!</span>(!content.contains(<span class="string">"setup-form"</span>));
-<a href=#900 id=900 data-nosnippet>900</a>    }
-<a href=#901 id=901 data-nosnippet>901</a>
-<a href=#902 id=902 data-nosnippet>902</a>    <span class="attr">#[test]
-<a href=#903 id=903 data-nosnippet>903</a>    </span><span class="kw">fn </span>setup_choice_has_start_and_restore_options() {
-<a href=#904 id=904 data-nosnippet>904</a>        <span class="kw">let </span>content = setup_choice_content(<span class="prelude-val">None</span>).into_string();
-<a href=#905 id=905 data-nosnippet>905</a>
-<a href=#906 id=906 data-nosnippet>906</a>        <span class="macro">assert!</span>(content.contains(<span class="string">"Start new Federation"</span>));
-<a href=#907 id=907 data-nosnippet>907</a>        <span class="macro">assert!</span>(content.contains(<span class="string">"Restore from backup"</span>));
-<a href=#908 id=908 data-nosnippet>908</a>        <span class="macro">assert!</span>(!content.contains(<span class="string">"multipart/form-data"</span>));
-<a href=#909 id=909 data-nosnippet>909</a>    }
-<a href=#910 id=910 data-nosnippet>910</a>
-<a href=#911 id=911 data-nosnippet>911</a>    <span class="attr">#[test]
-<a href=#912 id=912 data-nosnippet>912</a>    </span><span class="kw">fn </span>restore_form_has_upload_fields() {
-<a href=#913 id=913 data-nosnippet>913</a>        <span class="kw">let </span>content = restore_form_content(<span class="prelude-val">None</span>).into_string();
-<a href=#914 id=914 data-nosnippet>914</a>
-<a href=#915 id=915 data-nosnippet>915</a>        <span class="macro">assert!</span>(content.contains(<span class="string">"multipart/form-data"</span>));
-<a href=#916 id=916 data-nosnippet>916</a>        <span class="macro">assert!</span>(content.contains(<span class="string">"Guardian Password"</span>));
-<a href=#917 id=917 data-nosnippet>917</a>        <span class="macro">assert!</span>(content.contains(<span class="string">"Restore Guardian"</span>));
-<a href=#918 id=918 data-nosnippet>918</a>    }
-<a href=#919 id=919 data-nosnippet>919</a>}
+<a href=#883 id=883 data-nosnippet>883</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
