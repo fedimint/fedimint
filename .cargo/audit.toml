@@ -12,8 +12,6 @@
 ignore = [
   # `rsa` Marvin timing sidechannel; no fix available upstream
   "RUSTSEC-2023-0071",
-  # `atomic-polyfill` unmaintained; transitive, waiting for the update chain to reach iroh
-  "RUSTSEC-2023-0089",
   # `proc-macro-error` unmaintained; transitive
   "RUSTSEC-2024-0370",
   # `instant` unmaintained; transitive
@@ -28,8 +26,6 @@ ignore = [
   "RUSTSEC-2025-0141",
   # `lru` IterMut stacked-borrows unsoundness; theoretical, transitive
   "RUSTSEC-2026-0002",
-  # `keccak` unsoundness is in opt-in ARMv8 asm backend we do not enable
-  "RUSTSEC-2026-0012",
   # rustls-webpki CRL matching logic; 0.102.x has no backport, pinned via fedimint-ldk-node/iroh 0.35.0
   "RUSTSEC-2026-0049",
   # rand unsoundness requires a custom logger that re-enters rand::rng()/thread_rng(), which we do not define
