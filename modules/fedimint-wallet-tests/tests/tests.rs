@@ -1468,7 +1468,9 @@ async fn allocate_deposit_address_pooled_reuse_resets_monitoring_schedule() -> a
             &data,
         )
         .await;
-        dbtx.commit_tx().await;
+        if let Err(err) = dbtx.commit_tx_result().await {
+            assert!(matches!(err, DatabaseError::WriteConflict), "{err}");
+        }
     }
 
     let before_reuse = fedimint_core::time::now();
