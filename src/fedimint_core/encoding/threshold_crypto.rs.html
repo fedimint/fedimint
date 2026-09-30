@@ -97,21 +97,5 @@
 <a href=#97 id=97 data-nosnippet>97</a>}
 <a href=#98 id=98 data-nosnippet>98</a>
 <a href=#99 id=99 data-nosnippet>99</a><span class="attr">#[cfg(test)]
-<a href=#100 id=100 data-nosnippet>100</a></span><span class="kw">mod </span>tests {
-<a href=#101 id=101 data-nosnippet>101</a>    <span class="kw">use </span><span class="kw">super</span>::<span class="kw">super</span>::tests::test_roundtrip;
-<a href=#102 id=102 data-nosnippet>102</a>
-<a href=#103 id=103 data-nosnippet>103</a>    <span class="attr">#[test_log::test]
-<a href=#104 id=104 data-nosnippet>104</a>    </span><span class="kw">fn </span>test_ciphertext() {
-<a href=#105 id=105 data-nosnippet>105</a>        <span class="kw">let </span>sks = threshold_crypto::SecretKeySet::random(<span class="number">1</span>, <span class="kw-2">&amp;mut </span>rand::thread_rng());
-<a href=#106 id=106 data-nosnippet>106</a>        <span class="kw">let </span>pks = sks.public_keys();
-<a href=#107 id=107 data-nosnippet>107</a>        <span class="kw">let </span>pk = pks.public_key();
-<a href=#108 id=108 data-nosnippet>108</a>
-<a href=#109 id=109 data-nosnippet>109</a>        <span class="kw">let </span>message = <span class="string">b"Hello world!"</span>;
-<a href=#110 id=110 data-nosnippet>110</a>        <span class="kw">let </span>ciphertext = pk.encrypt(message);
-<a href=#111 id=111 data-nosnippet>111</a>        <span class="kw">let </span>decryption_share = sks.secret_key_share(<span class="number">0</span>).decrypt_share(<span class="kw-2">&amp;</span>ciphertext).unwrap();
-<a href=#112 id=112 data-nosnippet>112</a>
-<a href=#113 id=113 data-nosnippet>113</a>        test_roundtrip(<span class="kw-2">&amp;</span>ciphertext);
-<a href=#114 id=114 data-nosnippet>114</a>        test_roundtrip(<span class="kw-2">&amp;</span>decryption_share);
-<a href=#115 id=115 data-nosnippet>115</a>    }
-<a href=#116 id=116 data-nosnippet>116</a>}
+<a href=#100 id=100 data-nosnippet>100</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
