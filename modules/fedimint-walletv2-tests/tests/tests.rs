@@ -6,9 +6,13 @@ use assert_matches::assert_matches;
 use async_stream::stream;
 use bitcoin::Amount;
 use fedimint_client::ClientHandleArc;
+use fedimint_client::db::DbKeyPrefix;
 use fedimint_client::error::OperationLookupError;
 use fedimint_core::core::OperationId;
-use fedimint_core::task::sleep_in_test;
+use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::impl_db_record;
+use fedimint_core::task::{sleep, sleep_in_test};
 use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
@@ -283,6 +287,53 @@ async fn send_below_the_dust_limit_is_rejected() -> anyhow::Result<()> {
             .await,
         Err(SendError::DustValue)
     );
+
+    Ok(())
+}
+
+#[derive(Debug, Encodable, Decodable)]
+struct FillerKey(u32);
+
+#[derive(Debug, Encodable, Decodable)]
+struct FillerValue(Vec<u8>);
+
+impl_db_record!(
+    key = FillerKey,
+    value = FillerValue,
+    db_prefix = DbKeyPrefix::UserData,
+);
+
+#[tokio::test(flavor = "multi_thread")]
+async fn first_address_search_survives_concurrent_db_writes() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    // the in-memory database keeps no write history, so only RocksDB can fail
+    // a commit this way
+    let client = fed.new_client_rocksdb().await;
+
+    // the writes have to land while the scanner's first address search runs,
+    // and that search starts as soon as the module is initialized
+    let db = client.db().clone();
+    let value = FillerValue(vec![0xab; 64 * 1024]);
+
+    // 8 MiB is twice the write history RocksDB keeps. the pauses keep the
+    // short transactions other client tasks commit from spanning that history
+    for index in 0..128u32 {
+        let mut dbtx = db.begin_transaction().await;
+        dbtx.insert_entry(&FillerKey(index), &value).await;
+        dbtx.commit_tx().await;
+        sleep(Duration::from_millis(1)).await;
+    }
+
+    let wallet = client.get_first_module::<WalletClientModule>()?;
+    let client_shutdown = client.task_group().make_handle().make_shutdown_rx();
+
+    tokio::select! {
+        address = wallet.receive() => info!("Received address {address}"),
+        () = client_shutdown => {
+            panic!("The client shut down before the output scanner stored an address index")
+        }
+    }
 
     Ok(())
 }
