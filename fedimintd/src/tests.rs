@@ -1,6 +1,79 @@
 use clap::{CommandFactory, Parser};
 
-use super::{FM_ENABLE_IROH_ENV, ServerOpts};
+use super::{FM_ENABLE_IROH_ENV, FM_OVERRIDE_API_URLS_ENV, ServerOpts};
+
+#[test]
+fn api_url_override_accepts_multiple_startup_urls() {
+    let command = ServerOpts::command();
+    let override_arg = command
+        .get_arguments()
+        .find(|arg| arg.get_id() == "override_api_urls")
+        .expect("override-api-urls argument exists");
+    assert_eq!(
+        override_arg.get_env(),
+        Some(std::ffi::OsStr::new(FM_OVERRIDE_API_URLS_ENV))
+    );
+
+    let mut args = server_opts_args();
+    args.extend([
+        "--override-api-urls",
+        "ws://guardian.example/,ws://guardian.onion/",
+    ]);
+
+    let opts = ServerOpts::try_parse_from(args).expect("API URL overrides should parse");
+
+    assert_eq!(
+        opts.override_api_urls,
+        [
+            "ws://guardian.example/".parse().expect("valid URL"),
+            "ws://guardian.onion/".parse().expect("valid URL"),
+        ]
+    );
+}
+
+#[test]
+fn api_url_override_parses_environment_list() {
+    const CHILD_ENV: &str = "FM_TEST_API_URL_OVERRIDE_CHILD";
+    const CHILD_SUCCESS: &str = "API URL override environment parsing passed";
+    if std::env::var_os(CHILD_ENV).is_none() {
+        // Configure only the child environment; sibling libtest tests may read
+        // environment variables concurrently in the parent.
+        let output = std::process::Command::new(
+            std::env::current_exe().expect("test executable should exist"),
+        )
+        .args([
+            "--exact",
+            "tests::api_url_override_parses_environment_list",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env(CHILD_ENV, "1")
+        .env(
+            FM_OVERRIDE_API_URLS_ENV,
+            "ws://guardian.example/,ws://guardian.onion/",
+        )
+        .output()
+        .expect("environment parsing child should run");
+        assert!(
+            output.status.success()
+                && String::from_utf8_lossy(&output.stdout).contains(CHILD_SUCCESS),
+            "environment parsing child failed or did not run:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        return;
+    }
+
+    let opts = parse_server_opts();
+    assert_eq!(
+        opts.override_api_urls,
+        [
+            "ws://guardian.example/".parse().expect("valid URL"),
+            "ws://guardian.onion/".parse().expect("valid URL"),
+        ]
+    );
+    println!("{CHILD_SUCCESS}");
+}
 
 fn server_opts_args() -> Vec<&'static str> {
     vec![

@@ -7,7 +7,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::net::guardian_metadata::{GuardianMetadata, SignedGuardianMetadata};
 use fedimint_core::task::{TaskGroup, sleep};
-use fedimint_core::util::FmtCompact;
+use fedimint_core::util::{FmtCompact, SafeUrl};
 use fedimint_core::{PeerId, impl_db_lookup, impl_db_record, secp256k1};
 use fedimint_logging::LOG_NET_API;
 use futures::future::join_all;
@@ -173,43 +173,66 @@ pub fn start_guardian_metadata_service(
     });
 }
 
-/// Reconciles and signs the server-owned Iroh endpoint in guardian metadata.
+/// Reconciles and signs server-owned fields in guardian metadata.
 ///
-/// Existing administrator-owned URLs and Pkarr ID are preserved. Returns `true`
-/// if metadata was inserted or updated and should be broadcast.
+/// Existing administrator-owned API URLs are preserved unless
+/// `override_api_urls` configures authoritative startup values. The Pkarr ID is
+/// always preserved, as is the forward-only Iroh endpoint after it is first
+/// advertised. The consensus-config API endpoint only bootstraps metadata that
+/// does not exist yet; changing consensus config is not a runtime announcement
+/// mechanism. Returns `true` if metadata was inserted or updated and should be
+/// broadcast.
 pub async fn reconcile_guardian_metadata(
     db: &Database,
     cfg: &ServerConfig,
     iroh_next_api_settings: Option<&IrohNextApiSettings>,
+    override_api_urls: &[SafeUrl],
 ) -> anyhow::Result<bool> {
     let key = GuardianMetadataKey(cfg.local.identity);
-    let mut dbtx = db.begin_transaction().await;
-    let existing = dbtx.get_value(&key).await;
-
-    let mut guardian_metadata = existing.as_ref().map_or_else(
-        || {
-            GuardianMetadata::new(
-                cfg.consensus
-                    .api_endpoints()
-                    .get(&cfg.local.identity)
-                    .map(|endpoint| vec![endpoint.url.clone()])
-                    .unwrap_or_default(),
-                super::pkarr_publish::pkarr_id_z32(&cfg.private.broadcast_secret_key),
-                0,
-            )
-        },
-        |existing| existing.guardian_metadata().clone(),
+    let initial_metadata = GuardianMetadata::new(
+        cfg.consensus
+            .api_endpoints()
+            .get(&cfg.local.identity)
+            .map(|endpoint| vec![endpoint.url.clone()])
+            .unwrap_or_default(),
+        super::pkarr_publish::pkarr_id_z32(&cfg.private.broadcast_secret_key),
+        0,
     );
-
     let iroh_next_endpoint = iroh_next_api_settings.map(|_| {
         derive_iroh_v1_api_secret_key(&cfg.private.broadcast_secret_key)
             .public()
             .to_string()
     });
 
+    reconcile_guardian_metadata_record(
+        db,
+        key,
+        initial_metadata,
+        &cfg.private.broadcast_secret_key,
+        iroh_next_endpoint,
+        override_api_urls,
+    )
+    .await
+}
+
+async fn reconcile_guardian_metadata_record(
+    db: &Database,
+    key: GuardianMetadataKey,
+    initial_metadata: GuardianMetadata,
+    broadcast_secret_key: &secp256k1::SecretKey,
+    iroh_next_endpoint: Option<String>,
+    override_api_urls: &[SafeUrl],
+) -> anyhow::Result<bool> {
+    let mut dbtx = db.begin_transaction().await;
+    let existing = dbtx.get_value(&key).await;
+    let mut guardian_metadata = existing.as_ref().map_or(initial_metadata, |existing| {
+        existing.guardian_metadata().clone()
+    });
+
+    let api_urls_changed = reconcile_api_urls(&mut guardian_metadata, override_api_urls);
     let endpoint_changed =
         reconcile_iroh_next_endpoint(&mut guardian_metadata, iroh_next_endpoint)?;
-    if existing.is_some() && !endpoint_changed {
+    if existing.is_some() && !api_urls_changed && !endpoint_changed {
         return Ok(false);
     }
 
@@ -217,18 +240,15 @@ pub async fn reconcile_guardian_metadata(
         .duration_since(UNIX_EPOCH)
         .expect("System time should be after UNIX_EPOCH")
         .as_secs();
-    guardian_metadata.timestamp_secs = existing.as_ref().map_or(now, |metadata| {
-        now.max(
-            metadata
-                .guardian_metadata()
-                .timestamp_secs
-                .saturating_add(1),
-        )
-    });
+    guardian_metadata.timestamp_secs = next_metadata_timestamp(
+        now,
+        existing
+            .as_ref()
+            .map(|metadata| metadata.guardian_metadata().timestamp_secs),
+    )?;
 
     let ctx = secp256k1::Secp256k1::new();
-    let signed_metadata =
-        guardian_metadata.sign(&ctx, &cfg.private.broadcast_secret_key.keypair(&ctx));
+    let signed_metadata = guardian_metadata.sign(&ctx, &broadcast_secret_key.keypair(&ctx));
 
     dbtx.insert_entry(&key, &signed_metadata).await;
     dbtx.commit_tx().await;
@@ -236,37 +256,27 @@ pub async fn reconcile_guardian_metadata(
     Ok(true)
 }
 
-#[cfg(test)]
-mod tests {
-    use fedimint_core::net::guardian_metadata::GuardianMetadata;
-
-    use super::{ensure_iroh_next_remains_available, reconcile_iroh_next_endpoint};
-
-    #[test]
-    fn iroh_next_advertisement_is_forward_only() {
-        assert!(ensure_iroh_next_remains_available(None, None).is_ok());
-        assert!(ensure_iroh_next_remains_available(None, Some("new")).is_ok());
-        assert!(ensure_iroh_next_remains_available(Some("existing"), Some("existing")).is_ok());
-        assert!(ensure_iroh_next_remains_available(Some("existing"), Some("new")).is_err());
-        assert!(ensure_iroh_next_remains_available(Some("existing"), None).is_err());
+fn reconcile_api_urls(
+    guardian_metadata: &mut GuardianMetadata,
+    override_api_urls: &[SafeUrl],
+) -> bool {
+    if override_api_urls.is_empty() || guardian_metadata.api_urls == override_api_urls {
+        return false;
     }
 
-    #[test]
-    fn reconciliation_preserves_administrator_owned_metadata() {
-        let api_urls = vec!["wss://guardian.example".parse().expect("valid URL")];
-        let mut metadata = GuardianMetadata::new(api_urls.clone(), "pkarr-id".to_owned(), 42);
-
-        assert!(
-            reconcile_iroh_next_endpoint(&mut metadata, Some("iroh-id".to_owned()))
-                .expect("first advertisement is allowed")
-        );
-        assert_eq!(metadata.api_urls, api_urls);
-        assert_eq!(metadata.pkarr_id_z32, "pkarr-id");
-        assert_eq!(metadata.timestamp_secs, 42);
-        assert_eq!(metadata.iroh_next_endpoint.as_deref(), Some("iroh-id"));
-        assert!(
-            !reconcile_iroh_next_endpoint(&mut metadata, Some("iroh-id".to_owned()))
-                .expect("unchanged advertisement is allowed")
-        );
-    }
+    guardian_metadata.api_urls = override_api_urls.to_vec();
+    true
 }
+
+fn next_metadata_timestamp(now: u64, existing: Option<u64>) -> anyhow::Result<u64> {
+    existing.map_or(Ok(now), |timestamp| {
+        Ok(now.max(timestamp.checked_add(1).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Guardian metadata timestamp is exhausted at u64::MAX and cannot advance"
+            )
+        })?))
+    })
+}
+
+#[cfg(test)]
+mod tests;
