@@ -128,15 +128,7 @@ pub mod session_outcome;
 // It's necessary to wrap `hash_newtype!` in a module because the generated code
 // references a module called "core", but we export a conflicting module in this
 // file.
-mod txid {
-    use bitcoin::hashes::hash_newtype;
-    use bitcoin::hashes::sha256::Hash as Sha256;
-
-    hash_newtype!(
-        /// A transaction id for peg-ins, peg-outs and reissuances
-        pub struct TransactionId(Sha256);
-    );
-}
+mod txid;
 pub use txid::TransactionId;
 
 pub struct TransactionIdShortFmt<'a>(&'a TransactionId);
