@@ -37,7 +37,6 @@ pub trait ISetupApi {
     async fn set_local_parameters(
         &self,
         name: String,
-        federation_name: Option<String>,
         disable_base_fees: Option<bool>,
         enabled_modules: Option<BTreeSet<ModuleKind>>,
         federation_size: Option<u32>,
