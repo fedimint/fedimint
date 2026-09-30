@@ -45,6 +45,8 @@ use crate::common::{
     build_client, do_spend_notes, get_invite_code_cli, remint_denomination, try_get_notes_cli,
 };
 pub mod common;
+#[cfg(test)]
+mod tests;
 
 #[derive(Parser, Clone)]
 #[command(version)]
@@ -1003,6 +1005,25 @@ async fn wait_invoice_payment(
         .subscribe_ln_receive(operation_id)
         .await?
         .into_stream();
+    wait_invoice_payment_updates(
+        prefix,
+        gateway_name,
+        operation_id,
+        event_sender,
+        pay_invoice_time,
+        &mut updates,
+    )
+    .await
+}
+
+async fn wait_invoice_payment_updates(
+    prefix: &str,
+    gateway_name: &str,
+    operation_id: fedimint_core::core::OperationId,
+    event_sender: &mpsc::UnboundedSender<MetricEvent>,
+    pay_invoice_time: std::time::SystemTime,
+    updates: &mut (impl futures::Stream<Item = LnReceiveState> + Unpin),
+) -> anyhow::Result<()> {
     while let Some(update) = updates.next().await {
         debug!(%prefix, ?update, "Invoice payment update");
         match update {
@@ -1017,7 +1038,7 @@ async fn wait_invoice_payment(
                     name: format!("gateway_{gateway_name}_payment_received_success"),
                     duration: elapsed,
                 })?;
-                break;
+                return Ok(());
             }
             LnReceiveState::Canceled { reason } => {
                 let elapsed: Duration = pay_invoice_time.elapsed()?;
@@ -1028,12 +1049,18 @@ async fn wait_invoice_payment(
                     name: "gateway_payment_received_canceled".into(),
                     duration: elapsed,
                 })?;
-                break;
+                bail!(
+                    "Invoice payment receive for operation {operation_id:?} was canceled on \
+                     {gateway_name}: {reason}"
+                );
             }
             _ => {}
         }
     }
-    Ok(())
+    bail!(
+        "Invoice payment receive stream ended before operation {operation_id:?} was claimed on \
+         {gateway_name}"
+    )
 }
 
 async fn client_create_invoice(
