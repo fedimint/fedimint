@@ -183,8 +183,8 @@ impl IP2PConnector<u64> for PendingConnector {
 struct StatusMachineHarness {
     connection_sender: async_channel::Sender<DynP2PConnection<u64>>,
     status_receiver: watch::Receiver<P2PConnectionState>,
-    _outgoing_sender: async_channel::Sender<u64>,
-    _incoming_receiver: async_channel::Receiver<u64>,
+    outgoing_sender: async_channel::Sender<u64>,
+    incoming_receiver: async_channel::Receiver<u64>,
     task: JoinHandle<()>,
 }
 
@@ -200,6 +200,14 @@ impl StatusMachineHarness {
     }
 
     fn spawn_with_fallback(connection: FakeConnection, fallback: Option<ConnectionType>) -> Self {
+        Self::spawn_with_max_age(Arc::new(connection), fallback, None)
+    }
+
+    fn spawn_with_max_age(
+        connection: DynP2PConnection<u64>,
+        fallback: Option<ConnectionType>,
+        max_connection_age: Option<Duration>,
+    ) -> Self {
         let (connection_sender, incoming_connections) = async_channel::bounded(4);
         let (outgoing_sender, outgoing_receiver) = async_channel::bounded(5);
         let (incoming_sender, incoming_receiver) = async_channel::bounded(5);
@@ -209,7 +217,7 @@ impl StatusMachineHarness {
         });
         let connector: DynP2PConnector<u64> = Arc::new(PendingConnector { fallback });
         let mut state_machine = P2PConnectionStateMachine {
-            state: P2PConnectionSMState::Connected(Arc::new(connection)),
+            state: P2PConnectionSMState::Connected(connection),
             common: P2PConnectionSMCommon {
                 incoming_sender,
                 outgoing_receiver,
@@ -220,8 +228,9 @@ impl StatusMachineHarness {
                 connector,
                 incoming_connections,
                 status_sender,
-                max_connection_age: None,
-                connection_deadline: None,
+                max_connection_age,
+                connection_deadline: max_connection_age
+                    .map(|age| tokio::time::Instant::now() + age),
             },
         };
         let task = runtime::spawn("p2p-status-machine-test", async move {
@@ -233,8 +242,8 @@ impl StatusMachineHarness {
         Self {
             connection_sender,
             status_receiver,
-            _outgoing_sender: outgoing_sender,
-            _incoming_receiver: incoming_receiver,
+            outgoing_sender,
+            incoming_receiver,
             task,
         }
     }
@@ -383,6 +392,355 @@ async fn closed_status_stream_does_not_spin() {
     assert_eq!(harness.current_status(), None);
 }
 
+/// Both operations suspend inside the non-cancel-safe part of a message.
+struct PausedIoConnection {
+    /// Tracks destruction of the retired connection.
+    dropped: Arc<AtomicUsize>,
+    /// Reports each admitted send.
+    send_started: async_channel::Sender<u64>,
+    /// Allows the active send to finish.
+    finish_send: async_channel::Receiver<()>,
+    /// Counts successfully completed sends.
+    sends_completed: Arc<AtomicUsize>,
+    /// Reports each accepted frame read.
+    frame_started: async_channel::Sender<()>,
+    /// Supplies the completed frame body.
+    finish_frame: async_channel::Receiver<u64>,
+}
+
+impl Drop for PausedIoConnection {
+    fn drop(&mut self) {
+        self.dropped.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+#[async_trait]
+impl IP2PConnection<u64> for PausedIoConnection {
+    async fn send(&self, message: u64) -> anyhow::Result<()> {
+        self.send_started.try_send(message)?;
+        self.finish_send.recv().await?;
+        self.sends_completed.fetch_add(1, Ordering::Relaxed);
+        Ok(())
+    }
+
+    async fn receive(&self) -> anyhow::Result<DynIP2PFrame<u64>> {
+        Ok(PausedFrame {
+            started: self.frame_started.clone(),
+            finish: self.finish_frame.clone(),
+        }
+        .into_dyn())
+    }
+
+    fn rtt(&self) -> Option<Duration> {
+        None
+    }
+}
+
+/// A frame whose body stays incomplete until explicitly released.
+struct PausedFrame {
+    /// Reports entry into the non-cancel-safe read.
+    started: async_channel::Sender<()>,
+    /// Supplies the completed body.
+    finish: async_channel::Receiver<u64>,
+}
+
+#[async_trait]
+impl IP2PFrame<u64> for PausedFrame {
+    async fn read_to_end(&mut self) -> anyhow::Result<u64> {
+        self.started.try_send(())?;
+        Ok(self.finish.recv().await?)
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Retirement {
+    Replacement,
+    MaxAge,
+}
+
+/// Controls both active I/O halves without relying on scheduler timing.
+struct PausedIoHarness {
+    /// Owns the state machine task and queues.
+    machine: StatusMachineHarness,
+    /// Observes sends admitted on the old connection.
+    send_started: async_channel::Receiver<u64>,
+    /// Releases the active send.
+    finish_send: async_channel::Sender<()>,
+    /// Counts successfully completed old-connection sends.
+    sends_completed: Arc<AtomicUsize>,
+    /// Observes accepted frame reads.
+    frame_started: async_channel::Receiver<()>,
+    /// Releases the active frame body.
+    finish_frame: async_channel::Sender<u64>,
+    /// Counts old-connection destruction.
+    connections_dropped: Arc<AtomicUsize>,
+}
+
+impl PausedIoHarness {
+    async fn spawn(retirement: Retirement) -> Self {
+        Self::spawn_with_send(retirement, true).await
+    }
+
+    async fn spawn_with_send(retirement: Retirement, send: bool) -> Self {
+        let (send_started, send_observed) = async_channel::bounded(2);
+        let (finish_send, send_finished) = async_channel::bounded(1);
+        let (frame_started, frame_observed) = async_channel::bounded(2);
+        let (finish_frame, frame_finished) = async_channel::bounded(1);
+        let sends_completed = Arc::new(AtomicUsize::new(0));
+        let connections_dropped = Arc::new(AtomicUsize::new(0));
+        let connection = Arc::new(PausedIoConnection {
+            dropped: connections_dropped.clone(),
+            send_started,
+            finish_send: send_finished,
+            sends_completed: sends_completed.clone(),
+            frame_started,
+            finish_frame: frame_finished,
+        });
+        let max_age = match retirement {
+            Retirement::Replacement => None,
+            Retirement::MaxAge => Some(Duration::from_secs(60)),
+        };
+        let machine = StatusMachineHarness::spawn_with_max_age(connection, None, max_age);
+        if send {
+            machine
+                .outgoing_sender
+                .try_send(7)
+                .expect("queue first send");
+            machine
+                .outgoing_sender
+                .try_send(8)
+                .expect("queue second send");
+        }
+        // Both halves must reach the non-cancel-safe operation even while the
+        // other is parked. These handshakes establish active I/O before retiring.
+        timeout(Duration::from_secs(1), async {
+            if send {
+                assert_eq!(send_observed.recv().await.expect("send started"), 7);
+            }
+            frame_observed.recv().await.expect("frame read started");
+        })
+        .await
+        .expect("send and frame read must make progress concurrently");
+        Self {
+            machine,
+            send_started: send_observed,
+            finish_send,
+            sends_completed,
+            frame_started: frame_observed,
+            finish_frame,
+            connections_dropped,
+        }
+    }
+
+    async fn retire(&self, retirement: Retirement) {
+        match retirement {
+            Retirement::Replacement => {
+                self.machine
+                    .connection_sender
+                    .try_send(Arc::new(FakeConnection::new(FakeConnectionControl::new(
+                        ConnectionType::Relay,
+                    ))))
+                    .expect("queue replacement");
+                timeout(Duration::from_secs(1), async {
+                    while !self.machine.connection_sender.is_empty() {
+                        runtime::sleep(Duration::from_millis(1)).await;
+                    }
+                })
+                .await
+                .expect("replacement must be observed while I/O is parked");
+            }
+            Retirement::MaxAge => {
+                tokio::time::advance(Duration::from_secs(60)).await;
+                tokio::task::yield_now().await;
+            }
+        }
+    }
+
+    async fn assert_retired(&mut self, retirement: Retirement) {
+        self.machine
+            .wait_for_status(match retirement {
+                Retirement::Replacement => ExpectedStatus::Connected(ConnectionType::Relay),
+                Retirement::MaxAge => ExpectedStatus::Disconnected,
+            })
+            .await;
+        assert_eq!(
+            self.connections_dropped.load(Ordering::Relaxed),
+            1,
+            "old connection must be dropped"
+        );
+        assert!(self.send_started.is_closed(), "old send future is dropped");
+        assert!(
+            self.frame_started.is_closed(),
+            "old frame future is dropped"
+        );
+        assert!(
+            self.send_started.is_empty(),
+            "no new sends during retirement"
+        );
+        assert!(
+            self.frame_started.is_empty(),
+            "no new frames during retirement"
+        );
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn retirement_finishes_in_flight_messages() {
+    for retirement in [Retirement::Replacement, Retirement::MaxAge] {
+        let mut harness = PausedIoHarness::spawn(retirement).await;
+        harness.retire(retirement).await;
+        tokio::time::advance(super::CONNECTION_DRAIN_TIMEOUT / 2).await;
+        assert_eq!(harness.connections_dropped.load(Ordering::Relaxed), 0);
+        harness.finish_send.try_send(()).expect("finish old send");
+        harness.finish_frame.try_send(9).expect("finish old frame");
+        assert_eq!(
+            timeout(
+                Duration::from_secs(1),
+                harness.machine.incoming_receiver.recv()
+            )
+            .await
+            .expect("finish the in-flight read before retiring")
+            .expect("deliver frame"),
+            9
+        );
+        harness.assert_retired(retirement).await;
+        assert_eq!(harness.sends_completed.load(Ordering::Relaxed), 1);
+        assert!(
+            harness.machine.incoming_receiver.is_empty(),
+            "deliver only once"
+        );
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn retirement_preserves_accepted_frame_without_active_send() {
+    for retirement in [Retirement::Replacement, Retirement::MaxAge] {
+        let mut harness = PausedIoHarness::spawn_with_send(retirement, false).await;
+        harness.retire(retirement).await;
+        // This isolates the receive-cancellation case: an idle send half must
+        // not let retirement discard an already-accepted partial frame.
+        tokio::time::advance(super::CONNECTION_DRAIN_TIMEOUT / 2).await;
+        assert_eq!(harness.connections_dropped.load(Ordering::Relaxed), 0);
+        harness
+            .finish_frame
+            .try_send(9)
+            .expect("finish accepted frame");
+        assert_eq!(
+            timeout(
+                Duration::from_secs(1),
+                harness.machine.incoming_receiver.recv()
+            )
+            .await
+            .expect("accepted frame drains")
+            .expect("deliver frame"),
+            9
+        );
+        harness.assert_retired(retirement).await;
+        assert!(harness.machine.incoming_receiver.is_empty());
+        assert_eq!(harness.sends_completed.load(Ordering::Relaxed), 0);
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn retirement_bounds_one_parked_half_after_the_other_finishes() {
+    for retirement in [Retirement::Replacement, Retirement::MaxAge] {
+        for finish_send in [false, true] {
+            let mut harness = PausedIoHarness::spawn(retirement).await;
+            harness.retire(retirement).await;
+            if finish_send {
+                harness.finish_send.try_send(()).expect("finish send");
+            } else {
+                harness.finish_frame.try_send(9).expect("finish frame");
+            }
+            tokio::task::yield_now().await;
+            tokio::time::advance(super::CONNECTION_DRAIN_TIMEOUT / 2).await;
+            assert_eq!(harness.connections_dropped.load(Ordering::Relaxed), 0);
+            tokio::time::advance(super::CONNECTION_DRAIN_TIMEOUT / 2).await;
+            harness.assert_retired(retirement).await;
+            assert_eq!(
+                harness.sends_completed.load(Ordering::Relaxed),
+                usize::from(finish_send)
+            );
+            if !finish_send {
+                assert_eq!(
+                    harness.machine.incoming_receiver.try_recv().expect("frame"),
+                    9
+                );
+            }
+            assert!(harness.machine.incoming_receiver.is_empty());
+        }
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn retirement_drains_other_half_after_io_failure() {
+    for retirement in [Retirement::Replacement, Retirement::MaxAge] {
+        for fail_send in [false, true] {
+            let mut harness = PausedIoHarness::spawn(retirement).await;
+            harness.retire(retirement).await;
+            if fail_send {
+                harness.finish_send.close();
+            } else {
+                harness.finish_frame.close();
+            }
+            tokio::task::yield_now().await;
+            tokio::time::advance(super::CONNECTION_DRAIN_TIMEOUT / 2).await;
+            assert_eq!(harness.connections_dropped.load(Ordering::Relaxed), 0);
+            if fail_send {
+                harness
+                    .finish_frame
+                    .try_send(9)
+                    .expect("finish surviving frame");
+            } else {
+                harness
+                    .finish_send
+                    .try_send(())
+                    .expect("finish surviving send");
+            }
+            harness.assert_retired(retirement).await;
+            assert_eq!(
+                harness.sends_completed.load(Ordering::Relaxed),
+                usize::from(!fail_send)
+            );
+            if fail_send {
+                assert_eq!(
+                    harness.machine.incoming_receiver.try_recv().expect("frame"),
+                    9
+                );
+            }
+            assert!(harness.machine.incoming_receiver.is_empty());
+        }
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn retirement_bounds_permanently_parked_io() {
+    for retirement in [Retirement::Replacement, Retirement::MaxAge] {
+        let mut harness = PausedIoHarness::spawn(retirement).await;
+        harness.retire(retirement).await;
+        tokio::time::advance(super::CONNECTION_DRAIN_TIMEOUT).await;
+        harness.assert_retired(retirement).await;
+        assert_eq!(harness.sends_completed.load(Ordering::Relaxed), 0);
+        assert!(
+            harness.machine.incoming_receiver.is_empty(),
+            "no partial frame"
+        );
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn shutdown_drops_in_flight_io_during_retirement() {
+    let harness = PausedIoHarness::spawn(Retirement::Replacement).await;
+    harness.retire(Retirement::Replacement).await;
+    harness.machine.task.abort();
+    while !harness.machine.task.is_finished() {
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(harness.connections_dropped.load(Ordering::Relaxed), 1);
+    assert!(harness.send_started.is_closed());
+    assert!(harness.frame_started.is_closed());
+}
+
 /// A frame that yields a single pre-baked message.
 struct FakeFrame(u64);
 
@@ -513,8 +871,8 @@ async fn receives_while_a_send_is_parked_on_flow_control() {
 }
 
 /// A replacement connection that arrives while a send is parked must not
-/// cancel the in-flight send: the already dequeued message would be silently
-/// lost, and e.g. the DKG sends every message exactly once.
+/// cancel the in-flight send within its grace period: the already dequeued
+/// message would be silently lost, and DKG does not resend it.
 #[tokio::test]
 async fn replacement_connection_does_not_cancel_in_flight_send() {
     let (frame_sender, frames) = async_channel::bounded(1);
@@ -528,8 +886,9 @@ async fn replacement_connection_does_not_cancel_in_flight_send() {
 
     let sends_completed = Arc::new(AtomicUsize::new(0));
 
+    let window = Arc::new(Notify::new());
     let connection = FlowControlledConnection {
-        window: Arc::new(Notify::new()),
+        window: window.clone(),
         frames,
         sends_completed: sends_completed.clone(),
     };
@@ -575,9 +934,9 @@ async fn replacement_connection_does_not_cancel_in_flight_send() {
         .await
         .expect("replacement queued");
 
-    // Serving a receive reopens the window; the parked send must still be
-    // alive to complete despite the queued replacement.
-    frame_sender.send(9).await.expect("frame queued");
+    // The remote draining our write reopens the window independently of
+    // accepting another frame locally, which retirement no longer permits.
+    window.notify_one();
     timeout(Duration::from_secs(5), async {
         while sends_completed.load(Ordering::Relaxed) == 0 {
             tokio::task::yield_now().await;
