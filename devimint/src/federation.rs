@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::future::Future;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -53,6 +54,20 @@ pub const FEDIMINTD_API_PORT_OFFSET: u16 = 1;
 pub const FEDIMINTD_UI_PORT_OFFSET: u16 = 2;
 /// Which port is for prometheus inside the range from [`PORTS_PER_FEDIMINTD`]
 pub const FEDIMINTD_METRICS_PORT_OFFSET: u16 = 3;
+
+/// Runs one readiness query for every peer expected to be running.
+async fn query_running_peers<T, Q, F>(members: &BTreeMap<usize, T>, mut query: Q) -> Result<()>
+where
+    Q: FnMut(usize) -> F,
+    F: Future<Output = Result<()>>,
+{
+    for peer_id in members.keys().copied() {
+        query(peer_id)
+            .await
+            .with_context(|| format!("peer {peer_id} is not online"))?;
+    }
+    Ok(())
+}
 
 #[derive(Clone)]
 pub struct Federation {
@@ -1309,6 +1324,11 @@ impl Federation {
         Ok(())
     }
 
+    /// Waits for a federation quorum and every expected-running peer API.
+    ///
+    /// Intentionally stopped peers are absent from `members` and excluded. A
+    /// successful check establishes API availability, not equal block heights
+    /// or full synchronization between peers.
     pub async fn await_all_peers(&self) -> Result<()> {
         let (module_name, endpoint) = if crate::util::supports_wallet_v2() {
             ("walletv2", "consensus_block_count")
@@ -1329,6 +1349,24 @@ impl Federation {
             .run()
             .await
             .map_err(ControlFlow::Continue)?;
+
+            query_running_peers(&self.members, |peer_id| async move {
+                cmd!(
+                    self.internal_client().await?,
+                    "dev",
+                    "api",
+                    "--peer-id",
+                    peer_id,
+                    "--module",
+                    module_name,
+                    endpoint
+                )
+                .run()
+                .await
+            })
+            .await
+            .map_err(ControlFlow::Continue)?;
+
             Ok(())
         })
         .await
@@ -1544,3 +1582,6 @@ pub async fn run_cli_dkg_v2(endpoints: BTreeMap<PeerId, String>) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;
