@@ -237,37 +237,5 @@
 <a href=#237 id=237 data-nosnippet>237</a>}
 <a href=#238 id=238 data-nosnippet>238</a>
 <a href=#239 id=239 data-nosnippet>239</a><span class="attr">#[cfg(test)]
-<a href=#240 id=240 data-nosnippet>240</a></span><span class="kw">mod </span>tests {
-<a href=#241 id=241 data-nosnippet>241</a>    <span class="kw">use </span>fedimint_core::net::guardian_metadata::GuardianMetadata;
-<a href=#242 id=242 data-nosnippet>242</a>
-<a href=#243 id=243 data-nosnippet>243</a>    <span class="kw">use </span>super::{ensure_iroh_next_remains_available, reconcile_iroh_next_endpoint};
-<a href=#244 id=244 data-nosnippet>244</a>
-<a href=#245 id=245 data-nosnippet>245</a>    <span class="attr">#[test]
-<a href=#246 id=246 data-nosnippet>246</a>    </span><span class="kw">fn </span>iroh_next_advertisement_is_forward_only() {
-<a href=#247 id=247 data-nosnippet>247</a>        <span class="macro">assert!</span>(ensure_iroh_next_remains_available(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>).is_ok());
-<a href=#248 id=248 data-nosnippet>248</a>        <span class="macro">assert!</span>(ensure_iroh_next_remains_available(<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="string">"new"</span>)).is_ok());
-<a href=#249 id=249 data-nosnippet>249</a>        <span class="macro">assert!</span>(ensure_iroh_next_remains_available(<span class="prelude-val">Some</span>(<span class="string">"existing"</span>), <span class="prelude-val">Some</span>(<span class="string">"existing"</span>)).is_ok());
-<a href=#250 id=250 data-nosnippet>250</a>        <span class="macro">assert!</span>(ensure_iroh_next_remains_available(<span class="prelude-val">Some</span>(<span class="string">"existing"</span>), <span class="prelude-val">Some</span>(<span class="string">"new"</span>)).is_err());
-<a href=#251 id=251 data-nosnippet>251</a>        <span class="macro">assert!</span>(ensure_iroh_next_remains_available(<span class="prelude-val">Some</span>(<span class="string">"existing"</span>), <span class="prelude-val">None</span>).is_err());
-<a href=#252 id=252 data-nosnippet>252</a>    }
-<a href=#253 id=253 data-nosnippet>253</a>
-<a href=#254 id=254 data-nosnippet>254</a>    <span class="attr">#[test]
-<a href=#255 id=255 data-nosnippet>255</a>    </span><span class="kw">fn </span>reconciliation_preserves_administrator_owned_metadata() {
-<a href=#256 id=256 data-nosnippet>256</a>        <span class="kw">let </span>api_urls = <span class="macro">vec!</span>[<span class="string">"wss://guardian.example"</span>.parse().expect(<span class="string">"valid URL"</span>)];
-<a href=#257 id=257 data-nosnippet>257</a>        <span class="kw">let </span><span class="kw-2">mut </span>metadata = GuardianMetadata::new(api_urls.clone(), <span class="string">"pkarr-id"</span>.to_owned(), <span class="number">42</span>);
-<a href=#258 id=258 data-nosnippet>258</a>
-<a href=#259 id=259 data-nosnippet>259</a>        <span class="macro">assert!</span>(
-<a href=#260 id=260 data-nosnippet>260</a>            reconcile_iroh_next_endpoint(<span class="kw-2">&amp;mut </span>metadata, <span class="prelude-val">Some</span>(<span class="string">"iroh-id"</span>.to_owned()))
-<a href=#261 id=261 data-nosnippet>261</a>                .expect(<span class="string">"first advertisement is allowed"</span>)
-<a href=#262 id=262 data-nosnippet>262</a>        );
-<a href=#263 id=263 data-nosnippet>263</a>        <span class="macro">assert_eq!</span>(metadata.api_urls, api_urls);
-<a href=#264 id=264 data-nosnippet>264</a>        <span class="macro">assert_eq!</span>(metadata.pkarr_id_z32, <span class="string">"pkarr-id"</span>);
-<a href=#265 id=265 data-nosnippet>265</a>        <span class="macro">assert_eq!</span>(metadata.timestamp_secs, <span class="number">42</span>);
-<a href=#266 id=266 data-nosnippet>266</a>        <span class="macro">assert_eq!</span>(metadata.iroh_next_endpoint.as_deref(), <span class="prelude-val">Some</span>(<span class="string">"iroh-id"</span>));
-<a href=#267 id=267 data-nosnippet>267</a>        <span class="macro">assert!</span>(
-<a href=#268 id=268 data-nosnippet>268</a>            !reconcile_iroh_next_endpoint(<span class="kw-2">&amp;mut </span>metadata, <span class="prelude-val">Some</span>(<span class="string">"iroh-id"</span>.to_owned()))
-<a href=#269 id=269 data-nosnippet>269</a>                .expect(<span class="string">"unchanged advertisement is allowed"</span>)
-<a href=#270 id=270 data-nosnippet>270</a>        );
-<a href=#271 id=271 data-nosnippet>271</a>    }
-<a href=#272 id=272 data-nosnippet>272</a>}
+<a href=#240 id=240 data-nosnippet>240</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>

@@ -112,20 +112,5 @@
 <a href=#112 id=112 data-nosnippet>112</a>}
 <a href=#113 id=113 data-nosnippet>113</a>
 <a href=#114 id=114 data-nosnippet>114</a><span class="attr">#[cfg(test)]
-<a href=#115 id=115 data-nosnippet>115</a></span><span class="kw">mod </span>tests {
-<a href=#116 id=116 data-nosnippet>116</a>    <span class="kw">use </span>fedimint_core::secp256k1::SecretKey;
-<a href=#117 id=117 data-nosnippet>117</a>
-<a href=#118 id=118 data-nosnippet>118</a>    <span class="kw">use </span><span class="kw">super</span>::derive_iroh_v1_api_secret_key;
-<a href=#119 id=119 data-nosnippet>119</a>
-<a href=#120 id=120 data-nosnippet>120</a>    <span class="attr">#[test]
-<a href=#121 id=121 data-nosnippet>121</a>    </span><span class="kw">fn </span>iroh_v1_api_key_derivation_is_stable() {
-<a href=#122 id=122 data-nosnippet>122</a>        <span class="kw">let </span>broadcast_sk = SecretKey::from_slice(<span class="kw-2">&amp;</span>[<span class="number">1</span>; <span class="number">32</span>]).expect(<span class="string">"valid test key"</span>);
-<a href=#123 id=123 data-nosnippet>123</a>        <span class="macro">assert_eq!</span>(
-<a href=#124 id=124 data-nosnippet>124</a>            derive_iroh_v1_api_secret_key(<span class="kw-2">&amp;</span>broadcast_sk)
-<a href=#125 id=125 data-nosnippet>125</a>                .public()
-<a href=#126 id=126 data-nosnippet>126</a>                .to_string(),
-<a href=#127 id=127 data-nosnippet>127</a>            <span class="string">"e4b678498c23a7444ac2daf4aed336e88c2fa51c10e973f4ec57ae493e25fcf3"
-<a href=#128 id=128 data-nosnippet>128</a>        </span>);
-<a href=#129 id=129 data-nosnippet>129</a>    }
-<a href=#130 id=130 data-nosnippet>130</a>}
+<a href=#115 id=115 data-nosnippet>115</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>

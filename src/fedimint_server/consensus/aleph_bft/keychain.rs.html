@@ -136,44 +136,5 @@
 <a href=#136 id=136 data-nosnippet>136</a>}
 <a href=#137 id=137 data-nosnippet>137</a>
 <a href=#138 id=138 data-nosnippet>138</a><span class="attr">#[cfg(test)]
-<a href=#139 id=139 data-nosnippet>139</a></span><span class="kw">mod </span>tests {
-<a href=#140 id=140 data-nosnippet>140</a>    <span class="kw">use </span>std::collections::BTreeMap;
-<a href=#141 id=141 data-nosnippet>141</a>
-<a href=#142 id=142 data-nosnippet>142</a>    <span class="kw">use </span>aleph_bft::{Keychain <span class="kw">as _</span>, NodeIndex};
-<a href=#143 id=143 data-nosnippet>143</a>    <span class="kw">use </span>fedimint_core::encoding::Encodable;
-<a href=#144 id=144 data-nosnippet>144</a>    <span class="kw">use </span>fedimint_core::{PeerId, secp256k1};
-<a href=#145 id=145 data-nosnippet>145</a>    <span class="kw">use </span>secp256k1::{Keypair, SecretKey};
-<a href=#146 id=146 data-nosnippet>146</a>
-<a href=#147 id=147 data-nosnippet>147</a>    <span class="kw">use </span><span class="kw">super</span>::Keychain;
-<a href=#148 id=148 data-nosnippet>148</a>
-<a href=#149 id=149 data-nosnippet>149</a>    <span class="kw">fn </span>keychain() -&gt; Keychain {
-<a href=#150 id=150 data-nosnippet>150</a>        <span class="kw">let </span>keypair = Keypair::from_secret_key(
-<a href=#151 id=151 data-nosnippet>151</a>            secp256k1::SECP256K1,
-<a href=#152 id=152 data-nosnippet>152</a>            <span class="kw-2">&amp;</span>SecretKey::from_slice(<span class="kw-2">&amp;</span>[<span class="number">1</span>; <span class="number">32</span>]).expect(<span class="string">"Valid secret key"</span>),
-<a href=#153 id=153 data-nosnippet>153</a>        );
-<a href=#154 id=154 data-nosnippet>154</a>
-<a href=#155 id=155 data-nosnippet>155</a>        <span class="kw">let </span>pks = BTreeMap::from([(PeerId::from(<span class="number">0</span>), keypair.public_key())]);
-<a href=#156 id=156 data-nosnippet>156</a>
-<a href=#157 id=157 data-nosnippet>157</a>        Keychain {
-<a href=#158 id=158 data-nosnippet>158</a>            identity: PeerId::from(<span class="number">0</span>),
-<a href=#159 id=159 data-nosnippet>159</a>            message_tag: pks.consensus_hash(),
-<a href=#160 id=160 data-nosnippet>160</a>            pks,
-<a href=#161 id=161 data-nosnippet>161</a>            keypair,
-<a href=#162 id=162 data-nosnippet>162</a>        }
-<a href=#163 id=163 data-nosnippet>163</a>    }
-<a href=#164 id=164 data-nosnippet>164</a>
-<a href=#165 id=165 data-nosnippet>165</a>    <span class="attr">#[test]
-<a href=#166 id=166 data-nosnippet>166</a>    </span><span class="kw">fn </span>verify_rejects_out_of_range_node_index() {
-<a href=#167 id=167 data-nosnippet>167</a>        <span class="kw">let </span>keychain = keychain();
-<a href=#168 id=168 data-nosnippet>168</a>        <span class="kw">let </span>signature = keychain.sign(<span class="string">b"message"</span>);
-<a href=#169 id=169 data-nosnippet>169</a>
-<a href=#170 id=170 data-nosnippet>170</a>        <span class="macro">assert!</span>(keychain.verify(<span class="string">b"message"</span>, <span class="kw-2">&amp;</span>signature, NodeIndex(<span class="number">0</span>)));
-<a href=#171 id=171 data-nosnippet>171</a>
-<a href=#172 id=172 data-nosnippet>172</a>        <span class="comment">// A malicious peer can embed an arbitrary u64 index in a unit it sends us and
-<a href=#173 id=173 data-nosnippet>173</a>        // aleph-bft verifies the signature before it validates that index, so this must
-<a href=#174 id=174 data-nosnippet>174</a>        // return false rather than panic and take the consensus session down.
-<a href=#175 id=175 data-nosnippet>175</a>        </span><span class="macro">assert!</span>(!keychain.verify(<span class="string">b"message"</span>, <span class="kw-2">&amp;</span>signature, NodeIndex(usize::from(u16::MAX) + <span class="number">1</span>)));
-<a href=#176 id=176 data-nosnippet>176</a>        <span class="macro">assert!</span>(!keychain.verify(<span class="string">b"message"</span>, <span class="kw-2">&amp;</span>signature, NodeIndex(usize::MAX)));
-<a href=#177 id=177 data-nosnippet>177</a>    }
-<a href=#178 id=178 data-nosnippet>178</a>}
+<a href=#139 id=139 data-nosnippet>139</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
