@@ -1,17 +1,78 @@
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use bitcoin::hashes::Hash as _;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 
 use super::{
-    Database, DatabaseError, SupportsSafeDepositKey, TweakIdx, store_supports_safe_deposit,
-    supports_safe_deposit_verified,
+    Database, DatabaseError, ReceiveState, SupportsSafeDepositKey, TweakIdx,
+    receive_history_transition, store_supports_safe_deposit, supports_safe_deposit_verified,
 };
 use crate::backup::{
     RECOVER_NUM_IDX_ADD_TO_LAST_USED, RecoverScanOutcome, recover_scan_idxes_for_activity,
 };
+
+#[test]
+fn receive_history_transition_is_recoverable() {
+    let btc_deposited = bitcoin::Amount::from_sat(42);
+    let btc_out_point = bitcoin::OutPoint {
+        txid: bitcoin::Txid::from_byte_array([1; 32]),
+        vout: 0,
+    };
+    let mut reported_out_of_mempool = false;
+
+    assert_eq!(
+        receive_history_transition(
+            &mut reported_out_of_mempool,
+            true,
+            btc_deposited,
+            btc_out_point,
+        ),
+        None
+    );
+    assert!(!reported_out_of_mempool);
+
+    assert_eq!(
+        receive_history_transition(
+            &mut reported_out_of_mempool,
+            false,
+            btc_deposited,
+            btc_out_point,
+        ),
+        Some(ReceiveState::OutOfMempool {
+            btc_deposited,
+            btc_out_point,
+        })
+    );
+    assert!(reported_out_of_mempool);
+
+    assert_eq!(
+        receive_history_transition(
+            &mut reported_out_of_mempool,
+            false,
+            btc_deposited,
+            btc_out_point,
+        ),
+        None
+    );
+    assert!(reported_out_of_mempool);
+
+    assert_eq!(
+        receive_history_transition(
+            &mut reported_out_of_mempool,
+            true,
+            btc_deposited,
+            btc_out_point,
+        ),
+        Some(ReceiveState::WaitingForConfirmation {
+            btc_deposited,
+            btc_out_point,
+        })
+    );
+    assert!(!reported_out_of_mempool);
+}
 
 #[allow(clippy::too_many_lines)] // shut-up clippy, it's a test
 #[tokio::test(flavor = "multi_thread")]

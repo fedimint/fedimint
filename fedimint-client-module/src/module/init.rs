@@ -137,9 +137,11 @@ where
     /// Get the [`ClientContext`] for later use
     ///
     /// Notably `ClientContext` can not be used during `ClientModuleInit::init`,
-    /// as the outer context is not yet complete. But it can be stored to be
-    /// used in the methods of [`ClientModule`], at which point it will be
-    /// ready.
+    /// as the outer context is not yet complete. It can be stored for later use
+    /// by [`ClientModule`] methods after startup completes. During
+    /// [`ClientModule::pre_start_migration`] and [`ClientModule::start`],
+    /// final-client paths are still unavailable; use the explicit pre-start
+    /// migration context in the migration hook instead.
     pub fn context(&self) -> ClientContext<<C as ClientModuleInit>::Module> {
         self.context.clone()
     }

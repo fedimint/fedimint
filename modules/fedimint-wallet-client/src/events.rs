@@ -76,7 +76,12 @@ impl Event for SendPaymentStatusEvent {
 // Emitted when a deposit is confirmed
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ReceivePaymentEvent {
-    pub operation_id: OperationId,
+    /// Operation id of the deposit address allocation.
+    // Renamed from `operation_id` in 0.12.
+    #[serde(alias = "operation_id")]
+    pub address_operation_id: OperationId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receive_operation_id: Option<OperationId>,
     pub amount: Amount,
     pub txid: Txid,
 }

@@ -154,6 +154,56 @@ pub enum SubscribeDepositError {
     NonFinalOutcome,
 }
 
+/// A failure to follow a per-UTXO receive or a legacy address subscription.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum SubscribeReceiveError {
+    /// The operation could not be looked up or belongs to another module.
+    #[error("The receive operation could not be looked up")]
+    Operation(#[from] OperationLookupError),
+
+    /// The operation is neither a receive nor a deposit-address operation.
+    #[error("The operation is not a receive")]
+    NotAReceive,
+
+    /// An old deposit address lacks the index needed to monitor it.
+    #[error("The deposit address operation has no tweak index")]
+    MissingTweakIndex,
+
+    /// The receive address belongs to another Bitcoin network.
+    #[error("The receive address is not valid on {expected}")]
+    WrongNetwork {
+        /// The Bitcoin network configured for this wallet.
+        expected: Network,
+    },
+}
+
+/// A failure to read the recorded outcome of an old deposit-address operation.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum LegacyDepositOutcomeError {
+    /// The operation could not be looked up or belongs to another module.
+    #[error("The legacy deposit operation could not be looked up")]
+    Operation(#[from] OperationLookupError),
+
+    /// The operation does not describe an old deposit address.
+    #[error("The operation is not a legacy deposit")]
+    NotALegacyDeposit,
+
+    /// The recorded legacy outcome could not be decoded.
+    #[error("Failed to decode the legacy deposit outcome")]
+    Decode(#[source] serde_json::Error),
+
+    /// The outcome references an output absent from its recorded transaction.
+    #[error("Legacy deposit outcome references missing output {out_idx} of {txid}")]
+    MissingOutput {
+        /// The transaction recorded with the legacy deposit.
+        txid: bitcoin::Txid,
+        /// The missing transaction output's index.
+        out_idx: u32,
+    },
+}
+
 /// A failure to quote the on-chain fees of a peg-out.
 #[derive(Debug, Error)]
 #[non_exhaustive]
