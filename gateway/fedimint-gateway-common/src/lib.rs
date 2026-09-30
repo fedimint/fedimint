@@ -212,9 +212,26 @@ impl FederationConfig {
     Deserialize,
 )]
 pub enum PaymentPolicy {
-    /// Do not accept incoming Lightning payments: refuse to create invoices
-    /// and fail back the payments of invoices that were already issued.
+    /// Do not accept incoming payments: refuse to create invoices, fail back
+    /// the payments of invoices that were already issued, and refuse swaps
+    /// into the federation.
     ReceivesDisabled,
+}
+
+/// Held while the gateway funds a fresh incoming payment, so its payment
+/// policy cannot change between the check that admitted the payment and the
+/// operation that funds it.
+///
+/// Turning a policy off waits for every guard outstanding at that moment, so a
+/// payment admitted before the change always funds, and none is admitted after
+/// the change returns.
+#[derive(Debug)]
+pub struct PaymentPolicyGuard(#[allow(dead_code)] tokio::sync::OwnedRwLockReadGuard<()>);
+
+impl PaymentPolicyGuard {
+    pub fn new(guard: tokio::sync::OwnedRwLockReadGuard<()>) -> Self {
+        Self(guard)
+    }
 }
 
 /// Information about one of the feds we are connected to
