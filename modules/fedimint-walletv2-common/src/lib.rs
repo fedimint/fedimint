@@ -222,6 +222,8 @@ pub enum WalletInputError {
     InsufficientTotalFee,
     #[error("Constructing the pegin transaction caused an arithmetic overflow")]
     ArithmeticOverflow,
+    #[error("Too many pending transactions. Please try again later.")]
+    PendingTxCapExceeded,
 }
 
 #[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]
@@ -242,6 +244,8 @@ pub enum WalletOutputError {
     ArithmeticOverflow,
     #[error("Unknown script variant")]
     UnknownScriptVariant,
+    #[error("Too many pending transactions. Please try again later.")]
+    PendingTxCapExceeded,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]

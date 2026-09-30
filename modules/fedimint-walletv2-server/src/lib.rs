@@ -512,10 +512,16 @@ impl ServerModule for Wallet {
             return Err(WalletInputError::WrongTweak);
         }
 
-        let consensus_receive_fee = self
-            .receive_fee(dbtx)
-            .await
-            .ok_or(WalletInputError::NoConsensusFeerateAvailable)?;
+        let consensus_receive_fee = match self.receive_fee(dbtx).await {
+            Ok(fee) => fee,
+            Err(e) => {
+                return Err(if e.to_string().contains("pending transaction count") {
+                    WalletInputError::PendingTxCapExceeded
+                } else {
+                    WalletInputError::NoConsensusFeerateAvailable
+                });
+            }
+        };
 
         // We allow for a higher fee such that a guardian could construct a CPFP
         // transaction. This is the last line of defense should the federations
@@ -656,10 +662,16 @@ impl ServerModule for Wallet {
             .await
             .ok_or(WalletOutputError::NoFederationUTXO)?;
 
-        let consensus_send_fee = self
-            .send_fee(dbtx)
-            .await
-            .ok_or(WalletOutputError::NoConsensusFeerateAvailable)?;
+        let consensus_send_fee = match self.send_fee(dbtx).await {
+            Ok(fee) => fee,
+            Err(e) => {
+                return Err(if e.to_string().contains("pending transaction count") {
+                    WalletOutputError::PendingTxCapExceeded
+                } else {
+                    WalletOutputError::NoConsensusFeerateAvailable
+                });
+            }
+        };
 
         // We allow for a higher fee such that a guardian could construct a CPFP
         // transaction. This is the last line of defense should the federations
@@ -825,19 +837,19 @@ impl ServerModule for Wallet {
             public_api_endpoint! {
                 SEND_FEE_ENDPOINT,
                 ApiVersion::new(0, 0),
-                async |module: &Wallet, context, _params: ()| -> Option<Amount> {
+                async |module: &Wallet, context, _params: ()| -> Amount {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
-                    Ok(module.send_fee(&mut dbtx).await)
+                    module.send_fee(&mut dbtx).await
                 }
             },
             public_api_endpoint! {
                 RECEIVE_FEE_ENDPOINT,
                 ApiVersion::new(0, 0),
-                async |module: &Wallet, context, _params: ()| -> Option<Amount> {
+                async |module: &Wallet, context, _params: ()| -> Amount {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
-                    Ok(module.receive_fee(&mut dbtx).await)
+                    module.receive_fee(&mut dbtx).await
                 }
             },
             public_api_endpoint! {
@@ -1191,13 +1203,17 @@ impl Wallet {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         tx_vbytes: u64,
-    ) -> Option<Amount> {
+    ) -> anyhow::Result<Amount> {
         // The minimum feerate is a protection against a catastrophic error in the
         // feerate estimation and limits the length of the pending transaction stack.
 
         let pending_txs = pending_txs_unordered(dbtx).await;
 
-        assert!(pending_txs.len() <= 32);
+        ensure!(
+            pending_txs.len() <= 32,
+            "pending transaction count ({}) exceeds maximum (32)",
+            pending_txs.len()
+        );
 
         let feerate = self
             .consensus_feerate(dbtx)
@@ -1220,15 +1236,18 @@ impl Wallet {
             .map(|t| t.fee.to_sat())
             .fold(stack_fee, u64::saturating_sub);
 
-        Some(Amount::from_sat(tx_fee.max(stack_fee)))
+        Ok(Amount::from_sat(tx_fee.max(stack_fee)))
     }
 
-    pub async fn send_fee(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<Amount> {
+    pub async fn send_fee(&self, dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<Amount> {
         self.consensus_fee(dbtx, self.cfg.consensus.send_tx_vbytes)
             .await
     }
 
-    pub async fn receive_fee(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<Amount> {
+    pub async fn receive_fee(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> anyhow::Result<Amount> {
         self.consensus_fee(dbtx, self.cfg.consensus.receive_tx_vbytes)
             .await
     }
