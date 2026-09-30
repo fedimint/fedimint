@@ -1,10 +1,13 @@
+#[cfg(test)]
+mod tests;
+
 use std::collections::BTreeMap;
 use std::io::Write;
 
 use aleph_bft::Keychain as KeychainTrait;
 use bitcoin::hashes::Hash;
 use fedimint_core::encoding::Encodable;
-use fedimint_core::{NumPeersExt, PeerId, secp256k1};
+use fedimint_core::{NumPeersExt as _, PeerId, secp256k1};
 use secp256k1::hashes::sha256;
 use secp256k1::{Keypair, Message, PublicKey, schnorr};
 
@@ -127,52 +130,13 @@ impl aleph_bft::MultiKeychain for Keychain {
     }
 
     fn is_complete(&self, msg: &[u8], partial: &Self::PartialMultisignature) -> bool {
-        if partial.iter().count() < self.pks.to_num_peers().threshold() {
+        let Ok(num_peers) = self.pks.try_num_peers() else {
+            return false;
+        };
+        if partial.iter().count() < num_peers.threshold() {
             return false;
         }
 
         partial.iter().all(|(i, sgn)| self.verify(msg, sgn, i))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::BTreeMap;
-
-    use aleph_bft::{Keychain as _, NodeIndex};
-    use fedimint_core::encoding::Encodable;
-    use fedimint_core::{PeerId, secp256k1};
-    use secp256k1::{Keypair, SecretKey};
-
-    use super::Keychain;
-
-    fn keychain() -> Keychain {
-        let keypair = Keypair::from_secret_key(
-            secp256k1::SECP256K1,
-            &SecretKey::from_slice(&[1; 32]).expect("Valid secret key"),
-        );
-
-        let pks = BTreeMap::from([(PeerId::from(0), keypair.public_key())]);
-
-        Keychain {
-            identity: PeerId::from(0),
-            message_tag: pks.consensus_hash(),
-            pks,
-            keypair,
-        }
-    }
-
-    #[test]
-    fn verify_rejects_out_of_range_node_index() {
-        let keychain = keychain();
-        let signature = keychain.sign(b"message");
-
-        assert!(keychain.verify(b"message", &signature, NodeIndex(0)));
-
-        // A malicious peer can embed an arbitrary u64 index in a unit it sends us and
-        // aleph-bft verifies the signature before it validates that index, so this must
-        // return false rather than panic and take the consensus session down.
-        assert!(!keychain.verify(b"message", &signature, NodeIndex(usize::from(u16::MAX) + 1)));
-        assert!(!keychain.verify(b"message", &signature, NodeIndex(usize::MAX)));
     }
 }

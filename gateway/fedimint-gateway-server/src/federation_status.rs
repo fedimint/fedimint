@@ -30,7 +30,11 @@ fn federation_connectivity(
         .count();
     if connected == 0 {
         FederationConnectivity::Disconnected
-    } else if connected < NumPeers::from(connection_status.len()).threshold() {
+    } else if connected
+        < NumPeers::try_from(connection_status.len())
+            .expect("a connected guardian implies a non-empty status map")
+            .threshold()
+    {
         FederationConnectivity::Degraded
     } else {
         FederationConnectivity::Connected

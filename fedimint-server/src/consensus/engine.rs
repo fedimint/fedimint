@@ -105,7 +105,7 @@ impl ConsensusEngine {
     }
 
     pub async fn run_single_guardian(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
-        assert_eq!(self.num_peers(), NumPeers::from(1));
+        assert_eq!(self.num_peers(), NumPeers::new(1).expect("one is nonzero"));
 
         self.initialize_checkpoint_directory(self.get_finished_session_count().await)?;
 
