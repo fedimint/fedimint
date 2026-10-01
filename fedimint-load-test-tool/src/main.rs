@@ -404,7 +404,7 @@ async fn main() -> anyhow::Result<()> {
             warn!("Task failed: {:?}", e);
         }
     }
-    if len_failures > 0 {
+    if 0 < len_failures {
         bail!("Finished with failures");
     }
     info!("Finished successfully");
@@ -675,7 +675,7 @@ async fn do_load_test_user_task(
     let mut generated_invoices_per_user_iterator = (0..generated_invoices_per_user).peekable();
     while let Some(_) = generated_invoices_per_user_iterator.next() {
         let total_amount = get_note_summary(&client).await?.total_amount();
-        if invoice_amount > total_amount {
+        if total_amount < invoice_amount {
             warn!("Can't pay invoice, not enough funds: {invoice_amount} > {total_amount}");
         } else {
             match generate_invoice_with {
@@ -713,7 +713,7 @@ async fn do_load_test_user_task(
         let total_amount = get_note_summary(&client).await?.total_amount();
         let invoice_amount =
             Amount::from_msats(invoice.amount_milli_satoshis().unwrap_or_default());
-        if invoice_amount > total_amount {
+        if total_amount < invoice_amount {
             warn!("Can't pay invoice, not enough funds: {invoice_amount} > {total_amount}");
         } else if invoice_amount == Amount::ZERO {
             warn!("Can't pay invoice {invoice}, amount is zero");

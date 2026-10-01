@@ -896,7 +896,7 @@ impl Gateway {
                     let num_pruned = dbtx.prune_registered_incoming_contracts(cutoff_secs).await;
                     match dbtx.commit_tx_result().await {
                         Ok(()) => {
-                            if num_pruned > 0 {
+                            if 0 < num_pruned {
                                 info!(
                                     target: LOG_GATEWAY,
                                     num_pruned,
@@ -2356,7 +2356,7 @@ impl IAdminGateway for Gateway {
         let start = UNIX_EPOCH + Duration::from_millis(start_millis);
         let end = UNIX_EPOCH + Duration::from_millis(end_millis);
 
-        if start > end {
+        if end < start {
             return Err(AdminGatewayError::Unexpected(anyhow!("Invalid time range")));
         }
 

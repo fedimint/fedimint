@@ -950,7 +950,7 @@ impl LightningClientModule {
         gateway: Option<SafeUrl>,
         custom_meta: Value,
     ) -> Result<(Bolt11Invoice, OperationId), ReceiveError> {
-        if expiry_secs > MAX_INVOICE_EXPIRY_SECS {
+        if MAX_INVOICE_EXPIRY_SECS < expiry_secs {
             return Err(ReceiveError::InvoiceExpiryTooLong);
         }
 
@@ -988,7 +988,7 @@ impl LightningClientModule {
         receive_fee: PaymentFee,
         custom_meta: Value,
     ) -> Result<(Bolt11Invoice, OperationId), ReceiveWithTermsError> {
-        if expiry_secs > MAX_INVOICE_EXPIRY_SECS {
+        if MAX_INVOICE_EXPIRY_SECS < expiry_secs {
             return Err(ReceiveError::InvoiceExpiryTooLong.into());
         }
 

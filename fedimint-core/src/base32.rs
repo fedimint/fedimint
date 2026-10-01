@@ -24,7 +24,7 @@ pub fn encode(input: &[u8]) -> String {
         buffer |= (*byte as usize) << bits;
         bits += 8;
 
-        while bits >= 5 {
+        while 5 <= bits {
             output.push(RFC4648[buffer & 0b11111]);
 
             buffer >>= 5;
@@ -32,7 +32,7 @@ pub fn encode(input: &[u8]) -> String {
         }
     }
 
-    if bits > 0 {
+    if 0 < bits {
         output.push(RFC4648[buffer & 0b11111]);
     }
 
@@ -63,7 +63,7 @@ pub fn decode(input: &str) -> Result<Vec<u8>, Base32DecodeError> {
         buffer |= value << bits;
         bits += 5;
 
-        while bits >= 8 {
+        while 8 <= bits {
             output.push((buffer & 0xFF) as u8);
 
             buffer >>= 8;

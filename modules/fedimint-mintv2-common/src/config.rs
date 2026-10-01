@@ -89,7 +89,7 @@ impl FeeConsensus {
     pub fn new(parts_per_million: u64) -> Result<Self, ExcessiveRelativeFeeError> {
         const MAX_PARTS_PER_MILLION: u64 = 1_000;
 
-        if parts_per_million > MAX_PARTS_PER_MILLION {
+        if MAX_PARTS_PER_MILLION < parts_per_million {
             return Err(ExcessiveRelativeFeeError {
                 parts_per_million,
                 max: MAX_PARTS_PER_MILLION,

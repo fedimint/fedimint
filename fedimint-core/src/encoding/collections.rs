@@ -57,7 +57,7 @@ where
             let mut bytes = vec![];
 
             // Adapted from <https://github.com/rust-bitcoin/rust-bitcoin/blob/e2b9555070d9357fb552e56085fb6fb3f0274560/bitcoin/src/consensus/encode.rs#L667-L674>
-            while len > 0 {
+            while 0 < len {
                 let chunk_start = bytes.len();
                 let chunk_size = core::cmp::min(len, CHUNK_SIZE);
                 let chunk_end = chunk_start + chunk_size;
