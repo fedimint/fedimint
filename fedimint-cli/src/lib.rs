@@ -1494,7 +1494,7 @@ impl FedimintCli {
                         .with_module(wallet.id)
                         .fetch_consensus_block_count()
                         .await?;
-                    if count >= target {
+                    if target <= count {
                         Ok(CliOutput::WaitBlockCount { reached: count })
                     } else {
                         info!(target: LOG_CLIENT, current=count, target, "Block count not reached");
