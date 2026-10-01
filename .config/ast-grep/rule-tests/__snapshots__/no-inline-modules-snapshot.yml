@@ -1,0 +1,76 @@
+id: no-inline-modules
+snapshots:
+  ? |
+    #[cfg(test)]
+    mod tests {}
+  : labels:
+    - source: mod tests {}
+      style: primary
+      start: 13
+      end: 25
+    - source: '{}'
+      style: secondary
+      start: 23
+      end: 25
+  ? |
+    fn install() {
+        mod nested {}
+    }
+  : labels:
+    - source: mod nested {}
+      style: primary
+      start: 19
+      end: 32
+    - source: '{}'
+      style: secondary
+      start: 30
+      end: 32
+  ? |
+    mod protocol {
+        pub fn encode() {}
+    }
+  : labels:
+    - source: |-
+        mod protocol {
+            pub fn encode() {}
+        }
+      style: primary
+      start: 0
+      end: 39
+    - source: |-
+        {
+            pub fn encode() {}
+        }
+      style: secondary
+      start: 13
+      end: 39
+  mod transport {}:
+    labels:
+    - source: mod transport {}
+      style: primary
+      start: 0
+      end: 16
+    - source: '{}'
+      style: secondary
+      start: 14
+      end: 16
+  pub mod protocol {}:
+    labels:
+    - source: pub mod protocol {}
+      style: primary
+      start: 0
+      end: 19
+    - source: '{}'
+      style: secondary
+      start: 17
+      end: 19
+  pub(crate) mod internal {}:
+    labels:
+    - source: pub(crate) mod internal {}
+      style: primary
+      start: 0
+      end: 26
+    - source: '{}'
+      style: secondary
+      start: 24
+      end: 26
