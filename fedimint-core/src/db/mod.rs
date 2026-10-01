@@ -2452,7 +2452,7 @@ where
     let db_version = if let Some(disk_version) = disk_version {
         let mut current_db_version = disk_version;
 
-        if current_db_version > target_db_version {
+        if target_db_version < current_db_version {
             return Err(DbMigrationError::VersionTooHigh {
                 kind,
                 on_disk: current_db_version,

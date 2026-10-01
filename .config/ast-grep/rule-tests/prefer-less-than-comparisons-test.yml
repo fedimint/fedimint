@@ -1,0 +1,9 @@
+id: prefer-less-than-comparisons
+valid:
+  - smaller < larger
+  - smaller <= larger
+  - next_left() > next_right()
+  - object.left > object.right
+invalid:
+  - larger > smaller
+  - larger >= smaller

@@ -165,7 +165,7 @@ impl GatewayLndClient {
     async fn connect(&self) -> Result<LndClient, LightningRpcError> {
         let mut retries = 0;
         let client = loop {
-            if retries >= MAX_LIGHTNING_RETRIES {
+            if MAX_LIGHTNING_RETRIES <= retries {
                 return Err(LightningRpcError::FailedToConnect);
             }
 
@@ -2093,7 +2093,7 @@ impl ILnRpcClient for GatewayLndClient {
             .iter()
             .filter_map(|payment| {
                 let timestamp_secs = (payment.creation_time_ns / 1_000_000_000) as u64;
-                if timestamp_secs < start_secs || timestamp_secs >= end_secs {
+                if timestamp_secs < start_secs || end_secs <= timestamp_secs {
                     return None;
                 }
                 let payment_hash = sha256::Hash::from_str(&payment.payment_hash).ok();
@@ -2134,7 +2134,7 @@ impl ILnRpcClient for GatewayLndClient {
             .iter()
             .filter_map(|invoice| {
                 let timestamp_secs = invoice.settle_date as u64;
-                if timestamp_secs < start_secs || timestamp_secs >= end_secs {
+                if timestamp_secs < start_secs || end_secs <= timestamp_secs {
                     return None;
                 }
                 let status = match &invoice.state() {

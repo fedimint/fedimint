@@ -1057,7 +1057,7 @@ pub async fn spend_ecash_handler<E: Display>(
                     .into_string(),
                 );
             };
-            let overspent = actual_amount > requested_amount;
+            let overspent = requested_amount < actual_amount;
 
             // Fetch updated balance for the out-of-band swap
             let updated_balance = state

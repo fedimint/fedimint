@@ -145,7 +145,7 @@ async fn await_federation_total_value(
             .total_value()
             .await?;
 
-        if current_value >= min_value {
+        if min_value <= current_value {
             return Ok(());
         }
 

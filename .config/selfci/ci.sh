@@ -61,6 +61,7 @@ case "$SELFCI_JOB_NAME" in
 
   lint)
     nix develop --ignore-environment .#lint --command ./misc/git-hooks/pre-commit
+    nix develop --ignore-environment .#lint --command ast-grep test --config sgconfig.yml
     ;;
 
   cargo-udeps)

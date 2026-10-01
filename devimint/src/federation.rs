@@ -225,7 +225,7 @@ impl Client {
             cmd!(self, "dev", "wait", "3").out_json().await?;
 
             let balance = self.balance().await?;
-            if balance >= min_balance_msat {
+            if min_balance_msat <= balance {
                 return Ok(());
             }
 
@@ -832,7 +832,7 @@ impl Federation {
             self.terminate_server(self.num_members() - 1).await?;
         }
 
-        if offline_nodes > 0 {
+        if 0 < offline_nodes {
             info!(fed_size, offline_nodes, "federation is degraded");
         }
         Ok(())
@@ -1216,7 +1216,7 @@ impl Federation {
                     .out_json()
                     .await?;
                 let current: u64 = serde_json::from_value(value)?;
-                if current >= expected {
+                if expected <= current {
                     break;
                 }
                 fedimint_core::task::sleep_in_test(
