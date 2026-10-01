@@ -29,7 +29,9 @@ pub mod endpoint_constants;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("walletv2");
 
-pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(1, 0);
+/// Version 1.1: Changed pending transaction cap from panic to rejection (graceful error handling)
+/// Requires consensus activation for mixed-version rollout compatibility.
+pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(1, 1);
 
 /// Returns a sleep duration of 1 second in test environments or 60 seconds in
 /// production. Used for polling intervals where faster feedback is needed
@@ -246,6 +248,14 @@ pub enum WalletOutputError {
     UnknownScriptVariant,
     #[error("Too many pending transactions. Please try again later.")]
     PendingTxCapExceeded,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+pub enum FeeError {
+    #[error("No consensus feerate available at the moment. Please try again later.")]
+    NoConsensusFeerateAvailable,
+    #[error("Pending transaction count ({0}) exceeds maximum (32)")]
+    PendingTxCapExceeded(usize),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
