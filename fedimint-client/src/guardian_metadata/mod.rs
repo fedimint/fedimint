@@ -10,8 +10,7 @@ use fedimint_core::net::guardian_metadata::{SignedGuardianMetadata, Verification
 use fedimint_core::runtime::{self, sleep};
 use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::util::FmtCompact as _;
-use fedimint_core::util::backoff_util::custom_backoff;
-use fedimint_core::{NumPeersExt as _, PeerId, impl_db_lookup, impl_db_record};
+use fedimint_core::{PeerId, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT;
 use futures::stream::{FuturesUnordered, StreamExt as _};
 use tracing::debug;
@@ -36,34 +35,75 @@ impl_db_lookup!(
     query_prefix = GuardianMetadataPrefix
 );
 
+#[cfg(feature = "pkarr")]
+mod pkarr;
+#[cfg(test)]
+mod tests;
+
+const NORMAL_REFRESH_INTERVAL: Duration = Duration::from_secs(60 * 60);
+const INITIAL_FAILED_REFRESH_INTERVAL: Duration = Duration::from_secs(30);
+const MAX_FAILED_REFRESH_INTERVAL: Duration = Duration::from_secs(10 * 60);
+
+/// Extra time to wait for additional peer responses after the minimum
+/// required have been collected.
+fn extra_response_wait() -> Duration {
+    if is_running_in_test_env() {
+        Duration::from_millis(1)
+    } else {
+        Duration::from_secs(30)
+    }
+}
+
 /// Fetches guardian metadata from guardians, validates them and updates the
 /// DB if any new more up to date ones are found.
 pub(crate) async fn run_guardian_metadata_refresh_task(client_inner: Arc<Client>) {
     // Wait for the guardian keys to be available
     let guardian_pub_keys = client_inner.get_guardian_public_keys_blocking().await;
+    let mut failed_refresh_interval = INITIAL_FAILED_REFRESH_INTERVAL;
     loop {
         let api: &DynGlobalApi = &client_inner.api;
         let results = fetch_guardian_metadata_from_at_least_num_of_peers(
             1,
             api,
+            guardian_pub_keys.keys().copied().collect(),
             &guardian_pub_keys,
-            if is_running_in_test_env() {
-                Duration::from_millis(1)
-            } else {
-                Duration::from_secs(30)
-            },
+            extra_response_wait(),
         )
         .await;
+
+        #[cfg(feature = "pkarr")]
+        let results = if results.is_empty() {
+            pkarr::try_pkarr_fallback(&client_inner, &guardian_pub_keys).await
+        } else {
+            results
+        };
+
+        let received_response = !results.is_empty();
         store_guardian_metadata_updates_from_peers(client_inner.db(), &guardian_pub_keys, &results)
             .await;
 
         let duration = if is_running_in_test_env() {
             Duration::from_secs(1)
         } else {
-            // Check once an hour if there are new metadata
-            Duration::from_secs(3600)
+            next_refresh_interval(received_response, &mut failed_refresh_interval)
         };
         sleep(duration).await;
+    }
+}
+
+fn next_refresh_interval(
+    received_response: bool,
+    failed_refresh_interval: &mut Duration,
+) -> Duration {
+    if received_response {
+        *failed_refresh_interval = INITIAL_FAILED_REFRESH_INTERVAL;
+        NORMAL_REFRESH_INTERVAL
+    } else {
+        let interval = *failed_refresh_interval;
+        *failed_refresh_interval = failed_refresh_interval
+            .saturating_mul(2)
+            .min(MAX_FAILED_REFRESH_INTERVAL);
+        interval
     }
 }
 
@@ -79,21 +119,19 @@ pub(crate) async fn store_guardian_metadata_updates_from_peers(
 
 pub(crate) type PeersSignedGuardianMetadata = BTreeMap<PeerId, SignedGuardianMetadata>;
 
-/// Fetch responses from at least `num_responses_required` of peers.
+/// Fetch responses from at least `num_responses_required` of the requested
+/// peers.
 ///
-/// Will wait a little bit extra in hopes of collecting more than strictly
-/// needed responses.
+/// Each requested peer is tried once. If enough responses are collected, this
+/// waits a little bit extra in hopes of collecting more than strictly needed
+/// responses.
 pub(crate) async fn fetch_guardian_metadata_from_at_least_num_of_peers(
     num_responses_required: usize,
     api: &DynGlobalApi,
+    query_peer_ids: Vec<PeerId>,
     guardian_pub_keys: &BTreeMap<PeerId, bitcoin::secp256k1::PublicKey>,
     extra_response_wait: Duration,
 ) -> Vec<PeersSignedGuardianMetadata> {
-    let num_peers = guardian_pub_keys.to_num_peers();
-    // Keep trying, initially somewhat aggressively, but after a while retry very
-    // slowly, because chances for response are getting lower and lower.
-    let mut backoff = custom_backoff(Duration::from_millis(200), Duration::from_secs(600), None);
-
     // Make a single request to a peer after a delay
     async fn make_request(
         delay: Duration,
@@ -120,12 +158,12 @@ pub(crate) async fn fetch_guardian_metadata_from_at_least_num_of_peers(
                 };
 
                 let now = fedimint_core::time::duration_since_epoch();
-                if let Err(source) = metadata.verify(SECP256K1, guardian_pub_key, now) {
-                    return Err(FetchGuardianMetadataError::InvalidMetadata {
+                metadata
+                    .verify(SECP256K1, guardian_pub_key, now)
+                    .map_err(|source| FetchGuardianMetadataError::InvalidMetadata {
                         peer_id: *peer_id,
                         source,
-                    });
-                }
+                    })?;
             }
             Ok(metadata_map)
         }
@@ -136,7 +174,7 @@ pub(crate) async fn fetch_guardian_metadata_from_at_least_num_of_peers(
 
     let mut requests = FuturesUnordered::new();
 
-    for peer_id in num_peers.peer_ids() {
+    for peer_id in query_peer_ids {
         requests.push(make_request(
             Duration::ZERO,
             peer_id,
@@ -173,12 +211,6 @@ pub(crate) async fn fetch_guardian_metadata_from_at_least_num_of_peers(
                     err = %err.fmt_compact(),
                     "Failed to fetch guardian metadata from peer"
                 );
-                requests.push(make_request(
-                    backoff.next().expect("Keeps retrying"),
-                    peer_id,
-                    api,
-                    guardian_pub_keys,
-                ));
             }
             Ok(metadata) => {
                 responses.push(metadata);
@@ -187,6 +219,30 @@ pub(crate) async fn fetch_guardian_metadata_from_at_least_num_of_peers(
     }
 
     responses
+}
+
+/// Why a peer's guardian metadata was not accepted.
+#[derive(Debug, thiserror::Error)]
+enum FetchGuardianMetadataError {
+    /// The peer could not be asked.
+    #[error("Fetching guardian metadata from peer {peer_id} failed")]
+    Request {
+        peer_id: PeerId,
+        #[source]
+        source: ServerError,
+    },
+
+    /// The peer sent metadata of a guardian the client does not know.
+    #[error("Guardian public key not found for peer {peer_id}")]
+    UnknownGuardian { peer_id: PeerId },
+
+    /// The peer sent metadata that does not verify.
+    #[error("Failed to verify metadata for peer {peer_id}")]
+    InvalidMetadata {
+        peer_id: PeerId,
+        #[source]
+        source: VerificationError,
+    },
 }
 
 pub(crate) async fn store_guardian_metadata_updates(
@@ -244,28 +300,4 @@ pub(crate) async fn store_guardian_metadata_updates(
     )
     .await
     .expect("Will never return an error");
-}
-
-/// Why a peer's guardian metadata was not accepted.
-#[derive(Debug, thiserror::Error)]
-enum FetchGuardianMetadataError {
-    /// The peer could not be asked.
-    #[error("Fetching guardian metadata from peer {peer_id} failed")]
-    Request {
-        peer_id: PeerId,
-        #[source]
-        source: ServerError,
-    },
-
-    /// The peer sent metadata of a guardian the client does not know.
-    #[error("Guardian public key not found for peer {peer_id}")]
-    UnknownGuardian { peer_id: PeerId },
-
-    /// The peer sent metadata that does not verify.
-    #[error("Failed to verify metadata for peer {peer_id}")]
-    InvalidMetadata {
-        peer_id: PeerId,
-        #[source]
-        source: VerificationError,
-    },
 }
