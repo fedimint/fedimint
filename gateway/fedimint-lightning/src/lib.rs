@@ -410,8 +410,9 @@ pub struct InterceptPaymentRequest {
     pub incoming_amount_msat: u64,
     /// Block height at which the HTLC can no longer be claimed; `0` if unknown.
     /// On the LND forward-intercept path this is the HTLC's raw incoming
-    /// expiry instead, which the sender chooses and which LND fails back 13
-    /// blocks (`DefaultFinalCltvRejectDelta`) before.
+    /// expiry instead, which the sender chooses and which LND fails back
+    /// `DefaultFinalCltvRejectDelta` blocks before (19 since LND v0.21, 13
+    /// before).
     pub expiry: u32,
     pub incoming_chan_id: u64,
     pub short_channel_id: Option<u64>,

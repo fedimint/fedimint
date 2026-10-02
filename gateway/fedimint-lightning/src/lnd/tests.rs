@@ -2,10 +2,44 @@ use fedimint_core::encode_bolt11_invoice_features_without_length;
 use hex::FromHex;
 use lightning::types::features::Bolt11InvoiceFeatures;
 use tonic_lnd::lnrpc::invoice::InvoiceState;
+use tonic_lnd::lnrpc::{InvoiceHtlc, InvoiceHtlcState};
 
 use super::{
-    HoldInvoiceAction, PaymentActionKind, hold_invoice_action, wire_features_to_lnd_feature_vec,
+    HoldInvoiceAction, PaymentActionKind, hold_invoice_action, hold_invoice_claim_deadline,
+    wire_features_to_lnd_feature_vec,
 };
+
+#[test]
+fn hold_invoice_claim_deadline_is_earliest_accepted_expiry_minus_delta() {
+    let htlc = |state: InvoiceHtlcState, expiry_height| InvoiceHtlc {
+        state: state.into(),
+        expiry_height,
+        ..Default::default()
+    };
+
+    // The gateway assumes LND cancels 36 blocks before the earliest accepted
+    // HTLC expires.
+    assert_eq!(
+        hold_invoice_claim_deadline(&[
+            htlc(InvoiceHtlcState::Accepted, 1_000),
+            htlc(InvoiceHtlcState::Accepted, 990),
+            // A canceled HTLC no longer holds the payment.
+            htlc(InvoiceHtlcState::Canceled, 900),
+        ]),
+        954
+    );
+    // Nothing accepted, so no deadline to trust.
+    assert_eq!(
+        hold_invoice_claim_deadline(&[htlc(InvoiceHtlcState::Canceled, 1_000)]),
+        0
+    );
+    assert_eq!(hold_invoice_claim_deadline(&[]), 0);
+    // An HTLC expiring within the delta saturates to 0, which refuses funding.
+    assert_eq!(
+        hold_invoice_claim_deadline(&[htlc(InvoiceHtlcState::Accepted, 10)]),
+        0
+    );
+}
 
 #[test]
 fn features_to_lnd() {
