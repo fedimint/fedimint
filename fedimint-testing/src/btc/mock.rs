@@ -14,7 +14,7 @@ use bitcoin::merkle_tree::PartialMerkleTree;
 use bitcoin::{
     Address, Block, BlockHash, CompactTarget, Network, OutPoint, ScriptBuf, Transaction, TxOut,
 };
-use fedimint_bitcoind::{BitcoinRpcError, BlockchainInfo, IBitcoindRpc};
+use fedimint_bitcoind::{BitcoinRpcError, BlockchainInfo, DynBitcoindRpc, IBitcoindRpc};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::txoproof::TxOutProof;
@@ -108,8 +108,8 @@ impl FakeBitcoinTest {
             blocks.len()
         );
         let root = BlockHash::hash(&[0]);
-        // block height is 0-based, so blocks.len() before appending the current block
-        // gives the correct height
+        // block height is 0-based, so blocks.len() before appending the current
+        // block gives the correct height
         let block_height = blocks.len();
         for tx in pending.iter() {
             addresses.insert(tx.compute_txid(), Amount::from_sats(output_sum(tx)));
@@ -395,9 +395,9 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
         let mut filtered = BTreeMap::<Vec<OutPoint>, bitcoin::Transaction>::new();
 
         // Simulate the mempool keeping txs with higher fees (less output)
-        // TODO: This looks borked, should remove from `filtered` on higher fee or
-        // something, and check per-input anyway. Probably doesn't matter, and I
-        // don't want to touch it.
+        // TODO: This looks borked, should remove from `filtered` on higher fee
+        // or something, and check per-input anyway. Probably doesn't
+        // matter, and I don't want to touch it.
         for tx in &inner.pending {
             match filtered.get(&inputs(tx)) {
                 Some(found) if output_sum(tx) > output_sum(found) => {}
@@ -418,5 +418,98 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
 
     async fn get_chain_id(&self) -> anyhow::Result<ChainId> {
         self.get_block_hash(1).await.map(ChainId::new)
+    }
+}
+
+/// A Bitcoin RPC that answers the proof request for one transaction with the
+/// proof of another, and passes every other call through to the backend it
+/// wraps.
+///
+/// The peg-in monitor only asks for a proof once a deposit is final, so a test
+/// can arm this after the deposit is mined and know the monitor has not read
+/// the good proof yet. Everything else the monitor sees is unchanged, so it
+/// runs the same code it runs against a real node.
+#[derive(Debug)]
+pub struct ProofSwappingRpc {
+    inner: DynBitcoindRpc,
+    swap: std::sync::Mutex<Option<(Txid, Txid)>>,
+    swapped_answers: std::sync::atomic::AtomicUsize,
+    proof_requests: std::sync::atomic::AtomicUsize,
+}
+
+impl ProofSwappingRpc {
+    pub fn new(inner: DynBitcoindRpc) -> Arc<Self> {
+        Arc::new(Self {
+            inner,
+            swap: std::sync::Mutex::new(None),
+            swapped_answers: std::sync::atomic::AtomicUsize::new(0),
+            proof_requests: std::sync::atomic::AtomicUsize::new(0),
+        })
+    }
+
+    /// Answer a proof request for `txid` with the proof of `other` until
+    /// [`Self::stop_swapping`] is called.
+    pub fn answer_proof_of(&self, txid: Txid, other: Txid) {
+        *self.swap.lock().expect("Proof swap lock poisoned") = Some((txid, other));
+    }
+
+    /// How many proof requests have been answered with the wrong proof.
+    ///
+    /// A test has to wait for this before it can conclude anything: until the
+    /// caller has actually been handed the wrong proof, its own behaviour has
+    /// not been exercised at all.
+    pub fn swapped_answers(&self) -> usize {
+        self.swapped_answers
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Every proof request seen, swapped or not, so a test can tell "the caller
+    /// never asked" apart from "the caller asked about something else".
+    pub fn proof_requests(&self) -> usize {
+        self.proof_requests
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Go back to answering with each transaction's own proof.
+    pub fn stop_swapping(&self) {
+        *self.swap.lock().expect("Proof swap lock poisoned") = None;
+    }
+}
+
+#[async_trait]
+impl IBitcoindRpc for ProofSwappingRpc {
+    async fn get_tx_block_height(&self, txid: &Txid) -> Result<Option<u64>, BitcoinRpcError> {
+        self.inner.get_tx_block_height(txid).await
+    }
+
+    async fn watch_script_history(&self, script: &ScriptBuf) -> Result<(), BitcoinRpcError> {
+        self.inner.watch_script_history(script).await
+    }
+
+    async fn get_script_history(
+        &self,
+        script: &ScriptBuf,
+    ) -> Result<Vec<Transaction>, BitcoinRpcError> {
+        self.inner.get_script_history(script).await
+    }
+
+    async fn get_txout_proof(&self, txid: Txid) -> Result<TxOutProof, BitcoinRpcError> {
+        self.proof_requests
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        // The guard is dropped before the await, so the lock is never held
+        // across it.
+        let swapped = match *self.swap.lock().expect("Proof swap lock poisoned") {
+            Some((asked_for, other)) if asked_for == txid => Some(other),
+            _ => None,
+        };
+        if swapped.is_some() {
+            self.swapped_answers
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        self.inner.get_txout_proof(swapped.unwrap_or(txid)).await
+    }
+
+    async fn get_info(&self) -> Result<BlockchainInfo, BitcoinRpcError> {
+        self.inner.get_info().await
     }
 }
