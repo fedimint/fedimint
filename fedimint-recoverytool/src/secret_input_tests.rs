@@ -5,7 +5,11 @@ use super::{RecoveryTool, TweakSource};
 fn opts() -> RecoveryTool {
     RecoveryTool {
         config: None,
-        descriptor: None,
+        descriptor: Some(
+            "wsh(pk(0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798))"
+                .parse()
+                .unwrap(),
+        ),
         key: None,
         key_file: None,
         network: bitcoin::Network::Bitcoin,
@@ -60,6 +64,8 @@ fn file_requires_descriptor() {
             "--db",
             "unused"
         ])
+        .unwrap()
+        .resolve_key()
         .is_err()
     );
 }

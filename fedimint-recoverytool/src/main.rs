@@ -77,6 +77,10 @@ impl RecoveryTool {
             self.key.is_none() || self.key_file.is_none(),
             "key argument conflicts with key file"
         );
+        anyhow::ensure!(
+            (self.key.is_none() && self.key_file.is_none()) || self.descriptor.is_some(),
+            "--key-file or --key requires --descriptor"
+        );
         let value = if let Some(path) = &self.key_file {
             Some(fedimint_core::util::read_secret_file(path, 1024 * 1024)?)
         } else {
