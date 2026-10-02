@@ -33,7 +33,7 @@ use tonic_lnd::lnrpc::invoice::InvoiceState;
 use tonic_lnd::lnrpc::payment::PaymentStatus;
 use tonic_lnd::lnrpc::{
     ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest, ConnectPeerRequest,
-    GetInfoRequest, Invoice, InvoiceHtlcState, InvoiceSubscription, LightningAddress,
+    GetInfoRequest, Invoice, InvoiceHtlc, InvoiceHtlcState, InvoiceSubscription, LightningAddress,
     ListChannelsRequest, ListInvoiceRequest, ListPaymentsRequest, ListPeersRequest,
     OpenChannelRequest, SendCoinsRequest, WalletBalanceRequest,
 };
@@ -62,6 +62,37 @@ use crate::{
 type HtlcSubscriptionSender = mpsc::Sender<InterceptPaymentRequest>;
 
 const LND_PAYMENT_TIMEOUT_SECONDS: i32 = 180;
+
+/// Final CLTV delta of the HOLD invoices created for LNv2 receives. Left unset,
+/// LND would use its routing `bitcoin.timelockdelta`, which operators may lower
+/// to 24 (18 before v0.21), leaving only a few blocks between accepting a
+/// payment and LND cancelling it by itself `invoices.holdexpirydelta` blocks
+/// before expiry. LND rejects any HTLC expiring sooner than this many blocks
+/// after it arrives, so it bounds every accepted HTLC, not just honest payers.
+const LNV2_HOLD_INVOICE_CLTV_EXPIRY: u64 = 144;
+
+/// How many blocks before its earliest HTLC expiry LND is assumed to cancel an
+/// accepted HOLD invoice by itself. LND's `invoices.holdexpirydelta` defaults
+/// to 18 since v0.21 (16 + 2) and 12 before, has no upper bound, and cannot be
+/// read cheaply before v0.21 (`GetDebugInfo` returns the whole log), so this
+/// assumes twice the current default. The excess also absorbs blocks found
+/// between the deadline check and settlement. It costs nothing for a payment
+/// handled promptly, which still has about 108 blocks left under
+/// `LNV2_HOLD_INVOICE_CLTV_EXPIRY`.
+const LND_ASSUMED_HOLD_EXPIRY_DELTA: u32 = 36;
+
+/// Block height at which LND is assumed to cancel an accepted HOLD invoice by
+/// itself, `LND_ASSUMED_HOLD_EXPIRY_DELTA` blocks before its earliest accepted
+/// HTLC expires, after which the gateway can no longer settle it. Without an
+/// accepted HTLC there is no deadline to trust, so it is `0`.
+fn hold_invoice_claim_deadline(htlcs: &[InvoiceHtlc]) -> u32 {
+    htlcs
+        .iter()
+        .filter(|htlc| htlc.state() == InvoiceHtlcState::Accepted)
+        .map(|htlc| (htlc.expiry_height as u32).saturating_sub(LND_ASSUMED_HOLD_EXPIRY_DELTA))
+        .min()
+        .unwrap_or_default()
+}
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum HoldInvoiceAction {
@@ -278,16 +309,7 @@ impl GatewayLndClient {
                         // two amounts coincide here.
                         amount_msat: hold.amt_paid_msat as u64,
                         incoming_amount_msat: hold.amt_paid_msat as u64,
-                        // LND cancels a held HTLC `holdexpirydelta` (default 12)
-                        // blocks before its expiry, so that is when the gateway can
-                        // no longer settle it; the earliest accepted HTLC decides.
-                        expiry: hold
-                            .htlcs
-                            .iter()
-                            .filter(|htlc| htlc.state() == InvoiceHtlcState::Accepted)
-                            .map(|htlc| (htlc.expiry_height as u32).saturating_sub(12))
-                            .min()
-                            .unwrap_or_default(),
+                        expiry: hold_invoice_claim_deadline(&hold.htlcs),
                         short_channel_id: Some(0),
                         // The payment is held by a HOLD invoice on our own
                         // node rather than by an intercepted forward, which is
@@ -1396,6 +1418,7 @@ impl ILnRpcClient for GatewayLndClient {
                     hash: payment_hash.clone(),
                     value_msat: create_invoice_request.amount_msat as i64,
                     expiry: i64::from(create_invoice_request.expiry_secs),
+                    cltv_expiry: LNV2_HOLD_INVOICE_CLTV_EXPIRY,
                     ..Default::default()
                 },
                 InvoiceDescription::Hash(desc_hash) => AddHoldInvoiceRequest {
@@ -1403,6 +1426,7 @@ impl ILnRpcClient for GatewayLndClient {
                     hash: payment_hash.clone(),
                     value_msat: create_invoice_request.amount_msat as i64,
                     expiry: i64::from(create_invoice_request.expiry_secs),
+                    cltv_expiry: LNV2_HOLD_INVOICE_CLTV_EXPIRY,
                     ..Default::default()
                 },
             };
