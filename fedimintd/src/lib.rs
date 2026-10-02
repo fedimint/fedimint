@@ -146,10 +146,11 @@ struct ServerOpts {
     /// Trusted Esplora HTTP base URL, e.g. <https://mempool.space/api>
     ///
     /// With bitcoind configured, retries individual failed reads and supplies
-    /// block count while bitcoind reports initial block download. Their chain
-    /// identities are compared once at startup when both respond. Esplora can
-    /// bootstrap while bitcoind is offline and is trusted for chain selection,
-    /// not independently verified.
+    /// block count while bitcoind reports initial block download. Hybrid
+    /// construction does not probe either backend or compare their chain
+    /// identities. Esplora can bootstrap while bitcoind is offline and must
+    /// be trusted to serve the intended chain; its chain selection is not
+    /// independently verified.
     /// Transactions go to Esplora only after a bitcoind broadcast error.
     /// See SECURITY.md for the trust model.
     #[arg(long, env = FM_ESPLORA_URL_ENV)]
