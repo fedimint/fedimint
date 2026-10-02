@@ -43,6 +43,9 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true, features = ["log"] }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [build-dependencies]
 fedimint-build = { workspace = true }
 

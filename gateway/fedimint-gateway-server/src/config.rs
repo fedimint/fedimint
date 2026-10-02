@@ -34,8 +34,8 @@ pub enum DatabaseBackend {
 #[command(
     group(
         ArgGroup::new("bitcoind_password_auth")
-           .args(["bitcoind_password"])
-           .multiple(false)
+           .args(["bitcoind_password", "bitcoind_password_file"])
+           .multiple(true)
     ),
     group(
         ArgGroup::new("bitcoind_auth")
@@ -66,14 +66,24 @@ pub struct GatewayOpts {
     #[arg(long = "api-addr", env = envs::FM_GATEWAY_API_ADDR_ENV)]
     api_addr: Option<SafeUrl>,
 
-    /// Gateway webserver authentication bcrypt password hash
-    #[arg(long = "bcrypt-password-hash", env = envs::FM_GATEWAY_BCRYPT_PASSWORD_HASH_ENV)]
-    bcrypt_password_hash: String,
+    /// Gateway authentication hash (discouraged in argv/environment).
+    /// Prefer --bcrypt-password-hash-file.
+    #[arg(long = "bcrypt-password-hash", env = envs::FM_GATEWAY_BCRYPT_PASSWORD_HASH_ENV, hide_env_values = true, required_unless_present = "bcrypt_password_hash_file")]
+    bcrypt_password_hash: Option<String>,
+
+    /// Read the gateway authentication hash from a file (stdin is not
+    /// supported)
+    #[arg(long)]
+    bcrypt_password_hash_file: Option<PathBuf>,
 
     /// Gateway liquidity manager for channel and liquidity management
-    /// operations
-    #[arg(long = "bcrypt_liquidity_manager_password_hash", env = envs::FM_GATEWAY_LIQUIDITY_MANAGER_BCRYPT_PASSWORD_HASH_ENV)]
+    /// operations (discouraged in argv/environment). Prefer the file option.
+    #[arg(long = "bcrypt_liquidity_manager_password_hash", env = envs::FM_GATEWAY_LIQUIDITY_MANAGER_BCRYPT_PASSWORD_HASH_ENV, hide_env_values = true)]
     bcrypt_liquidity_manager_password_hash: Option<String>,
+
+    /// Read the liquidity manager authentication hash from a file (not stdin)
+    #[arg(long)]
+    bcrypt_liquidity_manager_password_hash_file: Option<PathBuf>,
 
     /// Bitcoin network this gateway will be running on
     #[arg(long = "network", env = envs::FM_GATEWAY_NETWORK_ENV)]
@@ -95,9 +105,14 @@ pub struct GatewayOpts {
     #[arg(long, env = FM_BITCOIND_USERNAME_ENV)]
     pub bitcoind_username: Option<String>,
 
-    /// The password to use when connecting to bitcoind
-    #[arg(long, env = FM_BITCOIND_PASSWORD_ENV)]
+    /// Bitcoin RPC password (discouraged in argv/environment).
+    /// Prefer --bitcoind-password-file.
+    #[arg(long, env = FM_BITCOIND_PASSWORD_ENV, hide_env_values = true)]
     pub bitcoind_password: Option<String>,
+
+    /// Read the Bitcoin RPC password from a file (stdin is not supported)
+    #[arg(long)]
+    pub bitcoind_password_file: Option<PathBuf>,
 
     /// Bitcoind RPC URL, e.g. <http://127.0.0.1:8332>
     /// This should not include authentication parameters, they should be
@@ -164,6 +179,41 @@ pub struct GatewayOpts {
 }
 
 impl GatewayOpts {
+    /// Resolve secrets once at startup, before constructing runtime parameters.
+    /// Reject conflicting sources without echoing their values.
+    pub fn resolve_secret_inputs(&mut self) -> anyhow::Result<()> {
+        let sources = [
+            (
+                &mut self.bcrypt_password_hash,
+                &mut self.bcrypt_password_hash_file,
+            ),
+            (
+                &mut self.bcrypt_liquidity_manager_password_hash,
+                &mut self.bcrypt_liquidity_manager_password_hash_file,
+            ),
+            (
+                &mut self.bitcoind_password,
+                &mut self.bitcoind_password_file,
+            ),
+        ];
+        for (value, file) in &sources {
+            ensure!(
+                value.is_none() || file.is_none(),
+                "Specify only one value or file source for each secret"
+            );
+            ensure!(
+                file.as_deref() != Some(std::path::Path::new("-")),
+                "Daemon secrets require a file; stdin is not supported"
+            );
+        }
+        for (value, file) in sources {
+            if let Some(path) = file.take() {
+                *value = Some(fedimint_core::util::read_secret_file(&path, 1024 * 1024)?);
+            }
+        }
+        Ok(())
+    }
+
     /// Converts the command line parameters into a helper struct the Gateway
     /// uses to store runtime parameters.
     pub fn to_gateway_parameters(&self) -> anyhow::Result<GatewayParameters> {
@@ -172,10 +222,18 @@ impl GatewayOpts {
                 .join(V1_API_ENDPOINT)
                 .expect("Could not join v1 api_addr")
         });
-        let bcrypt_password_hash = bcrypt::HashParts::from_str(&self.bcrypt_password_hash)?;
+        let bcrypt_password_hash = bcrypt::HashParts::from_str(
+            self.bcrypt_password_hash
+                .as_deref()
+                .ok_or_else(|| anyhow::anyhow!("Missing gateway password hash"))?,
+        )
+        .map_err(|_| anyhow::anyhow!("Invalid gateway password hash"))?;
         let bcrypt_liquidity_manager_password_hash =
             if let Some(h) = &self.bcrypt_liquidity_manager_password_hash {
-                Some(bcrypt::HashParts::from_str(h)?)
+                Some(
+                    bcrypt::HashParts::from_str(h)
+                        .map_err(|_| anyhow::anyhow!("Invalid liquidity manager password hash"))?,
+                )
             } else {
                 None
             };
@@ -232,6 +290,9 @@ impl GatewayOpts {
         })
     }
 }
+
+#[cfg(test)]
+mod tests;
 
 /// `GatewayParameters` is a helper struct that can be derived from
 /// `GatewayOpts` that holds the CLI or environment variables that are specified

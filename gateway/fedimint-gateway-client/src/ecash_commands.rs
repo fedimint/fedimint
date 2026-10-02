@@ -77,9 +77,13 @@ pub enum EcashCommands {
     },
     /// Receive e-cash out of band
     Receive {
-        /// E-cash notes (`OOBNotes` for v1 or `ECash` for v2)
+        /// E-cash notes in process arguments (discouraged). Prefer
+        /// --notes-file.
+        #[clap(long, required_unless_present = "notes_file")]
+        notes: Option<String>,
+        /// Read e-cash notes from a file, or '-' for stdin
         #[clap(long)]
-        notes: String,
+        notes_file: Option<std::path::PathBuf>,
     },
 }
 
@@ -181,7 +185,8 @@ impl EcashCommands {
 
                 Ok(CliOutput::SpendEcash(response))
             }
-            Self::Receive { notes } => {
+            Self::Receive { notes, .. } => {
+                let notes = notes.expect("required notes source resolved before handling");
                 let response =
                     receive_ecash(client, base_url, ReceiveEcashPayload { notes }).await?;
                 Ok(CliOutput::ReceiveEcash(response))

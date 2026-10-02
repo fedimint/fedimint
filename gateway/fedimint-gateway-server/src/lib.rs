@@ -603,7 +603,8 @@ impl Gateway {
     pub async fn new_with_default_modules(
         mnemonic_sender: tokio::sync::broadcast::Sender<()>,
     ) -> anyhow::Result<Gateway> {
-        let opts = GatewayOpts::parse();
+        let mut opts = GatewayOpts::parse();
+        opts.resolve_secret_inputs()?;
         let gateway_parameters = opts.to_gateway_parameters()?;
         let decoders = ModuleDecoderRegistry::default();
 

@@ -8,6 +8,48 @@ A Lightning Gateway connects Fedimint federations to the Lightning Network, enab
 
 ---
 
+## Secret inputs in command-line tools
+
+Do not place passwords, recovery mnemonics, or bearer ecash in command arguments:
+they can be exposed in process listings, shell history, and diagnostic logs.
+Legacy argument forms remain supported for compatibility but are discouraged.
+Environment variables are not equivalent to protected files: they can leak
+through process environments, deployment configuration, and debugging tools.
+
+`gateway-cli` supports `--rpcpassword-file`, `cfg set-mnemonic --words-file`,
+`ecash receive --notes-file`, `create-password-hash --password-file`, and
+`connect-fed --invite-code-file`. Each accepts a path or `-` to read stdin until
+EOF. Only one input per invocation may use stdin. For example:
+
+```bash
+gateway-cli --rpcpassword-file /run/secrets/gateway-password info
+gateway-cli --rpcpassword-file /run/secrets/gateway-password cfg set-mnemonic --words-file /run/secrets/gateway-mnemonic
+gateway-cli --rpcpassword-file /run/secrets/gateway-password ecash receive --notes-file - < ecash.txt
+```
+
+Do not use `--rpcpassword "$(cat password.txt)"`: shell expansion puts the secret
+back into process arguments. The tools do not prompt or turn off terminal echo;
+use protected files or a secret manager's pipe, not interactive terminal input.
+Each input is bounded (1 MiB for credentials, mnemonics and invite codes; 16 MiB
+for ecash), must be UTF-8, and has exactly one final LF or CRLF removed. Other
+whitespace and embedded newlines are preserved, not silently truncated.
+
+For `gatewayd` built from this checkout, use `--bitcoind-password-file`,
+`--bcrypt-password-hash-file`, and
+`--bcrypt-liquidity-manager-password-hash-file`. These accept file paths only,
+never stdin. Supplying both a file and the corresponding legacy argument or
+environment variable is an error; unset the legacy environment variable when
+switching to files. Restrict file permissions, mount container secret files
+read-only, and protect backups. Files reduce argv exposure but do not protect
+against processes that can read the files or the gateway's memory.
+
+Federation IDs, transaction IDs, node public keys, addresses, and invoices are
+not private keys (though they can reveal payment or relationship metadata).
+Invite codes can include a private federation's API secret: treat such codes as
+credentials and use `--invite-code-file`. Explicit export commands such as
+`seed`, `invite-codes`, and ecash creation intentionally print sensitive output;
+redirect it to protected storage and do not capture it in public logs.
+
 ## What is a Lightning Gateway?
 
 A Lightning Gateway is a service that bridges Fedimint federations with the broader Lightning Network. It enables federation users to:
@@ -110,13 +152,19 @@ Or copy it from the repository at [`docker/gatewayd/docker-compose.yaml`](../doc
 
 2. **Generate a password hash:**
 
+Using a `gateway-cli` built from this checkout (older released images may not
+support `--password-file`), read a password from a protected file rather than
+placing it in shell history or process arguments. Create `gateway-password.txt`
+using a trusted secret manager or editor, with access restricted to your user.
+
 ```bash
-docker run fedimint/gatewayd:v0.11.2 gateway-cli create-password-hash YOUR_PASSWORD_HERE | sed 's/\$/$$/g'
+gateway-cli create-password-hash --password-file - < gateway-password.txt | sed 's/\$/$$/g'
 ```
 
 3. **Configure the gateway:**
 
 Edit `docker-compose.yaml` and set `FM_GATEWAY_BCRYPT_PASSWORD_HASH` to your generated password hash.
+Protect the resulting Compose file too: password hashes permit offline guessing.
 
 4. **Start the gateway:**
 
