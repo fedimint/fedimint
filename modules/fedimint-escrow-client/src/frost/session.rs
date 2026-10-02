@@ -6,14 +6,14 @@ use fedimint_core::config::FederationId;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::secp256k1::PublicKey;
-use frost_secp256k1::keys::dkg::round1::{
+use frost_secp256k1_tr::keys::dkg::round1::{
     Package as Round1Package, SecretPackage as Round1SecretPackage,
 };
-use frost_secp256k1::keys::dkg::round2::{
+use frost_secp256k1_tr::keys::dkg::round2::{
     Package as Round2Package, SecretPackage as Round2SecretPackage,
 };
-use frost_secp256k1::keys::{KeyPackage, PublicKeyPackage};
-use frost_secp256k1::{Error, Identifier};
+use frost_secp256k1_tr::keys::{KeyPackage, PublicKeyPackage};
+use frost_secp256k1_tr::{Error, Identifier};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::client_db::{FrostDkgSessionKey, FrostDkgSessionRecordkey};

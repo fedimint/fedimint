@@ -24,7 +24,12 @@ fedimint-escrow-client = { workspace = true }
 fedimint-escrow-common = { workspace = true }
 fedimint-escrow-server = { workspace = true }
 fedimint-testing = { workspace = true }
+frost-secp256k1-tr = { version = "3.0.0", features = ["serde"] }
+futures = { workspace = true }
+iroh = { workspace = true, default-features = false }
 rand = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 tokio = { workspace = true }
 
 [lints]

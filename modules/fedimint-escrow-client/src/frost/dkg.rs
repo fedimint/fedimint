@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
 
-use frost_secp256k1::Identifier;
-use frost_secp256k1::keys::dkg::round1::{
+use frost_secp256k1_tr::Identifier;
+use frost_secp256k1_tr::keys::dkg::round1::{
     Package as Round1Package, SecretPackage as Round1SecretPackage,
 };
-use frost_secp256k1::keys::dkg::round2::{
+use frost_secp256k1_tr::keys::dkg::round2::{
     Package as Round2Package, SecretPackage as Round2SecretPackage,
 };
-use frost_secp256k1::keys::{KeyPackage, PublicKeyPackage};
+use frost_secp256k1_tr::keys::{KeyPackage, PublicKeyPackage};
 use rand::rngs::OsRng;
 
 use crate::frost::session::{FrostParticipant, SessionId};
@@ -59,7 +59,7 @@ impl<T: DkgTransport> DkgRunner<T> {
         let max_signers = participants.len() as u16;
         let rng = OsRng;
 
-        let (round1_secret_package, round1_package) = frost_secp256k1::keys::dkg::part1(
+        let (round1_secret_package, round1_package) = frost_secp256k1_tr::keys::dkg::part1(
             participant_id.identifier,
             max_signers,
             min_signers,
@@ -99,7 +99,7 @@ impl<T: DkgTransport> DkgRunner<T> {
         round1_received: &BTreeMap<Identifier, Round1Package>,
     ) -> Result<DkgRound2, DkgError> {
         let (round2_secret_package, round2_package) =
-            frost_secp256k1::keys::dkg::part2(round1_secret.clone(), round1_received)
+            frost_secp256k1_tr::keys::dkg::part2(round1_secret.clone(), round1_received)
                 .map_err(|e| DkgError::FrostError(e.to_string()))?;
 
         for (receiver, pkg) in round2_package {
@@ -134,7 +134,7 @@ impl<T: DkgTransport> DkgRunner<T> {
         round2_secret: &Round2SecretPackage,
         round2_received: &BTreeMap<Identifier, Round2Package>,
     ) -> Result<DkgResult, DkgError> {
-        frost_secp256k1::keys::dkg::part3(round2_secret, round1_received, round2_received)
+        frost_secp256k1_tr::keys::dkg::part3(round2_secret, round1_received, round2_received)
             .map(|(key_package, pubkey_package)| DkgResult {
                 key_package,
                 pubkey_package,

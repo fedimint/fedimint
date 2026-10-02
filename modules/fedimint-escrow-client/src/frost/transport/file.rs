@@ -5,8 +5,8 @@ use std::time::Duration;
 use async_trait::async_trait;
 use fedimint_core::runtime::sleep;
 use fedimint_core::time::now;
-use frost_secp256k1::Identifier;
-use frost_secp256k1::keys::dkg::{round1, round2};
+use frost_secp256k1_tr::Identifier;
+use frost_secp256k1_tr::keys::dkg::{round1, round2};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 

@@ -3637,7 +3637,7 @@ dependencies = [
  "fedimint-escrow-common",
  "fedimint-logging",
  "fedimint-server-core",
- "frost-secp256k1",
+ "frost-secp256k1-tr",
  "futures",
  "hex",
  "iroh 0.35.0",
@@ -3702,7 +3702,12 @@ dependencies = [
  "fedimint-escrow-common",
  "fedimint-escrow-server",
  "fedimint-testing",
+ "frost-secp256k1-tr",
+ "futures",
+ "iroh 0.35.0",
  "rand 0.8.5",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 
@@ -5493,10 +5498,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "frost-secp256k1"
+name = "frost-secp256k1-tr"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d69a97ae720bc1f01efd7a87c6c8451582bd00a45383052b01e83ba9c6faa5c5"
+checksum = "c6fca4ca9f057cf22066f3eb5bbda59d2af51f429f2aac5982a11a8a841c0993"
 dependencies = [
  "document-features",
  "frost-core",

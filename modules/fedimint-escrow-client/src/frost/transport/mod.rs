@@ -6,7 +6,7 @@ use std::error::Error;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use frost_secp256k1::{self as frost, Identifier};
+use frost_secp256k1_tr::{self as frost, Identifier};
 
 use crate::frost::session::SessionId;
 

@@ -5,9 +5,9 @@ use std::time::Duration;
 use async_trait::async_trait;
 use fedimint_core::runtime::{sleep, spawn};
 use fedimint_core::time::now;
-use frost_secp256k1::Identifier;
-use frost_secp256k1::keys::dkg::round1::Package as Round1Package;
-use frost_secp256k1::keys::dkg::round2::Package as Round2Package;
+use frost_secp256k1_tr::Identifier;
+use frost_secp256k1_tr::keys::dkg::round1::Package as Round1Package;
+use frost_secp256k1_tr::keys::dkg::round2::Package as Round2Package;
 use futures::lock::Mutex;
 use iroh::discovery::static_provider::StaticProvider;
 use iroh::{Endpoint, NodeAddr, NodeId, SecretKey};
@@ -17,7 +17,7 @@ use crate::frost::transport::{DkgTransport, TransportError};
 
 const ROUND1_TAG: u8 = 1;
 const ROUND2_TAG: u8 = 2;
-const DKG_ALPN: &[u8] = b"fedimint_escrow_iroh_dkg_consortium";
+pub const DKG_ALPN: &[u8] = b"fedimint_escrow_iroh_dkg_consortium";
 
 #[derive(Default)]
 struct Inbox {
@@ -42,30 +42,33 @@ impl IrohDkgTransport {
         for addr in peers.values() {
             static_provider.add_node_info(addr.clone());
         }
-
         let endpoint = Endpoint::builder()
             .secret_key(secret)
             .alpns(vec![DKG_ALPN.to_vec()])
             .discovery(Box::new(static_provider))
             .bind()
             .await?;
+        Ok(Self::from_endpoint(endpoint, session_id, peers))
+    }
 
+    pub fn from_endpoint(
+        endpoint: Endpoint,
+        session_id: SessionId,
+        peers: BTreeMap<Identifier, NodeAddr>,
+    ) -> Self {
         let inbox = Arc::new(Mutex::new(Inbox::default()));
-
         let receiver_mapping: BTreeMap<NodeId, Identifier> =
             peers.iter().map(|(id, addr)| (addr.node_id, *id)).collect();
 
         let accept_endpoint = endpoint.clone();
         let accept_inbox = inbox.clone();
-        let expected_session_id = session_id;
         spawn("iroh-dkg-accept", async move {
             while let Some(incoming) = accept_endpoint.accept().await {
                 let inbox = accept_inbox.clone();
                 let receiver_mapping = receiver_mapping.clone();
                 spawn("iroh-dkg-handle-incoming", async move {
                     if let Err(e) =
-                        handle_incoming(incoming, inbox, receiver_mapping, expected_session_id)
-                            .await
+                        handle_incoming(incoming, inbox, receiver_mapping, session_id).await
                     {
                         tracing::warn!("iroh dkg transport: {e}");
                     }
@@ -73,14 +76,13 @@ impl IrohDkgTransport {
             }
         });
 
-        Ok(Self {
+        Self {
             endpoint,
             session_id,
             peers,
             inbox,
-        })
+        }
     }
-
     async fn send_tagged(
         &self,
         session_id: &SessionId,

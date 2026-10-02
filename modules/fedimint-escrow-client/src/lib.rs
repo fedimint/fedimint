@@ -35,7 +35,7 @@ use fedimint_escrow_common::{
     GetContractParams, GetPendinFeeParams, KIND, LIST_CONTRACT_DOMAIN, ListContractParams, Outcome,
     Resolution, compute_contract_hash, compute_escrow_message, compute_proof_message,
 };
-use frost_secp256k1::Identifier;
+use frost_secp256k1_tr::Identifier;
 use futures::StreamExt;
 use iroh::{NodeAddr, SecretKey};
 use ring::rand::{SecureRandom, SystemRandom};
