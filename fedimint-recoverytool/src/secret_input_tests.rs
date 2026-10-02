@@ -53,7 +53,7 @@ fn config_does_not_require_password_or_key() {
 
 #[test]
 fn file_requires_descriptor() {
-    assert!(
+    assert_eq!(
         RecoveryTool::try_parse_from([
             "recoverytool",
             "--cfg",
@@ -66,7 +66,9 @@ fn file_requires_descriptor() {
         ])
         .unwrap()
         .resolve_key()
-        .is_err()
+        .unwrap_err()
+        .to_string(),
+        "--key-file or --key requires --descriptor"
     );
 }
 
