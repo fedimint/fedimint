@@ -477,7 +477,9 @@ impl GatewayClientModuleV2 {
         });
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-        self.client_ctx
+        // If the operation already exists, join it instead of starting another payment.
+        let _ = self
+            .client_ctx
             .manual_operation_start_dbtx(
                 &mut dbtx.to_ref_nc(),
                 operation_id,
@@ -485,8 +487,7 @@ impl GatewayClientModuleV2 {
                 GatewayOperationMetaV2::role(GatewayOperationRoleV2::Send),
                 vec![self.client_ctx.make_dyn_state(send_sm)],
             )
-            .await
-            .ok();
+            .await;
 
         self.client_ctx
             .log_event(

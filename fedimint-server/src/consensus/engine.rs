@@ -342,8 +342,9 @@ impl ConsensusEngine {
 
         // We can terminate the session instead of waiting for other peers to complete
         // it since they can always download the signed session outcome from us
-        terminator_sender.send(()).ok();
-        aleph_handle.await.ok();
+        // Preserve best-effort shutdown, but always wait before removing the backup.
+        let _ = terminator_sender.send(());
+        let _ = aleph_handle.await;
 
         // This method removes the backup of the current session from the database
         // and therefore has to be called after we have waited for the session to
