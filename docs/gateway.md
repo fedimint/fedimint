@@ -27,6 +27,11 @@ gateway-cli --rpcpassword-file /run/secrets/gateway-password cfg set-mnemonic --
 gateway-cli --rpcpassword-file /run/secrets/gateway-password ecash receive --notes-file - < ecash.txt
 ```
 
+In builds with Tor support, select it explicitly with
+`connect-fed --invite-code-file /run/secrets/invite-code --use-tor true`.
+The legacy positional Tor boolean remains supported when the invite code is
+positional; do not combine that boolean with `--use-tor`.
+
 Do not use `--rpcpassword "$(cat password.txt)"`: shell expansion puts the secret
 back into process arguments. The tools do not prompt or turn off terminal echo;
 use protected files or a secret manager's pipe, not interactive terminal input.

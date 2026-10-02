@@ -312,6 +312,17 @@ async fn run() -> CliOutputResult {
 impl Cli {
     /// Validate every source before reading any input (especially stdin).
     fn resolve_secret_inputs(&mut self) -> Result<(), ServerError> {
+        #[cfg(feature = "tor")]
+        if let Commands::General(GeneralCommands::ConnectFed {
+            use_tor: Some(_),
+            use_tor_option: Some(_),
+            ..
+        }) = &self.command
+        {
+            return Err(ServerError::InvalidRequest(
+                "Specify Tor selection either positionally or with --use-tor, not both".to_owned(),
+            ));
+        }
         let command_limit = if matches!(
             &self.command,
             Commands::Ecash(EcashCommands::Receive { .. })

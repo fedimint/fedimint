@@ -40,6 +40,11 @@ pub enum GeneralCommands {
         /// client
         #[cfg(feature = "tor")]
         use_tor: Option<bool>,
+        /// Select Tor when using --invite-code-file (also supported with a
+        /// positional invite code). Do not combine with the positional boolean.
+        #[cfg(feature = "tor")]
+        #[clap(long = "use-tor")]
+        use_tor_option: Option<bool>,
         /// Indicates if the client should be recovered from a mnemonic
         #[clap(long)]
         recover: Option<bool>,
@@ -113,6 +118,8 @@ impl GeneralCommands {
                 invite_code,
                 #[cfg(feature = "tor")]
                 use_tor,
+                #[cfg(feature = "tor")]
+                use_tor_option,
                 recover,
                 ..
             } => {
@@ -124,7 +131,7 @@ impl GeneralCommands {
                     ConnectFedPayload {
                         invite_code,
                         #[cfg(feature = "tor")]
-                        use_tor,
+                        use_tor: use_tor_option.or(use_tor),
                         #[cfg(not(feature = "tor"))]
                         use_tor: None,
                         recover,

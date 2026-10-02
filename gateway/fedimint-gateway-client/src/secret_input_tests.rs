@@ -207,6 +207,10 @@ async fn file_values_reach_http_handlers() {
             }
             let body: serde_json::Value = serde_json::from_slice(&request[header_end..]).unwrap();
             assert_eq!(body[field], " first\nsecond ");
+            #[cfg(feature = "tor")]
+            if field == "invite_code" {
+                assert_eq!(body["use_tor"], true);
+            }
             // A static failure response suffices: these tests verify the
             // serialized request, not server-side mnemonic/ecash validation.
             stream
@@ -222,6 +226,10 @@ async fn file_values_reach_http_handlers() {
             password.path().to_str().unwrap(),
         ];
         argv.extend(args);
+        #[cfg(feature = "tor")]
+        if field == "invite_code" {
+            argv.extend(["--use-tor", "true"]);
+        }
         let mut cli = Cli::try_parse_from(argv).unwrap();
         cli.resolve_secret_inputs().unwrap();
         let registry = ConnectorRegistry::build_from_testing_defaults()
@@ -238,4 +246,33 @@ async fn file_values_reach_http_handlers() {
         assert!(result.is_err());
         server.await.unwrap();
     }
+}
+
+#[cfg(feature = "tor")]
+#[test]
+fn tor_selection_preserves_legacy_and_file_forms() {
+    let mut legacy =
+        Cli::try_parse_from(["gateway-cli", "connect-fed", "invite-marker", "true"]).unwrap();
+    legacy.resolve_secret_inputs().unwrap();
+    assert!(matches!(
+        legacy.command,
+        Commands::General(GeneralCommands::ConnectFed {
+            use_tor: Some(true),
+            use_tor_option: None,
+            ..
+        })
+    ));
+
+    let mut conflict = Cli::try_parse_from([
+        "gateway-cli",
+        "connect-fed",
+        "invite-marker",
+        "true",
+        "--use-tor",
+        "false",
+    ])
+    .unwrap();
+    let error = conflict.resolve_secret_inputs().unwrap_err().to_string();
+    assert!(!error.contains("invite-marker"));
+    assert!(error.contains("not both"));
 }
