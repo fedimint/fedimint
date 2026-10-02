@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -25,6 +26,8 @@ struct State {
     fail_reads: bool,
     missing_feerate: bool,
     fail_broadcast: bool,
+    hang_chain_id: bool,
+    block_chain_id_ms: u64,
     calls: Vec<String>,
     transactions: Vec<Transaction>,
 }
@@ -34,6 +37,24 @@ struct State {
 struct Fake {
     state: Mutex<State>,
     url: SafeUrl,
+    /// Set as the identity probe enters the blocking section, so a test can
+    /// tell "the probe was cut short" apart from "the probe never got there".
+    entered_blocking: AtomicBool,
+}
+
+/// Waits briefly for a probe to reach its blocking section.
+///
+/// The probe runs in its own task, so it may still be on its way there when the
+/// bounded wait has already returned. Without this a green test could mean the
+/// probe never started.
+async fn await_blocking_entry(fake: &Fake) -> bool {
+    for _ in 0..40 {
+        if fake.entered_blocking.load(AtomicOrdering::SeqCst) {
+            return true;
+        }
+        fedimint_core::runtime::sleep(Duration::from_millis(50)).await;
+    }
+    false
 }
 
 fn chain(network: Network) -> ChainId {
@@ -52,10 +73,13 @@ impl Fake {
                 fail_reads: false,
                 missing_feerate: false,
                 fail_broadcast: false,
+                hang_chain_id: false,
+                block_chain_id_ms: 0,
                 calls: vec![],
                 transactions: vec![],
             }),
             url: format!("http://{name}.invalid").parse().unwrap(),
+            entered_blocking: AtomicBool::new(false),
         })
     }
 
@@ -149,6 +173,21 @@ impl IServerBitcoinRpc for Fake {
     }
 
     async fn get_chain_id(&self) -> Result<ChainId> {
+        if self.state.lock().unwrap().hang_chain_id {
+            std::future::pending::<()>().await;
+        }
+
+        // The production bitcoind path reaches a synchronous RPC through
+        // `block_in_place`, so a stalled backend blocks the poll rather than
+        // parking the future. This reproduces that boundary.
+        let block_ms = self.state.lock().unwrap().block_chain_id_ms;
+        if block_ms > 0 {
+            self.entered_blocking.store(true, AtomicOrdering::SeqCst);
+            fedimint_core::runtime::block_in_place(|| {
+                std::thread::sleep(Duration::from_millis(block_ms));
+            });
+        }
+
         Ok(self.call("chain")?.chain)
     }
 }
@@ -476,4 +515,56 @@ async fn monitor_read_failure_does_not_suppress_broadcast() {
         .shutdown_join_all(Duration::from_secs(1))
         .await
         .unwrap();
+}
+
+/// A backend that accepts the connection and then never answers used to hold
+/// the startup identity check open, and with it the server.
+#[tokio::test(start_paused = true)]
+async fn startup_survives_a_backend_that_never_answers() {
+    let primary = Fake::new("primary");
+    primary.state.lock().unwrap().hang_chain_id = true;
+    let fallback = Fake::new("fallback");
+
+    let rpc = fedimint_core::runtime::timeout(
+        Duration::from_secs(60),
+        BitcoindClientWithFallback::from_clients(primary.clone(), fallback.clone()),
+    )
+    .await
+    .expect("startup finishes without the backend that never answers")
+    .unwrap();
+
+    assert_eq!(rpc.get_chain_id().await.unwrap(), chain(Network::Bitcoin));
+    assert_eq!(fallback.calls("chain"), 1);
+}
+
+/// The bitcoind identity probe ends in a synchronous RPC inside
+/// `block_in_place`, which an async timeout around the call cannot interrupt.
+/// Startup must still come back.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn startup_is_not_held_by_a_blocking_identity_probe() {
+    let primary = Fake::new("primary");
+    primary.state.lock().unwrap().block_chain_id_ms = 3_000;
+    let fallback = Fake::new("fallback");
+
+    let started = fedimint_core::time::now();
+    let rpc = BitcoindClientWithFallback::from_clients_with_probe_timeout(
+        primary.clone(),
+        fallback.clone(),
+        Duration::from_millis(100),
+    )
+    .await
+    .unwrap();
+    let waited = fedimint_core::time::now()
+        .duration_since(started)
+        .unwrap_or_default();
+
+    assert!(
+        waited < Duration::from_secs(1),
+        "startup waited out the blocking probe: {waited:?}"
+    );
+    assert!(
+        await_blocking_entry(&primary).await,
+        "the probe never reached the blocking call, so the timing above proves nothing"
+    );
+    assert_eq!(rpc.get_chain_id().await.unwrap(), chain(Network::Bitcoin));
 }
