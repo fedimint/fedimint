@@ -7,6 +7,7 @@ mod lightning_commands;
 mod onchain_commands;
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use bitcoin::Txid;
 use bitcoin::address::NetworkUnchecked;
@@ -225,9 +226,14 @@ struct Cli {
     #[command(subcommand)]
     command: Commands,
 
-    /// Password for authenticated requests to the gateway
+    /// Password for authenticated requests (discouraged: visible in process
+    /// arguments). Prefer --rpcpassword-file.
     #[clap(long)]
     rpcpassword: Option<String>,
+
+    /// Read the RPC password from a file, or '-' for stdin
+    #[clap(long)]
+    rpcpassword_file: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -268,7 +274,8 @@ async fn main() {
 }
 
 async fn run() -> CliOutputResult {
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
+    cli.resolve_secret_inputs()?;
     let connector_registry = ConnectorRegistry::build_from_client_defaults()
         .with_env_var_overrides()
         .bind()
@@ -301,6 +308,80 @@ async fn run() -> CliOutputResult {
 
     Ok(output)
 }
+
+impl Cli {
+    /// Validate every source before reading any input (especially stdin).
+    fn resolve_secret_inputs(&mut self) -> Result<(), ServerError> {
+        #[cfg(feature = "tor")]
+        if let Commands::General(GeneralCommands::ConnectFed {
+            use_tor: Some(_),
+            use_tor_option: Some(_),
+            ..
+        }) = &self.command
+        {
+            return Err(ServerError::InvalidRequest(
+                "Specify Tor selection either positionally or with --use-tor, not both".to_owned(),
+            ));
+        }
+        let command_limit = if matches!(
+            &self.command,
+            Commands::Ecash(EcashCommands::Receive { .. })
+        ) {
+            16 * 1024 * 1024
+        } else {
+            1024 * 1024
+        };
+        let command_source = match &mut self.command {
+            Commands::General(GeneralCommands::CreatePasswordHash {
+                password,
+                password_file,
+                ..
+            }) => Some((password, password_file)),
+            Commands::General(GeneralCommands::ConnectFed {
+                invite_code,
+                invite_code_file,
+                ..
+            }) => Some((invite_code, invite_code_file)),
+            Commands::Cfg(ConfigCommands::SetMnemonic { words, words_file }) => {
+                Some((words, words_file))
+            }
+            Commands::Ecash(EcashCommands::Receive { notes, notes_file }) => {
+                Some((notes, notes_file))
+            }
+            _ => None,
+        };
+        let mut sources = vec![(
+            &mut self.rpcpassword,
+            &mut self.rpcpassword_file,
+            1024 * 1024,
+        )];
+        sources.extend(command_source.map(|(value, file)| (value, file, command_limit)));
+        if sources
+            .iter()
+            .any(|(value, file, _)| value.is_some() && file.is_some())
+        {
+            return Err(ServerError::InvalidRequest(
+                "Specify only one value or file source for each secret".to_owned(),
+            ));
+        }
+        fedimint_core::util::ensure_single_stdin(
+            sources.iter().filter_map(|(_, file, _)| file.as_deref()),
+        )
+        .map_err(|e| ServerError::InvalidRequest(e.to_string()))?;
+        for (value, file, limit) in sources {
+            if let Some(path) = file.take() {
+                *value = Some(
+                    fedimint_core::util::read_secret_file(&path, limit)
+                        .map_err(|e| ServerError::InvalidRequest(e.to_string()))?,
+                );
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod secret_input_tests;
 
 fn print_response<T: Serialize>(val: T) {
     println!(

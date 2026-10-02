@@ -23,9 +23,11 @@ services:
       # REQUIRED: Set the password hash to your own password
       # Run:
       #
-      # docker run fedimint/gatewayd:v0.11.2 gateway-cli create-password-hash <REPLACE ME> | sed 's/\$/$$/g'
+      # With gateway-cli built from the current checkout (older images lack
+      # --password-file), and a user-readable-only password file:
+      # gateway-cli create-password-hash --password-file - < gateway-password.txt | sed 's/\$/$$/g'
       #
-      # Then paste the result here.
+      # Then paste the result here. Protect this file: hashes allow offline guessing.
       FM_GATEWAY_BCRYPT_PASSWORD_HASH: ""
 
       # Esplora Config (comment out to disable esplora)

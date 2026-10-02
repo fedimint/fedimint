@@ -57,8 +57,12 @@ pub enum ConfigCommands {
     /// Instructs the gateway to create a new mnemonic or set it to the provided
     /// mnemonic
     SetMnemonic {
+        /// Mnemonic in process arguments (discouraged). Prefer --words-file.
         #[clap(long)]
         words: Option<String>,
+        /// Read the mnemonic from a file, or '-' for stdin
+        #[clap(long)]
+        words_file: Option<std::path::PathBuf>,
     },
 }
 
@@ -120,7 +124,7 @@ impl ConfigCommands {
                 .await?;
                 Ok(CliOutput::Empty)
             }
-            Self::SetMnemonic { words } => {
+            Self::SetMnemonic { words, .. } => {
                 set_mnemonic(client, base_url, SetMnemonicPayload { words }).await?;
                 Ok(CliOutput::Empty)
             }
