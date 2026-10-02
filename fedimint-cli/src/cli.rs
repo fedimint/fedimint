@@ -5,11 +5,10 @@ use clap::builder::BoolishValueParser;
 use clap::{Args, Parser, Subcommand};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
-use fedimint_core::invite_code::InviteCode;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, PeerId, TieredMulti};
 use fedimint_eventlog::EventLogId;
-use fedimint_mint_client::{OOBNotes, SpendableNote};
+use fedimint_mint_client::SpendableNote;
 use serde::{Deserialize, Serialize};
 
 use crate::client::{ClientCmd, ModuleSelector};
@@ -47,12 +46,18 @@ pub(crate) struct Opts {
     pub our_id: Option<PeerId>,
 
     /// Guardian password for authentication
-    #[arg(long, env = FM_PASSWORD_API_ENV)]
+    #[arg(long, env = FM_PASSWORD_API_ENV, hide_env_values = true)]
     pub password: Option<String>,
+    /// Read the guardian password from a protected UTF-8 file (`-` for stdin).
+    #[arg(long)]
+    pub password_file: Option<PathBuf>,
 
     /// Federation secret as consensus-encoded hex.
-    #[arg(long, env = FM_FEDERATION_SECRET_HEX_ENV)]
+    #[arg(long, env = FM_FEDERATION_SECRET_HEX_ENV, hide_env_values = true)]
     pub federation_secret_hex: Option<String>,
+    /// Read the federation secret from a protected UTF-8 file (`-` for stdin).
+    #[arg(long)]
+    pub federation_secret_hex_file: Option<PathBuf>,
 
     #[cfg(feature = "tor")]
     /// Activate usage of Tor as the Connector when building the Client
@@ -98,7 +103,10 @@ pub(crate) enum Command {
     /// Join a federation using its InviteCode
     #[clap(alias = "join-federation")]
     Join {
-        invite_code: String,
+        invite_code: Option<String>,
+        /// Read an invite code from a file (`-` for stdin).
+        #[arg(long)]
+        invite_code_file: Option<PathBuf>,
     },
 
     Completion {
@@ -121,8 +129,11 @@ pub(crate) enum AdminCmd {
         #[arg(long, env = FM_OUR_ID_ENV)]
         peer_id: u16,
         /// Guardian password for authentication
-        #[arg(long, env = FM_PASSWORD_API_ENV)]
-        password: String,
+        #[arg(long, env = FM_PASSWORD_API_ENV, hide_env_values = true)]
+        password: Option<String>,
+        /// Read the guardian password from a protected file (`-` for stdin).
+        #[arg(long)]
+        password_file: Option<PathBuf>,
         /// Skip interactive endpoint verification
         #[arg(long)]
         no_verify: bool,
@@ -201,12 +212,16 @@ pub(crate) enum SetupAdminCmd {
 #[derive(Debug, Clone, Subcommand)]
 pub(crate) enum DecodeType {
     /// Decode an invite code string into a JSON representation
-    InviteCode { invite_code: InviteCode },
+    InviteCode {
+        invite_code: Option<String>,
+        /// Read an invite code from a file (`-` for stdin).
+        #[arg(long)]
+        invite_code_file: Option<PathBuf>,
+    },
     /// Decode a string of ecash notes into a JSON representation
-    #[group(required = true, multiple = false)]
     Notes {
         /// Base64 e-cash notes to be decoded
-        notes: Option<OOBNotes>,
+        notes: Option<String>,
         /// File containing base64 e-cash notes to be decoded
         #[arg(long)]
         file: Option<PathBuf>,
@@ -234,12 +249,20 @@ pub(crate) enum EncodeType {
         federation_id: FederationId,
         #[clap(long = "peer")]
         peer: PeerId,
-        #[arg(env = FM_API_SECRET_ENV)]
+        #[arg(env = FM_API_SECRET_ENV, hide_env_values = true)]
         api_secret: Option<String>,
+        /// Read the API secret from a protected file (`-` for stdin).
+        #[arg(long)]
+        api_secret_file: Option<PathBuf>,
     },
 
     /// Encode a JSON string of notes to an ecash string
-    Notes { notes_json: String },
+    Notes {
+        notes_json: Option<String>,
+        /// Read note JSON from a protected file (`-` for stdin).
+        #[arg(long)]
+        notes_json_file: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -259,8 +282,10 @@ Examples:
         ///
         /// Note: single jsonrpc argument params string, which might require
         /// double-quotes (see example above).
-        #[clap(default_value = "null")]
-        params: String,
+        params: Option<String>,
+        /// Read JSON parameters from a file (`-` for stdin).
+        #[arg(long)]
+        params_file: Option<PathBuf>,
         /// Which server to send request to
         #[clap(long = "peer-id")]
         peer_id: Option<u16>,
@@ -273,6 +298,9 @@ Examples:
         /// called. Only use together with --peer-id.
         #[clap(long, requires = "peer_id")]
         password: Option<String>,
+        /// Read the guardian password from a protected file (`-` for stdin).
+        #[arg(long, requires = "peer_id")]
+        password_file: Option<PathBuf>,
     },
 
     ApiAnnouncements,
@@ -324,7 +352,10 @@ Examples:
         visible_aliases = ["federation-ip-query", "iroh-ip-query"]
     )]
     QueryFederationIps {
-        invite_code: InviteCode,
+        invite_code: Option<String>,
+        /// Read an invite code from a file (`-` for stdin).
+        #[arg(long)]
+        invite_code_file: Option<PathBuf>,
         /// Time to wait for iroh to discover a direct path to each guardian
         #[arg(long, default_value = "5")]
         path_timeout_seconds: u64,
@@ -349,8 +380,11 @@ Examples:
         #[arg(long = "salt-file")]
         salt_file: Option<PathBuf>,
         /// The password that encrypts the configs
-        #[arg(env = FM_PASSWORD_API_ENV)]
-        password: String,
+        #[arg(env = FM_PASSWORD_API_ENV, hide_env_values = true)]
+        password: Option<String>,
+        /// Read the encryption password from a protected file (`-` for stdin).
+        #[arg(long)]
+        password_file: Option<PathBuf>,
     },
 
     ConfigEncrypt {
@@ -365,8 +399,11 @@ Examples:
         #[arg(long = "salt-file")]
         salt_file: Option<PathBuf>,
         /// The password that encrypts the configs
-        #[arg(env = FM_PASSWORD_API_ENV)]
-        password: String,
+        #[arg(env = FM_PASSWORD_API_ENV, hide_env_values = true)]
+        password: Option<String>,
+        /// Read the encryption password from a protected file (`-` for stdin).
+        #[arg(long)]
+        password_file: Option<PathBuf>,
     },
 
     /// Lists active and inactive state machine states of the operation
