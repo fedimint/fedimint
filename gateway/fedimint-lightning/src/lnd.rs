@@ -81,11 +81,32 @@ const LNV2_HOLD_INVOICE_CLTV_EXPIRY: u64 = 144;
 /// `LNV2_HOLD_INVOICE_CLTV_EXPIRY`.
 const LND_ASSUMED_HOLD_EXPIRY_DELTA: u32 = 36;
 
+/// Whether a HOLD invoice accepted an HTLC without an MPP total. For the
+/// non-blinded HOLD invoices the gateway creates, standard LND builds require
+/// the payment address, which travels in the MPP record, from every HTLC
+/// except one carrying a keysend record. Since LND v0.20.3 and v0.21.2 that
+/// record must hold the invoice's preimage; before, any value passes unless
+/// `accept-keysend` is on.
+fn has_accepted_keysend_htlc(htlcs: &[InvoiceHtlc]) -> bool {
+    htlcs
+        .iter()
+        .any(|htlc| htlc.state() == InvoiceHtlcState::Accepted && htlc.mpp_total_amt_msat == 0)
+}
+
 /// Block height at which LND is assumed to cancel an accepted HOLD invoice by
 /// itself, `LND_ASSUMED_HOLD_EXPIRY_DELTA` blocks before its earliest accepted
 /// HTLC expires, after which the gateway can no longer settle it. Without an
 /// accepted HTLC there is no deadline to trust, so it is `0`.
+///
+/// The same holds once a keysend HTLC is accepted (see
+/// [`has_accepted_keysend_htlc`]): the invoice then keeps accepting further
+/// keysend HTLCs, and until it restarts LND neither reports them nor moves its
+/// cancel height for them.
 fn hold_invoice_claim_deadline(htlcs: &[InvoiceHtlc]) -> u32 {
+    if has_accepted_keysend_htlc(htlcs) {
+        return 0;
+    }
+
     htlcs
         .iter()
         .filter(|htlc| htlc.state() == InvoiceHtlcState::Accepted)
@@ -299,6 +320,14 @@ impl GatewayLndClient {
                             "Ignoring HOLD invoice not created by this gateway",
                         );
                         continue;
+                    }
+
+                    if has_accepted_keysend_htlc(&hold.htlcs) {
+                        warn!(
+                            target: LOG_LIGHTNING,
+                            payment_hash = %PrettyPaymentHash(&hold.r_hash),
+                            "LNv2 HOLD invoice accepted a keysend HTLC, its claim deadline is not trusted",
+                        );
                     }
 
                     let (incoming_chan_id, htlc_id) = NO_INCOMING_CIRCUIT;
