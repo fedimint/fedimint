@@ -1,6 +1,8 @@
 #![deny(clippy::pedantic)]
 
 mod key;
+#[cfg(test)]
+mod secret_input_tests;
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -56,14 +58,42 @@ struct RecoveryTool {
     #[arg(long)]
     descriptor: Option<PegInDescriptor>,
     /// Wallet secret key, can be used instead of config together with
-    /// --descriptor
+    /// --descriptor. Prefer --key-file to avoid exposing keys in arguments.
     #[arg(long, requires = "descriptor")]
-    key: Option<SecretKey>,
+    key: Option<String>,
+    /// Read a wallet secret key from a UTF-8 file, or '-' for stdin.
+    #[arg(long, requires = "descriptor")]
+    key_file: Option<PathBuf>,
     /// Network to operate on, has to be specified if --cfg isn't present
     #[arg(long, default_value = "bitcoin", requires = "descriptor")]
     network: Network,
     #[command(subcommand)]
     strategy: TweakSource,
+}
+
+impl RecoveryTool {
+    fn resolve_key(&self) -> anyhow::Result<Option<SecretKey>> {
+        anyhow::ensure!(
+            self.key.is_none() || self.key_file.is_none(),
+            "key argument conflicts with key file"
+        );
+        let value = if let Some(path) = &self.key_file {
+            Some(fedimint_core::util::read_secret_file(path, 1024 * 1024)?)
+        } else {
+            self.key.clone()
+        };
+        anyhow::ensure!(
+            self.descriptor.is_none() || value.is_some(),
+            "--descriptor requires --key-file or --key"
+        );
+        value
+            .map(|value| {
+                value
+                    .parse()
+                    .map_err(|_| anyhow!("invalid wallet secret key"))
+            })
+            .transpose()
+    }
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -127,11 +157,11 @@ async fn get_db(path: &Path, module_decoders: ModuleDecoderRegistry) -> Database
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    TracingSetup::default().init()?;
-
     handle_version_hash_command(fedimint_build_code_version_env!());
 
     let opts: RecoveryTool = RecoveryTool::parse();
+    let key = opts.resolve_key()?;
+    TracingSetup::default().init()?;
 
     let (base_descriptor, base_key, network, wallet_module_id) = if let Some(config) = opts.config {
         let cfg = read_server_config(&config).expect("Could not read config file");
@@ -145,7 +175,7 @@ async fn main() -> anyhow::Result<()> {
         let network = wallet_cfg.consensus.network.0;
 
         (base_descriptor, base_key, network, wallet_module_id)
-    } else if let (Some(descriptor), Some(key)) = (opts.descriptor, opts.key) {
+    } else if let (Some(descriptor), Some(key)) = (opts.descriptor, key) {
         // When using descriptor directly without config, we don't have a known wallet
         // module ID. Use 0 as a placeholder since it's only used for DB
         // prefix/decoder matching which isn't needed with direct descriptor usage.
