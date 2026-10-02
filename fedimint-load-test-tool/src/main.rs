@@ -7,7 +7,7 @@
 #![allow(clippy::large_futures)]
 
 use std::collections::{BTreeMap, HashMap};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 use std::vec;
@@ -29,7 +29,7 @@ use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::runtime::spawn;
-use fedimint_core::util::{BoxFuture, SafeUrl};
+use fedimint_core::util::{BoxFuture, SafeUrl, ensure_single_stdin, read_secret_file};
 use fedimint_ln_client::{LightningClientModule, LnReceiveState};
 use fedimint_ln_common::LightningGateway;
 use fedimint_mint_client::OOBNotes;
@@ -45,6 +45,77 @@ use crate::common::{
     build_client, do_spend_notes, get_invite_code_cli, remint_denomination, try_get_notes_cli,
 };
 pub mod common;
+#[cfg(test)]
+mod tests;
+
+/// Inputs that may contain bearer notes or an invite's optional access secret.
+#[derive(Args, Clone)]
+struct LoadInputs {
+    /// Federation invite; if omitted, use the local CLI or existing database
+    #[arg(long, conflicts_with = "invite_code_file")]
+    invite_code: Option<String>,
+    /// Read an invite from a protected UTF-8 file (max 1 MiB), or `-` for stdin
+    #[arg(long)]
+    invite_code_file: Option<PathBuf>,
+    /// Bearer ecash; if omitted, use archived funds or the local CLI
+    #[arg(long, conflicts_with = "initial_notes_file")]
+    initial_notes: Option<String>,
+    /// Read bearer ecash from a protected UTF-8 file (max 16 MiB), or `-` for
+    /// stdin
+    #[arg(long)]
+    initial_notes_file: Option<PathBuf>,
+    #[arg(skip)]
+    resolved_invite: Option<InviteCode>,
+    #[arg(skip)]
+    resolved_notes: Option<OOBNotes>,
+}
+
+fn resolve_input<T: FromStr>(
+    value: Option<&str>,
+    file: Option<&Path>,
+    max_bytes: usize,
+    label: &str,
+) -> anyhow::Result<Option<T>> {
+    let input = match (value, file) {
+        (Some(_), Some(_)) => bail!("Specify only one source for {label}"),
+        (None, None) => return Ok(None),
+        (Some(value), None) => value.to_owned(),
+        (None, Some(path)) => read_secret_file(path, max_bytes)?,
+    };
+    input
+        .parse()
+        .map(Some)
+        .map_err(|_| anyhow!("Invalid {label}"))
+}
+
+impl LoadInputs {
+    fn resolve(&mut self) -> anyhow::Result<()> {
+        if self.invite_code.is_some() && self.invite_code_file.is_some()
+            || self.initial_notes.is_some() && self.initial_notes_file.is_some()
+        {
+            bail!("Specify only one source for each input");
+        }
+        ensure_single_stdin(
+            self.invite_code_file
+                .iter()
+                .chain(&self.initial_notes_file)
+                .map(PathBuf::as_path),
+        )?;
+        self.resolved_invite = resolve_input(
+            self.invite_code.as_deref(),
+            self.invite_code_file.as_deref(),
+            1024 * 1024,
+            "invite code",
+        )?;
+        self.resolved_notes = resolve_input(
+            self.initial_notes.as_deref(),
+            self.initial_notes_file.as_deref(),
+            16 * 1024 * 1024,
+            "initial notes",
+        )?;
+        Ok(())
+    }
+}
 
 #[derive(Parser, Clone)]
 #[command(version)]
@@ -78,8 +149,18 @@ enum LnInvoiceGeneration {
 enum Command {
     #[command(about = "Keep many websocket connections to a federation for a duration of time")]
     TestConnect {
-        #[arg(long, help = "Federation invite code")]
-        invite_code: String,
+        #[arg(
+            long,
+            required_unless_present = "invite_code_file",
+            conflicts_with = "invite_code_file"
+        )]
+        invite_code: Option<String>,
+        /// Read an invite from a protected UTF-8 file (max 1 MiB), or `-` for
+        /// stdin
+        #[arg(long)]
+        invite_code_file: Option<PathBuf>,
+        #[arg(skip)]
+        resolved_invite: Option<InviteCode>,
         #[arg(
             long,
             default_value = "60",
@@ -100,8 +181,18 @@ enum Command {
     },
     #[command(about = "Try to download the client config many times.")]
     TestDownload {
-        #[arg(long, help = "Federation invite code")]
-        invite_code: String,
+        #[arg(
+            long,
+            required_unless_present = "invite_code_file",
+            conflicts_with = "invite_code_file"
+        )]
+        invite_code: Option<String>,
+        /// Read an invite from a protected UTF-8 file (max 1 MiB), or `-` for
+        /// stdin
+        #[arg(long)]
+        invite_code_file: Option<PathBuf>,
+        #[arg(skip)]
+        resolved_invite: Option<InviteCode>,
     },
     #[command(
         about = "Run a load test where many users in parallel will try to reissue notes and pay invoices through the gateway"
@@ -115,19 +206,39 @@ enum Command {
     LnCircularLoadTest(LnCircularLoadTestArgs),
 }
 
+impl Command {
+    fn resolve_inputs(&mut self) -> anyhow::Result<()> {
+        match self {
+            Self::LoadTest(args) => args.inputs.resolve(),
+            Self::LnCircularLoadTest(args) => args.inputs.resolve(),
+            Self::TestConnect {
+                invite_code,
+                invite_code_file,
+                resolved_invite,
+                ..
+            }
+            | Self::TestDownload {
+                invite_code,
+                invite_code_file,
+                resolved_invite,
+            } => {
+                *resolved_invite = resolve_input(
+                    invite_code.as_deref(),
+                    invite_code_file.as_deref(),
+                    1024 * 1024,
+                    "invite code",
+                )?;
+                anyhow::ensure!(resolved_invite.is_some(), "An invite code is required");
+                Ok(())
+            }
+        }
+    }
+}
+
 #[derive(Args, Clone)]
 struct LoadTestArgs {
-    #[arg(
-        long,
-        help = "Federation invite code. If none given, we assume the client already has a config downloaded in DB"
-    )]
-    invite_code: Option<InviteCode>,
-
-    #[arg(
-        long,
-        help = "Notes for the test. If none and no funds on archive, will call fedimint-cli spend"
-    )]
-    initial_notes: Option<OOBNotes>,
+    #[command(flatten)]
+    inputs: LoadInputs,
 
     #[arg(
         long,
@@ -185,17 +296,8 @@ struct LoadTestArgs {
 
 #[derive(Args, Clone)]
 struct LnCircularLoadTestArgs {
-    #[arg(
-        long,
-        help = "Federation invite code. If none given, we assume the client already has a config downloaded in DB"
-    )]
-    invite_code: Option<InviteCode>,
-
-    #[arg(
-        long,
-        help = "Notes for the test. If none and no funds on archive, will call fedimint-cli spend"
-    )]
-    initial_notes: Option<OOBNotes>,
+    #[command(flatten)]
+    inputs: LoadInputs,
 
     #[arg(
         long,
@@ -297,7 +399,10 @@ impl std::fmt::Display for EventMetricComparison {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     fedimint_logging::TracingSetup::default().init()?;
-    let opts = Opts::parse();
+    let mut opts = Opts::parse();
+    // Resolve every source before spawning metrics tasks, opening databases,
+    // retrieving fallback inputs, or connecting to a federation.
+    opts.command.resolve_inputs()?;
     let (event_sender, event_receiver) = tokio::sync::mpsc::unbounded_channel();
     let summary_handle = spawn("handle metrics summary", {
         let opts = opts.clone();
@@ -305,13 +410,14 @@ async fn main() -> anyhow::Result<()> {
     });
     let futures = match opts.command.clone() {
         Command::TestConnect {
-            invite_code,
+            resolved_invite,
             duration_secs,
             timeout_secs,
             limit_endpoints,
+            ..
         } => {
             let connectors = ConnectorRegistry::build_from_client_env().bind().await;
-            let invite_code = InviteCode::from_str(&invite_code).context("invalid invite code")?;
+            let invite_code = resolved_invite.context("An invite code is required")?;
             test_connect_raw_client(
                 &connectors,
                 invite_code,
@@ -323,13 +429,15 @@ async fn main() -> anyhow::Result<()> {
             )
             .await?
         }
-        Command::TestDownload { invite_code } => {
+        Command::TestDownload {
+            resolved_invite, ..
+        } => {
             let connectors = ConnectorRegistry::build_from_client_env().bind().await;
-            let invite_code = InviteCode::from_str(&invite_code).context("invalid invite code")?;
+            let invite_code = resolved_invite.context("An invite code is required")?;
             test_download_config(&connectors, &invite_code, opts.users, &event_sender.clone())
         }
         Command::LoadTest(args) => {
-            let invite_code = invite_code_or_fallback(args.invite_code).await;
+            let invite_code = invite_code_or_fallback(args.inputs.resolved_invite).await;
 
             let gateway_id = if let Some(gateway_id) = args.gateway_id {
                 Some(gateway_id)
@@ -362,7 +470,7 @@ async fn main() -> anyhow::Result<()> {
                 opts.archive_dir,
                 opts.users,
                 invite_code,
-                args.initial_notes,
+                args.inputs.resolved_notes,
                 args.generate_invoice_with,
                 args.invoices_per_user,
                 Duration::from_secs(args.ln_payment_sleep_secs),
@@ -376,12 +484,12 @@ async fn main() -> anyhow::Result<()> {
             .await?
         }
         Command::LnCircularLoadTest(args) => {
-            let invite_code = invite_code_or_fallback(args.invite_code).await;
+            let invite_code = invite_code_or_fallback(args.inputs.resolved_invite).await;
             run_ln_circular_load_test(
                 opts.archive_dir,
                 opts.users,
                 invite_code,
-                args.initial_notes,
+                args.inputs.resolved_notes,
                 Duration::from_secs(args.test_duration_secs),
                 Duration::from_secs(args.ln_payment_sleep_secs),
                 args.notes_per_user,
