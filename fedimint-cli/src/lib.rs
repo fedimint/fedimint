@@ -13,6 +13,7 @@ mod cli;
 mod client;
 mod db;
 pub mod envs;
+mod secret_input;
 mod utils;
 mod visualize;
 
@@ -407,7 +408,9 @@ fn decode_federation_secret_hex(federation_secret_hex: &str) -> CliResult<Deriva
         federation_secret_hex,
         &ModuleRegistry::default(),
     )
-    .map_err_cli_msg("invalid federation secret hex")
+    .map_err(|_| CliError {
+        error: "Invalid federation secret hex".to_owned(),
+    })
 }
 
 enum RecoverySecret {
@@ -807,7 +810,9 @@ impl FedimintCli {
 
         handle_version_hash_command(version_hash);
 
-        let cli_args = Opts::parse();
+        let mut cli_args = Opts::parse();
+        secret_input::check_module_stdin(&cli_args)?;
+        cli_args.resolve_secret_inputs()?;
         let base_level = if cli_args.verbose { "debug" } else { "info" };
         TracingSetup::default()
             .with_base_level(base_level)
@@ -1093,10 +1098,13 @@ impl FedimintCli {
 
                 Ok(CliOutput::InviteCode { invite_code })
             }
-            Command::Join { invite_code } => {
+            Command::Join { invite_code, .. } => {
+                let invite_code = invite_code.expect("secret inputs were resolved");
                 {
-                    let invite_code: InviteCode = InviteCode::from_str(&invite_code)
-                        .map_err_cli_msg("invalid invite code")?;
+                    let invite_code: InviteCode =
+                        InviteCode::from_str(&invite_code).map_err(|_| CliError {
+                            error: "Invalid invite code".to_owned(),
+                        })?;
 
                     // Build client and store config in DB
                     let _client = self.client_join(&cli, invite_code).await?;
@@ -1112,9 +1120,13 @@ impl FedimintCli {
             Command::Client(ClientCmd::Restore {
                 mnemonic,
                 invite_code,
+                ..
             }) => {
+                let invite_code = invite_code.expect("secret inputs were resolved");
                 let invite_code: InviteCode =
-                    InviteCode::from_str(&invite_code).map_err_cli_msg("invalid invite code")?;
+                    InviteCode::from_str(&invite_code).map_err(|_| CliError {
+                        error: "Invalid invite code".to_owned(),
+                    })?;
                 let recovery_secret = match (
                     mnemonic.as_deref(),
                     cli.federation_secret_hex.as_deref(),
@@ -1125,7 +1137,9 @@ impl FedimintCli {
                         });
                     }
                     (Some(mnemonic), None) => {
-                        let mnemonic = Mnemonic::from_str(mnemonic).map_err_cli()?;
+                        let mnemonic = Mnemonic::from_str(mnemonic).map_err(|_| CliError {
+                            error: "Invalid mnemonic".to_owned(),
+                        })?;
                         RecoverySecret::Mnemonic(mnemonic)
                     }
                     (None, Some(federation_secret_hex)) => {
@@ -1168,10 +1182,11 @@ impl FedimintCli {
                 password,
                 no_verify,
                 force,
+                ..
             }) => {
                 let db = cli.load_database().await?;
                 let peer_id = PeerId::from(peer_id);
-                let auth = ApiAuth::new(password);
+                let auth = ApiAuth::new(password.expect("secret inputs were resolved"));
 
                 // Check if credentials already exist
                 if !force {
@@ -1403,14 +1418,15 @@ impl FedimintCli {
                 peer_id,
                 password: auth,
                 module,
+                ..
             }) => {
+                let params = params.unwrap_or_else(|| "null".to_owned());
                 //Parse params to JSON.
                 //If fails, convert to JSON string.
-                let params = serde_json::from_str::<Value>(&params).unwrap_or_else(|err| {
+                let params = serde_json::from_str::<Value>(&params).unwrap_or_else(|_| {
                     debug!(
                         target: LOG_CLIENT,
-                        "Failed to serialize params:{}. Converting it to JSON string",
-                        err
+                        "Failed to parse params. Converting it to JSON string"
                     );
 
                     serde_json::Value::String(params)
@@ -1532,20 +1548,22 @@ impl FedimintCli {
                 Ok(CliOutput::Raw(serde_json::Value::Null))
             }
             Command::Dev(DevCmd::Decode { decode_type }) => match decode_type {
-                DecodeType::InviteCode { invite_code } => Ok(CliOutput::DecodeInviteCode {
-                    url: invite_code.url(),
-                    federation_id: invite_code.federation_id(),
-                }),
-                DecodeType::Notes { notes, file } => {
-                    let notes = if let Some(notes) = notes {
-                        notes
-                    } else if let Some(file) = file {
-                        let notes_str =
-                            fs::read_to_string(file).map_err_cli_msg("failed to read file")?;
-                        OOBNotes::from_str(&notes_str).map_err_cli_msg("failed to decode notes")?
-                    } else {
-                        unreachable!("Clap enforces either notes or file being set");
-                    };
+                DecodeType::InviteCode { invite_code, .. } => {
+                    let invite_code =
+                        InviteCode::from_str(&invite_code.expect("secret inputs were resolved"))
+                            .map_err(|_| CliError {
+                                error: "Invalid invite code".to_owned(),
+                            })?;
+                    Ok(CliOutput::DecodeInviteCode {
+                        url: invite_code.url(),
+                        federation_id: invite_code.federation_id(),
+                    })
+                }
+                DecodeType::Notes { notes, .. } => {
+                    let notes = OOBNotes::from_str(&notes.expect("secret inputs were resolved"))
+                        .map_err(|_| CliError {
+                            error: "Invalid notes".to_owned(),
+                        })?;
 
                     let notes_json = notes
                         .notes_json()
@@ -1580,14 +1598,21 @@ impl FedimintCli {
                     federation_id,
                     peer,
                     api_secret,
+                    ..
                 } => Ok(CliOutput::InviteCode {
                     invite_code: InviteCode::new(url, peer, federation_id, api_secret),
                 }),
-                EncodeType::Notes { notes_json } => {
-                    let notes = serde_json::from_str::<OOBNotesJson>(&notes_json)
-                        .map_err_cli_msg("invalid JSON for notes")?;
-                    let prefix =
-                        FederationIdPrefix::from_str(&notes.federation_id_prefix).map_err_cli()?;
+                EncodeType::Notes { notes_json, .. } => {
+                    let notes = serde_json::from_str::<OOBNotesJson>(
+                        &notes_json.expect("secret inputs were resolved"),
+                    )
+                    .map_err(|_| CliError {
+                        error: "Invalid JSON for notes".to_owned(),
+                    })?;
+                    let prefix = FederationIdPrefix::from_str(&notes.federation_id_prefix)
+                        .map_err(|_| CliError {
+                            error: "Invalid federation prefix in notes".to_owned(),
+                        })?;
                     let notes = OOBNotes::new(prefix, notes.notes);
                     Ok(CliOutput::Raw(notes.to_string().into()))
                 }
@@ -1601,7 +1626,13 @@ impl FedimintCli {
                 invite_code,
                 path_timeout_seconds,
                 require_direct,
+                ..
             }) => {
+                let invite_code =
+                    InviteCode::from_str(&invite_code.expect("secret inputs were resolved"))
+                        .map_err(|_| CliError {
+                            error: "Invalid invite code".to_owned(),
+                        })?;
                 let report = self
                     .federation_ip_query(
                         &cli,
@@ -1626,7 +1657,9 @@ impl FedimintCli {
                 out_file,
                 salt_file,
                 password,
+                ..
             }) => {
+                let password = password.expect("secret inputs were resolved");
                 let salt_file = salt_file.unwrap_or_else(|| salt_from_file_path(&in_file));
                 let salt = fs::read_to_string(salt_file).map_err_cli()?;
                 let key = get_encryption_key(&password, &salt).map_err_cli()?;
@@ -1645,7 +1678,9 @@ impl FedimintCli {
                 out_file,
                 salt_file,
                 password,
+                ..
             }) => {
+                let password = password.expect("secret inputs were resolved");
                 let mut in_file_handle =
                     fs::File::open(in_file).expect("Could not create output cfg file");
                 let mut plaintext_bytes = vec![];
