@@ -8,7 +8,8 @@ use tokio::sync::Notify;
 use crate::async_trait_maybe_send;
 use crate::db::mem_impl::{MemDatabase, MemTransaction};
 use crate::db::{
-    Database, DatabaseResult, IDatabaseTransactionOpsCoreTyped, IRawDatabase, TestKey, TestVal,
+    DatabaseResult, IDatabaseTransactionOpsCoreTyped, IRawDatabase, IRawDatabaseExt, TestKey,
+    TestVal,
 };
 
 #[derive(Debug, Default)]
@@ -44,13 +45,11 @@ impl IRawDatabase for PausedSnapshotDatabase {
 
 async fn commit_during_snapshot(module_id: Option<u16>, updates: &[u64]) {
     let pause = Arc::new(SnapshotPause::default());
-    let db = Database::new(
-        PausedSnapshotDatabase {
-            inner: MemDatabase::new(),
-            pause: pause.clone(),
-        },
-        Default::default(),
-    );
+    let db = PausedSnapshotDatabase {
+        inner: MemDatabase::new(),
+        pause: pause.clone(),
+    }
+    .into_database();
     let db = match module_id {
         Some(id) => db.with_prefix_module_id(id).0,
         None => db,
@@ -97,4 +96,17 @@ async fn module_commit_between_snapshot_and_wait() {
 async fn wait_again_after_unsatisfied_updates() {
     commit_during_snapshot(None, &[1, 2, 42]).await;
     commit_during_snapshot(Some(2), &[1, 2, 42]).await;
+}
+
+#[test]
+fn send_checker_does_not_need_sync() {
+    fn assert_send(_: impl crate::task::MaybeSend) {}
+
+    let db = MemDatabase::new().into_database();
+    let key = TestKey(1);
+    let checks = std::cell::Cell::new(0);
+    assert_send(db.wait_key_check(&key, move |value| {
+        checks.set(checks.get() + 1);
+        value
+    }));
 }
