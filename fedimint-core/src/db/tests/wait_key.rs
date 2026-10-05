@@ -1,0 +1,100 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use assert_matches::assert_matches;
+use macro_rules_attribute::apply;
+use tokio::sync::Notify;
+
+use crate::async_trait_maybe_send;
+use crate::db::mem_impl::{MemDatabase, MemTransaction};
+use crate::db::{
+    Database, DatabaseResult, IDatabaseTransactionOpsCoreTyped, IRawDatabase, TestKey, TestVal,
+};
+
+#[derive(Debug, Default)]
+struct SnapshotPause {
+    armed: AtomicBool,
+    resume: Notify,
+}
+
+/// Preserve normal database notifications, but allow a writer to commit after
+/// the waiter's snapshot is taken and before that snapshot is read.
+#[derive(Debug)]
+struct PausedSnapshotDatabase {
+    inner: MemDatabase,
+    pause: Arc<SnapshotPause>,
+}
+
+#[apply(async_trait_maybe_send!)]
+impl IRawDatabase for PausedSnapshotDatabase {
+    type Transaction<'a> = MemTransaction<'a>;
+
+    async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a> {
+        let snapshot = self.inner.begin_transaction().await;
+        if self.pause.armed.swap(false, Ordering::SeqCst) {
+            self.pause.resume.notified().await;
+        }
+        snapshot
+    }
+
+    fn checkpoint(&self, path: &std::path::Path) -> DatabaseResult<()> {
+        self.inner.checkpoint(path)
+    }
+}
+
+async fn commit_during_snapshot(module_id: Option<u16>, updates: &[u64]) {
+    let pause = Arc::new(SnapshotPause::default());
+    let db = Database::new(
+        PausedSnapshotDatabase {
+            inner: MemDatabase::new(),
+            pause: pause.clone(),
+        },
+        Default::default(),
+    );
+    let db = match module_id {
+        Some(id) => db.with_prefix_module_id(id).0,
+        None => db,
+    };
+    let key = TestKey(1);
+    let waiter = db.wait_key_check(&key, |value| value.filter(|value| *value == TestVal(42)));
+    futures::pin_mut!(waiter);
+
+    // Poll exactly to the snapshot pause, then commit on the same Database.
+    // No scheduler timing or wall-clock timeout is needed to force the race.
+    pause.armed.store(true, Ordering::SeqCst);
+    assert!(futures::poll!(waiter.as_mut()).is_pending());
+    assert!(!pause.armed.load(Ordering::SeqCst));
+
+    for value in updates {
+        let mut writer = db.begin_transaction().await;
+        writer.insert_entry(&key, &TestVal(*value)).await;
+        writer.commit_tx().await;
+        pause.resume.notify_one();
+
+        if *value == 42 {
+            assert_matches!(
+                futures::poll!(waiter.as_mut()),
+                std::task::Poll::Ready((TestVal(42), _)),
+                "waiter must observe the commit even though its earlier snapshot is stale"
+            );
+        } else {
+            assert!(futures::poll!(waiter.as_mut()).is_pending());
+        }
+    }
+}
+
+#[tokio::test]
+async fn commit_between_snapshot_and_wait() {
+    commit_during_snapshot(None, &[42]).await;
+}
+
+#[tokio::test]
+async fn module_commit_between_snapshot_and_wait() {
+    commit_during_snapshot(Some(2), &[42]).await;
+}
+
+#[tokio::test]
+async fn wait_again_after_unsatisfied_updates() {
+    commit_during_snapshot(None, &[1, 2, 42]).await;
+    commit_during_snapshot(Some(2), &[1, 2, 42]).await;
+}

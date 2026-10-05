@@ -1,3 +1,5 @@
+mod wait_key;
+
 use assert_matches::assert_matches;
 use tokio::sync::oneshot;
 
