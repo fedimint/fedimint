@@ -50,6 +50,7 @@ const TIMELOCK_DELTA: u64 = 10;
 ///    ClaimOutgoingContract -- claim tx submission --> Preimage
 ///    CancelContract -- cancel tx submission successful --> Canceled
 ///    CancelContract -- cancel tx submission unsuccessful --> Failed
+///    PayInvoice -- federation connectivity failure --> FederationUnreachable
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
 pub enum GatewayPayStates {
@@ -68,6 +69,7 @@ pub enum GatewayPayStates {
         error: OutgoingPaymentError,
         error_message: String,
     },
+    FederationUnreachable,
 }
 
 impl fmt::Display for GatewayPayStates {
@@ -81,6 +83,7 @@ impl fmt::Display for GatewayPayStates {
             GatewayPayStates::WaitForSwapPreimage(_) => write!(f, "WaitForSwapPreimage"),
             GatewayPayStates::ClaimOutgoingContract(_) => write!(f, "ClaimOutgoingContract"),
             GatewayPayStates::Failed { .. } => write!(f, "Failed"),
+            GatewayPayStates::FederationUnreachable => write!(f, "FederationUnreachable"),
         }
     }
 }
@@ -186,6 +189,8 @@ pub enum OutgoingPaymentErrorType {
     InvalidFederationConfiguration,
     #[error("Invalid invoice preimage")]
     InvalidInvoicePreimage,
+    #[error("The gateway could not communicate with the federation")]
+    FederationUnreachable,
 }
 
 #[derive(
@@ -254,6 +259,22 @@ impl GatewayPayInvoice {
             }
             Err(e) => {
                 warn!("Failed to get payment parameters: {e:?}");
+                if e.error_type == OutgoingPaymentErrorType::FederationUnreachable {
+                    return GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::FederationUnreachable,
+                    };
+                }
+                if matches!(
+                    e.error_type,
+                    OutgoingPaymentErrorType::OutgoingContractDoesNotExist { .. }
+                ) {
+                    return GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::OfferDoesNotExist(e.contract_id),
+                    };
+                }
+
                 match e.contract.clone() {
                     Some(contract) => GatewayPayStateMachine {
                         common,
@@ -263,7 +284,11 @@ impl GatewayPayInvoice {
                     },
                     None => GatewayPayStateMachine {
                         common,
-                        state: GatewayPayStates::OfferDoesNotExist(e.contract_id),
+                        state: GatewayPayStates::Failed {
+                            error: e,
+                            error_message: "Gateway could not retrieve the outgoing contract"
+                                .to_string(),
+                        },
                     },
                 }
             }
@@ -454,10 +479,30 @@ impl GatewayPayInvoice {
         federation_id: FederationId,
     ) -> Result<(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError> {
         debug!("Await payment parameters for outgoing contract {contract_id:?}");
-        let account = global_context
-            .module_api()
-            .await_contract(contract_id)
-            .await;
+        let module_api = global_context.module_api();
+        let account = match module_api.fetch_contract(contract_id).await {
+            Ok(account) => account,
+            Err(error) => {
+                let error_type = if module_api
+                    .contract_query_failure_is_unreachable(&error, contract_id)
+                    .await
+                {
+                    OutgoingPaymentErrorType::FederationUnreachable
+                } else {
+                    OutgoingPaymentErrorType::InvalidFederationConfiguration
+                };
+                return Err(OutgoingPaymentError {
+                    contract_id,
+                    contract: None,
+                    error_type,
+                });
+            }
+        }
+        .ok_or(OutgoingPaymentError {
+            contract_id,
+            contract: None,
+            error_type: OutgoingPaymentErrorType::OutgoingContractDoesNotExist { contract_id },
+        })?;
 
         if let FundedContract::Outgoing(contract) = account.contract {
             let outgoing_contract_account = OutgoingContractAccount {
@@ -465,17 +510,26 @@ impl GatewayPayInvoice {
                 contract,
             };
 
-            let consensus_block_count = global_context
-                .module_api()
-                .fetch_consensus_block_count()
-                .await
-                .map_err(|_| OutgoingPaymentError {
-                    contract_id,
-                    contract: Some(outgoing_contract_account.clone()),
-                    error_type: OutgoingPaymentErrorType::InvalidOutgoingContract {
-                        error: OutgoingContractError::TimeoutTooClose,
-                    },
-                })?;
+            let consensus_block_count = match module_api.fetch_consensus_block_count().await {
+                Ok(block_count) => block_count,
+                Err(error) => {
+                    let error_type = if module_api
+                        .block_count_query_failure_is_unreachable(&error)
+                        .await
+                    {
+                        OutgoingPaymentErrorType::FederationUnreachable
+                    } else {
+                        OutgoingPaymentErrorType::InvalidOutgoingContract {
+                            error: OutgoingContractError::TimeoutTooClose,
+                        }
+                    };
+                    return Err(OutgoingPaymentError {
+                        contract_id,
+                        contract: Some(outgoing_contract_account.clone()),
+                        error_type,
+                    });
+                }
+            };
 
             debug!(
                 "Consensus block count: {consensus_block_count:?} for outgoing contract {contract_id:?}"

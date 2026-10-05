@@ -3,17 +3,44 @@ use std::str::FromStr as _;
 use fedimint_core::PeerId;
 use fedimint_core::config::FederationId;
 use fedimint_core::invite_code::InviteCode;
-use fedimint_core::module::ApiMethod;
+use fedimint_core::module::{ApiMethod, GatewayErrorCode, IrohGatewayResponse};
 use fedimint_core::util::SafeUrl;
 
 use super::{
     IROH_REQUEST_TIMEOUT_DEFAULT, IROH_REQUEST_TIMEOUT_LONG_POLL, IrohConnector,
-    request_timeout_for_method,
+    parse_gateway_response, request_timeout_for_method,
 };
-use crate::error::ConnectorError;
+use crate::error::{ConnectorError, ServerError};
 use crate::{iroh_next_endpoint_url, is_iroh_next_endpoint_url, preserve_iroh_next_marker};
 
 const TEST_ENDPOINT_ID: &str = "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c";
+
+#[test]
+fn iroh_gateway_response_preserves_only_recognized_structured_errors() {
+    let response = |body| IrohGatewayResponse { status: 503, body };
+
+    assert!(matches!(
+        parse_gateway_response(response(serde_json::json!({
+            "version": 1,
+            "error": "federation_unreachable"
+        }))),
+        Err(ServerError::GatewayResponse {
+            status: 503,
+            response
+        }) if response.error == GatewayErrorCode::FederationUnreachable
+    ));
+    for body in [
+        serde_json::json!({"version": 2, "error": "federation_unreachable"}),
+        serde_json::json!({"version": 1, "error": "future_error"}),
+        serde_json::json!({"version": 1}),
+        serde_json::Value::Null,
+    ] {
+        assert!(matches!(
+            parse_gateway_response(response(body)),
+            Err(ServerError::ServerError(_))
+        ));
+    }
+}
 
 #[test]
 fn advertised_iroh_next_url_selects_only_the_next_stack() {

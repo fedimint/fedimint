@@ -922,13 +922,24 @@ impl IGatewayConnection for Connection {
 
         let response = serde_json::from_slice::<IrohGatewayResponse>(&response)
             .map_err(|e| ServerError::InvalidResponse(e.fmt_compact().to_string()))?;
-        match StatusCode::from_u16(response.status)
-            .map_err(|e| ServerError::InvalidResponse(format!("Invalid status code: {e}")))?
-        {
-            StatusCode::OK => Ok(response.body),
-            status => Err(ServerError::ServerError(format!(
+        parse_gateway_response(response)
+    }
+}
+
+fn parse_gateway_response(response: IrohGatewayResponse) -> ServerResult<Value> {
+    match StatusCode::from_u16(response.status)
+        .map_err(|e| ServerError::InvalidResponse(format!("Invalid status code: {e}")))?
+    {
+        StatusCode::OK => Ok(response.body),
+        status => {
+            if let Some(error) = ServerError::from_gateway_response(status.as_u16(), response.body)
+            {
+                return Err(error);
+            }
+
+            Err(ServerError::ServerError(format!(
                 "Server returned status code: {status}"
-            ))),
+            )))
         }
     }
 }
