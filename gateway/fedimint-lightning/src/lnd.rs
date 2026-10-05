@@ -115,6 +115,15 @@ fn hold_invoice_claim_deadline(htlcs: &[InvoiceHtlc]) -> u32 {
         .unwrap_or_default()
 }
 
+/// The hex preimage of an LND invoice, if LND knows it. A HOLD invoice has no
+/// preimage until it is settled, so `r_preimage` is empty while one is pending
+/// or after it was canceled.
+fn invoice_preimage_hex(invoice: &Invoice) -> Option<String> {
+    <[u8; 32]>::try_from(invoice.r_preimage.as_slice())
+        .ok()
+        .map(|preimage| preimage.consensus_encode_to_hex())
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum HoldInvoiceAction {
     Complete,
@@ -2148,11 +2157,6 @@ impl ILnRpcClient for GatewayLndClient {
             Ok(invoice) => invoice.into_inner(),
             Err(_) => return Ok(None),
         };
-        let preimage: [u8; 32] = invoice
-            .clone()
-            .r_preimage
-            .try_into()
-            .expect("Could not convert preimage");
         let status = match &invoice.state() {
             InvoiceState::Settled => fedimint_gateway_common::PaymentStatus::Succeeded,
             InvoiceState::Canceled => fedimint_gateway_common::PaymentStatus::Failed,
@@ -2160,7 +2164,7 @@ impl ILnRpcClient for GatewayLndClient {
         };
 
         Ok(Some(GetInvoiceResponse {
-            preimage: Some(preimage.consensus_encode_to_hex()),
+            preimage: invoice_preimage_hex(&invoice),
             payment_hash: Some(
                 sha256::Hash::from_slice(&invoice.r_hash).expect("Could not convert payment hash"),
             ),
