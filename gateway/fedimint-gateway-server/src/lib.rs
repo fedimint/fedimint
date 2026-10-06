@@ -3537,7 +3537,10 @@ impl Gateway {
             return Err(PublicGatewayError::RateLimited);
         }
 
-        if !payload.contract.verify() {
+        // Verifying the contract is two pairings; keep them off the async workers.
+        let contract = payload.contract.clone();
+
+        if !fedimint_core::runtime::spawn_blocking(move || contract.verify()).await {
             return Err(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
                 "The contract is invalid".to_string(),
             )));
