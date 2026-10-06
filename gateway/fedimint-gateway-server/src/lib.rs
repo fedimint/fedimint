@@ -1172,6 +1172,17 @@ impl Gateway {
             )
             .await?;
 
+        // An intercepted forward, or an unknown current height, leaves no time
+        // to fund a fresh contract; see `lnv2_blocks_to_claim_deadline`.
+        let current_block_height = lightning_context
+            .lnrpc
+            .info()
+            .await
+            .ok()
+            .map(|info| info.block_height);
+        let blocks_to_claim_deadline =
+            htlc_request.lnv2_blocks_to_claim_deadline(current_block_height);
+
         if let Err(err) = client
             .get_first_module::<GatewayClientModuleV2>()
             .expect("Must have client module")
@@ -1181,6 +1192,7 @@ impl Gateway {
                 htlc_request.htlc_id,
                 contract,
                 htlc_request.incoming_amount_msat,
+                blocks_to_claim_deadline,
             )
             .await
         {
@@ -3066,7 +3078,7 @@ impl Gateway {
     /// the connected Lightning node, then save the payment hash so that
     /// incoming lightning payments can be matched as a receive attempt to a
     /// specific federation.
-    async fn create_bolt11_invoice_v2(
+    pub async fn create_bolt11_invoice_v2(
         &self,
         payload: CreateBolt11InvoicePayload,
     ) -> Result<Bolt11Invoice> {
@@ -3441,9 +3453,10 @@ impl IGatewayClientV2 for Gateway {
                     .ok_or(anyhow!("Amountless invoice not supported"))?,
             ),
         };
+        // Nothing has been paid out yet, so failing here only cancels the send.
         let lnv1 = client
             .get_first_module::<GatewayClientModule>()
-            .expect("No LNv1 module");
+            .map_err(|_| anyhow!("Federation does not have an LNv1 module"))?;
         let Some(operation_id) = lnv1
             .gateway_handle_direct_swap(swap_params, allow_fresh_dispatch)
             .await?
@@ -3480,6 +3493,14 @@ impl IGatewayClientV2 for Gateway {
         }
 
         Ok(Some(final_state))
+    }
+
+    async fn is_lightning_connected(&self) -> bool {
+        self.get_lightning_context().await.is_ok()
+    }
+
+    async fn await_lightning_connected(&self) {
+        self.await_lightning_context().await;
     }
 }
 
