@@ -10,6 +10,7 @@ use fedimint_core::module::Amounts;
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, OutPoint};
+use fedimint_lightning::LightningRpcError;
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, LightningInvoice, OutgoingWitness};
 use serde::{Deserialize, Serialize};
@@ -93,8 +94,11 @@ pub enum Cancelled {
     Rejected,
     Refunded,
     Failure,
+    /// Legacy flattened Lightning RPC failure string.
     LightningRpcError(String),
     DuplicatePayment,
+    /// Lightning RPC failure preserving structured backend diagnostics.
+    LightningRpcPaymentError(LightningRpcError),
 }
 
 #[cfg_attr(doc, aquamarine::aquamarine)]
@@ -256,7 +260,7 @@ impl SendStateMachine {
                     .gateway
                     .pay(invoice, max_delay, max_fee)
                     .await
-                    .map_err(|e| Cancelled::LightningRpcError(e.to_string()))?;
+                    .map_err(Cancelled::LightningRpcPaymentError)?;
                 Ok(PaymentResponse {
                     preimage,
                     target_federation: None,
