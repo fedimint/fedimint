@@ -12,7 +12,7 @@ use serde_json::Value;
 
 use crate::api::LightningFederationApi;
 use crate::{
-    Bolt11InvoiceDescription, GenerateLnurlError, LightningClientModule, ListGatewaysError,
+    Bolt11InvoiceDescription, GatewaySelection, GenerateLnurlError, LightningClientModule, ListGatewaysError,
     ReceiveError, SelectGatewayError, SendPaymentError,
 };
 
@@ -117,7 +117,13 @@ pub(crate) async fn handle_cli_command(
         Opts::Gateways(gateway_opts) => match gateway_opts {
             #[allow(clippy::unit_arg)]
             GatewaysOpts::Map => json(lightning.update_gateway_map().await),
-            GatewaysOpts::Select { invoice } => json(lightning.select_gateway(invoice).await?.0),
+            GatewaysOpts::Select { invoice } => {
+                let selection = match invoice {
+                    Some(invoice) => GatewaySelection::Send { invoice },
+                    None => GatewaySelection::Any,
+                };
+                json(lightning.select_gateway(selection).await?.0)
+            }
             GatewaysOpts::List { peer } => json(lightning.list_gateways(peer).await?),
             GatewaysOpts::Add { gateway } => {
                 let auth = lightning
