@@ -3,14 +3,15 @@ use std::sync::Arc;
 
 use fedimint_core::util::SafeUrl;
 use ldk_node::NodeError;
-use ldk_node::payment::PaymentDirection;
+use ldk_node::payment::{PaymentDirection, PaymentStatus};
 use lightning::ln::channelmanager::PaymentId;
+use lightning::types::payment::PaymentPreimage;
 use lockable::LockPool;
 use tokio::sync::{RwLock, oneshot};
 
 use super::{
-    GatewayLdkClient, InboundRegistrationRefusal, LdkClientInitError, PendingPaymentWakeup,
-    check_inbound_registration, get_esplora_url, htlc_completion_error,
+    GatewayLdkClient, InboundRegistrationRefusal, LdkClientInitError, PendingPaymentCompletion,
+    PendingPaymentWakeup, check_inbound_registration, get_esplora_url, htlc_completion_error,
 };
 use crate::LightningRpcError;
 
@@ -103,28 +104,191 @@ async fn wake_pending_payment_reports_waiter_state() {
 
     // No waiter registered yet.
     assert_eq!(
-        GatewayLdkClient::wake_pending_payment(&pending_payments, payment_id).await,
+        GatewayLdkClient::wake_pending_payment(
+            &pending_payments,
+            payment_id,
+            Some("RouteNotFound".to_string()),
+            true,
+        )
+        .await,
         PendingPaymentWakeup::NoWaiter
     );
+    assert!(matches!(
+        pending_payments.read().await.get(&payment_id),
+        Some(PendingPaymentCompletion::Failed { failure_reason })
+            if failure_reason == "RouteNotFound"
+    ));
+    pending_payments.write().await.remove(&payment_id);
+
+    // No-waiter failures for non-Bolt11 payment ids are not cached, since only
+    // the Bolt11 `pay()` path consumes this map.
+    assert_eq!(
+        GatewayLdkClient::wake_pending_payment(
+            &pending_payments,
+            payment_id,
+            Some("RouteNotFound".to_string()),
+            false,
+        )
+        .await,
+        PendingPaymentWakeup::NoWaiter
+    );
+    assert!(pending_payments.read().await.is_empty());
 
     // A registered waiter is woken and removed from the map.
     let (sender, receiver) = oneshot::channel();
-    pending_payments.write().await.insert(payment_id, sender);
+    pending_payments
+        .write()
+        .await
+        .insert(payment_id, PendingPaymentCompletion::Waiting(sender));
     assert_eq!(
-        GatewayLdkClient::wake_pending_payment(&pending_payments, payment_id).await,
+        GatewayLdkClient::wake_pending_payment(
+            &pending_payments,
+            payment_id,
+            Some("RouteNotFound".to_string()),
+            true,
+        )
+        .await,
         PendingPaymentWakeup::Woken
     );
-    assert!(receiver.await.is_ok());
+    assert_eq!(receiver.await, Ok(Some("RouteNotFound".to_string())));
     assert!(pending_payments.read().await.is_empty());
 
     // A waiter whose receiver was dropped is reported as such and removed.
     let (sender, receiver) = oneshot::channel();
     drop(receiver);
-    pending_payments.write().await.insert(payment_id, sender);
+    pending_payments
+        .write()
+        .await
+        .insert(payment_id, PendingPaymentCompletion::Waiting(sender));
     assert_eq!(
-        GatewayLdkClient::wake_pending_payment(&pending_payments, payment_id).await,
+        GatewayLdkClient::wake_pending_payment(&pending_payments, payment_id, None, false).await,
         PendingPaymentWakeup::ReceiverDropped
     );
+    assert!(pending_payments.read().await.is_empty());
+}
+
+#[tokio::test]
+async fn early_payment_failure_is_consumed_on_registration() {
+    let pending_payments = Arc::new(RwLock::new(HashMap::new()));
+    let payment_id = PaymentId([4; 32]);
+    GatewayLdkClient::wake_pending_payment(
+        &pending_payments,
+        payment_id,
+        Some("RouteNotFound".to_string()),
+        true,
+    )
+    .await;
+    let (sender, _receiver) = oneshot::channel();
+    let reason =
+        GatewayLdkClient::register_pending_payment(&pending_payments, payment_id, sender).await;
+    assert_eq!(reason.as_deref(), Some("RouteNotFound"));
+    assert!(matches!(
+        GatewayLdkClient::ldk_payment_status_result(PaymentStatus::Failed, None, reason),
+        Some(Err(LightningRpcError::FailedPaymentWithDetails { failure_reason, .. }))
+            if failure_reason == "RouteNotFound"
+    ));
+    assert!(pending_payments.read().await.is_empty());
+}
+
+#[tokio::test]
+async fn cancelled_waiter_preserves_failure_for_reregistering_payment() {
+    let pending_payments = Arc::new(RwLock::new(HashMap::new()));
+    let payment_id = PaymentId([5; 32]);
+    let (sender, receiver) = oneshot::channel();
+    assert!(
+        GatewayLdkClient::register_pending_payment(&pending_payments, payment_id, sender)
+            .await
+            .is_none()
+    );
+    drop(receiver);
+    // A retry can observe Pending before the event loop delivers failure to
+    // the old, cancelled waiter. Its later registration must not lose the event.
+    assert!(
+        GatewayLdkClient::ldk_payment_status_result(PaymentStatus::Pending, None, None).is_none()
+    );
+    assert_eq!(
+        GatewayLdkClient::wake_pending_payment(
+            &pending_payments,
+            payment_id,
+            Some("RetriesExhausted".to_string()),
+            true,
+        )
+        .await,
+        PendingPaymentWakeup::ReceiverDropped
+    );
+    let (sender, _receiver) = oneshot::channel();
+    let reason =
+        GatewayLdkClient::register_pending_payment(&pending_payments, payment_id, sender).await;
+    assert_eq!(reason.as_deref(), Some("RetriesExhausted"));
+    assert!(matches!(
+        GatewayLdkClient::ldk_payment_status_result(PaymentStatus::Failed, None, reason),
+        Some(Err(LightningRpcError::FailedPaymentWithDetails { failure_reason, .. }))
+            if failure_reason == "RetriesExhausted"
+    ));
+    assert!(pending_payments.read().await.is_empty());
+}
+
+#[tokio::test]
+async fn registered_payment_completion_returns_reason_and_cleans_up() {
+    let pending_payments = Arc::new(RwLock::new(HashMap::new()));
+    let payment_id = PaymentId([6; 32]);
+    let (sender, receiver) = oneshot::channel();
+    assert!(
+        GatewayLdkClient::register_pending_payment(&pending_payments, payment_id, sender)
+            .await
+            .is_none()
+    );
+    assert_eq!(
+        GatewayLdkClient::wake_pending_payment(
+            &pending_payments,
+            payment_id,
+            Some("RouteNotFound".to_string()),
+            true,
+        )
+        .await,
+        PendingPaymentWakeup::Woken
+    );
+    let reason = receiver.await.unwrap();
+    assert!(matches!(
+        GatewayLdkClient::ldk_payment_status_result(PaymentStatus::Failed, None, reason),
+        Some(Err(LightningRpcError::FailedPaymentWithDetails { .. }))
+    ));
+    assert!(pending_payments.read().await.is_empty());
+}
+
+#[tokio::test]
+async fn preexisting_terminal_payment_resolves_without_a_new_waiter() {
+    let pending_payments = Arc::new(RwLock::new(HashMap::new()));
+    let payment_id = PaymentId([7; 32]);
+    GatewayLdkClient::wake_pending_payment(
+        &pending_payments,
+        payment_id,
+        Some("RouteNotFound".to_string()),
+        true,
+    )
+    .await;
+    let reason = GatewayLdkClient::take_cached_payment_failure(&pending_payments, payment_id).await;
+    assert!(matches!(
+        GatewayLdkClient::ldk_payment_status_result(PaymentStatus::Failed, None, reason),
+        Some(Err(LightningRpcError::FailedPaymentWithDetails { failure_reason, .. }))
+            if failure_reason == "RouteNotFound"
+    ));
+    assert!(pending_payments.read().await.is_empty());
+    let reason = GatewayLdkClient::take_cached_payment_failure(&pending_payments, payment_id).await;
+    let result = GatewayLdkClient::ldk_payment_status_result(
+        PaymentStatus::Succeeded,
+        Some(PaymentPreimage([8; 32])),
+        reason,
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(result.preimage.0, [8; 32]);
+    // A resumed failure without an in-memory event still has a terminal result.
+    assert!(matches!(
+        GatewayLdkClient::ldk_payment_status_result(PaymentStatus::Failed, None, None),
+        Some(Err(LightningRpcError::FailedPaymentWithDetails { failure_reason, .. }))
+            if failure_reason == "LDK payment failed"
+    ));
     assert!(pending_payments.read().await.is_empty());
 }
 
