@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::ensure;
+use anyhow::{Context as _, ensure};
 use bitcoin::hashes::sha256;
 use clap::{Parser, Subcommand};
 use devimint::devfed::DevJitFed;
@@ -8,17 +8,20 @@ use devimint::envs::FM_CLIENT_DIR_ENV;
 use devimint::federation::{Client, Federation};
 use devimint::util::{ProcessManager, almost_equal};
 use devimint::version_constants::{
-    VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA,
+    VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA, VERSION_0_13_0_ALPHA,
 };
 use devimint::{Gatewayd, cmd, util};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::Encodable;
+use fedimint_core::secp256k1::rand::rngs::OsRng;
+use fedimint_core::secp256k1::{SECP256K1, SecretKey};
 use fedimint_core::task::{self};
 use fedimint_core::util::{backoff_util, retry, write_overwrite_async};
 use fedimint_lnurl::{LnurlResponse, VerifyResponse, parse_lnurl};
 use fedimint_lnv2_client::FinalSendOperationState;
 use lightning_invoice::Bolt11Invoice;
 use serde::Deserialize;
+use serde_json::Value;
 use tokio::try_join;
 use tracing::info;
 
@@ -64,6 +67,8 @@ enum Commands {
     LnurlRecovery,
     /// Two clients racing to pay the same invoice settle exactly once
     DuplicatePayment,
+    /// Run direct HTLC tests between two clients without a gateway
+    DirectHtlc,
 }
 
 #[tokio::main]
@@ -105,6 +110,9 @@ async fn main() -> anyhow::Result<()> {
                     pegin_gateways(&dev_fed).await?;
                     test_duplicate_payment(&dev_fed, &process_mgr).await?;
                 }
+                Some(Commands::DirectHtlc) => {
+                    test_direct_htlc(&dev_fed).await?;
+                }
                 None => {
                     // Run all tests if no subcommand is specified
                     test_gateway_registration(&dev_fed).await?;
@@ -112,6 +120,7 @@ async fn main() -> anyhow::Result<()> {
                     test_duplicate_payment(&dev_fed, &process_mgr).await?;
                     test_lnurl_pay(&dev_fed).await?;
                     test_lnurl_recovery(&dev_fed).await?;
+                    test_direct_htlc(&dev_fed).await?;
                 }
             }
 
@@ -1083,4 +1092,245 @@ async fn test_iroh_payment(
     }
 
     Ok(())
+}
+
+/// Exercise the direct HTLC CLI between two clients of the same federation,
+/// with the full out-of-band handoff as strings: the claimer's key, the
+/// funder's funding txid and contract JSON, the claimer's preimage and secret
+/// key, and the forfeit signature.
+async fn test_direct_htlc(dev_fed: &DevJitFed) -> anyhow::Result<()> {
+    if util::FedimintCli::version_or_default().await < *VERSION_0_13_0_ALPHA {
+        info!("fedimint-cli does not support direct HTLCs, skipping");
+        return Ok(());
+    }
+
+    let federation = dev_fed.fed().await?;
+
+    let funder = federation
+        .new_joined_client("lnv2-test-direct-htlc-funder")
+        .await?;
+
+    let claimer = federation
+        .new_joined_client("lnv2-test-direct-htlc-claimer")
+        .await?;
+
+    assert_module_sanity(&funder).await?;
+
+    federation.pegin_client(10_000, &funder).await?;
+
+    info!("Generating the claim keypair...");
+
+    let claim_keypair = cmd!(claimer, "module", "lnv2", "htlc", "new-claim-keypair")
+        .out_json()
+        .await?;
+
+    let claim_sk = json_string(&claim_keypair["secret_key"])?;
+    let claim_pk = json_string(&claim_keypair["public_key"])?;
+
+    info!("Testing claim of a point-locked HTLC...");
+
+    // The preimage of a point lock is the secret key of the payment point.
+    let preimage = SecretKey::new(&mut OsRng);
+    let preimage_hex = preimage.display_secret().to_string();
+    let payment_point = preimage.public_key(SECP256K1).to_string();
+
+    let (funding_txid, contract) =
+        create_htlc(&funder, &claim_pk, 100, "--payment-point", &payment_point).await?;
+
+    let remaining_blocks = cmd!(
+        claimer,
+        "module",
+        "lnv2",
+        "htlc",
+        "await-funded",
+        funding_txid,
+        contract
+    )
+    .out_json()
+    .await?;
+
+    ensure!(
+        remaining_blocks.as_u64().is_some_and(|blocks| blocks > 0),
+        "Expected the remaining blocks until expiration, got {remaining_blocks}"
+    );
+
+    let claim_operation = cmd!(
+        claimer,
+        "module",
+        "lnv2",
+        "htlc",
+        "claim",
+        funding_txid,
+        contract,
+        claim_sk,
+        preimage_hex
+    )
+    .out_json()
+    .await?;
+
+    await_htlc_settled(&claimer, &claim_operation).await?;
+
+    ensure!(claimer.balance().await? > 0);
+
+    // The funder learns the preimage from the federation.
+    assert_eq!(
+        cmd!(
+            funder,
+            "module",
+            "lnv2",
+            "htlc",
+            "await-resolution",
+            funding_txid,
+            contract
+        )
+        .out_json()
+        .await?,
+        preimage_hex
+    );
+
+    info!("Testing cooperative cancellation of a hash-locked HTLC...");
+
+    let payment_hash = [42_u8; 32].consensus_hash::<sha256::Hash>().to_string();
+
+    let (funding_txid, contract) =
+        create_htlc(&funder, &claim_pk, 100, "--payment-hash", &payment_hash).await?;
+
+    let balance_before_cancel = funder.balance().await?;
+
+    let forfeit_signature = json_string(
+        &cmd!(
+            claimer, "module", "lnv2", "htlc", "forfeit", contract, claim_sk
+        )
+        .out_json()
+        .await?,
+    )?;
+
+    let cancel_operation = cmd!(
+        funder,
+        "module",
+        "lnv2",
+        "htlc",
+        "cancel",
+        funding_txid,
+        contract,
+        forfeit_signature
+    )
+    .out_json()
+    .await?;
+
+    await_htlc_settled(&funder, &cancel_operation).await?;
+
+    ensure!(funder.balance().await? > balance_before_cancel);
+
+    info!("Testing refund of an expired HTLC...");
+
+    let (funding_txid, contract) =
+        create_htlc(&funder, &claim_pk, 5, "--payment-hash", &payment_hash).await?;
+
+    let balance_before_refund = funder.balance().await?;
+
+    dev_fed.bitcoind().await?.mine_blocks(10).await?;
+
+    // The funder is notified that the contract expired unclaimed...
+    assert_eq!(
+        cmd!(
+            funder,
+            "module",
+            "lnv2",
+            "htlc",
+            "await-resolution",
+            funding_txid,
+            contract
+        )
+        .out_json()
+        .await?,
+        Value::Null
+    );
+
+    // ...and can refund it once the consensus block count has caught up.
+    let refund_operation = retry(
+        "Refunding the expired HTLC",
+        backoff_util::aggressive_backoff_long(),
+        || async {
+            cmd!(
+                funder,
+                "module",
+                "lnv2",
+                "htlc",
+                "refund",
+                funding_txid,
+                contract
+            )
+            .out_json()
+            .await
+        },
+    )
+    .await?;
+
+    await_htlc_settled(&funder, &refund_operation).await?;
+
+    ensure!(funder.balance().await? > balance_before_refund);
+
+    Ok(())
+}
+
+/// Fund an HTLC of one thousand sats locked to `claim_pk`, wait for the
+/// funding transaction to be accepted and return the funding txid and the
+/// contract JSON as the claimer receives them out of band.
+async fn create_htlc(
+    funder: &Client,
+    claim_pk: &str,
+    expiration_delta: u64,
+    lock_flag: &str,
+    lock_value: &str,
+) -> anyhow::Result<(String, String)> {
+    let created = cmd!(
+        funder,
+        "module",
+        "lnv2",
+        "htlc",
+        "create",
+        "1000000",
+        claim_pk,
+        expiration_delta,
+        lock_flag,
+        lock_value
+    )
+    .out_json()
+    .await?;
+
+    // The contract is always the first output of its funding transaction.
+    assert_eq!(created["outpoint"]["out_idx"], 0);
+
+    await_htlc_settled(funder, &created["operation_id"]).await?;
+
+    Ok((
+        json_string(&created["outpoint"]["txid"])?,
+        created["contract"].to_string(),
+    ))
+}
+
+async fn await_htlc_settled(client: &Client, operation_id: &Value) -> anyhow::Result<()> {
+    assert_eq!(
+        cmd!(
+            client,
+            "module",
+            "lnv2",
+            "htlc",
+            "await-settled",
+            json_string(operation_id)?
+        )
+        .out_json()
+        .await?,
+        "settled"
+    );
+
+    Ok(())
+}
+
+fn json_string(value: &Value) -> anyhow::Result<String> {
+    value
+        .as_str()
+        .map(str::to_owned)
+        .with_context(|| format!("Expected a JSON string, got {value}"))
 }
