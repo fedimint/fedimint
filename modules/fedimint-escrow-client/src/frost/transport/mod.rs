@@ -83,3 +83,20 @@ pub trait DkgTransport: Sync + Send {
         timeout: Duration,
     ) -> Result<BTreeMap<Identifier, frost::keys::dkg::round2::Package>, TransportError>;
 }
+
+#[async_trait]
+pub trait SigningTransport: Sync + Send {
+    async fn send(
+        &self,
+        sender: &Identifier,
+        receiver: &Identifier,
+        payload: Vec<u8>,
+    ) -> Result<(), TransportError>;
+
+    /// Next message for `self_id`, with the identifier of the sender.
+    async fn recv(
+        &self,
+        self_id: &Identifier,
+        timeout: Duration,
+    ) -> Result<(Identifier, Vec<u8>), TransportError>;
+}

@@ -11,7 +11,7 @@ use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
 use crate::frost::session::SessionId;
-use crate::frost::transport::{DkgTransport, TransportError};
+use crate::frost::transport::{DkgTransport, SigningTransport, TransportError};
 
 pub struct FileTransport {
     root: PathBuf,
@@ -95,6 +95,80 @@ impl DkgTransport for FileTransport {
                 .map_err(|e| TransportError::Serialization(e.to_string()))
         })
         .await
+    }
+}
+
+#[async_trait]
+impl SigningTransport for FileTransport {
+    async fn send(
+        &self,
+        sender: &Identifier,
+        receiver: &Identifier,
+        payload: Vec<u8>,
+    ) -> Result<(), TransportError> {
+        // name = <time>-<sender>-<random>.msg, so files can be in sorted order they
+        // were sent
+        let name = format!(
+            "{:040}-{}-{}.msg",
+            fedimint_core::time::duration_since_epoch().as_nanos(),
+            hex::encode(sender.serialize()),
+            rand::random::<u32>()
+        );
+        let path = self
+            .root
+            .join("signing")
+            .join(hex::encode(receiver.serialize()))
+            .join(name);
+
+        self.write_atomic(&path, &payload).await
+    }
+
+    async fn recv(
+        &self,
+        self_id: &Identifier,
+        timeout: Duration,
+    ) -> Result<(Identifier, Vec<u8>), TransportError> {
+        let dir = self
+            .root
+            .join("signing")
+            .join(hex::encode(self_id.serialize()));
+        let deadline = now()
+            .checked_add(timeout)
+            .ok_or(TransportError::TimeoutError)?;
+
+        loop {
+            if let Ok(mut entries) = fs::read_dir(&dir).await {
+                let mut names = Vec::new();
+                while let Some(entry) = entries.next_entry().await? {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    // ignore half written files (.tmp)
+                    if name.ends_with(".msg") {
+                        names.push(name);
+                    }
+                }
+                names.sort();
+
+                if let Some(name) = names.first() {
+                    let path = dir.join(name);
+                    let bytes = fs::read(&path).await?;
+                    fs::remove_file(&path).await?;
+
+                    let sender_hex = name.split('-').nth(1).unwrap_or_default();
+                    let sender = hex::decode(sender_hex)
+                        .map_err(|e| TransportError::Serialization(e.to_string()))
+                        .and_then(|b| {
+                            Identifier::deserialize(&b)
+                                .map_err(|e| TransportError::Serialization(e.to_string()))
+                        })?;
+                    return Ok((sender, bytes));
+                }
+            }
+
+            if now() >= deadline {
+                return Err(TransportError::TimeoutError);
+            }
+            sleep(self.poll_interval).await;
+        }
     }
 }
 

@@ -13,16 +13,18 @@ use iroh::discovery::static_provider::StaticProvider;
 use iroh::{Endpoint, NodeAddr, NodeId, SecretKey};
 
 use crate::frost::session::SessionId;
-use crate::frost::transport::{DkgTransport, TransportError};
+use crate::frost::transport::{DkgTransport, SigningTransport, TransportError};
 
 const ROUND1_TAG: u8 = 1;
 const ROUND2_TAG: u8 = 2;
+const SIGNING_TAG: u8 = 3;
 pub const DKG_ALPN: &[u8] = b"fedimint_escrow_iroh_dkg_consortium";
 
 #[derive(Default)]
 struct Inbox {
     round1: BTreeMap<Identifier, Vec<u8>>,
     round2: BTreeMap<Identifier, Vec<u8>>,
+    signing: std::collections::VecDeque<(Identifier, Vec<u8>)>,
 }
 
 pub struct IrohDkgTransport {
@@ -160,6 +162,9 @@ async fn handle_incoming(
         ROUND2_TAG => {
             inbox.round2.insert(sender, payload.to_vec());
         }
+        SIGNING_TAG => {
+            inbox.signing.push_back((sender, payload.to_vec()));
+        }
         _ => anyhow::bail!("unknown round tag"),
     }
     Ok(())
@@ -273,6 +278,41 @@ impl DkgTransport for IrohDkgTransport {
                 return Err(TransportError::TimeoutError);
             }
             sleep(Duration::from_millis(200)).await;
+        }
+    }
+}
+
+#[async_trait]
+impl SigningTransport for IrohDkgTransport {
+    async fn send(
+        &self,
+        _sender: &Identifier,
+        receiver: &Identifier,
+        payload: Vec<u8>,
+    ) -> Result<(), TransportError> {
+        // the frame carries the consortium session id, signing.rs puts the escrow id
+        // inside
+        self.send_tagged(&self.session_id, *receiver, SIGNING_TAG, &payload)
+            .await
+    }
+
+    async fn recv(
+        &self,
+        _self_id: &Identifier,
+        timeout: Duration,
+    ) -> Result<(Identifier, Vec<u8>), TransportError> {
+        let deadline = now()
+            .checked_add(timeout)
+            .ok_or(TransportError::TimeoutError)?;
+
+        loop {
+            if let Some(message) = self.inbox.lock().await.signing.pop_front() {
+                return Ok(message);
+            }
+            if now() >= deadline {
+                return Err(TransportError::TimeoutError);
+            }
+            sleep(Duration::from_millis(100)).await;
         }
     }
 }

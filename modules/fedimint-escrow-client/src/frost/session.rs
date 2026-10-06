@@ -1,11 +1,13 @@
 use std::collections::BTreeMap;
 
 use fedimint_core::BitcoinHash;
+use fedimint_core::bitcoin::XOnlyPublicKey;
 use fedimint_core::bitcoin::hashes::{HashEngine, sha256};
 use fedimint_core::config::FederationId;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::secp256k1::PublicKey;
+use frost_secp256k1_tr;
 use frost_secp256k1_tr::keys::dkg::round1::{
     Package as Round1Package, SecretPackage as Round1SecretPackage,
 };
@@ -211,6 +213,55 @@ impl FrostDkgSessionRecord {
         dbtx.commit_tx().await;
 
         anyhow::Ok(record)
+    }
+
+    pub async fn load_dkg_result(
+        db: &Database,
+        session_id: SessionId,
+    ) -> Result<DkgResult, DkgError> {
+        let mut dbtx = db.begin_transaction_nc().await;
+        let session: Option<FrostDkgSession> =
+            dbtx.get_value(&FrostDkgSessionKey(session_id)).await;
+
+        match session.map(|s| s.state) {
+            Some(FrostDkgState::Finalized {
+                key_package,
+                public_key_package,
+            }) => Ok(DkgResult {
+                key_package: KeyPackage::deserialize(&key_package)
+                    .map_err(|e| DkgError::FrostError(e.to_string()))?,
+                pubkey_package: PublicKeyPackage::deserialize(&public_key_package)
+                    .map_err(|e| DkgError::FrostError(e.to_string()))?,
+            }),
+            _ => Err(DkgError::FrostError(
+                "consortium DKG is not finished".to_string(),
+            )),
+        }
+    }
+
+    pub fn consortium_pubkey(pubkey_package: &PublicKeyPackage) -> Result<PublicKey, DkgError> {
+        let bytes = pubkey_package
+            .verifying_key()
+            .serialize()
+            .map_err(|e| DkgError::FrostError(e.to_string()))?;
+
+        match bytes.len() {
+            33 => PublicKey::from_slice(&bytes).map_err(|e| DkgError::FrostError(e.to_string())),
+
+            32 => {
+                let xonly = XOnlyPublicKey::from_slice(&bytes)
+                    .map_err(|e| DkgError::FrostError(e.to_string()))?;
+
+                Ok(PublicKey::from_x_only_public_key(
+                    xonly,
+                    fedimint_core::secp256k1::Parity::Even,
+                ))
+            }
+
+            len => Err(DkgError::FrostError(format!(
+                "invalid FROST verifying key length: {len}"
+            ))),
+        }
     }
 
     async fn persist_state(db: &Database, session_id: SessionId, state: FrostDkgState) {
