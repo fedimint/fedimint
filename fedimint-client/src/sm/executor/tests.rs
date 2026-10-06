@@ -1,12 +1,16 @@
 use std::fmt::Debug;
+use std::pin::pin;
 use std::sync::Arc;
 use std::time::Duration;
 
 use fedimint_client_module::error::AddStateMachinesError;
-use fedimint_client_module::sm::{Context, DynContext, DynState, State, StateTransition};
+use fedimint_client_module::sm::executor::ActiveStateKey;
+use fedimint_client_module::sm::{
+    ActiveStateMeta, Context, DynContext, DynState, State, StateTransition,
+};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::Database;
 use fedimint_core::db::mem_impl::MemDatabase;
+use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::runtime;
@@ -16,7 +20,7 @@ use tokio::sync::broadcast::Sender;
 use tokio::sync::watch;
 use tracing::{info, trace};
 
-use super::Executor;
+use super::{ActiveStateKeyDb, Executor};
 use crate::DynGlobalClientContext;
 use crate::sm::notifier::Notifier;
 
@@ -91,7 +95,7 @@ impl State for MockStateMachine {
     }
 
     fn operation_id(&self) -> OperationId {
-        OperationId([0u8; 32])
+        MOCK_OPERATION
     }
 }
 
@@ -120,7 +124,20 @@ impl Context for MockContext {
     const KIND: Option<ModuleKind> = None;
 }
 
+/// The operation every [`MockStateMachine`] belongs to.
+const MOCK_OPERATION: OperationId = OperationId([0u8; 32]);
+
 fn get_executor() -> (Executor, Sender<u64>, Database) {
+    let (executor, broadcast, db) = build_executor();
+
+    start_executor(&executor);
+
+    (executor, broadcast, db)
+}
+
+/// An executor that is not running yet, for tests that need to arrange the
+/// database it will find when it starts.
+fn build_executor() -> (Executor, Sender<u64>, Database) {
     let (broadcast, _) = tokio::sync::broadcast::channel(10);
 
     let mut decoder_builder = Decoder::builder();
@@ -145,6 +162,11 @@ fn get_executor() -> (Executor, Sender<u64>, Database) {
         TaskGroup::new(),
         log_ordering_wakeup_tx,
     );
+
+    (executor, broadcast, db)
+}
+
+fn start_executor(executor: &Executor) {
     executor.start_executor(
         Arc::new(|_, _| DynGlobalClientContext::new_fake()),
         tracing::Span::none(),
@@ -154,7 +176,15 @@ fn get_executor() -> (Executor, Sender<u64>, Database) {
         target: LOG_CLIENT_REACTOR,
         "Initialized test executor"
     );
-    (executor, broadcast, db)
+}
+
+/// Waits until `count` triggers of the mock state machine are listening on
+/// its broadcast, which is how a test knows the executor has started the
+/// state it is about to send a value to.
+async fn await_trigger_receivers(sender: &Sender<u64>, count: usize) {
+    while sender.receiver_count() != count {
+        runtime::sleep(Duration::from_millis(10)).await;
+    }
 }
 
 #[tokio::test]
@@ -256,4 +286,106 @@ async fn stop_executor_tolerates_poisoned_state_lock() {
 
     assert!(executor.inner.state.is_poisoned());
     executor.stop_executor();
+}
+
+/// Waiting for an operation to have no active states returns at once when it
+/// has none, keeps waiting while a state machine moves between non-terminal
+/// states, and returns once the last one has reached its terminal state.
+#[tokio::test]
+async fn awaiting_no_active_states_returns_once_the_last_state_machine_is_terminal() {
+    const MOCK_INSTANCE: ModuleInstanceId = 42;
+    const NOT_YET: Duration = Duration::from_millis(200);
+    const SOON: Duration = Duration::from_secs(10);
+
+    let (executor, sender, _db) = get_executor();
+
+    runtime::timeout(SOON, executor.await_no_active_states(MOCK_OPERATION))
+        .await
+        .expect("An operation that never started a state machine has none running");
+
+    executor
+        .add_state_machines(vec![DynState::from_typed(
+            MOCK_INSTANCE,
+            MockStateMachine::Start,
+        )])
+        .await
+        .expect("The state machine is new");
+
+    assert!(executor.has_active_states(MOCK_OPERATION).await);
+
+    let mut finished = pin!(executor.await_no_active_states(MOCK_OPERATION));
+
+    assert!(
+        runtime::timeout(NOT_YET, &mut finished).await.is_err(),
+        "The state machine has not moved yet"
+    );
+
+    // `Start` -> `ReceivedNonNull(7)`: the operation moves, but is not over.
+    await_trigger_receivers(&sender, 2).await;
+    sender.send(7).expect("The triggers are listening");
+    executor
+        .await_active_state(DynState::from_typed(
+            MOCK_INSTANCE,
+            MockStateMachine::ReceivedNonNull(7),
+        ))
+        .await;
+
+    assert!(
+        runtime::timeout(NOT_YET, &mut finished).await.is_err(),
+        "The state machine moved to another non-terminal state"
+    );
+
+    // `ReceivedNonNull(7)` -> `Final`.
+    await_trigger_receivers(&sender, 1).await;
+    sender.send(7).expect("The trigger is listening");
+
+    runtime::timeout(SOON, &mut finished)
+        .await
+        .expect("The only state machine of the operation reached its terminal state");
+
+    assert!(!executor.has_active_states(MOCK_OPERATION).await);
+    assert!(
+        executor
+            .contains_inactive_state(MOCK_INSTANCE, MockStateMachine::Final)
+            .await
+    );
+}
+
+/// A terminal state can be found among the active ones, for example one a
+/// recovery added before its module was there to say it is terminal. The
+/// executor makes it inactive when it comes across it, and those waiting for
+/// the operation to have no active states have to hear about that too.
+#[tokio::test]
+async fn awaiting_no_active_states_notices_a_terminal_state_being_inactivated() {
+    const MOCK_INSTANCE: ModuleInstanceId = 42;
+    const NOT_YET: Duration = Duration::from_millis(200);
+    const SOON: Duration = Duration::from_secs(10);
+
+    let (executor, _sender, db) = build_executor();
+
+    let mut dbtx = db.begin_transaction().await;
+    dbtx.insert_new_entry(
+        &ActiveStateKeyDb(ActiveStateKey::from_state(DynState::from_typed(
+            MOCK_INSTANCE,
+            MockStateMachine::Final,
+        ))),
+        &ActiveStateMeta::default(),
+    )
+    .await;
+    dbtx.commit_tx().await;
+
+    let mut finished = pin!(executor.await_no_active_states(MOCK_OPERATION));
+
+    assert!(
+        runtime::timeout(NOT_YET, &mut finished).await.is_err(),
+        "Nothing runs the state before the executor starts"
+    );
+
+    start_executor(&executor);
+
+    runtime::timeout(SOON, &mut finished)
+        .await
+        .expect("The executor made the terminal state inactive");
+
+    assert!(!executor.has_active_states(MOCK_OPERATION).await);
 }
