@@ -5,8 +5,10 @@ use std::sync::Arc;
 
 use fedimint_bip39::{Bip39RootSecretStrategy, Mnemonic};
 use fedimint_client::db::ClientConfigKey;
+use fedimint_client::meta::MetaService;
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::{Client, ClientBuilder, RootSecret};
+use fedimint_client_module::meta::LegacyMetaSource;
 use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
@@ -17,6 +19,7 @@ use fedimint_gateway_common::FederationConfig;
 use fedimint_gateway_server_db::GatewayDbExt as _;
 use fedimint_gw_client::GatewayClientInit;
 use fedimint_gwv2_client::GatewayClientInitV2;
+use fedimint_meta_client::MetaModuleMetaSourceWithFallback;
 
 use crate::config::DatabaseBackend;
 use crate::error::AdminGatewayError;
@@ -80,6 +83,9 @@ impl GatewayClientBuilder {
         });
 
         let mut client_builder = Client::builder().await.with_iroh_enable_dht(true);
+        client_builder.with_meta_service(MetaService::new(MetaModuleMetaSourceWithFallback::<
+            LegacyMetaSource,
+        >::default()));
         client_builder.with_module_inits(registry);
         Ok(client_builder)
     }

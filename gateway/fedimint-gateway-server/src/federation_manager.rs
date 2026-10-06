@@ -5,7 +5,9 @@ use std::time::SystemTime;
 
 use bitcoin::secp256k1::Keypair;
 use fedimint_client::ClientHandleArc;
-use fedimint_core::config::{FederationId, FederationIdPrefix, JsonClientConfig};
+use fedimint_core::config::{
+    FederationId, FederationIdPrefix, JsonClientConfig, META_FEDERATION_NAME_KEY,
+};
 use fedimint_core::core::Account;
 use fedimint_core::db::{Committable, DatabaseTransaction, NonCommittable};
 use fedimint_core::invite_code::InviteCode;
@@ -265,6 +267,17 @@ impl FederationManager {
     }
 
     pub async fn federation_name(&self, client: &ClientHandleArc) -> Option<String> {
+        if let Some(name) = client
+            .meta_service()
+            .get_cached_field::<String>(client.db(), META_FEDERATION_NAME_KEY)
+            .await
+            .and_then(|value| value.value)
+        {
+            return Some(name);
+        }
+
+        // Existing federations may still have only an immutable name, including
+        // when their Meta module has other fields but no federation name.
         let client_config = client.config().await;
         let federation_name = client_config.global.federation_name();
         federation_name.map(String::from)
