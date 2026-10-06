@@ -34,7 +34,6 @@ pub(crate) struct SetupInput {
     pub name: String,
     #[serde(default)]
     pub is_lead: bool,
-    pub federation_name: String,
     #[serde(default)]
     pub federation_size: String,
     #[serde(default)] // will not be sent if disabled
@@ -270,8 +269,6 @@ fn setup_form_content(
                 }
 
                 div class="toggle-content mt-3" {
-                    input type="text" class="form-control" id="federation_name" name="federation_name" placeholder="Federation Name";
-
                     div class="form-group mt-3" {
                         label class="form-label" for="federation_size" {
                             "Total number of guardians (including you)"
@@ -402,12 +399,6 @@ async fn setup_submit(
     Form(input): Form<SetupInput>,
 ) -> impl IntoResponse {
     // Only use these settings if is_lead is true
-    let federation_name = if input.is_lead {
-        Some(input.federation_name)
-    } else {
-        None
-    };
-
     let disable_base_fees = if input.is_lead {
         Some(!input.enable_base_fees)
     } else {
@@ -447,7 +438,6 @@ async fn setup_submit(
         .api
         .set_local_parameters(
             input.name,
-            federation_name,
             disable_base_fees,
             enabled_modules,
             federation_size,

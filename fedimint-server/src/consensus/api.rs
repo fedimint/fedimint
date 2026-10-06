@@ -850,13 +850,12 @@ impl IDashboardApi for ConsensusApi {
             .collect()
     }
 
-    async fn federation_name(&self) -> String {
+    async fn federation_name(&self) -> Option<String> {
         self.cfg
             .consensus
             .meta
             .get(META_FEDERATION_NAME_KEY)
             .cloned()
-            .expect("Federation name must be set")
     }
 
     async fn session_count(&self) -> u64 {
