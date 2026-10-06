@@ -145,7 +145,7 @@ async fn pending_txs_unordered(dbtx: &mut DatabaseTransaction<'_>) -> Vec<Federa
 
 #[derive(Debug, Clone)]
 enum FeeCalcError {
-    PendingTxCapExceeded { count: usize },
+    PendingTxCapExceeded,
     NoFeerateAvailable,
 }
 
@@ -542,7 +542,7 @@ impl ServerModule for Wallet {
 
         let consensus_receive_fee = match self.receive_fee_internal(dbtx).await {
             Ok(fee) => fee,
-            Err(FeeCalcError::PendingTxCapExceeded { .. }) => {
+            Err(FeeCalcError::PendingTxCapExceeded) => {
                 return Err(WalletInputError::PendingTxCapExceeded);
             }
             Err(FeeCalcError::NoFeerateAvailable) => {
@@ -695,7 +695,7 @@ impl ServerModule for Wallet {
 
         let consensus_send_fee = match self.send_fee_internal(dbtx).await {
             Ok(fee) => fee,
-            Err(FeeCalcError::PendingTxCapExceeded { .. }) => {
+            Err(FeeCalcError::PendingTxCapExceeded) => {
                 return Err(WalletOutputError::PendingTxCapExceeded);
             }
             Err(FeeCalcError::NoFeerateAvailable) => {
@@ -1244,9 +1244,7 @@ impl Wallet {
         let pending_txs = pending_txs_unordered(dbtx).await;
 
         if pending_txs.len() > 32 {
-            return Err(FeeCalcError::PendingTxCapExceeded {
-                count: pending_txs.len(),
-            });
+            return Err(FeeCalcError::PendingTxCapExceeded);
         }
 
         let feerate = self
