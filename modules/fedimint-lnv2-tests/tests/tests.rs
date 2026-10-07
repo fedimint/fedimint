@@ -30,10 +30,10 @@ use fedimint_lnv2_client::events::{
     ReceivePaymentEvent, SendPaymentEvent, SendPaymentStatus, SendPaymentUpdateEvent,
 };
 use fedimint_lnv2_client::{
-    FinalReceiveOperationState, InvoiceSendStatus, LightningClientInit, LightningClientModule,
-    LightningOperationMeta, ReceiveError, ReceiveOperationState, ReceiveWithTermsError,
-    SelectGatewayError, SendOperationState, SendPaymentError, SendWithTermsError,
-    SpendableAmountError,
+    FinalReceiveOperationState, FinalSendOperationState, InvoiceSendStatus, LightningClientInit,
+    LightningClientModule, LightningOperationMeta, ReceiveError, ReceiveOperationState,
+    ReceiveWithTermsError, SelectGatewayError, SendOperationState, SendPaymentError,
+    SendWithTermsError, SpendableAmountError,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::PaymentFee;
@@ -386,6 +386,51 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
             .get_invoice_send_status(&invoice)
             .await?,
         InvoiceSendStatus::Failed(operation_id),
+    );
+
+    Ok(())
+}
+
+/// Waiting for the operation to have no active states follows a payment the
+/// gateway fails through its refund, without the caller naming the refund's
+/// outputs: once it returns, the outcome is settled and the refunded amount is
+/// back in the balance.
+#[tokio::test(flavor = "multi_thread")]
+async fn awaiting_no_active_states_follows_a_refund_to_its_end() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await;
+
+    let operation_id = client
+        .get_first_module::<LightningClientModule>()?
+        .send(
+            mock::unpayable_invoice(),
+            Some(mock::gateway()),
+            Value::Null,
+        )
+        .await?;
+
+    client.await_no_active_states(operation_id).await;
+
+    assert!(!client.has_active_states(operation_id).await);
+
+    // Checked before the outcome is read, which would itself wait for the
+    // refund. The invoice asks for 1000 sats, so a balance within that of the
+    // starting one means the refund has been credited: all that is missing
+    // are the federation's fees.
+    assert!(client.get_balance_for_btc().await? > sats(9_000));
+
+    assert_eq!(
+        client
+            .get_first_module::<LightningClientModule>()?
+            .await_final_send_operation_state(operation_id)
+            .await?,
+        FinalSendOperationState::Refunded,
     );
 
     Ok(())
