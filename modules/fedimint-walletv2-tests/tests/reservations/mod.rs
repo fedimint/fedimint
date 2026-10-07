@@ -108,15 +108,16 @@ async fn a_payment_moves_only_the_reservation_it_was_made_to() -> anyhow::Result
         "The reservation that was not paid must not move"
     );
 
-    // A reservation that has ended reports its ending to whoever asks later.
+    // A reservation that has ended ends the same way for whoever asks later.
     assert_eq!(
         wallet
             .subscribe_reservation(paid.operation_id)
             .await?
             .into_stream()
             .collect::<Vec<_>>()
-            .await,
-        vec![ReservationState::Claimed(claim)]
+            .await
+            .last(),
+        Some(&ReservationState::Claimed(claim))
     );
 
     // The address that was paid, and the unpaid one before it, no longer
@@ -220,6 +221,13 @@ async fn a_rescan_finds_a_payment_to_a_reservation_made_after_an_unpaid_one() ->
     assert_eq!(wallet.receive().await, unpaid.address);
 
     wallet.rescan_reserved_addresses().await;
+
+    // A reservation asked for now waits for the rescan. It would otherwise be
+    // handed an address the rescan goes on to find a payment for.
+    let reservation = wallet.reserve_address().await?;
+
+    assert_ne!(reservation.address, unpaid.address);
+    assert_ne!(reservation.address, paid.address);
 
     let mut events = pin!(wallet_event_stream(&restored));
 
