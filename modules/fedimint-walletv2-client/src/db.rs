@@ -12,6 +12,7 @@ pub enum DbKeyPrefix {
     ReservedAddress = 0x33,
     LowestUnusedAddressIndex = 0x34,
     RecoveryScan = 0x35,
+    UnclaimedOutput = 0x36,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -97,16 +98,55 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::LowestUnusedAddressIndex
 );
 
-/// Present from the start of a recovery until the output scanner has caught
-/// up with the federation's outputs. While it is, the scanner keeps all the
-/// addresses derived that a reservation could have been made for, and no
-/// address is handed out.
+/// Where a recovery's scan of the federation's outputs stands. Absent in a
+/// wallet that was not recovered.
+///
+/// It is kept once the scan is over. The client has a recovery prepared
+/// every time it is opened until all of its modules have recovered, which
+/// can be after this scan is over, and the scan must not start anew then.
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct RecoveryScanKey;
 
+/// See [`RecoveryScanKey`].
+#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize)]
+pub enum RecoveryScan {
+    /// The output scanner has yet to catch up with the federation's outputs.
+    /// Until it has, it keeps all the addresses derived that a reservation
+    /// could have been made for, and no address is handed out.
+    Scanning,
+    /// The output scanner has caught up with the federation's outputs.
+    Complete,
+}
+
 impl_db_record!(
     key = RecoveryScanKey,
-    value = (),
+    value = RecoveryScan,
     db_prefix = DbKeyPrefix::RecoveryScan,
     notify_on_modify = true,
+);
+
+/// An unspent output the output scanner found paid to one of this wallet's
+/// addresses, by the federation's index of it. The value is the index its
+/// address is derived at.
+///
+/// The scanner writes it before it moves on to the next output and removes
+/// it once the output is claimed, turns out to be spent, or is not worth
+/// claiming. A payment that cannot be claimed when it is found is therefore
+/// not lost to the scan having passed it: it is claimed by a later pass, in
+/// this run of the client or a later one.
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct UnclaimedOutputKey(pub u64);
+
+impl_db_record!(
+    key = UnclaimedOutputKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::UnclaimedOutput
+);
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct UnclaimedOutputPrefix;
+
+impl_db_lookup!(
+    key = UnclaimedOutputKey,
+    query_prefix = UnclaimedOutputPrefix
 );

@@ -196,6 +196,11 @@ function walletv2_module() {
 }
 export -f walletv2_module
 
+function walletv2_recovery() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/walletv2-recovery-test.sh
+}
+export -f walletv2_recovery
+
 function mintv2_module_test() {
   # mintv2 tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
@@ -502,6 +507,7 @@ tests_to_run_in_parallel+=(
   "lnv2_module_lnurl_recovery"
   "lnv1_lnv2_swap"
   "walletv2_module"
+  "walletv2_recovery"
   "mintv2_module_test"
   "devimint_cli_test"
   "devimint_cli_test_single"

@@ -4,8 +4,11 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{Database, DatabaseError, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 
-use super::{AddressWindow, reserve, retire, unused};
-use crate::db::{RecoveryScanKey, ValidAddressIndexKey};
+use super::{
+    AddressWindow, finish_recovery_scan, recovery_scanning, reserve, retire, start_recovery_scan,
+    unused,
+};
+use crate::db::ValidAddressIndexKey;
 use crate::{MAX_UNPAID_RESERVATIONS, ReserveAddressError};
 
 /// A wallet whose scanner has derived the addresses at `indices`.
@@ -198,7 +201,7 @@ async fn no_address_is_handed_out_while_a_recovery_scans() {
 
     let mut dbtx = db.begin_transaction().await;
 
-    dbtx.insert_entry(&RecoveryScanKey, &()).await;
+    start_recovery_scan(&mut dbtx).await;
 
     dbtx.commit_tx().await;
 
@@ -207,9 +210,38 @@ async fn no_address_is_handed_out_while_a_recovery_scans() {
 
     let mut dbtx = db.begin_transaction().await;
 
-    dbtx.remove_entry(&RecoveryScanKey).await;
+    assert!(finish_recovery_scan(&mut dbtx).await);
 
     dbtx.commit_tx().await;
 
     assert_eq!(reserve_committed(&db).await.expect("an address"), Some(7));
+}
+
+/// The client has a recovery prepared every time it is opened until all of
+/// its modules have recovered. That can be while this wallet's scan is under
+/// way, and after it is over.
+#[tokio::test]
+async fn a_recovery_scan_is_started_only_once() {
+    let db = wallet_with_addresses(&[7]).await;
+
+    let mut dbtx = db.begin_transaction().await;
+
+    assert!(!recovery_scanning(&mut dbtx).await);
+
+    start_recovery_scan(&mut dbtx).await;
+    start_recovery_scan(&mut dbtx).await;
+
+    assert!(recovery_scanning(&mut dbtx).await);
+    assert!(finish_recovery_scan(&mut dbtx).await);
+    assert!(!recovery_scanning(&mut dbtx).await);
+
+    dbtx.commit_tx().await;
+
+    let mut dbtx = db.begin_transaction().await;
+
+    start_recovery_scan(&mut dbtx).await;
+
+    assert!(!recovery_scanning(&mut dbtx).await);
+    assert!(!finish_recovery_scan(&mut dbtx).await);
+    assert_eq!(unused(&mut dbtx).await, Some(7));
 }

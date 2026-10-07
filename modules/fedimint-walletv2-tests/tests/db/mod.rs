@@ -16,7 +16,7 @@ use fedimint_testing::db::{
 use fedimint_walletv2_client::WalletClientModule;
 use fedimint_walletv2_client::db::{
     self, LowestUnusedAddressIndexKey, NextOutputIndexKey, RecoveryScanKey, ReservedAddressPrefix,
-    ValidAddressIndexKey, ValidAddressIndexPrefix,
+    UnclaimedOutputPrefix, ValidAddressIndexKey, ValidAddressIndexPrefix,
 };
 use fedimint_walletv2_common::{FederationWallet, TxInfo, WalletCommonInit};
 use fedimint_walletv2_server::db::{
@@ -478,6 +478,19 @@ async fn test_client_db_migrations() -> anyhow::Result<()> {
                         ensure!(
                             dbtx.get_value(&RecoveryScanKey).await.is_none(),
                             "a migration must not start a recovery's scan"
+                        );
+                    }
+                    db::DbKeyPrefix::UnclaimedOutput => {
+                        let unclaimed = dbtx
+                            .find_by_prefix(&UnclaimedOutputPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+
+                        ensure!(
+                            unclaimed.is_empty(),
+                            "only the output scanner finds an output to claim, got \
+                             {unclaimed:?}"
                         );
                     }
                 }

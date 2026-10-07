@@ -1,5 +1,5 @@
-//! Which receive addresses are still handed out, and which of them are
-//! reserved.
+//! Which receive addresses are still handed out, which of them are reserved,
+//! and whether a recovery has yet to find out which of them were paid.
 //!
 //! Everything here reads and writes inside the caller's transaction. That is
 //! what keeps a reservation and the discovery of a payment apart: both write
@@ -11,8 +11,8 @@ use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use futures::StreamExt;
 
 use crate::db::{
-    LowestUnusedAddressIndexKey, RecoveryScanKey, ReservedAddress, ReservedAddressKey,
-    ValidAddressIndexPrefix,
+    LowestUnusedAddressIndexKey, RecoveryScan, RecoveryScanKey, ReservedAddress,
+    ReservedAddressKey, ValidAddressIndexPrefix,
 };
 use crate::{MAX_UNPAID_RESERVATIONS, ReserveAddressError};
 
@@ -86,11 +86,47 @@ pub(crate) async fn unused<Cap>(dbtx: &mut DatabaseTransaction<'_, Cap>) -> Opti
 where
     Cap: Send,
 {
-    if dbtx.get_value(&RecoveryScanKey).await.is_some() {
+    if recovery_scanning(dbtx).await {
         return None;
     }
 
     AddressWindow::load(dbtx).await.unused
+}
+
+/// Starts a recovery's scan of the federation's outputs, unless the wallet's
+/// recovery has started it before, whether or not it is over.
+pub(crate) async fn start_recovery_scan<Cap>(dbtx: &mut DatabaseTransaction<'_, Cap>)
+where
+    Cap: Send,
+{
+    if dbtx.get_value(&RecoveryScanKey).await.is_none() {
+        dbtx.insert_entry(&RecoveryScanKey, &RecoveryScan::Scanning)
+            .await;
+    }
+}
+
+/// Whether a recovery's scan of the federation's outputs is under way.
+pub(crate) async fn recovery_scanning<Cap>(dbtx: &mut DatabaseTransaction<'_, Cap>) -> bool
+where
+    Cap: Send,
+{
+    dbtx.get_value(&RecoveryScanKey).await == Some(RecoveryScan::Scanning)
+}
+
+/// Ends a recovery's scan of the federation's outputs. Returns whether one
+/// was under way.
+pub(crate) async fn finish_recovery_scan<Cap>(dbtx: &mut DatabaseTransaction<'_, Cap>) -> bool
+where
+    Cap: Send,
+{
+    if !recovery_scanning(dbtx).await {
+        return false;
+    }
+
+    dbtx.insert_entry(&RecoveryScanKey, &RecoveryScan::Complete)
+        .await;
+
+    true
 }
 
 /// Reserves the lowest unused address index for `operation_id` and returns

@@ -24,8 +24,9 @@ use api::WalletFederationApi;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, ScriptBuf};
 use db::{
-    LowestUnusedAddressIndexKey, NextOutputIndexKey, RecoveryScanKey, ReservedAddress,
-    ReservedAddressClaim, ReservedAddressKey, ValidAddressIndexKey, ValidAddressIndexPrefix,
+    LowestUnusedAddressIndexKey, NextOutputIndexKey, RecoveryScan, RecoveryScanKey,
+    ReservedAddress, ReservedAddressClaim, ReservedAddressKey, UnclaimedOutputKey,
+    UnclaimedOutputPrefix, ValidAddressIndexKey, ValidAddressIndexPrefix,
 };
 use events::{ReceivePaymentEvent, SendPaymentEvent};
 use fedimint_api_client::api::{DynModuleApi, FederationError, FederationResult};
@@ -57,6 +58,7 @@ use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::task::{TaskGroup, TaskHandle, sleep};
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, OutPoint, TransactionId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_eventlog::{Event, EventLogId};
@@ -292,13 +294,17 @@ impl ClientModuleInit for WalletClientInit {
     ///
     /// The recovery writes nothing else and the scanner does the searching,
     /// so there is nothing for the two to interfere over.
+    ///
+    /// The client calls this every time it is opened until all of its modules
+    /// have recovered, which can be after this module's scan is over. The
+    /// scan is started only once, see [`RecoveryScanKey`].
     async fn prepare_recovery(
         &self,
         args: &ClientModuleRecoveryPrepareArgs,
     ) -> Result<(), ClientModuleError> {
         let mut dbtx = args.db().begin_transaction().await;
 
-        dbtx.insert_entry(&RecoveryScanKey, &()).await;
+        addresses::start_recovery_scan(&mut dbtx).await;
 
         dbtx.commit_tx().await;
 
@@ -306,16 +312,26 @@ impl ClientModuleInit for WalletClientInit {
     }
 
     /// Waits for the output scanner to have gone through the federation's
-    /// outputs, see [`Self::prepare_recovery`]. What it finds it claims like
-    /// any other payment. The reservations themselves are not recovered.
+    /// outputs, see [`Self::prepare_recovery`]. The reservations themselves
+    /// are not recovered.
+    ///
+    /// The scanner records every unspent output it finds paid to the wallet,
+    /// and claims it like any other payment. The recovery does not wait for a
+    /// claim that cannot be made yet. One case of that is a recovering client
+    /// without a primary module, which a claim needs to issue the ecash to: a
+    /// primary module whose recovery mode is [`RecoveryMode::Unusable`] only
+    /// joins the client when it is opened with that module's recovery
+    /// complete. This recovery completes all the same. The outputs stay
+    /// recorded, and the scanner claims them in the first client that is
+    /// opened with a primary module.
     async fn recover(
         &self,
         args: &ClientModuleRecoverArgs<Self>,
         _snapshot: Option<&NoModuleBackup>,
     ) -> Result<Option<Amount>, ClientModuleError> {
         args.db()
-            .wait_key_check(&RecoveryScanKey, |scanning| {
-                scanning.is_none().then_some(())
+            .wait_key_check(&RecoveryScanKey, |scan| {
+                (scan != Some(RecoveryScan::Scanning)).then_some(())
             })
             .await;
 
@@ -345,10 +361,10 @@ impl ClientModuleInit for WalletClientInit {
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn> {
         let mut migrations: BTreeMap<DatabaseVersion, ClientModuleMigrationFn> = BTreeMap::new();
 
-        // Records the lowest address index still handed out, which the
-        // module did not keep before. Until now the scanner derived an address
-        // only once the one before it had been paid, so every valid index but
-        // the highest was paid.
+        // Records the lowest address index still handed out. A database
+        // without that record was written by a scanner that derived an
+        // address only once the one before it had been paid, so every valid
+        // index in it but the highest was paid.
         migrations.insert(DatabaseVersion(0), |dbtx, _, _| {
             Box::pin(async {
                 let mut indices: Vec<u64> = dbtx
@@ -1100,7 +1116,9 @@ impl WalletClientModule {
     /// Issue ecash for an unspent output with a given fee.
     ///
     /// Returns `None` if the output value cannot cover the fee, or if the
-    /// remainder is too small to fund the claim transaction's fees.
+    /// remainder is too small to fund the claim transaction's fees. The
+    /// output is not worth claiming then. Any other failure to submit the
+    /// claim is an error, and leaves the output to be claimed.
     async fn receive_output(
         &self,
         output_index: u64,
@@ -1108,41 +1126,21 @@ impl WalletClientModule {
         address_index: u64,
         fee: bitcoin::Amount,
         outpoint: Option<bitcoin::OutPoint>,
-    ) -> Option<(OperationId, TransactionId)> {
+    ) -> Result<Option<(OperationId, TransactionId)>, TransactionSubmitError> {
         let operation_id = OperationId::new_random();
 
-        let client_input = ClientInput::<WalletInput> {
-            input: WalletInput::V0(WalletInputV0 {
-                output_index,
-                fee,
-                tweak: self.derive_tweak(address_index).public_key(),
-            }),
-            keys: vec![self.derive_tweak(address_index)],
-            amounts: Amounts::new_bitcoin(Amount::from_sats(value.checked_sub(fee)?.to_sat())),
+        let Some(client_input_bundle) =
+            self.claim_input_bundle(operation_id, output_index, value, address_index, fee)
+        else {
+            return Ok(None);
         };
-
-        let client_input_sm = ClientInputSM::<WalletClientStateMachines> {
-            state_machines: Arc::new(move |range: OutPointRange| {
-                vec![WalletClientStateMachines::Receive(ReceiveStateMachine {
-                    common: ReceiveSMCommon {
-                        operation_id,
-                        txid: range.txid(),
-                        value,
-                        fee,
-                    },
-                    state: ReceiveSMState::Funding,
-                })]
-            }),
-        };
-
-        let client_input_bundle = ClientInputBundle::new(vec![client_input], vec![client_input_sm]);
 
         let address = self.derive_address(address_index).as_unchecked().clone();
 
         // The claim, its operation, its event and its place in the address's
         // reservation are written in one transaction. A reservation would
         // otherwise never learn of a claim submitted right before a crash.
-        let range = self
+        let submitted = self
             .client_ctx
             .module_db()
             .autocommit(
@@ -1218,10 +1216,63 @@ impl WalletClientModule {
                 },
                 Some(100),
             )
-            .await
-            .ok()?;
+            .await;
 
-        Some((operation_id, range.txid()))
+        match submitted {
+            Ok(range) => Ok(Some((operation_id, range.txid()))),
+            // What the claim brings in does not cover the fees of its
+            // transaction, and the client's balance cannot make up for it.
+            Err(AutocommitError::ClosureError {
+                error: TransactionSubmitError::InsufficientFunds(..),
+                ..
+            }) => Ok(None),
+            Err(AutocommitError::ClosureError { error, .. }) => Err(error),
+            Err(AutocommitError::CommitFailed { last_error, .. }) => {
+                Err(TransactionSubmitError::Database(last_error))
+            }
+        }
+    }
+
+    /// The input that claims an unspent output with a given fee, and the
+    /// state machine that follows the claim.
+    ///
+    /// Returns `None` if the output value cannot cover the fee.
+    fn claim_input_bundle(
+        &self,
+        operation_id: OperationId,
+        output_index: u64,
+        value: bitcoin::Amount,
+        address_index: u64,
+        fee: bitcoin::Amount,
+    ) -> Option<ClientInputBundle<WalletInput, WalletClientStateMachines>> {
+        let client_input = ClientInput::<WalletInput> {
+            input: WalletInput::V0(WalletInputV0 {
+                output_index,
+                fee,
+                tweak: self.derive_tweak(address_index).public_key(),
+            }),
+            keys: vec![self.derive_tweak(address_index)],
+            amounts: Amounts::new_bitcoin(Amount::from_sats(value.checked_sub(fee)?.to_sat())),
+        };
+
+        let client_input_sm = ClientInputSM::<WalletClientStateMachines> {
+            state_machines: Arc::new(move |range: OutPointRange| {
+                vec![WalletClientStateMachines::Receive(ReceiveStateMachine {
+                    common: ReceiveSMCommon {
+                        operation_id,
+                        txid: range.txid(),
+                        value,
+                        fee,
+                    },
+                    state: ReceiveSMState::Funding,
+                })]
+            }),
+        };
+
+        Some(ClientInputBundle::new(
+            vec![client_input],
+            vec![client_input_sm],
+        ))
     }
 
     fn spawn_output_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
@@ -1253,7 +1304,21 @@ impl WalletClientModule {
         });
     }
 
+    /// Scans the federation's outputs from where the last scan left off.
+    ///
+    /// Finding a payment and claiming it are separate steps. Every unspent
+    /// output paid to this wallet is recorded before the scan moves past it,
+    /// see [`UnclaimedOutputKey`], and what is recorded is claimed as soon as
+    /// that is possible. An output that cannot be claimed for now therefore
+    /// neither holds the scan back nor is lost to it. That is what lets a
+    /// recovery, which is complete once the scan has caught up with the
+    /// federation's outputs, complete in a client that cannot claim yet.
     async fn check_outputs(&self, handle: &TaskHandle) -> Result<bool, CheckOutputsError> {
+        // Claim what an earlier pass, or an earlier run of the client, found
+        // and could not claim. This comes before any address is derived, for
+        // the reason given where a payment is found below.
+        let mut claimed_all = self.claim_found_outputs().await;
+
         // Also where the first address is derived, and the next one after a
         // reservation took the last unused one.
         if self.derive_addresses(handle).await?.is_none() {
@@ -1296,14 +1361,17 @@ impl WalletClientModule {
                 // found, whatever becomes of the claim. Recording that first
                 // keeps the address from being reserved while the claim is
                 // under way, which would tie the reservation to this payment.
-                self.mark_address_used(address_index).await?;
+                let unclaimed = self.record_found_output(output, address_index).await?;
 
                 // Claim before deriving more addresses: the index search
                 // below is CPU-bound and can take longer than a short-lived
                 // client process (e.g. a cli invocation) lives. The claim is
                 // quick and the derivation can be retried on the next scan.
-                let processed =
-                    output.spent || self.process_unspent_output(output, address_index).await?;
+                // Outputs are claimed oldest first, so there is nothing to
+                // try while an earlier one is still to be claimed.
+                if unclaimed && claimed_all {
+                    claimed_all = self.claim_found_outputs().await;
+                }
 
                 // The address just paid may have been the last unused one,
                 // and for a recovery the addresses derived ahead have to stay
@@ -1316,10 +1384,6 @@ impl WalletClientModule {
                     valid_indices.push(index);
 
                     address_map.insert(self.derive_address(index).script_pubkey(), index);
-                }
-
-                if !processed {
-                    return Ok(false);
                 }
             }
 
@@ -1372,7 +1436,7 @@ impl WalletClientModule {
 
                 (
                     AddressWindow::load(&mut dbtx).await,
-                    dbtx.get_value(&RecoveryScanKey).await.is_some(),
+                    addresses::recovery_scanning(&mut dbtx).await,
                 )
             };
 
@@ -1402,16 +1466,109 @@ impl WalletClientModule {
         }
     }
 
-    /// Records that a payment to the address at `address_index` was found, so
-    /// that neither it nor any address below it is handed out again.
-    async fn mark_address_used(&self, address_index: u64) -> Result<(), DatabaseError> {
+    /// Records that the scan found `output`, paid to the address at
+    /// `address_index`: neither that address nor any below it is handed out
+    /// again, and the output is one to claim unless it is spent already.
+    /// Returns whether it is one to claim.
+    async fn record_found_output(
+        &self,
+        output: &OutputInfo,
+        address_index: u64,
+    ) -> Result<bool, DatabaseError> {
         let mut dbtx = self.db.begin_transaction().await;
 
-        if addresses::retire(&mut dbtx, address_index).await {
+        let retired = addresses::retire(&mut dbtx, address_index).await;
+
+        if !output.spent {
+            debug!(
+                target: LOG_CLIENT_MODULE_WALLETV2,
+                output_index = output.index,
+                value_sat = output.value.to_sat(),
+                address_index,
+                outpoint = ?output.outpoint,
+                "Discovered unspent walletv2 receive output"
+            );
+
+            dbtx.insert_entry(&UnclaimedOutputKey(output.index), &address_index)
+                .await;
+        }
+
+        if retired || !output.spent {
             dbtx.commit_tx_result().await?;
         }
 
-        Ok(())
+        Ok(!output.spent)
+    }
+
+    /// Claims the outputs the scan found and has yet to claim, oldest first,
+    /// up to the first that cannot be claimed for now. That one and those
+    /// after it are left to the next pass, which is why a failure is logged
+    /// and goes no further. Returns whether none is left to claim.
+    async fn claim_found_outputs(&self) -> bool {
+        let mut unclaimed: Vec<(u64, u64)> = self
+            .db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&UnclaimedOutputPrefix)
+            .await
+            .map(|(output, address_index)| (output.0, address_index))
+            .collect()
+            .await;
+
+        unclaimed.sort_unstable();
+
+        for (output_index, address_index) in unclaimed {
+            match self.claim_found_output(output_index, address_index).await {
+                Ok(true) => {}
+                Ok(false) => return false,
+                Err(error) => {
+                    warn!(
+                        target: LOG_CLIENT_MODULE_WALLETV2,
+                        output_index,
+                        err = %error.fmt_compact(),
+                        "Failed to claim walletv2 receive output"
+                    );
+
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+
+    /// Claims the output the federation lists at `output_index`, paid to the
+    /// address at `address_index`. Returns whether the output is dealt with,
+    /// and so no longer one to claim.
+    async fn claim_found_output(
+        &self,
+        output_index: u64,
+        address_index: u64,
+    ) -> Result<bool, ProcessOutputError> {
+        // Asked for anew, as the output may have been spent since it was
+        // found: by a claim a restart cut short of its outcome, or by another
+        // client of the same wallet.
+        let output = self
+            .module_api
+            .output_info_slice(output_index, output_index + 1)
+            .await?
+            .into_iter()
+            .next()
+            .ok_or(ProcessOutputError::UnknownOutput(output_index))?;
+
+        if !output.spent && !self.process_unspent_output(&output, address_index).await? {
+            return Ok(false);
+        }
+
+        // Not before the federation accepted the claim: one it rejects is
+        // made anew from this record.
+        let mut dbtx = self.db.begin_transaction().await;
+
+        dbtx.remove_entry(&UnclaimedOutputKey(output_index)).await;
+
+        dbtx.commit_tx_result().await?;
+
+        Ok(true)
     }
 
     /// Ends a recovery's scan, which has caught up with the federation's
@@ -1419,9 +1576,7 @@ impl WalletClientModule {
     async fn finish_recovery_scan(&self) -> Result<(), DatabaseError> {
         let mut dbtx = self.db.begin_transaction().await;
 
-        if dbtx.get_value(&RecoveryScanKey).await.is_some() {
-            dbtx.remove_entry(&RecoveryScanKey).await;
-
+        if addresses::finish_recovery_scan(&mut dbtx).await {
             dbtx.commit_tx_result().await?;
 
             self.addresses_changed.send_replace(());
@@ -1461,20 +1616,17 @@ impl WalletClientModule {
         Ok(())
     }
 
+    /// Claims an unspent output paid to the address at `address_index`.
+    ///
+    /// Returns whether the output is dealt with: its claim was accepted, or
+    /// it is not worth claiming. It is not while the claim has to wait, for
+    /// the federation's pending transactions to confirm or for the client to
+    /// have a primary module.
     async fn process_unspent_output(
         &self,
         output: &OutputInfo,
         address_index: u64,
     ) -> Result<bool, ProcessOutputError> {
-        debug!(
-            target: LOG_CLIENT_MODULE_WALLETV2,
-            output_index = output.index,
-            value_sat = output.value.to_sat(),
-            address_index,
-            outpoint = ?output.outpoint,
-            "Discovered unspent walletv2 receive output"
-        );
-
         // A claim recorded for this output is one a restart cut short of its
         // outcome. Claiming the output again would replace it in
         // the reservation with a claim the federation rejects if the first
@@ -1508,7 +1660,7 @@ impl WalletClientModule {
             .await?
             .ok_or(ProcessOutputError::NoFeerate)?;
 
-        if let Some((operation_id, txid)) = self
+        let claim = match self
             .receive_output(
                 output.index,
                 output.value,
@@ -1518,6 +1670,23 @@ impl WalletClientModule {
             )
             .await
         {
+            Ok(claim) => claim,
+            // The ecash a claim mints is issued to the client's primary
+            // module. A client is without one while it recovers a primary
+            // module that cannot be used during its recovery, and has it
+            // from the first time it is opened with that recovery complete.
+            Err(TransactionSubmitError::NoPrimaryModule { .. }) => {
+                debug!(
+                    target: LOG_CLIENT_MODULE_WALLETV2,
+                    output_index = output.index,
+                    "Delaying walletv2 receive claim because the client has no primary module"
+                );
+                return Ok(false);
+            }
+            Err(error) => return Err(ProcessOutputError::ClaimNotSubmitted(error)),
+        };
+
+        if let Some((operation_id, txid)) = claim {
             debug!(
                 target: LOG_CLIENT_MODULE_WALLETV2,
                 output_index = output.index,
@@ -1651,26 +1820,32 @@ enum CheckOutputsError {
     #[error(transparent)]
     Federation(#[from] FederationError),
 
-    /// The scan's progress could not be committed.
+    /// The scan's progress, or what it found, could not be committed.
     #[error(transparent)]
     Database(#[from] DatabaseError),
-
-    /// An unspent output paid to this client could not be claimed.
-    #[error(transparent)]
-    ProcessOutput(#[from] ProcessOutputError),
 }
 
-/// A failure to claim an unspent output paid to this client.
+/// A failure to claim an unspent output paid to this client. The output
+/// stays one to claim.
 #[derive(Debug, Error)]
 enum ProcessOutputError {
-    /// The federation could not report its pending transactions or the
-    /// receive fee.
+    /// The federation could not report the output, its pending transactions
+    /// or the receive fee.
     #[error(transparent)]
     Federation(#[from] FederationError),
+
+    /// The federation does not list an output it listed when the scan found
+    /// it.
+    #[error("The federation does not list output {0}")]
+    UnknownOutput(u64),
 
     /// The federation has no consensus feerate to price the claim with.
     #[error("No consensus feerate is available")]
     NoFeerate,
+
+    /// The claim transaction could not be submitted.
+    #[error("Claim transaction could not be submitted")]
+    ClaimNotSubmitted(#[source] TransactionSubmitError),
 
     /// The claim transaction was rejected.
     #[error("Claim transaction was rejected: {0}")]
@@ -1680,7 +1855,8 @@ enum ProcessOutputError {
     #[error(transparent)]
     Operation(#[from] OperationLookupError),
 
-    /// The reservation of the address the output paid could not be updated.
+    /// The reservation of the address the output paid, or the record of the
+    /// output itself, could not be updated.
     #[error(transparent)]
     Database(#[from] DatabaseError),
 }

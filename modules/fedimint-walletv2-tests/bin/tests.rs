@@ -1,15 +1,16 @@
 use std::time::Duration;
 
-use anyhow::{Context, ensure};
+use anyhow::{Context, bail, ensure};
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
+use clap::Parser;
 use devimint::external::Bitcoind;
 use devimint::federation::Client;
 use devimint::version_constants::{
     VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA, VERSION_0_13_0_ALPHA,
 };
 use devimint::{cmd, util};
-use fedimint_core::runtime::sleep;
+use fedimint_core::runtime::{sleep, timeout};
 use fedimint_core::task::sleep_in_test;
 use fedimint_eventlog::EventLogId;
 use serde::Deserialize;
@@ -219,12 +220,38 @@ async fn get_deposit_address(client: &Client) -> anyhow::Result<(Address, EventL
     }
 }
 
+/// Reserves a receive address and returns it.
+async fn reserve_address(client: &Client) -> anyhow::Result<Address> {
+    let reservation = cmd!(client, "module", "walletv2", "reserve-address")
+        .out_json()
+        .await?;
+
+    Ok(
+        serde_json::from_value::<Address<NetworkUnchecked>>(reservation["address"].clone())
+            .context("reserve-address should return the reserved address")?
+            .assume_checked(),
+    )
+}
+
+#[derive(Parser)]
+enum TestCli {
+    SendAndReceive,
+    Recovery,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Enable walletv2 module instead of wallet v1
     unsafe { std::env::set_var("FM_ENABLE_MODULE_WALLETV2", "true") };
     unsafe { std::env::set_var("FM_ENABLE_MODULE_WALLET", "false") };
 
+    match TestCli::parse() {
+        TestCli::SendAndReceive => send_and_receive_test().await,
+        TestCli::Recovery => recovery_test().await,
+    }
+}
+
+async fn send_and_receive_test() -> anyhow::Result<()> {
     devimint::run_devfed_test()
         .call(|dev_fed, _process_mgr| async move {
             let fedimint_cli_version = util::FedimintCli::version_or_default().await;
@@ -453,6 +480,154 @@ async fn main() -> anyhow::Result<()> {
             block_miner.abort();
 
             info!("Wallet V2 send and receive test successful");
+
+            Ok(())
+        })
+        .await
+}
+
+/// A wallet restored from its seed claims a payment that was made, while no
+/// client of the wallet was running, to an address the wallet had reserved.
+///
+/// The restored wallet has no record of the reservations. The payment is made
+/// to the second of two reserved addresses, so it is only found by a recovery
+/// that looks past the first, which is never paid.
+///
+/// The federation's mint is the v1 one, which cannot be used while it
+/// recovers. The `restore` command therefore finds the payment in a client
+/// without a primary module to issue the ecash to, and returns once the
+/// recovery is complete with the payment still to be claimed. It is the
+/// command after it, which opens the client anew, that can claim it.
+async fn recovery_test() -> anyhow::Result<()> {
+    unsafe { std::env::set_var("FM_ENABLE_MODULE_MINT", "true") };
+    unsafe { std::env::set_var("FM_ENABLE_MODULE_MINTV2", "false") };
+
+    devimint::run_devfed_test()
+        .call(|dev_fed, _process_mgr| async move {
+            let fedimint_cli_version = util::FedimintCli::version_or_default().await;
+            let fedimintd_version = util::FedimintdCmd::version_or_default().await;
+
+            if fedimint_cli_version < *VERSION_0_13_0_ALPHA {
+                info!(%fedimint_cli_version, "Version did not support walletv2 recovery, skipping");
+                return Ok(());
+            }
+
+            if fedimintd_version < *VERSION_0_11_0_ALPHA {
+                info!(%fedimintd_version, "Version did not support walletv2 module, skipping");
+                return Ok(());
+            }
+
+            let fed = dev_fed.fed().await?;
+
+            let original = fed
+                .new_joined_client("walletv2-test-recovery-original-client")
+                .await?;
+
+            ensure!(
+                module_is_present(&original, "walletv2").await?,
+                "walletv2 module should be present"
+            );
+
+            ensure!(
+                module_is_present(&original, "mint").await?,
+                "mint module should be present"
+            );
+
+            ensure!(
+                !module_is_present(&original, "mintv2").await?,
+                "mintv2 module should not be present"
+            );
+
+            // The original wallet is not run again once the payment is made,
+            // as it would claim the payment itself. Its seed is therefore
+            // taken first.
+            let mnemonic = cmd!(original, "print-secret").out_json().await?["secret"]
+                .as_str()
+                .context("print-secret should return the secret")?
+                .to_owned();
+
+            info!("Reserve two addresses and pay the second one...");
+
+            let unpaid_address = reserve_address(&original).await?;
+            let paid_address = reserve_address(&original).await?;
+
+            assert_ne!(unpaid_address, paid_address);
+
+            fed.bitcoind
+                .send_to(paid_address.to_string(), 100_000)
+                .await?;
+
+            // The federation knows of the payment once it is final.
+            fed.finalize_mempool_tx().await?;
+
+            info!("Restore the wallet from its seed...");
+
+            let restored = Client::create("walletv2-test-recovery-restored-client").await?;
+
+            restored
+                .restore_federation(fed.invite_code()?, mnemonic)
+                .await?;
+
+            info!("Wait for the restored wallet to claim the payment...");
+
+            // The claim takes a few seconds. A payment the restored wallet
+            // does not know of is one it would wait for without end.
+            timeout(
+                Duration::from_secs(120),
+                await_receive(&restored, EventLogId::LOG_START),
+            )
+            .await
+            .context("The restored wallet did not claim the payment")??;
+
+            ensure_client_balance(&restored, 90_000).await?;
+
+            // The wallet received once, to the address that was paid, and
+            // only after its recovery had completed: the client that
+            // recovered could not claim.
+            let events = cmd!(restored, "dev", "show-event-log", "--limit", "1000")
+                .out_json()
+                .await?;
+
+            let events = events
+                .as_array()
+                .context("show-event-log should return a list of events")?;
+
+            let recovered = events
+                .iter()
+                .position(|event| {
+                    event["kind"] == "module-recovery-completed"
+                        && event["payload"]["kind"] == "walletv2"
+                })
+                .context("The recovery of the wallet should have completed")?;
+
+            let receives = events
+                .iter()
+                .enumerate()
+                .filter(|(_, event)| {
+                    event["kind"] == "payment-receive" && event["module_kind"] == "walletv2"
+                })
+                .collect::<Vec<_>>();
+
+            let [(received, receive)] = receives.as_slice() else {
+                bail!("The restored wallet should have received once, got {receives:?}");
+            };
+
+            ensure!(
+                recovered < *received,
+                "The payment should be claimed after the recovery, got {events:?}"
+            );
+
+            ensure!(
+                receive["payload"]["address"] == paid_address.to_string(),
+                "The payment to the second reserved address should be claimed, got {receive}"
+            );
+
+            ensure!(
+                receive["payload"]["reservation"].is_null(),
+                "A restored wallet knows of no reservation, got {receive}"
+            );
+
+            info!("Wallet V2 recovery test successful");
 
             Ok(())
         })
