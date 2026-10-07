@@ -925,6 +925,53 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// A balance too low to fund the outgoing contract is reported as a typed
+/// shortfall carrying both amounts, so a caller can tell it apart from any
+/// other funding failure without reading a message.
+#[tokio::test(flavor = "multi_thread")]
+async fn send_without_enough_funds_reports_the_shortfall() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    // The mock invoice asks for 1000 sats, so this is short of it even
+    // before the gateway's fee.
+    let balance = sats(500);
+
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(balance, AmountUnit::BITCOIN)
+        .await;
+
+    let invoice = mock::payable_invoice();
+
+    let error = client
+        .get_first_module::<LightningClientModule>()?
+        .send(invoice.clone(), Some(mock::gateway()), Value::Null)
+        .await
+        .expect_err("a send the balance cannot fund did not fail");
+
+    assert_matches!(
+        error,
+        SendPaymentError::InsufficientFunds(shortfall) => {
+            assert_eq!(shortfall.total_amount, balance);
+            assert!(shortfall.requested_amount > sats(1_000));
+        }
+    );
+
+    // Nothing was funded, so the invoice can still be paid once the balance
+    // allows it.
+    assert_eq!(
+        client
+            .get_first_module::<LightningClientModule>()?
+            .get_invoice_send_status(&invoice)
+            .await?,
+        InvoiceSendStatus::NotAttempted,
+    );
+
+    Ok(())
+}
+
 /// Following an operation that was never started reports the shared
 /// operation-lookup error, so a caller can tell "I have never seen that id"
 /// apart from a genuine lightning failure without reading a message.

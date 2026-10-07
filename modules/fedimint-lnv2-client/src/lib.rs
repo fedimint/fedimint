@@ -23,7 +23,7 @@ use bitcoin::secp256k1;
 use db::{DbKeyPrefix, GatewayKey, IncomingContractStreamIndexKey};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client_module::error::{
-    ClientModuleError, OperationLookupError, TransactionSubmitError,
+    ClientModuleError, InsufficientBalanceError, OperationLookupError, TransactionSubmitError,
 };
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
@@ -769,7 +769,12 @@ impl LightningClientModule {
                 transaction,
             )
             .await
-            .map_err(|e| SendPaymentError::FailedToFundPayment(e.fmt_compact().to_string()))?;
+            .map_err(|e| match e {
+                TransactionSubmitError::InsufficientFunds(e) => {
+                    SendPaymentError::InsufficientFunds(e)
+                }
+                e => SendPaymentError::FailedToFundPayment(e.fmt_compact().to_string()),
+            })?;
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
@@ -1645,6 +1650,11 @@ pub enum SendPaymentError {
     GatewayExpirationExceedsLimit,
     #[error("Failed to request block count")]
     FailedToRequestBlockCount(String),
+    /// The client's balance cannot fund the payment and its fees.
+    #[error("The client does not have sufficient funds to send the payment")]
+    InsufficientFunds(#[source] InsufficientBalanceError),
+    /// The funding transaction could not be submitted for a reason that is
+    /// not about the balance.
     #[error("Failed to fund the payment")]
     FailedToFundPayment(String),
     #[error("Invoice is for a different currency")]
