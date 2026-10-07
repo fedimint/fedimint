@@ -154,7 +154,10 @@ impl InputStateMachine {
                 state: InputSMState::RefundSettled,
             }
         } else {
-            let refund_txid = old_state.common.refund_txid.expect("refund_txid must be set");
+            let refund_txid = old_state
+                .common
+                .refund_txid
+                .expect("refund_txid must be set");
             InputStateMachine {
                 common: old_state.common,
                 state: InputSMState::RefundFailed { refund_txid },

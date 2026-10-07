@@ -1009,7 +1009,8 @@ impl MintClientModule {
         } else {
             ECash::new(self.federation_id, notes)
         }
-        .with_unit(self.cfg.amount_unit);
+        .with_unit(self.cfg.amount_unit)
+        .with_module_instance_id(self.client_ctx.module_instance_id());
         let amount = ecash.amount();
         let operation_id = OperationId::new_random();
 
@@ -1052,6 +1053,16 @@ impl MintClientModule {
 
         if ecash.mint() != Some(self.federation_id) {
             return Err(ReceiveECashError::WrongFederation);
+        }
+
+        if let Some(ecash_module_id) = ecash.module_instance_id() {
+            let our_module_id = self.client_ctx.module_instance_id();
+            if ecash_module_id != our_module_id {
+                return Err(ReceiveECashError::WrongModuleInstance {
+                    actual: ecash_module_id,
+                    expected: our_module_id,
+                });
+            }
         }
 
         if ecash
@@ -1403,6 +1414,18 @@ pub enum ReceiveECashError {
     /// The e-cash was issued by a different federation.
     #[error("The ECash is from a different federation")]
     WrongFederation,
+
+    /// The e-cash was issued by a different Mint v2 module instance.
+    /// When provided in the error, the correct module instance id for receiving this ecash.
+    #[error(
+        "The ECash was issued by a different Mint v2 instance (expected {expected}, got {actual})"
+    )]
+    WrongModuleInstance {
+        /// The module instance that this e-cash is from.
+        actual: ModuleInstanceId,
+        /// The module instance that received the e-cash, which is incorrect.
+        expected: ModuleInstanceId,
+    },
 
     /// One of the notes is worth no more than the fee to reissue it.
     #[error("ECash contains an uneconomical denomination")]
