@@ -23,6 +23,7 @@ use fedimint_core::db::{
     Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, NonCommittable,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::runtime::{Instant, timeout};
 use fedimint_core::{Amount, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT_EVENT_LOG;
 use futures::{Future, StreamExt};
@@ -690,6 +691,23 @@ async fn trim_trimable_log(db: &Database, current_time_usecs: u64) {
     dbtx.commit_tx().await;
 }
 
+/// How far before the newest unordered event already ordered the ordering task
+/// starts its next scan.
+///
+/// Every unordered event is deleted once ordered, and a key-value store keeps
+/// the deletion as a tombstone until compaction, so a scan of the whole
+/// unordered prefix walks every event ordered since then and its cost grows
+/// with the client's event volume. Unordered ids are wall-clock based and
+/// transactions commit in any order, so an event can only become visible after
+/// newer ones were ordered by as long as its transaction stayed open; the
+/// margin covers that, the periodic full scan below covers the rest.
+const UNORDERED_SCAN_MARGIN: Duration = Duration::from_secs(60);
+
+/// How often the ordering task scans the whole unordered prefix, so an event
+/// committed later than [`UNORDERED_SCAN_MARGIN`] after newer ones, or written
+/// across a backwards clock step, is still ordered within this bound.
+const UNORDERED_FULL_SCAN_INTERVAL: Duration = Duration::from_secs(60);
+
 /// The code that handles new unordered events and rewriters them fully ordered
 /// into the final event log.
 pub async fn run_event_log_ordering_task(
@@ -715,14 +733,44 @@ pub async fn run_event_log_ordering_task(
         .get_next_event_log_trimable_id()
         .await;
 
+    let mut scan_from_usecs = 0;
+    let mut last_full_scan: Option<Instant> = None;
+
     loop {
         let mut dbtx = db.begin_transaction().await;
 
-        let unordered_events = dbtx
-            .find_by_prefix(&UnorderedEventLogIdPrefixAll)
-            .await
-            .collect::<Vec<_>>()
-            .await;
+        let full_scan =
+            last_full_scan.is_none_or(|at| at.elapsed() >= UNORDERED_FULL_SCAN_INTERVAL);
+
+        let unordered_events = if full_scan {
+            last_full_scan = Some(Instant::now());
+
+            dbtx.find_by_prefix(&UnorderedEventLogIdPrefixAll)
+                .await
+                .collect::<Vec<_>>()
+                .await
+        } else {
+            let start = UnordedEventLogId {
+                ts_usecs: scan_from_usecs,
+                counter: 0,
+            };
+
+            let end = UnordedEventLogId {
+                ts_usecs: u64::MAX,
+                counter: u64::MAX,
+            };
+
+            dbtx.find_by_range(start..end)
+                .await
+                .collect::<Vec<_>>()
+                .await
+        };
+
+        if let Some(newest_usecs) = unordered_events.iter().map(|entry| entry.0.ts_usecs).max() {
+            let margin_usecs = u64::try_from(UNORDERED_SCAN_MARGIN.as_micros()).unwrap_or(u64::MAX);
+
+            scan_from_usecs = scan_from_usecs.max(newest_usecs.saturating_sub(margin_usecs));
+        }
         trace!(target: LOG_CLIENT_EVENT_LOG, num=unordered_events.len(), "Fetched unordered events");
 
         for (unordered_id, entry) in &unordered_events {
@@ -777,7 +825,15 @@ pub async fn run_event_log_ordering_task(
         }
 
         trace!(target: LOG_CLIENT_EVENT_LOG, "Event log ordering task waits for more events");
-        if log_ordering_task_wakeup.changed().await.is_err() {
+
+        // Waking up for the periodic full scan even without new events keeps the
+        // bound on a late commit that a seeking scan skipped.
+        if let Ok(Err(_)) = timeout(
+            UNORDERED_FULL_SCAN_INTERVAL,
+            log_ordering_task_wakeup.changed(),
+        )
+        .await
+        {
             break;
         }
     }
