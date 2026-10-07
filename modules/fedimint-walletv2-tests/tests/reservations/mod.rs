@@ -40,8 +40,11 @@ async fn a_payment_moves_only_the_reservation_it_was_made_to() -> anyhow::Result
 
     let wallet = client.get_first_module::<WalletClientModule>()?;
 
-    let (unpaid, paid) = tokio::join!(wallet.reserve_address(), wallet.reserve_address());
-    let (unpaid, paid) = (unpaid?, paid?);
+    // One after the other, so that `unpaid` holds the lower address of the
+    // two: the limit below counts the addresses reserved ahead of the last
+    // one paid.
+    let unpaid = wallet.reserve_address().await?;
+    let paid = wallet.reserve_address().await?;
 
     assert_ne!(unpaid.address, paid.address);
     assert_ne!(unpaid.operation_id, paid.operation_id);
@@ -120,10 +123,6 @@ async fn a_payment_moves_only_the_reservation_it_was_made_to() -> anyhow::Result
         Some(&ReservationState::Claimed(claim))
     );
 
-    // The address that was paid, and the unpaid one before it, no longer
-    // count towards the limit.
-    wallet.reserve_address().await?;
-
     Ok(())
 }
 
@@ -173,12 +172,13 @@ async fn a_reservation_is_followed_across_a_restart() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// A wallet restored from its seed knows nothing of its reservations, and
-/// stops looking for payments at the first reserved address that was never
-/// paid. A rescan finds the payment made to one reserved after it.
+/// A wallet recovered from its seed knows nothing of its reservations, and
+/// would stop looking for payments at the first reserved address that was
+/// never paid. Its recovery derives every address a reservation could have
+/// been made for, so a payment to one reserved after an unpaid one is found.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_rescan_finds_a_payment_to_a_reservation_made_after_an_unpaid_one() -> anyhow::Result<()>
-{
+async fn a_recovered_wallet_finds_a_payment_to_a_reservation_made_after_an_unpaid_one()
+-> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_not_degraded().await;
     let bitcoin = fixtures.bitcoin();
@@ -187,9 +187,16 @@ async fn a_rescan_finds_a_payment_to_a_reservation_made_after_an_unpaid_one() ->
         .join_client_with_db(MemDatabase::new().into(), root_secret())
         .await;
 
+    // Recovered into a database of its own while the original wallet is
+    // still at work: both derive the same addresses, each a search that takes
+    // a while, and side by side that takes half as long.
+    let recovered = fed
+        .recover_client_with_db(MemDatabase::new().into(), root_secret())
+        .await;
+
     initialize_consensus(&original, &bitcoin).await?;
 
-    let (unpaid, paid) = {
+    let (_unpaid, paid) = {
         let wallet = original.get_first_module::<WalletClientModule>()?;
 
         (
@@ -199,37 +206,21 @@ async fn a_rescan_finds_a_payment_to_a_reservation_made_after_an_unpaid_one() ->
     };
 
     // The original wallet is gone before the payment is made, so it is the
-    // restored one that has to claim it.
+    // recovered one that has to claim it.
     Arc::into_inner(original)
         .expect("Nothing else holds the client")
         .shutdown()
         .await;
 
+    recovered.wait_for_all_recoveries().await?;
+
+    let mut events = pin!(wallet_event_stream(&recovered));
+
     bitcoin
         .send_and_mine_block(&paid.address, Amount::from_int_btc(1))
         .await;
 
-    let restored = fed
-        .join_client_with_db(MemDatabase::new().into(), root_secret())
-        .await;
-
-    await_finality_delay(&restored, &bitcoin).await?;
-
-    let wallet = restored.get_first_module::<WalletClientModule>()?;
-
-    // The restored wallet starts over at the address that was never paid.
-    assert_eq!(wallet.receive().await, unpaid.address);
-
-    wallet.rescan_reserved_addresses().await;
-
-    // A reservation asked for now waits for the rescan. It would otherwise be
-    // handed an address the rescan goes on to find a payment for.
-    let reservation = wallet.reserve_address().await?;
-
-    assert_ne!(reservation.address, unpaid.address);
-    assert_ne!(reservation.address, paid.address);
-
-    let mut events = pin!(wallet_event_stream(&restored));
+    await_finality_delay(&recovered, &bitcoin).await?;
 
     let Some(WalletEvent::Receive(receive)) = events.next().await else {
         panic!("Expected Receive event");

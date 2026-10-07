@@ -15,7 +15,7 @@ use fedimint_testing::db::{
 };
 use fedimint_walletv2_client::WalletClientModule;
 use fedimint_walletv2_client::db::{
-    self, HighestUsedAddressIndexKey, NextOutputIndexKey, RescanKey, ReservedAddressPrefix,
+    self, LowestUnusedAddressIndexKey, NextOutputIndexKey, RecoveryScanKey, ReservedAddressPrefix,
     ValidAddressIndexKey, ValidAddressIndexPrefix,
 };
 use fedimint_walletv2_common::{FederationWallet, TxInfo, WalletCommonInit};
@@ -465,21 +465,19 @@ async fn test_client_db_migrations() -> anyhow::Result<()> {
                              got {reserved:?}"
                         );
                     }
-                    db::DbKeyPrefix::HighestUsedAddressIndex => {
-                        let used = dbtx.get_value(&HighestUsedAddressIndexKey).await;
+                    db::DbKeyPrefix::LowestUnusedAddressIndex => {
+                        let lowest_unused = dbtx.get_value(&LowestUnusedAddressIndexKey).await;
 
                         ensure!(
-                            used == Some(0),
-                            "every seeded valid address index but the highest must be \
-                             migrated as used, got {used:?}"
+                            lowest_unused == Some(1),
+                            "only the highest seeded valid address index must be migrated \
+                             as unused, got {lowest_unused:?}"
                         );
                     }
-                    db::DbKeyPrefix::Rescan => {
-                        let rescan = dbtx.get_value(&RescanKey).await;
-
+                    db::DbKeyPrefix::RecoveryScan => {
                         ensure!(
-                            rescan.is_none(),
-                            "a migration must not start a rescan, got {rescan:?}"
+                            dbtx.get_value(&RecoveryScanKey).await.is_none(),
+                            "a migration must not start a recovery's scan"
                         );
                     }
                 }

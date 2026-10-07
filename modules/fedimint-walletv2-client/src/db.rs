@@ -10,8 +10,8 @@ pub enum DbKeyPrefix {
     NextOutputIndex = 0x31,
     ValidAddressIndex = 0x32,
     ReservedAddress = 0x33,
-    HighestUsedAddressIndex = 0x34,
-    Rescan = 0x35,
+    LowestUnusedAddressIndex = 0x34,
+    RecoveryScan = 0x35,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -83,33 +83,30 @@ impl_db_lookup!(
     query_prefix = ReservedAddressPrefix
 );
 
-/// The highest valid address index a payment has been found for. Only the
-/// valid indices above it are still handed out.
+/// The lowest address index that is still handed out, zero if absent. Every
+/// valid index below it was paid, or lies below one that was.
+///
+/// A reservation writes it back unchanged, so that its transaction conflicts
+/// with one that found a payment to the address meanwhile.
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
-pub struct HighestUsedAddressIndexKey;
+pub struct LowestUnusedAddressIndexKey;
 
 impl_db_record!(
-    key = HighestUsedAddressIndexKey,
+    key = LowestUnusedAddressIndexKey,
     value = u64,
-    db_prefix = DbKeyPrefix::HighestUsedAddressIndex
+    db_prefix = DbKeyPrefix::LowestUnusedAddressIndex
 );
 
-/// A rescan of the federation's outputs, from when it is asked for until the
-/// scanner has caught up with them again.
+/// Present from the start of a recovery until the output scanner has caught
+/// up with the federation's outputs. While it is, the scanner keeps all the
+/// addresses derived that a reservation could have been made for, and no
+/// address is handed out.
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
-pub struct RescanKey;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Encodable, Decodable, Serialize)]
-pub enum RescanState {
-    /// The scanner has not started over yet.
-    Requested,
-    /// The scanner started over from the federation's first output and has
-    /// not caught up yet.
-    Running,
-}
+pub struct RecoveryScanKey;
 
 impl_db_record!(
-    key = RescanKey,
-    value = RescanState,
-    db_prefix = DbKeyPrefix::Rescan
+    key = RecoveryScanKey,
+    value = (),
+    db_prefix = DbKeyPrefix::RecoveryScan,
+    notify_on_modify = true,
 );

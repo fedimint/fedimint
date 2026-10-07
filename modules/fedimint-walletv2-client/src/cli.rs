@@ -57,9 +57,6 @@ enum Opts {
         /// The operation id `reserve-address` returned.
         operation_id: OperationId,
     },
-    /// Search the federation's outputs again for payments to addresses
-    /// reserved before this wallet was restored.
-    RescanReservedAddresses,
 }
 
 #[derive(Clone, Subcommand, Serialize)]
@@ -143,11 +140,6 @@ pub(crate) async fn handle_cli_command(
             }
 
             json(state)
-        }
-        Opts::RescanReservedAddresses => {
-            wallet.rescan_reserved_addresses().await;
-
-            Value::Null
         }
     };
 

@@ -5062,6 +5062,7 @@ dependencies = [
 name = "fedimint-walletv2-client"
 version = "0.13.0-alpha"
 dependencies = [
+ "assert_matches",
  "async-stream",
  "async-trait",
  "bitcoin",
