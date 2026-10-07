@@ -339,6 +339,7 @@ async fn first_address_search_survives_concurrent_db_writes() -> anyhow::Result<
 }
 
 mod db;
+mod reservations;
 
 /// Awaiting an operation that was never started reports the shared
 /// operation-lookup error, not an opaque one.

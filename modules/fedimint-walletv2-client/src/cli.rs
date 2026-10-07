@@ -6,11 +6,16 @@ use clap::{Parser, Subcommand};
 use fedimint_api_client::api::FederationError;
 use fedimint_client_module::error::{ModuleLookupError, OperationLookupError};
 use fedimint_core::BitcoinAmountOrAll;
+use fedimint_core::core::OperationId;
 use fedimint_eventlog::EventLogId;
+use futures::StreamExt as _;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::{AwaitReceiveError, ReceiveError, SendError, WalletClientModule};
+use crate::{
+    AwaitReceiveError, ReceiveError, ReservationError, ReserveAddressError, SendError,
+    WalletClientModule,
+};
 
 #[derive(Parser, Serialize)]
 enum Opts {
@@ -43,6 +48,18 @@ enum Opts {
         /// `dev next-event-log-id` or a prior `await-receive`.
         position: EventLogId,
     },
+    /// Reserve a receive address and start an operation following the first
+    /// payment made to it. Returns the operation id and the address.
+    ReserveAddress,
+    /// Block until the first payment to a reserved address has been claimed.
+    /// Returns the reservation's final state.
+    AwaitReservation {
+        /// The operation id `reserve-address` returned.
+        operation_id: OperationId,
+    },
+    /// Search the federation's outputs again for payments to addresses
+    /// reserved before this wallet was restored.
+    RescanReservedAddresses,
 }
 
 #[derive(Clone, Subcommand, Serialize)]
@@ -112,6 +129,26 @@ pub(crate) async fn handle_cli_command(
         }
         Opts::Receive => json(wallet.receive().await),
         Opts::AwaitReceive { position } => json(wallet.await_receive(position).await?),
+        Opts::ReserveAddress => json(wallet.reserve_address().await?),
+        Opts::AwaitReservation { operation_id } => {
+            let mut updates = wallet
+                .subscribe_reservation(operation_id)
+                .await?
+                .into_stream();
+
+            let mut state = None;
+
+            while let Some(update) = updates.next().await {
+                state = Some(update);
+            }
+
+            json(state)
+        }
+        Opts::RescanReservedAddresses => {
+            wallet.rescan_reserved_addresses().await;
+
+            Value::Null
+        }
     };
 
     Ok(value)
@@ -147,4 +184,12 @@ pub(crate) enum CliCommandError {
     /// The next receive could not be awaited.
     #[error(transparent)]
     AwaitReceive(#[from] AwaitReceiveError),
+
+    /// No address could be reserved.
+    #[error(transparent)]
+    ReserveAddress(#[from] ReserveAddressError),
+
+    /// The reservation could not be followed.
+    #[error(transparent)]
+    Reservation(#[from] ReservationError),
 }

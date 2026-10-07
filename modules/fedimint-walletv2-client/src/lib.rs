@@ -15,13 +15,17 @@ mod receive_sm;
 mod send_sm;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
 
 use api::WalletFederationApi;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, ScriptBuf};
-use db::{NextOutputIndexKey, ValidAddressIndexKey, ValidAddressIndexPrefix};
+use db::{
+    HighestUsedAddressIndexKey, NextOutputIndexKey, RescanKey, RescanState, ReservedAddress,
+    ReservedAddressClaim, ReservedAddressKey, ValidAddressIndexKey, ValidAddressIndexPrefix,
+};
 use events::{ReceivePaymentEvent, SendPaymentEvent};
 use fedimint_api_client::api::{DynModuleApi, FederationError, FederationResult};
 use fedimint_client::DynGlobalClientContext;
@@ -36,11 +40,13 @@ use fedimint_client_module::error::{
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
+use fedimint_client_module::oplog::{OperationLogEntry, UpdateStreamOrOutcome};
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::sm_enum_variant_translation;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    Database, DatabaseError, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    AutocommitError, Database, DatabaseError, DatabaseTransaction, DatabaseVersion,
+    IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -63,6 +69,7 @@ use send_sm::{SendSMCommon, SendSMState, SendStateMachine};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator as _;
 use thiserror::Error;
+use tokio::sync::{Mutex, Notify, watch};
 use tracing::{debug, warn};
 
 /// Number of output info entries to scan per batch.
@@ -71,10 +78,23 @@ const SLICE_SIZE: u64 = 1000;
 /// Number of event log entries to read per batch.
 const EVENT_LOG_PAGE_SIZE: u64 = 1000;
 
+/// The number of addresses that may be reserved ahead of the last address
+/// that was paid.
+///
+/// A wallet restored from its seed has no record of the addresses it reserved.
+/// [`WalletClientModule::rescan_reserved_addresses`] finds the payments made to
+/// them by deriving this many addresses, and the one
+/// [`WalletClientModule::receive`] hands out, ahead of the last address that
+/// was paid. A reservation further ahead than that could be paid without the
+/// restored wallet ever finding out, and every address in that range costs it
+/// a search of about 65536 keys.
+pub const MAX_UNPAID_RESERVATIONS: usize = 3;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WalletOperationMeta {
     Send(SendMeta),
     Receive(ReceiveMeta),
+    Reservation(ReservationMeta),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,6 +114,45 @@ pub struct ReceiveMeta {
     pub fee: bitcoin::Amount,
     pub address: Option<Address<NetworkUnchecked>>,
     pub outpoint: Option<bitcoin::OutPoint>,
+    /// The reservation the address was handed out under, if it was reserved.
+    pub reservation: Option<OperationId>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReservationMeta {
+    pub address: Address<NetworkUnchecked>,
+    /// The index the address is derived at.
+    pub address_index: u64,
+}
+
+/// An address reserved with [`WalletClientModule::reserve_address`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Reservation {
+    /// The operation following the payments made to the address.
+    pub operation_id: OperationId,
+    pub address: Address,
+}
+
+/// The state of a reservation: of the first payment made to its address.
+///
+/// A reservation follows one payment. Further payments to the same address
+/// are claimed as well, each by a receive operation of its own that names the
+/// reservation in its [`ReceiveMeta`] and its
+/// [`ReceivePaymentEvent`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ReservationState {
+    /// No payment to the address is being claimed yet.
+    Pending,
+    /// A payment was found and the given receive operation is claiming it.
+    /// Reported again, with another operation, if the federation rejects the
+    /// claim and the payment is claimed anew.
+    Claiming(OperationId),
+    /// The given receive operation claimed the payment, and the ecash for it
+    /// has been issued.
+    Claimed(OperationId),
+    /// The federation accepted the given receive operation's claim, but the
+    /// ecash for it could not be issued.
+    Failure(OperationId),
 }
 
 /// The final state of an operation sending bitcoin onchain.
@@ -124,6 +183,15 @@ pub struct WalletClientModule {
     client_ctx: ClientContext<Self>,
     db: Database,
     module_api: DynModuleApi,
+    /// Held while an address is reserved, so that no two reservations are
+    /// handed the same one.
+    reservation_lock: Arc<Mutex<()>>,
+    /// Wakes the output scanner ahead of its next scheduled pass, when an
+    /// address was reserved or a rescan asked for.
+    scanner_wakeup: Arc<Notify>,
+    /// Tells those waiting for an unused address that the output scanner has
+    /// derived one.
+    address_derived: watch::Sender<()>,
 }
 
 #[derive(Debug, Clone)]
@@ -215,6 +283,9 @@ impl ClientModuleInit for WalletClientInit {
             client_ctx: args.context(),
             db: args.db().clone(),
             module_api: args.module_api().clone(),
+            reservation_lock: Arc::new(Mutex::new(())),
+            scanner_wakeup: Arc::new(Notify::new()),
+            address_derived: watch::Sender::new(()),
         };
 
         module.spawn_output_scanner(args.task_group(), args.client_span());
@@ -223,7 +294,33 @@ impl ClientModuleInit for WalletClientInit {
     }
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn> {
-        BTreeMap::new()
+        let mut migrations: BTreeMap<DatabaseVersion, ClientModuleMigrationFn> = BTreeMap::new();
+
+        // Records the highest address index a payment was found for, which
+        // the module did not keep before. Until now the scanner derived an
+        // address only once the one before it had been paid, so that is every
+        // valid index but the highest.
+        migrations.insert(DatabaseVersion(0), |dbtx, _, _| {
+            Box::pin(async {
+                let mut indices: Vec<u64> = dbtx
+                    .find_by_prefix(&ValidAddressIndexPrefix)
+                    .await
+                    .map(|entry| entry.0.0)
+                    .collect()
+                    .await;
+
+                indices.sort_unstable();
+
+                if let Some(index) = indices.iter().rev().nth(1) {
+                    dbtx.insert_new_entry(&HighestUsedAddressIndexKey, index)
+                        .await;
+                }
+
+                Ok(None)
+            })
+        });
+
+        migrations
     }
 
     fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
@@ -565,20 +662,8 @@ impl WalletClientModule {
         Ok(final_state.expect("Stream contains one final state"))
     }
 
-    /// Returns the highest valid receive address index that the background
-    /// scanner has derived so far, or `None` if it has not derived one yet.
-    async fn valid_index(&self) -> Option<u64> {
-        self.db
-            .begin_transaction_nc()
-            .await
-            .find_by_prefix_sorted_descending(&ValidAddressIndexPrefix)
-            .await
-            .next()
-            .await
-            .map(|entry| entry.0.0)
-    }
-
-    /// Returns the next unused receive address.
+    /// Returns the next unused receive address: the same one until it is
+    /// paid or reserved with [`Self::reserve_address`].
     ///
     /// To wait for a payment to this address race-free, read the client's
     /// current event log position (via the global `get_next_event_log_id`)
@@ -586,18 +671,281 @@ impl WalletClientModule {
     /// [`Self::await_receive`]; it will only consider payments received
     /// after that position.
     ///
-    /// If the background scanner has already derived a valid address index this
+    /// If the background scanner has already derived an unused address this
     /// returns immediately. Otherwise it blocks, letting the scanner grind
     /// until it finds the next valid index, and returns once one is
     /// available.
     pub async fn receive(&self) -> Address {
+        // Subscribed before the first look, so that an address derived
+        // between a look and the wait that follows it is not missed.
+        let mut derived = self.address_derived.subscribe();
+
         loop {
-            if let Some(index) = self.valid_index().await {
+            let unused = AddressWindow::load(&mut self.db.begin_transaction_nc().await)
+                .await
+                .unused;
+
+            if let Some(index) = unused {
                 return self.derive_address(index);
             }
 
-            sleep(Duration::from_secs(1)).await;
+            derived
+                .changed()
+                .await
+                .expect("The module holds the sender");
         }
+    }
+
+    /// Reserves a receive address for the caller alone and starts an
+    /// operation that follows the first payment made to it.
+    ///
+    /// No other call is handed the address, and [`Self::receive`] stops
+    /// returning it. It can be an address [`Self::receive`] returned earlier
+    /// that has not been paid since. The operation is in the operation log
+    /// from the moment this returns, so [`Self::subscribe_reservation`] can
+    /// follow it across a restart.
+    ///
+    /// If the background scanner has not derived an unused address yet this
+    /// waits for it, as [`Self::receive`] does.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`ReserveAddressError::TooManyUnpaid`] while
+    /// [`MAX_UNPAID_RESERVATIONS`] addresses are reserved ahead of the last
+    /// address that was paid. A wallet restored from its seed can only find
+    /// payments that far ahead, see [`Self::rescan_reserved_addresses`].
+    pub async fn reserve_address(&self) -> Result<Reservation, ReserveAddressError> {
+        let _guard = self.reservation_lock.lock().await;
+
+        // Subscribed before the first attempt, so that an address derived
+        // between an attempt and the wait that follows it is not missed.
+        let mut derived = self.address_derived.subscribe();
+
+        loop {
+            if let Some(reservation) = self.try_reserve_address().await? {
+                // The reservation may have taken the last unused address the
+                // scanner had derived.
+                self.scanner_wakeup.notify_one();
+
+                return Ok(reservation);
+            }
+
+            derived
+                .changed()
+                .await
+                .expect("The module holds the sender");
+        }
+    }
+
+    /// Reserves the next unused address, or returns `None` if the scanner has
+    /// not derived one yet.
+    async fn try_reserve_address(&self) -> Result<Option<Reservation>, ReserveAddressError> {
+        let operation_id = OperationId::new_random();
+
+        self.client_ctx
+            .module_db()
+            .autocommit(
+                |dbtx, _| {
+                    Box::pin(async move {
+                        let window = AddressWindow::load(dbtx).await;
+
+                        if window.reserved >= MAX_UNPAID_RESERVATIONS {
+                            return Err(ReserveAddressError::TooManyUnpaid);
+                        }
+
+                        let Some(address_index) = window.unused else {
+                            return Ok(None);
+                        };
+
+                        let address = self.derive_address(address_index);
+
+                        dbtx.insert_new_entry(
+                            &ReservedAddressKey(address_index),
+                            &ReservedAddress {
+                                operation_id,
+                                claim: None,
+                            },
+                        )
+                        .await;
+
+                        self.client_ctx
+                            .add_operation_log_entry_dbtx(
+                                dbtx,
+                                operation_id,
+                                WalletCommonInit::KIND.as_str(),
+                                WalletOperationMeta::Reservation(ReservationMeta {
+                                    address: address.as_unchecked().clone(),
+                                    address_index,
+                                }),
+                            )
+                            .await;
+
+                        Ok(Some(Reservation {
+                            operation_id,
+                            address,
+                        }))
+                    })
+                },
+                Some(100),
+            )
+            .await
+            .map_err(|error| match error {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    ReserveAddressError::Database(last_error)
+                }
+            })
+    }
+
+    /// Subscribes to the state of a reservation made with
+    /// [`Self::reserve_address`].
+    pub async fn subscribe_reservation(
+        &self,
+        operation_id: OperationId,
+    ) -> Result<UpdateStreamOrOutcome<ReservationState>, ReservationError> {
+        let (operation, meta) = self.reservation(operation_id).await?;
+
+        let module = self.clone();
+
+        Ok(self.client_ctx.outcome_or_updates(
+            &operation,
+            operation_id,
+            |state| {
+                matches!(
+                    state,
+                    ReservationState::Claimed(_) | ReservationState::Failure(_)
+                )
+            },
+            move || {
+                async_stream::stream! {
+                    yield ReservationState::Pending;
+
+                    // The claim the federation rejected last. The scanner
+                    // replaces it with the next claim of the same payment.
+                    let mut rejected = None;
+
+                    loop {
+                        let claim = module
+                            .await_reservation_claim(meta.address_index, rejected)
+                            .await;
+
+                        yield ReservationState::Claiming(claim);
+
+                        let state = module
+                            .await_final_receive_operation_state(claim)
+                            .await
+                            .expect("A claim is recorded in the transaction that creates its operation");
+
+                        if state == FinalReceiveOperationState::Aborted {
+                            rejected = Some(claim);
+
+                            continue;
+                        }
+
+                        match module.await_receive_issuance(claim).await {
+                            Ok(()) => yield ReservationState::Claimed(claim),
+                            Err(..) => yield ReservationState::Failure(claim),
+                        }
+
+                        return;
+                    }
+                }
+            },
+        ))
+    }
+
+    /// Returns the receive operation claiming the first payment made to a
+    /// reserved address, or `None` while no payment has been found.
+    ///
+    /// If the federation rejects the claim the payment is claimed anew, and
+    /// this returns the receive operation doing that instead.
+    pub async fn reservation_claim(
+        &self,
+        operation_id: OperationId,
+    ) -> Result<Option<OperationId>, ReservationError> {
+        let (_, meta) = self.reservation(operation_id).await?;
+
+        Ok(self
+            .recorded_claim(meta.address_index)
+            .await
+            .map(|claim| claim.operation_id))
+    }
+
+    /// Looks up a reservation's operation and what it was made for.
+    async fn reservation(
+        &self,
+        operation_id: OperationId,
+    ) -> Result<(OperationLogEntry, ReservationMeta), ReservationError> {
+        let operation = self.client_ctx.get_operation(operation_id).await?;
+
+        let WalletOperationMeta::Reservation(meta) = operation.meta::<WalletOperationMeta>() else {
+            return Err(ReservationError::NotAReservation { operation_id });
+        };
+
+        Ok((operation, meta))
+    }
+
+    /// The claim recorded for the first payment to the address at
+    /// `address_index`, if the address is reserved and a payment was found.
+    async fn recorded_claim(&self, address_index: u64) -> Option<ReservedAddressClaim> {
+        self.db
+            .begin_transaction_nc()
+            .await
+            .get_value(&ReservedAddressKey(address_index))
+            .await
+            .and_then(|reserved| reserved.claim)
+    }
+
+    /// Waits for the claim of the first payment to a reserved address,
+    /// passing over the one the federation `rejected`.
+    async fn await_reservation_claim(
+        &self,
+        address_index: u64,
+        rejected: Option<OperationId>,
+    ) -> OperationId {
+        self.db
+            .wait_key_check(&ReservedAddressKey(address_index), |reserved| {
+                reserved
+                    .and_then(|reserved| reserved.claim)
+                    .map(|claim| claim.operation_id)
+                    .filter(|claim| Some(*claim) != rejected)
+            })
+            .await
+            .0
+    }
+
+    /// Searches the federation's outputs again, from the first one, for
+    /// payments to addresses this wallet reserved before its database was
+    /// created.
+    ///
+    /// A wallet restored from its seed has no record of its reservations. It
+    /// finds the payments made to its addresses by deriving the next address
+    /// only once the one before it was paid, so it stops at the first
+    /// reserved address that never was, and misses a payment to one reserved
+    /// after it. Call this after restoring a wallet that used
+    /// [`Self::reserve_address`]: the scanner then starts over with
+    /// [`MAX_UNPAID_RESERVATIONS`] more addresses derived ahead of the last
+    /// one paid, which are all the addresses a reservation could have been
+    /// made for.
+    ///
+    /// The search runs in the background and claims what it finds like any
+    /// other payment. The reservations themselves are not restored.
+    pub async fn rescan_reserved_addresses(&self) {
+        self.db
+            .autocommit::<_, _, Infallible>(
+                |dbtx, _| {
+                    Box::pin(async {
+                        dbtx.insert_entry(&RescanKey, &RescanState::Requested).await;
+
+                        Ok(())
+                    })
+                },
+                None,
+            )
+            .await
+            .expect("Autocommit retries until the transaction commits");
+
+        self.scanner_wakeup.notify_one();
     }
 
     /// Block until the next on-chain payment recorded at or after `position` is
@@ -628,29 +976,39 @@ impl WalletClientModule {
             // A successful peg-in is terminal; an aborted one is retried as a
             // new receive operation, so keep waiting.
             if state == FinalReceiveOperationState::Success {
-                // Reaching `Success` only means the peg-in claim transaction was
-                // accepted into consensus. The ecash it mints is issued
-                // asynchronously by the primary module, so wait for those
-                // outputs before returning; otherwise the freshly claimed funds
-                // may not yet be reflected in the client's balance.
-                let operation = self.client_ctx.get_operation(operation_id).await?;
-
-                if let WalletOperationMeta::Receive(ReceiveMeta {
-                    change_outpoint_range,
-                    ..
-                }) = operation.meta::<WalletOperationMeta>()
-                {
-                    self.client_ctx
-                        .await_primary_module_outputs(
-                            operation_id,
-                            change_outpoint_range.into_iter().collect(),
-                        )
-                        .await?;
-                }
+                self.await_receive_issuance(operation_id).await?;
 
                 return Ok((state, position));
             }
         }
+    }
+
+    /// Waits for the ecash a successful receive operation mints.
+    ///
+    /// Reaching `Success` only means the peg-in claim transaction was accepted
+    /// into consensus. The ecash it mints is issued asynchronously by the
+    /// primary module, so until those outputs are final the freshly claimed
+    /// funds may not be reflected in the client's balance yet.
+    async fn await_receive_issuance(
+        &self,
+        operation_id: OperationId,
+    ) -> Result<(), AwaitReceiveError> {
+        let operation = self.client_ctx.get_operation(operation_id).await?;
+
+        if let WalletOperationMeta::Receive(ReceiveMeta {
+            change_outpoint_range,
+            ..
+        }) = operation.meta::<WalletOperationMeta>()
+        {
+            self.client_ctx
+                .await_primary_module_outputs(
+                    operation_id,
+                    change_outpoint_range.into_iter().collect(),
+                )
+                .await?;
+        }
+
+        Ok(())
     }
 
     /// Scan the event log from `position` for the next [`ReceivePaymentEvent`],
@@ -766,49 +1124,91 @@ impl WalletClientModule {
             }),
         };
 
-        let client_input_bundle = self.client_ctx.make_client_inputs(ClientInputBundle::new(
-            vec![client_input],
-            vec![client_input_sm],
-        ));
+        let client_input_bundle = ClientInputBundle::new(vec![client_input], vec![client_input_sm]);
 
         let address = self.derive_address(address_index).as_unchecked().clone();
 
-        let meta_address = address.clone();
+        // The claim, its operation, its event and its place in the address's
+        // reservation are written in one transaction. A reservation would
+        // otherwise never learn of a claim submitted right before a crash.
         let range = self
             .client_ctx
-            .finalize_and_submit_transaction(
-                operation_id,
-                WalletCommonInit::KIND.as_str(),
-                move |change_outpoint_range| {
-                    WalletOperationMeta::Receive(ReceiveMeta {
-                        change_outpoint_range,
-                        value,
-                        fee,
-                        address: Some(meta_address.clone()),
-                        outpoint,
+            .module_db()
+            .autocommit(
+                |dbtx, _| {
+                    let client_input_bundle = client_input_bundle.clone();
+                    let address = address.clone();
+
+                    Box::pin(async move {
+                        let reserved = dbtx.get_value(&ReservedAddressKey(address_index)).await;
+
+                        let range = self
+                            .client_ctx
+                            .claim_inputs(dbtx, client_input_bundle, operation_id)
+                            .await?;
+
+                        self.client_ctx
+                            .add_operation_log_entry_dbtx(
+                                dbtx,
+                                operation_id,
+                                WalletCommonInit::KIND.as_str(),
+                                WalletOperationMeta::Receive(ReceiveMeta {
+                                    change_outpoint_range: range,
+                                    value,
+                                    fee,
+                                    address: Some(address.clone()),
+                                    outpoint,
+                                    reservation: reserved
+                                        .as_ref()
+                                        .map(|reserved| reserved.operation_id),
+                                }),
+                            )
+                            .await;
+
+                        self.client_ctx
+                            .log_event(
+                                dbtx,
+                                ReceivePaymentEvent {
+                                    operation_id,
+                                    value,
+                                    fee,
+                                    address,
+                                    outpoint,
+                                    reservation: reserved
+                                        .as_ref()
+                                        .map(|reserved| reserved.operation_id),
+                                },
+                            )
+                            .await;
+
+                        // A reservation follows the first payment to its
+                        // address, through every claim of it.
+                        if let Some(reserved) = reserved
+                            && reserved
+                                .claim
+                                .as_ref()
+                                .is_none_or(|claim| claim.output_index == output_index)
+                        {
+                            dbtx.insert_entry(
+                                &ReservedAddressKey(address_index),
+                                &ReservedAddress {
+                                    operation_id: reserved.operation_id,
+                                    claim: Some(ReservedAddressClaim {
+                                        output_index,
+                                        operation_id,
+                                    }),
+                                },
+                            )
+                            .await;
+                        }
+
+                        Ok::<_, TransactionSubmitError>(range)
                     })
                 },
-                TransactionBuilder::new().with_inputs(client_input_bundle),
+                Some(100),
             )
             .await
             .ok()?;
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                ReceivePaymentEvent {
-                    operation_id,
-                    value,
-                    fee,
-                    address,
-                    outpoint,
-                },
-            )
-            .await;
-
-        dbtx.commit_tx().await;
 
         Some((operation_id, range.txid()))
     }
@@ -818,32 +1218,6 @@ impl WalletClientModule {
         let handle = task_group.make_handle();
 
         task_group.spawn_cancellable_with_span(client_span.clone(), "output-scanner", async move {
-            // Read the stored index with a short-lived transaction, runs the search
-            // with no transaction open, and inserts the result in its own short
-            // transaction. This avoids holding a transaction snapshot across a
-            // long-running CPU-bound search that might outlive RocksDB's retained
-            // write history, causing a SnapshotTooOld error and panic on commit.
-            // See: https://github.com/fedimint/fedimint/issues/9202
-            let address_index_exists = {
-                let mut dbtx = module.db.begin_transaction().await;
-                dbtx.find_by_prefix(&ValidAddressIndexPrefix)
-                    .await
-                    .next()
-                    .await
-                    .is_some()
-            };
-
-            if !address_index_exists {
-                let Some(index) = module.next_valid_index(0, &handle).await else {
-                    return;
-                };
-
-                let mut dbtx = module.db.begin_transaction().await;
-                dbtx.insert_new_entry(&ValidAddressIndexKey(index), &())
-                    .await;
-                dbtx.commit_tx().await;
-            }
-
             loop {
                 match module.check_outputs(&handle).await {
                     Ok(skip_wait) => {
@@ -856,22 +1230,41 @@ impl WalletClientModule {
                     }
                 }
 
-                sleep(fedimint_walletv2_common::sleep_duration()).await;
+                if handle.is_shutting_down() {
+                    return;
+                }
+
+                tokio::select! {
+                    () = sleep(fedimint_walletv2_common::sleep_duration()) => {}
+                    () = module.scanner_wakeup.notified() => {}
+                }
             }
         });
     }
 
     async fn check_outputs(&self, handle: &TaskHandle) -> Result<bool, CheckOutputsError> {
-        let mut dbtx = self.db.begin_transaction_nc().await;
+        self.start_requested_rescan().await?;
 
-        let next_output_index = dbtx.get_value(&NextOutputIndexKey).await.unwrap_or(0);
+        // Also where the first address is derived, and the next one after a
+        // reservation took the last unused one.
+        if self.derive_addresses(handle).await?.is_none() {
+            return Ok(false);
+        }
 
-        let mut valid_indices: Vec<u64> = dbtx
-            .find_by_prefix(&ValidAddressIndexPrefix)
-            .await
-            .map(|entry| entry.0.0)
-            .collect()
-            .await;
+        let (next_output_index, mut valid_indices) = {
+            let mut dbtx = self.db.begin_transaction_nc().await;
+
+            let next_output_index = dbtx.get_value(&NextOutputIndexKey).await.unwrap_or(0);
+
+            let valid_indices: Vec<u64> = dbtx
+                .find_by_prefix(&ValidAddressIndexPrefix)
+                .await
+                .map(|entry| entry.0.0)
+                .collect()
+                .await;
+
+            (next_output_index, valid_indices)
+        };
 
         let mut address_map: BTreeMap<ScriptBuf, u64> = valid_indices
             .iter()
@@ -890,32 +1283,24 @@ impl WalletClientModule {
             if let Some(&address_index) = address_map.get(&output.script) {
                 matched_num += 1;
 
-                // Claim before extending the valid index list: the index search
+                // Claim before deriving more addresses: the index search
                 // below is CPU-bound and can take longer than a short-lived
                 // client process (e.g. a cli invocation) lives. The claim is
-                // quick and the extension can be retried on the next scan.
+                // quick and the derivation can be retried on the next scan.
                 if !output.spent && !self.process_unspent_output(output, address_index).await? {
                     return Ok(false);
                 }
 
-                let next_address_index = valid_indices
-                    .last()
-                    .copied()
-                    .expect("we have at least one address index");
+                self.mark_address_used(address_index).await?;
 
-                // If we used the highest valid index, add the next valid one
-                if address_index == next_address_index {
-                    let Some(index) = self.next_valid_index(next_address_index + 1, handle).await
-                    else {
-                        return Ok(false);
-                    };
+                // The address just paid may have been the last unused one,
+                // and during a rescan the addresses derived ahead have to
+                // stay ahead of it for the outputs that follow.
+                let Some(derived) = self.derive_addresses(handle).await? else {
+                    return Ok(false);
+                };
 
-                    let mut dbtx = self.db.begin_transaction().await;
-
-                    dbtx.insert_entry(&ValidAddressIndexKey(index), &()).await;
-
-                    dbtx.commit_tx_result().await?;
-
+                for index in derived {
                     valid_indices.push(index);
 
                     address_map.insert(self.derive_address(index).script_pubkey(), index);
@@ -930,6 +1315,10 @@ impl WalletClientModule {
             dbtx.commit_tx_result().await?;
         }
 
+        if outputs.is_empty() {
+            self.finish_rescan().await?;
+        }
+
         debug!(
             target: LOG_CLIENT_MODULE_WALLETV2,
             next_output_index,
@@ -940,6 +1329,109 @@ impl WalletClientModule {
         );
 
         Ok(!outputs.is_empty())
+    }
+
+    /// Derives valid address indices until one of those still handed out is
+    /// unused. While a rescan is running, derives all the addresses a
+    /// reservation could have been made for instead.
+    ///
+    /// Returns the indices it derived, or `None` if the task group began
+    /// shutting down first.
+    async fn derive_addresses(
+        &self,
+        handle: &TaskHandle,
+    ) -> Result<Option<Vec<u64>>, DatabaseError> {
+        let mut derived = Vec::new();
+
+        loop {
+            // The window is read with a short-lived transaction, the search
+            // runs with no transaction open, and the result is inserted in
+            // its own short transaction. This avoids holding a transaction
+            // snapshot across a long-running CPU-bound search that might
+            // outlive RocksDB's retained write history, causing a
+            // SnapshotTooOld error on commit.
+            // See: https://github.com/fedimint/fedimint/issues/9202
+            let (window, rescanning) = {
+                let mut dbtx = self.db.begin_transaction_nc().await;
+
+                (
+                    AddressWindow::load(&mut dbtx).await,
+                    dbtx.get_value(&RescanKey).await == Some(RescanState::Running),
+                )
+            };
+
+            let wanted = if rescanning {
+                MAX_UNPAID_RESERVATIONS + 1
+            } else {
+                window.reserved + 1
+            };
+
+            if wanted <= window.len {
+                return Ok(Some(derived));
+            }
+
+            let Some(index) = self.next_valid_index(window.next_index, handle).await else {
+                return Ok(None);
+            };
+
+            let mut dbtx = self.db.begin_transaction().await;
+
+            dbtx.insert_entry(&ValidAddressIndexKey(index), &()).await;
+
+            dbtx.commit_tx_result().await?;
+
+            self.address_derived.send_replace(());
+
+            derived.push(index);
+        }
+    }
+
+    /// Records that a payment to the address at `address_index` was found, so
+    /// that neither it nor any address below it is handed out again.
+    async fn mark_address_used(&self, address_index: u64) -> Result<(), DatabaseError> {
+        let mut dbtx = self.db.begin_transaction().await;
+
+        if dbtx
+            .get_value(&HighestUsedAddressIndexKey)
+            .await
+            .is_none_or(|used| used < address_index)
+        {
+            dbtx.insert_entry(&HighestUsedAddressIndexKey, &address_index)
+                .await;
+
+            dbtx.commit_tx_result().await?;
+        }
+
+        Ok(())
+    }
+
+    /// Starts over from the federation's first output if
+    /// [`Self::rescan_reserved_addresses`] asked for it.
+    async fn start_requested_rescan(&self) -> Result<(), DatabaseError> {
+        let mut dbtx = self.db.begin_transaction().await;
+
+        if dbtx.get_value(&RescanKey).await == Some(RescanState::Requested) {
+            dbtx.insert_entry(&RescanKey, &RescanState::Running).await;
+
+            dbtx.insert_entry(&NextOutputIndexKey, &0).await;
+
+            dbtx.commit_tx_result().await?;
+        }
+
+        Ok(())
+    }
+
+    /// Ends a rescan that has caught up with the federation's outputs.
+    async fn finish_rescan(&self) -> Result<(), DatabaseError> {
+        let mut dbtx = self.db.begin_transaction().await;
+
+        if dbtx.get_value(&RescanKey).await == Some(RescanState::Running) {
+            dbtx.remove_entry(&RescanKey).await;
+
+            dbtx.commit_tx_result().await?;
+        }
+
+        Ok(())
     }
 
     async fn process_unspent_output(
@@ -955,6 +1447,20 @@ impl WalletClientModule {
             outpoint = ?output.outpoint,
             "Discovered unspent walletv2 receive output"
         );
+
+        // A claim recorded for this output is one a restart or a rescan cut
+        // short of its outcome. Claiming the output again would replace it in
+        // the reservation with a claim the federation rejects if the first
+        // one went through, so its outcome is awaited instead.
+        if let Some(claim) = self.recorded_claim(address_index).await
+            && claim.output_index == output.index
+            && self
+                .await_final_receive_operation_state(claim.operation_id)
+                .await?
+                == FinalReceiveOperationState::Success
+        {
+            return Ok(true);
+        }
 
         // In order to not overpay on fees we choose to wait,
         // the congestion will clear up within a few blocks.
@@ -1019,6 +1525,60 @@ impl WalletClientModule {
     }
 }
 
+/// The valid address indices above the highest one a payment was found for.
+/// These are the only addresses still handed out.
+struct AddressWindow {
+    /// How many of them there are.
+    len: usize,
+    /// How many of them are reserved.
+    reserved: usize,
+    /// The lowest of them that is not reserved.
+    unused: Option<u64>,
+    /// Where the search for the next valid index starts.
+    next_index: u64,
+}
+
+impl AddressWindow {
+    async fn load<Cap>(dbtx: &mut DatabaseTransaction<'_, Cap>) -> Self
+    where
+        Cap: Send,
+    {
+        let highest_used = dbtx.get_value(&HighestUsedAddressIndexKey).await;
+
+        let mut valid_indices: Vec<u64> = dbtx
+            .find_by_prefix(&ValidAddressIndexPrefix)
+            .await
+            .map(|entry| entry.0.0)
+            .collect()
+            .await;
+
+        valid_indices.sort_unstable();
+
+        let mut window = Self {
+            len: 0,
+            reserved: 0,
+            unused: None,
+            next_index: valid_indices.last().map_or(0, |index| index + 1),
+        };
+
+        for index in valid_indices {
+            if highest_used.is_some_and(|used| index <= used) {
+                continue;
+            }
+
+            window.len += 1;
+
+            if dbtx.get_value(&ReservedAddressKey(index)).await.is_some() {
+                window.reserved += 1;
+            } else if window.unused.is_none() {
+                window.unused = Some(index);
+            }
+        }
+
+        window
+    }
+}
+
 /// A failure to send an on-chain payment.
 #[derive(Error, Debug)]
 #[non_exhaustive]
@@ -1068,6 +1628,33 @@ pub enum ReceiveError {
     NoConsensusFeerateAvailable,
 }
 
+/// A failure to reserve a receive address.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ReserveAddressError {
+    /// [`MAX_UNPAID_RESERVATIONS`] addresses are reserved ahead of the last
+    /// address that was paid, and none of them has been paid.
+    #[error("Too many reserved addresses are waiting for their first payment")]
+    TooManyUnpaid,
+
+    /// The reservation could not be written.
+    #[error("The reservation could not be written to the database")]
+    Database(#[source] DatabaseError),
+}
+
+/// A failure to follow a reservation.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ReservationError {
+    /// The operation could not be looked up.
+    #[error("The reservation could not be looked up")]
+    Operation(#[from] OperationLookupError),
+
+    /// The operation is one of this module's, but not a reservation.
+    #[error("Operation {} is not a reservation", .operation_id.fmt_short())]
+    NotAReservation { operation_id: OperationId },
+}
+
 /// A failure to wait for the next on-chain payment to be received.
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -1113,6 +1700,10 @@ enum ProcessOutputError {
     /// The claim transaction was rejected.
     #[error("Claim transaction was rejected: {0}")]
     ClaimRejected(String),
+
+    /// A claim recorded for the output could not be looked up.
+    #[error(transparent)]
+    Operation(#[from] OperationLookupError),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

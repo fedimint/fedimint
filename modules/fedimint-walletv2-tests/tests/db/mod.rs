@@ -15,7 +15,8 @@ use fedimint_testing::db::{
 };
 use fedimint_walletv2_client::WalletClientModule;
 use fedimint_walletv2_client::db::{
-    self, NextOutputIndexKey, ValidAddressIndexKey, ValidAddressIndexPrefix,
+    self, HighestUsedAddressIndexKey, NextOutputIndexKey, RescanKey, ReservedAddressPrefix,
+    ValidAddressIndexKey, ValidAddressIndexPrefix,
 };
 use fedimint_walletv2_common::{FederationWallet, TxInfo, WalletCommonInit};
 use fedimint_walletv2_server::db::{
@@ -449,6 +450,36 @@ async fn test_client_db_migrations() -> anyhow::Result<()> {
                             indices == vec![0, 1],
                             "both seeded valid address indices must round-trip unchanged, \
                              got {indices:?}"
+                        );
+                    }
+                    db::DbKeyPrefix::ReservedAddress => {
+                        let reserved = dbtx
+                            .find_by_prefix(&ReservedAddressPrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+
+                        ensure!(
+                            reserved.is_empty(),
+                            "no address can have been reserved before there were reservations, \
+                             got {reserved:?}"
+                        );
+                    }
+                    db::DbKeyPrefix::HighestUsedAddressIndex => {
+                        let used = dbtx.get_value(&HighestUsedAddressIndexKey).await;
+
+                        ensure!(
+                            used == Some(0),
+                            "every seeded valid address index but the highest must be \
+                             migrated as used, got {used:?}"
+                        );
+                    }
+                    db::DbKeyPrefix::Rescan => {
+                        let rescan = dbtx.get_value(&RescanKey).await;
+
+                        ensure!(
+                            rescan.is_none(),
+                            "a migration must not start a rescan, got {rescan:?}"
                         );
                     }
                 }

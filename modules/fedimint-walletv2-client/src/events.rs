@@ -49,6 +49,8 @@ pub struct ReceivePaymentEvent {
     pub fee: bitcoin::Amount,
     pub address: Address<NetworkUnchecked>,
     pub outpoint: Option<bitcoin::OutPoint>,
+    /// The reservation the address was handed out under, if it was reserved.
+    pub reservation: Option<OperationId>,
 }
 
 impl Event for ReceivePaymentEvent {
