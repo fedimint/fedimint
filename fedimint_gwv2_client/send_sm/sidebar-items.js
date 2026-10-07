@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Cancelled","SendSMState"],"struct":["Claiming","PaymentResponse","SendSMCommon","SendStateMachine"]};
+window.SIDEBAR_ITEMS = {"enum":["Cancelled","SendSMState"],"fn":["fresh_dispatch_refusal"],"struct":["Claiming","PaymentResponse","SendSMCommon","SendStateMachine"]};
