@@ -43,9 +43,12 @@ impl State for MockStateMachine {
             MockStateMachine::Start => {
                 let mut receiver1 = context.broadcast.subscribe();
                 let mut receiver2 = context.broadcast.subscribe();
+                let running = context.running.clone();
                 vec![
                     StateTransition::new(
                         async move {
+                            running.send_modify(|running| running.push(MockStateMachine::Start));
+
                             loop {
                                 let val = receiver1.recv().await.unwrap();
                                 if val == 0 {
@@ -75,8 +78,13 @@ impl State for MockStateMachine {
             MockStateMachine::ReceivedNonNull(prev_val) => {
                 let prev_val = *prev_val;
                 let mut receiver = context.broadcast.subscribe();
+                let running = context.running.clone();
                 vec![StateTransition::new(
                     async move {
+                        running.send_modify(|running| {
+                            running.push(MockStateMachine::ReceivedNonNull(prev_val));
+                        });
+
                         loop {
                             let val = receiver.recv().await.unwrap();
                             if val == prev_val {
@@ -110,6 +118,10 @@ impl IntoDynInstance for MockStateMachine {
 #[derive(Debug, Clone)]
 struct MockContext {
     broadcast: tokio::sync::broadcast::Sender<u64>,
+    /// The states whose triggers the executor has started polling. A state's
+    /// triggers subscribe to `broadcast` before they are polled, so a value
+    /// sent once the state is listed here reaches them.
+    running: watch::Sender<Vec<MockStateMachine>>,
 }
 
 impl IntoDynInstance for MockContext {
@@ -128,7 +140,7 @@ impl Context for MockContext {
 const MOCK_OPERATION: OperationId = OperationId([0u8; 32]);
 
 fn get_executor() -> (Executor, Sender<u64>, Database) {
-    let (executor, broadcast, db) = build_executor();
+    let (executor, broadcast, _running, db) = build_executor();
 
     start_executor(&executor);
 
@@ -136,9 +148,16 @@ fn get_executor() -> (Executor, Sender<u64>, Database) {
 }
 
 /// An executor that is not running yet, for tests that need to arrange the
-/// database it will find when it starts.
-fn build_executor() -> (Executor, Sender<u64>, Database) {
+/// database it will find when it starts. Also returns the states whose
+/// triggers it is running, see [`MockContext::running`].
+fn build_executor() -> (
+    Executor,
+    Sender<u64>,
+    watch::Receiver<Vec<MockStateMachine>>,
+    Database,
+) {
     let (broadcast, _) = tokio::sync::broadcast::channel(10);
+    let (running, running_rx) = watch::channel(Vec::new());
 
     let mut decoder_builder = Decoder::builder();
     decoder_builder.with_decodable_type::<MockStateMachine>();
@@ -153,6 +172,7 @@ fn build_executor() -> (Executor, Sender<u64>, Database) {
         42,
         MockContext {
             broadcast: broadcast.clone(),
+            running,
         },
     );
     let (log_ordering_wakeup_tx, _log_ordering_wakeup_rx) = watch::channel(());
@@ -163,7 +183,7 @@ fn build_executor() -> (Executor, Sender<u64>, Database) {
         log_ordering_wakeup_tx,
     );
 
-    (executor, broadcast, db)
+    (executor, broadcast, running_rx, db)
 }
 
 fn start_executor(executor: &Executor) {
@@ -178,13 +198,22 @@ fn start_executor(executor: &Executor) {
     );
 }
 
-/// Waits until `count` triggers of the mock state machine are listening on
-/// its broadcast, which is how a test knows the executor has started the
-/// state it is about to send a value to.
-async fn await_trigger_receivers(sender: &Sender<u64>, count: usize) {
-    while sender.receiver_count() != count {
-        runtime::sleep(Duration::from_millis(10)).await;
-    }
+/// How long a test waits for something that has to happen.
+const SOON: Duration = Duration::from_secs(10);
+
+/// How long a test waits to see that something does not happen.
+const NOT_YET: Duration = Duration::from_millis(200);
+
+/// Waits until the executor is running the triggers of `state`, which is how
+/// a test knows that a value it sends on the mock's broadcast reaches them.
+async fn await_running(
+    running: &mut watch::Receiver<Vec<MockStateMachine>>,
+    state: &MockStateMachine,
+) {
+    runtime::timeout(SOON, running.wait_for(|running| running.contains(state)))
+        .await
+        .expect("The executor never started the state's triggers")
+        .expect("The mock context holds the sender");
 }
 
 #[tokio::test]
@@ -294,10 +323,10 @@ async fn stop_executor_tolerates_poisoned_state_lock() {
 #[tokio::test]
 async fn awaiting_no_active_states_returns_once_the_last_state_machine_is_terminal() {
     const MOCK_INSTANCE: ModuleInstanceId = 42;
-    const NOT_YET: Duration = Duration::from_millis(200);
-    const SOON: Duration = Duration::from_secs(10);
 
-    let (executor, sender, _db) = get_executor();
+    let (executor, sender, mut running, _db) = build_executor();
+
+    start_executor(&executor);
 
     runtime::timeout(SOON, executor.await_no_active_states(MOCK_OPERATION))
         .await
@@ -321,14 +350,9 @@ async fn awaiting_no_active_states_returns_once_the_last_state_machine_is_termin
     );
 
     // `Start` -> `ReceivedNonNull(7)`: the operation moves, but is not over.
-    await_trigger_receivers(&sender, 2).await;
+    await_running(&mut running, &MockStateMachine::Start).await;
     sender.send(7).expect("The triggers are listening");
-    executor
-        .await_active_state(DynState::from_typed(
-            MOCK_INSTANCE,
-            MockStateMachine::ReceivedNonNull(7),
-        ))
-        .await;
+    await_running(&mut running, &MockStateMachine::ReceivedNonNull(7)).await;
 
     assert!(
         runtime::timeout(NOT_YET, &mut finished).await.is_err(),
@@ -336,7 +360,6 @@ async fn awaiting_no_active_states_returns_once_the_last_state_machine_is_termin
     );
 
     // `ReceivedNonNull(7)` -> `Final`.
-    await_trigger_receivers(&sender, 1).await;
     sender.send(7).expect("The trigger is listening");
 
     runtime::timeout(SOON, &mut finished)
@@ -351,6 +374,54 @@ async fn awaiting_no_active_states_returns_once_the_last_state_machine_is_termin
     );
 }
 
+/// An operation with two state machines is over when the second of them
+/// finishes, not the first.
+#[tokio::test]
+async fn awaiting_no_active_states_waits_for_every_state_machine_of_the_operation() {
+    const MOCK_INSTANCE: ModuleInstanceId = 42;
+
+    let (executor, sender, mut running, _db) = build_executor();
+
+    start_executor(&executor);
+
+    executor
+        .add_state_machines(vec![
+            DynState::from_typed(MOCK_INSTANCE, MockStateMachine::ReceivedNonNull(5)),
+            DynState::from_typed(MOCK_INSTANCE, MockStateMachine::ReceivedNonNull(9)),
+        ])
+        .await
+        .expect("The state machines are new");
+
+    let mut finished = pin!(executor.await_no_active_states(MOCK_OPERATION));
+
+    await_running(&mut running, &MockStateMachine::ReceivedNonNull(5)).await;
+    await_running(&mut running, &MockStateMachine::ReceivedNonNull(9)).await;
+
+    // `ReceivedNonNull(5)` -> `Final`, while the other state machine waits.
+    sender.send(5).expect("The triggers are listening");
+
+    runtime::timeout(
+        SOON,
+        executor.await_inactive_state(DynState::from_typed(MOCK_INSTANCE, MockStateMachine::Final)),
+    )
+    .await
+    .expect("The first state machine reached its terminal state");
+
+    assert!(
+        runtime::timeout(NOT_YET, &mut finished).await.is_err(),
+        "The second state machine is still running"
+    );
+
+    // `ReceivedNonNull(9)` -> `Final`.
+    sender.send(9).expect("The trigger is listening");
+
+    runtime::timeout(SOON, &mut finished)
+        .await
+        .expect("Both state machines of the operation reached their terminal state");
+
+    assert!(!executor.has_active_states(MOCK_OPERATION).await);
+}
+
 /// A terminal state can be found among the active ones, for example one a
 /// recovery added before its module was there to say it is terminal. The
 /// executor makes it inactive when it comes across it, and those waiting for
@@ -358,10 +429,8 @@ async fn awaiting_no_active_states_returns_once_the_last_state_machine_is_termin
 #[tokio::test]
 async fn awaiting_no_active_states_notices_a_terminal_state_being_inactivated() {
     const MOCK_INSTANCE: ModuleInstanceId = 42;
-    const NOT_YET: Duration = Duration::from_millis(200);
-    const SOON: Duration = Duration::from_secs(10);
 
-    let (executor, _sender, db) = build_executor();
+    let (executor, _sender, _running, db) = build_executor();
 
     let mut dbtx = db.begin_transaction().await;
     dbtx.insert_new_entry(

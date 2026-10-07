@@ -419,6 +419,12 @@ async fn awaiting_no_active_states_follows_a_refund_to_its_end() -> anyhow::Resu
 
     assert!(!client.has_active_states(operation_id).await);
 
+    // Checked before the outcome is read, which would itself wait for the
+    // refund. The invoice asks for 1000 sats, so a balance within that of the
+    // starting one means the refund has been credited: all that is missing
+    // are the federation's fees.
+    assert!(client.get_balance_for_btc().await? > sats(9_000));
+
     assert_eq!(
         client
             .get_first_module::<LightningClientModule>()?
@@ -426,11 +432,6 @@ async fn awaiting_no_active_states_follows_a_refund_to_its_end() -> anyhow::Resu
             .await?,
         FinalSendOperationState::Refunded,
     );
-
-    // The invoice asks for 1000 sats, so a balance within that of the
-    // starting one means the refund has been credited: all that is missing
-    // are the federation's fees.
-    assert!(client.get_balance_for_btc().await? > sats(9_000));
 
     Ok(())
 }
