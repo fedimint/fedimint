@@ -978,3 +978,17 @@ async fn storing_a_second_client_secret_is_typed() {
 
     assert!(matches!(err, ClientSecretError::AlreadyExists), "{err:?}");
 }
+
+#[tokio::test]
+async fn transaction_builder_get_balance_empty_succeeds() {
+    use fedimint_client_module::transaction::TransactionBuilder;
+    use fedimint_core::module::Amounts;
+
+    let client = client_for_lookup_test().await;
+    let builder = TransactionBuilder::new();
+    let (in_amounts, out_amounts) = client
+        .transaction_builder_get_balance(&builder)
+        .expect("Empty builder must have valid balance");
+    assert_eq!(in_amounts, Amounts::ZERO);
+    assert_eq!(out_amounts, Amounts::ZERO);
+}
