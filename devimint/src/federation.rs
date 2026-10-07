@@ -1243,9 +1243,9 @@ impl Federation {
     }
 
     fn get_finality_delay(&self) -> Result<u32, anyhow::Error> {
-        // Walletv2 uses a constant finality delay
+        // Walletv2's consensus block count trails the backend by a constant
         if crate::util::supports_wallet_v2() {
-            return Ok(fedimint_walletv2_server::CONFIRMATION_FINALITY_DELAY as u32);
+            return Ok(fedimint_walletv2_server::BLOCK_COUNT_VOTE_DELAY as u32);
         }
 
         let wallet_instance_id = self.module_instance_id_by_kind(&fedimint_wallet_client::KIND)?;
