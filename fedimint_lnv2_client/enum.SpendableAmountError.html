@@ -3,8 +3,8 @@
     FederationNotSupported,
     SelectGateway(<a class="enum" href="enum.SelectGatewayError.html" title="enum fedimint_lnv2_client::SelectGatewayError">SelectGatewayError</a>),
     SendFeeExceedsLimit {
-        fee: PaymentFee,
-        limit: PaymentFee,
+        fee: <a class="struct" href="../fedimint_lnv2_common/gateway_api/struct.PaymentFee.html" title="struct fedimint_lnv2_common::gateway_api::PaymentFee">PaymentFee</a>,
+        limit: <a class="struct" href="../fedimint_lnv2_common/gateway_api/struct.PaymentFee.html" title="struct fedimint_lnv2_common::gateway_api::PaymentFee">PaymentFee</a>,
     },
     Quote(TransactionSubmitError),
     BalanceTooLow {
@@ -24,8 +24,8 @@ federation.</p>
 there is no fee schedule to compute against.</p>
 </div><section id="variant.SendFeeExceedsLimit" class="variant"><a href="#variant.SendFeeExceedsLimit" class="anchor">§</a><h3 class="code-header">SendFeeExceedsLimit</h3></section><div class="docblock"><p>The gateway’s default send fee is above the limit this module accepts,
 so an amount computed against it would not be payable through it.</p>
-</div><div class="sub-variant" id="variant.SendFeeExceedsLimit.fields"><h4>Fields</h4><div class="sub-variant-field"><span id="variant.SendFeeExceedsLimit.field.fee" class="section-header"><a href="#variant.SendFeeExceedsLimit.field.fee" class="anchor field">§</a><code>fee: PaymentFee</code></span><div class="docblock"><p>The default send fee the gateway announced.</p>
-</div></div><div class="sub-variant-field"><span id="variant.SendFeeExceedsLimit.field.limit" class="section-header"><a href="#variant.SendFeeExceedsLimit.field.limit" class="anchor field">§</a><code>limit: PaymentFee</code></span><div class="docblock"><p>The largest default send fee this module accepts.</p>
+</div><div class="sub-variant" id="variant.SendFeeExceedsLimit.fields"><h4>Fields</h4><div class="sub-variant-field"><span id="variant.SendFeeExceedsLimit.field.fee" class="section-header"><a href="#variant.SendFeeExceedsLimit.field.fee" class="anchor field">§</a><code>fee: <a class="struct" href="../fedimint_lnv2_common/gateway_api/struct.PaymentFee.html" title="struct fedimint_lnv2_common::gateway_api::PaymentFee">PaymentFee</a></code></span><div class="docblock"><p>The default send fee the gateway announced.</p>
+</div></div><div class="sub-variant-field"><span id="variant.SendFeeExceedsLimit.field.limit" class="section-header"><a href="#variant.SendFeeExceedsLimit.field.limit" class="anchor field">§</a><code>limit: <a class="struct" href="../fedimint_lnv2_common/gateway_api/struct.PaymentFee.html" title="struct fedimint_lnv2_common::gateway_api::PaymentFee">PaymentFee</a></code></span><div class="docblock"><p>The largest default send fee this module accepts.</p>
 </div></div></div><section id="variant.Quote" class="variant"><a href="#variant.Quote" class="anchor">§</a><h3 class="code-header">Quote(TransactionSubmitError)</h3></section><div class="docblock"><p>The fee probe failed for a reason unrelated to the balance.</p>
 </div><section id="variant.BalanceTooLow" class="variant"><a href="#variant.BalanceTooLow" class="anchor">§</a><h3 class="code-header">BalanceTooLow</h3></section><div class="docblock"><p>The balance cannot cover the smallest payable amount plus the gateway
 and federation fees, so there is no amount to send.</p>
