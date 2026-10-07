@@ -174,15 +174,15 @@
 <a href=#174 id=174 data-nosnippet>174</a>    <span class="doccomment">/// Make an aggregate request to federation, using `strategy` to logically
 <a href=#175 id=175 data-nosnippet>175</a>    /// merge the responses.
 <a href=#176 id=176 data-nosnippet>176</a>    </span><span class="attr">#[instrument(target = LOG_CLIENT_NET_API, skip_all, fields(method=method))]
-<a href=#177 id=177 data-nosnippet>177</a>    </span><span class="kw">async fn </span>request_with_strategy&lt;PR: DeserializeOwned, FR: Debug&gt;(
+<a href=#177 id=177 data-nosnippet>177</a>    </span><span class="kw">async fn </span>request_with_strategy&lt;PR: DeserializeOwned + MaybeSend, FR: Debug&gt;(
 <a href=#178 id=178 data-nosnippet>178</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#179 id=179 data-nosnippet>179</a>        <span class="kw-2">mut </span>strategy: <span class="kw">impl </span>QueryStrategy&lt;PR, FR&gt; + MaybeSend,
 <a href=#180 id=180 data-nosnippet>180</a>        method: String,
 <a href=#181 id=181 data-nosnippet>181</a>        params: ApiRequestErased,
 <a href=#182 id=182 data-nosnippet>182</a>    ) -&gt; FederationResult&lt;FR&gt; {
-<a href=#183 id=183 data-nosnippet>183</a>        <span class="comment">// NOTE: `FuturesUnorderded` is a footgun, but all we do here is polling
-<a href=#184 id=184 data-nosnippet>184</a>        // completed results from it and we don't do any `await`s when
-<a href=#185 id=185 data-nosnippet>185</a>        // processing them, it should be totally OK.
+<a href=#183 id=183 data-nosnippet>183</a>        <span class="comment">// NOTE: `FuturesUnordered` is a footgun, but all we do here is poll
+<a href=#184 id=184 data-nosnippet>184</a>        // completed results from it. Processing a result may await its
+<a href=#185 id=185 data-nosnippet>185</a>        // verification, during which the remaining requests simply pause.
 <a href=#186 id=186 data-nosnippet>186</a>        </span><span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 <a href=#187 id=187 data-nosnippet>187</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="kw">_</span>&gt; + Send&gt;&gt;&gt;::new();
 <a href=#188 id=188 data-nosnippet>188</a>        <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
@@ -212,7 +212,7 @@
 <a href=#212 id=212 data-nosnippet>212</a>                </span>.expect(<span class="string">"Query strategy ran out of peers to query without returning a result"</span>);
 <a href=#213 id=213 data-nosnippet>213</a>
 <a href=#214 id=214 data-nosnippet>214</a>            <span class="kw">match </span>result {
-<a href=#215 id=215 data-nosnippet>215</a>                <span class="prelude-val">Ok</span>(response) =&gt; <span class="kw">match </span>strategy.process(peer, response) {
+<a href=#215 id=215 data-nosnippet>215</a>                <span class="prelude-val">Ok</span>(response) =&gt; <span class="kw">match </span>strategy.process(peer, response).<span class="kw">await </span>{
 <a href=#216 id=216 data-nosnippet>216</a>                    QueryStep::Retry(peers) =&gt; {
 <a href=#217 id=217 data-nosnippet>217</a>                        <span class="kw">for </span>peer <span class="kw">in </span>peers {
 <a href=#218 id=218 data-nosnippet>218</a>                            futures.push(Box::pin({
@@ -266,9 +266,9 @@
 <a href=#266 id=266 data-nosnippet>266</a>        method: String,
 <a href=#267 id=267 data-nosnippet>267</a>        params: ApiRequestErased,
 <a href=#268 id=268 data-nosnippet>268</a>    ) -&gt; FR {
-<a href=#269 id=269 data-nosnippet>269</a>        <span class="comment">// NOTE: `FuturesUnorderded` is a footgun, but all we do here is polling
-<a href=#270 id=270 data-nosnippet>270</a>        // completed results from it and we don't do any `await`s when
-<a href=#271 id=271 data-nosnippet>271</a>        // processing them, it should be totally OK.
+<a href=#269 id=269 data-nosnippet>269</a>        <span class="comment">// NOTE: `FuturesUnordered` is a footgun, but all we do here is poll
+<a href=#270 id=270 data-nosnippet>270</a>        // completed results from it. Processing a result may await its
+<a href=#271 id=271 data-nosnippet>271</a>        // verification, during which the remaining requests simply pause.
 <a href=#272 id=272 data-nosnippet>272</a>        </span><span class="attr">#[cfg(not(target_family = <span class="string">"wasm"</span>))]
 <a href=#273 id=273 data-nosnippet>273</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>futures = FuturesUnordered::&lt;Pin&lt;Box&lt;<span class="kw">dyn </span>Future&lt;Output = <span class="kw">_</span>&gt; + Send&gt;&gt;&gt;::new();
 <a href=#274 id=274 data-nosnippet>274</a>        <span class="attr">#[cfg(target_family = <span class="string">"wasm"</span>)]
@@ -304,7 +304,7 @@
 <a href=#304 id=304 data-nosnippet>304</a>                <span class="prelude-val">None </span>=&gt; pending().<span class="kw">await</span>,
 <a href=#305 id=305 data-nosnippet>305</a>            };
 <a href=#306 id=306 data-nosnippet>306</a>
-<a href=#307 id=307 data-nosnippet>307</a>            <span class="kw">match </span>strategy.process(peer, response) {
+<a href=#307 id=307 data-nosnippet>307</a>            <span class="kw">match </span>strategy.process(peer, response).<span class="kw">await </span>{
 <a href=#308 id=308 data-nosnippet>308</a>                QueryStep::Retry(peers) =&gt; {
 <a href=#309 id=309 data-nosnippet>309</a>                    <span class="kw">for </span>peer <span class="kw">in </span>peers {
 <a href=#310 id=310 data-nosnippet>310</a>                        futures.push(Box::pin({

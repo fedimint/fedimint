@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["ReceiveSMState"],"struct":["ReceiveSMCommon","ReceiveStateMachine"]};
+window.SIDEBAR_ITEMS = {"enum":["DecryptionOutcome","ReceiveSMState"],"struct":["ReceiveSMCommon","ReceiveStateMachine"]};
