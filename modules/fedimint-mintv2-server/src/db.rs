@@ -45,6 +45,7 @@ impl_db_record!(
     key = BlindedSignatureShareKey,
     value = BlindedSignatureShare,
     db_prefix = DbKeyPrefix::BlindedSignatureShare,
+    notify_on_modify = true
 );
 impl_db_lookup!(
     key = BlindedSignatureShareKey,
