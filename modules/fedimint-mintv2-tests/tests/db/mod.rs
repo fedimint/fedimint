@@ -274,7 +274,7 @@ async fn create_client_db_with_v0_data(db: Database) {
     dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
         .await;
 
-    dbtx.insert_new_entry(&SpendableNoteKey(spendable_note(1)), &())
+    dbtx.insert_new_entry(&SpendableNoteKey(spendable_note(1).into()), &())
         .await;
 
     dbtx.insert_new_entry(
@@ -327,7 +327,7 @@ async fn test_client_db_migrations() -> anyhow::Result<()> {
                             notes.len()
                         );
                         ensure!(
-                            notes[0].0.0 == spendable_note(1),
+                            notes[0].0.0.decode().ok() == Some(spendable_note(1)),
                             "the spendable note must round-trip unchanged"
                         );
                     }
