@@ -99,6 +99,14 @@ use crate::metrics::{
 /// not count towards the number of confirmations.
 pub const CONFIRMATION_FINALITY_DELAY: u64 = 6;
 
+/// How many blocks a peer's block count vote trails its bitcoin backend: the
+/// finality delay, plus one block of slack. Processing a new consensus block
+/// count waits for the local backend to report the consensus count plus the
+/// finality delay, and without the slack that is exactly the block the voter
+/// saw, so a backend a little behind, or a backend status that is stale (it is
+/// polled once a minute), stalled item processing on every new block.
+pub const BLOCK_COUNT_VOTE_DELAY: u64 = CONFIRMATION_FINALITY_DELAY + 1;
+
 /// Maximum number of blocks the consensus block count can advance in a single
 /// consensus item to limit the work done in one `process_consensus_item` step.
 const MAX_BLOCK_COUNT_INCREMENT: u64 = 5;
@@ -443,9 +451,7 @@ impl ServerModule for Wallet {
         if let Some(status) = self.btc_rpc.status() {
             assert_eq!(status.network, self.cfg.consensus.network);
 
-            let block_count_vote = status
-                .block_count
-                .saturating_sub(CONFIRMATION_FINALITY_DELAY);
+            let block_count_vote = status.block_count.saturating_sub(BLOCK_COUNT_VOTE_DELAY);
 
             let consensus_block_count = self.consensus_block_count(dbtx).await;
 

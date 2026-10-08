@@ -26,7 +26,7 @@ use fedimint_walletv2_client::{
     FinalSendOperationState, SendError, WalletClientInit, WalletClientModule,
 };
 use fedimint_walletv2_common::KIND;
-use fedimint_walletv2_server::{CONFIRMATION_FINALITY_DELAY, WalletInit};
+use fedimint_walletv2_server::{BLOCK_COUNT_VOTE_DELAY, CONFIRMATION_FINALITY_DELAY, WalletInit};
 use futures::StreamExt;
 use tracing::info;
 
@@ -96,7 +96,7 @@ async fn initialize_consensus(
 ) -> anyhow::Result<()> {
     info!("Wait for the consensus to reach block count one");
 
-    bitcoin.mine_blocks(1 + CONFIRMATION_FINALITY_DELAY).await;
+    bitcoin.mine_blocks(1 + BLOCK_COUNT_VOTE_DELAY).await;
 
     await_consensus_block_count(client, 1).await
 }
@@ -112,7 +112,7 @@ async fn await_finality_delay(
         .block_count()
         .await?;
 
-    bitcoin.mine_blocks(CONFIRMATION_FINALITY_DELAY).await;
+    bitcoin.mine_blocks(BLOCK_COUNT_VOTE_DELAY).await;
 
     await_consensus_block_count(client, current_consensus + CONFIRMATION_FINALITY_DELAY).await
 }
