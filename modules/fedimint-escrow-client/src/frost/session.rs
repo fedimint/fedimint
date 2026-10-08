@@ -47,9 +47,8 @@ impl Decodable for FrostParticipant {
     ) -> Result<Self, fedimint_core::encoding::DecodeError> {
         let identifier_bytes: Vec<u8> = Decodable::consensus_decode_partial(r, modules)?;
 
-        let identifier = Identifier::deserialize(&identifier_bytes).map_err(|e| {
-            DecodeError::new_custom(anyhow::anyhow!("Invalid FROST identifier: {e}"))
-        })?;
+        let identifier = Identifier::deserialize(&identifier_bytes)
+            .map_err(|e| DecodeError::custom(format!("Invalid FROST identifier: {e}")))?;
 
         Ok(Self { identifier })
     }

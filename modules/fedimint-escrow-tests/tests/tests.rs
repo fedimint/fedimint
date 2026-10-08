@@ -2,12 +2,12 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use fedimint_client::OperationId;
+use fedimint_core::Amount;
 use fedimint_core::module::AmountUnit;
 use fedimint_core::runtime::sleep;
 use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::secp256k1::{Keypair, Message, PublicKey, Secp256k1};
 use fedimint_core::util::NextOrPending;
-use fedimint_core::{Amount, anyhow};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_escrow_client::api::EscrowFederationApi;
@@ -39,7 +39,7 @@ async fn fund_client(
     amount: Amount,
 ) -> anyhow::Result<()> {
     let dummy = client.get_first_module::<DummyClientModule>()?;
-    dummy.mock_receive(amount, AmountUnit::BITCOIN).await?;
+    dummy.mock_receive(amount, AmountUnit::BITCOIN).await;
 
     Ok(())
 }
@@ -591,7 +591,7 @@ async fn test_arbiter_consortium_dkg_then_escrow() -> anyhow::Result<()> {
     let dummy = funder_client.get_first_module::<DummyClientModule>()?;
     dummy
         .mock_receive(Amount::from_sats(2000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let arbiter_pubkey = PublicKey::from_slice(&group_key.serialize().expect("serialize"))?;
     let created = funder_escrow

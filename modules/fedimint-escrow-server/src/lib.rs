@@ -8,9 +8,8 @@ use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransacti
 use fedimint_core::envs::{FM_ENABLE_MODULE_ESCROW_ENV, is_env_var_set_opt};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
-    Amounts, ApiEndpoint, ApiVersion, CORE_CONSENSUS_VERSION, CoreConsensusVersion, InputMeta,
-    ModuleConsensusVersion, ModuleInit, SupportedModuleApiVersions, TransactionItemAmounts,
-    api_endpoint,
+    Amounts, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
+    ModuleInit, TransactionItemAmounts, public_api_endpoint,
 };
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::secp256k1::schnorr::Signature;
@@ -119,17 +118,6 @@ impl ServerModuleInit for EscrowInit {
     type Module = Escrow;
     fn versions(&self, _core: CoreConsensusVersion) -> &[ModuleConsensusVersion] {
         &[MODULE_CONSENSUS_VERSION]
-    }
-
-    fn supported_api_versions(&self) -> SupportedModuleApiVersions {
-        SupportedModuleApiVersions::from_raw(
-            (CORE_CONSENSUS_VERSION.major, CORE_CONSENSUS_VERSION.minor),
-            (
-                MODULE_CONSENSUS_VERSION.major,
-                MODULE_CONSENSUS_VERSION.minor,
-            ),
-            &[(0, 0)],
-        )
     }
 
     fn kind() -> fedimint_core::core::ModuleKind {
@@ -383,7 +371,7 @@ impl ServerModule for Escrow {
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
-            api_endpoint! {
+            public_api_endpoint! {
                 GET_CONTRACT_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Escrow, context, params: GetContractParams|
@@ -424,7 +412,7 @@ impl ServerModule for Escrow {
                     }
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 GET_PENDING_ARBITER_FEE_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Escrow, context, params: GetPendinFeeParams|
@@ -463,7 +451,7 @@ impl ServerModule for Escrow {
                     Ok(Some((arbiter_pubkey, share)))
                 }
             },
-            api_endpoint! {
+            public_api_endpoint! {
                 LIST_CONTRACT_BY_KEY_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Escrow, context, params: ListContractParams|

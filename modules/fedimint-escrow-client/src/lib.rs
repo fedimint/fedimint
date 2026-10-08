@@ -5,6 +5,8 @@ use std::time::Duration;
 
 use anyhow::{Error, bail};
 use async_stream::{stream, try_stream};
+#[cfg(feature = "cli")]
+use fedimint_client_module::ClientModuleError;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{
@@ -36,7 +38,7 @@ use fedimint_escrow_common::{
     Resolution, compute_contract_hash, compute_escrow_message, compute_proof_message,
 };
 use frost_secp256k1_tr::Identifier;
-use futures::StreamExt;
+use futures::{StreamExt, TryStreamExt};
 use iroh::{NodeAddr, SecretKey};
 use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
@@ -210,7 +212,10 @@ impl ClientModuleInit for EscrowClientInit {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         Ok(EscrowClientModule {
             federation_id: args.federation_id,
             cfg: args.cfg.clone(),
@@ -261,16 +266,18 @@ impl ClientModule for EscrowClientModule {
     async fn handle_cli_command(
         &self,
         args: &[std::ffi::OsString],
-    ) -> anyhow::Result<serde_json::Value> {
-        cli::handle_cli_command(&self, args).await
+    ) -> Result<serde_json::Value, ClientModuleError> {
+        cli::handle_cli_command(&self, args)
+            .await
+            .map_err(ClientModuleError::other)
     }
 
     async fn handle_rpc(
         &self,
         method: String,
         request: serde_json::Value,
-    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
-        Box::pin(try_stream! {
+    ) -> BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
+        let stream: BoxStream<'_, anyhow::Result<serde_json::Value>> = Box::pin(try_stream! {
             match method.as_str() {
                 "get_client_escrow_keys"=>{
                     let keypair=self.keypair.public_key().to_string();
@@ -358,7 +365,8 @@ impl ClientModule for EscrowClientModule {
                     unreachable!()
                 },
             }
-        })
+        });
+        Box::pin(stream.map_err(ClientModuleError::other))
     }
 }
 
@@ -992,9 +1000,16 @@ impl EscrowClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self
-            .client_ctx
-            .outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(
+            &operation,
+            operation_id,
+            |state| {
+                matches!(
+                    state,
+                    EscrowInputSMState::FeeClaimed | EscrowInputSMState::Failed { .. }
+                )
+            },
+            move || {
                 let client_ctx = client_ctx.clone();
                 stream! {
                     yield EscrowInputSMState::FeeClaiming;
@@ -1013,7 +1028,8 @@ impl EscrowClientModule {
                         }
                     }
                 }
-            }))
+            },
+        ))
     }
 
     pub async fn get_contract(
@@ -1090,9 +1106,16 @@ impl EscrowClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self
-            .client_ctx
-            .outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(
+            &operation,
+            operation_id,
+            |state| {
+                matches!(
+                    state,
+                    EscrowOutputSMState::Active | EscrowOutputSMState::Failed { .. }
+                )
+            },
+            move || {
                 let client_ctx = client_ctx.clone();
                 stream! {
                     yield EscrowOutputSMState::Creating;
@@ -1126,7 +1149,8 @@ impl EscrowClientModule {
                     //     }
                     // }
                 }
-            }))
+            },
+        ))
     }
 
     pub async fn subscribe_escrow_resolution(
@@ -1139,9 +1163,11 @@ impl EscrowClientModule {
 
         let client_ctx = self.client_ctx.clone();
 
-        Ok(self
-            .client_ctx
-            .outcome_or_updates(operation, operation_id, move || {
+        Ok(self.client_ctx.outcome_or_updates(
+            &operation,
+            operation_id,
+            |state| !matches!(state, EscrowInputSMState::Pending),
+            move || {
                 let client_ctx = client_ctx.clone();
                 stream! {
                     yield EscrowInputSMState::Pending;
@@ -1171,7 +1197,8 @@ impl EscrowClientModule {
                         }
                     }
                 }
-            }))
+            },
+        ))
     }
 
     pub fn sign_message(&self, message: EscrowMessage) -> anyhow::Result<Signature> {

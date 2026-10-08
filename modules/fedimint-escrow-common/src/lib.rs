@@ -1,6 +1,5 @@
 use std::fmt;
 
-use anyhow;
 use fedimint_core::bitcoin::hashes::{Hash, HashEngine, sha256};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
