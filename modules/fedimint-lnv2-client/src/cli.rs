@@ -1,6 +1,6 @@
+use std::path::{Path, PathBuf};
 use std::{ffi, iter};
 
-use anyhow::Context as _;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1;
 use clap::{Parser, Subcommand};
@@ -68,8 +68,15 @@ enum HtlcOpts {
         #[arg(long)]
         payment_point: Option<PublicKey>,
     },
-    /// Generate a random claim keypair to receive an HTLC with.
-    NewClaimKeypair,
+    /// Generate a random claim keypair to receive an HTLC with. The secret key
+    /// is written as hex to a new file created with owner-only permissions and
+    /// only the public key is printed.
+    NewClaimKeypair {
+        /// Path of the new file to write the secret key to. An existing file is
+        /// never overwritten.
+        #[arg(long)]
+        secret_key_file: PathBuf,
+    },
     /// Wait until the contract is funded at the outpoint and print the number
     /// of blocks remaining until its expiration.
     AwaitFunded {
@@ -84,14 +91,20 @@ enum HtlcOpts {
         #[arg(long, default_value_t = 0)]
         out_idx: u64,
         contract: String,
-        claim_sk: SecretKey,
-        preimage: String,
+        /// Read the hex claim secret key from a file, or '-' for stdin.
+        #[arg(long)]
+        claim_sk_file: PathBuf,
+        /// Read the hex preimage from a file, or '-' for stdin.
+        #[arg(long)]
+        preimage_file: PathBuf,
     },
     /// Create a forfeit signature to fail an HTLC locked to our claim key
     /// cooperatively.
     Forfeit {
         contract: String,
-        claim_sk: SecretKey,
+        /// Read the hex claim secret key from a file, or '-' for stdin.
+        #[arg(long)]
+        claim_sk_file: PathBuf,
     },
     /// Cancel an HTLC we created before its expiration with the
     /// counterparty's forfeit signature.
@@ -223,7 +236,7 @@ pub(crate) async fn handle_cli_command(
 async fn handle_htlc_command(
     lightning: &LightningClientModule,
     htlc_opts: HtlcOpts,
-) -> anyhow::Result<Value> {
+) -> Result<Value, CliCommandError> {
     let value = match htlc_opts {
         HtlcOpts::Create {
             amount,
@@ -235,7 +248,7 @@ async fn handle_htlc_command(
             let payment_image = match (payment_hash, payment_point) {
                 (Some(hash), None) => PaymentImage::Hash(hash),
                 (None, Some(point)) => PaymentImage::Point(point),
-                _ => anyhow::bail!("Specify exactly one of --payment-hash and --payment-point"),
+                _ => return Err(CliCommandError::InvalidPaymentImage),
             };
 
             let (operation_id, outpoint, contract) = lightning
@@ -254,11 +267,12 @@ async fn handle_htlc_command(
                 "contract": contract,
             }))
         }
-        HtlcOpts::NewClaimKeypair => {
+        HtlcOpts::NewClaimKeypair { secret_key_file } => {
             let keypair = Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng());
 
+            write_secret_key_file(&secret_key_file, &keypair.secret_key())?;
+
             json(serde_json::json!({
-                "secret_key": keypair.secret_key().display_secret().to_string(),
                 "public_key": keypair.public_key(),
             }))
         }
@@ -275,22 +289,37 @@ async fn handle_htlc_command(
             funding_txid,
             out_idx,
             contract,
-            claim_sk,
-            preimage,
-        } => json(
-            lightning
-                .claim_htlc(
-                    outpoint(funding_txid, out_idx),
-                    parse_contract(&contract)?,
-                    claim_sk.keypair(secp256k1::SECP256K1),
-                    parse_preimage(&preimage)?,
-                    Value::Null,
-                )
-                .await?,
-        ),
-        HtlcOpts::Forfeit { contract, claim_sk } => {
+            claim_sk_file,
+            preimage_file,
+        } => {
+            let contract = parse_contract(&contract)?;
+
+            ensure_single_stdin(&claim_sk_file, &preimage_file)?;
+
+            let claim_sk = read_claim_sk(&claim_sk_file)?;
+            let preimage = read_preimage(&preimage_file)?;
+
+            json(
+                lightning
+                    .claim_htlc(
+                        outpoint(funding_txid, out_idx),
+                        contract,
+                        claim_sk.keypair(secp256k1::SECP256K1),
+                        preimage,
+                        Value::Null,
+                    )
+                    .await?,
+            )
+        }
+        HtlcOpts::Forfeit {
+            contract,
+            claim_sk_file,
+        } => {
+            let contract = parse_contract(&contract)?;
+            let claim_sk = read_claim_sk(&claim_sk_file)?;
+
             json(LightningClientModule::create_htlc_forfeit_signature(
-                &parse_contract(&contract)?,
+                &contract,
                 &claim_sk.keypair(secp256k1::SECP256K1),
             )?)
         }
@@ -346,13 +375,84 @@ fn outpoint(txid: TransactionId, out_idx: u64) -> OutPoint {
     OutPoint { txid, out_idx }
 }
 
-fn parse_contract(contract: &str) -> anyhow::Result<OutgoingContract> {
-    serde_json::from_str(contract).context("Failed to parse the contract JSON")
+fn parse_contract(contract: &str) -> Result<OutgoingContract, CliCommandError> {
+    serde_json::from_str(contract).map_err(CliCommandError::InvalidContract)
 }
 
-fn parse_preimage(preimage: &str) -> anyhow::Result<[u8; 32]> {
-    <[u8; 32]>::try_from(hex::decode(preimage).context("The preimage is not valid hex")?)
-        .map_err(|_| anyhow::anyhow!("The preimage must be exactly 32 bytes"))
+/// The longest secret input we accept: 64 hex characters plus a line ending.
+const MAX_SECRET_HEX_BYTES: usize = 66;
+
+fn read_claim_sk(path: &Path) -> Result<SecretKey, CliCommandError> {
+    let claim_sk = read_secret_hex(path)?;
+
+    // Neither the input nor the parse error may appear in diagnostics.
+    claim_sk
+        .parse()
+        .map_err(|_| CliCommandError::InvalidClaimSecretKey)
+}
+
+fn read_preimage(path: &Path) -> Result<[u8; 32], CliCommandError> {
+    let preimage = read_secret_hex(path)?;
+
+    <[u8; 32]>::try_from(hex::decode(preimage).map_err(|_| CliCommandError::InvalidPreimageHex)?)
+        .map_err(|_| CliCommandError::InvalidPreimageLength)
+}
+
+fn ensure_single_stdin(first: &Path, second: &Path) -> Result<(), CliCommandError> {
+    #[cfg(not(target_family = "wasm"))]
+    fedimint_core::util::ensure_single_stdin([first, second])?;
+
+    #[cfg(target_family = "wasm")]
+    let _ = (first, second);
+
+    Ok(())
+}
+
+fn read_secret_hex(path: &Path) -> Result<String, CliCommandError> {
+    #[cfg(not(target_family = "wasm"))]
+    {
+        Ok(fedimint_core::util::read_secret_file(
+            path,
+            MAX_SECRET_HEX_BYTES,
+        )?)
+    }
+
+    #[cfg(target_family = "wasm")]
+    {
+        let _ = path;
+
+        Err(CliCommandError::UnsupportedSecretInput)
+    }
+}
+
+/// Write the secret key as hex to a new file only its owner can read.
+fn write_secret_key_file(path: &Path, secret_key: &SecretKey) -> Result<(), CliCommandError> {
+    #[cfg(not(target_family = "wasm"))]
+    {
+        use std::io::Write as _;
+
+        let mut options = std::fs::OpenOptions::new();
+
+        options.write(true).create_new(true);
+
+        #[cfg(unix)]
+        std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+
+        let mut file = options
+            .open(path)
+            .map_err(CliCommandError::SecretKeyFileCreate)?;
+
+        writeln!(file, "{}", secret_key.display_secret())
+            .and_then(|()| file.sync_all())
+            .map_err(|_| CliCommandError::SecretKeyFileWrite)
+    }
+
+    #[cfg(target_family = "wasm")]
+    {
+        let _ = (path, secret_key);
+
+        Err(CliCommandError::UnsupportedSecretInput)
+    }
 }
 
 fn json<T: Serialize>(value: T) -> Value {
@@ -362,6 +462,48 @@ fn json<T: Serialize>(value: T) -> Value {
 /// A failure of an `lnv2` module command.
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum CliCommandError {
+    /// The direct HTLC operation failed.
+    #[error(transparent)]
+    Htlc(#[from] crate::htlc::HtlcError),
+
+    /// Exactly one payment image must be specified.
+    #[error("Specify exactly one of --payment-hash and --payment-point")]
+    InvalidPaymentImage,
+
+    /// The supplied contract was not valid JSON.
+    #[error("Failed to parse the contract JSON: {0}")]
+    InvalidContract(#[source] serde_json::Error),
+
+    /// A secret input file could not be read.
+    #[cfg(not(target_family = "wasm"))]
+    #[error(transparent)]
+    SecretInput(#[from] fedimint_core::util::SecretInputError),
+
+    /// Secret input files are not supported on this platform.
+    #[cfg(target_family = "wasm")]
+    #[error("Secret input files are not supported on this platform")]
+    UnsupportedSecretInput,
+
+    /// The claim secret key file could not be created.
+    #[error("Could not create the secret key file: {0}")]
+    SecretKeyFileCreate(#[source] std::io::Error),
+
+    /// The claim secret key could not be written to its file.
+    #[error("Could not write the secret key file")]
+    SecretKeyFileWrite,
+
+    /// The supplied claim secret key was not a valid hex secret key.
+    #[error("The claim secret key is not a valid hex secret key")]
+    InvalidClaimSecretKey,
+
+    /// The supplied preimage was not valid hexadecimal.
+    #[error("The preimage is not valid hex")]
+    InvalidPreimageHex,
+
+    /// The supplied preimage had the wrong length.
+    #[error("The preimage must be exactly 32 bytes")]
+    InvalidPreimageLength,
+
     /// The payment could not be started.
     #[error(transparent)]
     Send(#[from] SendPaymentError),
@@ -395,3 +537,6 @@ pub(crate) enum CliCommandError {
     #[error("Admin auth not set")]
     AdminAuthNotSet,
 }
+
+#[cfg(test)]
+mod tests;

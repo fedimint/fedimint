@@ -1392,8 +1392,8 @@ async fn test_iroh_payment(
 
 /// Exercise the direct HTLC CLI between two clients of the same federation,
 /// with the full out-of-band handoff as strings: the claimer's key, the
-/// funder's funding txid and contract JSON, the claimer's preimage and secret
-/// key, and the forfeit signature.
+/// funder's funding txid and contract JSON, and the forfeit signature. The
+/// claimer's secret key and preimage are passed through files and stdin.
 async fn test_direct_htlc(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     if util::FedimintCli::version_or_default().await < *VERSION_0_13_0_ALPHA {
         info!("fedimint-cli does not support direct HTLCs, skipping");
@@ -1414,14 +1414,60 @@ async fn test_direct_htlc(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     federation.pegin_client(10_000, &funder).await?;
 
+    let secrets_dir = PathBuf::from(std::env::var(FM_CLIENT_DIR_ENV)?).join("direct-htlc");
+
+    tokio::fs::create_dir_all(&secrets_dir).await?;
+
+    let claim_sk_file = secrets_dir.join("claim-sk");
+    let preimage_file = secrets_dir.join("preimage");
+
     info!("Generating the claim keypair...");
 
-    let claim_keypair = cmd!(claimer, "module", "lnv2", "htlc", "new-claim-keypair")
-        .out_json()
-        .await?;
+    let claim_keypair = cmd!(
+        claimer,
+        "module",
+        "lnv2",
+        "htlc",
+        "new-claim-keypair",
+        "--secret-key-file",
+        claim_sk_file.display()
+    )
+    .out_json()
+    .await?;
 
-    let claim_sk = json_string(&claim_keypair["secret_key"])?;
+    ensure!(
+        claim_keypair.get("secret_key").is_none(),
+        "The claim secret key must not be printed"
+    );
+
     let claim_pk = json_string(&claim_keypair["public_key"])?;
+
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let mode = tokio::fs::metadata(&claim_sk_file)
+            .await?
+            .permissions()
+            .mode();
+
+        ensure!(mode & 0o777 == 0o600, "Secret key file has mode {mode:o}");
+    }
+
+    ensure!(
+        cmd!(
+            claimer,
+            "module",
+            "lnv2",
+            "htlc",
+            "new-claim-keypair",
+            "--secret-key-file",
+            claim_sk_file.display()
+        )
+        .run()
+        .await
+        .is_err(),
+        "An existing secret key file must not be overwritten"
+    );
 
     info!("Testing claim of a point-locked HTLC...");
 
@@ -1429,6 +1475,8 @@ async fn test_direct_htlc(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     let preimage = SecretKey::new(&mut OsRng);
     let preimage_hex = preimage.display_secret().to_string();
     let payment_point = preimage.public_key(SECP256K1).to_string();
+
+    write_overwrite_async(&preimage_file, &preimage_hex).await?;
 
     let (funding_txid, contract) =
         create_htlc(&funder, &claim_pk, 100, "--payment-point", &payment_point).await?;
@@ -1450,7 +1498,7 @@ async fn test_direct_htlc(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         "Expected the remaining blocks until expiration, got {remaining_blocks}"
     );
 
-    let claim_operation = cmd!(
+    let mut claim = cmd!(
         claimer,
         "module",
         "lnv2",
@@ -1458,11 +1506,15 @@ async fn test_direct_htlc(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         "claim",
         funding_txid,
         contract,
-        claim_sk,
-        preimage_hex
-    )
-    .out_json()
-    .await?;
+        "--claim-sk-file",
+        claim_sk_file.display(),
+        "--preimage-file",
+        "-"
+    );
+
+    claim.cmd.stdin(std::fs::File::open(&preimage_file)?);
+
+    let claim_operation = claim.out_json().await?;
 
     await_htlc_settled(&claimer, &claim_operation).await?;
 
@@ -1493,13 +1545,20 @@ async fn test_direct_htlc(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     let balance_before_cancel = funder.balance().await?;
 
-    let forfeit_signature = json_string(
-        &cmd!(
-            claimer, "module", "lnv2", "htlc", "forfeit", contract, claim_sk
-        )
-        .out_json()
-        .await?,
-    )?;
+    let mut forfeit = cmd!(
+        claimer,
+        "module",
+        "lnv2",
+        "htlc",
+        "forfeit",
+        contract,
+        "--claim-sk-file",
+        "-"
+    );
+
+    forfeit.cmd.stdin(std::fs::File::open(&claim_sk_file)?);
+
+    let forfeit_signature = json_string(&forfeit.out_json().await?)?;
 
     let cancel_operation = cmd!(
         funder,

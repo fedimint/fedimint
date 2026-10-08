@@ -714,7 +714,7 @@ async fn direct_htlc_claim() -> anyhow::Result<()> {
     funder
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     await_block_count_consensus(&fixtures, &funder).await?;
 
@@ -823,7 +823,7 @@ async fn direct_htlc_refund() -> anyhow::Result<()> {
     funder
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     await_block_count_consensus(&fixtures, &funder).await?;
 
@@ -940,7 +940,7 @@ async fn direct_htlc_cancel() -> anyhow::Result<()> {
     funder
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     await_block_count_consensus(&fixtures, &funder).await?;
 

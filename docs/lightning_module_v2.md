@@ -119,6 +119,15 @@ All coordination data is exchanged out of band: the claim public key from the cl
 - The `amount` is in millisatoshis. Preimages are 32 bytes in hex; secret keys, public keys and forfeit signatures use the usual secp256k1 hex encodings.
 - The claimer's `await-funded` verifies that exactly this contract is funded at the outpoint and returns the number of blocks remaining until its expiration, and should be run before taking any action of its own, e.g. sending funds on another chain.
 
+### Secret inputs
+The claim secret key and the preimage control the locked funds, so the CLI never takes them as command-line arguments, where shell history and process listings could expose them:
+
+- `lnv2 htlc new-claim-keypair --secret-key-file <path>` writes the claim secret key as hex to a new file readable only by its owner, refuses to overwrite an existing file, and prints only the public key.
+- `lnv2 htlc claim` reads the claim secret key from `--claim-sk-file` and the preimage from `--preimage-file`; `lnv2 htlc forfeit` reads the claim secret key from `--claim-sk-file`.
+- Each file holds a single hex value, optionally followed by one line ending. Pass `-` to read a value from stdin instead; at most one input per command can use stdin.
+
+Keep these files on storage only you can access and delete them once the contract is resolved. The preimage remains secret until the claim transaction reveals it.
+
 ### Payment images
 A hash lock (`--payment-hash`) locks the contract to the SHA-256 hash of a 32-byte preimage and is interoperable with any system using the same construction, such as Lightning HTLCs or Cashu NUT-14. A point lock (`--payment-point`) locks the contract to a secp256k1 public key whose secret key is the preimage.
 
