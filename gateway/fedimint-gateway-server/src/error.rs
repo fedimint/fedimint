@@ -199,6 +199,14 @@ pub enum LNv1Error {
 pub enum LNv2Error {
     #[error("Incoming Payment Error: {}", .0)]
     IncomingPayment(String),
+    /// A contract is registered for the payment image, but for another amount.
+    #[error(
+        "Incoming Payment Error: the registered contract is for {registered_msats} msat, the payment carries {payment_msats} msat"
+    )]
+    IncomingAmountMismatch {
+        registered_msats: u64,
+        payment_msats: u64,
+    },
     #[error("Outgoing Payment Error: {}", OptStacktrace(.0))]
     OutgoingPayment(#[from] anyhow::Error),
 }
