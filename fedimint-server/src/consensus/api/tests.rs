@@ -254,3 +254,121 @@ async fn admin_metadata_update_preserves_persisted_iroh_endpoint() {
         signed.tagged_hash()
     );
 }
+
+/// Pause exactly one transaction after RocksDB takes its snapshot. The other
+/// writer commits before the paused transaction reads or writes, guaranteeing
+/// a real write conflict without relying on scheduler timing.
+#[derive(Debug)]
+struct PausedSnapshotDatabase<D> {
+    inner: D,
+    pause: Arc<MetadataSnapshotPause>,
+}
+
+#[derive(Debug, Default)]
+struct MetadataSnapshotPause {
+    transactions: AtomicUsize,
+    entered: tokio::sync::Notify,
+    resume: tokio::sync::Notify,
+}
+
+#[async_trait::async_trait]
+impl<D: fedimint_core::db::IRawDatabase> fedimint_core::db::IRawDatabase
+    for PausedSnapshotDatabase<D>
+{
+    type Transaction<'a> = D::Transaction<'a>;
+
+    async fn begin_transaction<'a>(&'a self) -> Self::Transaction<'a> {
+        let snapshot = self.inner.begin_transaction().await;
+        if self.pause.transactions.fetch_add(1, Relaxed) == 0 {
+            self.pause.entered.notify_one();
+            self.pause.resume.notified().await;
+        }
+        snapshot
+    }
+
+    fn checkpoint(&self, path: &std::path::Path) -> fedimint_core::db::DatabaseResult<()> {
+        self.inner.checkpoint(path)
+    }
+}
+
+async fn metadata_conflict(paused_timestamp: u64, competing_timestamp: u64) {
+    let tempdir = tempfile::tempdir().unwrap();
+    let pause = Arc::new(MetadataSnapshotPause::default());
+    let db = PausedSnapshotDatabase {
+        inner: fedimint_rocksdb::RocksDb::build(tempdir.path().join("db"))
+            .open()
+            .await
+            .unwrap(),
+        pause: pause.clone(),
+    }
+    .into_database();
+    let peer_id = PeerId::from(0);
+    let ctx = secp256k1::Secp256k1::new();
+    let keypair = secp256k1::SecretKey::from_slice(&[42; 32])
+        .unwrap()
+        .keypair(&ctx);
+    let metadata = |timestamp| {
+        GuardianMetadata::new(vec![], "test-pkarr".to_owned(), timestamp).sign(&ctx, &keypair)
+    };
+    let paused_metadata = metadata(paused_timestamp);
+    let competing_metadata = metadata(competing_timestamp);
+
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let paused = tokio::spawn({
+            let db = db.clone();
+            let paused_metadata = paused_metadata.clone();
+            async move { super::store_guardian_metadata(&db, peer_id, &paused_metadata).await }
+        });
+        pause.entered.notified().await;
+        super::store_guardian_metadata(&db, peer_id, &competing_metadata)
+            .await
+            .expect("the competing transaction must commit first");
+        pause.resume.notify_one();
+        let result = paused.await.expect("a write conflict must not panic");
+
+        if paused_timestamp < competing_timestamp {
+            let err = result.expect_err("retry must reject metadata superseded by the winner");
+            assert_eq!(err.code, 400);
+            assert_eq!(
+                err.message,
+                "New metadata timestamp is not newer than existing"
+            );
+        } else {
+            result.expect("retry must accept identical or newer metadata");
+        }
+        assert_eq!(
+            pause.transactions.load(Relaxed),
+            3,
+            "two submissions plus one fresh transaction after the write conflict"
+        );
+        let stored = db
+            .begin_transaction_nc()
+            .await
+            .get_value(&GuardianMetadataKey(peer_id))
+            .await
+            .unwrap();
+        let expected = if paused_timestamp > competing_timestamp {
+            &paused_metadata
+        } else {
+            &competing_metadata
+        };
+        assert_eq!(stored.tagged_hash(), expected.tagged_hash());
+    })
+    .await
+    .expect("metadata submissions must finish without deadlocking");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn guardian_metadata_concurrent_identical_submissions_succeed() {
+    metadata_conflict(2, 2).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn guardian_metadata_conflict_rejects_superseded_submission() {
+    metadata_conflict(2, 3).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn guardian_metadata_conflict_retries_newer_submission() {
+    metadata_conflict(3, 2).await;
+}
