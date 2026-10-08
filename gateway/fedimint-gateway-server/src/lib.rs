@@ -1217,6 +1217,23 @@ impl Gateway {
             return "lnv2";
         }
 
+        // A payment held for a registered LNv2 contract is left to that
+        // contract's receive, or to the Lightning node's expiry, even if its
+        // amount does not match: cancelling it would also fail back HTLCs the
+        // receive may already be settling.
+        if payment_request.incoming_circuit().is_none()
+            && let Err(PublicGatewayError::LNv2(err @ LNv2Error::IncomingAmountMismatch { .. })) =
+                &lnv2_result
+        {
+            warn!(
+                target: LOG_GATEWAY,
+                payment_hash = %payment_request.payment_hash,
+                err = %err.fmt_compact(),
+                "Ignoring payment for a registered LNv2 contract whose amount does not match",
+            );
+            return "ignore";
+        }
+
         let lnv1_start = fedimint_core::time::now();
         let lnv1_result = self
             .try_handle_lightning_payment_ln_legacy(&payment_request, lightning_context)
@@ -3777,10 +3794,12 @@ impl Gateway {
             )))?;
 
         if registered_incoming_contract.incoming_amount_msats != amount_msats {
-            return Err(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
-                "The available decryption contract's amount is not equal to the requested amount"
-                    .to_string(),
-            )));
+            return Err(PublicGatewayError::LNv2(
+                LNv2Error::IncomingAmountMismatch {
+                    registered_msats: registered_incoming_contract.incoming_amount_msats,
+                    payment_msats: amount_msats,
+                },
+            ));
         }
 
         // Turning receives off covers invoices issued before the switch was
