@@ -979,6 +979,185 @@ async fn storing_a_second_client_secret_is_typed() {
     assert!(matches!(err, ClientSecretError::AlreadyExists), "{err:?}");
 }
 
+#[derive(fedimint_core::encoding::Encodable, fedimint_core::encoding::Decodable, Clone, Debug, Hash, PartialEq, Eq)]
+struct TestInput;
+
+impl std::fmt::Display for TestInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("TestInput")
+    }
+}
+
+impl fedimint_core::core::Input for TestInput {
+    const KIND: ModuleKind = ModuleKind::from_static_str("mock");
+}
+
+impl fedimint_core::core::IntoDynInstance for TestInput {
+    type DynType = fedimint_core::core::DynInput;
+
+    fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
+        fedimint_core::core::DynInput::from_typed(instance_id, self)
+    }
+}
+
+#[derive(fedimint_core::encoding::Encodable, fedimint_core::encoding::Decodable, Clone, Debug, Hash, PartialEq, Eq)]
+struct TestOutput;
+
+impl std::fmt::Display for TestOutput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("TestOutput")
+    }
+}
+
+impl fedimint_core::core::Output for TestOutput {
+    const KIND: ModuleKind = ModuleKind::from_static_str("mock");
+}
+
+impl fedimint_core::core::IntoDynInstance for TestOutput {
+    type DynType = fedimint_core::core::DynOutput;
+
+    fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
+        fedimint_core::core::DynOutput::from_typed(instance_id, self)
+    }
+}
+
+#[derive(Debug)]
+struct MockBalanceModule {
+    input_fee: Amounts,
+    output_fee: Amounts,
+}
+
+#[fedimint_core::apply(fedimint_core::async_trait_maybe_send!)]
+impl fedimint_client_module::module::IClientModule for MockBalanceModule {
+    fn as_any(&self) -> &(fedimint_core::maybe_add_send_sync!(dyn std::any::Any)) {
+        self
+    }
+
+    fn decoder(&self) -> fedimint_core::core::Decoder {
+        fedimint_core::core::Decoder::default()
+    }
+
+    fn context(&self, _instance: ModuleInstanceId) -> fedimint_core::core::DynContext {
+        fedimint_core::core::DynContext::from_typed(0, ())
+    }
+
+    async fn start(&self) {}
+
+    async fn handle_cli_command(
+        &self,
+        _args: &[std::ffi::OsString],
+    ) -> Result<serde_json::Value, ClientModuleError> {
+        Ok(serde_json::Value::Null)
+    }
+
+    async fn handle_rpc(
+        &self,
+        _method: String,
+        _request: serde_json::Value,
+    ) -> futures::stream::BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
+        Box::pin(futures::stream::empty())
+    }
+
+    fn input_fee(&self, _amount: &Amounts, _input: &fedimint_core::core::DynInput) -> Option<Amounts> {
+        Some(self.input_fee.clone())
+    }
+
+    fn output_fee(&self, _amount: &Amounts, _output: &fedimint_core::core::DynOutput) -> Option<Amounts> {
+        Some(self.output_fee.clone())
+    }
+
+    fn supports_backup(&self) -> bool {
+        false
+    }
+
+    async fn backup(
+        &self,
+        _module_instance_id: ModuleInstanceId,
+    ) -> Result<fedimint_client_module::module::DynModuleBackup, ClientModuleError> {
+        Err(ClientModuleError::Other(anyhow::anyhow!("unsupported").into()))
+    }
+
+    fn supports_being_primary(&self) -> fedimint_client_module::module::PrimaryModuleSupport {
+        fedimint_client_module::module::PrimaryModuleSupport::None
+    }
+
+    async fn create_final_inputs_and_outputs(
+        &self,
+        _module_instance: ModuleInstanceId,
+        _dbtx: &mut DatabaseTransaction<'_>,
+        _operation_id: OperationId,
+        _unit: fedimint_core::module::AmountUnit,
+        _input_amount: fedimint_core::Amount,
+        _output_amount: fedimint_core::Amount,
+    ) -> Result<
+        (
+            fedimint_client_module::module::ClientInputBundle,
+            fedimint_client_module::module::ClientOutputBundle,
+        ),
+        ClientModuleError,
+    > {
+        Err(ClientModuleError::Other(anyhow::anyhow!("unsupported").into()))
+    }
+
+    async fn await_primary_module_output(
+        &self,
+        _operation_id: OperationId,
+        _out_point: fedimint_core::OutPoint,
+    ) -> Result<(), ClientModuleError> {
+        Ok(())
+    }
+
+    async fn get_balance(
+        &self,
+        _module_instance: ModuleInstanceId,
+        _dbtx: &mut DatabaseTransaction<'_>,
+        _unit: fedimint_core::module::AmountUnit,
+    ) -> fedimint_core::Amount {
+        fedimint_core::Amount::ZERO
+    }
+
+    async fn subscribe_balance_changes(&self) -> futures::stream::BoxStream<'static, ()> {
+        Box::pin(futures::stream::empty())
+    }
+}
+
+async fn client_with_mock_module(input_fee: Amounts, output_fee: Amounts) -> Client {
+    let mut client = client_for_lookup_test().await;
+    let mock = Arc::new(MockBalanceModule {
+        input_fee,
+        output_fee,
+    });
+    client.modules = ModuleRegistry::from_iter([(
+        1,
+        ModuleKind::from_static_str("mock"),
+        fedimint_client_module::module::DynClientModule::from(
+            mock as Arc<dyn fedimint_client_module::module::IClientModule>,
+        ),
+    )]);
+    client
+}
+
+fn test_input_bundle(amounts: Amounts) -> fedimint_client_module::module::ClientInputBundle {
+    fedimint_client_module::transaction::ClientInputBundle::<TestInput>::new_no_sm(vec![
+        fedimint_client_module::transaction::ClientInput {
+            input: TestInput,
+            keys: vec![],
+            amounts,
+        },
+    ])
+    .into_dyn(1)
+}
+
+fn test_output_bundle(amounts: Amounts) -> fedimint_client_module::module::ClientOutputBundle {
+    fedimint_client_module::transaction::ClientOutputBundle::<TestOutput>::new_no_sm(vec![
+        fedimint_client_module::transaction::ClientOutput {
+            output: TestOutput,
+            amounts,
+        },
+    ])
+    .into_dyn(1)
+}
+
 #[tokio::test]
 async fn transaction_builder_get_balance_empty_succeeds() {
     use fedimint_client_module::transaction::TransactionBuilder;
@@ -991,4 +1170,188 @@ async fn transaction_builder_get_balance_empty_succeeds() {
         .expect("Empty builder must have valid balance");
     assert_eq!(in_amounts, Amounts::ZERO);
     assert_eq!(out_amounts, Amounts::ZERO);
+}
+
+#[tokio::test]
+async fn transaction_builder_get_balance_input_total_overflow_is_reported_as_error() {
+    use fedimint_client_module::error::TransactionSubmitError;
+    use fedimint_client_module::transaction::TransactionBuilder;
+    use fedimint_core::Amount;
+    use fedimint_core::module::Amounts;
+
+    let client = client_with_mock_module(Amounts::ZERO, Amounts::ZERO).await;
+    let builder = TransactionBuilder::new()
+        .with_inputs(test_input_bundle(Amounts::new_bitcoin(Amount::from_msats(
+            u64::MAX,
+        ))))
+        .with_inputs(test_input_bundle(Amounts::new_bitcoin(Amount::from_msats(
+            1,
+        ))));
+
+    let err = client
+        .transaction_builder_get_balance(&builder)
+        .expect_err("Overflowing input totals must fail");
+    assert!(
+        matches!(err, TransactionSubmitError::AmountOverflow),
+        "{err:?}"
+    );
+}
+
+#[tokio::test]
+async fn transaction_builder_get_balance_output_total_overflow_is_reported_as_error() {
+    use fedimint_client_module::error::TransactionSubmitError;
+    use fedimint_client_module::transaction::TransactionBuilder;
+    use fedimint_core::Amount;
+    use fedimint_core::module::Amounts;
+
+    let client = client_with_mock_module(Amounts::ZERO, Amounts::ZERO).await;
+    let builder = TransactionBuilder::new()
+        .with_outputs(test_output_bundle(Amounts::new_bitcoin(Amount::from_msats(
+            u64::MAX,
+        ))))
+        .with_outputs(test_output_bundle(Amounts::new_bitcoin(Amount::from_msats(
+            1,
+        ))));
+
+    let err = client
+        .transaction_builder_get_balance(&builder)
+        .expect_err("Overflowing output totals must fail");
+    assert!(
+        matches!(err, TransactionSubmitError::AmountOverflow),
+        "{err:?}"
+    );
+}
+
+#[tokio::test]
+async fn transaction_builder_get_balance_accumulated_input_fees_overflow_is_reported_as_error() {
+    use fedimint_client_module::error::TransactionSubmitError;
+    use fedimint_client_module::transaction::TransactionBuilder;
+    use fedimint_core::Amount;
+    use fedimint_core::module::Amounts;
+
+    let client = client_with_mock_module(
+        Amounts::new_bitcoin(Amount::from_msats(u64::MAX)),
+        Amounts::ZERO,
+    )
+    .await;
+    let builder = TransactionBuilder::new()
+        .with_inputs(test_input_bundle(Amounts::ZERO))
+        .with_inputs(test_input_bundle(Amounts::ZERO));
+
+    let err = client
+        .transaction_builder_get_balance(&builder)
+        .expect_err("Accumulated input fees overflow must fail");
+    assert!(
+        matches!(err, TransactionSubmitError::AmountOverflow),
+        "{err:?}"
+    );
+}
+
+#[tokio::test]
+async fn transaction_builder_get_balance_accumulated_output_fees_overflow_is_reported_as_error() {
+    use fedimint_client_module::error::TransactionSubmitError;
+    use fedimint_client_module::transaction::TransactionBuilder;
+    use fedimint_core::Amount;
+    use fedimint_core::module::Amounts;
+
+    let client = client_with_mock_module(
+        Amounts::ZERO,
+        Amounts::new_bitcoin(Amount::from_msats(u64::MAX)),
+    )
+    .await;
+    let builder = TransactionBuilder::new()
+        .with_outputs(test_output_bundle(Amounts::ZERO))
+        .with_outputs(test_output_bundle(Amounts::ZERO));
+
+    let err = client
+        .transaction_builder_get_balance(&builder)
+        .expect_err("Accumulated output fees overflow must fail");
+    assert!(
+        matches!(err, TransactionSubmitError::AmountOverflow),
+        "{err:?}"
+    );
+}
+
+#[tokio::test]
+async fn transaction_builder_get_balance_output_plus_fee_overflow_is_reported_as_error() {
+    use fedimint_client_module::error::TransactionSubmitError;
+    use fedimint_client_module::transaction::TransactionBuilder;
+    use fedimint_core::Amount;
+    use fedimint_core::module::Amounts;
+
+    let client = client_with_mock_module(
+        Amounts::ZERO,
+        Amounts::new_bitcoin(Amount::from_msats(1)),
+    )
+    .await;
+    let builder = TransactionBuilder::new().with_outputs(test_output_bundle(Amounts::new_bitcoin(
+        Amount::from_msats(u64::MAX),
+    )));
+
+    let err = client
+        .transaction_builder_get_balance(&builder)
+        .expect_err("Output plus fee overflow must fail");
+    assert!(
+        matches!(err, TransactionSubmitError::AmountOverflow),
+        "{err:?}"
+    );
+}
+
+#[tokio::test]
+async fn transaction_builder_get_balance_nonempty_maximum_valid_boundary_with_distinct_units_succeeds()
+{
+    use fedimint_client_module::transaction::TransactionBuilder;
+    use fedimint_core::Amount;
+    use fedimint_core::module::{AmountUnit, Amounts};
+
+    let custom_unit = AmountUnit::new_custom(1);
+    let client = client_with_mock_module(
+        Amounts::new_bitcoin(Amount::from_msats(5)),
+        Amounts::new_custom(custom_unit, Amount::from_msats(10)),
+    )
+    .await;
+
+    let mut input_amounts = Amounts::new_bitcoin(Amount::from_msats(u64::MAX - 20));
+    input_amounts = input_amounts
+        .checked_add_unit(Amount::from_msats(u64::MAX - 100), custom_unit)
+        .expect("Fits in unit");
+
+    let mut output_amounts = Amounts::new_bitcoin(Amount::from_msats(100));
+    output_amounts = output_amounts
+        .checked_add_unit(Amount::from_msats(200), custom_unit)
+        .expect("Fits in unit");
+
+    let builder = TransactionBuilder::new()
+        .with_inputs(test_input_bundle(input_amounts))
+        .with_inputs(test_input_bundle(Amounts::new_bitcoin(
+            Amount::from_msats(15),
+        )))
+        .with_outputs(test_output_bundle(output_amounts));
+
+    let (in_amounts, out_amounts) = client
+        .transaction_builder_get_balance(&builder)
+        .expect("Valid boundary amounts across distinct units must succeed");
+
+    assert_eq!(
+        in_amounts
+            .get(&AmountUnit::BITCOIN)
+            .copied()
+            .unwrap_or_default(),
+        Amount::from_msats(u64::MAX - 5)
+    );
+    assert_eq!(
+        in_amounts.get(&custom_unit).copied().unwrap_or_default(),
+        Amount::from_msats(u64::MAX - 100)
+    );
+    assert_eq!(
+        out_amounts
+            .get(&AmountUnit::BITCOIN)
+            .copied()
+            .unwrap_or_default(),
+        Amount::from_msats(100 + 10) // output (100) + input fees (5+5=10)
+    );
+    assert_eq!(
+        out_amounts.get(&custom_unit).copied().unwrap_or_default(),
+        Amount::from_msats(200 + 10) // output (200) + output fee (10)
+    );
 }

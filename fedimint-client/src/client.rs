@@ -1021,7 +1021,8 @@ impl Client {
     /// transaction, and [`PrimaryModule`] for every other failure of that
     /// module; [`TransactionTooLarge`] if the finalized transaction exceeds
     /// the federation's size limit; [`StateMachines`] if the transaction's
-    /// state machines cannot be registered; and [`Database`] if the
+    /// state machines cannot be registered; [`AmountOverflow`] if calculating
+    /// the transaction balance or fees overflowed; and [`Database`] if the
     /// transaction keeps colliding with others and cannot be committed within
     /// its retry budget, which should not happen except in excessively
     /// concurrent scenarios.
@@ -1032,6 +1033,7 @@ impl Client {
     /// [`PrimaryModule`]: TransactionSubmitError::PrimaryModule
     /// [`TransactionTooLarge`]: TransactionSubmitError::TransactionTooLarge
     /// [`StateMachines`]: TransactionSubmitError::StateMachines
+    /// [`AmountOverflow`]: TransactionSubmitError::AmountOverflow
     /// [`Database`]: TransactionSubmitError::Database
     pub async fn finalize_and_submit_transaction<F, M>(
         &self,
