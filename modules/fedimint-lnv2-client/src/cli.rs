@@ -22,6 +22,9 @@ use crate::{
     ReceiveError, SelectGatewayError, SendPaymentError,
 };
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Parser, Serialize)]
 enum Opts {
     /// Pay an invoice. For  testing  you can optionally specify a gateway to
@@ -537,6 +540,3 @@ pub(crate) enum CliCommandError {
     #[error("Admin auth not set")]
     AdminAuthNotSet,
 }
-
-#[cfg(test)]
-mod tests;

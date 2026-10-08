@@ -416,8 +416,9 @@ impl LightningClientModule {
     /// reported count would be zero while the actual chain tip may already
     /// be at a positive height; an expiration computed against the zero
     /// count would be overtaken the moment the first votes are committed.
-    /// For the same reason [`Self::create_htlc`] and [`Self::claim_htlc`]
-    /// refuse to operate until this method succeeds.
+    /// For the same reason [`Self::create_htlc`], [`Self::claim_htlc`] and
+    /// [`Self::await_htlc_funded`] refuse to operate until this method
+    /// succeeds.
     pub async fn consensus_block_count(&self) -> Result<u64, HtlcError> {
         let consensus_block_count = self
             .module_api
@@ -458,11 +459,18 @@ impl LightningClientModule {
     /// will also never resolve if the contract has already been claimed,
     /// refunded or cancelled again. Any other federation error, e.g. one of a
     /// federation that does not support direct HTLCs, is returned.
+    ///
+    /// Returns [`HtlcError::NoBlockCountConsensus`] while the federation has
+    /// not yet reached consensus on a block count, as the remaining blocks
+    /// would be measured against a count of zero and overstate the contract's
+    /// lifetime; see [`Self::consensus_block_count`].
     pub async fn await_htlc_funded(
         &self,
         outpoint: OutPoint,
         contract: &OutgoingContract,
     ) -> Result<u64, HtlcError> {
+        self.consensus_block_count().await?;
+
         loop {
             match self.module_api.outgoing_contract_expiration(outpoint).await {
                 Ok(Some((contract_id, remaining_blocks))) => {

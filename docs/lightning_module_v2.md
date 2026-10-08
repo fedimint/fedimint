@@ -117,12 +117,12 @@ All coordination data is exchanged out of band: the claim public key from the cl
 - The contract is always output zero of its funding transaction. The follow-up commands take the txid as a positional argument and the output index via `--out-idx`, which defaults to zero.
 - A point-locked contract has `"payment_image": { "Point": "<compressed pubkey hex>" }` instead.
 - The `amount` is in millisatoshis. Preimages are 32 bytes in hex; secret keys, public keys and forfeit signatures use the usual secp256k1 hex encodings.
-- The claimer's `await-funded` verifies that exactly this contract is funded at the outpoint and returns the number of blocks remaining until its expiration, and should be run before taking any action of its own, e.g. sending funds on another chain.
+- The claimer's `await-funded` verifies that exactly this contract is funded at the outpoint and returns the number of blocks remaining until its expiration, and should be run before taking any action of its own, e.g. sending funds on another chain. Like `create` and `claim`, it fails until the federation has reached consensus on a nonzero block count, since a remaining lifetime measured against a block count of zero would be overstated.
 
 ### Secret inputs
 The claim secret key and the preimage control the locked funds, so the CLI never takes them as command-line arguments, where shell history and process listings could expose them:
 
-- `lnv2 htlc new-claim-keypair --secret-key-file <path>` writes the claim secret key as hex to a new file readable only by its owner, refuses to overwrite an existing file, and prints only the public key.
+- `lnv2 htlc new-claim-keypair --secret-key-file <path>` writes the claim secret key as hex to a new file readable only by its owner, refuses to overwrite an existing file, and prints only the public key as `{ "public_key": "<compressed pubkey hex>" }`.
 - `lnv2 htlc claim` reads the claim secret key from `--claim-sk-file` and the preimage from `--preimage-file`; `lnv2 htlc forfeit` reads the claim secret key from `--claim-sk-file`.
 - Each file holds a single hex value, optionally followed by one line ending. Pass `-` to read a value from stdin instead; at most one input per command can use stdin.
 
