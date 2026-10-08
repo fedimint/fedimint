@@ -3,7 +3,7 @@
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>std::time::Duration;
 <a href=#4 id=4 data-nosnippet>4</a>
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>anyhow::{bail, ensure};
-<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>bitcoin::hashes::sha256;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>bitcoin::hashes::{Hash, sha256};
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>clap::{Parser, Subcommand};
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>devimint::devfed::{DevFed, DevJitFed};
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>devimint::envs::FM_CLIENT_DIR_ENV;
@@ -19,7 +19,7 @@
 <a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>fedimint_core::util::{backoff_util, retry, write_overwrite_async};
 <a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>fedimint_lnurl::{LnurlResponse, VerifyResponse, parse_lnurl};
 <a href=#21 id=21 data-nosnippet>21</a><span class="kw">use </span>fedimint_lnv2_client::FinalSendOperationState;
-<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>lightning_invoice::Bolt11Invoice;
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span>lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescriptionRef};
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>serde::Deserialize;
 <a href=#24 id=24 data-nosnippet>24</a><span class="kw">use </span>tokio::try_join;
 <a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>tracing::info;
@@ -1272,93 +1272,111 @@
 <a href=#1272 id=1272 data-nosnippet>1272</a><span class="attr">#[derive(Deserialize, Clone)]
 <a href=#1273 id=1273 data-nosnippet>1273</a></span><span class="kw">struct </span>LnUrlPayResponse {
 <a href=#1274 id=1274 data-nosnippet>1274</a>    callback: String,
-<a href=#1275 id=1275 data-nosnippet>1275</a>}
-<a href=#1276 id=1276 data-nosnippet>1276</a>
-<a href=#1277 id=1277 data-nosnippet>1277</a><span class="attr">#[derive(Deserialize, Clone)]
-<a href=#1278 id=1278 data-nosnippet>1278</a></span><span class="kw">struct </span>LnUrlPayInvoiceResponse {
-<a href=#1279 id=1279 data-nosnippet>1279</a>    pr: Bolt11Invoice,
-<a href=#1280 id=1280 data-nosnippet>1280</a>    verify: String,
-<a href=#1281 id=1281 data-nosnippet>1281</a>}
-<a href=#1282 id=1282 data-nosnippet>1282</a>
-<a href=#1283 id=1283 data-nosnippet>1283</a><span class="kw">async fn </span>fetch_invoice(lnurl: String, amount_msat: u64) -&gt; anyhow::Result&lt;(Bolt11Invoice, String)&gt; {
-<a href=#1284 id=1284 data-nosnippet>1284</a>    <span class="kw">let </span>url = parse_lnurl(<span class="kw-2">&amp;</span>lnurl).ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Invalid LNURL"</span>))<span class="question-mark">?</span>;
+<a href=#1275 id=1275 data-nosnippet>1275</a>    metadata: String,
+<a href=#1276 id=1276 data-nosnippet>1276</a>}
+<a href=#1277 id=1277 data-nosnippet>1277</a>
+<a href=#1278 id=1278 data-nosnippet>1278</a><span class="attr">#[derive(Deserialize, Clone)]
+<a href=#1279 id=1279 data-nosnippet>1279</a></span><span class="kw">struct </span>LnUrlPayInvoiceResponse {
+<a href=#1280 id=1280 data-nosnippet>1280</a>    pr: Bolt11Invoice,
+<a href=#1281 id=1281 data-nosnippet>1281</a>    <span class="comment">// LUD-06 requires this field, so parsing fails if the service omits it
+<a href=#1282 id=1282 data-nosnippet>1282</a>    </span>routes: Vec&lt;serde_json::Value&gt;,
+<a href=#1283 id=1283 data-nosnippet>1283</a>    verify: String,
+<a href=#1284 id=1284 data-nosnippet>1284</a>}
 <a href=#1285 id=1285 data-nosnippet>1285</a>
-<a href=#1286 id=1286 data-nosnippet>1286</a>    <span class="kw">let </span>response = reqwest::get(url).<span class="kw">await</span><span class="question-mark">?</span>.json::&lt;LnUrlPayResponse&gt;().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1287 id=1287 data-nosnippet>1287</a>
-<a href=#1288 id=1288 data-nosnippet>1288</a>    <span class="kw">let </span>callback_url = <span class="macro">format!</span>(<span class="string">"{}?amount={}"</span>, response.callback, amount_msat);
-<a href=#1289 id=1289 data-nosnippet>1289</a>
-<a href=#1290 id=1290 data-nosnippet>1290</a>    <span class="kw">let </span>response = reqwest::get(callback_url)
-<a href=#1291 id=1291 data-nosnippet>1291</a>        .<span class="kw">await</span><span class="question-mark">?
-<a href=#1292 id=1292 data-nosnippet>1292</a>        </span>.json::&lt;LnUrlPayInvoiceResponse&gt;()
-<a href=#1293 id=1293 data-nosnippet>1293</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1294 id=1294 data-nosnippet>1294</a>
-<a href=#1295 id=1295 data-nosnippet>1295</a>    <span class="macro">ensure!</span>(
-<a href=#1296 id=1296 data-nosnippet>1296</a>        response.pr.amount_milli_satoshis() == <span class="prelude-val">Some</span>(amount_msat),
-<a href=#1297 id=1297 data-nosnippet>1297</a>        <span class="string">"Invoice amount is not set"
-<a href=#1298 id=1298 data-nosnippet>1298</a>    </span>);
-<a href=#1299 id=1299 data-nosnippet>1299</a>
-<a href=#1300 id=1300 data-nosnippet>1300</a>    <span class="prelude-val">Ok</span>((response.pr, response.verify))
-<a href=#1301 id=1301 data-nosnippet>1301</a>}
+<a href=#1286 id=1286 data-nosnippet>1286</a><span class="kw">async fn </span>fetch_invoice(lnurl: String, amount_msat: u64) -&gt; anyhow::Result&lt;(Bolt11Invoice, String)&gt; {
+<a href=#1287 id=1287 data-nosnippet>1287</a>    <span class="kw">let </span>url = parse_lnurl(<span class="kw-2">&amp;</span>lnurl).ok_or_else(|| <span class="macro">anyhow::anyhow!</span>(<span class="string">"Invalid LNURL"</span>))<span class="question-mark">?</span>;
+<a href=#1288 id=1288 data-nosnippet>1288</a>
+<a href=#1289 id=1289 data-nosnippet>1289</a>    <span class="kw">let </span>response = reqwest::get(url).<span class="kw">await</span><span class="question-mark">?</span>.json::&lt;LnUrlPayResponse&gt;().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1290 id=1290 data-nosnippet>1290</a>
+<a href=#1291 id=1291 data-nosnippet>1291</a>    <span class="kw">let </span>callback_url = <span class="macro">format!</span>(<span class="string">"{}?amount={}"</span>, response.callback, amount_msat);
+<a href=#1292 id=1292 data-nosnippet>1292</a>
+<a href=#1293 id=1293 data-nosnippet>1293</a>    <span class="kw">let </span>invoice_response = reqwest::get(callback_url)
+<a href=#1294 id=1294 data-nosnippet>1294</a>        .<span class="kw">await</span><span class="question-mark">?
+<a href=#1295 id=1295 data-nosnippet>1295</a>        </span>.json::&lt;LnUrlPayInvoiceResponse&gt;()
+<a href=#1296 id=1296 data-nosnippet>1296</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1297 id=1297 data-nosnippet>1297</a>
+<a href=#1298 id=1298 data-nosnippet>1298</a>    <span class="macro">ensure!</span>(
+<a href=#1299 id=1299 data-nosnippet>1299</a>        invoice_response.pr.amount_milli_satoshis() == <span class="prelude-val">Some</span>(amount_msat),
+<a href=#1300 id=1300 data-nosnippet>1300</a>        <span class="string">"Invoice amount is not set"
+<a href=#1301 id=1301 data-nosnippet>1301</a>    </span>);
 <a href=#1302 id=1302 data-nosnippet>1302</a>
-<a href=#1303 id=1303 data-nosnippet>1303</a><span class="kw">async fn </span>test_iroh_payment(
-<a href=#1304 id=1304 data-nosnippet>1304</a>    client: <span class="kw-2">&amp;</span>Client,
-<a href=#1305 id=1305 data-nosnippet>1305</a>    gw_lnd: <span class="kw-2">&amp;</span>Gatewayd,
-<a href=#1306 id=1306 data-nosnippet>1306</a>    gw_ldk: <span class="kw-2">&amp;</span>Gatewayd,
-<a href=#1307 id=1307 data-nosnippet>1307</a>    online_peers: <span class="kw-2">&amp;</span>[usize],
-<a href=#1308 id=1308 data-nosnippet>1308</a>) -&gt; anyhow::Result&lt;()&gt; {
-<a href=#1309 id=1309 data-nosnippet>1309</a>    <span class="macro">info!</span>(<span class="string">"Testing iroh payment..."</span>);
-<a href=#1310 id=1310 data-nosnippet>1310</a>    <span class="comment">// The send below relies on automatic gateway selection picking the iroh
-<a href=#1311 id=1311 data-nosnippet>1311</a>    // gateway, so the gateways devimint added on startup have to go first.
-<a href=#1312 id=1312 data-nosnippet>1312</a>    </span>remove_all_gateways(client, online_peers).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1313 id=1313 data-nosnippet>1313</a>    <span class="kw">for </span><span class="kw-2">&amp;</span>peer <span class="kw">in </span>online_peers {
-<a href=#1314 id=1314 data-nosnippet>1314</a>        add_gateway(client, peer, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1315 id=1315 data-nosnippet>1315</a>    }
-<a href=#1316 id=1316 data-nosnippet>1316</a>
-<a href=#1317 id=1317 data-nosnippet>1317</a>    <span class="comment">// If the client is below v0.10.0, also add the HTTP address so that the client
-<a href=#1318 id=1318 data-nosnippet>1318</a>    // can fallback to using that, since the iroh gateway will fail.
-<a href=#1319 id=1319 data-nosnippet>1319</a>    </span><span class="kw">if </span>util::FedimintCli::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA
-<a href=#1320 id=1320 data-nosnippet>1320</a>        || gw_lnd.gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA
-<a href=#1321 id=1321 data-nosnippet>1321</a>    {
-<a href=#1322 id=1322 data-nosnippet>1322</a>        <span class="kw">for </span><span class="kw-2">&amp;</span>peer <span class="kw">in </span>online_peers {
-<a href=#1323 id=1323 data-nosnippet>1323</a>            add_gateway(client, peer, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1324 id=1324 data-nosnippet>1324</a>        }
-<a href=#1325 id=1325 data-nosnippet>1325</a>    }
-<a href=#1326 id=1326 data-nosnippet>1326</a>
-<a href=#1327 id=1327 data-nosnippet>1327</a>    <span class="kw">let </span>invoice = gw_ldk.client().create_invoice(<span class="number">5_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1328 id=1328 data-nosnippet>1328</a>
-<a href=#1329 id=1329 data-nosnippet>1329</a>    <span class="kw">let </span>send_op = serde_json::from_value::&lt;OperationId&gt;(
-<a href=#1330 id=1330 data-nosnippet>1330</a>        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"send"</span>, invoice,)
-<a href=#1331 id=1331 data-nosnippet>1331</a>            .out_json()
-<a href=#1332 id=1332 data-nosnippet>1332</a>            .<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#1333 id=1333 data-nosnippet>1333</a>    )<span class="question-mark">?</span>;
+<a href=#1303 id=1303 data-nosnippet>1303</a>    <span class="macro">ensure!</span>(
+<a href=#1304 id=1304 data-nosnippet>1304</a>        invoice_response.routes.is_empty(),
+<a href=#1305 id=1305 data-nosnippet>1305</a>        <span class="string">"LUD-06 requires routes to be an empty array"
+<a href=#1306 id=1306 data-nosnippet>1306</a>    </span>);
+<a href=#1307 id=1307 data-nosnippet>1307</a>
+<a href=#1308 id=1308 data-nosnippet>1308</a>    <span class="kw">let </span>metadata_hash = sha256::Hash::hash(response.metadata.as_bytes());
+<a href=#1309 id=1309 data-nosnippet>1309</a>
+<a href=#1310 id=1310 data-nosnippet>1310</a>    <span class="macro">ensure!</span>(
+<a href=#1311 id=1311 data-nosnippet>1311</a>        <span class="macro">matches!</span>(
+<a href=#1312 id=1312 data-nosnippet>1312</a>            invoice_response.pr.description(),
+<a href=#1313 id=1313 data-nosnippet>1313</a>            Bolt11InvoiceDescriptionRef::Hash(hash) <span class="kw">if </span>hash.<span class="number">0 </span>== metadata_hash
+<a href=#1314 id=1314 data-nosnippet>1314</a>        ),
+<a href=#1315 id=1315 data-nosnippet>1315</a>        <span class="string">"Invoice does not commit to the LNURL metadata via its description hash (LUD-06)"
+<a href=#1316 id=1316 data-nosnippet>1316</a>    </span>);
+<a href=#1317 id=1317 data-nosnippet>1317</a>
+<a href=#1318 id=1318 data-nosnippet>1318</a>    <span class="prelude-val">Ok</span>((invoice_response.pr, invoice_response.verify))
+<a href=#1319 id=1319 data-nosnippet>1319</a>}
+<a href=#1320 id=1320 data-nosnippet>1320</a>
+<a href=#1321 id=1321 data-nosnippet>1321</a><span class="kw">async fn </span>test_iroh_payment(
+<a href=#1322 id=1322 data-nosnippet>1322</a>    client: <span class="kw-2">&amp;</span>Client,
+<a href=#1323 id=1323 data-nosnippet>1323</a>    gw_lnd: <span class="kw-2">&amp;</span>Gatewayd,
+<a href=#1324 id=1324 data-nosnippet>1324</a>    gw_ldk: <span class="kw-2">&amp;</span>Gatewayd,
+<a href=#1325 id=1325 data-nosnippet>1325</a>    online_peers: <span class="kw-2">&amp;</span>[usize],
+<a href=#1326 id=1326 data-nosnippet>1326</a>) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#1327 id=1327 data-nosnippet>1327</a>    <span class="macro">info!</span>(<span class="string">"Testing iroh payment..."</span>);
+<a href=#1328 id=1328 data-nosnippet>1328</a>    <span class="comment">// The send below relies on automatic gateway selection picking the iroh
+<a href=#1329 id=1329 data-nosnippet>1329</a>    // gateway, so the gateways devimint added on startup have to go first.
+<a href=#1330 id=1330 data-nosnippet>1330</a>    </span>remove_all_gateways(client, online_peers).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1331 id=1331 data-nosnippet>1331</a>    <span class="kw">for </span><span class="kw-2">&amp;</span>peer <span class="kw">in </span>online_peers {
+<a href=#1332 id=1332 data-nosnippet>1332</a>        add_gateway(client, peer, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1333 id=1333 data-nosnippet>1333</a>    }
 <a href=#1334 id=1334 data-nosnippet>1334</a>
-<a href=#1335 id=1335 data-nosnippet>1335</a>    <span class="kw">let </span>send_state = common::await_send(client, send_op).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1336 id=1336 data-nosnippet>1336</a>    <span class="macro">assert!</span>(
-<a href=#1337 id=1337 data-nosnippet>1337</a>        <span class="macro">matches!</span>(send_state, FinalSendOperationState::Success(<span class="kw">_</span>)),
-<a href=#1338 id=1338 data-nosnippet>1338</a>        <span class="string">"unexpected send state: {send_state:?}"
-<a href=#1339 id=1339 data-nosnippet>1339</a>    </span>);
-<a href=#1340 id=1340 data-nosnippet>1340</a>
-<a href=#1341 id=1341 data-nosnippet>1341</a>    <span class="kw">let </span>(invoice, receive_op) = serde_json::from_value::&lt;(Bolt11Invoice, OperationId)&gt;(
-<a href=#1342 id=1342 data-nosnippet>1342</a>        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"receive"</span>, <span class="string">"5000000"</span>,)
-<a href=#1343 id=1343 data-nosnippet>1343</a>            .out_json()
-<a href=#1344 id=1344 data-nosnippet>1344</a>            .<span class="kw">await</span><span class="question-mark">?</span>,
-<a href=#1345 id=1345 data-nosnippet>1345</a>    )<span class="question-mark">?</span>;
+<a href=#1335 id=1335 data-nosnippet>1335</a>    <span class="comment">// If the client is below v0.10.0, also add the HTTP address so that the client
+<a href=#1336 id=1336 data-nosnippet>1336</a>    // can fallback to using that, since the iroh gateway will fail.
+<a href=#1337 id=1337 data-nosnippet>1337</a>    </span><span class="kw">if </span>util::FedimintCli::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA
+<a href=#1338 id=1338 data-nosnippet>1338</a>        || gw_lnd.gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA
+<a href=#1339 id=1339 data-nosnippet>1339</a>    {
+<a href=#1340 id=1340 data-nosnippet>1340</a>        <span class="kw">for </span><span class="kw-2">&amp;</span>peer <span class="kw">in </span>online_peers {
+<a href=#1341 id=1341 data-nosnippet>1341</a>            add_gateway(client, peer, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1342 id=1342 data-nosnippet>1342</a>        }
+<a href=#1343 id=1343 data-nosnippet>1343</a>    }
+<a href=#1344 id=1344 data-nosnippet>1344</a>
+<a href=#1345 id=1345 data-nosnippet>1345</a>    <span class="kw">let </span>invoice = gw_ldk.client().create_invoice(<span class="number">5_000_000</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#1346 id=1346 data-nosnippet>1346</a>
-<a href=#1347 id=1347 data-nosnippet>1347</a>    gw_ldk.client().pay_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1348 id=1348 data-nosnippet>1348</a>    common::await_receive_claimed(client, receive_op).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1349 id=1349 data-nosnippet>1349</a>
-<a href=#1350 id=1350 data-nosnippet>1350</a>    <span class="kw">if </span>util::FedimintCli::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA
-<a href=#1351 id=1351 data-nosnippet>1351</a>        || gw_lnd.gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA
-<a href=#1352 id=1352 data-nosnippet>1352</a>    {
-<a href=#1353 id=1353 data-nosnippet>1353</a>        <span class="kw">for </span><span class="kw-2">&amp;</span>peer <span class="kw">in </span>online_peers {
-<a href=#1354 id=1354 data-nosnippet>1354</a>            remove_gateway(client, peer, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1355 id=1355 data-nosnippet>1355</a>        }
-<a href=#1356 id=1356 data-nosnippet>1356</a>    }
-<a href=#1357 id=1357 data-nosnippet>1357</a>
-<a href=#1358 id=1358 data-nosnippet>1358</a>    <span class="kw">for </span><span class="kw-2">&amp;</span>peer <span class="kw">in </span>online_peers {
-<a href=#1359 id=1359 data-nosnippet>1359</a>        remove_gateway(client, peer, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1360 id=1360 data-nosnippet>1360</a>    }
-<a href=#1361 id=1361 data-nosnippet>1361</a>
-<a href=#1362 id=1362 data-nosnippet>1362</a>    <span class="prelude-val">Ok</span>(())
-<a href=#1363 id=1363 data-nosnippet>1363</a>}
+<a href=#1347 id=1347 data-nosnippet>1347</a>    <span class="kw">let </span>send_op = serde_json::from_value::&lt;OperationId&gt;(
+<a href=#1348 id=1348 data-nosnippet>1348</a>        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"send"</span>, invoice,)
+<a href=#1349 id=1349 data-nosnippet>1349</a>            .out_json()
+<a href=#1350 id=1350 data-nosnippet>1350</a>            .<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#1351 id=1351 data-nosnippet>1351</a>    )<span class="question-mark">?</span>;
+<a href=#1352 id=1352 data-nosnippet>1352</a>
+<a href=#1353 id=1353 data-nosnippet>1353</a>    <span class="kw">let </span>send_state = common::await_send(client, send_op).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1354 id=1354 data-nosnippet>1354</a>    <span class="macro">assert!</span>(
+<a href=#1355 id=1355 data-nosnippet>1355</a>        <span class="macro">matches!</span>(send_state, FinalSendOperationState::Success(<span class="kw">_</span>)),
+<a href=#1356 id=1356 data-nosnippet>1356</a>        <span class="string">"unexpected send state: {send_state:?}"
+<a href=#1357 id=1357 data-nosnippet>1357</a>    </span>);
+<a href=#1358 id=1358 data-nosnippet>1358</a>
+<a href=#1359 id=1359 data-nosnippet>1359</a>    <span class="kw">let </span>(invoice, receive_op) = serde_json::from_value::&lt;(Bolt11Invoice, OperationId)&gt;(
+<a href=#1360 id=1360 data-nosnippet>1360</a>        <span class="macro">cmd!</span>(client, <span class="string">"module"</span>, <span class="string">"lnv2"</span>, <span class="string">"receive"</span>, <span class="string">"5000000"</span>,)
+<a href=#1361 id=1361 data-nosnippet>1361</a>            .out_json()
+<a href=#1362 id=1362 data-nosnippet>1362</a>            .<span class="kw">await</span><span class="question-mark">?</span>,
+<a href=#1363 id=1363 data-nosnippet>1363</a>    )<span class="question-mark">?</span>;
+<a href=#1364 id=1364 data-nosnippet>1364</a>
+<a href=#1365 id=1365 data-nosnippet>1365</a>    gw_ldk.client().pay_invoice(invoice).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1366 id=1366 data-nosnippet>1366</a>    common::await_receive_claimed(client, receive_op).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1367 id=1367 data-nosnippet>1367</a>
+<a href=#1368 id=1368 data-nosnippet>1368</a>    <span class="kw">if </span>util::FedimintCli::version_or_default().<span class="kw">await </span>&lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA
+<a href=#1369 id=1369 data-nosnippet>1369</a>        || gw_lnd.gatewayd_version &lt; <span class="kw-2">*</span>VERSION_0_10_0_ALPHA
+<a href=#1370 id=1370 data-nosnippet>1370</a>    {
+<a href=#1371 id=1371 data-nosnippet>1371</a>        <span class="kw">for </span><span class="kw-2">&amp;</span>peer <span class="kw">in </span>online_peers {
+<a href=#1372 id=1372 data-nosnippet>1372</a>            remove_gateway(client, peer, <span class="kw-2">&amp;</span>gw_lnd.addr).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1373 id=1373 data-nosnippet>1373</a>        }
+<a href=#1374 id=1374 data-nosnippet>1374</a>    }
+<a href=#1375 id=1375 data-nosnippet>1375</a>
+<a href=#1376 id=1376 data-nosnippet>1376</a>    <span class="kw">for </span><span class="kw-2">&amp;</span>peer <span class="kw">in </span>online_peers {
+<a href=#1377 id=1377 data-nosnippet>1377</a>        remove_gateway(client, peer, <span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"iroh://{}"</span>, gw_lnd.node_id)).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1378 id=1378 data-nosnippet>1378</a>    }
+<a href=#1379 id=1379 data-nosnippet>1379</a>
+<a href=#1380 id=1380 data-nosnippet>1380</a>    <span class="prelude-val">Ok</span>(())
+<a href=#1381 id=1381 data-nosnippet>1381</a>}
 </code></pre></div></section></main></body></html>

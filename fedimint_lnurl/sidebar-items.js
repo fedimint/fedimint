@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["LnurlResponse"],"fn":["encode_lnurl","get_invoice","parse_address","parse_lnurl","pay_request_tag","request","verify_invoice"],"struct":["InvoiceResponse","PayResponse","VerifyResponse"]};
+window.SIDEBAR_ITEMS = {"enum":["LnurlResponse"],"fn":["encode_lnurl","get_invoice","ok_status","parse_address","parse_lnurl","pay_request_tag","request","verify_invoice"],"struct":["InvoiceResponse","PayResponse","VerifyResponse"]};
