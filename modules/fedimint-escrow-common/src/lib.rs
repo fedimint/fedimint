@@ -1,5 +1,6 @@
 use std::fmt;
 
+use anyhow;
 use fedimint_core::bitcoin::hashes::{Hash, HashEngine, sha256};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
@@ -7,7 +8,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::secp256k1::schnorr::Signature;
-use fedimint_core::{Amount, anyhow, hex, plugin_types_trait_impl_common};
+use fedimint_core::{Amount, hex, plugin_types_trait_impl_common};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 

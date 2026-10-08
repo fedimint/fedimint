@@ -1711,6 +1711,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "const-crc32-nostd"
+version = "1.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "808ac43170e95b11dd23d78aa9eaac5bea45776a602955552c4e833f3f0f823d"
+
+[[package]]
 name = "const-oid"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2431,8 +2437,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-=======
 name = "derive-getters"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2444,28 +2448,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive_builder"
-version = "0.20.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "507dfb09ea8b7fa618fcf76e953f4f5e192547945816d5358edffe39f6f94947"
-dependencies = [
- "derive_builder_macro",
-]
-
-[[package]]
-name = "derive_builder_core"
-version = "0.20.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d5bcf7b024d6835cfb3d473887cd966994907effbe9227e8c8219824d06c4e8"
-dependencies = [
- "darling 0.20.11",
- "proc-macro2",
- "quote",
- "syn 2.0.104",
-]
-
-[[package]]
->>>>>>> c304206298e (feat: implemented frost dkg with btreemap making transport explicitly)
 name = "derive_builder_core_fork_arti"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3623,7 +3605,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-escrow-client"
-version = "0.12.0-alpha"
+version = "0.13.0-alpha"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -3646,28 +3628,29 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.1",
- "strum_macros 0.27.1",
- "thiserror 2.0.18",
+ "strum_macros 0.28.0",
+ "thiserror 2.0.21",
  "tokio",
  "tracing",
 ]
 
 [[package]]
 name = "fedimint-escrow-common"
-version = "0.12.0-alpha"
+version = "0.13.0-alpha"
 dependencies = [
+ "anyhow",
  "clap",
  "fedimint-core",
  "futures",
  "serde",
  "strum 0.27.1",
- "strum_macros 0.27.1",
- "thiserror 2.0.18",
+ "strum_macros 0.28.0",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "fedimint-escrow-server"
-version = "0.12.0-alpha"
+version = "0.13.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3683,16 +3666,16 @@ dependencies = [
  "ring",
  "serde",
  "strum 0.27.1",
- "strum_macros 0.27.1",
+ "strum_macros 0.28.0",
  "test-log",
- "thiserror 2.0.18",
+ "thiserror 2.0.21",
  "tokio",
  "tracing",
 ]
 
 [[package]]
 name = "fedimint-escrow-tests"
-version = "0.12.0-alpha"
+version = "0.13.0-alpha"
 dependencies = [
  "fedimint-client",
  "fedimint-core",
@@ -5478,7 +5461,7 @@ dependencies = [
  "rand_core 0.6.4",
  "serde",
  "serdect 0.2.0",
- "thiserror 2.0.18",
+ "thiserror 2.0.21",
  "visibility",
  "zeroize",
  "zeroize_derive",
