@@ -2,11 +2,11 @@ use fedimint_core::encode_bolt11_invoice_features_without_length;
 use hex::FromHex;
 use lightning::types::features::Bolt11InvoiceFeatures;
 use tonic_lnd::lnrpc::invoice::InvoiceState;
-use tonic_lnd::lnrpc::{InvoiceHtlc, InvoiceHtlcState};
+use tonic_lnd::lnrpc::{Invoice, InvoiceHtlc, InvoiceHtlcState};
 
 use super::{
     HoldInvoiceAction, PaymentActionKind, hold_invoice_action, hold_invoice_claim_deadline,
-    wire_features_to_lnd_feature_vec,
+    invoice_preimage_hex, wire_features_to_lnd_feature_vec,
 };
 
 /// An HTLC carrying an MPP record, as every non-keysend HTLC to an LND invoice
@@ -77,6 +77,34 @@ fn hold_invoice_claim_deadline_distrusts_accepted_keysend_htlcs() {
         ]),
         964
     );
+}
+
+/// LND leaves `r_preimage` empty until a HOLD invoice settles. Looking up an
+/// in-flight or canceled LNv2 receive used to panic the gateway; it now has no
+/// preimage instead.
+#[test]
+fn invoice_without_preimage_has_none() {
+    for state in [
+        InvoiceState::Open,
+        InvoiceState::Accepted,
+        InvoiceState::Canceled,
+    ] {
+        let invoice = Invoice {
+            state: state.into(),
+            ..Default::default()
+        };
+        assert_eq!(invoice_preimage_hex(&invoice), None);
+    }
+}
+
+#[test]
+fn settled_invoice_has_hex_preimage() {
+    let invoice = Invoice {
+        r_preimage: vec![0xab; 32],
+        state: InvoiceState::Settled.into(),
+        ..Default::default()
+    };
+    assert_eq!(invoice_preimage_hex(&invoice), Some("ab".repeat(32)));
 }
 
 #[test]
