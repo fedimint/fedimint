@@ -110,7 +110,7 @@ use fedimintd_envs::FM_FORCE_API_SECRETS_ENV;
 use format as f;
 use net_overrides::{FederationsNetOverrides, FedimintdPeerOverrides};
 
-use crate::envs::FM_FAUCET_PORT_ENV;
+use crate::envs::{FM_FAUCET_PORT_ENV, FM_GATEWAY_BASE_PORT_ENV};
 use crate::federation::{
     FEDIMINTD_METRICS_PORT_OFFSET, FEDIMINTD_UI_PORT_OFFSET, PORTS_PER_FEDIMINTD,
 };
@@ -128,6 +128,16 @@ const GATEWAY_PORT_OFFSET_LDK: u16 = 5;
 const GATEWAY_PORT_OFFSET_LDK_METRICS: u16 = 6;
 const GATEWAY_PORT_OFFSET_LDK2: u16 = 7;
 const GATEWAY_PORT_OFFSET_LDK2_METRICS: u16 = 8;
+
+fn gateway_port(base: u16, offset: u16) -> anyhow::Result<u16> {
+    base.checked_add(offset).with_context(|| {
+        f!(
+            "--gateway-base-port/{FM_GATEWAY_BASE_PORT_ENV} value {base} must accommodate \
+             gateway port offset {GATEWAY_PORT_OFFSET_LDK2_METRICS} (maximum base port {})",
+            u16::MAX - GATEWAY_PORT_OFFSET_LDK2_METRICS
+        )
+    })
+}
 
 declare_vars! {
     Global = (test_dir: &Path, num_feds: usize, fed_size: usize, offline_nodes: usize, federation_base_ports: u16, num_gateways: usize, gateway_base_port: Option<u16>) =>
@@ -164,27 +174,27 @@ declare_vars! {
         FM_PORT_ESPLORA_MONITORING: u16 = port_alloc(1)?; env: "FM_PORT_ESPLORA_MONITORING";
         FM_PORT_ESPLORA_ELECTRUM: u16 = port_alloc(1)?; env: "FM_PORT_ESPLORA_ELECTRUM";
         FM_PORT_GW_LND: u16 = match gateway_base_port {
-            Some(b) => b + GATEWAY_PORT_OFFSET_LND,
+            Some(b) => gateway_port(b, GATEWAY_PORT_OFFSET_LND)?,
             None => port_alloc(1)?,
         }; env: "FM_PORT_GW_LND";
         FM_PORT_GW_LND_METRICS: u16 = match gateway_base_port {
-            Some(b) => b + GATEWAY_PORT_OFFSET_LND_METRICS,
+            Some(b) => gateway_port(b, GATEWAY_PORT_OFFSET_LND_METRICS)?,
             None => port_alloc(1)?,
         }; env: "FM_PORT_GW_LND_METRICS";
         FM_PORT_GW_LDK: u16 = match gateway_base_port {
-            Some(b) => b + GATEWAY_PORT_OFFSET_LDK,
+            Some(b) => gateway_port(b, GATEWAY_PORT_OFFSET_LDK)?,
             None => port_alloc(1)?,
         }; env: "FM_PORT_GW_LDK";
         FM_PORT_GW_LDK_METRICS: u16 = match gateway_base_port {
-            Some(b) => b + GATEWAY_PORT_OFFSET_LDK_METRICS,
+            Some(b) => gateway_port(b, GATEWAY_PORT_OFFSET_LDK_METRICS)?,
             None => port_alloc(1)?,
         }; env: "FM_PORT_GW_LDK_METRICS";
         FM_PORT_GW_LDK2: u16 = match gateway_base_port {
-            Some(b) => b + GATEWAY_PORT_OFFSET_LDK2,
+            Some(b) => gateway_port(b, GATEWAY_PORT_OFFSET_LDK2)?,
             None => port_alloc(1)?,
         }; env: "FM_PORT_GW_LDK2";
         FM_PORT_GW_LDK2_METRICS: u16 = match gateway_base_port {
-            Some(b) => b + GATEWAY_PORT_OFFSET_LDK2_METRICS,
+            Some(b) => gateway_port(b, GATEWAY_PORT_OFFSET_LDK2_METRICS)?,
             None => port_alloc(1)?,
         }; env: "FM_PORT_GW_LDK2_METRICS";
         FM_PORT_FAUCET: u16 = match std::env::var(FM_FAUCET_PORT_ENV) {
@@ -261,6 +271,9 @@ declare_vars! {
     }
 }
 
+#[cfg(test)]
+mod tests;
+
 impl Global {
     pub async fn new(
         test_dir: &Path,
@@ -270,6 +283,10 @@ impl Global {
         federations_base_port: Option<u16>,
         gateway_base_port: Option<u16>,
     ) -> anyhow::Result<Self> {
+        if let Some(gateway_base_port) = gateway_base_port {
+            gateway_port(gateway_base_port, GATEWAY_PORT_OFFSET_LDK2_METRICS)?;
+        }
+
         let federations_base_port = if let Some(federations_base_port) = federations_base_port {
             federations_base_port
         } else {
