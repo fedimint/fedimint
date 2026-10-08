@@ -59,7 +59,7 @@ use fedimint_ln_client::{
 };
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
-use fedimint_ln_common::contracts::{ContractId, Preimage};
+use fedimint_ln_common::contracts::{ContractId, FundedContract, Preimage};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
     GatewayRegistrationAuth, KIND, LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA,
@@ -78,8 +78,8 @@ use tracing::{debug, error, info, warn};
 
 use self::complete::GatewayCompleteStateMachine;
 use self::pay::{
-    GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
-    OutgoingPaymentError,
+    GatewayPayCancelContract, GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine,
+    GatewayPayStates, OutgoingPaymentError,
 };
 pub use crate::error::{
     GatewayClientV1Error, GatewayPayInvoiceError, HandleDirectSwapError, HandleInterceptedHtlcError,
@@ -894,13 +894,19 @@ impl GatewayClientModule {
 
     /// Pay lightning invoice on behalf of federation user
     ///
+    /// A funded contract whose invoice hash belongs to another operation is
+    /// cancelled without attempting a payment. The hash claim is retained.
+    ///
     /// # Errors
     ///
     /// Fails with [`GatewayPayInvoiceError::MissingInvoiceAmount`] if the
     /// invoice has no amount, [`GatewayPayInvoiceError::PrunedInvoiceRejected`]
     /// if the gateway cannot pay a pruned invoice,
     /// [`GatewayPayInvoiceError::PaymentHashAlreadyClaimed`] if another
-    /// operation already claimed the invoice's payment hash,
+    /// operation already claimed the invoice's payment hash and this request
+    /// has no matching funded contract to refund,
+    /// [`GatewayPayInvoiceError::ContractLookup`] if the contract cannot be
+    /// fetched for a refund,
     /// [`GatewayPayInvoiceError::Unauthorized`] if a payment of this contract
     /// is already under way and the request does not carry the
     /// authentication it was started with,
@@ -932,7 +938,7 @@ impl GatewayClientModule {
         // across LNv1, LNv2 and all federations; see the LNv2 `send_payment`.
         // The claim is taken before the operation is created, and a retry of the
         // same contract finds its own claim.
-        if !self
+        let initial_state = if self
             .lightning_manager
             .claim_payment_image(
                 &fedimint_lnv2_common::contracts::PaymentImage::Hash(
@@ -942,8 +948,33 @@ impl GatewayClientModule {
             )
             .await
         {
-            return Err(GatewayPayInvoiceError::PaymentHashAlreadyClaimed);
-        }
+            GatewayPayStates::PayInvoice(GatewayPayInvoice {
+                pay_invoice_payload: payload.clone(),
+            })
+        } else {
+            let account = self
+                .module_api
+                .fetch_contract(payload.contract_id)
+                .await
+                .map_err(GatewayPayInvoiceError::ContractLookup)?
+                .ok_or(GatewayPayInvoiceError::PaymentHashAlreadyClaimed)?;
+            let FundedContract::Outgoing(contract) = account.contract else {
+                return Err(GatewayPayInvoiceError::PaymentHashAlreadyClaimed);
+            };
+
+            if account.amount == Amount::ZERO
+                || contract.gateway_key != self.redeem_key.public_key()
+                || contract.hash != payload.payment_data.payment_hash()
+            {
+                return Err(GatewayPayInvoiceError::PaymentHashAlreadyClaimed);
+            }
+            GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract::for_claimed_hash(
+                OutgoingContractAccount {
+                    amount: account.amount,
+                    contract,
+                },
+            )))
+        };
 
         self.client_ctx.module_db()
             .autocommit(
@@ -997,9 +1028,7 @@ impl GatewayClientModule {
                         let state_machines =
                             vec![GatewayClientStateMachines::Pay(GatewayPayStateMachine {
                                 common: GatewayPayCommon { operation_id },
-                                state: GatewayPayStates::PayInvoice(GatewayPayInvoice {
-                                    pay_invoice_payload: payload.clone(),
-                                }),
+                                state: initial_state.clone(),
                             })];
 
                         let dyn_states = state_machines

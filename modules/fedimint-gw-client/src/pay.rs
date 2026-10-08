@@ -186,6 +186,8 @@ pub enum OutgoingPaymentErrorType {
     InvalidFederationConfiguration,
     #[error("Invalid invoice preimage")]
     InvalidInvoicePreimage,
+    #[error("A payment for this payment hash was already accepted")]
+    PaymentHashAlreadyClaimed,
 }
 
 #[derive(
@@ -1012,6 +1014,17 @@ pub struct GatewayPayCancelContract {
 }
 
 impl GatewayPayCancelContract {
+    pub(super) fn for_claimed_hash(contract: OutgoingContractAccount) -> Self {
+        Self {
+            error: OutgoingPaymentError {
+                error_type: OutgoingPaymentErrorType::PaymentHashAlreadyClaimed,
+                contract_id: contract.contract.contract_id(),
+                contract: Some(contract.clone()),
+            },
+            contract,
+        }
+    }
+
     fn transitions(
         &self,
         global_context: DynGlobalClientContext,
