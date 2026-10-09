@@ -3,12 +3,14 @@ mod tests;
 
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use bitcoin::{BlockHash, Transaction};
 use fedimint_core::envs::BitcoinRpcConfig;
+use fedimint_core::task::timeout;
 use fedimint_core::util::{FmtCompact as _, SafeUrl};
-use fedimint_core::{ChainId, Feerate};
+use fedimint_core::{ChainId, Feerate, runtime};
 use fedimint_logging::LOG_SERVER;
 use fedimint_server_core::bitcoin_rpc::{DynServerBitcoinRpc, IServerBitcoinRpc};
 use tracing::{info, warn};
@@ -23,6 +25,11 @@ use crate::esplora::EsploraClient;
 /// endpoints are available; it is not SPV or reconnection verification.
 /// Reads remain bitcoind-first, except block counts use Esplora while Core
 /// explicitly reports initial block download. Broadcast remains primary-first.
+/// How long the startup identity check waits on each backend. A backend that
+/// never answers must not hold up the server, and an unanswered probe is
+/// already handled as an unknown identity below.
+const STARTUP_CHAIN_ID_TIMEOUT: Duration = Duration::from_secs(10);
+
 #[derive(Debug)]
 pub struct BitcoindClientWithFallback {
     /// Primary full-node RPC.
@@ -61,9 +68,24 @@ impl BitcoindClientWithFallback {
         bitcoind_client: DynServerBitcoinRpc,
         esplora_client: DynServerBitcoinRpc,
     ) -> Result<Self> {
+        Self::from_clients_with_probe_timeout(
+            bitcoind_client,
+            esplora_client,
+            STARTUP_CHAIN_ID_TIMEOUT,
+        )
+        .await
+    }
+
+    /// As `from_clients`, with the identity probe bound given explicitly so a
+    /// test does not have to wait out the production one.
+    async fn from_clients_with_probe_timeout(
+        bitcoind_client: DynServerBitcoinRpc,
+        esplora_client: DynServerBitcoinRpc,
+        probe_timeout: Duration,
+    ) -> Result<Self> {
         let (primary, fallback) = tokio::join!(
-            bitcoind_client.get_chain_id(),
-            esplora_client.get_chain_id(),
+            Self::probe_chain_id(&bitcoind_client, probe_timeout),
+            Self::probe_chain_id(&esplora_client, probe_timeout),
         );
         let chain_id = match (primary, fallback) {
             (Ok(primary), Ok(fallback)) => {
@@ -104,6 +126,28 @@ impl BitcoindClientWithFallback {
             chain_id: cached_chain_id,
             bitcoind_ibd_complete: AtomicBool::new(false),
         })
+    }
+
+    /// Reads one backend's chain identity for the startup check, bounded so a
+    /// backend that never answers cannot hold up startup. Each probe is bounded
+    /// on its own, so a slow backend does not discard the other's answer.
+    ///
+    /// The probe runs as its own task rather than being awaited inline. The
+    /// bitcoind path reaches a synchronous RPC through `block_in_place`, which
+    /// a timeout around the future cannot interrupt while that call is being
+    /// polled, so the bound has to sit on waiting for the task. A probe that
+    /// outlives the bound is left to finish on its own and its answer dropped.
+    async fn probe_chain_id(client: &DynServerBitcoinRpc, bound: Duration) -> Result<ChainId> {
+        let client = client.clone();
+        let probe = runtime::spawn("bitcoin-startup-chain-id-probe", async move {
+            client.get_chain_id().await
+        });
+
+        match timeout(bound, probe).await {
+            Ok(Ok(chain_id)) => chain_id,
+            Ok(Err(..)) => Err(anyhow!("Chain identity probe did not complete")),
+            Err(..) => Err(anyhow!("Timed out reading the chain identity")),
+        }
     }
 
     async fn fallback_block_count(&self, primary: anyhow::Error) -> Result<u64> {
