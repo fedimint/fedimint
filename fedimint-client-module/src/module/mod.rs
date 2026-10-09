@@ -115,6 +115,10 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
 
     async fn has_active_states(&self, operation_id: OperationId) -> bool;
 
+    /// Waits until no state machine of the operation is running any more.
+    /// See `Client::await_no_active_states`.
+    async fn await_no_active_states(&self, operation_id: OperationId);
+
     async fn operation_exists(&self, operation_id: OperationId) -> bool;
 
     async fn config(&self) -> ClientConfig;
@@ -526,6 +530,18 @@ where
 
     pub async fn has_active_states(&self, op_id: OperationId) -> bool {
         self.client.get().has_active_states(op_id).await
+    }
+
+    /// Waits until no state machine of the operation is running any more:
+    /// every transaction it submitted has been accepted or rejected, and
+    /// every input and output state machine those started, the primary
+    /// module's among them, has reached its final state.
+    ///
+    /// Unlike [`Self::await_primary_module_outputs`] this needs no outputs
+    /// named, and does not report whether they were issued. See
+    /// `Client::await_no_active_states`.
+    pub async fn await_no_active_states(&self, op_id: OperationId) {
+        self.client.get().await_no_active_states(op_id).await;
     }
 
     pub async fn operation_exists(&self, op_id: OperationId) -> bool {

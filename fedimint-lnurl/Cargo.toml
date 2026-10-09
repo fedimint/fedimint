@@ -20,8 +20,11 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
+<<<<<<< HEAD
 thiserror = { workspace = true }
 
 [dev-dependencies]
 bitcoin = { workspace = true }
 serde_json.workspace = true
+=======
+>>>>>>> 9479309dea5010bc14eccf016516cc934101b935

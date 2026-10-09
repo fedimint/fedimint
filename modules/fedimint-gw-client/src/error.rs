@@ -124,6 +124,11 @@ pub enum GatewayPayInvoiceError {
     #[error("The gateway cannot pay the pruned invoice")]
     PrunedInvoiceRejected(#[source] GatewayClientV1Error),
 
+    /// Another operation already claimed the invoice's payment hash, so this
+    /// gateway will never pay it out for this contract.
+    #[error("A payment for this payment hash was already accepted")]
+    PaymentHashAlreadyClaimed,
+
     /// A payment of this contract is already under way, and the request does
     /// not carry the authentication it was started with.
     #[error("Not authorized to receive the preimage for contract {contract_id}")]

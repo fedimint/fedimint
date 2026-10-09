@@ -1,0 +1,94 @@
+id: ban-system-time-elapsed
+snapshots:
+  (&clock).elapsed():
+    labels:
+    - source: (&clock).elapsed()
+      style: primary
+      start: 0
+      end: 18
+  (clock).elapsed():
+    labels:
+    - source: (clock).elapsed()
+      style: primary
+      start: 0
+      end: 17
+  ? |
+    clock
+        .elapsed()
+  : labels:
+    - source: |-
+        clock
+            .elapsed()
+      style: primary
+      start: 0
+      end: 20
+  ? |
+    clock /* receiver */
+        .elapsed(/* no arguments */)
+  : labels:
+    - source: |-
+        clock /* receiver */
+            .elapsed(/* no arguments */)
+      style: primary
+      start: 0
+      end: 53
+  clock.elapsed():
+    labels:
+    - source: clock.elapsed()
+      style: primary
+      start: 0
+      end: 15
+  clock.elapsed().expect("clock moved backwards"):
+    labels:
+    - source: clock.elapsed()
+      style: primary
+      start: 0
+      end: 15
+  clock.elapsed::<'a, u32, 3>():
+    labels:
+    - source: clock.elapsed::<'a, u32, 3>()
+      style: primary
+      start: 0
+      end: 29
+  clock.elapsed::<u32>():
+    labels:
+    - source: clock.elapsed::<u32>()
+      style: primary
+      start: 0
+      end: 22
+  clock.inner.elapsed():
+    labels:
+    - source: clock.inner.elapsed()
+      style: primary
+      start: 0
+      end: 21
+  clocks[0].elapsed():
+    labels:
+    - source: clocks[0].elapsed()
+      style: primary
+      start: 0
+      end: 19
+  get_clock().await.elapsed():
+    labels:
+    - source: get_clock().await.elapsed()
+      style: primary
+      start: 0
+      end: 27
+  get_clock().elapsed():
+    labels:
+    - source: get_clock().elapsed()
+      style: primary
+      start: 0
+      end: 21
+  get_clock()?.elapsed():
+    labels:
+    - source: get_clock()?.elapsed()
+      style: primary
+      start: 0
+      end: 22
+  unrelated.elapsed():
+    labels:
+    - source: unrelated.elapsed()
+      style: primary
+      start: 0
+      end: 19
