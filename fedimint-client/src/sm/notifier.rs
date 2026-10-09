@@ -38,6 +38,14 @@ impl Notifier {
         }
     }
 
+    /// Subscribe to the state transitions of every module and operation.
+    ///
+    /// Unlike a [`ModuleNotifier`] subscription this replays nothing from the
+    /// database: the receiver only sees transitions notified after this call.
+    pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<DynState> {
+        self.broadcast.subscribe()
+    }
+
     /// Create a new notifier for a specific module instance that can only
     /// subscribe to the instance's state transitions
     pub fn module_notifier<S>(

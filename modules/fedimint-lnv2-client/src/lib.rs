@@ -23,7 +23,7 @@ use bitcoin::secp256k1;
 use db::{DbKeyPrefix, GatewayKey, IncomingContractStreamIndexKey};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client_module::error::{
-    ClientModuleError, OperationLookupError, TransactionSubmitError,
+    ClientModuleError, InsufficientBalanceError, OperationLookupError, TransactionSubmitError,
 };
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
@@ -46,7 +46,7 @@ use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::{FmtCompact as _, SafeUrl};
-use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send};
+use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send, runtime};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
@@ -65,7 +65,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use strum::IntoEnumIterator as _;
 use thiserror::Error;
-use tpe::{AggregateDecryptionKey, derive_agg_dk};
+use tpe::{AggregateDecryptionKey, AggregatePublicKey, derive_agg_dk};
 use tracing::warn;
 
 use crate::api::LightningFederationApi;
@@ -769,7 +769,12 @@ impl LightningClientModule {
                 transaction,
             )
             .await
-            .map_err(|e| SendPaymentError::FailedToFundPayment(e.fmt_compact().to_string()))?;
+            .map_err(|e| match e {
+                TransactionSubmitError::InsufficientFunds(e) => {
+                    SendPaymentError::InsufficientFunds(e)
+                }
+                e => SendPaymentError::FailedToFundPayment(e.fmt_compact().to_string()),
+            })?;
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
 
@@ -1338,7 +1343,14 @@ impl LightningClientModule {
     ) -> Option<OperationId> {
         let operation_id = OperationId::from_encodable(&contract.clone());
 
-        let (claim_keypair, agg_decryption_key) = self.recover_contract_keys(sk, &contract)?;
+        let tpe_agg_pk = self.cfg.tpe_agg_pk;
+
+        let (claim_keypair, agg_decryption_key) = runtime::spawn_blocking({
+            let contract = contract.clone();
+
+            move || recover_contract_keys(sk, &tpe_agg_pk, &contract)
+        })
+        .await?;
 
         let receive_sm = LightningClientStateMachines::Receive(ReceiveStateMachine {
             common: ReceiveSMCommon {
@@ -1363,38 +1375,6 @@ impl LightningClientModule {
             .ok();
 
         Some(operation_id)
-    }
-
-    fn recover_contract_keys(
-        &self,
-        sk: SecretKey,
-        contract: &IncomingContract,
-    ) -> Option<(Keypair, AggregateDecryptionKey)> {
-        let tweak = ecdh::SharedSecret::new(&contract.commitment.ephemeral_pk, &sk);
-
-        let encryption_seed = tweak
-            .secret_bytes()
-            .consensus_hash::<sha256::Hash>()
-            .to_byte_array();
-
-        let claim_keypair = sk
-            .mul_tweak(&Scalar::from_be_bytes(tweak.secret_bytes()).expect("Within curve order"))
-            .expect("Tweak is valid")
-            .keypair(secp256k1::SECP256K1);
-
-        if claim_keypair.public_key() != contract.commitment.claim_pk {
-            return None; // The claim key is not derived from our pk
-        }
-
-        let agg_decryption_key = derive_agg_dk(&self.cfg.tpe_agg_pk, &encryption_seed);
-
-        if !contract.verify_agg_decryption_key(&self.cfg.tpe_agg_pk, &agg_decryption_key) {
-            return None; // The decryption key is not derived from our pk
-        }
-
-        contract.decrypt_preimage(&agg_decryption_key)?;
-
-        Some((claim_keypair, agg_decryption_key))
     }
 
     /// Subscribe to all state updates of the receive operation.
@@ -1566,10 +1546,16 @@ impl LightningClientModule {
             // before quoting - recovering the keys is local arithmetic, the quote
             // reads the wallet - and skip the contracts the claim fee would swallow,
             // so that unsolicited dust never becomes an operation in the first place.
-            if self
-                .recover_contract_keys(self.lnurl_keypair.secret_key(), contract)
-                .is_none()
-            {
+            let keys = runtime::spawn_blocking({
+                let sk = self.lnurl_keypair.secret_key();
+                let tpe_agg_pk = self.cfg.tpe_agg_pk;
+                let contract = contract.clone();
+
+                move || recover_contract_keys(sk, &tpe_agg_pk, &contract)
+            })
+            .await;
+
+            if keys.is_none() {
                 continue;
             }
 
@@ -1664,6 +1650,11 @@ pub enum SendPaymentError {
     GatewayExpirationExceedsLimit,
     #[error("Failed to request block count")]
     FailedToRequestBlockCount(String),
+    /// The client's balance cannot fund the payment and its fees.
+    #[error("The client does not have sufficient funds to send the payment")]
+    InsufficientFunds(#[source] InsufficientBalanceError),
+    /// The funding transaction could not be submitted for a reason that is
+    /// not about the balance.
     #[error("Failed to fund the payment")]
     FailedToFundPayment(String),
     #[error("Invoice is for a different currency")]
@@ -1836,4 +1827,41 @@ impl State for LightningClientStateMachines {
             LightningClientStateMachines::Receive(state) => state.operation_id(),
         }
     }
+}
+
+/// The claim keypair and aggregate decryption key of an incoming contract
+/// addressed to `sk`, or none when it is not ours.
+///
+/// Verifying the key is four pairings, so callers run this off the async
+/// workers.
+fn recover_contract_keys(
+    sk: SecretKey,
+    tpe_agg_pk: &AggregatePublicKey,
+    contract: &IncomingContract,
+) -> Option<(Keypair, AggregateDecryptionKey)> {
+    let tweak = ecdh::SharedSecret::new(&contract.commitment.ephemeral_pk, &sk);
+
+    let encryption_seed = tweak
+        .secret_bytes()
+        .consensus_hash::<sha256::Hash>()
+        .to_byte_array();
+
+    let claim_keypair = sk
+        .mul_tweak(&Scalar::from_be_bytes(tweak.secret_bytes()).expect("Within curve order"))
+        .expect("Tweak is valid")
+        .keypair(secp256k1::SECP256K1);
+
+    if claim_keypair.public_key() != contract.commitment.claim_pk {
+        return None; // The claim key is not derived from our pk
+    }
+
+    let agg_decryption_key = derive_agg_dk(tpe_agg_pk, &encryption_seed);
+
+    if !contract.verify_agg_decryption_key(tpe_agg_pk, &agg_decryption_key) {
+        return None; // The decryption key is not derived from our pk
+    }
+
+    contract.decrypt_preimage(&agg_decryption_key)?;
+
+    Some((claim_keypair, agg_decryption_key))
 }

@@ -123,6 +123,13 @@ use crate::recurring::RecurringPaymentCodeEntry;
 /// client can get refund
 const OUTGOING_LN_CONTRACT_TIMELOCK: u64 = 500;
 
+/// Largest number of blocks an outgoing contract's timelock may lie ahead of
+/// the current block count, matching the `EXPIRATION_DELTA_LIMIT` of the
+/// `fedimint-lnv2-client`. The payee picks part of the delta through the
+/// invoice's `min_final_cltv_expiry_delta`, so without a bound they could push
+/// the payer's refund out arbitrarily far or overflow the timelock.
+const MAX_OUTGOING_CONTRACT_TIMELOCK_DELTA: u64 = 1440;
+
 // 24 hours. Many wallets default to 1 hour, but it's a bad user experience if
 // invoices expire too quickly
 const DEFAULT_INVOICE_EXPIRY_TIME: Duration = Duration::from_hours(24);
@@ -849,6 +856,16 @@ impl LightningClientModule {
             });
         }
 
+        let timelock_delta = invoice
+            .min_final_cltv_expiry_delta()
+            .saturating_add(OUTGOING_LN_CONTRACT_TIMELOCK - 1);
+        if timelock_delta > MAX_OUTGOING_CONTRACT_TIMELOCK_DELTA {
+            return Err(PayBolt11InvoiceError::TimelockDeltaTooLarge {
+                found: timelock_delta,
+                max: MAX_OUTGOING_CONTRACT_TIMELOCK_DELTA,
+            });
+        }
+
         // Do not create the funding transaction if the gateway is not currently
         // available
         self.gateway_conn
@@ -862,11 +879,9 @@ impl LightningClientModule {
             .await?
             .ok_or(PayBolt11InvoiceError::NoConsensusBlockCount)?;
 
-        // Add the timelock to the current block count and the invoice's
-        // `min_cltv_delta`
-        let min_final_cltv = invoice.min_final_cltv_expiry_delta();
-        let absolute_timelock =
-            consensus_count + min_final_cltv + OUTGOING_LN_CONTRACT_TIMELOCK - 1;
+        // The timelock delta covers the invoice's `min_cltv_delta` plus our own
+        // refund timelock, and was bounded above
+        let absolute_timelock = consensus_count + timelock_delta;
 
         // Compute amount to lock in the outgoing contract
         let invoice_amount = Amount::from_msats(

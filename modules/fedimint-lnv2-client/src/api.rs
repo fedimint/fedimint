@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::future::ready;
 
 use fedimint_api_client::api::{
     FederationApiExt, FederationResult, IModuleFederationApi, ServerResult,
@@ -90,7 +91,7 @@ where
         let gateways: BTreeMap<PeerId, Vec<SafeUrl>> = self
             .request_with_strategy(
                 FilterMapThreshold::new(
-                    |_, gateways| Ok(gateways),
+                    |_, gateways| ready(Ok(gateways)),
                     self.all_peers().to_num_peers(),
                 ),
                 GATEWAYS_ENDPOINT.to_string(),

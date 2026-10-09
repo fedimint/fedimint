@@ -315,8 +315,16 @@ where
 pub trait IDatabase: Debug + MaybeSend + MaybeSync + 'static {
     /// Start a database transaction
     async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a>;
-    /// Register (and wait) for `key` updates
-    async fn register(&self, key: &[u8]);
+    /// Register for `key` updates, returning a future that waits for an update.
+    ///
+    /// Await registration before taking the database snapshot used to check a
+    /// condition. Once registration completes, updates must be remembered even
+    /// before the returned future is polled. The future may wake spuriously;
+    /// register again before checking a fresh snapshot after each wake.
+    ///
+    /// The returned future borrows the database, not the key. Dropping it
+    /// cancels the wait.
+    async fn register<'a>(&'a self, key: &[u8]) -> BoxFuture<'a, ()>;
     /// Notify about `key` update (creation, modification, deletion)
     async fn notify(&self, key: &[u8]);
 
@@ -336,8 +344,8 @@ where
     async fn begin_transaction<'a>(&'a self) -> Box<dyn IDatabaseTransaction + 'a> {
         (**self).begin_transaction().await
     }
-    async fn register(&self, key: &[u8]) {
-        (**self).register(key).await;
+    async fn register<'a>(&'a self, key: &[u8]) -> BoxFuture<'a, ()> {
+        (**self).register(key).await
     }
     async fn notify(&self, key: &[u8]) {
         (**self).notify(key).await;
@@ -374,8 +382,8 @@ impl<RawDatabase: IRawDatabase + MaybeSend + 'static> IDatabase for BaseDatabase
             self.notifications.clone(),
         ))
     }
-    async fn register(&self, key: &[u8]) {
-        self.notifications.register(key).await;
+    async fn register<'a>(&'a self, key: &[u8]) -> BoxFuture<'a, ()> {
+        Box::pin(self.notifications.register(key))
     }
     async fn notify(&self, key: &[u8]) {
         self.notifications.notify(key);
@@ -640,7 +648,7 @@ impl Database {
         let key_bytes = key.to_bytes();
         loop {
             // register for notification
-            let notify = self.inner.register(&key_bytes);
+            let notify = self.inner.register(&key_bytes).await;
 
             // check for value in db
             let mut tx = self.inner.begin_transaction().await;
@@ -720,8 +728,8 @@ where
             prefix: self.prefix.clone(),
         })
     }
-    async fn register(&self, key: &[u8]) {
-        self.inner.register(&self.get_full_key(key)).await;
+    async fn register<'a>(&'a self, key: &[u8]) -> BoxFuture<'a, ()> {
+        self.inner.register(&self.get_full_key(key)).await
     }
 
     async fn notify(&self, key: &[u8]) {

@@ -9,6 +9,8 @@ use super::{
 use crate::module::registry::ModuleDecoderRegistry;
 use crate::runtime::spawn;
 
+mod wait_key;
+
 async fn waiter(db: &Database, key: TestKey) -> tokio::task::JoinHandle<TestVal> {
     let db = db.clone();
     let (tx, rx) = oneshot::channel::<()>();

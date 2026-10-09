@@ -30,6 +30,7 @@ use futures::future::{self, select_all};
 use futures::stream::{FuturesUnordered, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::select;
+use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::{mpsc, oneshot, watch};
 use tracing::{Instrument, debug, error, info, trace, warn};
 
@@ -353,6 +354,51 @@ impl Executor {
             .await
     }
 
+    /// Whether any state machine of the operation is still running.
+    pub async fn has_active_states(&self, operation_id: OperationId) -> bool {
+        self.inner
+            .db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&ActiveOperationStateKeyPrefix { operation_id })
+            .await
+            .next()
+            .await
+            .is_some()
+    }
+
+    /// Waits until no state machine of the operation is running any more.
+    ///
+    /// Returns at once if none is, which includes an operation that never
+    /// started one. State machines added to the operation after this returns
+    /// make it active again.
+    ///
+    /// State machines only make progress while the executor runs, so this
+    /// never returns for an operation that still has some once the executor
+    /// has stopped.
+    pub async fn await_no_active_states(&self, operation_id: OperationId) {
+        // Subscribe before the first read: a state machine finishing between a
+        // read and the wait that follows it then still leaves a notification
+        // behind to wake this up.
+        let mut transitions = self.inner.notifier.subscribe();
+
+        while self.has_active_states(operation_id).await {
+            loop {
+                match transitions.recv().await {
+                    Ok(state) if state.operation_id() == operation_id => break,
+                    Ok(_) => {}
+                    // The skipped notifications may have been about this
+                    // operation, so look again.
+                    Err(RecvError::Lagged(_)) => break,
+                    // The executor holds a sender for as long as it lives, so
+                    // this cannot happen while `self` is borrowed. If it did,
+                    // nothing could change the answer any more.
+                    Err(RecvError::Closed) => future::pending::<()>().await,
+                }
+            }
+        }
+    }
+
     /// Only meant for debug tooling
     pub async fn get_operation_states(
         &self,
@@ -541,6 +587,10 @@ impl ExecutorInner {
                 )
                 .await
                 .expect("Autocommit here can't fail");
+
+            // The operation just lost an active state, which those waiting for
+            // it to have none need to hear about.
+            self.notifier.notify(state.clone());
         }
 
         transitions

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::future::ready;
 use std::hash;
 use std::time::Duration;
 
@@ -336,15 +337,19 @@ impl MintOutputStatesCreated {
                 // this query collects a threshold of 2f + 1 valid blind signature shares
                 FilterMapThreshold::new(
                     move |peer, outcome| {
-                        verify_blind_share(
-                            peer,
-                            &outcome,
-                            amount,
-                            message,
-                            &module_decoder,
-                            &tbs_pks,
+                        ready(
+                            verify_blind_share(
+                                peer,
+                                &outcome,
+                                amount,
+                                message,
+                                &module_decoder,
+                                &tbs_pks,
+                            )
+                            .map_err(|err| {
+                                ServerError::InvalidResponse(err.fmt_compact().to_string())
+                            }),
                         )
-                        .map_err(|err| ServerError::InvalidResponse(err.fmt_compact().to_string()))
                     },
                     global_context.api().all_peers().to_num_peers(),
                 ),
@@ -580,63 +585,66 @@ impl MintOutputStatesCreatedMulti {
 
         // Use custom query strategy to collect and verify outcomes from all guardians
         let issuance_requests_clone = issuance_requests.clone();
+        // The verification is synchronous; the strategy awaits it.
+        let verify = move |peer: PeerId, outcomes: Vec<Option<SerdeOutputOutcome>>| {
+            // Verify the response has the expected length
+            if outcomes.len() != common.out_point_range.count() {
+                return Err(ServerError::InvalidResponse(format!(
+                    "Peer {peer} returned {} outcomes but expected {}",
+                    outcomes.len(),
+                    common.out_point_range.count()
+                )));
+            }
+
+            // Verify each outcome and extract valid blind signature shares
+            // If ANY share is invalid, reject the ENTIRE response from this guardian
+            let mut verified_shares = Vec::with_capacity(outcomes.len());
+            for (relative_idx, outcome_opt) in outcomes.into_iter().enumerate() {
+                let out_idx = common.out_point_range.start_idx() + relative_idx as u64;
+
+                // We should have an issuance request for every output in the range
+                let (amount, issuance_request) = issuance_requests_clone
+                    .get(&out_idx)
+                    .expect("issuance_request must exist for every output in range");
+
+                let share = if let Some(outcome) = outcome_opt {
+                    match verify_blind_share(
+                        peer,
+                        &outcome,
+                        *amount,
+                        issuance_request.blinded_message(),
+                        &module_decoder,
+                        &tbs_pks,
+                    ) {
+                        Ok(share) => Some(share),
+                        Err(err) => {
+                            // Invalid share - reject entire response from this guardian
+                            tracing::warn!(
+                                target: LOG_CLIENT_MODULE_MINT,
+                                %peer,
+                                err = %err.fmt_compact(),
+                                out_point = %OutPoint { txid: common.txid(), out_idx},
+                                "Invalid signature share from peer"
+                            );
+                            return Err(ServerError::InvalidResponse(
+                                err.fmt_compact().to_string(),
+                            ));
+                        }
+                    }
+                } else {
+                    None
+                };
+
+                verified_shares.push(share);
+            }
+
+            Ok(verified_shares)
+        };
+
         let verified_shares_per_output: BTreeMap<PeerId, Vec<Option<BlindedSignatureShare>>> = api
             .request_with_strategy_retry(
                 FilterMapThreshold::new(
-                    move |peer, outcomes: Vec<Option<SerdeOutputOutcome>>| {
-                        // Verify the response has the expected length
-                        if outcomes.len() != common.out_point_range.count() {
-                            return Err(ServerError::InvalidResponse(format!(
-                                "Peer {peer} returned {} outcomes but expected {}",
-                                outcomes.len(),
-                                common.out_point_range.count()
-                            )));
-                        }
-
-                        // Verify each outcome and extract valid blind signature shares
-                        // If ANY share is invalid, reject the ENTIRE response from this guardian
-                        let mut verified_shares = Vec::with_capacity(outcomes.len());
-                        for (relative_idx, outcome_opt) in outcomes.into_iter().enumerate() {
-                            let out_idx = common.out_point_range.start_idx() + relative_idx as u64;
-
-                            // We should have an issuance request for every output in the range
-                            let (amount, issuance_request) = issuance_requests_clone
-                                .get(&out_idx)
-                                .expect("issuance_request must exist for every output in range");
-
-                            let share = if let Some(outcome) = outcome_opt {
-                                match verify_blind_share(
-                                    peer,
-                                    &outcome,
-                                    *amount,
-                                    issuance_request.blinded_message(),
-                                    &module_decoder,
-                                    &tbs_pks,
-                                ) {
-                                    Ok(share) => Some(share),
-                                    Err(err) => {
-                                        // Invalid share - reject entire response from this guardian
-                                        tracing::warn!(
-                                            target: LOG_CLIENT_MODULE_MINT,
-                                            %peer,
-                                            err = %err.fmt_compact(),
-                                            out_point = %OutPoint { txid: common.txid(), out_idx},
-                                            "Invalid signature share from peer"
-                                        );
-                                        return Err(ServerError::InvalidResponse(
-                                            err.fmt_compact().to_string(),
-                                        ));
-                                    }
-                                }
-                            } else {
-                                None
-                            };
-
-                            verified_shares.push(share);
-                        }
-
-                        Ok(verified_shares)
-                    },
+                    move |peer, outcomes| ready(verify(peer, outcomes)),
                     api.all_peers().to_num_peers(),
                 ),
                 AWAIT_OUTPUTS_OUTCOMES_ENDPOINT.to_owned(),
@@ -687,17 +695,19 @@ impl MintOutputStatesCreatedMulti {
                 .request_with_strategy_retry(
                     FilterMapThreshold::new(
                         move |peer, outcome| {
-                            verify_blind_share(
-                                peer,
-                                &outcome,
-                                amount,
-                                issuance_request.blinded_message(),
-                                &module_decoder,
-                                &tbs_pks,
+                            ready(
+                                verify_blind_share(
+                                    peer,
+                                    &outcome,
+                                    amount,
+                                    issuance_request.blinded_message(),
+                                    &module_decoder,
+                                    &tbs_pks,
+                                )
+                                .map_err(|err| {
+                                    ServerError::InvalidResponse(err.fmt_compact().to_string())
+                                }),
                             )
-                            .map_err(|err| {
-                                ServerError::InvalidResponse(err.fmt_compact().to_string())
-                            })
                         },
                         api.all_peers().to_num_peers(),
                     ),
@@ -725,19 +735,23 @@ impl MintOutputStatesCreatedMulti {
                             .request_with_strategy_retry(
                                 FilterMapThreshold::new(
                                     move |peer, outcome| {
-                                        verify_blind_share(
-                                            peer,
-                                            &outcome,
-                                            amount,
-                                            issuance_request.blinded_message(),
-                                            &module_decoder,
-                                            &tbs_pks,
-                                        )
-                                        .map_err(|err| {
-                                            ServerError::InvalidResponse(
-                                                err.fmt_compact().to_string(),
+                                        ready(
+                                            verify_blind_share(
+                                                peer,
+                                                &outcome,
+                                                amount,
+                                                issuance_request.blinded_message(),
+                                                &module_decoder,
+                                                &tbs_pks,
                                             )
-                                        })
+                                            .map_err(
+                                                |err| {
+                                                    ServerError::InvalidResponse(
+                                                        err.fmt_compact().to_string(),
+                                                    )
+                                                },
+                                            ),
+                                        )
                                     },
                                     api.all_peers().to_num_peers(),
                                 ),

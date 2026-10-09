@@ -3,12 +3,16 @@ use std::collections::BTreeMap;
 use fedimint_client::DynGlobalClientContext;
 use fedimint_client_module::module::OutPointRange;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
-use fedimint_core::PeerId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::{PeerId, runtime};
 use fedimint_mintv2_common::{Denomination, verify_note};
-use tbs::{AggregatePublicKey, BlindedSignatureShare, PublicKeyShare, aggregate_signature_shares};
+use serde::{Deserialize, Serialize};
+use tbs::{
+    AggregatePublicKey, BlindedSignature, BlindedSignatureShare, PublicKeyShare,
+    aggregate_signature_shares,
+};
 
 use crate::api::MintV2ModuleApi;
 use crate::client_db::SpendableNoteKey;
@@ -56,24 +60,20 @@ impl State for MintOutputStateMachine {
         match &self.state {
             OutputSMState::Pending => {
                 vec![StateTransition::new(
-                    Self::await_signature_shares(
+                    Self::await_issuance(
                         global_context.clone(),
                         self.common.range,
                         self.common.issuance_requests.clone(),
                         context.tbs_pks.clone(),
+                        context.tbs_agg_pks.clone(),
                     ),
-                    move |dbtx, signature_shares, old_state| {
+                    move |dbtx, outcome, old_state| {
                         let balance_update_sender = context.balance_update_sender.clone();
 
                         dbtx.module_tx()
                             .on_commit(move || balance_update_sender.send_replace(()));
 
-                        Box::pin(Self::transition_outcome_ready(
-                            dbtx,
-                            signature_shares,
-                            old_state,
-                            context.tbs_agg_pks.clone(),
-                        ))
+                        Box::pin(Self::transition_issuance(dbtx, outcome, old_state))
                     },
                 )]
             }
@@ -88,74 +88,115 @@ impl State for MintOutputStateMachine {
     }
 }
 
+/// What the issuance trigger resolves to.
+///
+/// The shares are aggregated and the notes verified in the trigger, off the
+/// async workers, so the transition only unblinds and inserts them.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum IssuanceOutcome {
+    /// The transaction containing the issuance was rejected.
+    Aborted,
+    /// The aggregated signatures of the notes that verified, in order, and
+    /// whether one did not: the verified ones are kept either way, the
+    /// machine fails on the invalid one.
+    Signatures {
+        signatures: Vec<BlindedSignature>,
+        invalid: bool,
+    },
+}
+
 impl MintOutputStateMachine {
-    async fn await_signature_shares(
+    async fn await_issuance(
         global_context: DynGlobalClientContext,
         range: Option<OutPointRange>,
         issuance_requests: Vec<NoteIssuanceRequest>,
         tbs_pks: BTreeMap<Denomination, BTreeMap<PeerId, PublicKeyShare>>,
-    ) -> Result<BTreeMap<PeerId, Vec<BlindedSignatureShare>>, String> {
-        if let Some(range) = range {
-            global_context.await_tx_accepted(range.txid).await?;
-
-            let shares = global_context
-                .module_api()
-                .fetch_signature_shares(range, issuance_requests, tbs_pks)
-                .await;
-
-            Ok(shares)
-        } else {
-            let shares = global_context
-                .module_api()
-                .fetch_signature_shares_recovery(issuance_requests, tbs_pks)
-                .await;
-
-            Ok(shares)
-        }
-    }
-
-    async fn transition_outcome_ready(
-        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        signature_shares: Result<BTreeMap<PeerId, Vec<BlindedSignatureShare>>, String>,
-        old_state: MintOutputStateMachine,
-        tbs_pks: BTreeMap<Denomination, AggregatePublicKey>,
-    ) -> MintOutputStateMachine {
-        let Ok(signature_shares) = signature_shares else {
-            return MintOutputStateMachine {
-                common: old_state.common,
-                state: OutputSMState::Aborted,
-            };
-        };
-
-        for (i, request) in old_state.common.issuance_requests.iter().enumerate() {
-            let agg_blind_signature = aggregate_signature_shares(
-                &signature_shares
-                    .iter()
-                    .map(|(peer, shares)| (peer.to_usize() as u64, shares[i]))
-                    .collect(),
-            );
-
-            let spendable_note = request.finalize(agg_blind_signature);
-
-            let pk = *tbs_pks
-                .get(&request.denomination)
-                .expect("No aggregated pk found for denomination");
-
-            if !verify_note(spendable_note.note(), pk) {
-                return MintOutputStateMachine {
-                    common: old_state.common,
-                    state: OutputSMState::Failure,
-                };
+        tbs_agg_pks: BTreeMap<Denomination, AggregatePublicKey>,
+    ) -> IssuanceOutcome {
+        let signature_shares = if let Some(range) = range {
+            if global_context.await_tx_accepted(range.txid).await.is_err() {
+                return IssuanceOutcome::Aborted;
             }
 
+            global_context
+                .module_api()
+                .fetch_signature_shares(range, issuance_requests.clone(), tbs_pks)
+                .await
+        } else {
+            global_context
+                .module_api()
+                .fetch_signature_shares_recovery(issuance_requests.clone(), tbs_pks)
+                .await
+        };
+
+        // Aggregating a note's shares is a Lagrange interpolation and verifying
+        // it two pairings; keep them off the async workers.
+        runtime::spawn_blocking(move || {
+            let mut signatures = Vec::with_capacity(issuance_requests.len());
+
+            for (i, request) in issuance_requests.iter().enumerate() {
+                let agg_blind_signature = aggregate_signature_shares(
+                    &signature_shares
+                        .iter()
+                        .map(|(peer, shares)| (peer.to_usize() as u64, shares[i]))
+                        .collect(),
+                );
+
+                let spendable_note = request.finalize(agg_blind_signature);
+
+                let pk = *tbs_agg_pks
+                    .get(&request.denomination)
+                    .expect("No aggregated pk found for denomination");
+
+                if !verify_note(spendable_note.note(), pk) {
+                    return IssuanceOutcome::Signatures {
+                        signatures,
+                        invalid: true,
+                    };
+                }
+
+                signatures.push(agg_blind_signature);
+            }
+
+            IssuanceOutcome::Signatures {
+                signatures,
+                invalid: false,
+            }
+        })
+        .await
+    }
+
+    async fn transition_issuance(
+        dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
+        outcome: IssuanceOutcome,
+        old_state: MintOutputStateMachine,
+    ) -> MintOutputStateMachine {
+        let (signatures, invalid) = match outcome {
+            IssuanceOutcome::Aborted => {
+                return MintOutputStateMachine {
+                    common: old_state.common,
+                    state: OutputSMState::Aborted,
+                };
+            }
+            IssuanceOutcome::Signatures {
+                signatures,
+                invalid,
+            } => (signatures, invalid),
+        };
+
+        for (request, signature) in old_state.common.issuance_requests.iter().zip(signatures) {
             dbtx.module_tx()
-                .insert_new_entry(&SpendableNoteKey(spendable_note), &())
+                .insert_new_entry(&SpendableNoteKey(request.finalize(signature)), &())
                 .await;
         }
 
         MintOutputStateMachine {
             common: old_state.common,
-            state: OutputSMState::Success,
+            state: if invalid {
+                OutputSMState::Failure
+            } else {
+                OutputSMState::Success
+            },
         }
     }
 }
