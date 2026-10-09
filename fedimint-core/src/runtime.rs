@@ -33,6 +33,27 @@ where
     n0_future::task::spawn(future.instrument(span))
 }
 
+/// Runs CPU-bound work off the async workers so they stay schedulable.
+///
+/// Meant for the pairings that verify signature and decryption shares. Wasm
+/// has no blocking pool, so there the work runs inline.
+pub async fn spawn_blocking<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R + MaybeSend + 'static,
+    R: MaybeSend + 'static,
+{
+    #[cfg(not(target_family = "wasm"))]
+    {
+        tokio::task::spawn_blocking(f)
+            .await
+            .expect("Blocking task panicked")
+    }
+    #[cfg(target_family = "wasm")]
+    {
+        f()
+    }
+}
+
 // Note: These functions only exist on non-wasm platforms and you need to handle
 // them conditionally at the call site of packages that compile on wasm
 #[cfg(not(target_family = "wasm"))]

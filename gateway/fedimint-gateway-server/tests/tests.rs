@@ -2031,6 +2031,7 @@ async fn lnv2_relay_persists_every_distinct_incoming_circuit() -> anyhow::Result
             hold.htlc_id,
             contract.clone(),
             1_000_000,
+            u32::MAX,
         ),
         module.relay_incoming_htlc(
             payment_hash,
@@ -2038,6 +2039,7 @@ async fn lnv2_relay_persists_every_distinct_incoming_circuit() -> anyhow::Result
             forward.htlc_id,
             contract.clone(),
             1_000_000,
+            u32::MAX,
         ),
     );
     hold_result?;
@@ -2051,6 +2053,7 @@ async fn lnv2_relay_persists_every_distinct_incoming_circuit() -> anyhow::Result
             forward.htlc_id,
             contract,
             1_000_000,
+            u32::MAX,
         )
         .await?;
 
@@ -3409,6 +3412,105 @@ async fn lnv2_relay_direct_swap_without_funds_is_refused() -> anyhow::Result<()>
             .relay_direct_swap(contract, 900, true)
             .await,
         Err(TransactionSubmitError::InsufficientFunds(_))
+    );
+
+    Ok(())
+}
+
+/// One preimage settles every contract for an invoice, on either protocol, so
+/// the gateway must pay out for a payment hash at most once: a second contract
+/// for it is refused before anything is paid.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv2_payout_refuses_lnv1_payment_of_same_hash() -> anyhow::Result<()> {
+    let gateway_conn = Arc::new(CapturingGatewayConnection::default());
+    let fixtures = capturing_lnv2_fixtures(gateway_conn.clone());
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+    let invoice = FakeLightningTest::new().invoice(sats(250), None)?;
+
+    let payload =
+        captured_lnv2_send_payload(&gateway, &gateway_conn, &fed, invoice.clone()).await?;
+    gateway
+        .send_payment_v2(payload)
+        .await?
+        .expect("the gateway pays the invoice over LNv2");
+
+    let user_client = fed.new_client().await;
+    user_client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
+        .await;
+    let ln_module = user_client.get_first_module::<LightningClientModule>()?;
+    ln_module.update_gateway_cache().await?;
+    let lightning_gateway = ln_module
+        .select_gateway(&gateway.http_gateway_id().await)
+        .await;
+    let OutgoingLightningPayment {
+        payment_type: PayType::Lightning(pay_op),
+        contract_id,
+        ..
+    } = ln_module
+        .pay_bolt11_invoice(lightning_gateway.clone(), invoice.clone(), ())
+        .await?
+    else {
+        panic!("Expected a Lightning payment");
+    };
+    let mut pay_sub = ln_module.subscribe_ln_pay(pay_op).await?.into_stream();
+    assert_eq!(pay_sub.ok().await?, LnPayState::Created);
+    assert_matches!(pay_sub.ok().await?, LnPayState::Funded { .. });
+
+    let result = gateway
+        .select_client(fed.id())
+        .await?
+        .into_value()
+        .get_first_module::<GatewayClientModule>()?
+        .gateway_pay_bolt11_invoice(PayInvoicePayload {
+            federation_id: fed.id(),
+            contract_id,
+            payment_data: get_payment_data(lightning_gateway, invoice),
+            preimage_auth: Hash::hash(&[0; 32]),
+        })
+        .await;
+    assert_matches!(
+        result,
+        Err(GatewayPayInvoiceError::PaymentHashAlreadyClaimed),
+        "the LNv1 payment is refused as a duplicate"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv1_payout_refuses_lnv2_payment_of_same_hash() -> anyhow::Result<()> {
+    let gateway_conn = Arc::new(CapturingGatewayConnection::default());
+    let fixtures = capturing_lnv2_fixtures(gateway_conn.clone());
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+    let invoice = FakeLightningTest::new().invoice(sats(250), None)?;
+
+    let user_client = fed.new_client().await;
+    user_client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
+        .await;
+    user_client
+        .get_first_module::<LightningClientModule>()?
+        .update_gateway_cache()
+        .await?;
+    gateway_pay_valid_invoice(
+        invoice.clone(),
+        &user_client,
+        &gateway.select_client(fed.id()).await?.into_value(),
+        &gateway.http_gateway_id().await,
+    )
+    .await?;
+
+    let payload = captured_lnv2_send_payload(&gateway, &gateway_conn, &fed, invoice).await?;
+    assert!(
+        gateway.send_payment_v2(payload).await.is_err(),
+        "the LNv2 contract is refused without paying again"
     );
 
     Ok(())

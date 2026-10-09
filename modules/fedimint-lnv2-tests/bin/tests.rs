@@ -1,24 +1,30 @@
 use std::path::PathBuf;
+use std::str::FromStr;
+use std::time::Duration;
 
-use anyhow::ensure;
-use bitcoin::hashes::sha256;
+use anyhow::{Context as _, bail, ensure};
+use bitcoin::hashes::{Hash, sha256};
 use clap::{Parser, Subcommand};
-use devimint::devfed::DevJitFed;
+use devimint::devfed::{DevFed, DevJitFed};
 use devimint::envs::FM_CLIENT_DIR_ENV;
 use devimint::federation::{Client, Federation};
-use devimint::util::{ProcessManager, almost_equal};
+use devimint::util::{ProcessManager, almost_equal, poll_simple};
 use devimint::version_constants::{
-    VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA,
+    VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA, VERSION_0_12_2_ALPHA,
+    VERSION_0_13_0_ALPHA,
 };
 use devimint::{Gatewayd, cmd, util};
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::Encodable;
+use fedimint_core::secp256k1::rand::rngs::OsRng;
+use fedimint_core::secp256k1::{SECP256K1, SecretKey};
 use fedimint_core::task::{self};
 use fedimint_core::util::{backoff_util, retry, write_overwrite_async};
 use fedimint_lnurl::{LnurlResponse, VerifyResponse, parse_lnurl};
 use fedimint_lnv2_client::FinalSendOperationState;
-use lightning_invoice::Bolt11Invoice;
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescriptionRef};
 use serde::Deserialize;
+use serde_json::Value;
 use tokio::try_join;
 use tracing::info;
 
@@ -64,6 +70,11 @@ enum Commands {
     LnurlRecovery,
     /// Two clients racing to pay the same invoice settle exactly once
     DuplicatePayment,
+    /// The gateway refuses to fund a receive while the federation cannot
+    /// reach consensus
+    FederationOutage,
+    /// Run direct HTLC tests between two clients without a gateway
+    DirectHtlc,
 }
 
 #[tokio::main]
@@ -105,6 +116,14 @@ async fn main() -> anyhow::Result<()> {
                     pegin_gateways(&dev_fed).await?;
                     test_duplicate_payment(&dev_fed, &process_mgr).await?;
                 }
+                Some(Commands::DirectHtlc) => {
+                    test_direct_htlc(&dev_fed).await?;
+                }
+                Some(Commands::FederationOutage) => {
+                    pegin_gateways(&dev_fed).await?;
+                    let dev_fed = dev_fed.to_dev_fed(&process_mgr).await?;
+                    test_federation_outage(dev_fed, &process_mgr).await?;
+                }
                 None => {
                     // Run all tests if no subcommand is specified
                     test_gateway_registration(&dev_fed).await?;
@@ -112,6 +131,12 @@ async fn main() -> anyhow::Result<()> {
                     test_duplicate_payment(&dev_fed, &process_mgr).await?;
                     test_lnurl_pay(&dev_fed).await?;
                     test_lnurl_recovery(&dev_fed).await?;
+                    test_direct_htlc(&dev_fed).await?;
+                    // Last, since it takes ownership of the federation to
+                    // stop and restart guardians.
+                    pegin_gateways(&dev_fed).await?;
+                    let dev_fed = dev_fed.to_dev_fed(&process_mgr).await?;
+                    test_federation_outage(dev_fed, &process_mgr).await?;
                 }
             }
 
@@ -454,8 +479,10 @@ async fn join_client(name: &str, invite_code: &str) -> anyhow::Result<Client> {
 /// Three independent clients — two in the primary federation and one in a
 /// second federation, all served by the same gateway — race to pay the *same*
 /// invoice. The gateway pays the invoice only once, so it may claim only one of
-/// the three outgoing contracts regardless of which federation funded them; the
-/// other two must be forfeited and refunded. Exactly one payment settles.
+/// the three outgoing contracts regardless of which federation funded them.
+/// Exactly one payment settles; how the other two end depends on the gateway
+/// version, see [`assert_duplicates_refunded`] and
+/// [`assert_duplicates_refused`].
 async fn test_duplicate_payment(
     dev_fed: &DevJitFed,
     process_mgr: &ProcessManager,
@@ -533,6 +560,11 @@ async fn test_duplicate_payment(
     // the gateway on its own. This proves the gateway serves the second
     // federation, so any refund of the shared invoice below is caused by the
     // duplicate payment rather than a second-federation setup problem.
+    let second_federation_id = second_federation.calculate_federation_id();
+    let second_balance_before_control = gw_send
+        .client()
+        .ecash_balance(second_federation_id.clone())
+        .await?;
     let control_invoice = gw_receive
         .client()
         .create_invoice(1_000_000)
@@ -544,23 +576,75 @@ async fn test_duplicate_payment(
         "second-federation control payment must succeed, got {control:?}"
     );
 
+    // The sender sees the preimage once the gateway's claim is accepted, which
+    // can be before the claimed ecash reaches the gateway. Wait for it, so the
+    // gateway's balances only move below because of the shared invoice.
+    poll_simple(
+        "Waiting for the gateway to claim the control payment",
+        || async {
+            let balance = gw_send
+                .client()
+                .ecash_balance(second_federation_id.clone())
+                .await?;
+            ensure!(
+                balance > second_balance_before_control,
+                "gateway has not claimed the control payment yet"
+            );
+            Ok(())
+        },
+    )
+    .await?;
+
     let invoice = gw_receive
         .client()
         .create_invoice(1_000_000)
         .await?
         .to_string();
 
+    // Before 0.12.2 the gateway claimed the payment image only after paying,
+    // and forfeited every later contract for it, so those were refunded at once.
+    // Since then it claims the image when it accepts a send and refuses the
+    // others outright, so their senders are only refunded at contract expiry.
+    if gw_send.gatewayd_version < *VERSION_0_12_2_ALPHA {
+        return assert_duplicates_refunded(&client_a, &client_b, &client_c, gw_send, &invoice)
+            .await;
+    }
+
+    assert_duplicates_refused(
+        [&client_a, &client_b, &client_c],
+        gw_send,
+        [
+            first_federation.calculate_federation_id(),
+            second_federation_id,
+        ],
+        &invoice,
+    )
+    .await
+}
+
+/// How long a send refused by the gateway is watched to stay unresolved.
+const REFUSED_SEND_WATCH: Duration = Duration::from_secs(30);
+
+/// The duplicate-payment assertions for gateways that claim the payment image
+/// only after paying and forfeit the duplicates: one settles, two are refunded.
+async fn assert_duplicates_refunded(
+    client_a: &Client,
+    client_b: &Client,
+    client_c: &Client,
+    gw_send: &Gatewayd,
+    invoice: &str,
+) -> anyhow::Result<()> {
     // The two clients in the first federation race for the invoice; the
     // per-federation dedup settles exactly one of them and refunds the other.
     let (state_a, state_b) = try_join!(
-        common::send(&client_a, &gw_send.addr, &invoice),
-        common::send(&client_b, &gw_send.addr, &invoice),
+        common::send(client_a, &gw_send.addr, invoice),
+        common::send(client_b, &gw_send.addr, invoice),
     )?;
 
     // The second-federation client then pays the same, now-settled invoice. The
     // gateway already holds the preimage, so without cross-federation dedup it
     // claims this contract too, being reimbursed twice for one Lightning payment.
-    let state_c = common::send(&client_c, &gw_send.addr, &invoice).await?;
+    let state_c = common::send(client_c, &gw_send.addr, invoice).await?;
 
     let states = [state_a, state_b, state_c];
 
@@ -582,6 +666,209 @@ async fn test_duplicate_payment(
         "exactly one payment must settle and the other two be refunded, got {states:?}"
     );
 
+    Ok(())
+}
+
+/// The duplicate-payment assertions for gateways that claim the payment image
+/// at intake: one send settles, the gateway refuses the other two without
+/// paying or forfeiting anything, so they stay unresolved until their contracts
+/// expire, and the gateway is reimbursed exactly once.
+async fn assert_duplicates_refused(
+    [client_a, client_b, client_c]: [&Client; 3],
+    gw_send: &Gatewayd,
+    [first_federation_id, second_federation_id]: [String; 2],
+    invoice: &str,
+) -> anyhow::Result<()> {
+    let first_balance_before = gw_send
+        .client()
+        .ecash_balance(first_federation_id.clone())
+        .await?;
+    let second_balance_before = gw_send
+        .client()
+        .ecash_balance(second_federation_id.clone())
+        .await?;
+
+    // The two clients in the first federation race for the invoice. Whichever
+    // the gateway accepts first settles; the other is refused and stays funded.
+    let (op_a, op_b) = try_join!(
+        common::start_send(client_a, &gw_send.addr, invoice),
+        common::start_send(client_b, &gw_send.addr, invoice),
+    )?;
+
+    let (state_a, state_b) = tokio::join!(
+        await_send_within(client_a, op_a, REFUSED_SEND_WATCH),
+        await_send_within(client_b, op_b, REFUSED_SEND_WATCH),
+    );
+
+    // The second-federation client then pays the same, now-settled invoice. The
+    // claim is global to the gateway, so it is refused as well.
+    let op_c = common::start_send(client_c, &gw_send.addr, invoice).await?;
+    let state_c = await_send_within(client_c, op_c, REFUSED_SEND_WATCH).await;
+
+    let states = [state_a?, state_b?, state_c?];
+
+    info!("shared-invoice send states (None = unresolved): {states:?}");
+
+    let successes = states
+        .iter()
+        .filter(|state| matches!(state, Some(FinalSendOperationState::Success(_))))
+        .count();
+
+    let unresolved = states.iter().filter(|state| state.is_none()).count();
+
+    assert_eq!(
+        (successes, unresolved),
+        (1, 2),
+        "exactly one payment must settle and the other two stay unresolved, got {states:?}"
+    );
+
+    // A contract costs at least the invoice amount, so reimbursement for a
+    // second one would at least double the gain.
+    let invoice_msats = Bolt11Invoice::from_str(invoice)?
+        .amount_milli_satoshis()
+        .expect("the invoice has an amount");
+
+    let first_gain = gw_send
+        .client()
+        .ecash_balance(first_federation_id)
+        .await?
+        .checked_sub(first_balance_before)
+        .expect("the gateway's balance in the first federation must not shrink");
+
+    assert!(
+        (invoice_msats..2 * invoice_msats).contains(&first_gain),
+        "the gateway must be reimbursed for exactly one contract, gained {first_gain} msat"
+    );
+
+    assert_eq!(
+        gw_send.client().ecash_balance(second_federation_id).await?,
+        second_balance_before,
+        "the gateway must not claim the second federation's contract"
+    );
+
+    Ok(())
+}
+
+/// Waits up to `watch` for a send to reach its final state, returning `None`
+/// if it is still unresolved by then.
+async fn await_send_within(
+    client: &Client,
+    operation_id: OperationId,
+    watch: Duration,
+) -> anyhow::Result<Option<FinalSendOperationState>> {
+    match tokio::time::timeout(watch, common::await_send(client, operation_id)).await {
+        Ok(state) => state.map(Some),
+        Err(_) => Ok(None),
+    }
+}
+
+/// Stops enough guardians that no threshold of them can answer, checks that
+/// a receive is refused without the gateway funding anything, then checks
+/// that receives work again once the guardians are back.
+async fn test_federation_outage(
+    dev_fed: DevFed,
+    process_mgr: &ProcessManager,
+) -> anyhow::Result<()> {
+    info!("Testing that the gateway refuses to fund a receive during a federation outage...");
+
+    let DevFed {
+        mut fed,
+        gw_lnd,
+        gw_ldk,
+        ..
+    } = dev_fed;
+
+    if gw_lnd.gatewayd_version < *VERSION_0_12_2_ALPHA {
+        info!(
+            gatewayd_version = %gw_lnd.gatewayd_version,
+            "Skipping: gateway predates the federation liveness probe"
+        );
+        return Ok(());
+    }
+
+    let client = fed
+        .new_joined_client("lnv2-federation-outage-client")
+        .await?;
+    fed.await_all_peers().await?;
+
+    let federation_id = fed.calculate_federation_id();
+    let gateway = gw_lnd.client().address();
+
+    // Register the invoice while the federation is healthy so that only the
+    // funding decision is exercised below.
+    let (invoice, _) = common::receive(&client, &gateway, 100_000).await?;
+    let balance_before = gw_lnd.client().ecash_balance(federation_id.clone()).await?;
+
+    // Stop the smallest number of guardians that leaves fewer than a
+    // threshold of them running.
+    let fed_size = process_mgr.globals.FM_FED_SIZE;
+    let max_evil = (fed_size - 1) / 3;
+    let stopped: Vec<usize> = (fed_size - max_evil - 1..fed_size).collect();
+    for peer in &stopped {
+        fed.terminate_server(*peer).await?;
+    }
+
+    info!(
+        ?stopped,
+        "Paying invoice while the federation cannot reach consensus"
+    );
+    // The payment runs concurrently: a gateway that funds anyway holds the
+    // HTLC until the guardians are back, so awaiting it here would block the
+    // restart below.
+    let payment = fedimint_core::runtime::spawn("lnv2-outage-payment", {
+        let gw_ldk = gw_ldk.client();
+        async move { gw_ldk.pay_invoice(invoice).await }
+    });
+
+    // Bring the guardians back only once the gateway has acted on the HTLC:
+    // a refusal fails the payment, while funding consumes ecash at submission
+    // even though the transaction cannot land yet.
+    poll_simple("Waiting for the gateway to act on the HTLC", || async {
+        if payment.is_finished() {
+            return Ok(());
+        }
+        let balance = gw_lnd.client().ecash_balance(federation_id.clone()).await?;
+        if balance < balance_before {
+            return Ok(());
+        }
+        bail!("gateway has not acted on the HTLC yet")
+    })
+    .await?;
+
+    for peer in &stopped {
+        fed.start_server(process_mgr, *peer).await?;
+    }
+    fed.await_all_peers().await?;
+
+    // Funding queued during the outage would land now that the guardians are
+    // back, and the payment would complete against it. The probe exists so
+    // that it does not.
+    let outcome = payment.await?;
+    info!(?outcome, "Payment outcome once the guardians are back");
+    ensure!(
+        outcome.is_err(),
+        "payment must fail: the gateway funded an incoming contract during the outage"
+    );
+    ensure!(
+        gw_lnd.client().ecash_balance(federation_id.clone()).await? == balance_before,
+        "gateway must not fund an incoming contract while the federation cannot reach consensus"
+    );
+
+    // The gateway's own connections to the restarted guardians come back on
+    // their own schedule, and the probe refuses receives until they do, so
+    // retry with a fresh invoice each time; a refused invoice is cancelled.
+    info!("Paying a fresh invoice after the guardians are back");
+    poll_simple("Waiting for receives to succeed again", || async {
+        let (invoice, _) = common::receive(&client, &gateway, 100_000).await?;
+        gw_ldk.client().pay_invoice(invoice).await
+    })
+    .await?;
+    ensure!(
+        gw_lnd.client().ecash_balance(federation_id).await? < balance_before,
+        "gateway must fund the incoming contract once the federation is back"
+    );
+
+    info!("Federation outage test complete");
     Ok(())
 }
 
@@ -995,11 +1282,14 @@ async fn verify_payment_wait(verify_url: String) -> anyhow::Result<VerifyRespons
 #[derive(Deserialize, Clone)]
 struct LnUrlPayResponse {
     callback: String,
+    metadata: String,
 }
 
 #[derive(Deserialize, Clone)]
 struct LnUrlPayInvoiceResponse {
     pr: Bolt11Invoice,
+    // LUD-06 requires this field, so parsing fails if the service omits it
+    routes: Vec<serde_json::Value>,
     verify: String,
 }
 
@@ -1010,17 +1300,32 @@ async fn fetch_invoice(lnurl: String, amount_msat: u64) -> anyhow::Result<(Bolt1
 
     let callback_url = format!("{}?amount={}", response.callback, amount_msat);
 
-    let response = reqwest::get(callback_url)
+    let invoice_response = reqwest::get(callback_url)
         .await?
         .json::<LnUrlPayInvoiceResponse>()
         .await?;
 
     ensure!(
-        response.pr.amount_milli_satoshis() == Some(amount_msat),
+        invoice_response.pr.amount_milli_satoshis() == Some(amount_msat),
         "Invoice amount is not set"
     );
 
-    Ok((response.pr, response.verify))
+    ensure!(
+        invoice_response.routes.is_empty(),
+        "LUD-06 requires routes to be an empty array"
+    );
+
+    let metadata_hash = sha256::Hash::hash(response.metadata.as_bytes());
+
+    ensure!(
+        matches!(
+            invoice_response.pr.description(),
+            Bolt11InvoiceDescriptionRef::Hash(hash) if hash.0 == metadata_hash
+        ),
+        "Invoice does not commit to the LNURL metadata via its description hash (LUD-06)"
+    );
+
+    Ok((invoice_response.pr, invoice_response.verify))
 }
 
 async fn test_iroh_payment(
@@ -1083,4 +1388,304 @@ async fn test_iroh_payment(
     }
 
     Ok(())
+}
+
+/// Exercise the direct HTLC CLI between two clients of the same federation,
+/// with the full out-of-band handoff as strings: the claimer's key, the
+/// funder's funding txid and contract JSON, and the forfeit signature. The
+/// claimer's secret key and preimage are passed through files and stdin.
+async fn test_direct_htlc(dev_fed: &DevJitFed) -> anyhow::Result<()> {
+    if util::FedimintCli::version_or_default().await < *VERSION_0_13_0_ALPHA {
+        info!("fedimint-cli does not support direct HTLCs, skipping");
+        return Ok(());
+    }
+
+    let federation = dev_fed.fed().await?;
+
+    let funder = federation
+        .new_joined_client("lnv2-test-direct-htlc-funder")
+        .await?;
+
+    let claimer = federation
+        .new_joined_client("lnv2-test-direct-htlc-claimer")
+        .await?;
+
+    assert_module_sanity(&funder).await?;
+
+    federation.pegin_client(10_000, &funder).await?;
+
+    let secrets_dir = PathBuf::from(std::env::var(FM_CLIENT_DIR_ENV)?).join("direct-htlc");
+
+    tokio::fs::create_dir_all(&secrets_dir).await?;
+
+    let claim_sk_file = secrets_dir.join("claim-sk");
+    let preimage_file = secrets_dir.join("preimage");
+
+    info!("Generating the claim keypair...");
+
+    let claim_keypair = cmd!(
+        claimer,
+        "module",
+        "lnv2",
+        "htlc",
+        "new-claim-keypair",
+        "--secret-key-file",
+        claim_sk_file.display()
+    )
+    .out_json()
+    .await?;
+
+    ensure!(
+        claim_keypair.get("secret_key").is_none(),
+        "The claim secret key must not be printed"
+    );
+
+    let claim_pk = json_string(&claim_keypair["public_key"])?;
+
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let mode = tokio::fs::metadata(&claim_sk_file)
+            .await?
+            .permissions()
+            .mode();
+
+        ensure!(mode & 0o777 == 0o600, "Secret key file has mode {mode:o}");
+    }
+
+    ensure!(
+        cmd!(
+            claimer,
+            "module",
+            "lnv2",
+            "htlc",
+            "new-claim-keypair",
+            "--secret-key-file",
+            claim_sk_file.display()
+        )
+        .run()
+        .await
+        .is_err(),
+        "An existing secret key file must not be overwritten"
+    );
+
+    info!("Testing claim of a point-locked HTLC...");
+
+    // The preimage of a point lock is the secret key of the payment point.
+    let preimage = SecretKey::new(&mut OsRng);
+    let preimage_hex = preimage.display_secret().to_string();
+    let payment_point = preimage.public_key(SECP256K1).to_string();
+
+    write_overwrite_async(&preimage_file, &preimage_hex).await?;
+
+    let (funding_txid, contract) =
+        create_htlc(&funder, &claim_pk, 100, "--payment-point", &payment_point).await?;
+
+    let remaining_blocks = cmd!(
+        claimer,
+        "module",
+        "lnv2",
+        "htlc",
+        "await-funded",
+        funding_txid,
+        contract
+    )
+    .out_json()
+    .await?;
+
+    ensure!(
+        remaining_blocks.as_u64().is_some_and(|blocks| blocks > 0),
+        "Expected the remaining blocks until expiration, got {remaining_blocks}"
+    );
+
+    let mut claim = cmd!(
+        claimer,
+        "module",
+        "lnv2",
+        "htlc",
+        "claim",
+        funding_txid,
+        contract,
+        "--claim-sk-file",
+        claim_sk_file.display(),
+        "--preimage-file",
+        "-"
+    );
+
+    claim.cmd.stdin(std::fs::File::open(&preimage_file)?);
+
+    let claim_operation = claim.out_json().await?;
+
+    await_htlc_settled(&claimer, &claim_operation).await?;
+
+    ensure!(claimer.balance().await? > 0);
+
+    // The funder learns the preimage from the federation.
+    assert_eq!(
+        cmd!(
+            funder,
+            "module",
+            "lnv2",
+            "htlc",
+            "await-resolution",
+            funding_txid,
+            contract
+        )
+        .out_json()
+        .await?,
+        preimage_hex
+    );
+
+    info!("Testing cooperative cancellation of a hash-locked HTLC...");
+
+    let payment_hash = [42_u8; 32].consensus_hash::<sha256::Hash>().to_string();
+
+    let (funding_txid, contract) =
+        create_htlc(&funder, &claim_pk, 100, "--payment-hash", &payment_hash).await?;
+
+    let balance_before_cancel = funder.balance().await?;
+
+    let mut forfeit = cmd!(
+        claimer,
+        "module",
+        "lnv2",
+        "htlc",
+        "forfeit",
+        contract,
+        "--claim-sk-file",
+        "-"
+    );
+
+    forfeit.cmd.stdin(std::fs::File::open(&claim_sk_file)?);
+
+    let forfeit_signature = json_string(&forfeit.out_json().await?)?;
+
+    let cancel_operation = cmd!(
+        funder,
+        "module",
+        "lnv2",
+        "htlc",
+        "cancel",
+        funding_txid,
+        contract,
+        forfeit_signature
+    )
+    .out_json()
+    .await?;
+
+    await_htlc_settled(&funder, &cancel_operation).await?;
+
+    ensure!(funder.balance().await? > balance_before_cancel);
+
+    info!("Testing refund of an expired HTLC...");
+
+    let (funding_txid, contract) =
+        create_htlc(&funder, &claim_pk, 5, "--payment-hash", &payment_hash).await?;
+
+    let balance_before_refund = funder.balance().await?;
+
+    dev_fed.bitcoind().await?.mine_blocks(10).await?;
+
+    // The funder is notified that the contract expired unclaimed...
+    assert_eq!(
+        cmd!(
+            funder,
+            "module",
+            "lnv2",
+            "htlc",
+            "await-resolution",
+            funding_txid,
+            contract
+        )
+        .out_json()
+        .await?,
+        Value::Null
+    );
+
+    // ...and can refund it once the consensus block count has caught up.
+    let refund_operation = retry(
+        "Refunding the expired HTLC",
+        backoff_util::aggressive_backoff_long(),
+        || async {
+            cmd!(
+                funder,
+                "module",
+                "lnv2",
+                "htlc",
+                "refund",
+                funding_txid,
+                contract
+            )
+            .out_json()
+            .await
+        },
+    )
+    .await?;
+
+    await_htlc_settled(&funder, &refund_operation).await?;
+
+    ensure!(funder.balance().await? > balance_before_refund);
+
+    Ok(())
+}
+
+/// Fund an HTLC of one thousand sats locked to `claim_pk`, wait for the
+/// funding transaction to be accepted and return the funding txid and the
+/// contract JSON as the claimer receives them out of band.
+async fn create_htlc(
+    funder: &Client,
+    claim_pk: &str,
+    expiration_delta: u64,
+    lock_flag: &str,
+    lock_value: &str,
+) -> anyhow::Result<(String, String)> {
+    let created = cmd!(
+        funder,
+        "module",
+        "lnv2",
+        "htlc",
+        "create",
+        "1000000",
+        claim_pk,
+        expiration_delta,
+        lock_flag,
+        lock_value
+    )
+    .out_json()
+    .await?;
+
+    // The contract is always the first output of its funding transaction.
+    assert_eq!(created["outpoint"]["out_idx"], 0);
+
+    await_htlc_settled(funder, &created["operation_id"]).await?;
+
+    Ok((
+        json_string(&created["outpoint"]["txid"])?,
+        created["contract"].to_string(),
+    ))
+}
+
+async fn await_htlc_settled(client: &Client, operation_id: &Value) -> anyhow::Result<()> {
+    assert_eq!(
+        cmd!(
+            client,
+            "module",
+            "lnv2",
+            "htlc",
+            "await-settled",
+            json_string(operation_id)?
+        )
+        .out_json()
+        .await?,
+        "settled"
+    );
+
+    Ok(())
+}
+
+fn json_string(value: &Value) -> anyhow::Result<String> {
+    value
+        .as_str()
+        .map(str::to_owned)
+        .with_context(|| format!("Expected a JSON string, got {value}"))
 }
