@@ -509,6 +509,74 @@ async fn double_spend_is_rejected() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Recovery only scans the log up to the bound fixed when it is prepared, so a
+/// note minted before the bound but spent after it is still in the scanned
+/// range. The recovering client must not restore such a note as unspent.
+#[tokio::test(flavor = "multi_thread")]
+async fn recovery_does_not_restore_notes_spent_after_its_bound() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+
+    // Device A mints notes with the key and sends 1000 sats of them out.
+    let client_a = fed
+        .join_client_with_db(MemDatabase::new().into(), root_secret(&SEND_SK))
+        .await;
+
+    issue_ecash(&client_a, Amount::from_sats(11_000)).await?;
+
+    let mut send_events = pin!(mint_event_stream(&client_a));
+
+    let (operation_id, ecash) = client_a
+        .get_first_module::<MintClientModule>()?
+        .send(Amount::from_sats(1_000), Value::Null, false)
+        .await?;
+
+    let Some(MintEvent::Send(send)) = send_events.next().await else {
+        panic!("Expected Send event");
+    };
+    assert_eq!(send.operation_id, operation_id);
+
+    client_a.wait_for_all_active_state_machines().await;
+
+    // What device A still holds is exactly what is unspent at this point.
+    let expected_balance = client_a.get_balance_for_btc().await?;
+
+    // Recovery fixes its bound before the call returns. The sent notes are
+    // below it.
+    let recovering_client = fed
+        .recover_client_with_db(MemDatabase::new().into(), root_secret(&SEND_SK))
+        .await;
+
+    // A fresh device with the same key spends the sent notes after the bound.
+    let client_b = fed
+        .join_client_with_db(MemDatabase::new().into(), root_secret(&SEND_SK))
+        .await;
+
+    let operation_id = client_b
+        .get_first_module::<MintClientModule>()?
+        .receive(ecash, Value::Null)
+        .await?;
+
+    let state = client_b
+        .get_first_module::<MintClientModule>()?
+        .await_final_receive_operation_state(operation_id)
+        .await?;
+
+    assert_eq!(state, FinalReceiveOperationState::Success);
+
+    recovering_client.wait_for_all_recoveries().await?;
+    recovering_client.wait_for_all_active_state_machines().await;
+
+    let recovered_balance = recovering_client.get_balance_for_btc().await?;
+
+    ensure!(
+        recovered_balance == expected_balance,
+        "Recovery restored notes already spent: expected {expected_balance}, got {recovered_balance}"
+    );
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> {
     let fixtures = fixtures();
