@@ -10,6 +10,7 @@ use fedimint_core::module::serde_json;
 use fedimint_core::{Feerate, PeerId, plugin_types_trait_impl_config};
 use miniscript::descriptor::{Wpkh, Wsh};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use crate::keys::CompressedPublicKey;
 use crate::{PegInDescriptor, WalletCommonInit};
@@ -103,6 +104,11 @@ impl Default for FeeConsensus {
     }
 }
 
+/// Failure to build the peg-in descriptor for a [`WalletConfig`].
+#[derive(Debug, Error)]
+#[error("Building the P2WSH peg-in multisig, which supports at most 20 guardians")]
+pub struct PegInDescriptorError(#[source] miniscript::Error);
+
 impl WalletConfig {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -113,7 +119,7 @@ impl WalletConfig {
         finality_delay: u32,
         client_default_bitcoin_rpc: BitcoinRpcConfig,
         fee_consensus: FeeConsensus,
-    ) -> Self {
+    ) -> Result<Self, PegInDescriptorError> {
         let peg_in_descriptor = if pubkeys.len() == 1 {
             PegInDescriptor::Wpkh(
                 Wpkh::new(
@@ -126,11 +132,12 @@ impl WalletConfig {
             )
         } else {
             PegInDescriptor::Wsh(
-                Wsh::new_sortedmulti(threshold, pubkeys.values().copied().collect()).unwrap(),
+                Wsh::new_sortedmulti(threshold, pubkeys.values().copied().collect())
+                    .map_err(PegInDescriptorError)?,
             )
         };
 
-        Self {
+        Ok(Self {
             private: WalletConfigPrivate { peg_in_key: sk },
             consensus: WalletConfigConsensus {
                 network: NetworkLegacyEncodingWrapper(network),
@@ -141,7 +148,7 @@ impl WalletConfig {
                 fee_consensus,
                 client_default_bitcoin_rpc,
             },
-        }
+        })
     }
 }
 

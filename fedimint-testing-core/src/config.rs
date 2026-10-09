@@ -65,6 +65,7 @@ pub fn local_config_gen_params(
                     fedimint_core::version::cargo_pkg_release(),
                 )
                 .expect("cargo package release is a valid semantic version"),
+                descriptor_kind: None,
             };
             (*peer, params)
         })
@@ -83,6 +84,7 @@ pub fn local_config_gen_params(
                 disable_base_fees: !enable_mint_fees,
                 enabled_modules: enabled_modules.clone(),
                 network: bitcoin::Network::Regtest,
+                descriptor_kind: Default::default(),
             };
             Ok((*peer, params))
         })
