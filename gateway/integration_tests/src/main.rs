@@ -28,6 +28,8 @@ use fedimint_testing_core::node_type::LightningNodeType;
 use itertools::Itertools;
 use tracing::info;
 
+mod refused_payments;
+
 #[derive(Parser)]
 struct GatewayTestOpts {
     #[clap(subcommand)]
@@ -44,6 +46,7 @@ enum GatewayTest {
     BackupRestoreTest,
     LiquidityTest,
     EsploraTest,
+    RefusedPaymentRefundTest,
 }
 
 #[tokio::main]
@@ -54,6 +57,7 @@ async fn main() -> anyhow::Result<()> {
         GatewayTest::BackupRestoreTest => Box::pin(backup_restore_test()).await,
         GatewayTest::LiquidityTest => Box::pin(liquidity_test()).await,
         GatewayTest::EsploraTest => esplora_test().await,
+        GatewayTest::RefusedPaymentRefundTest => refused_payments::refund_test().await,
     }
 }
 
