@@ -16,7 +16,7 @@ use fedimint_client_module::module::recovery::{DynModuleBackup, RecoveryProgress
 use fedimint_client_module::module::{
     ClientModuleRegistry, DynClientModule, FinalClientIface, IClientModule, PrimaryModuleSupport,
 };
-use fedimint_client_module::sm::{Context, DynContext};
+use fedimint_client_module::sm::DynContext;
 use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
 };
@@ -1030,21 +1030,6 @@ impl fedimint_core::core::IntoDynInstance for TestOutput {
     }
 }
 
-#[derive(Debug, Clone)]
-struct MockContext;
-
-impl fedimint_core::core::IntoDynInstance for MockContext {
-    type DynType = DynContext;
-
-    fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
-        DynContext::from_typed(instance_id, self)
-    }
-}
-
-impl Context for MockContext {
-    const KIND: Option<ModuleKind> = Some(ModuleKind::from_static_str("mock"));
-}
-
 #[derive(Debug)]
 struct MockBalanceModule {
     input_fee: Amounts,
@@ -1056,55 +1041,44 @@ impl IClientModule for MockBalanceModule {
     fn as_any(&self) -> &(fedimint_core::maybe_add_send_sync!(dyn std::any::Any)) {
         self
     }
-
     fn decoder(&self) -> Decoder {
         Decoder::default()
     }
-
-    fn context(&self, instance: ModuleInstanceId) -> DynContext {
-        DynContext::from_typed(instance, MockContext)
+    fn context(&self, _instance: ModuleInstanceId) -> DynContext {
+        unimplemented!()
     }
-
     async fn start(&self) {}
-
     async fn handle_cli_command(
         &self,
         _args: &[std::ffi::OsString],
     ) -> Result<serde_json::Value, ClientModuleError> {
-        Ok(serde_json::Value::Null)
+        unimplemented!()
     }
-
     async fn handle_rpc(
         &self,
         _method: String,
         _request: serde_json::Value,
     ) -> futures::stream::BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
-        Box::pin(futures::stream::empty())
+        unimplemented!()
     }
-
     fn input_fee(&self, _amount: &Amounts, _input: &fedimint_core::core::DynInput) -> Option<Amounts> {
         Some(self.input_fee.clone())
     }
-
     fn output_fee(&self, _amount: &Amounts, _output: &fedimint_core::core::DynOutput) -> Option<Amounts> {
         Some(self.output_fee.clone())
     }
-
     fn supports_backup(&self) -> bool {
         false
     }
-
     async fn backup(
         &self,
         _module_instance_id: ModuleInstanceId,
     ) -> Result<DynModuleBackup, ClientModuleError> {
-        Err(ClientModuleError::Other(anyhow::anyhow!("unsupported").into()))
+        unimplemented!()
     }
-
     fn supports_being_primary(&self) -> PrimaryModuleSupport {
         PrimaryModuleSupport::None
     }
-
     async fn create_final_inputs_and_outputs(
         &self,
         _module_instance: ModuleInstanceId,
@@ -1114,17 +1088,15 @@ impl IClientModule for MockBalanceModule {
         _input_amount: Amount,
         _output_amount: Amount,
     ) -> Result<(ClientInputBundle, ClientOutputBundle), ClientModuleError> {
-        Err(ClientModuleError::Other(anyhow::anyhow!("unsupported").into()))
+        unimplemented!()
     }
-
     async fn await_primary_module_output(
         &self,
         _operation_id: OperationId,
         _out_point: OutPoint,
     ) -> Result<(), ClientModuleError> {
-        Ok(())
+        unimplemented!()
     }
-
     async fn get_balance(
         &self,
         _module_instance: ModuleInstanceId,
@@ -1133,9 +1105,8 @@ impl IClientModule for MockBalanceModule {
     ) -> Amount {
         Amount::ZERO
     }
-
     async fn subscribe_balance_changes(&self) -> futures::stream::BoxStream<'static, ()> {
-        Box::pin(futures::stream::empty())
+        unimplemented!()
     }
 }
 
@@ -1182,103 +1153,59 @@ async fn transaction_builder_get_balance_empty_succeeds() {
 }
 
 #[tokio::test]
-async fn transaction_builder_get_balance_input_total_overflow_is_reported_as_error() {
-    let client = client_with_mock_module(Amounts::ZERO, Amounts::ZERO).await;
-    let builder = TransactionBuilder::new()
-        .with_inputs(test_input_bundle(Amounts::new_bitcoin(Amount::from_msats(
-            u64::MAX,
-        ))))
-        .with_inputs(test_input_bundle(Amounts::new_bitcoin(Amount::from_msats(
-            1,
-        ))));
+async fn transaction_builder_get_balance_overflow_conditions_fail() {
+    let cases = vec![
+        (
+            "input totals overflow",
+            Amounts::ZERO,
+            Amounts::ZERO,
+            TransactionBuilder::new()
+                .with_inputs(test_input_bundle(Amounts::new_bitcoin(Amount::from_msats(u64::MAX))))
+                .with_inputs(test_input_bundle(Amounts::new_bitcoin(Amount::from_msats(1)))),
+        ),
+        (
+            "output totals overflow",
+            Amounts::ZERO,
+            Amounts::ZERO,
+            TransactionBuilder::new()
+                .with_outputs(test_output_bundle(Amounts::new_bitcoin(Amount::from_msats(u64::MAX))))
+                .with_outputs(test_output_bundle(Amounts::new_bitcoin(Amount::from_msats(1)))),
+        ),
+        (
+            "input fees overflow",
+            Amounts::new_bitcoin(Amount::from_msats(u64::MAX)),
+            Amounts::ZERO,
+            TransactionBuilder::new()
+                .with_inputs(test_input_bundle(Amounts::ZERO))
+                .with_inputs(test_input_bundle(Amounts::ZERO)),
+        ),
+        (
+            "output fees overflow",
+            Amounts::ZERO,
+            Amounts::new_bitcoin(Amount::from_msats(u64::MAX)),
+            TransactionBuilder::new()
+                .with_outputs(test_output_bundle(Amounts::ZERO))
+                .with_outputs(test_output_bundle(Amounts::ZERO)),
+        ),
+        (
+            "output plus fees overflow",
+            Amounts::ZERO,
+            Amounts::new_bitcoin(Amount::from_msats(1)),
+            TransactionBuilder::new()
+                .with_outputs(test_output_bundle(Amounts::new_bitcoin(Amount::from_msats(u64::MAX)))),
+        ),
+    ];
 
-    let err = client
-        .transaction_builder_get_balance(&builder)
-        .expect_err("Overflowing input totals must fail");
-    assert!(
-        matches!(err, TransactionSubmitError::AmountOverflow),
-        "{err:?}"
-    );
-}
-
-#[tokio::test]
-async fn transaction_builder_get_balance_output_total_overflow_is_reported_as_error() {
-    let client = client_with_mock_module(Amounts::ZERO, Amounts::ZERO).await;
-    let builder = TransactionBuilder::new()
-        .with_outputs(test_output_bundle(Amounts::new_bitcoin(Amount::from_msats(
-            u64::MAX,
-        ))))
-        .with_outputs(test_output_bundle(Amounts::new_bitcoin(Amount::from_msats(
-            1,
-        ))));
-
-    let err = client
-        .transaction_builder_get_balance(&builder)
-        .expect_err("Overflowing output totals must fail");
-    assert!(
-        matches!(err, TransactionSubmitError::AmountOverflow),
-        "{err:?}"
-    );
-}
-
-#[tokio::test]
-async fn transaction_builder_get_balance_accumulated_input_fees_overflow_is_reported_as_error() {
-    let client = client_with_mock_module(
-        Amounts::new_bitcoin(Amount::from_msats(u64::MAX)),
-        Amounts::ZERO,
-    )
-    .await;
-    let builder = TransactionBuilder::new()
-        .with_inputs(test_input_bundle(Amounts::ZERO))
-        .with_inputs(test_input_bundle(Amounts::ZERO));
-
-    let err = client
-        .transaction_builder_get_balance(&builder)
-        .expect_err("Accumulated input fees overflow must fail");
-    assert!(
-        matches!(err, TransactionSubmitError::AmountOverflow),
-        "{err:?}"
-    );
-}
-
-#[tokio::test]
-async fn transaction_builder_get_balance_accumulated_output_fees_overflow_is_reported_as_error() {
-    let client = client_with_mock_module(
-        Amounts::ZERO,
-        Amounts::new_bitcoin(Amount::from_msats(u64::MAX)),
-    )
-    .await;
-    let builder = TransactionBuilder::new()
-        .with_outputs(test_output_bundle(Amounts::ZERO))
-        .with_outputs(test_output_bundle(Amounts::ZERO));
-
-    let err = client
-        .transaction_builder_get_balance(&builder)
-        .expect_err("Accumulated output fees overflow must fail");
-    assert!(
-        matches!(err, TransactionSubmitError::AmountOverflow),
-        "{err:?}"
-    );
-}
-
-#[tokio::test]
-async fn transaction_builder_get_balance_output_plus_fee_overflow_is_reported_as_error() {
-    let client = client_with_mock_module(
-        Amounts::ZERO,
-        Amounts::new_bitcoin(Amount::from_msats(1)),
-    )
-    .await;
-    let builder = TransactionBuilder::new().with_outputs(test_output_bundle(Amounts::new_bitcoin(
-        Amount::from_msats(u64::MAX),
-    )));
-
-    let err = client
-        .transaction_builder_get_balance(&builder)
-        .expect_err("Output plus fee overflow must fail");
-    assert!(
-        matches!(err, TransactionSubmitError::AmountOverflow),
-        "{err:?}"
-    );
+    for (name, input_fee, output_fee, builder) in cases {
+        let client = client_with_mock_module(input_fee, output_fee).await;
+        let err = client
+            .transaction_builder_get_balance(&builder)
+            .expect_err(&format!("Case '{name}' must fail with AmountOverflow"));
+        assert!(
+            matches!(err, TransactionSubmitError::AmountOverflow),
+            "Case '{name}' expected AmountOverflow, got {err:?}"
+        );
+    }
 }
 
 #[tokio::test]
