@@ -415,7 +415,7 @@ impl ServerModuleInit for WalletInit {
             },
             EnvVarDoc {
                 name: FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV,
-                description: "Target size of each guardian's local FROST nonce buffer. Smaller values reduce startup latency at the cost of less headroom. Defaults to 64. Must stay well below 1024, the consensus cap on each peer's commitment pool.",
+                description: "Target size of each guardian's local FROST nonce buffer. Smaller values reduce startup latency at the cost of less headroom. Defaults to 8. Must stay well below 1024, the consensus cap on each peer's commitment pool.",
             },
         ]
     }

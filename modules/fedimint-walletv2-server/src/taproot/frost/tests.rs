@@ -221,6 +221,78 @@ async fn determinism_holds_across_growing_suspects() {
     }
 }
 
+/// Asserts that once fewer than `threshold` non-suspects are viable,
+/// suspects fill exactly the seats left over instead of the pick failing.
+#[tokio::test]
+async fn suspects_fill_seats_left_by_non_suspects() {
+    let all_peers = peers(N);
+    let counts: BTreeMap<_, _> = all_peers.iter().map(|p| (*p, 4)).collect();
+    let db = db_with_commitments(&counts).await;
+    let txid = dummy_txid(9);
+
+    let suspects: BTreeSet<_> = peers(3).into_iter().collect();
+
+    let session = run_pick(&db, &all_peers, THRESHOLD, txid, 0, 1, &suspects)
+        .await
+        .expect("seven viable peers ≥ threshold, suspects included");
+    let drafted = session.iter().filter(|p| suspects.contains(p)).count();
+
+    assert_eq!(session.len(), THRESHOLD);
+    assert_eq!(
+        drafted,
+        THRESHOLD - (N - suspects.len()),
+        "every non-suspect must be picked before any suspect: {session:?}"
+    );
+}
+
+/// The nonce-loss scenario in a 3-of-4 federation: `A` is offline and `B`
+/// can never clear its suspicion because the nonces behind its replicated
+/// commitments are gone. Both are suspects, so only two non-suspects remain.
+/// Later attempts must keep drafting a suspect into the third seat — and
+/// reach `B` — rather than stalling.
+#[tokio::test]
+async fn nonce_loss_suspect_is_reselected_in_later_attempts() {
+    let all_peers = peers(4);
+    let threshold = 3;
+    let a = PeerId::from(3);
+    let b = PeerId::from(1);
+    let suspects = BTreeSet::from([a, b]);
+    let txid = dummy_txid(10);
+
+    // `A` still has the commitments it published before going offline.
+    let counts: BTreeMap<_, _> = all_peers.iter().map(|p| (*p, 4)).collect();
+    let db = db_with_commitments(&counts).await;
+
+    let mut b_reselected = false;
+    for attempt in 2..18 {
+        let session = run_pick(&db, &all_peers, threshold, txid, attempt, 1, &suspects)
+            .await
+            .expect("a suspect fills the third seat");
+        let drafted: Vec<_> = session.iter().filter(|p| suspects.contains(p)).collect();
+
+        assert_eq!(session.len(), threshold);
+        assert_eq!(drafted.len(), 1, "attempt {attempt}: {session:?}");
+        b_reselected |= session.contains(&b);
+    }
+    assert!(b_reselected, "B must be selected in some later attempt");
+
+    // Once `A`'s pool is drained it isn't viable, so `B` takes the seat in
+    // every attempt.
+    let counts: BTreeMap<_, _> = all_peers
+        .iter()
+        .map(|p| (*p, if *p == a { 0 } else { 4 }))
+        .collect();
+    let db = db_with_commitments(&counts).await;
+
+    for attempt in 2..6 {
+        let session = run_pick(&db, &all_peers, threshold, txid, attempt, 1, &suspects)
+            .await
+            .expect("B fills the third seat");
+        assert!(session.contains(&b), "attempt {attempt}: {session:?}");
+        assert!(!session.contains(&a), "attempt {attempt}: {session:?}");
+    }
+}
+
 /// Regression for the dump-redaction contract: the serde output of a
 /// `FrostSigningNonces` value — what `dump_database` emits for the
 /// `FrostSigningNonce` prefix — must never contain the secret hiding /
