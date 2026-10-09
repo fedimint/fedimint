@@ -117,7 +117,8 @@ impl aleph_bft::Network<NetworkData> for Network {
                     }
                 }
                 P2PMessage::SessionSignature(signature) => {
-                    self.signatures_sender.try_send((peer_id, signature)).ok();
+                    // The unbounded session channel may close before Aleph stops.
+                    let _ = self.signatures_sender.try_send((peer_id, signature));
                 }
                 P2PMessage::SessionIndex(their_session) => {
                     if let Some(outcome) = self
@@ -136,9 +137,8 @@ impl aleph_bft::Network<NetworkData> for Network {
                 P2PMessage::SignedSessionOutcome(encoded_outcome) => {
                     match encoded_outcome.try_into_inner(&ModuleRegistry::default()) {
                         Ok(outcome) => {
-                            self.signed_outcomes_sender
-                                .try_send((peer_id, outcome))
-                                .ok();
+                            // The unbounded session channel may close before Aleph stops.
+                            let _ = self.signed_outcomes_sender.try_send((peer_id, outcome));
                         }
                         Err(err) => {
                             error!(
