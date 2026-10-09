@@ -23,4 +23,5 @@ serde_with = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+bitcoin = { workspace = true }
 serde_json.workspace = true

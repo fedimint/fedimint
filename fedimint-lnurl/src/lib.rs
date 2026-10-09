@@ -1,11 +1,18 @@
 use bech32::{Bech32, Hrp};
 use bitcoin_hashes::sha256::Hash as Sha256Hash;
 use bitcoin_hashes::Hash;
-use lightning_invoice::Bolt11Invoice;
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescriptionRef};
 use serde::{Deserialize, Serialize};
 use serde_with::hex::Hex;
 use serde_with::serde_as;
 use thiserror::Error;
+#[cfg(test)]
+use {
+    bitcoin::secp256k1::{Secp256k1, SecretKey},
+    lightning_invoice::{
+        Bolt11InvoiceDescription, Currency, Description, InvoiceBuilder, PaymentSecret, Sha256,
+    },
+};
 
 #[derive(Debug, Clone, Error)]
 pub enum LnurlError {
@@ -183,16 +190,22 @@ pub fn metadata_hash(metadata: &str) -> [u8; 32] {
     Sha256Hash::hash(metadata.as_bytes()).to_byte_array()
 }
 
-/// Verify that an invoice's h tag matches the metadata hash (LUD-06).
+/// Verify that an invoice's description hash commits to the metadata (LUD-06).
+///
+/// The commitment is the BOLT11 description hash, not the payment hash, which
+/// is the hash of the preimage and says nothing about the metadata. An invoice
+/// without a description hash cannot be verified, so it is rejected.
 pub fn verify_metadata_hash(invoice: &Bolt11Invoice, metadata: &str) -> Result<(), LnurlError> {
-    let expected_hash = metadata_hash(metadata);
-    let invoice_hash_bytes = invoice.payment_hash().as_ref();
+    let expected_hash = Sha256Hash::hash(metadata.as_bytes());
 
-    if invoice_hash_bytes != expected_hash {
-        return Err(LnurlError::InvalidMetadataHash);
+    match invoice.description() {
+        Bolt11InvoiceDescriptionRef::Hash(description_hash)
+            if description_hash.0 == expected_hash =>
+        {
+            Ok(())
+        }
+        _ => Err(LnurlError::InvalidMetadataHash),
     }
-
-    Ok(())
 }
 
 /// Fetch and parse an LNURL-pay response (legacy string-returning version).
@@ -490,4 +503,58 @@ fn test_metadata_hash() {
     let metadata = "[[\"text/plain\",\"Pay to example.com\"]]";
     let hash = metadata_hash(metadata);
     assert_eq!(hash.len(), 32);
+}
+
+#[cfg(test)]
+const TEST_METADATA: &str = "[[\"text/plain\",\"Pay to example.com\"]]";
+
+/// Signs an invoice with a fixed key. Its payment hash is deliberately unrelated
+/// to the metadata, so only the description commitment can satisfy the check.
+#[cfg(test)]
+fn signed_invoice(description: Bolt11InvoiceDescription) -> Bolt11Invoice {
+    let secp = Secp256k1::new();
+    let key = SecretKey::from_slice(&[0x11; 32]).expect("valid secret key");
+
+    InvoiceBuilder::new(Currency::Bitcoin)
+        .invoice_description(description)
+        .payment_hash(Sha256Hash::hash(&[0x22; 32]))
+        .payment_secret(PaymentSecret([0x33; 32]))
+        .current_timestamp()
+        .min_final_cltv_expiry_delta(144)
+        .amount_milli_satoshis(1_000)
+        .build_signed(|hash| secp.sign_ecdsa_recoverable(hash, &key))
+        .expect("invoice builds")
+}
+
+#[test]
+fn verify_metadata_hash_accepts_matching_description_hash() {
+    let invoice = signed_invoice(Bolt11InvoiceDescription::Hash(Sha256(Sha256Hash::hash(
+        TEST_METADATA.as_bytes(),
+    ))));
+
+    assert!(verify_metadata_hash(&invoice, TEST_METADATA).is_ok());
+}
+
+#[test]
+fn verify_metadata_hash_rejects_mismatched_description_hash() {
+    let invoice = signed_invoice(Bolt11InvoiceDescription::Hash(Sha256(Sha256Hash::hash(
+        b"some other metadata",
+    ))));
+
+    assert!(matches!(
+        verify_metadata_hash(&invoice, TEST_METADATA),
+        Err(LnurlError::InvalidMetadataHash)
+    ));
+}
+
+#[test]
+fn verify_metadata_hash_rejects_missing_description_hash() {
+    let invoice = signed_invoice(Bolt11InvoiceDescription::Direct(
+        Description::new("Pay to example.com".to_string()).expect("description fits"),
+    ));
+
+    assert!(matches!(
+        verify_metadata_hash(&invoice, TEST_METADATA),
+        Err(LnurlError::InvalidMetadataHash)
+    ));
 }
