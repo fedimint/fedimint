@@ -789,6 +789,12 @@ jobs:
           name: "${{ matrix.build.flake-output }}-linux"
           path: bins
 
+      # The bundles unpack into a chroot inside an unprivileged user namespace,
+      # which Ubuntu 24.04 denies by default through AppArmor. Users on such
+      # hosts need the same setting, or a profile allowing the bundle.
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
       - name: Smoke test bundled Linux binaries
         run: |
           set -euo pipefail
