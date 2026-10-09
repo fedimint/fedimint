@@ -153,18 +153,16 @@ impl IServerBitcoinRpc for Fake {
     }
 }
 
-async fn hybrid() -> (BitcoindClientWithFallback, Arc<Fake>, Arc<Fake>) {
+fn hybrid() -> (BitcoindClientWithFallback, Arc<Fake>, Arc<Fake>) {
     let primary = Fake::new("primary");
     let fallback = Fake::new("fallback");
-    let rpc = BitcoindClientWithFallback::from_clients(primary.clone(), fallback.clone())
-        .await
-        .unwrap();
+    let rpc = BitcoindClientWithFallback::from_clients(primary.clone(), fallback.clone());
     (rpc, primary, fallback)
 }
 
 #[tokio::test]
 async fn healthy_primary_preserves_arguments_results_and_identity() {
-    let (rpc, primary, fallback) = hybrid().await;
+    let (rpc, primary, fallback) = hybrid();
     let block = genesis_block(Network::Bitcoin);
     assert_eq!(rpc.get_block_count().await.unwrap(), 100);
     assert_eq!(rpc.get_block_hash(42).await.unwrap(), block.block_hash());
@@ -177,12 +175,12 @@ async fn healthy_primary_preserves_arguments_results_and_identity() {
     assert_eq!(primary.calls("hash:42"), 1);
     assert_eq!(fallback.calls("hash:42"), 0);
     assert_eq!(primary.calls("chain"), 1);
-    assert_eq!(fallback.calls("chain"), 1);
+    assert_eq!(fallback.calls("chain"), 0);
 }
 
 #[tokio::test]
 async fn local_node_one_block_behind_remains_preferred() {
-    let (rpc, primary, fallback) = hybrid().await;
+    let (rpc, primary, fallback) = hybrid();
     primary.state.lock().unwrap().count = 99;
     fallback.state.lock().unwrap().count = 100;
     assert_eq!(rpc.get_block_count().await.unwrap(), 99);
@@ -193,7 +191,7 @@ async fn local_node_one_block_behind_remains_preferred() {
 
 #[tokio::test]
 async fn missing_local_fee_estimate_falls_back_to_esplora() {
-    let (rpc, primary, fallback) = hybrid().await;
+    let (rpc, primary, fallback) = hybrid();
     primary.state.lock().unwrap().missing_feerate = true;
     fallback.state.lock().unwrap().count = 123;
 
@@ -211,12 +209,8 @@ async fn missing_local_fee_estimate_uses_existing_esplora_floor_for_empty_respon
     let url: SafeUrl = format!("http://{}", listener.local_addr().unwrap())
         .parse()
         .unwrap();
-    let chain_id = chain(Network::Bitcoin).block_hash();
     let server = fedimint_core::runtime::spawn("esplora-test-http", async move {
-        for (path, body) in [
-            ("/block-height/1", chain_id.to_string()),
-            ("/fee-estimates", "{}".to_owned()),
-        ] {
+        for (path, body) in [("/fee-estimates", "{}")] {
             let (mut socket, _) = listener.accept().await.unwrap();
             let mut request = Vec::new();
             while !request.windows(4).any(|window| window == b"\r\n\r\n") {
@@ -244,9 +238,7 @@ async fn missing_local_fee_estimate_uses_existing_esplora_floor_for_empty_respon
     });
 
     let fallback = EsploraClient::new(&url).unwrap().into_dyn();
-    let rpc = BitcoindClientWithFallback::from_clients(primary.clone(), fallback)
-        .await
-        .unwrap();
+    let rpc = BitcoindClientWithFallback::from_clients(primary.clone(), fallback);
 
     assert_eq!(
         tokio::time::timeout(Duration::from_secs(5), rpc.get_feerate())
@@ -264,7 +256,7 @@ async fn missing_local_fee_estimate_uses_existing_esplora_floor_for_empty_respon
 
 #[tokio::test]
 async fn failed_local_fee_request_falls_back_to_esplora() {
-    let (rpc, primary, fallback) = hybrid().await;
+    let (rpc, primary, fallback) = hybrid();
     primary.state.lock().unwrap().fail_reads = true;
     fallback.state.lock().unwrap().count = 123;
 
@@ -275,7 +267,7 @@ async fn failed_local_fee_request_falls_back_to_esplora() {
 
 #[tokio::test]
 async fn failed_local_fee_request_accepts_an_absent_esplora_estimate() {
-    let (rpc, primary, fallback) = hybrid().await;
+    let (rpc, primary, fallback) = hybrid();
     primary.state.lock().unwrap().fail_reads = true;
     fallback.state.lock().unwrap().missing_feerate = true;
 
@@ -286,7 +278,7 @@ async fn failed_local_fee_request_accepts_an_absent_esplora_estimate() {
 
 #[tokio::test]
 async fn absent_fee_estimate_is_preserved_when_esplora_cannot_supply_one() {
-    let (rpc, primary, fallback) = hybrid().await;
+    let (rpc, primary, fallback) = hybrid();
     primary.state.lock().unwrap().missing_feerate = true;
     fallback.state.lock().unwrap().missing_feerate = true;
 
@@ -300,7 +292,7 @@ async fn absent_fee_estimate_is_preserved_when_esplora_cannot_supply_one() {
 
 #[tokio::test]
 async fn missing_local_payload_falls_back_only_for_that_request() {
-    let (rpc, primary, fallback) = hybrid().await;
+    let (rpc, primary, fallback) = hybrid();
     primary.state.lock().unwrap().fail_reads = true;
     let hash = genesis_block(Network::Bitcoin).block_hash();
     assert_eq!(rpc.get_block(&hash).await.unwrap().block_hash(), hash);
@@ -308,12 +300,12 @@ async fn missing_local_payload_falls_back_only_for_that_request() {
     assert!(rpc.get_feerate().await.unwrap().is_some());
     assert_eq!(fallback.calls(&format!("block:{hash}")), 1);
     assert_eq!(fallback.calls("fee"), 0);
-    assert_eq!(primary.calls("chain"), 1);
+    assert_eq!(primary.calls("chain"), 0);
 }
 
 #[tokio::test]
 async fn ibd_uses_fallback_until_first_completed_report_then_latches() {
-    let (rpc, primary, fallback) = hybrid().await;
+    let (rpc, primary, fallback) = hybrid();
     {
         let mut state = primary.state.lock().unwrap();
         state.ibd = true;
@@ -344,9 +336,7 @@ async fn offline_primary_boots_from_trusted_fallback_then_recovers() {
     let fallback = Fake::new("fallback");
     fallback.state.lock().unwrap().chain = chain(Network::Signet);
     primary.state.lock().unwrap().offline = true;
-    let rpc = BitcoindClientWithFallback::from_clients(primary.clone(), fallback.clone())
-        .await
-        .unwrap();
+    let rpc = BitcoindClientWithFallback::from_clients(primary.clone(), fallback.clone());
     assert_eq!(rpc.get_chain_id().await.unwrap(), chain(Network::Signet));
     assert_eq!(rpc.get_block_count().await.unwrap(), 100);
     {
@@ -361,52 +351,59 @@ async fn offline_primary_boots_from_trusted_fallback_then_recovers() {
 }
 
 #[tokio::test]
-async fn mismatched_startup_is_rejected() {
+async fn construction_does_not_probe_disagreeing_or_unavailable_backends() {
     let primary = Fake::new("primary");
     let fallback = Fake::new("fallback");
     fallback.state.lock().unwrap().chain = chain(Network::Testnet);
-    assert!(
-        BitcoindClientWithFallback::from_clients(primary.clone(), fallback.clone())
-            .await
-            .is_err()
-    );
-    assert_eq!(primary.calls("fee"), 0);
-    assert_eq!(fallback.calls("fee"), 0);
+    primary.state.lock().unwrap().offline = true;
+    fallback.state.lock().unwrap().offline = true;
+    let rpc = BitcoindClientWithFallback::from_clients(primary.clone(), fallback.clone());
+    assert!(primary.state.lock().unwrap().calls.is_empty());
+    assert!(fallback.state.lock().unwrap().calls.is_empty());
+
+    primary.state.lock().unwrap().offline = false;
+    fallback.state.lock().unwrap().offline = false;
+    assert_eq!(rpc.get_chain_id().await.unwrap(), chain(Network::Bitcoin));
+    assert_eq!(primary.calls("chain"), 1);
+    assert_eq!(fallback.calls("chain"), 0);
 }
 
 #[tokio::test]
-async fn unavailable_startup_comparison_does_not_prevent_later_identity_read() {
+async fn failed_identity_reads_are_retried_and_success_is_cached() {
     let primary = Fake::new("primary");
     let fallback = Fake::new("fallback");
     primary.state.lock().unwrap().offline = true;
     fallback.state.lock().unwrap().offline = true;
-    let rpc = BitcoindClientWithFallback::from_clients(primary.clone(), fallback.clone())
-        .await
-        .unwrap();
+    let rpc = BitcoindClientWithFallback::from_clients(primary.clone(), fallback.clone());
+    assert!(primary.state.lock().unwrap().calls.is_empty());
+    assert!(fallback.state.lock().unwrap().calls.is_empty());
     assert!(rpc.get_chain_id().await.is_err());
 
     primary.state.lock().unwrap().offline = false;
     fallback.state.lock().unwrap().offline = false;
     assert_eq!(rpc.get_chain_id().await.unwrap(), chain(Network::Bitcoin));
     assert_eq!(rpc.get_chain_id().await.unwrap(), chain(Network::Bitcoin));
-    assert_eq!(primary.calls("chain"), 3);
-    assert_eq!(fallback.calls("chain"), 2);
+    assert_eq!(primary.calls("chain"), 2);
+    assert_eq!(fallback.calls("chain"), 1);
 }
 
 #[tokio::test]
-async fn startup_chain_check_is_not_repeated() {
-    let (rpc, primary, fallback) = hybrid().await;
-    primary.state.lock().unwrap().chain = chain(Network::Testnet);
+async fn lazy_identity_does_not_compare_after_backend_changes() {
+    let (rpc, primary, fallback) = hybrid();
     assert!(rpc.get_feerate().await.is_ok());
+    assert_eq!(primary.calls("chain"), 0);
+    assert_eq!(fallback.calls("chain"), 0);
+    assert_eq!(rpc.get_chain_id().await.unwrap(), chain(Network::Bitcoin));
+    primary.state.lock().unwrap().chain = chain(Network::Testnet);
     assert_eq!(rpc.get_chain_id().await.unwrap(), chain(Network::Bitcoin));
     assert_eq!(primary.calls("chain"), 1);
-    assert_eq!(fallback.calls("chain"), 1);
+    assert_eq!(fallback.calls("chain"), 0);
     assert_eq!(primary.calls("fee"), 1);
 }
 
 #[tokio::test]
 async fn accepted_primary_broadcast_does_not_send_to_fallback() {
-    let (rpc, primary, fallback) = hybrid().await;
+    let (rpc, primary, fallback) = hybrid();
     let tx = genesis_block(Network::Bitcoin).txdata.remove(0);
     rpc.submit_transaction(tx.clone()).await.unwrap();
     assert_eq!(primary.state.lock().unwrap().transactions, vec![tx]);
@@ -415,7 +412,7 @@ async fn accepted_primary_broadcast_does_not_send_to_fallback() {
 
 #[tokio::test]
 async fn policy_rejection_falls_back() {
-    let (rpc, primary, fallback) = hybrid().await;
+    let (rpc, primary, fallback) = hybrid();
     primary.state.lock().unwrap().fail_broadcast = true;
     let tx = genesis_block(Network::Bitcoin).txdata.remove(0);
     rpc.submit_transaction(tx.clone()).await.unwrap();
@@ -424,7 +421,7 @@ async fn policy_rejection_falls_back() {
 
 #[tokio::test]
 async fn original_primary_error_is_returned_when_read_fallback_fails() {
-    let (rpc, primary, fallback) = hybrid().await;
+    let (rpc, primary, fallback) = hybrid();
     primary.state.lock().unwrap().fail_reads = true;
     fallback.state.lock().unwrap().fail_reads = true;
     let error = rpc.get_feerate().await.unwrap_err().to_string();
@@ -433,7 +430,7 @@ async fn original_primary_error_is_returned_when_read_fallback_fails() {
 
 #[tokio::test]
 async fn original_primary_error_is_returned_when_broadcast_fallback_fails() {
-    let (rpc, primary, fallback) = hybrid().await;
+    let (rpc, primary, fallback) = hybrid();
     primary.state.lock().unwrap().fail_broadcast = true;
     fallback.state.lock().unwrap().fail_broadcast = true;
     let transaction = genesis_block(Network::Bitcoin).txdata.remove(0);
@@ -460,7 +457,7 @@ async fn wait_for_failed_status_attempt(
 
 #[tokio::test]
 async fn monitor_read_failure_does_not_suppress_broadcast() {
-    let (rpc, primary, fallback) = hybrid().await;
+    let (rpc, primary, fallback) = hybrid();
     primary.state.lock().unwrap().fail_count = true;
     fallback.state.lock().unwrap().fail_count = true;
     let tasks = TaskGroup::new();
