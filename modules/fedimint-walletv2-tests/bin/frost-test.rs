@@ -1,7 +1,11 @@
+use std::ops::ControlFlow;
 use std::path::PathBuf;
+use std::time::Duration;
 
-use anyhow::{Context, ensure};
+use anyhow::{Context, anyhow, ensure};
 use clap::Parser;
+use devimint::federation::Federation;
+use devimint::util::{ProcessManager, poll};
 use devimint::version_constants::VERSION_0_13_0_ALPHA;
 use devimint::{cmd, util};
 use fedimint_core::NumPeers;
@@ -34,7 +38,30 @@ struct Opts {
     /// directly.
     #[arg(long, hide = true)]
     offline_nodes: Option<usize>,
+
+    /// Wipe one guardian's database before the FROST-signed transactions, so
+    /// it rejoins with replicated signing commitments it no longer holds the
+    /// nonces for, and assert the federation still signs once the offline
+    /// guardians are taken down as well.
+    #[arg(long)]
+    nonce_loss: bool,
 }
+
+/// The guardian whose database the `--nonce-loss` scenario wipes. Peer `0`
+/// is left alone, and `degrade_federation` takes the highest peer ids
+/// offline, so peer `1` is online in every combination this test runs.
+const NONCE_LOSS_PEER: usize = 1;
+
+/// How long the `--nonce-loss` scenario may take from the wipe until a
+/// FROST-signed transaction completes.
+///
+/// Every guardian runs with a nonce buffer of 2, so the pool holds exactly 4
+/// unusable commitments: the wiped guardian's 2 and the offline guardian's 2.
+/// A signing attempt only fails if it draws one of them, and drawing one
+/// consumes it, so at most 4 attempts fail before one succeeds. Each failed
+/// attempt costs `LOCAL_ADVANCE_TIMEOUT` (30s), which bounds signing at about
+/// 2 minutes.
+const NONCE_LOSS_TIMEOUT: Duration = Duration::from_mins(4);
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -49,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
             .offline_nodes
             .context("--offline-nodes is required alongside --fed-size")?;
 
-        return run_single_federation(fed_size, offline_nodes).await;
+        return run_single_federation(fed_size, offline_nodes, opts.nonce_loss).await;
     }
 
     // Driver mode: spawn a child process for every combination. A separate
@@ -63,13 +90,13 @@ async fn main() -> anyhow::Result<()> {
 
     fedimint_logging::TracingSetup::default().init()?;
 
-    run_driver(&opts.fed_sizes).await
+    run_driver(&opts.fed_sizes, opts.nonce_loss).await
 }
 
 /// Re-invokes this binary once per `(fed_size, offline_nodes)` combination,
 /// covering every offline level from `0` up to `max_evil()` for each federation
 /// size. Fails on the first combination whose worker process exits non-zero.
-async fn run_driver(fed_sizes: &[usize]) -> anyhow::Result<()> {
+async fn run_driver(fed_sizes: &[usize], nonce_loss: bool) -> anyhow::Result<()> {
     let current_exe = std::env::current_exe().context("resolving current executable path")?;
 
     // Each worker gets its own test directory so federations don't clobber each
@@ -92,19 +119,20 @@ async fn run_driver(fed_sizes: &[usize]) -> anyhow::Result<()> {
 
             let test_dir = base_test_dir.join(format!("fed{fed_size}-offline{offline_nodes}"));
 
-            let status = tokio::process::Command::new(&current_exe)
+            let mut worker = tokio::process::Command::new(&current_exe);
+            worker
                 .arg("--fed-size")
                 .arg(fed_size.to_string())
                 .arg("--offline-nodes")
                 .arg(offline_nodes.to_string())
-                .env("FM_TEST_DIR", &test_dir)
-                .status()
-                .await
-                .with_context(|| {
-                    format!(
-                        "spawning worker for fed_size={fed_size}, offline_nodes={offline_nodes}"
-                    )
-                })?;
+                .env("FM_TEST_DIR", &test_dir);
+            if nonce_loss {
+                worker.arg("--nonce-loss");
+            }
+
+            let status = worker.status().await.with_context(|| {
+                format!("spawning worker for fed_size={fed_size}, offline_nodes={offline_nodes}")
+            })?;
 
             ensure!(
                 status.success(),
@@ -120,8 +148,15 @@ async fn run_driver(fed_sizes: &[usize]) -> anyhow::Result<()> {
 }
 
 /// Runs the peg-in / peg-out test against a single federation of `fed_size`
-/// guardians with `offline_nodes` of them taken offline.
-async fn run_single_federation(fed_size: usize, offline_nodes: usize) -> anyhow::Result<()> {
+/// guardians with `offline_nodes` of them taken offline. With `nonce_loss`,
+/// [`NONCE_LOSS_PEER`] loses its database between the first deposit and the
+/// first FROST-signed transaction, and the offline guardians are only taken
+/// down after it has caught up (see [`lose_nonces_then_degrade`]).
+async fn run_single_federation(
+    fed_size: usize,
+    offline_nodes: usize,
+    nonce_loss: bool,
+) -> anyhow::Result<()> {
     // A BFT federation of `n` guardians tolerates at most `f = (n - 1) / 3`
     // offline guardians; beyond that the remaining `n - f` guardians fall below
     // the consensus (and FROST signing) threshold and the federation stalls.
@@ -141,15 +176,22 @@ async fn run_single_federation(fed_size: usize, offline_nodes: usize) -> anyhow:
     // size from `FM_FED_SIZE` and the number of guardians to shut down from
     // `FM_OFFLINE_NODES` (applied automatically via `degrade_federation`).
     unsafe { std::env::set_var("FM_FED_SIZE", fed_size.to_string()) };
-    unsafe { std::env::set_var("FM_OFFLINE_NODES", offline_nodes.to_string()) };
+    let startup_offline_nodes = if nonce_loss { 0 } else { offline_nodes };
+    unsafe { std::env::set_var("FM_OFFLINE_NODES", startup_offline_nodes.to_string()) };
     unsafe { std::env::set_var("FM_ENABLE_MODULE_WALLETV2", "true") };
     unsafe { std::env::set_var("FM_WALLETV2_DESCRIPTOR", "frost") };
     unsafe { std::env::set_var("FM_ENABLE_MODULE_WALLET", "false") };
-    unsafe { std::env::set_var("FM_WALLETV2_FROST_NONCE_BUFFER_TARGET", "3") };
+    // The nonce-loss scenario uses the minimum buffer to bound the number of
+    // unusable commitments (see `NONCE_LOSS_TIMEOUT`).
+    let nonce_buffer_target = if nonce_loss { "2" } else { "3" };
+    unsafe { std::env::set_var("FM_WALLETV2_FROST_NONCE_BUFFER_TARGET", nonce_buffer_target) };
 
     devimint::run_devfed_test()
-        .call(move |dev_fed, _process_mgr| async move {
-            info!(fed_size, offline_nodes, "Starting FROST federation test");
+        .call(move |dev_fed, process_mgr| async move {
+            info!(
+                fed_size,
+                offline_nodes, nonce_loss, "Starting FROST federation test"
+            );
 
             let fedimint_cli_version = util::FedimintCli::version_or_default().await;
             let fedimintd_version = util::FedimintdCmd::version_or_default().await;
@@ -212,26 +254,26 @@ async fn run_single_federation(fed_size: usize, offline_nodes: usize) -> anyhow:
 
             await_receive(&client, seed_position).await?;
 
-            // A deposit into a non-empty wallet sweeps the existing UTXO and the
-            // new deposit into a single consolidation transaction, which IS
-            // FROST-signed — so it produces a finalization stat.
-            info!("Deposit again to trigger a FROST-signed consolidation tx...");
-
-            let (consolidation_address, consolidation_position) =
-                get_deposit_address(&client).await?;
-
-            bitcoind
-                .send_to(consolidation_address.to_string(), 100_000)
-                .await?;
-
-            await_receive(&client, consolidation_position).await?;
-
-            ensure_federation_total_value(&client, 180_000).await?;
-
-            // Once there are no pending transactions, the consolidation tx has
-            // finalized and every online guardian has deterministically recorded
-            // its FROST finalization stat.
-            await_no_pending_txs(&client).await?;
+            // No FROST-signed transaction has run yet, so every commitment the
+            // guardian published is still in the replicated pool and none of
+            // them can be signed with once its database is gone.
+            //
+            // The restarted guardian's process handle lives in the returned
+            // clone and terminates the process when dropped, so keep it alive.
+            let _degraded_fed = if nonce_loss {
+                let fed = tokio::time::timeout(NONCE_LOSS_TIMEOUT, async {
+                    let fed =
+                        lose_nonces_then_degrade(fed, &client, &process_mgr, offline_nodes).await?;
+                    consolidate(&client, bitcoind).await?;
+                    anyhow::Ok(fed)
+                })
+                .await
+                .context("FROST signing stalled after a guardian lost its nonces")??;
+                Some(fed)
+            } else {
+                consolidate(&client, bitcoind).await?;
+                None
+            };
 
             // The consolidation tx is the only federation tx so far (the peg-out
             // hasn't happened yet), so it's the last entry in the tx chain.
@@ -273,7 +315,7 @@ async fn run_single_federation(fed_size: usize, offline_nodes: usize) -> anyhow:
             // signed, broadcast, and confirmed (it polls the unsigned +
             // unconfirmed sets), which also guarantees the FROST finalization
             // stat has been recorded — so no separate on-chain poll is needed.
-            await_no_pending_txs(&client).await?;
+            await_signed(&client, nonce_loss).await?;
 
             report_frost_finalization_stats(&client, "peg-out", txid, fed_size, offline_nodes)
                 .await?;
@@ -282,10 +324,139 @@ async fn run_single_federation(fed_size: usize, offline_nodes: usize) -> anyhow:
 
             info!(
                 fed_size,
-                offline_nodes, "Wallet V2 FROST peg-in and peg-out test successful"
+                offline_nodes, nonce_loss, "Wallet V2 FROST peg-in and peg-out test successful"
             );
 
             Ok(())
         })
         .await
+}
+
+/// Deposits into the non-empty wallet, which sweeps the existing UTXO and the
+/// new deposit into a single FROST-signed consolidation transaction, and waits
+/// until it is signed.
+async fn consolidate(
+    client: &devimint::federation::Client,
+    bitcoind: &devimint::external::Bitcoind,
+) -> anyhow::Result<()> {
+    info!("Deposit again to trigger a FROST-signed consolidation tx...");
+
+    let (consolidation_address, consolidation_position) = get_deposit_address(client).await?;
+
+    bitcoind
+        .send_to(consolidation_address.to_string(), 100_000)
+        .await?;
+
+    await_receive(client, consolidation_position).await?;
+
+    ensure_federation_total_value(client, 180_000).await?;
+
+    // Once there are no pending transactions, the consolidation tx has
+    // finalized and every online guardian has deterministically recorded
+    // its FROST finalization stat.
+    await_no_pending_txs(client).await
+}
+
+/// Restarts [`NONCE_LOSS_PEER`] with an empty database, as after a disk loss
+/// or a restore that only kept its config, then takes the highest
+/// `offline_nodes` guardians offline. Returns the federation handle that owns
+/// the restarted guardian's process.
+///
+/// The guardian replays consensus history from the other guardians, which puts
+/// back its old signing commitments, but the nonces behind them were never
+/// part of consensus and are gone for good. It generates fresh nonces on
+/// startup, since it only counts the ones in its own database.
+///
+/// AlephBFT keeps a guardian's messages for the open session in its database,
+/// so the wiped guardian contradicts itself in the session it was stopped in.
+/// That session needs every other guardian to complete, so the offline
+/// guardians only go down once the wiped guardian has completed it.
+async fn lose_nonces_then_degrade(
+    fed: &Federation,
+    client: &devimint::federation::Client,
+    process_mgr: &ProcessManager,
+    offline_nodes: usize,
+) -> anyhow::Result<Federation> {
+    let mut fed = fed.clone();
+    let peer = NONCE_LOSS_PEER;
+
+    info!(peer, "Wiping guardian database to lose its FROST nonces");
+
+    // `fedimint_server::config::io::DB_FILE`
+    let db_dir = fed
+        .vars
+        .get(&peer)
+        .context("nonce-loss peer has no env vars")?
+        .FM_DATA_DIR
+        .join("database");
+
+    fed.terminate_server(peer).await?;
+
+    // The session the guardian was stopped in can't be past the one the
+    // others are in now.
+    let open_session = peer_session_count(client, 0).await?;
+
+    tokio::fs::remove_dir_all(&db_dir)
+        .await
+        .with_context(|| format!("removing {}", db_dir.display()))?;
+
+    fed.start_server(process_mgr, peer).await?;
+
+    poll(
+        "Wiped guardian completes the session it was stopped in",
+        || async {
+            let session_count = peer_session_count(client, peer)
+                .await
+                .map_err(ControlFlow::Continue)?;
+
+            if session_count <= open_session {
+                return Err(ControlFlow::Continue(anyhow!(
+                    "guardian {peer} has completed {session_count} sessions, waiting for {}",
+                    open_session + 1
+                )));
+            }
+
+            Ok(())
+        },
+    )
+    .await?;
+
+    let fed_size = fed.vars.len();
+    for offline_peer in (fed_size - offline_nodes)..fed_size {
+        fed.terminate_server(offline_peer).await?;
+    }
+
+    if offline_nodes > 0 {
+        info!(fed_size, offline_nodes, "federation is degraded");
+    }
+
+    Ok(fed)
+}
+
+/// Returns the number of consensus sessions `peer` has completed.
+async fn peer_session_count(
+    client: &devimint::federation::Client,
+    peer: usize,
+) -> anyhow::Result<u64> {
+    cmd!(client, "dev", "api", "--peer-id", peer, "session_count")
+        .out_json()
+        .await?["value"]
+        .as_u64()
+        .context("session count wasn't a number")
+}
+
+/// Waits until the federation has no pending transactions. In the nonce-loss
+/// scenario a stalled signing would otherwise hang the test forever, so it
+/// fails after [`NONCE_LOSS_TIMEOUT`] instead.
+async fn await_signed(
+    client: &devimint::federation::Client,
+    nonce_loss: bool,
+) -> anyhow::Result<()> {
+    if !nonce_loss {
+        return await_no_pending_txs(client).await;
+    }
+
+    tokio::time::timeout(NONCE_LOSS_TIMEOUT, await_no_pending_txs(client))
+        .await
+        .context("FROST signing stalled after a guardian lost its nonces")?
 }

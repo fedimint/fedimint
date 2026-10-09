@@ -225,6 +225,13 @@ function walletv2_frost_degraded() {
 }
 export -f walletv2_frost_degraded
 
+function walletv2_frost_nonce_loss() {
+  # A guardian rejoins with a wiped database while another is offline, so
+  # signing must draft it back in once its unusable commitments are used up.
+  fm-run-test "${FUNCNAME[0]}" ./scripts/tests/walletv2-frost-test.sh --fed-size 4 --offline-nodes 1 --nonce-loss
+}
+export -f walletv2_frost_nonce_loss
+
 function mintv2_module_test() {
   # mintv2 tests don't support different versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
@@ -535,6 +542,7 @@ tests_to_run_in_parallel+=(
   "walletv2_module_tr"
   "walletv2_module_single_peer"
   "walletv2_frost_degraded"
+  "walletv2_frost_nonce_loss"
   "mintv2_module_test"
   "devimint_cli_test"
   "devimint_cli_test_single"

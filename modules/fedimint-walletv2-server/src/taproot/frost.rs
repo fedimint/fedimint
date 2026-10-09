@@ -579,8 +579,7 @@ impl Wallet {
             // But every attempt we signed for keeps its share on offer until
             // it's delivered. A share that lands late clears us from the
             // suspect set (see `compute_and_store_frost_signature_shares`),
-            // which can be exactly what lets a later attempt find a viable
-            // session again.
+            // so later attempts pick us ahead of the remaining suspects again.
             for (attempt, record) in &attempts {
                 if record.signing_session.contains(&self.our_peer_id) {
                     items.extend(
@@ -1356,12 +1355,16 @@ impl Wallet {
 }
 
 /// Target number of unused FROST signing nonces each peer keeps on disk.
-/// Larger buffers let adaptive ROAST advance through more attempts (and let
-/// the commitment-aware signer selection still find a viable session) before
-/// the federation runs out of fresh nonces. Each unused commitment is also
-/// broadcast as a consensus item, so this also caps the per-peer commitment
-/// bytes flowing through `AlephBFT`.
-pub(crate) const DEFAULT_FROST_NONCE_BUFFER_TARGET: usize = 64;
+/// `consume_our_nonce` replaces every nonce it uses, so the buffer only has to
+/// cover the commitments a burst of signing sessions draws before those
+/// replacements reach consensus: a walletv2 transaction spends at most two
+/// inputs, so this covers four transactions starting at once. A session that
+/// finds too few commitments waits for the replacements rather than failing.
+///
+/// Kept small because a guardian that loses its database leaves this many
+/// unusable commitments in the pool, and every signing attempt that draws one
+/// fails after [`LOCAL_ADVANCE_TIMEOUT`] before the next one can start.
+pub(crate) const DEFAULT_FROST_NONCE_BUFFER_TARGET: usize = 8;
 
 /// Upper bound on the number of unused commitments any single peer may hold
 /// in the replicated pool. Without a cap, a malicious or misconfigured
@@ -1486,16 +1489,23 @@ pub(crate) fn peer_id_to_identifier(peer_id: PeerId) -> Identifier {
 
 /// Deterministically pick a `threshold`-sized signing session for `(txid,
 /// attempt)`. Walks a shuffle of `all_peers` seeded by `(txid, attempt)`,
-/// skipping suspects and peers whose `FrostSigningCommitments` pool is
-/// shorter than `required_commitments` (one commitment per input is consumed
-/// per session peer). Returns the first `threshold` peers, or `None` if not
-/// enough viable non-suspects remain.
+/// skipping peers whose `FrostSigningCommitments` pool is shorter than
+/// `required_commitments` (one commitment per input is consumed per session
+/// peer). Non-suspects fill the session first; suspects only fill the seats
+/// left over, in shuffle order. Returns `None` only if fewer than
+/// `threshold` peers are viable at all.
 ///
 /// All inputs (commitment counts, suspects) are derived from
 /// consensus-replicated DB state, so every peer computes the same answer.
-/// Each new `attempt` reseeds the shuffle, and the suspect set shrinks
-/// whenever a previously slow honest peer broadcasts a late share — together
-/// these guarantee progress without any round-robin fallback.
+///
+/// With at most `f` faulty peers, at least `threshold` peers never become
+/// suspects, so suspects are never selected and the tx signs within `f + 1`
+/// attempts. Suspects are only drafted back in beyond that, which is what
+/// keeps an honest peer that can never clear its suspicion from stalling the
+/// tx: one that lost the nonces behind its replicated commitments (a DB
+/// restore or wipe) can't produce a late share for the attempt it failed.
+/// Each attempt it is drafted into consumes and tombstones some of those
+/// unusable commitments, so it signs again once they are used up.
 pub(crate) async fn pick_signing_session(
     dbtx: &mut DatabaseTransaction<'_>,
     all_peers: &[PeerId],
@@ -1524,10 +1534,13 @@ pub(crate) async fn pick_signing_session(
     let mut shuffled = all_peers.to_vec();
     shuffled.shuffle(&mut rng);
 
-    let session: Vec<PeerId> = shuffled
-        .iter()
-        .copied()
-        .filter(|p| !suspects.contains(p) && viable(p))
+    let (non_suspects, drafted_suspects): (Vec<PeerId>, Vec<PeerId>) = shuffled
+        .into_iter()
+        .filter(viable)
+        .partition(|peer| !suspects.contains(peer));
+    let session: Vec<PeerId> = non_suspects
+        .into_iter()
+        .chain(drafted_suspects)
         .take(threshold)
         .collect();
     if session.len() == threshold {
