@@ -44,6 +44,159 @@ use crate::db::{
 use crate::taproot::attach_key_path_witnesses;
 use crate::{FederationTx, Wallet};
 
+/// Target number of unused FROST signing nonces each peer keeps on disk.
+/// `consume_our_nonce` replaces every nonce it uses, so the buffer only has to
+/// cover the commitments a burst of signing sessions draws before those
+/// replacements reach consensus: a walletv2 transaction spends at most two
+/// inputs, so this covers four transactions starting at once. A session that
+/// finds too few commitments waits for the replacements rather than failing.
+///
+/// Kept small because a guardian that loses its database leaves this many
+/// unusable commitments in the pool, and every signing attempt that draws one
+/// fails after [`LOCAL_ADVANCE_TIMEOUT`] before the next one can start.
+const DEFAULT_FROST_NONCE_BUFFER_TARGET: usize = 8;
+
+/// Smallest usable local FROST nonce buffer: a peer is only picked into a
+/// signing session if it has one commitment per input, and a peg-in spends
+/// two. Below this the guardian would never be viable — and since the buffer
+/// is only topped up at startup (`consume_our_nonce` refills 1:1
+/// thereafter), a target of `0` would leave it with no commitments forever.
+const MIN_FROST_NONCE_BUFFER_TARGET: usize = 2;
+
+/// Upper bound on the number of unused commitments any single peer may hold
+/// in the replicated pool. Without a cap, a malicious or misconfigured
+/// guardian could broadcast endless unique commitments and grow every
+/// guardian's DB without bound.
+///
+/// Consensus-critical: every guardian must reach the same accept/reject
+/// decision for every commitment item, so this must stay a hard constant —
+/// never derive it from the per-guardian
+/// [`FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV`] setting. It is instead the
+/// upper bound that [`frost_nonce_buffer_target`] clamps that setting to.
+const MAX_PEER_COMMITMENT_POOL: usize = 1024;
+
+/// How often a peer re-broadcasts its FROST signature share (or
+/// commitment) when the previous broadcast hasn't yet been delivered
+/// through consensus. `AlephBFT` can drop a unit when its broadcast lands
+/// close to a session boundary — most likely with larger federations
+/// where each peer commands a smaller fraction of the per-round byte
+/// budget. Picking a value comparable to the typical `AlephBFT` session
+/// duration (~20–30 s) keeps re-broadcasts to ~1 per session per item
+/// instead of ~10/sec.
+const FROST_REBROADCAST_INTERVAL: std::time::Duration = std::time::Duration::from_secs(15);
+
+/// Local wall-clock window each peer waits before broadcasting a
+/// `FrostAdvanceVote` for a stuck signing session. Per-peer (not
+/// consensus) — peers' clocks may differ, but the consensus is on the
+/// *vote count*, not the timing. Held at 30s in every environment
+/// (including devimint) so that one-input txs get a fair chance to
+/// finish on the original `signing_session` before peers start firing
+/// advance votes — premature advance creates a swarm of new attempts,
+/// which inflates consensus-item volume and can push `AlephBFT` past its
+/// per-instance byte budget at different boundaries on different peers.
+const LOCAL_ADVANCE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Target size of the local FROST nonce buffer (see
+/// [`spawn_initial_nonce_backfill`]).
+/// Reads [`FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV`] once on first use,
+/// falling back to [`DEFAULT_FROST_NONCE_BUFFER_TARGET`] when unset or
+/// unparsable, and clamped to
+/// `MIN_FROST_NONCE_BUFFER_TARGET..=MAX_PEER_COMMITMENT_POOL` — commitments
+/// above the cap are rejected federation-wide and re-proposed forever.
+fn frost_nonce_buffer_target() -> usize {
+    static TARGET: LazyLock<usize> = LazyLock::new(|| {
+        let configured = std::env::var(FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV)
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(DEFAULT_FROST_NONCE_BUFFER_TARGET);
+
+        let clamped = configured.clamp(MIN_FROST_NONCE_BUFFER_TARGET, MAX_PEER_COMMITMENT_POOL);
+
+        if clamped != configured {
+            tracing::warn!(
+                target: LOG_MODULE_WALLETV2,
+                configured,
+                clamped_to = clamped,
+                env = FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV,
+                "FROST nonce buffer target out of range; clamping"
+            );
+        }
+
+        clamped
+    });
+
+    *TARGET
+}
+
+#[derive(Debug, Clone)]
+struct FrostPolynomial(frost::keys::dkg::round1::Package);
+
+impl_frost_encodable!(FrostPolynomial, frost::keys::dkg::round1::Package);
+
+#[derive(Debug, Clone)]
+struct FrostSecretSharePackage(frost_secp256k1_tr::keys::dkg::round2::Package);
+
+impl_frost_encodable!(
+    FrostSecretSharePackage,
+    frost_secp256k1_tr::keys::dkg::round2::Package
+);
+
+#[derive(Debug, Clone)]
+pub struct FrostSigningNonces(pub frost::round1::SigningNonces);
+
+impl_frost_encodable!(
+    FrostSigningNonces,
+    frost_secp256k1_tr::round1::SigningNonces
+);
+
+/// Placeholder emitted in place of each secret nonce by the `Serialize` impl
+/// of [`FrostSigningNonces`].
+const REDACTED_NONCE: &str = "<redacted>";
+
+/// Diagnostic (`dump_database`) serialization only — the DB encoding goes
+/// through `impl_frost_encodable!` and is unaffected.
+///
+/// The hiding and binding nonces are this guardian's per-signature secrets:
+/// a dump captured while a nonce is still buffered, combined with the
+/// signature share later broadcast with it, reveals the guardian's
+/// long-lived FROST signing share. So this impl deliberately never emits
+/// them and only carries the public commitment (the same value the DB key
+/// holds), mirroring the redacting `Debug` impl of `SigningNonces` in
+/// `frost-core`.
+impl serde::Serialize for FrostSigningNonces {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct as _;
+
+        let commitments = self
+            .0
+            .commitments()
+            .serialize()
+            .map_err(serde::ser::Error::custom)?;
+
+        let mut state = serializer.serialize_struct("FrostSigningNonces", 3)?;
+        state.serialize_field("hiding", REDACTED_NONCE)?;
+        state.serialize_field("binding", REDACTED_NONCE)?;
+        state.serialize_field("commitments", &fedimint_core::hex::encode(commitments))?;
+        state.end()
+    }
+}
+
+/// `Encodable`/`Decodable` wrapper for `SigningPackage`. Cached in the DB at
+/// `FrostSigningPackagesKey(txid)` so that any peer (including non-session
+/// peers) can verify and aggregate `FrostSignatureShare` consensus items
+/// without the package being re-sent over the wire by every signer.
+#[derive(Debug, Clone)]
+pub struct FrostSigningPackage(pub SigningPackage);
+
+impl_frost_encodable!(FrostSigningPackage, SigningPackage);
+
+impl serde::Serialize for FrostSigningPackage {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let bytes = self.0.serialize().map_err(serde::ser::Error::custom)?;
+        serializer.serialize_str(&fedimint_core::hex::encode(bytes))
+    }
+}
+
 /// Broadcast pacing for consensus items we've handed to a
 /// `consensus_proposal` but haven't yet seen come back through
 /// `process_consensus_item`, keyed by item with the wall-clock timestamp of
@@ -1354,91 +1507,6 @@ impl Wallet {
     }
 }
 
-/// Target number of unused FROST signing nonces each peer keeps on disk.
-/// `consume_our_nonce` replaces every nonce it uses, so the buffer only has to
-/// cover the commitments a burst of signing sessions draws before those
-/// replacements reach consensus: a walletv2 transaction spends at most two
-/// inputs, so this covers four transactions starting at once. A session that
-/// finds too few commitments waits for the replacements rather than failing.
-///
-/// Kept small because a guardian that loses its database leaves this many
-/// unusable commitments in the pool, and every signing attempt that draws one
-/// fails after [`LOCAL_ADVANCE_TIMEOUT`] before the next one can start.
-pub(crate) const DEFAULT_FROST_NONCE_BUFFER_TARGET: usize = 8;
-
-/// Upper bound on the number of unused commitments any single peer may hold
-/// in the replicated pool. Without a cap, a malicious or misconfigured
-/// guardian could broadcast endless unique commitments and grow every
-/// guardian's DB without bound.
-///
-/// Consensus-critical: every guardian must reach the same accept/reject
-/// decision for every commitment item, so this must stay a hard constant —
-/// never derive it from the per-guardian
-/// [`FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV`] setting. It is instead the
-/// upper bound that [`frost_nonce_buffer_target`] clamps that setting to.
-pub(crate) const MAX_PEER_COMMITMENT_POOL: usize = 1024;
-
-/// Smallest usable local FROST nonce buffer: a peer is only picked into a
-/// signing session if it has one commitment per input, and a peg-in spends
-/// two. Below this the guardian would never be viable — and since the buffer
-/// is only topped up at startup (`consume_our_nonce` refills 1:1
-/// thereafter), a target of `0` would leave it with no commitments forever.
-pub(crate) const MIN_FROST_NONCE_BUFFER_TARGET: usize = 2;
-
-/// Target size of the local FROST nonce buffer (see
-/// [`spawn_initial_nonce_backfill`]).
-/// Reads [`FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV`] once on first use,
-/// falling back to [`DEFAULT_FROST_NONCE_BUFFER_TARGET`] when unset or
-/// unparsable, and clamped to
-/// `MIN_FROST_NONCE_BUFFER_TARGET..=MAX_PEER_COMMITMENT_POOL` — commitments
-/// above the cap are rejected federation-wide and re-proposed forever.
-pub(crate) fn frost_nonce_buffer_target() -> usize {
-    static TARGET: LazyLock<usize> = LazyLock::new(|| {
-        let configured = std::env::var(FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV)
-            .ok()
-            .and_then(|value| value.parse::<usize>().ok())
-            .unwrap_or(DEFAULT_FROST_NONCE_BUFFER_TARGET);
-
-        let clamped = configured.clamp(MIN_FROST_NONCE_BUFFER_TARGET, MAX_PEER_COMMITMENT_POOL);
-
-        if clamped != configured {
-            tracing::warn!(
-                target: LOG_MODULE_WALLETV2,
-                configured,
-                clamped_to = clamped,
-                env = FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV,
-                "FROST nonce buffer target out of range; clamping"
-            );
-        }
-
-        clamped
-    });
-
-    *TARGET
-}
-
-/// How often a peer re-broadcasts its FROST signature share (or
-/// commitment) when the previous broadcast hasn't yet been delivered
-/// through consensus. `AlephBFT` can drop a unit when its broadcast lands
-/// close to a session boundary — most likely with larger federations
-/// where each peer commands a smaller fraction of the per-round byte
-/// budget. Picking a value comparable to the typical `AlephBFT` session
-/// duration (~20–30 s) keeps re-broadcasts to ~1 per session per item
-/// instead of ~10/sec.
-pub(crate) const FROST_REBROADCAST_INTERVAL: std::time::Duration =
-    std::time::Duration::from_secs(15);
-
-/// Local wall-clock window each peer waits before broadcasting a
-/// `FrostAdvanceVote` for a stuck signing session. Per-peer (not
-/// consensus) — peers' clocks may differ, but the consensus is on the
-/// *vote count*, not the timing. Held at 30s in every environment
-/// (including devimint) so that one-input txs get a fair chance to
-/// finish on the original `signing_session` before peers start firing
-/// advance votes — premature advance creates a swarm of new attempts,
-/// which inflates consensus-item volume and can push `AlephBFT` past its
-/// per-instance byte budget at different boundaries on different peers.
-pub(crate) const LOCAL_ADVANCE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
-
 /// One-shot startup backfill: top the local FROST nonce buffer up to
 /// [`frost_nonce_buffer_target()`] and exit. After this, the buffer is
 /// maintained 1:1 by `consume_our_nonce`, which generates a replacement
@@ -1482,7 +1550,7 @@ pub(crate) fn spawn_initial_nonce_backfill(
 /// FROST identifiers must be non-zero, so we offset by 1. `PeerId` wraps a
 /// `u16`, so the cast is lossless; the offset only overflows at `PeerId`
 /// `u16::MAX`, which config gen never assigns (ids are `0..n`).
-pub(crate) fn peer_id_to_identifier(peer_id: PeerId) -> Identifier {
+fn peer_id_to_identifier(peer_id: PeerId) -> Identifier {
     Identifier::try_from(peer_id.to_usize() as u16 + 1)
         .expect("Could not convert PeerId to Identifier")
 }
@@ -1506,7 +1574,7 @@ pub(crate) fn peer_id_to_identifier(peer_id: PeerId) -> Identifier {
 /// restore or wipe) can't produce a late share for the attempt it failed.
 /// Each attempt it is drafted into consumes and tombstones some of those
 /// unusable commitments, so it signs again once they are used up.
-pub(crate) async fn pick_signing_session(
+async fn pick_signing_session(
     dbtx: &mut DatabaseTransaction<'_>,
     all_peers: &[PeerId],
     threshold: usize,
@@ -1705,10 +1773,7 @@ fn tweak_verifying_key(verifying_key: &VerifyingKey, tweak: &Scalar) -> Verifyin
 /// interpretation of the original internal key — so we normalize
 /// to Even-Y before adding the tweak. The BIP-341 tap tweak is applied
 /// separately by `round2::sign_with_tweak`.
-pub(crate) fn apply_utxo_tweak_to_key_package(
-    key_package: &KeyPackage,
-    tweak: &sha256::Hash,
-) -> KeyPackage {
+fn apply_utxo_tweak_to_key_package(key_package: &KeyPackage, tweak: &sha256::Hash) -> KeyPackage {
     let key_package = key_package.clone().into_even_y(None);
 
     // See `tweak_xonly_public_key` for why the hash-to-scalar load is an
@@ -1738,7 +1803,7 @@ pub(crate) fn apply_utxo_tweak_to_key_package(
 ///
 /// Mirrors `apply_utxo_tweak_to_key_package` on the public side. The BIP-341
 /// tap tweak is applied separately by `aggregate_with_tweak`.
-pub(crate) fn apply_utxo_tweak_to_pubkey_package(
+fn apply_utxo_tweak_to_pubkey_package(
     pubkey_package: &PublicKeyPackage,
     tweak: &sha256::Hash,
 ) -> PublicKeyPackage {
@@ -1766,7 +1831,7 @@ pub(crate) fn apply_utxo_tweak_to_pubkey_package(
 /// verifying-share / verifying-key match what the signer used in
 /// `sign_with_tweak`. Returns an error if the share doesn't verify (e.g., a
 /// malicious or buggy peer).
-pub(crate) fn verify_signature_share(
+fn verify_signature_share(
     pubkey_package: &PublicKeyPackage,
     utxo_tweak: &sha256::Hash,
     merkle_root: &[u8],
@@ -1791,75 +1856,6 @@ pub(crate) fn verify_signature_share(
         pubkey_package.verifying_key(),
     )
     .map_err(|e| anyhow::anyhow!("FROST signature share from peer {peer_id} is invalid: {e}"))
-}
-
-#[derive(Debug, Clone)]
-struct FrostPolynomial(frost::keys::dkg::round1::Package);
-
-impl_frost_encodable!(FrostPolynomial, frost::keys::dkg::round1::Package);
-
-#[derive(Debug, Clone)]
-struct FrostSecretSharePackage(frost_secp256k1_tr::keys::dkg::round2::Package);
-
-impl_frost_encodable!(
-    FrostSecretSharePackage,
-    frost_secp256k1_tr::keys::dkg::round2::Package
-);
-
-#[derive(Debug, Clone)]
-pub struct FrostSigningNonces(pub frost::round1::SigningNonces);
-
-impl_frost_encodable!(
-    FrostSigningNonces,
-    frost_secp256k1_tr::round1::SigningNonces
-);
-
-/// Placeholder emitted in place of each secret nonce by the `Serialize` impl
-/// of [`FrostSigningNonces`].
-const REDACTED_NONCE: &str = "<redacted>";
-
-/// Diagnostic (`dump_database`) serialization only — the DB encoding goes
-/// through `impl_frost_encodable!` and is unaffected.
-///
-/// The hiding and binding nonces are this guardian's per-signature secrets:
-/// a dump captured while a nonce is still buffered, combined with the
-/// signature share later broadcast with it, reveals the guardian's
-/// long-lived FROST signing share. So this impl deliberately never emits
-/// them and only carries the public commitment (the same value the DB key
-/// holds), mirroring the redacting `Debug` impl of `SigningNonces` in
-/// `frost-core`.
-impl serde::Serialize for FrostSigningNonces {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeStruct as _;
-
-        let commitments = self
-            .0
-            .commitments()
-            .serialize()
-            .map_err(serde::ser::Error::custom)?;
-
-        let mut state = serializer.serialize_struct("FrostSigningNonces", 3)?;
-        state.serialize_field("hiding", REDACTED_NONCE)?;
-        state.serialize_field("binding", REDACTED_NONCE)?;
-        state.serialize_field("commitments", &fedimint_core::hex::encode(commitments))?;
-        state.end()
-    }
-}
-
-/// `Encodable`/`Decodable` wrapper for `SigningPackage`. Cached in the DB at
-/// `FrostSigningPackagesKey(txid)` so that any peer (including non-session
-/// peers) can verify and aggregate `FrostSignatureShare` consensus items
-/// without the package being re-sent over the wire by every signer.
-#[derive(Debug, Clone)]
-pub struct FrostSigningPackage(pub SigningPackage);
-
-impl_frost_encodable!(FrostSigningPackage, SigningPackage);
-
-impl serde::Serialize for FrostSigningPackage {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let bytes = self.0.serialize().map_err(serde::ser::Error::custom)?;
-        serializer.serialize_str(&fedimint_core::hex::encode(bytes))
-    }
 }
 
 #[cfg(test)]
