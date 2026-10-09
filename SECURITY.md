@@ -111,6 +111,40 @@ fallback, complete peg-out transactions and guardian-origin timing. Any primary
 broadcast error, including policy rejection, may trigger this disclosure. Only
 configure a fallback if these trust and privacy consequences are acceptable.
 
+## Walletv2 FROST Signing
+
+A walletv2 federation set up with the `frost` descriptor holds its funds under
+a FROST threshold key. During DKG, each guardian's round-two share for another
+guardian is secret and is sent only to that guardian over the authenticated,
+encrypted guardian-to-guardian connection, never broadcast. The resulting key
+share is stored in the guardian's private config next to its Bitcoin key, so
+the guardian config backup must be protected like the private config itself.
+
+Signing nonces are generated and kept only in the guardian's local database.
+Only their public commitments go through consensus, and nonces are redacted
+from debug and serialized output. A nonce is removed from the database in the
+same transaction that produces the signature share using it, and the share is
+broadcast only after that transaction commits. Each commitment drawn into a
+signing session is recorded as consumed in replicated state, so a delayed or
+replayed copy of it is rejected by every guardian. Signing sessions are built
+only from consensus state, so replaying history after a restore rebuilds the
+same sessions and never signs a different message with a used nonce. Never
+run two copies of the same guardian at once.
+
+A guardian whose database is lost or restored from an older snapshot recovers
+consensus history from its peers, which puts back commitments whose nonces it
+no longer holds. Sessions that draw them fail and are retried with other
+guardians, and with more than `f` guardians unavailable or stale, signing
+retries until those commitments are used up. Each affected guardian can delay
+signing by up to its nonce buffer (`FM_WALLETV2_FROST_NONCE_BUFFER_TARGET`,
+default 8) times the 30-second attempt timeout. This costs liveness only, not
+safety.
+
+FROST outputs also commit to a script-path `multi_a` branch over the guardians'
+Bitcoin keys. `fedimintd` never uses it: FROST federations sign only through
+the key path and reject script-path signatures. Spending through that branch
+requires building and signing transactions manually, outside Fedimint.
+
 ## Public Gateway Federation Status
 
 Configured gateways expose unauthenticated HTTP and Iroh `POST
