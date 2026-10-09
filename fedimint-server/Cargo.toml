@@ -73,6 +73,8 @@ url = { workspace = true }
 z32 = { workspace = true }
 
 [dev-dependencies]
+fedimint-rocksdb = { workspace = true }
+tempfile = { workspace = true }
 test-log = { workspace = true }
 
 [build-dependencies]

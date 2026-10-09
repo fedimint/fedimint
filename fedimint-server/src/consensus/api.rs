@@ -701,8 +701,6 @@ impl ConsensusApi {
         peer_id: PeerId,
         metadata: fedimint_core::net::guardian_metadata::SignedGuardianMetadata,
     ) -> Result<(), ApiError> {
-        use crate::net::api::guardian_metadata::GuardianMetadataKey;
-
         let Some(peer_key) = self.cfg.consensus.broadcast_public_keys.get(&peer_id) else {
             return Err(ApiError::bad_request("Peer not in federation".into()));
         };
@@ -714,31 +712,7 @@ impl ConsensusApi {
             )));
         }
 
-        let mut dbtx = self.db.begin_transaction().await;
-
-        if let Some(existing_metadata) = dbtx.get_value(&GuardianMetadataKey(peer_id)).await {
-            // If the current metadata is semantically identical to the new one (except
-            // for potentially having a different, valid signature) we return ok to allow
-            // the caller to stop submitting the value if they are in a retry loop.
-            if existing_metadata.bytes == metadata.bytes {
-                return Ok(());
-            }
-
-            // Only update if the new metadata has a newer timestamp
-            if metadata.guardian_metadata().timestamp_secs
-                <= existing_metadata.guardian_metadata().timestamp_secs
-            {
-                return Err(ApiError::bad_request(
-                    "New metadata timestamp is not newer than existing".into(),
-                ));
-            }
-        }
-
-        dbtx.insert_entry(&GuardianMetadataKey(peer_id), &metadata)
-            .await;
-        dbtx.commit_tx().await;
-
-        Ok(())
+        store_guardian_metadata(&self.db, peer_id, &metadata).await
     }
 
     async fn sign_guardian_metadata(
@@ -767,6 +741,53 @@ impl ConsensusApi {
             api_secret,
         )
     }
+}
+
+/// Store metadata after the submitting peer and signature have been verified.
+async fn store_guardian_metadata(
+    db: &Database,
+    peer_id: PeerId,
+    metadata: &fedimint_core::net::guardian_metadata::SignedGuardianMetadata,
+) -> Result<(), ApiError> {
+    use crate::net::api::guardian_metadata::GuardianMetadataKey;
+
+    // Concurrent submissions can update the same peer. Retry the comparison as
+    // well as the write so a newer record committed by another request wins.
+    db.autocommit(
+        |dbtx, _| {
+            let metadata = metadata.clone();
+            Box::pin(async move {
+                if let Some(existing_metadata) = dbtx.get_value(&GuardianMetadataKey(peer_id)).await
+                {
+                    // Semantically identical metadata may have a different valid signature.
+                    // Accept it so callers can stop retrying an already-stored update.
+                    if existing_metadata.bytes == metadata.bytes {
+                        return Ok(());
+                    }
+
+                    if metadata.guardian_metadata().timestamp_secs
+                        <= existing_metadata.guardian_metadata().timestamp_secs
+                    {
+                        return Err(ApiError::bad_request(
+                            "New metadata timestamp is not newer than existing".into(),
+                        ));
+                    }
+                }
+
+                dbtx.insert_entry(&GuardianMetadataKey(peer_id), &metadata)
+                    .await;
+                Ok(())
+            })
+        },
+        None,
+    )
+    .await
+    .map_err(|e| match e {
+        fedimint_core::db::AutocommitError::ClosureError { error, .. } => error,
+        fedimint_core::db::AutocommitError::CommitFailed { last_error, .. } => {
+            ApiError::server_error(format!("Database commit failed: {last_error}"))
+        }
+    })
 }
 
 async fn sign_guardian_metadata_preserving_iroh_endpoint(
