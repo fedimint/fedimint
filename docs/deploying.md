@@ -41,7 +41,7 @@ You can create a Fedimint in two ways:
 
 ### Step By Step Ceremony
 1. **Install & Launch `fedimintd`:**
-    Each participating guardian runs their own instance of fedimintd.
+    Each participating guardian runs their own instance of fedimintd.[^wallet-descriptor]
 	See below [self-hosted solutions](#self-hosted-solutions) or [hosted solutions](#hosted-solutions) for installation options.
 2. **Set Passwords:**
 	Each guardian sets two environment variables before starting fedimintd: `FM_PASSWORD_UI` (gates the admin UI login form) and `FM_PASSWORD_API` (gates admin RPCs on the public WS/iroh API). They can be the same value. Either is optional: unset `FM_PASSWORD_UI` serves the UI without a login form (only safe when `FM_BIND_UI` stays on a trusted interface — the default `127.0.0.1`), and unset `FM_PASSWORD_API` makes admin RPCs return 401 unconditionally. `FM_PASSWORD_UI` falls back to a `password.private` file in the data dir for backwards compatibility; `FM_PASSWORD_API` never does, since the public API is always network-reachable and must be enabled explicitly.
@@ -61,6 +61,8 @@ run, though one gateway can join and server multiple
 federations. It is currently recommend to use an existing Lightning Gateway, but you can run your own. [Reach out on Discord for more information](https://chat.fedimint.org).
 
 See [here](../docs/gateway.md) for more information about the Lightning Gateway.
+
+[^wallet-descriptor]: Optional: the leader, the guardian who sets the federation name, can set `FM_WALLETV2_DESCRIPTOR` before starting fedimintd to choose how the walletv2 module holds the federation's on-chain funds: `wsh` (the default, a P2WSH multisig), `tr` (a Taproot k-of-n multisig) or `frost` (a Taproot FROST threshold key). Leaving it unset uses `wsh`. Only the leader's value is used; the variable has no effect on the other guardians. An invalid value makes setup fail rather than fall back to the default. `wsh`, and the legacy `wallet` module whichever descriptor is chosen, support at most 20 guardians. The descriptor is fixed when DKG runs, and existing federations are not migrated to a different one.
 
 ## Self-hosted solutions
 
