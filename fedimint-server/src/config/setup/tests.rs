@@ -1,17 +1,20 @@
 use std::collections::BTreeSet;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
 
 use base64::Engine as _;
 use bitcoin::Network;
+use fedimint_core::base32::{self, FEDIMINT_PREFIX};
+use fedimint_core::core::ModuleKind;
 use fedimint_core::db::IRawDatabaseExt;
 use fedimint_core::db::mem_impl::MemDatabase;
+use fedimint_core::setup_code::{MAX_WSH_FEDERATION_SIZE, PeerSetupCode, WalletDescriptorKind};
 use fedimint_server_core::setup_ui::ISetupApi;
 use tokio::sync::mpsc::{self, Receiver};
 
-use super::{
-    ConfigGenOutcome, ConfigGenSettings, FEDIMINT_PREFIX, JSON_EXT, LOCAL_CONFIG, PathBuf,
-    PeerSetupCode, SetupApi, base32, parse_backup,
-};
+use super::{ConfigGenOutcome, LEGACY_WALLET_MODULE_KIND, SetupApi, parse_backup};
+use crate::config::ConfigGenSettings;
+use crate::config::io::{JSON_EXT, LOCAL_CONFIG};
 
 fn setup_api(network: Network) -> SetupApi {
     setup_api_with_version(network, "1.2.3-alpha")
@@ -294,4 +297,99 @@ async fn rejects_different_fedimint_vendor_during_dkg() {
                 .contains(&format!("Guardian uses Fedimint version {peer_version}"))
         );
     }
+}
+
+#[tokio::test]
+async fn rejects_federation_size_above_wsh_limit_on_leader() {
+    // Rejected whatever the descriptor: with the default `wsh` one it is the
+    // P2WSH limit, with a taproot one the legacy wallet's.
+    let api = setup_api(Network::Regtest);
+
+    let err = api
+        .set_local_parameters(
+            "leader".to_string(),
+            Some("fed".to_string()),
+            None,
+            Some(BTreeSet::from([LEGACY_WALLET_MODULE_KIND])),
+            Some(MAX_WSH_FEDERATION_SIZE + 1),
+        )
+        .await
+        .expect_err("a P2WSH multisig can't hold that many keys");
+
+    assert!(
+        err.to_string().contains("exceeds the maximum of 20"),
+        "unexpected error: {err:#}"
+    );
+}
+
+/// A leader code as a follower would receive it, built without going through
+/// the leader's own validation.
+async fn leader_code(
+    descriptor_kind: Option<WalletDescriptorKind>,
+    enabled_modules: Option<BTreeSet<ModuleKind>>,
+    federation_size: u32,
+) -> String {
+    let leader_api = setup_api(Network::Regtest);
+    let mut code = decode_setup_code(&setup_code(&leader_api, "leader").await);
+    code.federation_name = Some("fed".to_string());
+    code.descriptor_kind = descriptor_kind;
+    code.enabled_modules = enabled_modules;
+    code.federation_size = Some(federation_size);
+    base32::encode_prefixed(FEDIMINT_PREFIX, &code)
+}
+
+#[tokio::test]
+async fn follower_rejects_leader_code_above_wsh_limit_for_default_descriptor() {
+    let api = setup_api(Network::Regtest);
+    setup_code(&api, "local").await;
+
+    let err = api
+        .add_peer_setup_code(leader_code(None, None, MAX_WSH_FEDERATION_SIZE + 1).await)
+        .await
+        .expect_err("an unset descriptor means P2WSH");
+
+    assert!(
+        err.to_string().contains("for the Wsh wallet descriptor"),
+        "unexpected error: {err:#}"
+    );
+}
+
+#[tokio::test]
+async fn follower_rejects_leader_code_above_wsh_limit_with_legacy_wallet() {
+    let api = setup_api(Network::Regtest);
+    setup_code(&api, "local").await;
+
+    let err = api
+        .add_peer_setup_code(
+            leader_code(
+                Some(WalletDescriptorKind::Frost),
+                Some(BTreeSet::from([LEGACY_WALLET_MODULE_KIND])),
+                MAX_WSH_FEDERATION_SIZE + 1,
+            )
+            .await,
+        )
+        .await
+        .expect_err("the legacy wallet is P2WSH regardless of the walletv2 descriptor");
+
+    assert!(
+        err.to_string().contains("legacy `wallet` module"),
+        "unexpected error: {err:#}"
+    );
+}
+
+#[tokio::test]
+async fn follower_accepts_leader_code_above_wsh_limit_with_taproot_descriptor() {
+    let api = setup_api(Network::Regtest);
+    setup_code(&api, "local").await;
+
+    api.add_peer_setup_code(
+        leader_code(
+            Some(WalletDescriptorKind::Frost),
+            Some(BTreeSet::from([ModuleKind::from_static_str("mint")])),
+            MAX_WSH_FEDERATION_SIZE + 1,
+        )
+        .await,
+    )
+    .await
+    .expect("taproot descriptors don't bound the federation size");
 }
