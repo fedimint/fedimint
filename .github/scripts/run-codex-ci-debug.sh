@@ -156,6 +156,10 @@ Target run:
 - Head branch: $CI_DEBUG_HEAD_BRANCH
 - Head SHA: $CI_DEBUG_HEAD_SHA
 
+If you open a draft PR, add one line at the bottom of the PR description with
+the failed CI run URL that triggered it and a ping for the requester or actor.
+Do not include secrets or unrelated environment variable values.
+
 Use the GitHub event payload at:
 $RUNNER_TEMP/codex-ci-debug/context/event.json
 
