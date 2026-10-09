@@ -1635,7 +1635,7 @@ pub(crate) async fn dkg(
                 .get(&identifier)
                 .expect("No round2 package for identifier")
                 .clone();
-            (peer_id, FrostPolynomialCommitment(package))
+            (peer_id, FrostSecretSharePackage(package))
         })
         .collect::<BTreeMap<_, _>>();
 
@@ -1786,10 +1786,10 @@ struct FrostPolynomial(frost::keys::dkg::round1::Package);
 impl_frost_encodable!(FrostPolynomial, frost::keys::dkg::round1::Package);
 
 #[derive(Debug, Clone)]
-struct FrostPolynomialCommitment(frost_secp256k1_tr::keys::dkg::round2::Package);
+struct FrostSecretSharePackage(frost_secp256k1_tr::keys::dkg::round2::Package);
 
 impl_frost_encodable!(
-    FrostPolynomialCommitment,
+    FrostSecretSharePackage,
     frost_secp256k1_tr::keys::dkg::round2::Package
 );
 
