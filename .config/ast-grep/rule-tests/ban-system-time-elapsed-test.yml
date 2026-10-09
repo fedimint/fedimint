@@ -1,0 +1,38 @@
+id: ban-system-time-elapsed
+valid:
+  - clock.duration_since(start)
+  - clock.elapsed(1)
+  - clock.elapsed::<u32>(1)
+  - clock.elapsed
+  - elapsed(clock)
+  - Clock::elapsed(&clock)
+  - clock.elapsed_time()
+  - '"clock.elapsed()"'
+  - '// clock.elapsed()'
+  # Both scanners leave macro token trees uninspected.
+  - 'println!("{:?}", clock.elapsed());'
+  - assert!(clock.elapsed().is_ok());
+  - custom!(clock.elapsed());
+  - custom!{clock.elapsed();}
+  - custom![clock.elapsed()];
+  - outer!(inner!(clock.elapsed()));
+  - 'macro_rules! clock { () => { clock.elapsed() }; }'
+invalid:
+  - clock.elapsed()
+  - unrelated.elapsed()
+  - clock.inner.elapsed()
+  - get_clock().elapsed()
+  - (clock).elapsed()
+  - (&clock).elapsed()
+  - clocks[0].elapsed()
+  - get_clock()?.elapsed()
+  - get_clock().await.elapsed()
+  - clock.elapsed().expect("clock moved backwards")
+  - clock.elapsed::<u32>()
+  - clock.elapsed::<'a, u32, 3>()
+  - |
+      clock
+          .elapsed()
+  - |
+      clock /* receiver */
+          .elapsed(/* no arguments */)

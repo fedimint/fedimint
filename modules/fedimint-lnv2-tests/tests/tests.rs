@@ -30,10 +30,10 @@ use fedimint_lnv2_client::events::{
     ReceivePaymentEvent, SendPaymentEvent, SendPaymentStatus, SendPaymentUpdateEvent,
 };
 use fedimint_lnv2_client::{
-    FinalReceiveOperationState, InvoiceSendStatus, LightningClientInit, LightningClientModule,
-    LightningOperationMeta, ReceiveError, ReceiveOperationState, ReceiveWithTermsError,
-    SelectGatewayError, SendOperationState, SendPaymentError, SendWithTermsError,
-    SpendableAmountError,
+    FinalReceiveOperationState, FinalSendOperationState, InvoiceSendStatus, LightningClientInit,
+    LightningClientModule, LightningOperationMeta, ReceiveError, ReceiveOperationState,
+    ReceiveWithTermsError, SelectGatewayError, SendOperationState, SendPaymentError,
+    SendWithTermsError, SpendableAmountError,
 };
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
 use fedimint_lnv2_common::gateway_api::PaymentFee;
@@ -386,6 +386,51 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
             .get_invoice_send_status(&invoice)
             .await?,
         InvoiceSendStatus::Failed(operation_id),
+    );
+
+    Ok(())
+}
+
+/// Waiting for the operation to have no active states follows a payment the
+/// gateway fails through its refund, without the caller naming the refund's
+/// outputs: once it returns, the outcome is settled and the refunded amount is
+/// back in the balance.
+#[tokio::test(flavor = "multi_thread")]
+async fn awaiting_no_active_states_follows_a_refund_to_its_end() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await;
+
+    let operation_id = client
+        .get_first_module::<LightningClientModule>()?
+        .send(
+            mock::unpayable_invoice(),
+            Some(mock::gateway()),
+            Value::Null,
+        )
+        .await?;
+
+    client.await_no_active_states(operation_id).await;
+
+    assert!(!client.has_active_states(operation_id).await);
+
+    // Checked before the outcome is read, which would itself wait for the
+    // refund. The invoice asks for 1000 sats, so a balance within that of the
+    // starting one means the refund has been credited: all that is missing
+    // are the federation's fees.
+    assert!(client.get_balance_for_btc().await? > sats(9_000));
+
+    assert_eq!(
+        client
+            .get_first_module::<LightningClientModule>()?
+            .await_final_send_operation_state(operation_id)
+            .await?,
+        FinalSendOperationState::Refunded,
     );
 
     Ok(())
@@ -920,6 +965,53 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
             invoice_currency: lightning_invoice::Currency::Signet,
             federation_currency: lightning_invoice::Currency::Regtest
         }
+    );
+
+    Ok(())
+}
+
+/// A balance too low to fund the outgoing contract is reported as a typed
+/// shortfall carrying both amounts, so a caller can tell it apart from any
+/// other funding failure without reading a message.
+#[tokio::test(flavor = "multi_thread")]
+async fn send_without_enough_funds_reports_the_shortfall() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    // The mock invoice asks for 1000 sats, so this is short of it even
+    // before the gateway's fee.
+    let balance = sats(500);
+
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(balance, AmountUnit::BITCOIN)
+        .await;
+
+    let invoice = mock::payable_invoice();
+
+    let error = client
+        .get_first_module::<LightningClientModule>()?
+        .send(invoice.clone(), Some(mock::gateway()), Value::Null)
+        .await
+        .expect_err("a send the balance cannot fund did not fail");
+
+    assert_matches!(
+        error,
+        SendPaymentError::InsufficientFunds(shortfall) => {
+            assert_eq!(shortfall.total_amount, balance);
+            assert!(shortfall.requested_amount > sats(1_000));
+        }
+    );
+
+    // Nothing was funded, so the invoice can still be paid once the balance
+    // allows it.
+    assert_eq!(
+        client
+            .get_first_module::<LightningClientModule>()?
+            .get_invoice_send_status(&invoice)
+            .await?,
+        InvoiceSendStatus::NotAttempted,
     );
 
     Ok(())

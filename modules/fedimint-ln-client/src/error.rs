@@ -182,6 +182,18 @@ pub enum PayBolt11InvoiceError {
     #[error("The invoice does not specify an amount")]
     MissingInvoiceAmount,
 
+    /// The invoice's `min_final_cltv_expiry_delta` would put the contract's
+    /// refund timelock too far ahead, locking the payer's funds for that long
+    /// if the gateway never cancels.
+    #[error("The contract's timelock delta of {found} blocks exceeds the maximum of {max}")]
+    TimelockDeltaTooLarge {
+        /// The delta this invoice would need: its `min_final_cltv_expiry_delta`
+        /// plus the client's own refund timelock.
+        found: u64,
+        /// The largest delta this client accepts.
+        max: u64,
+    },
+
     /// The chosen gateway did not answer, so funding a contract for it would
     /// lock money up with nobody to claim it.
     #[error("The gateway is not available")]

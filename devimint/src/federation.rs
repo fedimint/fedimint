@@ -1110,7 +1110,8 @@ impl Federation {
     }
 
     /// Initiates multiple peg-outs from the same federation for the set of
-    /// gateways to save on mining blocks in parallel.
+    /// gateways and waits for their change to become spendable, sharing the
+    /// confirmation blocks across all peg-outs.
     pub async fn pegout_gateways(
         &self,
         amount: u64,
@@ -1137,14 +1138,16 @@ impl Federation {
                 .await?;
             peg_outs.insert(gw.ln.ln_type(), (prev_fed_ecash_balance, response));
         }
-        self.bitcoind.mine_blocks(21).await?;
-
+        // The gateway returns once the peg-out is accepted, before it is
+        // necessarily broadcast. Mining first can leave the peg-outs in the
+        // mempool, with no spendable change for a subsequent withdrawal.
         try_join_all(
             peg_outs
                 .values()
                 .map(|(_, pegout)| self.bitcoind.poll_get_transaction(pegout.txid)),
         )
         .await?;
+        self.finalize_mempool_tx().await?;
 
         for gw in gateways.clone() {
             let after_fed_ecash_balance = gw
@@ -1240,9 +1243,9 @@ impl Federation {
     }
 
     fn get_finality_delay(&self) -> Result<u32, anyhow::Error> {
-        // Walletv2 uses a constant finality delay
+        // Walletv2's consensus block count trails the backend by a constant
         if crate::util::supports_wallet_v2() {
-            return Ok(fedimint_walletv2_server::CONFIRMATION_FINALITY_DELAY as u32);
+            return Ok(fedimint_walletv2_server::BLOCK_COUNT_VOTE_DELAY as u32);
         }
 
         let wallet_instance_id = self.module_instance_id_by_kind(&fedimint_wallet_client::KIND)?;
