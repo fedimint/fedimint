@@ -1,11 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
+use std::future::{Future, ready};
 use std::mem;
+use std::pin::Pin;
 
 use fedimint_connectors::ServerResult;
 use fedimint_connectors::error::ServerError;
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{NumPeers, PeerId, maybe_add_send_sync};
+use fedimint_core::{NumPeers, PeerId, maybe_add_send, maybe_add_send_sync};
 
 /// Fedimint query strategy
 ///
@@ -14,7 +16,15 @@ use fedimint_core::{NumPeers, PeerId, maybe_add_send_sync};
 /// responses from the Federation members. This trait abstracts away the details
 /// of each specific strategy for the generic client Api code.
 pub trait QueryStrategy<IR, OR = IR> {
-    fn process(&mut self, peer_id: PeerId, response: IR) -> QueryStep<OR>;
+    /// Processes a peer's response.
+    ///
+    /// A strategy that verifies responses awaits the verification, so a heavy
+    /// one can run off the async workers.
+    fn process(
+        &mut self,
+        peer_id: PeerId,
+        response: IR,
+    ) -> impl Future<Output = QueryStep<OR>> + MaybeSend;
 
     /// Called when a peer's request fails, so a strategy can tell "still
     /// waiting" apart from "will never answer".
@@ -60,39 +70,52 @@ impl<R, T> FilterMap<R, T> {
     }
 }
 
-impl<R, T> QueryStrategy<R, T> for FilterMap<R, T> {
-    fn process(&mut self, _peer: PeerId, response: R) -> QueryStep<T> {
-        match (self.filter_map)(response) {
+impl<R, T: MaybeSend> QueryStrategy<R, T> for FilterMap<R, T> {
+    fn process(
+        &mut self,
+        _peer: PeerId,
+        response: R,
+    ) -> impl Future<Output = QueryStep<T>> + MaybeSend {
+        ready(match (self.filter_map)(response) {
             Ok(value) => QueryStep::Success(value),
             Err(e) => QueryStep::Failure(e),
-        }
+        })
     }
 }
 
 /// Returns when we obtain a threshold of valid responses. RPC call errors or
 /// invalid responses are not retried.
 pub struct FilterMapThreshold<R, T> {
-    filter_map: Box<maybe_add_send_sync!(dyn Fn(PeerId, R) -> ServerResult<T>)>,
+    filter_map: Box<maybe_add_send_sync!(dyn Fn(PeerId, R) -> FilterMapFuture<T>)>,
     filtered_responses: BTreeMap<PeerId, T>,
     threshold: usize,
 }
 
+type FilterMapFuture<T> = Pin<Box<maybe_add_send!(dyn Future<Output = ServerResult<T>>)>>;
+
 impl<R, T> FilterMapThreshold<R, T> {
-    pub fn new(
-        verifier: impl Fn(PeerId, R) -> ServerResult<T> + MaybeSend + MaybeSync + 'static,
+    /// The verifier runs once per response and is awaited, so pairings and
+    /// other heavy checks can go on the blocking pool.
+    pub fn new<Fut>(
+        verifier: impl Fn(PeerId, R) -> Fut + MaybeSend + MaybeSync + 'static,
         num_peers: NumPeers,
-    ) -> Self {
+    ) -> Self
+    where
+        Fut: Future<Output = ServerResult<T>> + MaybeSend + 'static,
+    {
         Self {
-            filter_map: Box::new(verifier),
+            filter_map: Box::new(move |peer, response| Box::pin(verifier(peer, response))),
             filtered_responses: BTreeMap::new(),
             threshold: num_peers.threshold(),
         }
     }
 }
 
-impl<R, T> QueryStrategy<R, BTreeMap<PeerId, T>> for FilterMapThreshold<R, T> {
-    fn process(&mut self, peer: PeerId, response: R) -> QueryStep<BTreeMap<PeerId, T>> {
-        match (self.filter_map)(peer, response) {
+impl<R: MaybeSend, T: MaybeSend> QueryStrategy<R, BTreeMap<PeerId, T>>
+    for FilterMapThreshold<R, T>
+{
+    async fn process(&mut self, peer: PeerId, response: R) -> QueryStep<BTreeMap<PeerId, T>> {
+        match (self.filter_map)(peer, response).await {
             Ok(response) => {
                 self.filtered_responses.insert(peer, response);
 
@@ -127,103 +150,26 @@ impl<R> ThresholdConsensus<R> {
     }
 }
 
-impl<R: Eq + Clone> QueryStrategy<R> for ThresholdConsensus<R> {
-    fn process(&mut self, peer: PeerId, response: R) -> QueryStep<R> {
+impl<R: Eq + Clone + MaybeSend> QueryStrategy<R> for ThresholdConsensus<R> {
+    fn process(
+        &mut self,
+        peer: PeerId,
+        response: R,
+    ) -> impl Future<Output = QueryStep<R>> + MaybeSend {
         self.responses.insert(peer, response.clone());
 
         if self.responses.values().filter(|r| **r == response).count() == self.threshold {
-            return QueryStep::Success(response);
+            return ready(QueryStep::Success(response));
         }
 
         assert!(self.retry.insert(peer));
 
-        if self.retry.len() == self.threshold {
+        ready(if self.retry.len() == self.threshold {
             QueryStep::Retry(mem::take(&mut self.retry))
         } else {
             QueryStep::Continue
-        }
+        })
     }
-}
-
-#[cfg(test)]
-fn dead_peer() -> ServerError {
-    ServerError::Connection("peer is unreachable".into())
-}
-
-#[test]
-fn threshold_agreement_counts_every_peer() {
-    use assert_matches::assert_matches;
-
-    // The case `FilterMapThreshold` gets wrong: peer 0 lags, and the agreement
-    // among 1, 2 and 3 only becomes visible once the fourth answer lands. A
-    // strategy that stopped at `threshold` responses would have reported a
-    // divergence that does not exist.
-    let mut agreement = ThresholdAgreement::<u64>::new(NumPeers::from(4));
-
-    assert_matches!(agreement.process(PeerId::from(0), 0), QueryStep::Continue);
-    assert_matches!(agreement.process(PeerId::from(1), 1), QueryStep::Continue);
-    assert_matches!(agreement.process(PeerId::from(3), 1), QueryStep::Continue);
-    assert_matches!(
-        agreement.process(PeerId::from(2), 1),
-        QueryStep::Success(Ok(1))
-    );
-}
-
-#[test]
-fn threshold_agreement_reports_divergence_once_every_peer_has_answered() {
-    use assert_matches::assert_matches;
-
-    let mut agreement = ThresholdAgreement::<u64>::new(NumPeers::from(4));
-
-    assert_matches!(agreement.process(PeerId::from(0), 0), QueryStep::Continue);
-    assert_matches!(agreement.process(PeerId::from(1), 1), QueryStep::Continue);
-    assert_matches!(agreement.process(PeerId::from(2), 2), QueryStep::Continue);
-
-    let QueryStep::Success(Err(responses)) = agreement.process(PeerId::from(3), 3) else {
-        panic!("expected a divergence carrying every response");
-    };
-    assert_eq!(responses.len(), 4);
-}
-
-#[test]
-fn threshold_agreement_does_not_wait_on_a_peer_that_errored() {
-    use assert_matches::assert_matches;
-
-    // A failed peer completes the picture just as a response does, so the
-    // divergence is reported rather than waiting on an answer that is never
-    // coming - the hang this strategy exists to avoid.
-    let mut agreement = ThresholdAgreement::<u64>::new(NumPeers::from(4));
-
-    assert_matches!(agreement.process(PeerId::from(0), 0), QueryStep::Continue);
-    assert_matches!(agreement.process(PeerId::from(1), 1), QueryStep::Continue);
-    assert_matches!(agreement.process(PeerId::from(2), 1), QueryStep::Continue);
-
-    let QueryStep::Success(Err(responses)) = agreement.process_error(PeerId::from(3), &dead_peer())
-    else {
-        panic!("expected a divergence once every peer has answered");
-    };
-    assert_eq!(responses.len(), 3);
-}
-
-#[test]
-fn threshold_agreement_defers_to_peer_errors_when_too_few_answered() {
-    use assert_matches::assert_matches;
-
-    // Two of four unreachable leaves fewer responses than the threshold. The
-    // useful complaint is that peers are down, which the caller reports from
-    // its own error accounting, so stay quiet.
-    let mut agreement = ThresholdAgreement::<u64>::new(NumPeers::from(4));
-
-    assert_matches!(agreement.process(PeerId::from(0), 0), QueryStep::Continue);
-    assert_matches!(agreement.process(PeerId::from(1), 1), QueryStep::Continue);
-    assert_matches!(
-        agreement.process_error(PeerId::from(2), &dead_peer()),
-        QueryStep::Continue
-    );
-    assert_matches!(
-        agreement.process_error(PeerId::from(3), &dead_peer()),
-        QueryStep::Continue
-    );
 }
 
 /// Returns the response a threshold of peers agree on, or - when they do not
@@ -272,15 +218,21 @@ impl<R> ThresholdAgreement<R> {
     }
 }
 
-impl<R: Eq + Clone> QueryStrategy<R, Result<R, BTreeMap<PeerId, R>>> for ThresholdAgreement<R> {
-    fn process(&mut self, peer: PeerId, response: R) -> QueryStep<Result<R, BTreeMap<PeerId, R>>> {
+impl<R: Eq + Clone + MaybeSend> QueryStrategy<R, Result<R, BTreeMap<PeerId, R>>>
+    for ThresholdAgreement<R>
+{
+    fn process(
+        &mut self,
+        peer: PeerId,
+        response: R,
+    ) -> impl Future<Output = QueryStep<Result<R, BTreeMap<PeerId, R>>>> + MaybeSend {
         self.responses.insert(peer, response.clone());
 
         if self.responses.values().filter(|r| **r == response).count() == self.threshold {
-            return QueryStep::Success(Ok(response));
+            return ready(QueryStep::Success(Ok(response)));
         }
 
-        self.diverged().unwrap_or(QueryStep::Continue)
+        ready(self.diverged().unwrap_or(QueryStep::Continue))
     }
 
     fn process_error(
@@ -294,17 +246,5 @@ impl<R: Eq + Clone> QueryStrategy<R, Result<R, BTreeMap<PeerId, R>>> for Thresho
     }
 }
 
-#[test]
-fn test_threshold_consensus() {
-    use assert_matches::assert_matches;
-
-    let mut consensus = ThresholdConsensus::<u64>::new(NumPeers::from(4));
-
-    assert_matches!(consensus.process(PeerId::from(0), 1), QueryStep::Continue);
-    assert_matches!(consensus.process(PeerId::from(1), 1), QueryStep::Continue);
-    assert_matches!(consensus.process(PeerId::from(2), 0), QueryStep::Retry(..));
-
-    assert_matches!(consensus.process(PeerId::from(0), 1), QueryStep::Continue);
-    assert_matches!(consensus.process(PeerId::from(1), 1), QueryStep::Continue);
-    assert_matches!(consensus.process(PeerId::from(2), 1), QueryStep::Success(1));
-}
+#[cfg(test)]
+mod tests;

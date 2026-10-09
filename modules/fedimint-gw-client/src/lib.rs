@@ -899,6 +899,8 @@ impl GatewayClientModule {
     /// Fails with [`GatewayPayInvoiceError::MissingInvoiceAmount`] if the
     /// invoice has no amount, [`GatewayPayInvoiceError::PrunedInvoiceRejected`]
     /// if the gateway cannot pay a pruned invoice,
+    /// [`GatewayPayInvoiceError::PaymentHashAlreadyClaimed`] if another
+    /// operation already claimed the invoice's payment hash,
     /// [`GatewayPayInvoiceError::Unauthorized`] if a payment of this contract
     /// is already under way and the request does not carry the
     /// authentication it was started with,
@@ -925,6 +927,23 @@ impl GatewayClientModule {
             .verify_pruned_invoice(pay_invoice_payload.payment_data)
             .await
             .map_err(GatewayPayInvoiceError::PrunedInvoiceRejected)?;
+
+        // Only the first operation to claim a payment image may ever pay it out,
+        // across LNv1, LNv2 and all federations; see the LNv2 `send_payment`.
+        // The claim is taken before the operation is created, and a retry of the
+        // same contract finds its own claim.
+        if !self
+            .lightning_manager
+            .claim_payment_image(
+                &fedimint_lnv2_common::contracts::PaymentImage::Hash(
+                    payload.payment_data.payment_hash(),
+                ),
+                OperationId(payload.contract_id.to_byte_array()),
+            )
+            .await
+        {
+            return Err(GatewayPayInvoiceError::PaymentHashAlreadyClaimed);
+        }
 
         self.client_ctx.module_db()
             .autocommit(
@@ -1383,4 +1402,12 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
         )>,
         GatewayClientV1Error,
     >;
+
+    /// Claims the payment image for `operation_id` in the claim table shared
+    /// with LNv2, returning `false` if another operation already claimed it.
+    async fn claim_payment_image(
+        &self,
+        payment_image: &fedimint_lnv2_common::contracts::PaymentImage,
+        operation_id: OperationId,
+    ) -> bool;
 }
