@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["CliCommandError","GatewaysOpts","LnurlOpts","Opts"],"fn":["handle_cli_command","json"]};
+window.SIDEBAR_ITEMS = {"constant":["MAX_SECRET_HEX_BYTES"],"enum":["CliCommandError","GatewaysOpts","HtlcOpts","LnurlOpts","Opts"],"fn":["ensure_single_stdin","handle_cli_command","handle_htlc_command","json","outpoint","parse_contract","read_claim_sk","read_preimage","read_secret_hex","write_secret_key_file"]};
