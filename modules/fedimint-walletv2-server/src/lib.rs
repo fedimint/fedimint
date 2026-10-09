@@ -15,6 +15,8 @@ pub mod envs;
 mod metrics;
 mod pending;
 mod taproot;
+#[cfg(test)]
+mod tests;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -94,7 +96,7 @@ use futures::StreamExt;
 use miniscript::descriptor::Wsh;
 use rand::rngs::OsRng;
 use secp256k1::ecdsa::Signature;
-use secp256k1::{PublicKey, Scalar, SecretKey, schnorr};
+use secp256k1::{Keypair, PublicKey, Scalar, SecretKey, schnorr};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tokio::sync::watch;
@@ -1826,31 +1828,61 @@ impl Wallet {
             .bitcoin_pks
             .iter()
             .map(|(peer, pk)| {
-                let tweaked = match self.cfg.consensus.descriptor {
-                    WalletDescriptor::Wsh => tweak_public_key(pk, &wallet.tweak).to_string(),
-                    WalletDescriptor::Tr
-                    | WalletDescriptor::SinglePeer(_)
-                    | WalletDescriptor::Frost(_) => {
-                        tweak_xonly_public_key(&pk.x_only_public_key().0, &wallet.tweak).to_string()
-                    }
-                };
-                (*peer, tweaked)
+                (
+                    *peer,
+                    recovery_public_key(&self.cfg.consensus.descriptor, pk, &wallet.tweak),
+                )
             })
             .collect();
 
-        let tweak = &Scalar::from_be_bytes(wallet.tweak.to_byte_array())
-            .expect("Hash is within field order");
-
-        let sk = self
-            .cfg
-            .private
-            .bitcoin_sk
-            .add_tweak(tweak)
-            .expect("Failed to tweak bitcoin secret key");
+        let sk = recovery_secret_key(
+            &self.cfg.consensus.descriptor,
+            &self.cfg.private.bitcoin_sk,
+            &wallet.tweak,
+        );
 
         let sk = bitcoin::PrivateKey::new(sk, self.cfg.consensus.network).to_wif();
 
         Some((pks, sk))
+    }
+}
+
+/// The public key controlling the federation UTXO identified by `tweak`, as
+/// exported for shutdown recovery. Taproot descriptors use the x-only tweak,
+/// matching the keys in the federation's scripts.
+fn recovery_public_key(
+    descriptor: &WalletDescriptor,
+    pk: &PublicKey,
+    tweak: &sha256::Hash,
+) -> String {
+    match descriptor {
+        WalletDescriptor::Wsh => tweak_public_key(pk, tweak).to_string(),
+        WalletDescriptor::Tr | WalletDescriptor::SinglePeer(_) | WalletDescriptor::Frost(_) => {
+            tweak_xonly_public_key(&pk.x_only_public_key().0, tweak).to_string()
+        }
+    }
+}
+
+/// The secret key matching [`recovery_public_key`]. The x-only tweak first
+/// negates a secret key whose public key has odd Y, so Taproot descriptors
+/// derive it the way signing does, via `Keypair::add_xonly_tweak`.
+fn recovery_secret_key(
+    descriptor: &WalletDescriptor,
+    sk: &SecretKey,
+    tweak: &sha256::Hash,
+) -> SecretKey {
+    let tweak = &Scalar::from_be_bytes(tweak.to_byte_array()).expect("Hash is within field order");
+
+    match descriptor {
+        WalletDescriptor::Wsh => sk
+            .add_tweak(tweak)
+            .expect("Failed to tweak bitcoin secret key"),
+        WalletDescriptor::Tr | WalletDescriptor::SinglePeer(_) | WalletDescriptor::Frost(_) => {
+            Keypair::from_secret_key(secp256k1::SECP256K1, sk)
+                .add_xonly_tweak(secp256k1::SECP256K1, tweak)
+                .expect("Failed to tweak bitcoin keypair")
+                .secret_key()
+        }
     }
 }
 
