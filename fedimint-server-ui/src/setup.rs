@@ -10,7 +10,7 @@ use axum_extra::extract::Form;
 use axum_extra::extract::cookie::CookieJar;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::envs::FM_WALLETV2_DESCRIPTOR_ENV;
-use fedimint_core::setup_code::WalletDescriptorKind;
+use fedimint_core::setup_code::{MAX_WSH_FEDERATION_SIZE, WalletDescriptorKind};
 use fedimint_server_core::setup_ui::DynSetupApi;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
 use fedimint_ui_common::auth::UserAuth;
@@ -304,7 +304,10 @@ fn setup_form_content(
                             option value="" selected disabled { "Federation Size" }
                             option value="1" { "1 — Testing" }
                             @for n in 4..=max_federation_size(descriptor_kind_from_env()) {
-                                @if n == 4 || (n > 4 && (n - 4) % 3 == 0) {
+                                // Only sizes every wallet descriptor supports are
+                                // recommended; larger taproot federations are offered
+                                // but not yet vetted.
+                                @if n <= MAX_WSH_FEDERATION_SIZE && (n - 4) % 3 == 0 {
                                     option value=(n) { (n) " — Recommended" }
                                 } @else {
                                     option value=(n) { (n) }
