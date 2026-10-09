@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["GatewayTest"],"fn":["backup_restore_test","config_test","esplora_test","get_transaction","liquidity_test","main","stop_and_recover_gateway"],"struct":["GatewayTestOpts"]};
+window.SIDEBAR_ITEMS = {"enum":["GatewayTest"],"fn":["backup_restore_test","config_test","esplora_test","get_transaction","liquidity_test","main","stop_and_recover_gateway"],"mod":["refused_payments"],"struct":["GatewayTestOpts"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["PAYMENT_AMOUNT_MSAT","REFUND_TIMEOUT"],"fn":["account","outgoing_cancelled","pay","payments","refund_paid_invoice","refund_test","unreachable_invoice"]};
