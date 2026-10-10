@@ -655,8 +655,10 @@ impl Client {
     /// # Panics
     /// If any of the input or output versions in the transaction builder are
     /// unknown by the respective module.
-    fn transaction_builder_get_balance(&self, builder: &TransactionBuilder) -> (Amounts, Amounts) {
-        // FIXME: prevent overflows, currently not suitable for untrusted input
+    fn transaction_builder_get_balance(
+        &self,
+        builder: &TransactionBuilder,
+    ) -> Result<(Amounts, Amounts), TransactionSubmitError> {
         let mut in_amounts = Amounts::ZERO;
         let mut out_amounts = Amounts::ZERO;
         let mut fee_amounts = Amounts::ZERO;
@@ -668,8 +670,12 @@ impl Client {
                 "We only build transactions with input versions that are supported by the module",
             );
 
-            in_amounts.checked_add_mut(&input.amounts);
-            fee_amounts.checked_add_mut(&item_fees);
+            in_amounts
+                .checked_add_mut(&input.amounts)
+                .ok_or(TransactionSubmitError::AmountOverflow)?;
+            fee_amounts
+                .checked_add_mut(&item_fees)
+                .ok_or(TransactionSubmitError::AmountOverflow)?;
         }
 
         for output in builder.outputs() {
@@ -679,12 +685,18 @@ impl Client {
                 "We only build transactions with output versions that are supported by the module",
             );
 
-            out_amounts.checked_add_mut(&output.amounts);
-            fee_amounts.checked_add_mut(&item_fees);
+            out_amounts
+                .checked_add_mut(&output.amounts)
+                .ok_or(TransactionSubmitError::AmountOverflow)?;
+            fee_amounts
+                .checked_add_mut(&item_fees)
+                .ok_or(TransactionSubmitError::AmountOverflow)?;
         }
 
-        out_amounts.checked_add_mut(&fee_amounts);
-        (in_amounts, out_amounts)
+        out_amounts
+            .checked_add_mut(&fee_amounts)
+            .ok_or(TransactionSubmitError::AmountOverflow)?;
+        Ok((in_amounts, out_amounts))
     }
 
     pub fn get_internal_payment_markers(
@@ -754,7 +766,8 @@ impl Client {
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
     ) -> Result<FinalizedTransaction, TransactionSubmitError> {
-        let (in_amounts, out_amounts) = self.transaction_builder_get_balance(&partial_transaction);
+        let (in_amounts, out_amounts) =
+            self.transaction_builder_get_balance(&partial_transaction)?;
 
         let mut added_inputs_bundles = vec![];
         let mut added_outputs_bundles = vec![];
@@ -816,7 +829,7 @@ impl Client {
         }
 
         let (input_amounts, output_amounts) =
-            self.transaction_builder_get_balance(&partial_transaction);
+            self.transaction_builder_get_balance(&partial_transaction)?;
 
         for (unit, output_amount) in output_amounts {
             let input_amount = input_amounts.get(&unit).copied().unwrap_or_default();
@@ -1008,7 +1021,8 @@ impl Client {
     /// transaction, and [`PrimaryModule`] for every other failure of that
     /// module; [`TransactionTooLarge`] if the finalized transaction exceeds
     /// the federation's size limit; [`StateMachines`] if the transaction's
-    /// state machines cannot be registered; and [`Database`] if the
+    /// state machines cannot be registered; [`AmountOverflow`] if calculating
+    /// the transaction balance or fees overflowed; and [`Database`] if the
     /// transaction keeps colliding with others and cannot be committed within
     /// its retry budget, which should not happen except in excessively
     /// concurrent scenarios.
@@ -1019,6 +1033,7 @@ impl Client {
     /// [`PrimaryModule`]: TransactionSubmitError::PrimaryModule
     /// [`TransactionTooLarge`]: TransactionSubmitError::TransactionTooLarge
     /// [`StateMachines`]: TransactionSubmitError::StateMachines
+    /// [`AmountOverflow`]: TransactionSubmitError::AmountOverflow
     /// [`Database`]: TransactionSubmitError::Database
     pub async fn finalize_and_submit_transaction<F, M>(
         &self,

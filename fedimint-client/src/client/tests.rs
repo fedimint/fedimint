@@ -8,22 +8,31 @@ use bitcoin::key::Secp256k1;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
 use fedimint_client_module::OperationId;
-use fedimint_client_module::error::{ClientModuleError, OperationNotFoundError};
+use fedimint_client_module::error::{
+    ClientModuleError, OperationNotFoundError, TransactionSubmitError,
+};
 use fedimint_client_module::meta::LegacyMetaSource;
-use fedimint_client_module::module::recovery::RecoveryProgress;
-use fedimint_client_module::module::{ClientModuleRegistry, FinalClientIface};
+use fedimint_client_module::module::recovery::{DynModuleBackup, RecoveryProgress};
+use fedimint_client_module::module::{
+    ClientModuleRegistry, DynClientModule, FinalClientIface, IClientModule, PrimaryModuleSupport,
+};
+use fedimint_client_module::sm::DynContext;
+use fedimint_client_module::transaction::{
+    ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
+};
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::{
     ClientConfig, ClientModuleConfig, GlobalClientConfig, ModuleInitRegistry,
 };
-use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::core::{Decoder, IntoDynInstance as _, ModuleInstanceId, ModuleKind};
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped as _};
+use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::DynRawFallback;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
-use fedimint_core::module::{CoreConsensusVersion, ModuleConsensusVersion};
+use fedimint_core::module::{AmountUnit, Amounts, CoreConsensusVersion, ModuleConsensusVersion};
 use fedimint_core::runtime::timeout;
 use fedimint_core::task::TaskGroup;
+use fedimint_core::{Amount, OutPoint};
 use fedimint_derive_secret::DerivableSecret;
 use futures::{StreamExt as _, poll};
 use tokio::select;
@@ -977,4 +986,284 @@ async fn storing_a_second_client_secret_is_typed() {
         .expect_err("A stored secret must not be overwritten");
 
     assert!(matches!(err, ClientSecretError::AlreadyExists), "{err:?}");
+}
+
+#[derive(fedimint_core::encoding::Encodable, fedimint_core::encoding::Decodable, Clone, Debug, Hash, PartialEq, Eq)]
+struct TestInput;
+
+impl std::fmt::Display for TestInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("TestInput")
+    }
+}
+
+impl fedimint_core::core::Input for TestInput {
+    const KIND: ModuleKind = ModuleKind::from_static_str("mock");
+}
+
+impl fedimint_core::core::IntoDynInstance for TestInput {
+    type DynType = fedimint_core::core::DynInput;
+
+    fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
+        fedimint_core::core::DynInput::from_typed(instance_id, self)
+    }
+}
+
+#[derive(fedimint_core::encoding::Encodable, fedimint_core::encoding::Decodable, Clone, Debug, Hash, PartialEq, Eq)]
+struct TestOutput;
+
+impl std::fmt::Display for TestOutput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("TestOutput")
+    }
+}
+
+impl fedimint_core::core::Output for TestOutput {
+    const KIND: ModuleKind = ModuleKind::from_static_str("mock");
+}
+
+impl fedimint_core::core::IntoDynInstance for TestOutput {
+    type DynType = fedimint_core::core::DynOutput;
+
+    fn into_dyn(self, instance_id: ModuleInstanceId) -> Self::DynType {
+        fedimint_core::core::DynOutput::from_typed(instance_id, self)
+    }
+}
+
+#[derive(Debug)]
+struct MockBalanceModule {
+    input_fee: Amounts,
+    output_fee: Amounts,
+}
+
+#[fedimint_core::apply(fedimint_core::async_trait_maybe_send!)]
+impl IClientModule for MockBalanceModule {
+    fn as_any(&self) -> &(fedimint_core::maybe_add_send_sync!(dyn std::any::Any)) {
+        self
+    }
+    fn decoder(&self) -> Decoder {
+        Decoder::default()
+    }
+    fn context(&self, _instance: ModuleInstanceId) -> DynContext {
+        unimplemented!()
+    }
+    async fn start(&self) {}
+    async fn handle_cli_command(
+        &self,
+        _args: &[std::ffi::OsString],
+    ) -> Result<serde_json::Value, ClientModuleError> {
+        unimplemented!()
+    }
+    async fn handle_rpc(
+        &self,
+        _method: String,
+        _request: serde_json::Value,
+    ) -> futures::stream::BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
+        unimplemented!()
+    }
+    fn input_fee(&self, _amount: &Amounts, _input: &fedimint_core::core::DynInput) -> Option<Amounts> {
+        Some(self.input_fee.clone())
+    }
+    fn output_fee(&self, _amount: &Amounts, _output: &fedimint_core::core::DynOutput) -> Option<Amounts> {
+        Some(self.output_fee.clone())
+    }
+    fn supports_backup(&self) -> bool {
+        false
+    }
+    async fn backup(
+        &self,
+        _module_instance_id: ModuleInstanceId,
+    ) -> Result<DynModuleBackup, ClientModuleError> {
+        unimplemented!()
+    }
+    fn supports_being_primary(&self) -> PrimaryModuleSupport {
+        PrimaryModuleSupport::None
+    }
+    async fn create_final_inputs_and_outputs(
+        &self,
+        _module_instance: ModuleInstanceId,
+        _dbtx: &mut DatabaseTransaction<'_>,
+        _operation_id: OperationId,
+        _unit: AmountUnit,
+        _input_amount: Amount,
+        _output_amount: Amount,
+    ) -> Result<(ClientInputBundle, ClientOutputBundle), ClientModuleError> {
+        unimplemented!()
+    }
+    async fn await_primary_module_output(
+        &self,
+        _operation_id: OperationId,
+        _out_point: OutPoint,
+    ) -> Result<(), ClientModuleError> {
+        unimplemented!()
+    }
+    async fn get_balance(
+        &self,
+        _module_instance: ModuleInstanceId,
+        _dbtx: &mut DatabaseTransaction<'_>,
+        _unit: AmountUnit,
+    ) -> Amount {
+        Amount::ZERO
+    }
+    async fn subscribe_balance_changes(&self) -> futures::stream::BoxStream<'static, ()> {
+        unimplemented!()
+    }
+}
+
+async fn client_with_mock_module(input_fee: Amounts, output_fee: Amounts) -> Client {
+    let mut client = client_for_lookup_test().await;
+    let mock = MockBalanceModule {
+        input_fee,
+        output_fee,
+    };
+    client.modules = ModuleRegistry::from_iter([(
+        1,
+        ModuleKind::from_static_str("mock"),
+        DynClientModule::from(mock),
+    )]);
+    client
+}
+
+fn test_input_bundle(amounts: Amounts) -> ClientInputBundle {
+    ClientInputBundle::new_no_sm(vec![ClientInput {
+        input: TestInput,
+        keys: vec![],
+        amounts,
+    }])
+    .into_dyn(1)
+}
+
+fn test_output_bundle(amounts: Amounts) -> ClientOutputBundle {
+    ClientOutputBundle::new_no_sm(vec![ClientOutput {
+        output: TestOutput,
+        amounts,
+    }])
+    .into_dyn(1)
+}
+
+#[tokio::test]
+async fn transaction_builder_get_balance_empty_succeeds() {
+    let client = client_for_lookup_test().await;
+    let builder = TransactionBuilder::new();
+    let (in_amounts, out_amounts) = client
+        .transaction_builder_get_balance(&builder)
+        .expect("Empty builder must have valid balance");
+    assert_eq!(in_amounts, Amounts::ZERO);
+    assert_eq!(out_amounts, Amounts::ZERO);
+}
+
+#[tokio::test]
+async fn transaction_builder_get_balance_overflow_conditions_fail() {
+    let cases = vec![
+        (
+            "input totals overflow",
+            Amounts::ZERO,
+            Amounts::ZERO,
+            TransactionBuilder::new()
+                .with_inputs(test_input_bundle(Amounts::new_bitcoin(Amount::from_msats(u64::MAX))))
+                .with_inputs(test_input_bundle(Amounts::new_bitcoin(Amount::from_msats(1)))),
+        ),
+        (
+            "output totals overflow",
+            Amounts::ZERO,
+            Amounts::ZERO,
+            TransactionBuilder::new()
+                .with_outputs(test_output_bundle(Amounts::new_bitcoin(Amount::from_msats(u64::MAX))))
+                .with_outputs(test_output_bundle(Amounts::new_bitcoin(Amount::from_msats(1)))),
+        ),
+        (
+            "input fees overflow",
+            Amounts::new_bitcoin(Amount::from_msats(u64::MAX)),
+            Amounts::ZERO,
+            TransactionBuilder::new()
+                .with_inputs(test_input_bundle(Amounts::ZERO))
+                .with_inputs(test_input_bundle(Amounts::ZERO)),
+        ),
+        (
+            "output fees overflow",
+            Amounts::ZERO,
+            Amounts::new_bitcoin(Amount::from_msats(u64::MAX)),
+            TransactionBuilder::new()
+                .with_outputs(test_output_bundle(Amounts::ZERO))
+                .with_outputs(test_output_bundle(Amounts::ZERO)),
+        ),
+        (
+            "output plus fees overflow",
+            Amounts::ZERO,
+            Amounts::new_bitcoin(Amount::from_msats(1)),
+            TransactionBuilder::new()
+                .with_outputs(test_output_bundle(Amounts::new_bitcoin(Amount::from_msats(u64::MAX)))),
+        ),
+    ];
+
+    for (name, input_fee, output_fee, builder) in cases {
+        let client = client_with_mock_module(input_fee, output_fee).await;
+        let err = client
+            .transaction_builder_get_balance(&builder)
+            .expect_err(&format!("Case '{name}' must fail with AmountOverflow"));
+        assert!(
+            matches!(err, TransactionSubmitError::AmountOverflow),
+            "Case '{name}' expected AmountOverflow, got {err:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn transaction_builder_get_balance_nonempty_maximum_valid_boundary_with_distinct_units_succeeds()
+{
+    let custom_unit = AmountUnit::new_custom(1);
+    let client = client_with_mock_module(
+        Amounts::new_bitcoin(Amount::from_msats(5)),
+        Amounts::new_custom(custom_unit, Amount::from_msats(25))
+            .checked_add_unit(Amount::from_msats(10), AmountUnit::BITCOIN)
+            .expect("Fits in unit"),
+    )
+    .await;
+
+    let mut input_amounts_1 = Amounts::new_bitcoin(Amount::from_msats(u64::MAX - 50));
+    input_amounts_1 = input_amounts_1
+        .checked_add_unit(Amount::from_msats(u64::MAX - 100), custom_unit)
+        .expect("Fits in unit");
+
+    let mut input_amounts_2 = Amounts::new_bitcoin(Amount::from_msats(50));
+    input_amounts_2 = input_amounts_2
+        .checked_add_unit(Amount::from_msats(100), custom_unit)
+        .expect("Fits in unit");
+
+    let mut output_amounts = Amounts::new_bitcoin(Amount::from_msats(u64::MAX - 20));
+    output_amounts = output_amounts
+        .checked_add_unit(Amount::from_msats(u64::MAX - 25), custom_unit)
+        .expect("Fits in unit");
+
+    let builder = TransactionBuilder::new()
+        .with_inputs(test_input_bundle(input_amounts_1))
+        .with_inputs(test_input_bundle(input_amounts_2))
+        .with_outputs(test_output_bundle(output_amounts));
+
+    let (in_amounts, out_amounts) = client
+        .transaction_builder_get_balance(&builder)
+        .expect("Valid boundary amounts reaching u64::MAX across distinct units must succeed");
+
+    assert_eq!(
+        in_amounts
+            .get(&AmountUnit::BITCOIN)
+            .copied()
+            .unwrap_or_default(),
+        Amount::from_msats(u64::MAX)
+    );
+    assert_eq!(
+        in_amounts.get(&custom_unit).copied().unwrap_or_default(),
+        Amount::from_msats(u64::MAX)
+    );
+    assert_eq!(
+        out_amounts
+            .get(&AmountUnit::BITCOIN)
+            .copied()
+            .unwrap_or_default(),
+        Amount::from_msats(u64::MAX) // (u64::MAX - 20) + 2*5 input fee + 10 output fee = u64::MAX
+    );
+    assert_eq!(
+        out_amounts.get(&custom_unit).copied().unwrap_or_default(),
+        Amount::from_msats(u64::MAX) // (u64::MAX - 25) + 2*0 input fee + 25 output fee = u64::MAX
+    );
 }
