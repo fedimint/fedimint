@@ -336,6 +336,7 @@ test-log = { version = "0.2", features = ["trace"], default-features = false }
 thiserror = "2.0.18"
 threshold_crypto = { version = "0.2.1", package = "fedimint-threshold-crypto" }
 tikv-jemallocator = { version = "0.6", features = ["profiling"] }
+rusty_alloc-api = { version = "2.1" }
 time = "0.3.41"
 tokio = "1.48.0"
 tokio-rustls = { version = "0.26.4", features = ["aws_lc_rs"] }
