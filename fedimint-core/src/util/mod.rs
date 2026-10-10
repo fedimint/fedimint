@@ -158,11 +158,16 @@ impl SafeUrl {
     /// Unlike `Url::join` (RFC 3986), this never drops path
     /// segments from the base — it always appends.
     pub fn join_path(&self, path: &str) -> Self {
-        let base = self.to_string();
-        let base = base.trim_end_matches('/');
-        let path = path.trim_start_matches('/');
-        Self::parse(&format!("{base}/{path}"))
-            .expect("appending a relative path to a valid URL should produce a valid URL")
+        let mut url = self.clone();
+        if let Ok(mut segments) = url.0.path_segments_mut() {
+            segments.pop_if_empty();
+            for segment in path.trim_matches('/').split('/') {
+                if !segment.is_empty() {
+                    segments.push(segment);
+                }
+            }
+        }
+        url
     }
 
     // It can be removed to use `is_onion_address()` implementation,

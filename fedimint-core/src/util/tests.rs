@@ -70,6 +70,31 @@ fn test_safe_url() {
     let _: SafeUrl = url::Url::parse("http://1.2.3.4:80/foo").unwrap().into();
 }
 
+#[test]
+fn test_safe_url_join_path() {
+    let base = SafeUrl::parse("http://admin:secret@127.0.0.1:8080/api/v1").unwrap();
+    let joined = base.join_path("users");
+    assert_eq!(joined.as_str(), "http://admin:secret@127.0.0.1:8080/api/v1/users");
+    assert_eq!(joined.username(), "admin");
+    assert_eq!(joined.password(), Some("secret"));
+    assert_eq!(format!("{joined}"), "http://REDACTEDUSER:REDACTEDPASS@127.0.0.1:8080/api/v1/users");
+
+    let base_with_trailing = SafeUrl::parse("http://admin:secret@127.0.0.1:8080/api/v1/").unwrap();
+    let joined = base_with_trailing.join_path("/users/profile/");
+    assert_eq!(joined.as_str(), "http://admin:secret@127.0.0.1:8080/api/v1/users/profile");
+    assert_eq!(joined.username(), "admin");
+    assert_eq!(joined.password(), Some("secret"));
+
+    let root = SafeUrl::parse("http://127.0.0.1:8080").unwrap();
+    assert_eq!(root.join_path("foo").as_str(), "http://127.0.0.1:8080/foo");
+    assert_eq!(root.join_path("/foo/bar").as_str(), "http://127.0.0.1:8080/foo/bar");
+    assert_eq!(root.join_path("").as_str(), "http://127.0.0.1:8080/");
+
+    let with_query_frag = SafeUrl::parse("http://127.0.0.1:8080/base?key=value#frag").unwrap();
+    let joined = with_query_frag.join_path("sub");
+    assert_eq!(joined.as_str(), "http://127.0.0.1:8080/base/sub?key=value#frag");
+}
+
 #[tokio::test]
 async fn test_next_or_pending() {
     let mut stream = futures::stream::iter(vec![1, 2]);
