@@ -6,7 +6,7 @@
 
 pub mod envs;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use bytes::Bytes;
@@ -14,7 +14,7 @@ use clap::{Parser, Subcommand};
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client_module::module::init::ClientModuleInit;
 use fedimint_core::db::{IDatabaseTransactionOpsCore, IRawDatabaseExt};
-use fedimint_core::util::handle_version_hash_command;
+use fedimint_core::util::{ensure_single_stdin, handle_version_hash_command, read_secret_file};
 use fedimint_ln_client::LightningClientInit;
 use fedimint_ln_server::LightningInit;
 use fedimint_logging::TracingSetup;
@@ -32,6 +32,8 @@ use crate::dump::DatabaseDump;
 use crate::envs::{FM_DBTOOL_CONFIG_DIR_ENV, FM_DBTOOL_DATABASE_ENV};
 
 mod dump;
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug, Clone, Parser)]
 #[command(version)]
@@ -54,26 +56,66 @@ struct Options {
 enum DbCommand {
     /// List all key-value pairs where the key begins with `prefix`
     List {
-        #[arg(long, value_parser = hex_parser)]
-        prefix: Bytes,
+        #[arg(
+            long,
+            required_unless_present = "prefix_file",
+            conflicts_with = "prefix_file"
+        )]
+        prefix: Option<String>,
+        /// Read a hex-encoded prefix from a protected UTF-8 file (max 16 MiB),
+        /// or `-` for stdin
+        #[arg(long)]
+        prefix_file: Option<PathBuf>,
     },
     /// Write a key-value pair to the database, overwriting the previous value
     /// if present
     Write {
-        #[arg(long, value_parser = hex_parser)]
-        key: Bytes,
-        #[arg(long, value_parser = hex_parser)]
-        value: Bytes,
+        #[arg(
+            long,
+            required_unless_present = "key_file",
+            conflicts_with = "key_file"
+        )]
+        key: Option<String>,
+        /// Read a hex-encoded key from a protected UTF-8 file (max 16 MiB), or
+        /// `-` for stdin
+        #[arg(long)]
+        key_file: Option<PathBuf>,
+        #[arg(
+            long,
+            required_unless_present = "value_file",
+            conflicts_with = "value_file"
+        )]
+        value: Option<String>,
+        /// Read a hex-encoded value from a protected UTF-8 file (max 16 MiB),
+        /// or `-` for stdin
+        #[arg(long)]
+        value_file: Option<PathBuf>,
     },
     /// Delete a single entry from the database identified by `key`
     Delete {
-        #[arg(long, value_parser = hex_parser)]
-        key: Bytes,
+        #[arg(
+            long,
+            required_unless_present = "key_file",
+            conflicts_with = "key_file"
+        )]
+        key: Option<String>,
+        /// Read a hex-encoded key from a protected UTF-8 file (max 16 MiB), or
+        /// `-` for stdin
+        #[arg(long)]
+        key_file: Option<PathBuf>,
     },
     /// Deletes all keys starting
     DeletePrefix {
-        #[arg(long, value_parser = hex_parser)]
-        prefix: Bytes,
+        #[arg(
+            long,
+            required_unless_present = "prefix_file",
+            conflicts_with = "prefix_file"
+        )]
+        prefix: Option<String>,
+        /// Read a hex-encoded prefix from a protected UTF-8 file (max 16 MiB),
+        /// or `-` for stdin
+        #[arg(long)]
+        prefix_file: Option<PathBuf>,
     },
     /// Dump a subset of the specified database and serialize the retrieved data
     /// to JSON. Module and prefix are used to specify which subset of the
@@ -88,9 +130,32 @@ enum DbCommand {
     },
 }
 
-fn hex_parser(hex: &str) -> Result<Bytes> {
-    let bytes: Vec<u8> = hex::FromHex::from_hex(hex)?;
+fn resolve_hex_source(value: Option<&str>, file: Option<&Path>) -> Result<Bytes> {
+    let input = match (value, file) {
+        (Some(value), None) => value.to_owned(),
+        (None, Some(file)) => read_secret_file(file, 16 * 1024 * 1024)?,
+        _ => anyhow::bail!("Specify exactly one direct or file input"),
+    };
+    let bytes: Vec<u8> = hex::FromHex::from_hex(&input)
+        .map_err(|_| anyhow::anyhow!("Invalid hex-encoded database input"))?;
     Ok(bytes.into())
+}
+
+fn resolve_hex_pair(
+    key: Option<&str>,
+    key_file: Option<&Path>,
+    value: Option<&str>,
+    value_file: Option<&Path>,
+) -> Result<(Bytes, Bytes)> {
+    // Check all sources before reading stdin or opening the database.
+    if key.is_some() == key_file.is_some() || value.is_some() == value_file.is_some() {
+        anyhow::bail!("Specify exactly one direct or file input");
+    }
+    ensure_single_stdin(key_file.into_iter().chain(value_file))?;
+    Ok((
+        resolve_hex_source(key, key_file)?,
+        resolve_hex_source(value, value_file)?,
+    ))
 }
 
 fn print_kv(key: &[u8], value: &[u8]) {
@@ -136,6 +201,7 @@ impl FedimintDBTool {
         self
     }
 
+    #[must_use]
     pub fn with_default_modules_inits(self) -> Self {
         self.with_server_module_init(WalletInit)
             .with_server_module_init(MintInit)
@@ -150,14 +216,19 @@ impl FedimintDBTool {
             .with_client_module_init(MetaClientInit)
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn run(&self) -> anyhow::Result<()> {
         let options = &self.cli_args;
         match &options.command {
-            DbCommand::List { prefix } => {
+            DbCommand::List {
+                prefix,
+                prefix_file,
+            } => {
+                let prefix = resolve_hex_source(prefix.as_deref(), prefix_file.as_deref())?;
                 let rocksdb = open_db(options).await;
                 let mut dbtx = rocksdb.begin_transaction().await;
                 let prefix_iter = dbtx
-                    .raw_find_by_prefix(prefix)
+                    .raw_find_by_prefix(&prefix)
                     .await?
                     .collect::<Vec<_>>()
                     .await;
@@ -166,18 +237,30 @@ impl FedimintDBTool {
                 }
                 dbtx.commit_tx().await;
             }
-            DbCommand::Write { key, value } => {
+            DbCommand::Write {
+                key,
+                key_file,
+                value,
+                value_file,
+            } => {
+                let (key, value) = resolve_hex_pair(
+                    key.as_deref(),
+                    key_file.as_deref(),
+                    value.as_deref(),
+                    value_file.as_deref(),
+                )?;
                 let rocksdb = open_db(options).await;
                 let mut dbtx = rocksdb.begin_transaction().await;
-                dbtx.raw_insert_bytes(key, value)
+                dbtx.raw_insert_bytes(&key, &value)
                     .await
                     .expect("Error inserting entry into RocksDb");
                 dbtx.commit_tx().await;
             }
-            DbCommand::Delete { key } => {
+            DbCommand::Delete { key, key_file } => {
+                let key = resolve_hex_source(key.as_deref(), key_file.as_deref())?;
                 let rocksdb = open_db(options).await;
                 let mut dbtx = rocksdb.begin_transaction().await;
-                dbtx.raw_remove_entry(key)
+                dbtx.raw_remove_entry(&key)
                     .await
                     .expect("Error removing entry from RocksDb");
                 dbtx.commit_tx().await;
@@ -226,10 +309,14 @@ impl FedimintDBTool {
                 .await?;
                 dbdump.dump_database().await?;
             }
-            DbCommand::DeletePrefix { prefix } => {
+            DbCommand::DeletePrefix {
+                prefix,
+                prefix_file,
+            } => {
+                let prefix = resolve_hex_source(prefix.as_deref(), prefix_file.as_deref())?;
                 let rocksdb = open_db(options).await;
                 let mut dbtx = rocksdb.begin_transaction().await;
-                dbtx.raw_remove_by_prefix(prefix).await?;
+                dbtx.raw_remove_by_prefix(&prefix).await?;
                 dbtx.commit_tx().await;
             }
         }
