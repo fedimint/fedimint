@@ -12,7 +12,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::Amounts;
 use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, OutPoint, TransactionId, secp256k1};
-use fedimint_lightning::{LightningRpcError, PayInvoiceResponse};
+use fedimint_lightning::{LightningRpcError, PayInvoiceResponse, PaymentFailureDiagnostics};
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_common::config::FeeToAmount;
@@ -195,6 +195,19 @@ pub struct OutgoingPaymentError {
     pub error_type: OutgoingPaymentErrorType,
     pub contract_id: ContractId,
     pub contract: Option<OutgoingContractAccount>,
+}
+
+impl OutgoingPaymentError {
+    /// Returns what the Lightning node reported about where and why the
+    /// payment failed, if it failed on the Lightning network.
+    pub fn lightning_failure_diagnostics(&self) -> Option<&PaymentFailureDiagnostics> {
+        match &self.error_type {
+            OutgoingPaymentErrorType::LightningPayError { lightning_error } => {
+                lightning_error.payment_failure_diagnostics()
+            }
+            _ => None,
+        }
+    }
 }
 
 impl Display for OutgoingPaymentError {
@@ -1052,6 +1065,7 @@ impl GatewayPayCancelContract {
                 OutgoingPaymentFailed {
                     outgoing_contract: contract.clone(),
                     contract_id: contract.contract.contract_id(),
+                    lightning_failure_diagnostics: error.lightning_failure_diagnostics().cloned(),
                     error: error.clone(),
                 },
             )

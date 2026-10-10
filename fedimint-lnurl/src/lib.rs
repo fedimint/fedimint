@@ -197,12 +197,7 @@ fn ok_status() -> String {
     "OK".to_string()
 }
 
-<<<<<<< HEAD
 /// Verify that an invoice's description hash commits to the metadata (LUD-06).
-///
-/// The commitment is the BOLT11 description hash, not the payment hash, which
-/// is the hash of the preimage and says nothing about the metadata. An invoice
-/// without a description hash cannot be verified, so it is rejected.
 pub fn verify_metadata_hash(invoice: &Bolt11Invoice, metadata: &str) -> Result<(), LnurlError> {
     let expected_hash = Sha256Hash::hash(metadata.as_bytes());
 
@@ -214,7 +209,8 @@ pub fn verify_metadata_hash(invoice: &Bolt11Invoice, metadata: &str) -> Result<(
         }
         _ => Err(LnurlError::InvalidMetadataHash),
     }
-=======
+}
+
 impl VerifyResponse {
     /// A LUD-21 response for a payment that has been settled
     pub fn settled(preimage: [u8; 32]) -> Self {
@@ -233,7 +229,6 @@ impl VerifyResponse {
             preimage: None,
         }
     }
->>>>>>> 9479309dea5010bc14eccf016516cc934101b935
 }
 
 /// Fetch and parse an LNURL-pay response
@@ -574,13 +569,6 @@ fn test_invalid_address_with_double_at() {
 #[test]
 fn test_invalid_local_part() {
     assert_eq!(parse_address("user!@example.com"), None);
-}
-
-#[test]
-fn test_metadata_hash() {
-    let metadata = "[[\"text/plain\",\"Pay to example.com\"]]";
-    let hash = metadata_hash(metadata);
-    assert_eq!(hash.len(), 32);
 }
 
 #[cfg(test)]

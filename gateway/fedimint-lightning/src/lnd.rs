@@ -29,6 +29,7 @@ use tonic_lnd::invoicesrpc::{
 };
 use tonic_lnd::lnrpc::channel_point::FundingTxid;
 use tonic_lnd::lnrpc::failure::FailureCode;
+use tonic_lnd::lnrpc::htlc_attempt::HtlcStatus;
 use tonic_lnd::lnrpc::invoice::InvoiceState;
 use tonic_lnd::lnrpc::payment::PaymentStatus;
 use tonic_lnd::lnrpc::policy_update_request::Scope as PolicyUpdateScope;
@@ -36,8 +37,9 @@ use tonic_lnd::lnrpc::{
     ChanInfoRequest, ChannelBalanceRequest, ChannelPoint, CloseChannelRequest,
     ConnectPeerRequest as LndConnectPeerRequest, FeeReportRequest, GetInfoRequest, Invoice,
     InvoiceHtlc, InvoiceHtlcState, InvoiceSubscription, LightningAddress, ListChannelsRequest,
-    ListInvoiceRequest, ListPaymentsRequest, ListPeersRequest, OpenChannelRequest,
-    PolicyUpdateRequest, SendCoinsRequest, UpdateFailure, WalletBalanceRequest,
+    ListInvoiceRequest, ListPaymentsRequest, ListPeersRequest, OpenChannelRequest, Payment,
+    PaymentFailureReason, PolicyUpdateRequest, SendCoinsRequest, UpdateFailure,
+    WalletBalanceRequest,
 };
 use tonic_lnd::routerrpc::{
     CircuitKey, ForwardHtlcInterceptResponse, ResolveHoldForwardAction, SendPaymentRequest,
@@ -52,6 +54,7 @@ use super::{
     ChannelInfo, ILnRpcClient, LightningRpcError, ListChannelsResponse, Lnv2HoldInvoiceFilter,
     MAX_LIGHTNING_RETRIES, RouteHtlcStream,
 };
+use crate::payment_failure::{AttemptedHop, FailedHtlcAttempt, PaymentFailureDiagnostics};
 use crate::{
     CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, CreateInvoiceRequest,
     CreateInvoiceResponse, GetBalancesResponse, GetInvoiceRequest, GetInvoiceResponse,
@@ -810,10 +813,7 @@ impl GatewayLndClient {
                                 return Ok(Some(payment.payment_preimage));
                             }
                             Ok(Some(payment)) if payment.status() == PaymentStatus::Failed => {
-                                let failure_reason = payment.failure_reason();
-                                return Err(LightningRpcError::FailedPayment {
-                                    failure_reason: format!("{failure_reason:?}"),
-                                });
+                                return Err(failed_payment_error(&payment));
                             }
                             Ok(Some(payment)) => {
                                 debug!(
@@ -1318,10 +1318,7 @@ impl ILnRpcClient for GatewayLndClient {
                                 status = ?payment.status(),
                                 "LND payment failed",
                             );
-                            let failure_reason = payment.failure_reason();
-                            return Err(LightningRpcError::FailedPayment {
-                                failure_reason: format!("{failure_reason:?}"),
-                            });
+                            return Err(failed_payment_error(&payment));
                         }
                         // `InFlight`, `Initiated` (delivered before the first HTLC
                         // when `routerrpc.usestatusinitiated` is set) and any status
@@ -2320,6 +2317,114 @@ fn route_hints_to_lnd(
                 .collect(),
         })
         .collect()
+}
+
+/// Turns a payment LND reports as `Failed` into the error the gateway records
+/// for it, carrying what LND knows about where and why its HTLCs failed.
+fn failed_payment_error(payment: &Payment) -> LightningRpcError {
+    let failure_reason = payment.failure_reason();
+    LightningRpcError::FailedPaymentWithDiagnostics {
+        failure_reason: format!("{failure_reason:?}"),
+        diagnostics: payment_failure_diagnostics(payment),
+    }
+}
+
+fn payment_failure_diagnostics(payment: &Payment) -> PaymentFailureDiagnostics {
+    let payment_failure_reason = match PaymentFailureReason::try_from(payment.failure_reason) {
+        Ok(reason) => reason.as_str_name().to_owned(),
+        Err(_) => format!("UNRECOGNIZED_FAILURE_REASON_{}", payment.failure_reason),
+    };
+
+    let mut failed_htlcs = payment
+        .htlcs
+        .iter()
+        .filter(|htlc| htlc.status() == HtlcStatus::Failed)
+        .collect::<Vec<_>>();
+    failed_htlcs.sort_by_key(|htlc| htlc.attempt_id);
+
+    PaymentFailureDiagnostics::new(
+        Some(payment_failure_reason),
+        failed_htlcs
+            .into_iter()
+            .map(|htlc| {
+                failed_htlc_attempt(
+                    htlc.route
+                        .as_ref()
+                        .map_or(&[], |route| route.hops.as_slice()),
+                    htlc.failure.as_ref(),
+                )
+            })
+            .collect(),
+    )
+}
+
+fn failed_htlc_attempt(
+    hops: &[tonic_lnd::lnrpc::Hop],
+    failure: Option<&tonic_lnd::lnrpc::Failure>,
+) -> FailedHtlcAttempt {
+    let route = hops
+        .iter()
+        .map(|hop| AttemptedHop {
+            node_id: PublicKey::from_str(&hop.pub_key).ok(),
+            short_channel_id: hop.chan_id,
+            // LND reports these as non-negative `int64`s.
+            amount_to_forward: Amount::from_msats(
+                u64::try_from(hop.amt_to_forward_msat).unwrap_or_default(),
+            ),
+            fee: Amount::from_msats(u64::try_from(hop.fee_msat).unwrap_or_default()),
+        })
+        .collect::<Vec<_>>();
+
+    let Some(failure) = failure else {
+        return FailedHtlcAttempt {
+            route,
+            failure_code: None,
+            failure_source_index: None,
+            failing_node: None,
+            failing_short_channel_id: None,
+        };
+    };
+
+    let code = FailureCode::try_from(failure.code);
+    let failure_code = match code {
+        Ok(code) => code.as_str_name().to_ascii_lowercase(),
+        Err(_) => format!("unrecognized_failure_code_{}", failure.code),
+    };
+
+    // LND cannot tell which node produced an onion error it failed to decrypt,
+    // or one it has no record of, and reports index `0` for those regardless,
+    // which would wrongly blame the gateway's own node.
+    if matches!(
+        code,
+        Ok(FailureCode::UnreadableFailure | FailureCode::UnknownFailure)
+    ) {
+        return FailedHtlcAttempt {
+            route,
+            failure_code: Some(failure_code),
+            failure_source_index: None,
+            failing_node: None,
+            failing_short_channel_id: None,
+        };
+    }
+
+    // Index `0` is the gateway's own node and index `i` the node reached by
+    // `route[i - 1]`. The node at index `i` failed to forward over the
+    // channel of `route[i]`; the destination, at index `route.len()`, has no
+    // such channel.
+    let source_index = failure.failure_source_index as usize;
+    let failing_node = source_index
+        .checked_sub(1)
+        .and_then(|hop| route.get(hop))
+        .and_then(|hop| hop.node_id);
+    let failing_short_channel_id = route.get(source_index).map(|hop| hop.short_channel_id);
+
+    FailedHtlcAttempt {
+        route,
+        failure_code: Some(failure_code),
+        failure_source_index: Some(failure.failure_source_index),
+        failing_node,
+        failing_short_channel_id,
+    }
 }
 
 fn wire_features_to_lnd_feature_vec(

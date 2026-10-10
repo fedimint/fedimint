@@ -3,9 +3,12 @@ use std::collections::BTreeSet;
 use bitcoin::hashes::{Hash as _, sha256};
 use fedimint_core::module::serde_json;
 use fedimint_lightning::LightningRpcError;
+use fedimint_lightning::payment_failure::PaymentFailureDiagnostics;
+use fedimint_lnv2_common::contracts::PaymentImage;
 
 use crate::complete_sm::{CompleteSMCommon, CompletionOutcome, completion_outcome};
-use crate::send_sm::{Cancelled, fresh_dispatch_refusal};
+use crate::events::OutgoingPaymentFailed;
+use crate::send_sm::{Cancelled, SendPaymentError, fresh_dispatch_refusal};
 use crate::{
     CompleteSMState, CompleteStateMachine, GatewayClientStateMachinesV2, GatewayOperationMetaV2,
     GatewayOperationRoleV2, IncomingCircuitKey, IncomingRelayPlan, OperationId,
@@ -144,4 +147,68 @@ fn fresh_dispatch_is_refused_once_the_invoice_expires_or_the_budget_runs_out() {
         Some(Cancelled::InvoiceExpired),
         "invoice expiry keeps taking precedence, as before the budget check"
     );
+}
+
+fn outgoing_payment_failed(
+    lightning_failure_diagnostics: Option<PaymentFailureDiagnostics>,
+) -> OutgoingPaymentFailed {
+    OutgoingPaymentFailed {
+        payment_image: PaymentImage::Hash(sha256::Hash::all_zeros()),
+        error: Cancelled::LightningRpcError("Payment failed: FailureReasonNoRoute".to_string()),
+        lightning_failure_diagnostics,
+    }
+}
+
+/// Failure events logged before diagnostics were recorded must still parse,
+/// and events without diagnostics keep their previous shape.
+#[test]
+fn failure_event_without_diagnostics_keeps_its_shape() {
+    let json =
+        serde_json::to_value(outgoing_payment_failed(None)).expect("Failed to serialize event");
+    assert!(json.get("lightning_failure_diagnostics").is_none());
+
+    let parsed: OutgoingPaymentFailed =
+        serde_json::from_value(json).expect("Failed to parse event without diagnostics");
+    assert_eq!(parsed.lightning_failure_diagnostics, None);
+}
+
+#[test]
+fn failure_event_records_diagnostics() {
+    let diagnostics =
+        PaymentFailureDiagnostics::new(Some("FAILURE_REASON_NO_ROUTE".to_string()), vec![]);
+
+    let json = serde_json::to_value(outgoing_payment_failed(Some(diagnostics.clone())))
+        .expect("Failed to serialize event");
+    let parsed: OutgoingPaymentFailed =
+        serde_json::from_value(json).expect("Failed to parse event with diagnostics");
+
+    assert_eq!(parsed.lightning_failure_diagnostics, Some(diagnostics));
+}
+
+/// The persisted cancellation keeps exactly the message it had before
+/// diagnostics were recorded; the diagnostics only travel alongside it.
+#[test]
+fn lightning_failure_keeps_its_cancellation_and_carries_diagnostics() {
+    let diagnostics =
+        PaymentFailureDiagnostics::new(Some("FAILURE_REASON_NO_ROUTE".to_string()), vec![]);
+
+    let error =
+        SendPaymentError::from_lightning_error(LightningRpcError::FailedPaymentWithDiagnostics {
+            failure_reason: "FailureReasonNoRoute".to_string(),
+            diagnostics: diagnostics.clone(),
+        });
+    assert_eq!(
+        error.cancelled,
+        Cancelled::LightningRpcError("Payment failed: FailureReasonNoRoute".to_string())
+    );
+    assert_eq!(error.diagnostics, Some(diagnostics));
+
+    let error = SendPaymentError::from_lightning_error(LightningRpcError::FailedPayment {
+        failure_reason: "FailureReasonNoRoute".to_string(),
+    });
+    assert_eq!(
+        error.cancelled,
+        Cancelled::LightningRpcError("Payment failed: FailureReasonNoRoute".to_string())
+    );
+    assert_eq!(error.diagnostics, None);
 }
