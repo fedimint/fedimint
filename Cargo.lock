@@ -3179,6 +3179,7 @@ dependencies = [
  "lightning-invoice",
  "rand 0.8.5",
  "reqwest 0.12.28",
+ "rusty_alloc-api",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
@@ -4054,11 +4055,15 @@ name = "fedimint-lnurl"
 version = "0.13.0-alpha"
 dependencies = [
  "bech32",
+ "bitcoin",
+ "bitcoin_hashes",
+ "hex",
  "lightning-invoice",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
  "serde_with",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -10589,6 +10594,26 @@ name = "rustversion"
 version = "1.0.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
+
+[[package]]
+name = "rusty_alloc"
+version = "2.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "740543b926ebc90e1589fc0c6d48e89576ad6d86f51f21a683ba7c4440c31a38"
+dependencies = [
+ "libc",
+ "portable-atomic",
+ "windows-sys 0.60.2",
+]
+
+[[package]]
+name = "rusty_alloc-api"
+version = "2.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aaf81f1850fd84b116a7081e0eb78ca7aecc98fe5d15518f8bfd3ec9a5f96ca5"
+dependencies = [
+ "rusty_alloc",
+]
 
 [[package]]
 name = "ryu"
