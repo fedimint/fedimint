@@ -4,10 +4,11 @@ use clap::Parser;
 use fedimint_client_module::error::OperationLookupError;
 use fedimint_core::Amount;
 use fedimint_core::base32::{self, FEDIMINT_PREFIX, PrefixedDecodeError};
+use fedimint_core::core::ModuleInstanceId;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::{MintClientModule, ReceiveECashError, SendECashError};
+use crate::{ECash, MintClientModule, ReceiveECashError, SendECashError};
 
 #[derive(Parser, Serialize)]
 enum Opts {
@@ -43,15 +44,21 @@ pub(crate) async fn handle_cli_command(
             Ok(json(ecash))
         }
         Opts::Receive { ecash } => {
-            let ecash = base32::decode_prefixed(FEDIMINT_PREFIX, &ecash)?;
+            let ecash: ECash = base32::decode_prefixed(FEDIMINT_PREFIX, &ecash)?;
 
-            let operation_id = mint.receive(ecash, Value::Null).await?;
+            match mint.receive(ecash.clone(), Value::Null).await {
+                Ok(operation_id) => {
+                    let state = mint
+                        .await_final_receive_operation_state(operation_id)
+                        .await?;
 
-            let state = mint
-                .await_final_receive_operation_state(operation_id)
-                .await?;
-
-            Ok(json(state))
+                    Ok(json(state))
+                }
+                Err(ReceiveECashError::WrongModuleInstance { actual, expected }) => {
+                    Err(CliCommandError::WrongModuleInstance { actual, expected })
+                }
+                Err(e) => Err(CliCommandError::Receive(e)),
+            }
         }
     }
 }
@@ -74,6 +81,18 @@ pub(crate) enum CliCommandError {
     /// The e-cash could not be received.
     #[error(transparent)]
     Receive(#[from] ReceiveECashError),
+
+    /// The e-cash was issued by a different module instance.
+    /// The error includes the correct module instance id to use.
+    #[error(
+        "The ECash was issued by module instance {actual}, but this is module instance {expected}. Please try: fedimint-cli -m mintv2:{actual} receive <ecash>"
+    )]
+    WrongModuleInstance {
+        /// The module instance that issued the e-cash.
+        actual: ModuleInstanceId,
+        /// The module instance that received the e-cash (incorrect).
+        expected: ModuleInstanceId,
+    },
 
     /// The receive operation could not be looked up.
     #[error(transparent)]

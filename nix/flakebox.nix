@@ -228,6 +228,36 @@ let
     HOME = "/tmp";
   };
 
+  stripBuildToolchainReferences =
+    pkg:
+    let
+      # Build-time toolchain packages to strip from runtime closure
+      # This is critical for aarch64 where these packages would otherwise leak
+      # ~1.8GB of closure bloat (clang, LLVM, gcc, binutils, compiler-rt, linux-headers)
+      toolchainPkgs = lib.filter (p: p != null) [
+        (if pkgs ? clang then pkgs.clang else null)
+        (if pkgs ? llvm then pkgs.llvm else null)
+        (if pkgs ? gcc then pkgs.gcc else null)
+        (if pkgs ? binutils then pkgs.binutils else null)
+        (if pkgs ? compiler-rt then pkgs."compiler-rt" else null)
+        (if pkgs ? linux-headers then pkgs.linux-headers else null)
+      ];
+      removeRefsCmd = lib.concatMapStringsSep "\n" (
+        p: "find \"$out\" -type f -executable -exec remove-references-to -t ${p} '{}' + 2>/dev/null || true"
+      ) toolchainPkgs;
+    in
+    pkg.overrideAttrs (
+      final: prev: {
+        postFixup = (prev.postFixup or "") + lib.optionalString (toolchainPkgs != []) ''
+          # Remove references to C/C++ build toolchain components that shouldn't
+          # be in runtime closure. This addresses the aarch64 image size issue where
+          # cross-compilation toolchain references were leaking ~1.8GB of bloat.
+          >&2 echo "Stripping build toolchain references from $out"
+          ${removeRefsCmd}
+        '';
+      }
+    );
+
   commonArgs = {
     pname = "fedimint";
 
@@ -886,32 +916,36 @@ in
       '';
     };
 
-    fedimint-pkgs = fedimintBuildPackageGroup {
-      pname = "fedimint-pkgs";
+    fedimint-pkgs = stripBuildToolchainReferences (
+      fedimintBuildPackageGroup {
+        pname = "fedimint-pkgs";
 
-      packages = [
-        "fedimintd"
-        "fedimint-cli"
-        "fedimint-dbtool"
-        "fedimint-recoverytool"
-      ];
+        packages = [
+          "fedimintd"
+          "fedimint-cli"
+          "fedimint-dbtool"
+          "fedimint-recoverytool"
+        ];
 
-      # Cargo features can't be enabled by default conditionally on the target
-      # architecture, so we enable jemalloc here for the systems where it works.
-      features = lib.optionals (pkgs.stdenv.isLinux || pkgs.stdenv.isDarwin) [
-        "fedimintd/jemalloc"
-        "fedimint-cli/jemalloc"
-      ];
-    };
+        # Cargo features can't be enabled by default conditionally on the target
+        # architecture, so we enable jemalloc here for the systems where it works.
+        features = lib.optionals (pkgs.stdenv.isLinux || pkgs.stdenv.isDarwin) [
+          "fedimintd/jemalloc"
+          "fedimint-cli/jemalloc"
+        ];
+      }
+    );
 
-    gateway-pkgs = fedimintBuildPackageGroup {
-      pname = "gateway-pkgs";
+    gateway-pkgs = stripBuildToolchainReferences (
+      fedimintBuildPackageGroup {
+        pname = "gateway-pkgs";
 
-      packages = [
-        "fedimint-gateway-server"
-        "fedimint-gateway-client"
-      ];
-    };
+        packages = [
+          "fedimint-gateway-server"
+          "fedimint-gateway-client"
+        ];
+      }
+    );
 
     client-pkgs = fedimintBuildPackageGroup {
       pname = "client-pkgs";
@@ -971,20 +1005,24 @@ in
       bin = "fedimint-recoverytool";
     };
 
-    fedimint-recurringd-pkgs = fedimintBuildPackageGroup {
-      pname = "fedimint-recurringd-pkgs";
-      packages = [ "fedimint-recurringd" ];
-    };
+    fedimint-recurringd-pkgs = stripBuildToolchainReferences (
+      fedimintBuildPackageGroup {
+        pname = "fedimint-recurringd-pkgs";
+        packages = [ "fedimint-recurringd" ];
+      }
+    );
 
     fedimint-recurringd = pickBinary {
       pkg = fedimint-recurringd-pkgs;
       bin = "fedimint-recurringd";
     };
 
-    fedimint-recurringdv2-pkgs = fedimintBuildPackageGroup {
-      pname = "fedimint-recurringdv2-pkgs";
-      packages = [ "fedimint-recurringdv2" ];
-    };
+    fedimint-recurringdv2-pkgs = stripBuildToolchainReferences (
+      fedimintBuildPackageGroup {
+        pname = "fedimint-recurringdv2-pkgs";
+        packages = [ "fedimint-recurringdv2" ];
+      }
+    );
 
     fedimint-recurringdv2 = pickBinary {
       pkg = fedimint-recurringdv2-pkgs;

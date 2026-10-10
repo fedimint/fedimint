@@ -219,6 +219,8 @@ pub enum WalletInputError {
     WrongTweak,
     #[error("No up to date feerate is available at the moment. Please try again later.")]
     NoConsensusFeerateAvailable,
+    #[error("The federation has too many pending transactions. Please try again later.")]
+    PendingTxCapExceeded,
     #[error("The total transaction fee is too low. Please construct a new transaction.")]
     InsufficientTotalFee,
     #[error("Constructing the pegin transaction caused an arithmetic overflow")]
@@ -235,6 +237,8 @@ pub enum WalletOutputError {
     NoFederationUTXO,
     #[error("No up to date feerate is available at the moment. Please try again later.")]
     NoConsensusFeerateAvailable,
+    #[error("The federation has too many pending transactions. Please try again later.")]
+    PendingTxCapExceeded,
     #[error("The total transaction fee is too low. Please construct a new transaction.")]
     InsufficientTotalFee,
     #[error("The change value is below the dust limit.")]
