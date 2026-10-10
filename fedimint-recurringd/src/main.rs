@@ -49,14 +49,40 @@ struct CliOpts {
     bind_address: SocketAddr,
     #[clap(long, env = "FM_RECURRING_API_ADDRESS")]
     api_address: SafeUrl,
+    /// API bearer token. Prefer --bearer-token-file.
     #[clap(
         long,
         env = "FM_RECURRING_API_BEARER_TOKEN",
-        value_parser = parse_non_empty_bearer_token
+        hide_env_values = true,
+        required_unless_present = "bearer_token_file"
     )]
-    bearer_token: String,
+    bearer_token: Option<String>,
+    /// Read the API bearer token from a UTF-8 file (not stdin).
+    #[clap(long)]
+    bearer_token_file: Option<PathBuf>,
     #[clap(long, env = "FM_RECURRING_DATA_DIR")]
     data_dir: PathBuf,
+}
+
+impl CliOpts {
+    fn resolve_bearer_token(&self) -> anyhow::Result<String> {
+        anyhow::ensure!(
+            self.bearer_token.is_none() || self.bearer_token_file.is_none(),
+            "bearer token argument/environment value conflicts with secret file"
+        );
+        let token = if let Some(path) = &self.bearer_token_file {
+            anyhow::ensure!(
+                path != std::path::Path::new("-"),
+                "daemon secret files cannot use stdin"
+            );
+            fedimint_core::util::read_secret_file(path, 1024 * 1024)?
+        } else {
+            self.bearer_token
+                .clone()
+                .ok_or_else(|| anyhow::anyhow!("bearer token required"))?
+        };
+        parse_non_empty_bearer_token(&token).map_err(anyhow::Error::msg)
+    }
 }
 
 fn parse_non_empty_bearer_token(token: &str) -> Result<String, &'static str> {
@@ -78,9 +104,9 @@ struct AppState {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    TracingSetup::default().init()?;
-
     let cli_opts = CliOpts::parse();
+    let bearer_token = cli_opts.resolve_bearer_token()?;
+    TracingSetup::default().init()?;
 
     let db = RocksDb::build(cli_opts.data_dir).open().await?;
     let recurring_invoice_server = RecurringInvoiceServer::new(
@@ -120,7 +146,7 @@ async fn main() -> anyhow::Result<()> {
     let app = axum::Router::new()
         .nest("/lnv1", api_v1)
         .with_state(AppState {
-            auth_token: ApiAuth::new(cli_opts.bearer_token),
+            auth_token: ApiAuth::new(bearer_token),
             recurring_invoice_server,
         });
 
