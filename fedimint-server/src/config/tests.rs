@@ -19,6 +19,7 @@ fn server_config_with_code_version(code_version: &str) -> ServerConfig {
             disable_base_fees: false,
             enabled_modules: BTreeSet::new(),
             network: bitcoin::Network::Regtest,
+            descriptor_kind: fedimint_core::setup_code::WalletDescriptorKind::Wsh,
         },
         PeerId::from(0),
         BTreeMap::new(),

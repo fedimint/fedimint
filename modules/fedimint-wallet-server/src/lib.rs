@@ -404,7 +404,8 @@ impl ServerModuleInit for WalletInit {
                     finality_delay,
                     client_default_bitcoin_rpc.clone(),
                     FeeConsensus::default(),
-                );
+                )
+                .expect("Trusted dealer federations are small enough for the P2WSH multisig");
                 (*id, cfg)
             })
             .collect();
@@ -441,7 +442,7 @@ impl ServerModuleInit for WalletInit {
             finality_delay,
             client_default_bitcoin_rpc,
             FeeConsensus::default(),
-        );
+        )?;
 
         Ok(wallet_cfg.to_erased())
     }
