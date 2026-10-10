@@ -73,8 +73,8 @@ use fedimint_walletv2_common::endpoint_constants::{
     SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 };
 use fedimint_walletv2_common::{
-    FederationWallet, MODULE_CONSENSUS_VERSION, TxInfo, WalletInputError, WalletOutputError,
-    descriptor, is_potential_receive, tweak_public_key,
+    FederationWallet, FeeError, MODULE_CONSENSUS_VERSION, TxInfo, WalletInputError,
+    WalletOutputError, descriptor, is_potential_receive, tweak_public_key,
 };
 use futures::StreamExt;
 use miniscript::descriptor::Wsh;
@@ -540,10 +540,15 @@ impl ServerModule for Wallet {
             return Err(WalletInputError::WrongTweak);
         }
 
-        let consensus_receive_fee = self
-            .receive_fee(dbtx)
-            .await
-            .ok_or(WalletInputError::NoConsensusFeerateAvailable)?;
+        let consensus_receive_fee = match self.receive_fee(dbtx).await {
+            Ok(fee) => fee,
+            Err(FeeError::PendingTxCapExceeded(_)) => {
+                return Err(WalletInputError::PendingTxCapExceeded);
+            }
+            Err(FeeError::NoConsensusFeerateAvailable) => {
+                return Err(WalletInputError::NoConsensusFeerateAvailable);
+            }
+        };
 
         // We allow for a higher fee such that a guardian could construct a CPFP
         // transaction. This is the last line of defense should the federations
@@ -688,10 +693,15 @@ impl ServerModule for Wallet {
             .await
             .ok_or(WalletOutputError::NoFederationUTXO)?;
 
-        let consensus_send_fee = self
-            .send_fee(dbtx)
-            .await
-            .ok_or(WalletOutputError::NoConsensusFeerateAvailable)?;
+        let consensus_send_fee = match self.send_fee(dbtx).await {
+            Ok(fee) => fee,
+            Err(FeeError::PendingTxCapExceeded(_)) => {
+                return Err(WalletOutputError::PendingTxCapExceeded);
+            }
+            Err(FeeError::NoConsensusFeerateAvailable) => {
+                return Err(WalletOutputError::NoConsensusFeerateAvailable);
+            }
+        };
 
         // We allow for a higher fee such that a guardian could construct a CPFP
         // transaction. This is the last line of defense should the federations
@@ -861,19 +871,47 @@ impl ServerModule for Wallet {
             public_api_endpoint! {
                 SEND_FEE_ENDPOINT,
                 ApiVersion::new(0, 0),
-                async |module: &Wallet, context, _params: ()| -> Option<Amount> {
+                async |module: &Wallet, context, _params: ()| -> Amount {
+                    use fedimint_walletv2_common::FeeError;
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
-                    Ok(module.send_fee(&mut dbtx).await)
+                    module
+                        .send_fee(&mut dbtx)
+                        .await
+                        .map_err(|e| {
+                            let msg = match e {
+                                FeeError::PendingTxCapExceeded(count) => {
+                                    format!("Pending transaction cap exceeded: {} pending (max 32)", count)
+                                }
+                                FeeError::NoConsensusFeerateAvailable => {
+                                    "No consensus feerate available".to_string()
+                                }
+                            };
+                            fedimint_core::module::ApiError::bad_request(msg)
+                        })
                 }
             },
             public_api_endpoint! {
                 RECEIVE_FEE_ENDPOINT,
                 ApiVersion::new(0, 0),
-                async |module: &Wallet, context, _params: ()| -> Option<Amount> {
+                async |module: &Wallet, context, _params: ()| -> Amount {
+                    use fedimint_walletv2_common::FeeError;
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
-                    Ok(module.receive_fee(&mut dbtx).await)
+                    module
+                        .receive_fee(&mut dbtx)
+                        .await
+                        .map_err(|e| {
+                            let msg = match e {
+                                FeeError::PendingTxCapExceeded(count) => {
+                                    format!("Pending transaction cap exceeded: {} pending (max 32)", count)
+                                }
+                                FeeError::NoConsensusFeerateAvailable => {
+                                    "No consensus feerate available".to_string()
+                                }
+                            };
+                            fedimint_core::module::ApiError::bad_request(msg)
+                        })
                 }
             },
             public_api_endpoint! {
@@ -1227,17 +1265,22 @@ impl Wallet {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         tx_vbytes: u64,
-    ) -> Option<Amount> {
+    ) -> Result<Amount, FeeError> {
+        use fedimint_walletv2_common::FeeError;
+
         // The minimum feerate is a protection against a catastrophic error in the
         // feerate estimation and limits the length of the pending transaction stack.
 
         let pending_txs = pending_txs_unordered(dbtx).await;
 
-        assert!(pending_txs.len() <= 32);
+        if pending_txs.len() > 32 {
+            return Err(FeeError::PendingTxCapExceeded(pending_txs.len()));
+        }
 
         let feerate = self
             .consensus_feerate(dbtx)
-            .await?
+            .await
+            .ok_or(FeeError::NoConsensusFeerateAvailable)?
             .max(self.cfg.consensus.feerate_base << pending_txs.len());
 
         let tx_fee = tx_vbytes.saturating_mul(feerate).saturating_div(1000);
@@ -1256,15 +1299,18 @@ impl Wallet {
             .map(|t| t.fee.to_sat())
             .fold(stack_fee, u64::saturating_sub);
 
-        Some(Amount::from_sat(tx_fee.max(stack_fee)))
+        Ok(Amount::from_sat(tx_fee.max(stack_fee)))
     }
 
-    pub async fn send_fee(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<Amount> {
+    pub async fn send_fee(&self, dbtx: &mut DatabaseTransaction<'_>) -> Result<Amount, FeeError> {
         self.consensus_fee(dbtx, self.cfg.consensus.send_tx_vbytes)
             .await
     }
 
-    pub async fn receive_fee(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<Amount> {
+    pub async fn receive_fee(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+    ) -> Result<Amount, FeeError> {
         self.consensus_fee(dbtx, self.cfg.consensus.receive_tx_vbytes)
             .await
     }
@@ -1464,12 +1510,14 @@ impl Wallet {
     pub async fn send_fee_ui(&self) -> Option<Amount> {
         self.send_fee(&mut self.db.begin_transaction_nc().await)
             .await
+            .ok()
     }
 
     /// Get the current receive fee for UI display
     pub async fn receive_fee_ui(&self) -> Option<Amount> {
         self.receive_fee(&mut self.db.begin_transaction_nc().await)
             .await
+            .ok()
     }
 
     /// Get the current pending transaction info for UI display
