@@ -52,8 +52,8 @@ pub trait IDashboardApi {
     /// Get a map of peer IDs to guardian names
     async fn guardian_names(&self) -> BTreeMap<PeerId, String>;
 
-    /// Get the federation name
-    async fn federation_name(&self) -> String;
+    /// Read the legacy name from the immutable configuration, if present.
+    async fn federation_name(&self) -> Option<String>;
 
     /// Get the current active session count
     async fn session_count(&self) -> u64;

@@ -45,8 +45,10 @@ pub enum SetupStatus {
 pub struct SetLocalParamsRequest {
     /// Name of the peer, used in TLS auth
     pub name: String,
-    /// Federation name set by the leader
-    pub federation_name: Option<String>,
+    /// Deprecated and ignored, kept for backward-compatible deserialization
+    #[serde(rename = "federation_name")]
+    #[allow(clippy::pub_underscore_fields)]
+    pub _federation_name: Option<String>,
     /// Whether to disable base fees, set by the leader
     pub disable_base_fees: Option<bool>,
     /// Modules enabled by the leader (if None, all available modules are

@@ -20,6 +20,9 @@ use crate::envs::{
 };
 use crate::utils::parse_peer_id;
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub(crate) enum DatabaseBackend {
     /// Use RocksDB database backend
@@ -177,6 +180,9 @@ pub(crate) enum SetupAdminCmd {
     Status,
     SetLocalParams {
         name: String,
+        /// Deprecated and ignored by new guardians. After setup, set
+        /// federation_name in the guardian dashboard's Meta module; a guardian
+        /// consensus threshold must submit the same metadata.
         #[clap(long)]
         federation_name: Option<String>,
         #[clap(long)]

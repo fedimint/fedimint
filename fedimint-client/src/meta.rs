@@ -50,7 +50,7 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
         db: &Database,
         field: &str,
     ) -> Option<MetaValue<V>> {
-        match self.get_field_from_db(db, field).await {
+        match self.get_cached_field(db, field).await {
             Some(value) => {
                 // might be from in old cache.
                 // TODO: maybe old cache should have a ttl?
@@ -59,12 +59,16 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
             _ => {
                 // wait for initial value
                 self.initial_fetch_waiter.wait().await;
-                self.get_field_from_db(db, field).await
+                self.get_cached_field(db, field).await
             }
         }
     }
 
-    async fn get_field_from_db<V: DeserializeOwned + 'static>(
+    /// Read a cached field without waiting for the initial metadata fetch.
+    ///
+    /// Returns `None` if the cache has not been initialized. Cached values may
+    /// be stale; the background task refreshes them independently.
+    pub async fn get_cached_field<V: DeserializeOwned + 'static>(
         &self,
         db: &Database,
         field: &str,
@@ -170,7 +174,7 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
         stream! {
             let mut update_stream = pin!(self.subscribe_to_updates());
             loop {
-                let value = self.get_field_from_db(db, name).await;
+                let value = self.get_cached_field(db, name).await;
                 yield value;
                 if update_stream.next().await.is_none() {
                     break;
@@ -249,3 +253,6 @@ impl<S: MetaSource + ?Sized> MetaService<S> {
         self.meta_update_notify.notify_waiters();
     }
 }
+
+#[cfg(test)]
+mod tests;

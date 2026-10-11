@@ -1,17 +1,18 @@
 use std::collections::BTreeSet;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
 
 use base64::Engine as _;
 use bitcoin::Network;
+use fedimint_core::base32::{self, FEDIMINT_PREFIX};
 use fedimint_core::db::IRawDatabaseExt;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_server_core::setup_ui::ISetupApi;
 use tokio::sync::mpsc::{self, Receiver};
 
-use super::{
-    ConfigGenOutcome, ConfigGenSettings, FEDIMINT_PREFIX, JSON_EXT, LOCAL_CONFIG, PathBuf,
-    PeerSetupCode, SetupApi, base32, parse_backup,
-};
+use super::{ConfigGenOutcome, SetupApi, parse_backup};
+use crate::config::io::{JSON_EXT, LOCAL_CONFIG};
+use crate::config::{ConfigGenSettings, PeerSetupCode};
 
 fn setup_api(network: Network) -> SetupApi {
     setup_api_with_version(network, "1.2.3-alpha")
@@ -58,7 +59,7 @@ const INVALID_RESTORE_BACKUP_FIXTURE_B64: &str =
     include_str!("../../test_fixtures/guardian-backup-invalid-config.tar.b64");
 
 async fn setup_code(api: &SetupApi, name: &str) -> String {
-    api.set_local_parameters(name.to_string(), None, None, None, None)
+    api.set_local_parameters(name.to_string(), None, None, None)
         .await
         .expect("setting local parameters should succeed")
 }
@@ -212,7 +213,7 @@ async fn rejects_peer_setup_code_from_different_fedimint_vendor() {
 async fn rejects_malformed_local_fedimint_version() {
     let malformed_local = setup_api_with_version(Network::Regtest, "fedimint-code-version");
     let err = malformed_local
-        .set_local_parameters("local".to_owned(), None, None, None, None)
+        .set_local_parameters("local".to_owned(), None, None, None)
         .await
         .expect_err("malformed local version should be rejected");
     assert!(err.to_string().contains("Invalid local Fedimint version"));
@@ -245,15 +246,9 @@ async fn rejects_different_fedimint_minor_during_dkg() {
 async fn accepts_same_vendor_patch_versions_during_dkg() {
     let (api, mut receiver) =
         setup_api_with_version_and_receiver(Network::Regtest, "1.2.3-alpha+fedi");
-    api.set_local_parameters(
-        "local".to_owned(),
-        Some("test federation".to_owned()),
-        None,
-        None,
-        Some(4),
-    )
-    .await
-    .expect("setting local parameters should succeed");
+    api.set_local_parameters("local".to_owned(), None, None, Some(4))
+        .await
+        .expect("setting local parameters should succeed");
 
     for (name, version) in [
         ("peer-1", "1.2.4-beta+fedi"),
@@ -269,10 +264,17 @@ async fn accepts_same_vendor_patch_versions_during_dkg() {
     api.start_dkg()
         .await
         .expect("DKG should accept peers from the same Fedimint minor");
-    receiver
+    let outcome = receiver
         .recv()
         .await
         .expect("DKG parameters should be sent");
+    let ConfigGenOutcome::Generated(params) = outcome else {
+        panic!("DKG should generate new parameters");
+    };
+    assert!(
+        params.meta.is_empty(),
+        "new setup must not write immutable metadata"
+    );
 }
 
 #[tokio::test]

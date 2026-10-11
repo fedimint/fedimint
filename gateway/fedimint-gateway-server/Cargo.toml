@@ -61,6 +61,7 @@ fedimint-lnurl = { workspace = true }
 fedimint-lnv2-client = { workspace = true }
 fedimint-lnv2-common = { workspace = true }
 fedimint-logging = { workspace = true }
+fedimint-meta-client = { workspace = true }
 fedimint-metrics = { workspace = true }
 fedimint-mint-client = { workspace = true }
 fedimint-mintv2-client = { workspace = true }
@@ -105,6 +106,7 @@ fedimint-dummy-common = { workspace = true }
 fedimint-dummy-server = { workspace = true }
 fedimint-ln-server = { workspace = true }
 fedimint-lnv2-server = { workspace = true }
+fedimint-meta-server = { workspace = true }
 fedimint-testing = { workspace = true }
 fedimint-testing-core = { workspace = true }
 fedimint-unknown-common = { workspace = true }
