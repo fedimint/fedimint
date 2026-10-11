@@ -159,13 +159,13 @@ impl SafeUrl {
     /// segments from the base — it always appends.
     pub fn join_path(&self, path: &str) -> Self {
         let mut url = self.clone();
+        if path.is_empty() {
+            return url;
+        }
         if let Ok(mut segments) = url.0.path_segments_mut() {
             segments.pop_if_empty();
-            for segment in path.trim_matches('/').split('/') {
-                if !segment.is_empty() {
-                    segments.push(segment);
-                }
-            }
+            let relative_path = path.trim_start_matches('/');
+            segments.extend(relative_path.split('/'));
         }
         url
     }

@@ -81,9 +81,12 @@ fn test_safe_url_join_path() {
 
     let base_with_trailing = SafeUrl::parse("http://admin:secret@127.0.0.1:8080/api/v1/").unwrap();
     let joined = base_with_trailing.join_path("/users/profile/");
-    assert_eq!(joined.as_str(), "http://admin:secret@127.0.0.1:8080/api/v1/users/profile");
+    assert_eq!(joined.as_str(), "http://admin:secret@127.0.0.1:8080/api/v1/users/profile/");
     assert_eq!(joined.username(), "admin");
     assert_eq!(joined.password(), Some("secret"));
+
+    let with_empty_segment = base.join_path("foo//bar");
+    assert_eq!(with_empty_segment.as_str(), "http://admin:secret@127.0.0.1:8080/api/v1/foo//bar");
 
     let root = SafeUrl::parse("http://127.0.0.1:8080").unwrap();
     assert_eq!(root.join_path("foo").as_str(), "http://127.0.0.1:8080/foo");
