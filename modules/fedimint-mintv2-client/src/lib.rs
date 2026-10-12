@@ -20,6 +20,8 @@ pub mod issuance;
 mod output;
 mod rebalance;
 mod receive;
+#[cfg(test)]
+mod tests;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::Infallible;
@@ -53,7 +55,8 @@ use fedimint_core::base32::{self, FEDIMINT_PREFIX};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
@@ -127,6 +130,55 @@ impl SpendableNote {
             denomination: self.denomination,
             nonce: self.nonce(),
             signature: self.signature,
+        }
+    }
+}
+
+/// A [`SpendableNote`] whose signature is not decoded yet, with the same
+/// encoding.
+///
+/// Decoding a [`tbs::Signature`] decompresses and subgroup-checks a curve
+/// point, which is expensive, and every spend reads far more notes than it
+/// spends. Reading the note table as this type defers that cost to the notes
+/// actually selected. Since not every byte string is a valid signature it is
+/// only for reading the client's own database; [`Self::decode`] validates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable)]
+pub struct SpendableNoteUndecoded {
+    pub denomination: Denomination,
+    pub keypair: Keypair,
+    // Must stay in sync with the encoding of `tbs::Signature`, which a test
+    // verifies.
+    pub signature: [u8; 48],
+}
+
+impl SpendableNoteUndecoded {
+    pub fn amount(&self) -> Amount {
+        self.denomination.amount()
+    }
+
+    pub fn decode(self) -> Result<SpendableNote, DecodeError> {
+        Ok(SpendableNote {
+            denomination: self.denomination,
+            keypair: self.keypair,
+            signature: Decodable::consensus_decode_whole(
+                &self.signature,
+                &ModuleDecoderRegistry::default(),
+            )?,
+        })
+    }
+
+    fn decode_own(self) -> SpendableNote {
+        self.decode()
+            .expect("Notes in our own database were encoded from valid signatures")
+    }
+}
+
+impl From<SpendableNote> for SpendableNoteUndecoded {
+    fn from(note: SpendableNote) -> Self {
+        Self {
+            denomination: note.denomination,
+            keypair: note.keypair,
+            signature: note.signature.0.to_compressed(),
         }
     }
 }
@@ -643,10 +695,10 @@ impl MintClientModule {
                 .find_by_prefix(&SpendableNoteAmountPrefix(amount))
                 .await
                 .map(|entry| entry.0.0)
-                .collect::<Vec<SpendableNote>>()
+                .collect::<Vec<SpendableNoteUndecoded>>()
                 .await;
 
-            target_notes.extend(notes_amount.iter().take(TARGET_PER_DENOMINATION).cloned());
+            target_notes.extend(notes_amount.iter().take(TARGET_PER_DENOMINATION).copied());
 
             if notes_amount.len() > 2 * TARGET_PER_DENOMINATION {
                 for note in notes_amount.into_iter().skip(TARGET_PER_DENOMINATION) {
@@ -667,7 +719,12 @@ impl MintClientModule {
         }
 
         if excess_output == Amount::ZERO {
-            return Some(selected_notes);
+            return Some(
+                selected_notes
+                    .into_iter()
+                    .map(SpendableNoteUndecoded::decode_own)
+                    .collect(),
+            );
         }
 
         for note in excess_notes.into_iter().chain(target_notes) {
@@ -681,7 +738,12 @@ impl MintClientModule {
             selected_notes.push(note);
 
             if excess_output == Amount::ZERO {
-                return Some(selected_notes);
+                return Some(
+                    selected_notes
+                        .into_iter()
+                        .map(SpendableNoteUndecoded::decode_own)
+                        .collect(),
+                );
             }
         }
 
@@ -721,7 +783,7 @@ impl MintClientModule {
 
                             excess_input += note.amount() - (d.amount() + fee.fee(d.amount()));
 
-                            input_notes.push(note);
+                            input_notes.push(note.decode_own());
                         }
                         None => break,
                     },
@@ -1261,18 +1323,7 @@ impl MintClientModule {
     ) -> BTreeMap<Denomination, u64> {
         let mut spent_counts: BTreeMap<Denomination, u64> = BTreeMap::new();
 
-        for note in spent {
-            *spent_counts.entry(note.denomination).or_insert(0) += 1;
-        }
-
-        let mut deficit = BTreeMap::new();
-
-        for (denomination, spent_count) in spent_counts {
-            let held = dbtx
-                .find_by_prefix(&SpendableNoteAmountPrefix(denomination))
-                .await
-                .count()
-                .await as u64;
+            notes.push(spendable_note.decode_own());
 
             let remaining = held.saturating_sub(spent_count);
 
@@ -1468,7 +1519,7 @@ impl MintClientModule {
         dbtx: &mut DatabaseTransaction<'_>,
         spendable_note: &SpendableNote,
     ) {
-        dbtx.remove_entry(&SpendableNoteKey(spendable_note.clone()))
+        dbtx.remove_entry(&SpendableNoteKey(spendable_note.clone().into()))
             .await
             .expect("Must delete existing spendable note");
     }
