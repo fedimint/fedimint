@@ -76,9 +76,10 @@ pub fn tweak_xonly_public_key(pk: &XOnlyPublicKey, tweak: &sha256::Hash) -> XOnl
 
 /// Build the federation's Taproot multi-`a` descriptor for the given tweak.
 ///
-/// The internal key is a provably unspendable BIP-341 NUMS point so the
-/// only way to spend is via the script path. The script path commits to a
-/// `multi_a` of the guardians' tweaked x-only keys.
+/// The caller supplies the internal key: the provably unspendable BIP-341
+/// NUMS point for `Tr`, which forces spends through the script path, or the
+/// FROST aggregate key for `Frost`, which enables key-path spends. The script
+/// path commits to a `multi_a` of the guardians' tweaked x-only keys.
 pub fn descriptor_tr(
     pks: &BTreeMap<PeerId, PublicKey>,
     tweak: &sha256::Hash,
