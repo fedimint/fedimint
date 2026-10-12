@@ -734,16 +734,13 @@ pub async fn run_event_log_ordering_task(
         .await;
 
     let mut scan_from_usecs = 0;
-    let mut last_full_scan: Option<Instant> = None;
+    let mut next_full_scan = Instant::now();
 
     loop {
         let mut dbtx = db.begin_transaction().await;
 
-        let full_scan =
-            last_full_scan.is_none_or(|at| at.elapsed() >= UNORDERED_FULL_SCAN_INTERVAL);
-
-        let unordered_events = if full_scan {
-            last_full_scan = Some(Instant::now());
+        let unordered_events = if Instant::now() >= next_full_scan {
+            next_full_scan = Instant::now() + UNORDERED_FULL_SCAN_INTERVAL;
 
             dbtx.find_by_prefix(&UnorderedEventLogIdPrefixAll)
                 .await
@@ -827,9 +824,10 @@ pub async fn run_event_log_ordering_task(
         trace!(target: LOG_CLIENT_EVENT_LOG, "Event log ordering task waits for more events");
 
         // Waking up for the periodic full scan even without new events keeps the
-        // bound on a late commit that a seeking scan skipped.
+        // bound on a late commit that a seeking scan skipped. The deadline is
+        // absolute so that notifications in between cannot postpone it.
         if let Ok(Err(_)) = timeout(
-            UNORDERED_FULL_SCAN_INTERVAL,
+            next_full_scan.saturating_duration_since(Instant::now()),
             log_ordering_task_wakeup.changed(),
         )
         .await
