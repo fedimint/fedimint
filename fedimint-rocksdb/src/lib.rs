@@ -128,11 +128,13 @@ fn is_power_of_two_sanity() {
 /// Default write buffer size: 2 MiB (`RocksDB` default is 64 MiB)
 const DEFAULT_WRITE_BUFFER_SIZE: usize = 2 * 1024 * 1024;
 
-/// Default block cache size: 2 MiB (`RocksDB` default is 8 MiB).
+/// Default block cache size: 64 MiB (`RocksDB` default is 8 MiB).
 /// Index/filter blocks are placed in this cache too
-/// (`set_cache_index_and_filter_blocks`), so everything is bounded.
-/// We only need correctness, not throughput, so we keep this minimal.
-const DEFAULT_BLOCK_CACHE_SIZE: usize = 2 * 1024 * 1024;
+/// (`set_cache_index_and_filter_blocks`), so everything is bounded. With
+/// long keys a table's index block reaches several MiB, and every lookup
+/// needs it, so the cache must be able to hold the index blocks of the tables
+/// being read or each lookup reads and decodes them again.
+const DEFAULT_BLOCK_CACHE_SIZE: usize = 64 * 1024 * 1024;
 
 /// Default max open files: 256 (`RocksDB` default is unlimited which
 /// consumes memory for each open file handle and associated metadata)
@@ -164,7 +166,14 @@ fn get_default_options() -> Result<rocksdb::Options, RocksDbOpenError> {
 
     let block_cache_size =
         parse_env_size(FM_ROCKSDB_BLOCK_CACHE_SIZE_ENV)?.unwrap_or(DEFAULT_BLOCK_CACHE_SIZE);
-    let cache = rocksdb::Cache::new_lru_cache(block_cache_size);
+    // A sharded cache splits the capacity evenly and an entry larger than its
+    // shard is not retained. The default sharding keeps shards at 512 KiB to
+    // 1 MiB for caches up to 64 MiB, so index blocks of several MiB would never
+    // stay cached.
+    let mut cache_opts = rocksdb::LruCacheOptions::default();
+    cache_opts.set_capacity(block_cache_size);
+    cache_opts.set_num_shard_bits(0);
+    let cache = rocksdb::Cache::new_lru_cache_opts(&cache_opts);
     let mut block_opts = rocksdb::BlockBasedOptions::default();
     block_opts.set_block_cache(&cache);
     // Put index and filter blocks into the block cache so they are
