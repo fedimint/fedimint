@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicU8;
+use std::time::Duration;
 
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{
@@ -7,7 +8,9 @@ use fedimint_core::db::{
     NonCommittable,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::runtime::sleep;
 use fedimint_core::task::TaskGroup;
+use fedimint_core::time::duration_since_epoch;
 use fedimint_core::{apply, async_trait_maybe_send, impl_db_record};
 use futures::StreamExt as _;
 use tokio::sync::{broadcast, watch};
@@ -17,7 +20,8 @@ use tracing::info;
 use super::{
     DBTransactionEventLogExt as _, EventHandlerError, EventKind, EventLogEntry, EventLogId,
     EventLogTrimableId, EventLogTrimableIdPrefixAll, TRIMABLE_EVENTLOG_MIN_ID_AGE,
-    TRIMABLE_EVENTLOG_MIN_TS_AGE, handle_events, run_event_log_ordering_task, trim_trimable_log,
+    TRIMABLE_EVENTLOG_MIN_TS_AGE, UnordedEventLogId, UnorderedEventLogEntry, handle_events,
+    run_event_log_ordering_task, trim_trimable_log,
 };
 use crate::{EventLogNonTrimableTracker, EventLogTrackerError};
 
@@ -296,4 +300,104 @@ async fn test_trim_trimable_log() {
         assert_eq!(remaining_ids[0], expected_start_id);
         assert_eq!(remaining_ids.len(), expected_remaining);
     }
+}
+
+/// Logs a persistent event without a module and commits it, which wakes up the
+/// ordering task.
+async fn log_test_event(db: &Database, log_ordering_wakeup_tx: &watch::Sender<()>, kind: &str) {
+    let mut dbtx = db.begin_transaction().await;
+
+    dbtx.log_event_raw(
+        log_ordering_wakeup_tx.clone(),
+        EventKind::from(kind.to_string()),
+        None,
+        None,
+        vec![],
+        crate::EventPersistence::Persistent,
+    )
+    .await;
+
+    dbtx.commit_tx().await;
+}
+
+/// Kinds of all events in the ordered log, in order.
+async fn ordered_kinds(db: &Database) -> Vec<EventKind> {
+    db.begin_transaction_nc()
+        .await
+        .get_event_log(None, 100)
+        .await
+        .into_iter()
+        .map(|entry| entry.inner.kind)
+        .collect()
+}
+
+/// An event committed behind the seeking scan's watermark is only picked up by
+/// the periodic full scan, and a notification just before that scan's deadline
+/// must not postpone it.
+#[test_log::test(tokio::test(start_paused = true))]
+async fn full_scan_deadline_is_not_postponed_by_notifications() {
+    let tg = TaskGroup::new();
+    let (db, _log_event_added_rx, log_ordering_wakeup_tx) = spawn_ordering_task(&tg);
+
+    // The task starts with a full scan at t=0, so the next one is due at t=60s.
+    sleep(Duration::from_secs(1)).await;
+
+    log_test_event(&db, &log_ordering_wakeup_tx, "first").await;
+
+    sleep(Duration::from_secs(1)).await;
+
+    let late_ts_usecs = u64::try_from(
+        duration_since_epoch()
+            .saturating_sub(Duration::from_mins(2))
+            .as_micros(),
+    )
+    .expect("Fits in u64");
+
+    let mut dbtx = db.begin_transaction().await;
+
+    dbtx.insert_new_entry(
+        &UnordedEventLogId {
+            ts_usecs: late_ts_usecs,
+            counter: 0,
+        },
+        &UnorderedEventLogEntry {
+            flags: UnorderedEventLogEntry::FLAG_PERSIST,
+            inner: EventLogEntry {
+                kind: EventKind::from("late".to_string()),
+                module: None,
+                ts_usecs: late_ts_usecs,
+                payload: vec![],
+            },
+        },
+    )
+    .await;
+
+    dbtx.commit_tx().await;
+
+    sleep(Duration::from_secs(57)).await;
+
+    log_test_event(&db, &log_ordering_wakeup_tx, "second").await;
+
+    sleep(Duration::from_millis(500)).await;
+
+    assert_eq!(
+        ordered_kinds(&db).await,
+        vec![
+            EventKind::from("first".to_string()),
+            EventKind::from("second".to_string()),
+        ],
+        "The seeking scan at t=59s must skip the event behind its watermark"
+    );
+
+    sleep(Duration::from_secs(1)).await;
+
+    assert_eq!(
+        ordered_kinds(&db).await,
+        vec![
+            EventKind::from("first".to_string()),
+            EventKind::from("second".to_string()),
+            EventKind::from("late".to_string()),
+        ],
+        "The full scan due at t=60s must order the late event without another notification"
+    );
 }
