@@ -97,6 +97,7 @@ async fn run_pick(
         attempt,
         required_commitments,
         suspects,
+        None,
     )
     .await
 }
@@ -301,6 +302,70 @@ async fn nonce_loss_suspect_is_reselected_in_later_attempts() {
 /// otherwise reveal this guardian's long-lived signing share. Goes
 /// through a real DB round-trip so the value serialized is the decoded
 /// at-rest one, exactly as in the dump.
+/// Runs `pick_signing_session` with the test-only `forced_signer` hook.
+async fn run_pick_forced(
+    db: &Database,
+    all_peers: &[PeerId],
+    txid: Txid,
+    attempt: u32,
+    forced_signer: PeerId,
+) -> Option<Vec<PeerId>> {
+    let mut dbtx = db.begin_transaction().await;
+    pick_signing_session(
+        &mut dbtx.to_ref_nc(),
+        all_peers,
+        THRESHOLD,
+        txid,
+        attempt,
+        2,
+        &BTreeSet::new(),
+        Some(forced_signer),
+    )
+    .await
+}
+
+/// Asserts that the forced signer takes the first seat in attempt 0 of every
+/// tx, and leaves later attempts untouched.
+#[tokio::test]
+async fn forced_signer_is_seated_in_first_attempt_only() {
+    let all_peers = peers(N);
+    let counts: BTreeMap<_, _> = all_peers.iter().map(|p| (*p, 4)).collect();
+    let db = db_with_commitments(&counts).await;
+    let forced = PeerId::from_str("6").unwrap();
+
+    for seed in 0..16 {
+        let txid = dummy_txid(seed);
+
+        let first = run_pick_forced(&db, &all_peers, txid, 0, forced)
+            .await
+            .expect("all peers viable");
+        assert_eq!(first[0], forced);
+        assert_eq!(first.len(), THRESHOLD);
+
+        assert_eq!(
+            run_pick_forced(&db, &all_peers, txid, 1, forced).await,
+            run_pick(&db, &all_peers, THRESHOLD, txid, 1, 2, &BTreeSet::new()).await,
+        );
+    }
+}
+
+/// Asserts that a forced signer without enough commitments is skipped like
+/// any other under-buffered peer.
+#[tokio::test]
+async fn forced_signer_without_commitments_is_skipped() {
+    let all_peers = peers(N);
+    let forced = PeerId::from_str("6").unwrap();
+    let mut counts: BTreeMap<_, _> = all_peers.iter().map(|p| (*p, 4)).collect();
+    counts.insert(forced, 0);
+    let db = db_with_commitments(&counts).await;
+    let txid = dummy_txid(9);
+
+    assert_eq!(
+        run_pick_forced(&db, &all_peers, txid, 0, forced).await,
+        run_pick(&db, &all_peers, THRESHOLD, txid, 0, 2, &BTreeSet::new()).await,
+    );
+}
+
 #[tokio::test]
 async fn signing_nonces_dump_never_contains_secret_nonces() {
     let signing_share = signing_share_for_tests();

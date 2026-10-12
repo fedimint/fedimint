@@ -48,8 +48,7 @@ use fedimint_core::db::{
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{
-    FM_ENABLE_MODULE_WALLETV2_ENV, FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV, is_env_var_set_opt,
-    is_running_in_test_env,
+    FM_ENABLE_MODULE_WALLETV2_ENV, is_env_var_set_opt, is_running_in_test_env,
 };
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
@@ -110,6 +109,7 @@ use crate::db::{
     LocalFrostSignatureSharePrefix, SchnorrSignaturesPrefix, TxInfoKey, TxInfoPrefix,
     UnconfirmedTxKey, UnconfirmedTxPrefix, UnsignedTxKey, UnsignedTxPrefix,
 };
+use crate::envs::FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV;
 use crate::metrics::{
     WALLET_BLOCK_COUNT, WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS,
     WALLET_PEGIN_SATS, WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,

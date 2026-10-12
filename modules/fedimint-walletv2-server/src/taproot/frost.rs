@@ -8,7 +8,7 @@ use bitcoin::hashes::{Hash, sha256};
 use bitcoin::sighash::{Prevouts, SighashCache};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Encodable;
-use fedimint_core::envs::FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV;
+use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{NumPeersExt, PeerId};
@@ -40,6 +40,9 @@ use crate::db::{
     FrostSigningCommitmentsPeerPrefix, FrostSigningNoncesKey, FrostSigningNoncesPrefix,
     FrostSigningPackagesKey, FrostSigningPackagesTxidPrefix, LocalFrostSignatureShareKey,
     LocalFrostSignatureShareTxidPrefix, UnsignedTxKey, UnsignedTxPrefix,
+};
+use crate::envs::{
+    FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV, FM_WALLETV2_FROST_TEST_FORCE_SIGNER_ENV,
 };
 use crate::taproot::attach_key_path_witnesses;
 use crate::{FederationTx, Wallet};
@@ -126,6 +129,28 @@ fn frost_nonce_buffer_target() -> usize {
     });
 
     *TARGET
+}
+
+/// Test hook: the peer [`pick_signing_session`] seats first in attempt `0`,
+/// read once from [`FM_WALLETV2_FROST_TEST_FORCE_SIGNER_ENV`]. Always `None`
+/// outside test environments. Signing sessions must be identical on every
+/// guardian, so all guardians of a federation must set the same value.
+fn frost_test_forced_signer() -> Option<PeerId> {
+    static FORCED: LazyLock<Option<PeerId>> = LazyLock::new(|| {
+        if !is_running_in_test_env() {
+            return None;
+        }
+
+        std::env::var(FM_WALLETV2_FROST_TEST_FORCE_SIGNER_ENV)
+            .ok()
+            .map(|value| {
+                value
+                    .parse::<PeerId>()
+                    .expect("FM_WALLETV2_FROST_TEST_FORCE_SIGNER must be a peer id")
+            })
+    });
+
+    *FORCED
 }
 
 #[derive(Debug, Clone)]
@@ -384,6 +409,7 @@ impl Wallet {
             attempt,
             unsigned_tx.tx.input.len(),
             &suspects,
+            frost_test_forced_signer(),
         )
         .await
         .ok_or_else(|| {
@@ -1574,6 +1600,11 @@ fn peer_id_to_identifier(peer_id: PeerId) -> Identifier {
 /// restore or wipe) can't produce a late share for the attempt it failed.
 /// Each attempt it is drafted into consumes and tombstones some of those
 /// unusable commitments, so it signs again once they are used up.
+///
+/// `forced_signer` is a test hook (see [`frost_test_forced_signer`]): if it is
+/// viable, it takes the first seat in attempt `0`, and the others keep their
+/// shuffle order.
+#[allow(clippy::too_many_arguments)]
 async fn pick_signing_session(
     dbtx: &mut DatabaseTransaction<'_>,
     all_peers: &[PeerId],
@@ -1582,6 +1613,7 @@ async fn pick_signing_session(
     attempt: u32,
     required_commitments: usize,
     suspects: &BTreeSet<PeerId>,
+    forced_signer: Option<PeerId>,
 ) -> Option<Vec<PeerId>> {
     let mut commitment_counts: BTreeMap<PeerId, usize> = BTreeMap::new();
     for &peer in all_peers {
@@ -1601,6 +1633,14 @@ async fn pick_signing_session(
     let mut rng = ChaCha8Rng::from_seed(seed);
     let mut shuffled = all_peers.to_vec();
     shuffled.shuffle(&mut rng);
+
+    if attempt == 0
+        && let Some(forced_signer) = forced_signer
+        && let Some(position) = shuffled.iter().position(|peer| *peer == forced_signer)
+    {
+        // Move it to the front, keeping the others in shuffle order.
+        shuffled[..=position].rotate_right(1);
+    }
 
     let (non_suspects, drafted_suspects): (Vec<PeerId>, Vec<PeerId>) = shuffled
         .into_iter()
