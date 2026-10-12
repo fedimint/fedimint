@@ -5,6 +5,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 pub use fedimint_walletv2_common as common;
+pub use fedimint_walletv2_common::MempoolVisibility;
 
 mod api;
 #[cfg(feature = "cli")]
@@ -18,7 +19,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context as _, anyhow};
 use api::WalletFederationApi;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, ScriptBuf};
@@ -55,7 +55,7 @@ use fedimint_eventlog::{Event, EventLogId};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
 use fedimint_walletv2_common::config::WalletClientConfig;
 use fedimint_walletv2_common::{
-    CONFIRMATION_FINALITY_DELAY, KIND, OutputInfo, PendingOutput, StandardScript, TxInfo,
+    BLOCK_COUNT_VOTE_DELAY, KIND, OutputInfo, PendingOutput, StandardScript, TxInfo,
     WalletCommonInit, WalletInput, WalletInputV0, WalletModuleTypes, WalletOutput, WalletOutputV0,
     descriptor, is_potential_receive,
 };
@@ -174,19 +174,20 @@ pub enum ReceiveProgress {
 pub struct AddressReceiveProgress {
     /// One entry per deposit the guardians can see, ordered by outpoint.
     pub deposits: Vec<(bitcoin::OutPoint, ReceiveProgress)>,
-    /// Whether any guardian could enumerate a mempool for this query.
+    /// The best mempool view any guardian had for this query.
     ///
-    /// When this is false nobody can report an unmined deposit, so empty
-    /// `deposits` are not evidence that nothing was sent - the federation is
-    /// simply blind to the payment until it is mined. A guardian reports false
-    /// if its bitcoin backend is esplora, if it has turned its mempool scan
-    /// off, or if it could not read its mempool this round; one guardian that
-    /// can see a mempool is enough to make this true for everyone.
+    /// Only [`MempoolVisibility::Complete`] makes empty `deposits` evidence
+    /// that nothing has been broadcast yet. With
+    /// [`MempoolVisibility::Partial`] the unmined deposits reported are
+    /// real, but one may be missing because a guardian failed to fetch its
+    /// transaction; with [`MempoolVisibility::Unavailable`] the federation
+    /// is blind to a payment until it is mined. One guardian that inspected
+    /// its whole mempool is enough to make this `Complete` for everyone.
     ///
     /// A wallet showing a receive screen wants this to choose between "we have
     /// not seen your payment yet" and "waiting for the first confirmation",
     /// which are very different things to tell a user who has just paid.
-    pub mempool_visibility: bool,
+    pub mempool_visibility: MempoolVisibility,
 }
 
 #[derive(Debug, Clone)]
@@ -665,7 +666,7 @@ impl WalletClientModule {
     pub async fn receive_progress(
         &self,
         outpoint: bitcoin::OutPoint,
-    ) -> anyhow::Result<ReceiveProgress> {
+    ) -> Result<ReceiveProgress, ReceiveProgressError> {
         let pending = self.module_api.pending_outputs().await;
 
         // Guardians report every output passing the receive filter, most of
@@ -678,7 +679,7 @@ impl WalletClientModule {
             .iter()
             .find(|output| output.outpoint == outpoint && ours.contains_key(&output.script))
             .map(|output| Self::pending_progress(output, pending.block_count))
-            .context("No deposit of ours at this outpoint")
+            .ok_or(ReceiveProgressError::UnknownDeposit)
     }
 
     /// The progress of every deposit to `address` the federation has seen,
@@ -686,17 +687,18 @@ impl WalletClientModule {
     ///
     /// Empty deposits mean no guardian has reported a payment to the address
     /// yet. That is only proof nothing was sent if
-    /// [`AddressReceiveProgress::mempool_visibility`] is true, since an unmined
-    /// deposit is invisible to a federation that cannot read a mempool.
+    /// [`AddressReceiveProgress::mempool_visibility`] is
+    /// [`MempoolVisibility::Complete`], since an unmined deposit is invisible
+    /// to a federation that could not inspect its whole mempool.
     ///
     /// Errors if `address` was not handed out by [`Self::receive`].
     pub async fn address_receive_progress(
         &self,
         address: &Address,
-    ) -> anyhow::Result<AddressReceiveProgress> {
+    ) -> Result<AddressReceiveProgress, ReceiveProgressError> {
         self.address_index(address)
             .await
-            .context("Address was not derived by this client")?;
+            .ok_or(ReceiveProgressError::UnknownAddress)?;
 
         Ok(self.deposits_paying(&address.script_pubkey()).await)
     }
@@ -739,10 +741,11 @@ impl WalletClientModule {
     }
 
     fn pending_progress(output: &PendingOutput, block_count: u64) -> ReceiveProgress {
-        // The module counts finality from the block after the one that mined the
-        // transaction, so a peg-in is claimable one standard confirmation later
-        // than the delay itself.
-        let required = CONFIRMATION_FINALITY_DELAY + 1;
+        // Block count votes trail the chain tip by the vote delay, and an output
+        // is only recorded once the consensus block count is past the block that
+        // mined it, so a peg-in is claimable one standard confirmation later than
+        // the vote delay itself.
+        let required = BLOCK_COUNT_VOTE_DELAY + 1;
 
         match output.height {
             Some(height) => ReceiveProgress::Confirming {
@@ -1318,6 +1321,21 @@ pub enum AwaitReceiveError {
     /// The deposit was claimed, but the ecash it mints was never issued.
     #[error("The ecash for the claimed deposit could not be issued")]
     Issuance(#[from] TransactionSubmitError),
+}
+
+/// A failure to look up the progress of an incoming peg-in.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ReceiveProgressError {
+    /// No guardian reports a deposit at this outpoint to one of our addresses.
+    /// This includes a deposit that was reorged out or evicted since it was
+    /// last seen.
+    #[error("No deposit of ours at this outpoint")]
+    UnknownDeposit,
+
+    /// The address was not handed out by [`WalletClientModule::receive`].
+    #[error("Address was not derived by this client")]
+    UnknownAddress,
 }
 
 /// A failure while scanning the federation's outputs for payments to this

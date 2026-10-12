@@ -14,7 +14,7 @@ use fedimint_walletv2_common::endpoint_constants::{
     RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 };
 use fedimint_walletv2_common::{
-    FederationWallet, OutputInfo, PendingOutput, PendingOutputs, TxInfo,
+    FederationWallet, MempoolVisibility, OutputInfo, PendingOutput, PendingOutputs, TxInfo,
 };
 
 /// Renders each peer's fee answer so a divergence error names the odd one out.
@@ -235,13 +235,13 @@ where
             .copied()
             .unwrap_or(0);
 
-        let mut mempool_visibility = false;
+        let mut mempool_visibility = MempoolVisibility::Unavailable;
         let mut outputs: BTreeMap<bitcoin::OutPoint, PendingOutput> = BTreeMap::new();
 
         for response in responses {
-            // One guardian that can see a mempool is enough to report unmined
-            // peg-ins for the whole federation.
-            mempool_visibility |= response.mempool_visibility;
+            // One guardian that inspected its mempool is enough to report
+            // unmined peg-ins for the whole federation, so the best view wins.
+            mempool_visibility = mempool_visibility.max(response.mempool_visibility);
 
             for output in response.outputs {
                 outputs

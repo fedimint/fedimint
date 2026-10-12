@@ -37,6 +37,17 @@ pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVers
 /// not count towards the number of confirmations.
 pub const CONFIRMATION_FINALITY_DELAY: u64 = 6;
 
+/// How many blocks a peer's block count vote trails its bitcoin backend: the
+/// finality delay, plus one block of slack. Processing a new consensus block
+/// count waits for the local backend to report the consensus count plus the
+/// finality delay, and without the slack that is exactly the block the voter
+/// saw, so a backend a little behind, or a backend status that is stale (it is
+/// polled once a minute), stalled item processing on every new block.
+///
+/// Lives here rather than in the server so that the client can tell how deep a
+/// peg-in has to be before the federation claims it.
+pub const BLOCK_COUNT_VOTE_DELAY: u64 = CONFIRMATION_FINALITY_DELAY + 1;
+
 /// Returns a sleep duration of 1 second in test environments or 60 seconds in
 /// production. Used for polling intervals where faster feedback is needed
 /// during testing.
@@ -155,17 +166,40 @@ pub struct PendingOutputs {
     ///
     /// A mined output's confirmations are `block_count - height`, which counts
     /// the block that mined it as the first confirmation. Note this is offset
-    /// by one from [`CONFIRMATION_FINALITY_DELAY`], which does not count the
-    /// mining block, so a peg-in becomes claimable at
-    /// `CONFIRMATION_FINALITY_DELAY + 1` confirmations.
+    /// by one from [`BLOCK_COUNT_VOTE_DELAY`], which does not count the mining
+    /// block, so a peg-in becomes claimable at `BLOCK_COUNT_VOTE_DELAY + 1`
+    /// confirmations.
     pub block_count: u64,
     pub outputs: Vec<PendingOutput>,
-    /// Whether this guardian's bitcoin backend can enumerate a mempool.
+    /// How much of its mempool this guardian inspected for these outputs.
     ///
-    /// Distinguishes "no unmined peg-ins" from "this guardian cannot see the
-    /// mempool at all", which an esplora-backed guardian never can. Without it
-    /// a client could not tell an empty mempool from a blind guardian.
-    pub mempool_visibility: bool,
+    /// Distinguishes "no unmined peg-ins" from "this guardian could not look",
+    /// which an esplora-backed guardian never can. Without it a client could
+    /// not tell an empty mempool from a blind guardian.
+    pub mempool_visibility: MempoolVisibility,
+}
+
+/// How much of a mempool was inspected for unmined peg-ins.
+///
+/// Ordered from least to most visibility, so the best of several views is
+/// their maximum.
+#[derive(
+    Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize,
+)]
+pub enum MempoolVisibility {
+    /// Nothing unmined is reported, either because the backend cannot
+    /// enumerate a mempool (as esplora never can), because the mempool scan is
+    /// turned off, or because listing the mempool failed.
+    #[default]
+    Unavailable,
+    /// The mempool was listed, but fetching some of its transactions failed.
+    ///
+    /// Every unmined output reported is real, but the set may be short of a
+    /// few transactions, so the absence of a deposit proves nothing.
+    Partial,
+    /// Every transaction in the mempool was inspected, so a deposit that is not
+    /// reported has not reached this mempool.
+    Complete,
 }
 
 #[derive(Debug)]

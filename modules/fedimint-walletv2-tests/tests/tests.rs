@@ -24,8 +24,8 @@ use fedimint_walletv2_client::events::{
     SendPaymentUpdateEvent,
 };
 use fedimint_walletv2_client::{
-    FinalReceiveOperationState, FinalSendOperationState, ReceiveProgress, SendError,
-    WalletClientInit, WalletClientModule,
+    FinalReceiveOperationState, FinalSendOperationState, MempoolVisibility, ReceiveProgress,
+    SendError, WalletClientInit, WalletClientModule,
 };
 use fedimint_walletv2_common::KIND;
 use fedimint_walletv2_server::{BLOCK_COUNT_VOTE_DELAY, CONFIRMATION_FINALITY_DELAY, WalletInit};
@@ -227,7 +227,7 @@ async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
 
     assert_eq!(
         confirmations,
-        CONFIRMATION_FINALITY_DELAY + 1,
+        BLOCK_COUNT_VOTE_DELAY + 1,
         "Progress should count up to the depth at which the federation claims"
     );
 
@@ -294,13 +294,10 @@ async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
     // would leave it one block short of claimable forever.
     let consensus_block_count = module.block_count().await?;
 
-    bitcoin.mine_blocks(CONFIRMATION_FINALITY_DELAY + 1).await;
+    bitcoin.mine_blocks(BLOCK_COUNT_VOTE_DELAY + 1).await;
 
-    await_consensus_block_count(
-        &client,
-        consensus_block_count + CONFIRMATION_FINALITY_DELAY + 1,
-    )
-    .await?;
+    await_consensus_block_count(&client, consensus_block_count + BLOCK_COUNT_VOTE_DELAY + 1)
+        .await?;
 
     // The advisory view cannot tell a claimed deposit from a reorged one, and
     // keeps reporting an output for a while after it turns final, so the receive
@@ -323,9 +320,9 @@ async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
 /// The scan caches one transaction per mempool entry it has never seen, so
 /// discarding the cache on a transient error would both hide deposits the
 /// guardian can still account for and force the whole mempool to be refetched
-/// on the next pass. A pass that fails is reported as far as it got instead: an
-/// unfetched deposit is indistinguishable to a client from one that has not
-/// been broadcast yet, so the federation keeps its mempool visibility.
+/// on the next pass. A pass that fails is reported as far as it got instead,
+/// but flagged as partial: the unfetched deposit is missing from it, so its
+/// absence must not read as nothing having been sent.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_failed_mempool_fetch_keeps_the_deposits_already_seen() -> anyhow::Result<()> {
     if Fixtures::is_real_test() {
@@ -367,6 +364,8 @@ async fn a_failed_mempool_fetch_keeps_the_deposits_already_seen() -> anyhow::Res
         .send_without_mining(&address, Amount::from_int_btc(2))
         .await;
 
+    await_mempool_visibility(&client, &address, MempoolVisibility::Partial).await?;
+
     // The guardians rescan on their bitcoin monitor's interval, which is 100ms
     // under test, so this covers many failing passes rather than a single one.
     for _ in 0..20 {
@@ -380,9 +379,10 @@ async fn a_failed_mempool_fetch_keeps_the_deposits_already_seen() -> anyhow::Res
             "A failing scan must not drop the deposit the guardians had already cached"
         );
 
-        assert!(
+        assert_eq!(
             progress.mempool_visibility,
-            "A scan that fails partway through still saw a mempool, so it must keep reporting one"
+            MempoolVisibility::Partial,
+            "A scan that fails partway through must not claim to have seen the whole mempool"
         );
 
         assert!(
@@ -414,6 +414,8 @@ async fn a_failed_mempool_fetch_keeps_the_deposits_already_seen() -> anyhow::Res
         "The recovered scan must still report the originally cached deposit"
     );
 
+    await_mempool_visibility(&client, &address, MempoolVisibility::Complete).await?;
+
     let recovered = deposits
         .iter()
         .find_map(|(outpoint, state)| {
@@ -429,6 +431,31 @@ async fn a_failed_mempool_fetch_keeps_the_deposits_already_seen() -> anyhow::Res
     );
 
     Ok(())
+}
+
+/// Polls receive progress until the federation reports `expected` mempool
+/// visibility for `address`.
+async fn await_mempool_visibility(
+    client: &ClientHandleArc,
+    address: &bitcoin::Address,
+    expected: MempoolVisibility,
+) -> anyhow::Result<()> {
+    loop {
+        let progress = client
+            .get_first_module::<WalletClientModule>()?
+            .address_receive_progress(address)
+            .await?;
+
+        if progress.mempool_visibility == expected {
+            return Ok(());
+        }
+
+        sleep_in_test(
+            format!("Waiting for {expected:?} mempool visibility"),
+            Duration::from_millis(100),
+        )
+        .await;
+    }
 }
 
 /// Returns the progress reported for `outpoint`, panicking if it is absent.
@@ -488,8 +515,9 @@ async fn await_receive_mempool(
             .address_receive_progress(address)
             .await?;
 
-        assert!(
+        assert_ne!(
             progress.mempool_visibility,
+            MempoolVisibility::Unavailable,
             "The mock backend can enumerate its mempool, so the federation must see one"
         );
 

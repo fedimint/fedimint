@@ -66,9 +66,6 @@ use fedimint_server_core::{
     ConfigGenModuleArgs, EnvVarDoc, ServerModule, ServerModuleInit, ServerModuleInitArgs,
 };
 pub use fedimint_walletv2_common as common;
-/// Re-exported for existing callers; the constant lives in the common crate so
-/// that the client can render peg-in confirmation progress against it.
-pub use fedimint_walletv2_common::CONFIRMATION_FINALITY_DELAY;
 use fedimint_walletv2_common::config::{
     FeeConsensus, WalletClientConfig, WalletConfig, WalletConfigPrivate,
 };
@@ -77,9 +74,13 @@ use fedimint_walletv2_common::endpoint_constants::{
     OUTPUT_INFO_SLICE_ENDPOINT, PENDING_OUTPUTS_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT,
     RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 };
+/// Re-exported for existing callers; the constants live in the common crate so
+/// that the client can render peg-in confirmation progress against them.
+pub use fedimint_walletv2_common::{BLOCK_COUNT_VOTE_DELAY, CONFIRMATION_FINALITY_DELAY};
 use fedimint_walletv2_common::{
-    FederationWallet, MODULE_CONSENSUS_VERSION, PendingOutput, PendingOutputs, TxInfo,
-    WalletInputError, WalletOutputError, descriptor, is_potential_receive, tweak_public_key,
+    FederationWallet, MODULE_CONSENSUS_VERSION, MempoolVisibility, PendingOutput, PendingOutputs,
+    TxInfo, WalletInputError, WalletOutputError, descriptor, is_potential_receive,
+    tweak_public_key,
 };
 use futures::StreamExt;
 use miniscript::descriptor::Wsh;
@@ -100,14 +101,6 @@ use crate::metrics::{
     WALLET_PEGIN_SATS, WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
 };
 
-/// How many blocks a peer's block count vote trails its bitcoin backend: the
-/// finality delay, plus one block of slack. Processing a new consensus block
-/// count waits for the local backend to report the consensus count plus the
-/// finality delay, and without the slack that is exactly the block the voter
-/// saw, so a backend a little behind, or a backend status that is stale (it is
-/// polled once a minute), stalled item processing on every new block.
-pub const BLOCK_COUNT_VOTE_DELAY: u64 = CONFIRMATION_FINALITY_DELAY + 1;
-
 /// Maximum number of blocks the consensus block count can advance in a single
 /// consensus item to limit the work done in one `process_consensus_item` step.
 const MAX_BLOCK_COUNT_INCREMENT: u64 = 5;
@@ -123,13 +116,13 @@ const MIN_FEERATE_VOTE_SATS_PER_KVB: u64 = 1000;
 /// Number of blocks below the local chain tip that the pending receive scanner
 /// reports on.
 ///
-/// Only the first [`CONFIRMATION_FINALITY_DELAY`] blocks of this window are
+/// Only the first [`BLOCK_COUNT_VOTE_DELAY`] blocks of this window are
 /// strictly necessary, since deeper outputs are already in the consensus output
 /// log. The window deliberately extends past that so a peg-in keeps being
 /// reported for a while after it becomes final: a client needs a moment to
 /// notice the consensus entry and start its claim, and without the overlap its
 /// progress display would briefly fall back to reporting nothing at all.
-const MAX_PENDING_DEPTH: u64 = 2 * CONFIRMATION_FINALITY_DELAY;
+const MAX_PENDING_DEPTH: u64 = 2 * BLOCK_COUNT_VOTE_DELAY;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Encodable, Decodable)]
 pub struct FederationTx {
@@ -253,37 +246,12 @@ async fn scan_pending_blocks(
     Ok(())
 }
 
-/// The outcome of one pass over the guardian's mempool.
+/// Collects the receive outputs of the transactions in the node's mempool.
 ///
 /// A pass never fails outright, because the mempool is only ever the weakest
 /// half of the pending view: losing it must not cost the mined half, which is
 /// the stronger signal and is gathered from a backend that may well still be
-/// working.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum MempoolScan {
-    /// Every transaction the backend listed is now in the cache.
-    Complete,
-    /// The backend listed its mempool, but the pass gave up partway through
-    /// fetching transactions from it.
-    ///
-    /// What is cached was still pruned against that fresh listing, so every
-    /// entry in it is real and the set is merely short of a few transactions.
-    /// That is indistinguishable to a client from a deposit that has not
-    /// arrived yet, so a partial pass is still reported.
-    Partial,
-    /// This pass learned nothing about the mempool, either because the backend
-    /// cannot enumerate one or because listing it failed.
-    Unavailable,
-}
-
-impl MempoolScan {
-    /// Whether the cache this pass leaves behind may be reported to clients.
-    fn visible(self) -> bool {
-        matches!(self, Self::Complete | Self::Partial)
-    }
-}
-
-/// Collects the receive outputs of the transactions in the node's mempool.
+/// working. Instead it reports how much of the mempool it managed to inspect.
 ///
 /// Only transactions absent from `cache` are fetched, and entries that have
 /// left the mempool are dropped, so eviction and replacement are handled by
@@ -295,27 +263,30 @@ impl MempoolScan {
 /// `cache` is never emptied on failure. Refilling it costs one fetch per
 /// mempool transaction, so discarding it because a single call failed would
 /// turn a transient error into repeated bursts of RPC work; whether its
-/// contents may be *reported* is what the returned [`MempoolScan`] decides.
+/// contents may be *reported* is what the returned [`MempoolVisibility`]
+/// decides. A partial pass still reports its cache: it was pruned against a
+/// fresh listing, so every entry in it is real and the set is merely short of
+/// a few transactions.
 async fn scan_pending_mempool(
     btc_rpc: &ServerBitcoinRpcMonitor,
     pks_hash: &sha256::Hash,
     cache: &mut MempoolCache,
-) -> MempoolScan {
+) -> MempoolVisibility {
     let txids = match btc_rpc.get_mempool_txids().await {
         Ok(Some(txids)) => txids,
         // The backend has no mempool to enumerate, as esplora never does.
-        Ok(None) => return MempoolScan::Unavailable,
+        Ok(None) => return MempoolVisibility::Unavailable,
         // Without a fresh listing the cache cannot be pruned, so it may hold
         // transactions that have since been mined or evicted. Report nothing
         // from it until a listing succeeds and prunes it again.
         Err(err) => {
             debug!(
                 target: LOG_MODULE_WALLETV2,
-                err = %err.fmt_compact_anyhow(),
+                err = %err.fmt_compact(),
                 "Error listing the mempool, reporting confirmations only"
             );
 
-            return MempoolScan::Unavailable;
+            return MempoolVisibility::Unavailable;
         }
     };
 
@@ -346,16 +317,16 @@ async fn scan_pending_mempool(
                 debug!(
                     target: LOG_MODULE_WALLETV2,
                     %txid,
-                    err = %err.fmt_compact_anyhow(),
+                    err = %err.fmt_compact(),
                     "Error fetching a mempool transaction, reporting a partial mempool"
                 );
 
-                return MempoolScan::Partial;
+                return MempoolVisibility::Partial;
             }
         }
     }
 
-    MempoolScan::Complete
+    MempoolVisibility::Complete
 }
 
 /// Collects every receive output a guardian can see but the federation has not
@@ -380,7 +351,7 @@ async fn scan_pending_receives(
     let mempool = if scan_mempool {
         scan_pending_mempool(btc_rpc, pks_hash, &mut cache.mempool).await
     } else {
-        MempoolScan::Unavailable
+        MempoolVisibility::Unavailable
     };
 
     let mined = cache
@@ -391,8 +362,7 @@ async fn scan_pending_receives(
     // The cache survives a pass that could not report from it, so that a
     // transient failure does not force a refetch of the whole mempool next
     // time; what is reported is decided here instead of by emptying it.
-    let unmined = mempool
-        .visible()
+    let unmined = (mempool != MempoolVisibility::Unavailable)
         .then(|| cache.mempool.values().flatten().cloned())
         .into_iter()
         .flatten();
@@ -414,7 +384,7 @@ async fn scan_pending_receives(
     Ok(PendingOutputs {
         block_count: status.block_count,
         outputs,
-        mempool_visibility: mempool.visible(),
+        mempool_visibility: mempool,
     })
 }
 
@@ -1291,7 +1261,7 @@ impl Wallet {
                         // nothing pending rather than failing.
                         debug!(
                             target: LOG_MODULE_WALLETV2,
-                            err = %err.fmt_compact_anyhow(),
+                            err = %err.fmt_compact(),
                             "Error scanning for pending receives"
                         );
 
