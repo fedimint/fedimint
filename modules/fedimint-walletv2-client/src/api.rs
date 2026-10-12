@@ -17,6 +17,9 @@ use fedimint_walletv2_common::{
     FederationWallet, MempoolVisibility, OutputInfo, PendingOutput, PendingOutputs, TxInfo,
 };
 
+#[cfg(test)]
+mod tests;
+
 /// Renders each peer's fee answer so a divergence error names the odd one out.
 fn describe_fee_quotes(quotes: &BTreeMap<PeerId, Option<bitcoin::Amount>>) -> String {
     quotes
@@ -215,58 +218,68 @@ where
 
         let responses: Vec<PendingOutputs> = responses.into_iter().flatten().collect();
 
-        // Heights are absolute, so confirmations can be computed against any
-        // guardian's tip. Which tip to trust is the question: taking the
-        // highest would let a single peer inflate everyone's progress, so pick
-        // the same way the module itself picks a block count, the highest value
-        // a threshold of peers have reached.
-        //
-        // Falling back to the highest reported tip keeps progress working on a
-        // federation where fewer than a threshold of guardians are upgraded far
-        // enough to serve this endpoint at all.
-        let mut counts: Vec<u64> = responses.iter().map(|r| r.block_count).collect();
+        merge_pending_outputs(responses, self.all_peers().to_num_peers().threshold())
+    }
+}
 
-        counts.sort_unstable();
-        counts.reverse();
+/// Combines the guardians' independent pending views into one, given the
+/// responses of the peers that answered and the federation's threshold.
+///
+/// Kept free of any networking so the merge rules can be tested against
+/// synthetic responses: every integration test shares one bitcoin backend, so
+/// none of them ever sees guardians disagree.
+fn merge_pending_outputs(responses: Vec<PendingOutputs>, threshold: usize) -> PendingOutputs {
+    // Heights are absolute, so confirmations can be computed against any
+    // guardian's tip. Which tip to trust is the question: taking the highest
+    // would let a single peer inflate everyone's progress, so pick the same way
+    // the module itself picks a block count, the highest value a threshold of
+    // peers have reached.
+    //
+    // Falling back to the highest reported tip keeps progress working on a
+    // federation where fewer than a threshold of guardians are upgraded far
+    // enough to serve this endpoint at all.
+    let mut counts: Vec<u64> = responses.iter().map(|r| r.block_count).collect();
 
-        let block_count = counts
-            .get(self.all_peers().to_num_peers().threshold() - 1)
-            .or_else(|| counts.first())
-            .copied()
-            .unwrap_or(0);
+    counts.sort_unstable();
+    counts.reverse();
 
-        let mut mempool_visibility = MempoolVisibility::Unavailable;
-        let mut outputs: BTreeMap<bitcoin::OutPoint, PendingOutput> = BTreeMap::new();
+    let block_count = counts
+        .get(threshold - 1)
+        .or_else(|| counts.first())
+        .copied()
+        .unwrap_or(0);
 
-        for response in responses {
-            // One guardian that inspected its mempool is enough to report
-            // unmined peg-ins for the whole federation, so the best view wins.
-            mempool_visibility = mempool_visibility.max(response.mempool_visibility);
+    let mut mempool_visibility = MempoolVisibility::Unavailable;
+    let mut outputs: BTreeMap<bitcoin::OutPoint, PendingOutput> = BTreeMap::new();
 
-            for output in response.outputs {
-                outputs
-                    .entry(output.outpoint)
-                    .and_modify(|existing| {
-                        existing.height = match (existing.height, output.height) {
-                            // A guardian that has seen the transaction mined is
-                            // ahead of one that still has it in its mempool, so
-                            // a known height always wins over none.
-                            (None, height) | (height, None) => height,
-                            // Guardians can disagree on the height of an
-                            // outpoint across a reorg. Keep the deepest, which
-                            // yields the lower confirmation count, so progress
-                            // is never overstated.
-                            (Some(existing), Some(new)) => Some(existing.max(new)),
-                        };
-                    })
-                    .or_insert(output);
-            }
+    for response in responses {
+        // One guardian that inspected its mempool is enough to report unmined
+        // peg-ins for the whole federation, so the best view wins.
+        mempool_visibility = mempool_visibility.max(response.mempool_visibility);
+
+        for output in response.outputs {
+            outputs
+                .entry(output.outpoint)
+                .and_modify(|existing| {
+                    existing.height = match (existing.height, output.height) {
+                        // A guardian that has seen the transaction mined is
+                        // ahead of one that still has it in its mempool, so a
+                        // known height always wins over none.
+                        (None, height) | (height, None) => height,
+                        // Guardians can disagree on the height of an outpoint
+                        // across a reorg. Keep the highest, the shallower of
+                        // the two blocks, which yields the lower confirmation
+                        // count, so progress is never overstated.
+                        (Some(existing), Some(new)) => Some(existing.max(new)),
+                    };
+                })
+                .or_insert(output);
         }
+    }
 
-        PendingOutputs {
-            block_count,
-            outputs: outputs.into_values().collect(),
-            mempool_visibility,
-        }
+    PendingOutputs {
+        block_count,
+        outputs: outputs.into_values().collect(),
+        mempool_visibility,
     }
 }
