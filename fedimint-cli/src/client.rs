@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::ffi;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -83,7 +84,10 @@ pub enum ClientCmd {
     /// Reissue notes received from a third party to avoid double spends
     #[clap(hide = true)]
     Reissue {
-        oob_notes: OOBNotes,
+        oob_notes: Option<OOBNotes>,
+        /// Read serialized notes from a file, or '-' for stdin.
+        #[arg(long)]
+        notes_file: Option<PathBuf>,
         #[arg(long = "no-wait", action = clap::ArgAction::SetFalse)]
         wait: bool,
     },
@@ -108,12 +112,20 @@ pub enum ClientCmd {
     /// Splits a string containing multiple e-cash notes (e.g. from the `spend`
     /// command) into ones that contain exactly one.
     #[clap(hide = true)]
-    Split { oob_notes: OOBNotes },
+    Split {
+        oob_notes: Option<OOBNotes>,
+        /// Read serialized notes from a file, or '-' for stdin.
+        #[arg(long)]
+        notes_file: Option<PathBuf>,
+    },
     /// Combines two or more serialized e-cash notes strings
     #[clap(hide = true)]
     Combine {
-        #[clap(required = true)]
         oob_notes: Vec<OOBNotes>,
+        /// Read one serialized notes string per file. May be repeated; '-'
+        /// reads stdin once. Cannot be combined with positional notes.
+        #[arg(long)]
+        notes_file: Vec<PathBuf>,
     },
     /// Create a lightning invoice to receive payment via gateway
     #[clap(hide = true)]
@@ -191,8 +203,14 @@ pub enum ClientCmd {
         /// If omitted, use global `--federation-secret-hex` instead.
         #[clap(long)]
         mnemonic: Option<String>,
+        /// Read the mnemonic from a protected UTF-8 file (`-` for stdin).
         #[clap(long)]
-        invite_code: String,
+        mnemonic_file: Option<std::path::PathBuf>,
+        #[clap(long)]
+        invite_code: Option<String>,
+        /// Read an invite code from a file (`-` for stdin).
+        #[clap(long)]
+        invite_code_file: Option<std::path::PathBuf>,
     },
     /// Print the secret key of the client
     PrintSecret,
@@ -217,13 +235,94 @@ pub enum ClientCmd {
     SessionCount,
 }
 
+impl ClientCmd {
+    /// Secret note files to include in preflight stdin checks.
+    pub fn notes_file_paths(&self) -> Vec<&Path> {
+        match self {
+            Self::Reissue { notes_file, .. } | Self::Split { notes_file, .. } => {
+                notes_file.iter().map(PathBuf::as_path).collect()
+            }
+            Self::Combine { notes_file, .. } => notes_file.iter().map(PathBuf::as_path).collect(),
+            _ => vec![],
+        }
+    }
+
+    /// Check sources before any global credential consumes stdin.
+    pub fn validate_notes_sources(&self) -> anyhow::Result<()> {
+        match self {
+            Self::Reissue {
+                oob_notes,
+                notes_file,
+                ..
+            }
+            | Self::Split {
+                oob_notes,
+                notes_file,
+            } => {
+                validate_notes_sources(oob_notes.is_some(), notes_file.is_some())?;
+            }
+            Self::Combine {
+                oob_notes,
+                notes_file,
+            } => {
+                validate_notes_sources(!oob_notes.is_empty(), !notes_file.is_empty())?;
+            }
+            _ => {}
+        }
+        fedimint_core::util::ensure_single_stdin(self.notes_file_paths())?;
+        Ok(())
+    }
+}
+
+fn validate_notes_sources(has_notes: bool, has_file: bool) -> anyhow::Result<()> {
+    match (has_notes, has_file) {
+        (true, true) => bail!("Provide either positional notes or --notes-file, not both"),
+        (false, false) => bail!("Provide positional notes or --notes-file"),
+        _ => Ok(()),
+    }
+}
+
+fn read_notes_file(path: &Path) -> anyhow::Result<OOBNotes> {
+    fedimint_core::util::read_secret_file(path, 16 * 1024 * 1024)?
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Invalid e-cash notes in secret input"))
+}
+
+fn resolve_notes(notes: Option<OOBNotes>, file: Option<PathBuf>) -> anyhow::Result<OOBNotes> {
+    validate_notes_sources(notes.is_some(), file.is_some())?;
+    match (notes, file) {
+        (Some(notes), None) => Ok(notes),
+        (None, Some(file)) => read_notes_file(&file),
+        _ => unreachable!("Sources validated"),
+    }
+}
+
+fn resolve_notes_list(notes: Vec<OOBNotes>, files: &[PathBuf]) -> anyhow::Result<Vec<OOBNotes>> {
+    validate_notes_sources(!notes.is_empty(), !files.is_empty())?;
+    fedimint_core::util::ensure_single_stdin(files.iter().map(PathBuf::as_path))?;
+    if notes.is_empty() {
+        files.iter().map(|file| read_notes_file(file)).collect()
+    } else {
+        Ok(notes)
+    }
+}
+
+#[cfg(test)]
+mod tests;
+
 pub async fn handle_command(
     command: ClientCmd,
     client: ClientHandleArc,
 ) -> anyhow::Result<serde_json::Value> {
+    command.validate_notes_sources()?;
     match command {
         ClientCmd::Info => get_note_summary(&client).await,
-        ClientCmd::Reissue { oob_notes, wait } => {
+        ClientCmd::Reissue {
+            oob_notes,
+            notes_file,
+            wait,
+        } => {
+            let oob_notes = resolve_notes(oob_notes, notes_file)?;
             warn!(
                 target: LOG_CLIENT,
                 "Command deprecated. Use `fedimint-cli module mint reissue` instead."
@@ -306,7 +405,11 @@ pub async fn handle_command(
                 "notes": notes,
             }))
         }
-        ClientCmd::Split { oob_notes } => {
+        ClientCmd::Split {
+            oob_notes,
+            notes_file,
+        } => {
+            let oob_notes = resolve_notes(oob_notes, notes_file)?;
             warn!(
                 target: LOG_CLIENT,
                 "Command deprecated. Use `fedimint-cli module mint split` instead."
@@ -333,7 +436,11 @@ pub async fn handle_command(
                 "notes": notes,
             }))
         }
-        ClientCmd::Combine { oob_notes } => {
+        ClientCmd::Combine {
+            oob_notes,
+            notes_file,
+        } => {
+            let oob_notes = resolve_notes_list(oob_notes, &notes_file)?;
             warn!(
                 target: LOG_CLIENT,
                 "Command deprecated. Use `fedimint-cli module mint combine` instead."

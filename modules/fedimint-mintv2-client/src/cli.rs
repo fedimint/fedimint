@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::{ffi, iter};
 
 use clap::Parser;
@@ -7,6 +8,7 @@ use fedimint_core::base32::{self, FEDIMINT_PREFIX, PrefixedDecodeError};
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::ecash::ECash;
 use crate::{MintClientModule, ReceiveECashError, SendECashError};
 
 #[derive(Parser, Serialize)]
@@ -22,7 +24,33 @@ enum Opts {
         include_invite: bool,
     },
     /// Receive the `ECash` by reissuing the notes and return the amount.
-    Receive { ecash: String },
+    Receive {
+        ecash: Option<String>,
+        /// Read serialized e-cash from a file, or '-' for stdin.
+        #[clap(long)]
+        ecash_file: Option<PathBuf>,
+    },
+}
+
+fn resolve_ecash(ecash: Option<String>, file: Option<PathBuf>) -> Result<ECash, CliCommandError> {
+    match (ecash, file) {
+        (Some(ecash), None) => Ok(base32::decode_prefixed(FEDIMINT_PREFIX, &ecash)?),
+        (None, Some(file)) => {
+            #[cfg(not(target_family = "wasm"))]
+            {
+                let encoded = fedimint_core::util::read_secret_file(&file, 16 * 1024 * 1024)?;
+                base32::decode_prefixed(FEDIMINT_PREFIX, &encoded)
+                    .map_err(|_| CliCommandError::InvalidSecretEcash)
+            }
+            #[cfg(target_family = "wasm")]
+            {
+                let _ = file;
+                Err(CliCommandError::UnsupportedSecretInput)
+            }
+        }
+        (Some(_), Some(_)) => Err(CliCommandError::ConflictingEcash),
+        (None, None) => Err(CliCommandError::MissingEcash),
+    }
 }
 
 pub(crate) async fn handle_cli_command(
@@ -42,8 +70,8 @@ pub(crate) async fn handle_cli_command(
 
             Ok(json(ecash))
         }
-        Opts::Receive { ecash } => {
-            let ecash = base32::decode_prefixed(FEDIMINT_PREFIX, &ecash)?;
+        Opts::Receive { ecash, ecash_file } => {
+            let ecash = resolve_ecash(ecash, ecash_file)?;
 
             let operation_id = mint.receive(ecash, Value::Null).await?;
 
@@ -63,6 +91,19 @@ fn json<T: Serialize>(value: T) -> Value {
 /// A failure of a `mintv2` module command.
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum CliCommandError {
+    #[error("Provide either positional e-cash or --ecash-file, not both")]
+    ConflictingEcash,
+    #[error("Provide positional e-cash or --ecash-file")]
+    MissingEcash,
+    #[cfg(not(target_family = "wasm"))]
+    #[error("Invalid e-cash in secret input")]
+    InvalidSecretEcash,
+    #[cfg(not(target_family = "wasm"))]
+    #[error(transparent)]
+    SecretInput(#[from] fedimint_core::util::SecretInputError),
+    #[cfg(target_family = "wasm")]
+    #[error("Secret file input is not supported on this platform")]
+    UnsupportedSecretInput,
     /// The e-cash could not be sent.
     #[error(transparent)]
     Send(#[from] SendECashError),
@@ -79,3 +120,6 @@ pub(crate) enum CliCommandError {
     #[error(transparent)]
     OperationLookup(#[from] OperationLookupError),
 }
+
+#[cfg(test)]
+mod tests;
