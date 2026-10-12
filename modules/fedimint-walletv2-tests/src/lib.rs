@@ -384,15 +384,15 @@ pub async fn tx_chain(client: &Client) -> anyhow::Result<Vec<TxInfo>> {
 /// Queries every guardian for its FROST finalization stat for `txid`, asserts
 /// that all online guardians (`fed_size - offline_nodes`) responded, and logs
 /// the median/mean finalization latency plus the (consensus-driven) attempt
-/// count under `label`. Call only once the transaction has finalized (e.g.
-/// after [`await_no_pending_txs`]).
+/// count under `label`, and returns that attempt count. Call only once the
+/// transaction has finalized (e.g. after [`await_no_pending_txs`]).
 pub async fn report_frost_finalization_stats(
     client: &Client,
     label: &str,
     txid: Txid,
     fed_size: usize,
     offline_nodes: usize,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Option<u32>> {
     let expected_online = fed_size - offline_nodes;
     let summary = frost_finalization_stats(client, txid, fed_size).await?;
 
@@ -415,5 +415,5 @@ pub async fn report_frost_finalization_stats(
         "FROST finalization latency"
     );
 
-    Ok(())
+    Ok(summary.attempts)
 }
