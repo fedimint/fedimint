@@ -47,6 +47,29 @@ fedimint-dbtool <DATABASE> list <PREFIX> | cut -d ' ' -f 1 | xargs -n 1 -- fedim
 
 ## Hex encoding
 
+### Protected input files
+
+Raw database keys, values, or prefixes can contain secret material, depending on
+the entry being manipulated; they are not inherently all secret. Where needed,
+avoid putting their contents in shell history or process arguments by using
+`--key-file`, `--value-file`, or `--prefix-file` instead of the corresponding
+direct option:
+
+```bash
+fedimint-dbtool --database-dir database write --key-file key.hex --value-file value.hex
+fedimint-dbtool --database-dir database delete --key-file -
+```
+
+Restrict access to the input files to the user running the tool. File contents
+are **hex-encoded UTF-8**, not raw binary, exactly as with direct options: no
+database prefixes or consensus-encoding framing are added or removed.
+Files may contain at most 16 MiB each, including a trailing newline.
+Exactly one final LF or CRLF is removed; other whitespace is preserved.
+`-` reads stdin, with at most one stdin source per invocation.
+Each file option conflicts with its direct option; legacy direct inputs remain
+supported. These options do not redact database contents printed by `list` or
+`dump`; handle that output appropriately.
+
 To en-/decode hex you can use `xxd`, although the raw binary data will not be of use that often.
 
 ```
