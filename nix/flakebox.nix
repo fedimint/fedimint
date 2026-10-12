@@ -329,6 +329,45 @@ let
       >&2 echo "Removing references to $rust_toolchain_pkg"
 
       find "$out" -type f -executable -exec remove-references-to -t $rust_toolchain_pkg '{}' +
+
+      # C/C++ code compiled by build scripts (e.g. vendored rocksdb) records
+      # the absolute include paths of the C toolchain (clang's resource dir,
+      # gcc's libstdc++ headers, glibc's dev headers) in DWARF debug info,
+      # which we keep (see `dontStrip` above). The debug sections are
+      # zstd-compressed, which usually mangles these store paths beyond
+      # recognition, but zstd stores hard-to-compress chunks verbatim, so
+      # individual references can survive intact. When that happens Nix's
+      # reference scanner picks them up and drags the whole C toolchain
+      # (~1.8 GB) into the runtime closure, and thus into the container
+      # images; see https://github.com/fedimint/fedimint/issues/9075
+      #
+      # Scrub references to the C compiler wrapper and to every package its
+      # compile flags point at. Linker flags are deliberately not included:
+      # they point at runtime libs (glibc, gcc's libs) we depend on.
+      if [ -n "''${NIX_CC:-}" ]; then
+        c_toolchain_pkgs=$(
+          {
+            echo "$NIX_CC"
+            # the vendored crate sources are referenced from DWARF the same
+            # way (tens of thousands of times), so guard against the same
+            # failure mode pulling the whole vendor dir into the closure
+            case "''${cargoVendorDir:-}" in
+              /nix/store/*) echo "$cargoVendorDir" ;;
+            esac
+            cat "$NIX_CC/nix-support/cc-cflags" \
+              "$NIX_CC/nix-support/libc-cflags" \
+              "$NIX_CC/nix-support/libcxx-cxxflags" 2>/dev/null |
+              grep -oE '/nix/store/[a-z0-9]{32}-[^ /]+' || true
+          } | sort -u
+        )
+        c_toolchain_args=()
+        for c_toolchain_pkg in $c_toolchain_pkgs; do
+          c_toolchain_args+=(-t "$c_toolchain_pkg")
+        done
+        >&2 echo "Removing references to C toolchain packages:" $c_toolchain_pkgs
+
+        find "$out" -type f -executable -exec remove-references-to "''${c_toolchain_args[@]}" '{}' +
+      fi
     '';
   };
 
