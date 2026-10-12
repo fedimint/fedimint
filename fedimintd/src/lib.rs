@@ -7,6 +7,8 @@
 #![allow(clippy::large_futures)]
 
 mod metrics;
+#[cfg(test)]
+mod secret_input_tests;
 
 use std::convert::Infallible;
 use std::env;
@@ -77,7 +79,7 @@ const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
     group(
         ArgGroup::new("bitcoind_password_auth")
            .args(["bitcoind_password", "bitcoind_url_password_file"])
-           .multiple(false)
+           .multiple(true)
     ),
     group(
         ArgGroup::new("bitcoind_auth")
@@ -101,15 +103,26 @@ struct ServerOpts {
     /// back to reading password.private from data-dir, and if neither is
     /// present the UI is served without a login form. Only safe when
     /// bind-ui stays on a trusted interface (the default 127.0.0.1).
-    #[arg(long, env = FM_PASSWORD_UI_ENV)]
+    /// Prefer --password-ui-file to keep the password out of process arguments.
+    #[arg(long, env = FM_PASSWORD_UI_ENV, hide_env_values = true)]
     password_ui: Option<String>,
+
+    /// Read the UI password from a UTF-8 file (not stdin).
+    #[arg(long)]
+    password_ui_file: Option<PathBuf>,
 
     /// Password gating admin RPCs on the public API (WebSocket on bind-api
     /// and iroh). Optional and never falls back to disk: when unset, admin
     /// RPCs return 401 unconditionally, since the public API is always
     /// network-reachable and must be enabled explicitly.
-    #[arg(long, env = FM_PASSWORD_API_ENV)]
+    /// Prefer --password-api-file to keep the password out of process
+    /// arguments.
+    #[arg(long, env = FM_PASSWORD_API_ENV, hide_env_values = true)]
     password_api: Option<String>,
+
+    /// Read the API password from a UTF-8 file (not stdin).
+    #[arg(long)]
+    password_api_file: Option<PathBuf>,
 
     /// The bitcoin network of the federation
     #[arg(long, env = FM_BITCOIN_NETWORK_ENV, default_value = "regtest")]
@@ -119,8 +132,8 @@ struct ServerOpts {
     #[arg(long, env = FM_BITCOIND_USERNAME_ENV)]
     bitcoind_username: Option<String>,
 
-    /// The password to use when connecting to bitcoind
-    #[arg(long, env = FM_BITCOIND_PASSWORD_ENV)]
+    /// The bitcoind password. Prefer --bitcoind-password-file.
+    #[arg(long, env = FM_BITCOIND_PASSWORD_ENV, hide_env_values = true)]
     bitcoind_password: Option<String>,
 
     /// Bitcoind RPC URL, e.g. <http://127.0.0.1:8332>
@@ -140,7 +153,7 @@ struct ServerOpts {
     /// e.g. SOPS, age, etc.
     ///
     /// Note this is not meant to handle bitcoind's cookie file.
-    #[arg(long, env = FM_BITCOIND_URL_PASSWORD_FILE_ENV)]
+    #[arg(long, visible_alias = "bitcoind-password-file", env = FM_BITCOIND_URL_PASSWORD_FILE_ENV)]
     bitcoind_url_password_file: Option<PathBuf>,
 
     /// Trusted Esplora HTTP base URL, e.g. <https://mempool.space/api>
@@ -256,8 +269,13 @@ struct ServerOpts {
     /// that the user might want to set via UI at runtime, etc.
     /// In the future, managing secrets might be possible via Admin UI
     /// and defaults will be provided via `FM_DEFAULT_API_SECRETS`.
-    #[arg(long, env = FM_FORCE_API_SECRETS_ENV, default_value = "")]
-    force_api_secrets: ApiSecrets,
+    /// Prefer --force-api-secrets-file to keep credentials out of arguments.
+    #[arg(long, env = FM_FORCE_API_SECRETS_ENV, hide_env_values = true)]
+    force_api_secrets: Option<String>,
+
+    /// Read comma-separated API secrets from a UTF-8 file (not stdin).
+    #[arg(long)]
+    force_api_secrets_file: Option<PathBuf>,
 
     /// Maximum number of concurrent Iroh API connections
     #[arg(long = "iroh-api-max-connections", env = FM_IROH_API_MAX_CONNECTIONS_ENV, default_value = "1000")]
@@ -289,25 +307,60 @@ struct ServerOpts {
 }
 
 impl ServerOpts {
-    pub async fn get_bitcoind_url_and_password(&self) -> anyhow::Result<(SafeUrl, String)> {
+    /// Resolve every explicit secret before opening databases or listeners.
+    fn resolve_secrets(&mut self) -> anyhow::Result<ApiSecrets> {
+        for (direct, file) in [
+            (&self.password_ui, &self.password_ui_file),
+            (&self.password_api, &self.password_api_file),
+            (&self.bitcoind_password, &self.bitcoind_url_password_file),
+            (&self.force_api_secrets, &self.force_api_secrets_file),
+        ] {
+            anyhow::ensure!(
+                direct.is_none() || file.is_none(),
+                "secret argument/environment value conflicts with secret file"
+            );
+            anyhow::ensure!(
+                file.as_deref() != Some(std::path::Path::new("-")),
+                "daemon secret files cannot use stdin"
+            );
+        }
+        for (direct, file) in [
+            (&mut self.password_ui, &self.password_ui_file),
+            (&mut self.password_api, &self.password_api_file),
+            (
+                &mut self.bitcoind_password,
+                &self.bitcoind_url_password_file,
+            ),
+            (&mut self.force_api_secrets, &self.force_api_secrets_file),
+        ] {
+            if let Some(path) = file {
+                *direct = Some(fedimint_core::util::read_secret_file(path, 1024 * 1024)?);
+            }
+        }
+        // Preserve the existing bitcoind password-file whitespace handling.
+        if self.bitcoind_url_password_file.is_some() {
+            self.bitcoind_password = self
+                .bitcoind_password
+                .take()
+                .map(|value| value.trim().to_owned());
+        }
+        self.force_api_secrets
+            .as_deref()
+            .unwrap_or_default()
+            .parse()
+            .map_err(|_| anyhow::anyhow!("invalid API secrets"))
+    }
+
+    pub fn get_bitcoind_url_and_password(&self) -> anyhow::Result<(SafeUrl, String)> {
         let url = self
             .bitcoind_url
             .clone()
             .ok_or_else(|| anyhow::anyhow!("No bitcoind url set"))?;
-        if let Some(password_file) = self.bitcoind_url_password_file.as_ref() {
-            let password = tokio::fs::read_to_string(password_file)
-                .await
-                .context("Failed to read the password")?
-                .trim()
-                .to_owned();
-            Ok((url, password))
-        } else {
-            let password = self
-                .bitcoind_password
-                .clone()
-                .expect("FM_BITCOIND_URL is set but FM_BITCOIND_PASSWORD is not");
-            Ok((url, password))
-        }
+        let password = self
+            .bitcoind_password
+            .clone()
+            .expect("FM_BITCOIND_URL is set but FM_BITCOIND_PASSWORD is not");
+        Ok((url, password))
     }
 }
 
@@ -349,7 +402,7 @@ pub async fn run(
         .with_label_values(&[fedimint_version, code_version_hash])
         .set(fedimint_core::time::duration_since_epoch().as_secs() as i64);
 
-    let server_opts = {
+    let mut server_opts = {
         // Collect env vars from all registered modules and append them to the
         // long-help text so operators can discover them via `fedimintd --help`.
         let mut module_env_help = String::from("\nModule environment variables:\n");
@@ -364,6 +417,7 @@ pub async fn run(
         ServerOpts::from_arg_matches(&matches)
             .expect("clap arg matches must be valid after parsing")
     };
+    let force_api_secrets = server_opts.resolve_secrets()?;
 
     let mut tracing_builder = TracingSetup::default();
 
@@ -452,7 +506,6 @@ pub async fn run(
                 .expect("FM_BITCOIND_URL is set but FM_BITCOIND_USERNAME is not");
             let (bitcoind_url, bitcoind_password) = server_opts
                 .get_bitcoind_url_and_password()
-                .await
                 .expect("Failed to get bitcoind url");
             BitcoindClient::new(bitcoind_username, bitcoind_password, &bitcoind_url)
                 .unwrap()
@@ -466,7 +519,6 @@ pub async fn run(
                 .expect("FM_BITCOIND_URL is set but FM_BITCOIND_USERNAME is not");
             let (bitcoind_url, bitcoind_password) = server_opts
                 .get_bitcoind_url_and_password()
-                .await
                 .expect("Failed to get bitcoind url");
             BitcoindClientWithFallback::new(
                 bitcoind_username,
@@ -507,7 +559,7 @@ pub async fn run(
             server_opts.data_dir,
             auth_ui,
             auth_api,
-            server_opts.force_api_secrets,
+            force_api_secrets,
             settings,
             db,
             code_version_str,
