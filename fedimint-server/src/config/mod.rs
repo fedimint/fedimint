@@ -249,6 +249,7 @@ pub struct ConfigGenParams {
     pub iroh_p2p_sk: Option<iroh::SecretKey>,
     /// Endpoints of all servers
     pub peers: BTreeMap<PeerId, PeerSetupCode>,
+    /// (Retired, see <https://github.com/fedimint/fedimint/issues/7889>)
     /// Guardian-defined key-value pairs that will be passed to the client
     pub meta: BTreeMap<String, String>,
     /// Whether to disable base fees for this federation

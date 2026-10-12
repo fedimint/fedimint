@@ -2,6 +2,8 @@
 //!
 //! This crate contains integration tests for the gateway API
 //! and business logic.
+mod federation_name;
+
 use std::sync::Arc;
 use std::time::Duration;
 

@@ -3707,6 +3707,8 @@ dependencies = [
  "fedimint-lnv2-common",
  "fedimint-lnv2-server",
  "fedimint-logging",
+ "fedimint-meta-client",
+ "fedimint-meta-server",
  "fedimint-metrics",
  "fedimint-mint-client",
  "fedimint-mintv2-client",
