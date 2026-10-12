@@ -47,6 +47,9 @@ struct FakeBitcoinTestInner {
     /// Listing the mempool is deliberately left working, so a scan still sees
     /// which transactions exist and fails only when fetching them.
     fail_mempool_tx_fetches: bool,
+    /// How long every mempool transaction fetch takes, to model a scan that
+    /// outlasts a guardian's time budget.
+    mempool_tx_fetch_delay: Duration,
 }
 
 #[derive(Clone, Debug)]
@@ -70,6 +73,7 @@ impl FakeBitcoinTest {
             scripts: BTreeMap::new(),
             txid_to_block_height: BTreeMap::new(),
             fail_mempool_tx_fetches: false,
+            mempool_tx_fetch_delay: Duration::ZERO,
         };
         let res = FakeBitcoinTest {
             inner: std::sync::RwLock::new(inner).into(),
@@ -325,6 +329,13 @@ impl BitcoinTest for FakeBitcoinTest {
             .expect("RwLock poisoned")
             .fail_mempool_tx_fetches = failing;
     }
+
+    fn delay_mempool_tx_fetches(&self, delay: Duration) {
+        self.inner
+            .write()
+            .expect("RwLock poisoned")
+            .mempool_tx_fetch_delay = delay;
+    }
 }
 
 #[async_trait]
@@ -439,6 +450,13 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
     }
 
     async fn get_mempool_tx(&self, txid: &bitcoin::Txid) -> Result<Option<bitcoin::Transaction>> {
+        // Read before sleeping, so the lock is not held across the delay.
+        let delay = self.inner.read().unwrap().mempool_tx_fetch_delay;
+
+        if !delay.is_zero() {
+            sleep_in_test("delaying a mempool transaction fetch", delay).await;
+        }
+
         let inner = self.inner.read().unwrap();
 
         // Bitcoin Core reports "no such transaction" as `Ok(None)`, so an error

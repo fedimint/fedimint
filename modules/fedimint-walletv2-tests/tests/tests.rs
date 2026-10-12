@@ -458,6 +458,78 @@ async fn await_mempool_visibility(
     }
 }
 
+/// A mempool scan that outlasts its time budget must publish what it has
+/// gathered so far, flagged as partial, instead of holding back the whole view
+/// until every transaction has been fetched.
+///
+/// Every fetch is slowed past the test budget, so each pass fetches a single
+/// transaction. Deposits must therefore show up a few at a time under `Partial`
+/// before the view completes, rather than all at once.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_slow_mempool_scan_publishes_partial_progress() -> anyhow::Result<()> {
+    if Fixtures::is_real_test() {
+        warn!(
+            target: LOG_TEST,
+            "Skipping test as only the mock bitcoin backend can slow a mempool fetch"
+        );
+
+        return Ok(());
+    }
+
+    const DEPOSITS: usize = 4;
+
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+
+    initialize_consensus(&client, &bitcoin).await?;
+
+    let module = client.get_first_module::<WalletClientModule>()?;
+    let address = module.receive().await;
+
+    info!("Slow every mempool fetch past the budget, then broadcast the deposits...");
+
+    bitcoin.delay_mempool_tx_fetches(Duration::from_millis(500));
+
+    for btc in 1..=DEPOSITS {
+        bitcoin
+            .send_without_mining(&address, Amount::from_int_btc(btc as u64))
+            .await;
+    }
+
+    let mut saw_partial_progress = false;
+
+    for _ in 0..600 {
+        let progress = module.address_receive_progress(&address).await?;
+
+        match (progress.mempool_visibility, progress.deposits.len()) {
+            (MempoolVisibility::Complete, DEPOSITS) => {
+                assert!(
+                    saw_partial_progress,
+                    "The deposits only appeared once the whole mempool was fetched"
+                );
+
+                bitcoin.delay_mempool_tx_fetches(Duration::ZERO);
+
+                return Ok(());
+            }
+            (MempoolVisibility::Partial, found) if 0 < found && found < DEPOSITS => {
+                saw_partial_progress = true;
+            }
+            _ => {}
+        }
+
+        sleep_in_test(
+            "Waiting for the slow mempool scan to complete",
+            Duration::from_millis(50),
+        )
+        .await;
+    }
+
+    panic!("The slow mempool scan never completed");
+}
+
 /// Returns the progress reported for `outpoint`, panicking if it is absent.
 fn lookup_progress(
     progress: &[(bitcoin::OutPoint, ReceiveProgress)],

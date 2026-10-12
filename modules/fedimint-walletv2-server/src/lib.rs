@@ -15,6 +15,7 @@ pub mod envs;
 mod metrics;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Duration;
 
 use anyhow::{Context, anyhow, bail, ensure};
 use bitcoin::absolute::LockTime;
@@ -246,12 +247,59 @@ async fn scan_pending_blocks(
     Ok(())
 }
 
+/// How long one pass may spend fetching mempool transactions before it
+/// publishes what it has and starts the next pass.
+///
+/// Fetches are sequential, so a cold cache over a large mempool would otherwise
+/// hold back the confirmations already gathered from the block scan until
+/// every transaction had been fetched. Kept short under test so that a test can
+/// observe a pass running out of budget without a large mempool.
+fn mempool_scan_budget() -> Duration {
+    if is_running_in_test_env() {
+        Duration::from_millis(100)
+    } else {
+        Duration::from_secs(5)
+    }
+}
+
+/// How one pass over the guardian's mempool ended.
+///
+/// Clients only learn the resulting [`MempoolVisibility`]; the scanner also
+/// needs to know *why* a pass stopped short, because a pass that ran out of
+/// budget should continue right away while one that hit a failing backend
+/// should wait before trying again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MempoolScan {
+    /// The backend cannot enumerate a mempool, the scan is turned off, or
+    /// listing the mempool failed.
+    Unavailable,
+    /// Fetching a transaction failed, so the pass gave up partway through.
+    Failed,
+    /// The pass spent its budget with transactions still left to fetch.
+    OutOfBudget,
+    /// Every transaction the backend listed is now in the cache.
+    Complete,
+}
+
+impl MempoolScan {
+    fn visibility(self) -> MempoolVisibility {
+        match self {
+            Self::Unavailable => MempoolVisibility::Unavailable,
+            Self::Failed | Self::OutOfBudget => MempoolVisibility::Partial,
+            Self::Complete => MempoolVisibility::Complete,
+        }
+    }
+}
+
 /// Collects the receive outputs of the transactions in the node's mempool.
 ///
 /// A pass never fails outright, because the mempool is only ever the weakest
 /// half of the pending view: losing it must not cost the mined half, which is
 /// the stronger signal and is gathered from a backend that may well still be
-/// working. Instead it reports how much of the mempool it managed to inspect.
+/// working. Instead it reports how far it got.
+///
+/// A pass stops fetching once `budget` has elapsed, after fetching at least one
+/// transaction so that every pass makes progress.
 ///
 /// Only transactions absent from `cache` are fetched, and entries that have
 /// left the mempool are dropped, so eviction and replacement are handled by
@@ -263,19 +311,22 @@ async fn scan_pending_blocks(
 /// `cache` is never emptied on failure. Refilling it costs one fetch per
 /// mempool transaction, so discarding it because a single call failed would
 /// turn a transient error into repeated bursts of RPC work; whether its
-/// contents may be *reported* is what the returned [`MempoolVisibility`]
-/// decides. A partial pass still reports its cache: it was pruned against a
-/// fresh listing, so every entry in it is real and the set is merely short of
-/// a few transactions.
+/// contents may be *reported* is what the returned [`MempoolScan`] decides. A
+/// pass that stops short still reports its cache: it was pruned against a fresh
+/// listing, so every entry in it is real and the set is merely short of a few
+/// transactions.
 async fn scan_pending_mempool(
     btc_rpc: &ServerBitcoinRpcMonitor,
     pks_hash: &sha256::Hash,
+    budget: Duration,
     cache: &mut MempoolCache,
-) -> MempoolVisibility {
+) -> MempoolScan {
+    let deadline = fedimint_core::time::now() + budget;
+
     let txids = match btc_rpc.get_mempool_txids().await {
         Ok(Some(txids)) => txids,
         // The backend has no mempool to enumerate, as esplora never does.
-        Ok(None) => return MempoolVisibility::Unavailable,
+        Ok(None) => return MempoolScan::Unavailable,
         // Without a fresh listing the cache cannot be pruned, so it may hold
         // transactions that have since been mined or evicted. Report nothing
         // from it until a listing succeeds and prunes it again.
@@ -286,7 +337,7 @@ async fn scan_pending_mempool(
                 "Error listing the mempool, reporting confirmations only"
             );
 
-            return MempoolVisibility::Unavailable;
+            return MempoolScan::Unavailable;
         }
     };
 
@@ -294,11 +345,14 @@ async fn scan_pending_mempool(
 
     cache.retain(|txid, _| txids.contains(txid));
 
-    for txid in txids {
-        if cache.contains_key(&txid) {
-            continue;
-        }
+    let missing: Vec<Txid> = txids
+        .into_iter()
+        .filter(|txid| !cache.contains_key(txid))
+        .collect();
 
+    let mut missing = missing.into_iter().peekable();
+
+    while let Some(txid) = missing.next() {
         match btc_rpc.get_mempool_tx(&txid).await {
             Ok(Some(tx)) => {
                 cache.insert(txid, filtered_receive_outputs(&tx, pks_hash, None));
@@ -321,23 +375,32 @@ async fn scan_pending_mempool(
                     "Error fetching a mempool transaction, reporting a partial mempool"
                 );
 
-                return MempoolVisibility::Partial;
+                return MempoolScan::Failed;
             }
+        }
+
+        // Checked after a fetch rather than before, so that even a budget
+        // shorter than a single fetch makes progress on every pass.
+        if missing.peek().is_some() && fedimint_core::time::now() >= deadline {
+            return MempoolScan::OutOfBudget;
         }
     }
 
-    MempoolVisibility::Complete
+    MempoolScan::Complete
 }
 
 /// Collects every receive output a guardian can see but the federation has not
-/// yet recorded, from the recent blocks and, unless `scan_mempool` is off, the
-/// mempool.
+/// yet recorded, from the recent blocks and, unless `mempool_budget` is `None`
+/// because the mempool scan is turned off, the mempool.
+///
+/// Also returns how the mempool pass ended, so the caller can tell whether to
+/// continue straight away.
 async fn scan_pending_receives(
     btc_rpc: &ServerBitcoinRpcMonitor,
     pks_hash: &sha256::Hash,
-    scan_mempool: bool,
+    mempool_budget: Option<Duration>,
     cache: &mut PendingCache,
-) -> anyhow::Result<PendingOutputs> {
+) -> anyhow::Result<(PendingOutputs, MempoolScan)> {
     let status = btc_rpc
         .status()
         .context("Bitcoin backend is not connected")?;
@@ -348,10 +411,9 @@ async fn scan_pending_receives(
     // the mined progress gathered above, which is both the stronger signal and
     // still available: with an esplora fallback the block scan can succeed
     // while the mempool read, which only bitcoind can serve, does not.
-    let mempool = if scan_mempool {
-        scan_pending_mempool(btc_rpc, pks_hash, &mut cache.mempool).await
-    } else {
-        MempoolVisibility::Unavailable
+    let mempool = match mempool_budget {
+        Some(budget) => scan_pending_mempool(btc_rpc, pks_hash, budget, &mut cache.mempool).await,
+        None => MempoolScan::Unavailable,
     };
 
     let mined = cache
@@ -362,7 +424,7 @@ async fn scan_pending_receives(
     // The cache survives a pass that could not report from it, so that a
     // transient failure does not force a refetch of the whole mempool next
     // time; what is reported is decided here instead of by emptying it.
-    let unmined = (mempool != MempoolVisibility::Unavailable)
+    let unmined = (mempool != MempoolScan::Unavailable)
         .then(|| cache.mempool.values().flatten().cloned())
         .into_iter()
         .flatten();
@@ -381,11 +443,13 @@ async fn scan_pending_receives(
         "Scanned for pending receives"
     );
 
-    Ok(PendingOutputs {
+    let pending = PendingOutputs {
         block_count: status.block_count,
         outputs,
-        mempool_visibility: mempool,
-    })
+        mempool_visibility: mempool.visibility(),
+    };
+
+    Ok((pending, mempool))
 }
 
 #[derive(Debug, Clone)]
@@ -1238,7 +1302,8 @@ impl Wallet {
         // Read once rather than per scan: it selects how this guardian behaves
         // for its whole run, and a guardian that has opted out should not be
         // paying an env lookup on every chain tip either.
-        let scan_mempool = !is_env_var_set(FM_WALLETV2_DISABLE_MEMPOOL_SCAN_ENV);
+        let mempool_budget =
+            (!is_env_var_set(FM_WALLETV2_DISABLE_MEMPOOL_SCAN_ENV)).then(mempool_scan_budget);
 
         task_group.spawn_cancellable("scan_pending_receives", async move {
             // Carried across scans so that each one only fetches blocks and
@@ -1251,9 +1316,14 @@ impl Wallet {
             let mut status = btc_rpc.subscribe_status();
 
             loop {
-                match scan_pending_receives(&btc_rpc, &pks_hash, scan_mempool, &mut cache).await {
-                    Ok(pending) => {
+                let scan =
+                    scan_pending_receives(&btc_rpc, &pks_hash, mempool_budget, &mut cache).await;
+
+                let out_of_budget = match scan {
+                    Ok((pending, mempool)) => {
                         sender.send_replace(pending);
+
+                        mempool == MempoolScan::OutOfBudget
                     }
                     Err(err) => {
                         // This view is advisory, so a guardian that cannot
@@ -1266,7 +1336,18 @@ impl Wallet {
                         );
 
                         sender.send_replace(PendingOutputs::default());
+
+                        false
                     }
+                };
+
+                // A pass that ran out of budget has published what it gathered
+                // and still has mempool transactions left to fetch, so carry on
+                // now rather than a full monitor interval later. Every such
+                // pass fetches at least one transaction, so this terminates
+                // once the cache has caught up with the mempool.
+                if out_of_budget {
+                    continue;
                 }
 
                 if status.changed().await.is_err() {

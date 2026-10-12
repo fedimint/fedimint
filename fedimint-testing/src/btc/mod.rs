@@ -1,6 +1,8 @@
 pub mod mock;
 pub mod real;
 
+use std::time::Duration;
+
 use async_trait::async_trait;
 use bitcoin::{Address, Transaction, Txid};
 use fedimint_core::Amount;
@@ -76,6 +78,21 @@ pub trait BitcoinTest {
     fn fail_mempool_tx_fetches(&self, _failing: bool) {
         panic!(
             "Only the mock bitcoin backend can fail mempool fetches; \
+             guard this test with `Fixtures::is_real_test`"
+        );
+    }
+
+    /// Makes every subsequent mempool transaction fetch by a guardian take
+    /// `delay` before answering, until called again with [`Duration::ZERO`].
+    ///
+    /// Lets a test make a guardian's mempool scan slow enough to run out of its
+    /// time budget, which is otherwise only reachable with a large mempool.
+    ///
+    /// Only the mock backend can do this, so a test that calls it must skip
+    /// itself on real daemons via `Fixtures::is_real_test`.
+    fn delay_mempool_tx_fetches(&self, _delay: Duration) {
+        panic!(
+            "Only the mock bitcoin backend can delay mempool fetches; \
              guard this test with `Fixtures::is_real_test`"
         );
     }
