@@ -40,13 +40,14 @@ use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, State
 use fedimint_client_module::sm_enum_variant_translation;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    Database, DatabaseError, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    AutocommitError, Database, DatabaseError, DatabaseTransaction, DatabaseVersion,
+    IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::task::{TaskGroup, TaskHandle, sleep};
+use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, TaskHandle, sleep};
 use fedimint_core::{Amount, OutPoint, TransactionId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_eventlog::{Event, EventLogId};
@@ -441,42 +442,30 @@ impl WalletClientModule {
 
         let address_clone = address.clone();
 
-        self.client_ctx
-            .finalize_and_submit_transaction(
-                operation_id,
-                WalletCommonInit::KIND.as_str(),
-                move |change_outpoint_range| {
-                    WalletOperationMeta::Send(SendMeta {
-                        change_outpoint_range,
-                        address: address_clone.clone(),
-                        value,
-                        fee,
-                        custom_meta: custom_meta.clone(),
-                    })
-                },
-                TransactionBuilder::new().with_outputs(client_output_bundle),
-            )
-            .await
-            .map_err(|error| match error {
-                TransactionSubmitError::InsufficientFunds(_) => SendError::InsufficientFunds,
-                error => SendError::Failed(error),
-            })?;
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                SendPaymentEvent {
-                    operation_id,
-                    address,
+        self.submit_with_event(
+            operation_id,
+            move |change_outpoint_range| {
+                WalletOperationMeta::Send(SendMeta {
+                    change_outpoint_range,
+                    address: address_clone.clone(),
                     value,
                     fee,
-                },
-            )
-            .await;
-
-        dbtx.commit_tx().await;
+                    custom_meta: custom_meta.clone(),
+                })
+            },
+            TransactionBuilder::new().with_outputs(client_output_bundle),
+            SendPaymentEvent {
+                operation_id,
+                address,
+                value,
+                fee,
+            },
+        )
+        .await
+        .map_err(|error| match error {
+            TransactionSubmitError::InsufficientFunds(_) => SendError::InsufficientFunds,
+            error => SendError::Failed(error),
+        })?;
 
         Ok(operation_id)
     }
@@ -775,10 +764,8 @@ impl WalletClientModule {
 
         let meta_address = address.clone();
         let range = self
-            .client_ctx
-            .finalize_and_submit_transaction(
+            .submit_with_event(
                 operation_id,
-                WalletCommonInit::KIND.as_str(),
                 move |change_outpoint_range| {
                     WalletOperationMeta::Receive(ReceiveMeta {
                         change_outpoint_range,
@@ -789,15 +776,6 @@ impl WalletClientModule {
                     })
                 },
                 TransactionBuilder::new().with_inputs(client_input_bundle),
-            )
-            .await
-            .ok()?;
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
                 ReceivePaymentEvent {
                     operation_id,
                     value,
@@ -806,11 +784,62 @@ impl WalletClientModule {
                     outpoint,
                 },
             )
-            .await;
-
-        dbtx.commit_tx().await;
+            .await
+            .ok()?;
 
         Some((operation_id, range.txid()))
+    }
+
+    /// Submits a transaction as a new operation and logs the event that
+    /// announces the operation, in one database transaction.
+    ///
+    /// Committing the two together is what lets a reader of the event log rely
+    /// on it: an operation that exists has its event, also after the client
+    /// stopped at any point in between.
+    async fn submit_with_event<F, E>(
+        &self,
+        operation_id: OperationId,
+        operation_meta_gen: F,
+        tx_builder: TransactionBuilder,
+        event: E,
+    ) -> Result<OutPointRange, TransactionSubmitError>
+    where
+        F: Fn(OutPointRange) -> WalletOperationMeta + Clone + MaybeSend + MaybeSync + 'static,
+        E: Event + Clone + Send + MaybeSync,
+    {
+        self.client_ctx
+            .module_db()
+            .autocommit(
+                |dbtx, _| {
+                    let operation_meta_gen = operation_meta_gen.clone();
+                    let tx_builder = tx_builder.clone();
+                    let event = event.clone();
+                    Box::pin(async move {
+                        let range = self
+                            .client_ctx
+                            .finalize_and_submit_transaction_dbtx(
+                                dbtx,
+                                operation_id,
+                                WalletCommonInit::KIND.as_str(),
+                                operation_meta_gen,
+                                tx_builder,
+                            )
+                            .await?;
+
+                        self.client_ctx.log_event(dbtx, event).await;
+
+                        Ok::<_, TransactionSubmitError>(range)
+                    })
+                },
+                Some(100),
+            )
+            .await
+            .map_err(|error| match error {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    TransactionSubmitError::Database(last_error)
+                }
+            })
     }
 
     fn spawn_output_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
