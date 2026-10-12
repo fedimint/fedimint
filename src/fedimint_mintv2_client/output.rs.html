@@ -186,7 +186,7 @@
 <a href=#186 id=186 data-nosnippet>186</a>
 <a href=#187 id=187 data-nosnippet>187</a>        <span class="kw">for </span>(request, signature) <span class="kw">in </span>old_state.common.issuance_requests.iter().zip(signatures) {
 <a href=#188 id=188 data-nosnippet>188</a>            dbtx.module_tx()
-<a href=#189 id=189 data-nosnippet>189</a>                .insert_new_entry(<span class="kw-2">&amp;</span>SpendableNoteKey(request.finalize(signature)), <span class="kw-2">&amp;</span>())
+<a href=#189 id=189 data-nosnippet>189</a>                .insert_new_entry(<span class="kw-2">&amp;</span>SpendableNoteKey(request.finalize(signature).into()), <span class="kw-2">&amp;</span>())
 <a href=#190 id=190 data-nosnippet>190</a>                .<span class="kw">await</span>;
 <a href=#191 id=191 data-nosnippet>191</a>        }
 <a href=#192 id=192 data-nosnippet>192</a>
