@@ -195,10 +195,14 @@ pub enum MempoolVisibility {
     /// The mempool was listed, but fetching some of its transactions failed.
     ///
     /// Every unmined output reported is real, but the set may be short of a
-    /// few transactions, so the absence of a deposit proves nothing.
+    /// few transactions the guardian has but could not fetch.
     Partial,
-    /// Every transaction in the mempool was inspected, so a deposit that is not
-    /// reported has not reached this mempool.
+    /// Every transaction in the guardian's mempool was inspected, so a deposit
+    /// that is not reported had not reached this mempool when it was scanned.
+    ///
+    /// This describes one guardian's local snapshot, not the network: a
+    /// payment that is not reported may still have been broadcast and not
+    /// have propagated to this node yet.
     Complete,
 }
 

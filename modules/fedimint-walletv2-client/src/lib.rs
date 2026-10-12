@@ -176,13 +176,17 @@ pub struct AddressReceiveProgress {
     pub deposits: Vec<(bitcoin::OutPoint, ReceiveProgress)>,
     /// The best mempool view any guardian had for this query.
     ///
-    /// Only [`MempoolVisibility::Complete`] makes empty `deposits` evidence
-    /// that nothing has been broadcast yet. With
-    /// [`MempoolVisibility::Partial`] the unmined deposits reported are
-    /// real, but one may be missing because a guardian failed to fetch its
-    /// transaction; with [`MempoolVisibility::Unavailable`] the federation
-    /// is blind to a payment until it is mined. One guardian that inspected
-    /// its whole mempool is enough to make this `Complete` for everyone.
+    /// With [`MempoolVisibility::Complete`], empty `deposits` mean no
+    /// matching deposit was observed in the reported snapshot. That is not
+    /// proof that no payment was sent: a guardian only inspects its own
+    /// mempool, which a freshly broadcast transaction may not have reached
+    /// yet, and a deposit mined long enough ago has left the reported block
+    /// window. With [`MempoolVisibility::Partial`] the unmined deposits
+    /// reported are real, but one may also be missing because a guardian
+    /// failed to fetch its transaction; with
+    /// [`MempoolVisibility::Unavailable`] the federation is blind to a
+    /// payment until it is mined. One guardian that inspected its whole
+    /// mempool is enough to make this `Complete` for everyone.
     ///
     /// A wallet showing a receive screen wants this to choose between "we have
     /// not seen your payment yet" and "waiting for the first confirmation",
@@ -686,10 +690,12 @@ impl WalletClientModule {
     /// ordered by outpoint.
     ///
     /// Empty deposits mean no guardian has reported a payment to the address
-    /// yet. That is only proof nothing was sent if
-    /// [`AddressReceiveProgress::mempool_visibility`] is
-    /// [`MempoolVisibility::Complete`], since an unmined deposit is invisible
-    /// to a federation that could not inspect its whole mempool.
+    /// yet. Even when [`AddressReceiveProgress::mempool_visibility`] is
+    /// [`MempoolVisibility::Complete`], that only means no matching deposit
+    /// was observed in the reported snapshot, never proof that no payment was
+    /// sent: a broadcast transaction may not have reached the guardians'
+    /// mempools yet. Without `Complete` an unmined deposit may be invisible
+    /// to the federation altogether.
     ///
     /// Errors if `address` was not handed out by [`Self::receive`].
     pub async fn address_receive_progress(
