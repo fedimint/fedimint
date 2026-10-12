@@ -10,6 +10,9 @@ use devimint::version_constants::VERSION_0_13_0_ALPHA;
 use devimint::{cmd, util};
 use fedimint_core::NumPeers;
 use fedimint_core::setup_code::WalletDescriptorKind;
+use fedimint_walletv2_server::envs::{
+    FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV, FM_WALLETV2_FROST_TEST_FORCE_SIGNER_ENV,
+};
 use fedimint_walletv2_tests::{
     FinalSendState, await_consensus_block_count, await_no_pending_txs, await_receive,
     ensure_address_matches_descriptor, ensure_federation_total_value, get_deposit_address,
@@ -45,6 +48,12 @@ struct Opts {
     /// guardians are taken down as well.
     #[arg(long)]
     nonce_loss: bool,
+
+    /// Force the guardian with the highest peer id into the first signing
+    /// attempt of every transaction, take it offline before the FROST-signed
+    /// transactions, and assert each of them is signed in exactly 2 attempts.
+    #[arg(long, conflicts_with = "nonce_loss")]
+    stalled_signer: bool,
 }
 
 /// The guardian whose database the `--nonce-loss` scenario wipes. Peer `0`
@@ -63,6 +72,11 @@ const NONCE_LOSS_PEER: usize = 1;
 /// 2 minutes.
 const NONCE_LOSS_TIMEOUT: Duration = Duration::from_mins(4);
 
+/// How long the `--stalled-signer` scenario waits for each FROST-signed
+/// transaction: the first attempt always stalls, so signing takes one
+/// `LOCAL_ADVANCE_TIMEOUT` (30s) plus the second attempt.
+const STALLED_SIGNER_TIMEOUT: Duration = Duration::from_mins(2);
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let opts = Opts::parse();
@@ -76,7 +90,13 @@ async fn main() -> anyhow::Result<()> {
             .offline_nodes
             .context("--offline-nodes is required alongside --fed-size")?;
 
-        return run_single_federation(fed_size, offline_nodes, opts.nonce_loss).await;
+        return run_single_federation(
+            fed_size,
+            offline_nodes,
+            opts.nonce_loss,
+            opts.stalled_signer,
+        )
+        .await;
     }
 
     // Driver mode: spawn a child process for every combination. A separate
@@ -90,13 +110,17 @@ async fn main() -> anyhow::Result<()> {
 
     fedimint_logging::TracingSetup::default().init()?;
 
-    run_driver(&opts.fed_sizes, opts.nonce_loss).await
+    run_driver(&opts.fed_sizes, opts.nonce_loss, opts.stalled_signer).await
 }
 
 /// Re-invokes this binary once per `(fed_size, offline_nodes)` combination,
 /// covering every offline level from `0` up to `max_evil()` for each federation
 /// size. Fails on the first combination whose worker process exits non-zero.
-async fn run_driver(fed_sizes: &[usize], nonce_loss: bool) -> anyhow::Result<()> {
+async fn run_driver(
+    fed_sizes: &[usize],
+    nonce_loss: bool,
+    stalled_signer: bool,
+) -> anyhow::Result<()> {
     let current_exe = std::env::current_exe().context("resolving current executable path")?;
 
     // Each worker gets its own test directory so federations don't clobber each
@@ -129,6 +153,9 @@ async fn run_driver(fed_sizes: &[usize], nonce_loss: bool) -> anyhow::Result<()>
             if nonce_loss {
                 worker.arg("--nonce-loss");
             }
+            if stalled_signer {
+                worker.arg("--stalled-signer");
+            }
 
             let status = worker.status().await.with_context(|| {
                 format!("spawning worker for fed_size={fed_size}, offline_nodes={offline_nodes}")
@@ -151,11 +178,14 @@ async fn run_driver(fed_sizes: &[usize], nonce_loss: bool) -> anyhow::Result<()>
 /// guardians with `offline_nodes` of them taken offline. With `nonce_loss`,
 /// [`NONCE_LOSS_PEER`] loses its database between the first deposit and the
 /// first FROST-signed transaction, and the offline guardians are only taken
-/// down after it has caught up (see [`lose_nonces_then_degrade`]).
+/// down after it has caught up (see [`lose_nonces_then_degrade`]). With
+/// `stalled_signer`, the highest-id guardian is forced into every first
+/// signing attempt and only taken offline after the first deposit.
 async fn run_single_federation(
     fed_size: usize,
     offline_nodes: usize,
     nonce_loss: bool,
+    stalled_signer: bool,
 ) -> anyhow::Result<()> {
     // A BFT federation of `n` guardians tolerates at most `f = (n - 1) / 3`
     // offline guardians; beyond that the remaining `n - f` guardians fall below
@@ -170,13 +200,21 @@ async fn run_single_federation(
         fed_size,
         num_peers.threshold(),
     );
+    ensure!(
+        !stalled_signer || offline_nodes > 0,
+        "--stalled-signer needs at least one offline guardian to stall on"
+    );
 
     // Spawn a federation with walletv2 enabled (using the FROST wallet
     // descriptor) and walletv1 disabled. `run_devfed_test` reads the federation
     // size from `FM_FED_SIZE` and the number of guardians to shut down from
     // `FM_OFFLINE_NODES` (applied automatically via `degrade_federation`).
     unsafe { std::env::set_var("FM_FED_SIZE", fed_size.to_string()) };
-    let startup_offline_nodes = if nonce_loss { 0 } else { offline_nodes };
+    let startup_offline_nodes = if nonce_loss || stalled_signer {
+        0
+    } else {
+        offline_nodes
+    };
     unsafe { std::env::set_var("FM_OFFLINE_NODES", startup_offline_nodes.to_string()) };
     unsafe { std::env::set_var("FM_ENABLE_MODULE_WALLETV2", "true") };
     unsafe { std::env::set_var("FM_WALLETV2_DESCRIPTOR", "frost") };
@@ -184,13 +222,28 @@ async fn run_single_federation(
     // The nonce-loss scenario uses the minimum buffer to bound the number of
     // unusable commitments (see `NONCE_LOSS_TIMEOUT`).
     let nonce_buffer_target = if nonce_loss { "2" } else { "3" };
-    unsafe { std::env::set_var("FM_WALLETV2_FROST_NONCE_BUFFER_TARGET", nonce_buffer_target) };
+    unsafe {
+        std::env::set_var(
+            FM_WALLETV2_FROST_NONCE_BUFFER_TARGET_ENV,
+            nonce_buffer_target,
+        )
+    };
+    // The highest-id guardian is the first one taken offline. Every guardian
+    // reads this, so they all build the same first signing session.
+    if stalled_signer {
+        unsafe {
+            std::env::set_var(
+                FM_WALLETV2_FROST_TEST_FORCE_SIGNER_ENV,
+                (fed_size - 1).to_string(),
+            );
+        };
+    }
 
     devimint::run_devfed_test()
         .call(move |dev_fed, process_mgr| async move {
             info!(
                 fed_size,
-                offline_nodes, nonce_loss, "Starting FROST federation test"
+                offline_nodes, nonce_loss, stalled_signer, "Starting FROST federation test"
             );
 
             let fedimint_cli_version = util::FedimintCli::version_or_default().await;
@@ -270,6 +323,15 @@ async fn run_single_federation(
                 .await
                 .context("FROST signing stalled after a guardian lost its nonces")??;
                 Some(fed)
+            } else if stalled_signer {
+                // Its commitments stay in the pool, so the forced first attempt
+                // still selects it.
+                let mut fed = fed.clone();
+                take_offline(&mut fed, offline_nodes).await?;
+                tokio::time::timeout(STALLED_SIGNER_TIMEOUT, consolidate(&client, bitcoind))
+                    .await
+                    .context("FROST signing stalled after the forced signer went offline")??;
+                Some(fed)
             } else {
                 consolidate(&client, bitcoind).await?;
                 None
@@ -283,7 +345,7 @@ async fn run_single_federation(
                 .context("expected a consolidation tx after the second peg-in")?
                 .txid;
 
-            report_frost_finalization_stats(
+            let consolidation_attempts = report_frost_finalization_stats(
                 &client,
                 "peg-in (consolidation)",
                 consolidation_txid,
@@ -291,6 +353,10 @@ async fn run_single_federation(
                 offline_nodes,
             )
             .await?;
+
+            if stalled_signer {
+                ensure_stalled_once("peg-in (consolidation)", consolidation_attempts)?;
+            }
 
             info!("Peg funds back out to an on-chain address...");
 
@@ -315,16 +381,31 @@ async fn run_single_federation(
             // signed, broadcast, and confirmed (it polls the unsigned +
             // unconfirmed sets), which also guarantees the FROST finalization
             // stat has been recorded — so no separate on-chain poll is needed.
-            await_signed(&client, nonce_loss).await?;
+            let timeout = if nonce_loss {
+                Some(NONCE_LOSS_TIMEOUT)
+            } else if stalled_signer {
+                Some(STALLED_SIGNER_TIMEOUT)
+            } else {
+                None
+            };
+            await_signed(&client, timeout).await?;
 
-            report_frost_finalization_stats(&client, "peg-out", txid, fed_size, offline_nodes)
-                .await?;
+            let peg_out_attempts =
+                report_frost_finalization_stats(&client, "peg-out", txid, fed_size, offline_nodes)
+                    .await?;
+
+            if stalled_signer {
+                ensure_stalled_once("peg-out", peg_out_attempts)?;
+            }
 
             block_miner.abort();
 
             info!(
                 fed_size,
-                offline_nodes, nonce_loss, "Wallet V2 FROST peg-in and peg-out test successful"
+                offline_nodes,
+                nonce_loss,
+                stalled_signer,
+                "Wallet V2 FROST peg-in and peg-out test successful"
             );
 
             Ok(())
@@ -421,6 +502,14 @@ async fn lose_nonces_then_degrade(
     )
     .await?;
 
+    take_offline(&mut fed, offline_nodes).await?;
+
+    Ok(fed)
+}
+
+/// Takes the highest `offline_nodes` guardians offline, like
+/// `degrade_federation` does at startup.
+async fn take_offline(fed: &mut Federation, offline_nodes: usize) -> anyhow::Result<()> {
     let fed_size = fed.vars.len();
     for offline_peer in (fed_size - offline_nodes)..fed_size {
         fed.terminate_server(offline_peer).await?;
@@ -430,7 +519,20 @@ async fn lose_nonces_then_degrade(
         info!(fed_size, offline_nodes, "federation is degraded");
     }
 
-    Ok(fed)
+    Ok(())
+}
+
+/// Asserts that a transaction signed in exactly 2 attempts: the forced first
+/// attempt stalled on the offline guardian, the federation advanced past it,
+/// and the next attempt, which leaves it out, succeeded.
+fn ensure_stalled_once(label: &str, attempts: Option<u32>) -> anyhow::Result<()> {
+    ensure!(
+        attempts == Some(2),
+        "Expected {label} to sign in exactly 2 attempts after the forced signer stalled, \
+         got {attempts:?}"
+    );
+
+    Ok(())
 }
 
 /// Returns the number of consensus sessions `peer` has completed.
@@ -446,17 +548,17 @@ async fn peer_session_count(
 }
 
 /// Waits until the federation has no pending transactions. In the nonce-loss
-/// scenario a stalled signing would otherwise hang the test forever, so it
-/// fails after [`NONCE_LOSS_TIMEOUT`] instead.
+/// and stalled-signer scenarios a stalled signing would otherwise hang the
+/// test forever, so it fails after `timeout` instead.
 async fn await_signed(
     client: &devimint::federation::Client,
-    nonce_loss: bool,
+    timeout: Option<Duration>,
 ) -> anyhow::Result<()> {
-    if !nonce_loss {
+    let Some(timeout) = timeout else {
         return await_no_pending_txs(client).await;
-    }
+    };
 
-    tokio::time::timeout(NONCE_LOSS_TIMEOUT, await_no_pending_txs(client))
+    tokio::time::timeout(timeout, await_no_pending_txs(client))
         .await
         .context("FROST signing stalled after a guardian lost its nonces")?
 }
