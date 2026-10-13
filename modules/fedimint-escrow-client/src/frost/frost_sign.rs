@@ -11,6 +11,7 @@ use frost_secp256k1_tr::Identifier;
 use frost_secp256k1_tr::keys::{KeyPackage, PublicKeyPackage};
 use frost_secp256k1_tr::round1::SigningCommitments;
 use frost_secp256k1_tr::round2::SignatureShare;
+use futures::future::{join_all, try_join_all};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
@@ -25,6 +26,8 @@ const MAX_MESSAGE_BYTES: usize = 64 * 1024;
 const MAX_VOTE_LIFETIME: Duration = Duration::from_secs(60 * 60);
 /// Time after which messages nobody read are dropped from the inbox
 const INBOX_MESSAGE_LIFETIME: Duration = Duration::from_secs(60 * 60);
+/// Maximum time to send a message to an arbiter
+const SEND_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_QUEUED_MESSAGES_PER_ESCROW: usize = 128;
 const MAX_QUEUED_ESCROWS: usize = 1024;
 
@@ -40,7 +43,7 @@ pub enum SigningError {
     Encoding(#[from] serde_json::Error),
     #[error("no outcome got enough votes")]
     NoQuorum,
-    #[error("the coordinator asked us to sign something we did not vote for")]
+    #[error("the coordinator asked to sign something the arbiter did not vote for")]
     MessageMismatch,
     #[error("invalid signing package: {0}")]
     InvalidPackage(&'static str),
@@ -115,7 +118,7 @@ pub struct SigningMux<T: SigningTransport + 'static> {
     caller: Identifier,
     participants: BTreeSet<Identifier>,
     inbox: Mutex<HashMap<[u8; 32], VecDeque<QueuedArbiterMessage>>>,
-    active_escrows: Arc<Mutex<HashSet<[u8; 32]>>>,
+    active_escrows: Mutex<HashSet<[u8; 32]>>,
 }
 
 impl<T: SigningTransport + 'static> SigningMux<T> {
@@ -130,7 +133,7 @@ impl<T: SigningTransport + 'static> SigningMux<T> {
             caller: caller.identifier,
             participants: participants.iter().map(|p| p.identifier).collect(),
             inbox: Mutex::default(),
-            active_escrows: Arc::default(),
+            active_escrows: Mutex::default(),
         });
 
         let weak_mux = Arc::downgrade(&mux);
@@ -162,19 +165,22 @@ impl<T: SigningTransport + 'static> SigningMux<T> {
                     continue;
                 };
 
+                let expired = |queued: &QueuedArbiterMessage| {
+                    now().duration_since(queued.received_at).unwrap_or_default()
+                        >= INBOX_MESSAGE_LIFETIME
+                };
                 let mut inbox = mux.inbox.lock().unwrap();
-                inbox.retain(|_, queue| {
-                    queue.retain(|queued| {
-                        now().duration_since(queued.received_at).unwrap_or_default()
-                            < INBOX_MESSAGE_LIFETIME
-                    });
-                    !queue.is_empty()
-                });
                 if inbox.len() >= MAX_QUEUED_ESCROWS && !inbox.contains_key(&envelope.escrow_id.0) {
-                    warn!("signing inbox is full, dropping message from {from:?}");
-                    continue;
+                    inbox.retain(|_, queue| queue.back().is_some_and(|queued| !expired(queued)));
+                    if inbox.len() >= MAX_QUEUED_ESCROWS {
+                        warn!("signing inbox is full, dropping message from {from:?}");
+                        continue;
+                    }
                 }
                 let queue = inbox.entry(envelope.escrow_id.0).or_default();
+                while queue.front().is_some_and(expired) {
+                    queue.pop_front();
+                }
                 if queue.len() >= MAX_QUEUED_MESSAGES_PER_ESCROW {
                     queue.pop_front();
                 }
@@ -196,7 +202,12 @@ impl<T: SigningTransport + 'static> SigningMux<T> {
         message: ArbiterMessage,
     ) -> Result<(), SigningError> {
         let envelope = serde_json::to_vec(&ArbiterEnvelope { escrow_id, message })?;
-        self.transport.send(&self.caller, to, envelope).await?;
+        tokio::time::timeout(
+            SEND_TIMEOUT,
+            self.transport.send(&self.caller, to, envelope),
+        )
+        .await
+        .map_err(|_| SigningError::Timeout)??;
         Ok(())
     }
 
@@ -218,19 +229,19 @@ impl<T: SigningTransport + 'static> SigningMux<T> {
             if now() >= deadline {
                 return Err(SigningError::Timeout);
             }
-            sleep(Duration::from_millis(50)).await;
+            sleep(Duration::from_millis(100)).await;
         }
     }
 }
 
 /// Marks an escrow as being signed until dropped, which includes the signing
 /// being cancelled.
-struct ActiveEscrow {
-    active_escrows: Arc<Mutex<HashSet<[u8; 32]>>>,
+struct ActiveEscrow<'a> {
+    active_escrows: &'a Mutex<HashSet<[u8; 32]>>,
     escrow_id: EscrowId,
 }
 
-impl Drop for ActiveEscrow {
+impl Drop for ActiveEscrow<'_> {
     fn drop(&mut self) {
         self.active_escrows
             .lock()
@@ -258,37 +269,37 @@ pub enum SignerOutcome {
         outcome: Outcome,
         signature: schnorr::Signature,
     },
-    /// We sent our signature share but did not hear the result in time.
+    /// The signature share was sent but the result did not arrive in time.
     ShareSent,
 }
 
-/// Votes for `my_outcome` and signs it if the coordinator asks, then
-/// waits for the result.
+/// Votes for `caller_outcome` and signs it if the coordinator asks, then waits
+/// for the result.
 ///
-/// Fails with [`SigningError::Timeout`] if we are neither asked to sign nor
-/// told the result before `timeout`.
+/// Fails with [`SigningError::Timeout`] if the arbiter is neither asked to
+/// sign nor told the result before `timeout`.
 pub async fn sign_as_signer<T: SigningTransport + 'static>(
     mux: &SigningMux<T>,
     coordinator: &Identifier,
     key_package: &KeyPackage,
     escrow_id: EscrowId,
-    my_outcome: Outcome,
+    caller_outcome: Outcome,
     decision_hash_for: impl Fn(Outcome) -> [u8; 32],
     timeout: Duration,
 ) -> Result<SignerOutcome, SigningError> {
     if let Outcome::Split {
         funder_split_bps,
         recipient_split_bps,
-    } = my_outcome
+    } = caller_outcome
         && !validate_split_bps(funder_split_bps, recipient_split_bps)
     {
         return Err(SigningError::InvalidOutcome);
     }
     let deadline = now().checked_add(timeout).ok_or(SigningError::Timeout)?;
     let min_signers = *key_package.min_signers() as usize;
-    let my_decision_hash = decision_hash_for(my_outcome);
+    let caller_decision_hash = decision_hash_for(caller_outcome);
 
-    // the nonces are used by the one share we make and never stored
+    // the nonces are used for a single share and never stored
     let (nonces, commitments) = frost::round1::commit(key_package.signing_share(), &mut OsRng);
     let mut nonces = Some(nonces);
     let commitments_bytes = commitments.serialize()?;
@@ -296,7 +307,7 @@ pub async fn sign_as_signer<T: SigningTransport + 'static>(
         coordinator,
         escrow_id,
         ArbiterMessage::Vote {
-            outcome: my_outcome,
+            outcome: caller_outcome,
             commitments: commitments_bytes.clone(),
             expires_at: deadline,
         },
@@ -314,7 +325,7 @@ pub async fn sign_as_signer<T: SigningTransport + 'static>(
             ArbiterMessage::Request { signing_package } if from == *coordinator => {
                 let package = frost::SigningPackage::deserialize(&signing_package)?;
 
-                // the package is for an earlier attempt
+                // the package belongs to an earlier attempt
                 if package.signing_commitments().get(&mux.caller) != Some(&commitments) {
                     continue;
                 }
@@ -327,7 +338,7 @@ pub async fn sign_as_signer<T: SigningTransport + 'static>(
                     return Err(SigningError::InvalidPackage("bad set of signers"));
                 }
 
-                if package.message() != my_decision_hash.as_slice() {
+                if package.message() != caller_decision_hash.as_slice() {
                     return Err(SigningError::MessageMismatch);
                 }
 
@@ -346,6 +357,7 @@ pub async fn sign_as_signer<T: SigningTransport + 'static>(
                 .await?;
                 share_sent = true;
             }
+            // verified against the consortium key, so any arbiter can send it
             ArbiterMessage::Finished { outcome, signature } => {
                 if let Ok(frost_signature) = frost::Signature::deserialize(&signature)
                     && key_package
@@ -372,14 +384,14 @@ pub async fn sign_as_coordinator<T: SigningTransport + 'static>(
     key_package: &KeyPackage,
     pubkey_package: &PublicKeyPackage,
     escrow_id: EscrowId,
-    my_outcome: Outcome,
+    caller_outcome: Outcome,
     decision_hash_for: impl Fn(Outcome) -> [u8; 32],
     timeout: Duration,
 ) -> Result<(Outcome, schnorr::Signature), SigningError> {
     if let Outcome::Split {
         funder_split_bps,
         recipient_split_bps,
-    } = my_outcome
+    } = caller_outcome
         && !validate_split_bps(funder_split_bps, recipient_split_bps)
     {
         return Err(SigningError::InvalidOutcome);
@@ -388,10 +400,10 @@ pub async fn sign_as_coordinator<T: SigningTransport + 'static>(
     let deadline = now().checked_add(timeout).ok_or(SigningError::Timeout)?;
     let consortium_pubkey = FrostDkgSessionRecord::consortium_pubkey(pubkey_package)?;
 
-    let (my_nonces, my_commitments) =
+    let (caller_nonces, caller_commitments) =
         frost::round1::commit(key_package.signing_share(), &mut OsRng);
     let mut votes = BTreeMap::new();
-    votes.insert(mux.caller, (my_outcome, my_commitments));
+    votes.insert(mux.caller, (caller_outcome, caller_commitments));
 
     let winner = loop {
         let outcomes: Vec<Outcome> = votes.values().map(|(outcome, _)| *outcome).collect();
@@ -429,7 +441,7 @@ pub async fn sign_as_coordinator<T: SigningTransport + 'static>(
         .filter(|(id, (outcome, _))| **id != mux.caller && *outcome == winner)
         .map(|(id, _)| *id)
         .collect();
-    if my_outcome == winner {
+    if caller_outcome == winner {
         signers.insert(0, mux.caller);
     }
     signers.truncate(min_signers);
@@ -441,15 +453,19 @@ pub async fn sign_as_coordinator<T: SigningTransport + 'static>(
     let request = ArbiterMessage::Request {
         signing_package: package.serialize()?,
     };
-    for id in signers.iter().filter(|id| **id != mux.caller) {
-        mux.send(id, escrow_id, request.clone()).await?;
-    }
+    try_join_all(
+        signers
+            .iter()
+            .filter(|id| **id != mux.caller)
+            .map(|id| mux.send(id, escrow_id, request.clone())),
+    )
+    .await?;
 
     let mut shares = BTreeMap::new();
     if signers.contains(&mux.caller) {
         shares.insert(
             mux.caller,
-            frost::round2::sign(&package, &my_nonces, key_package)?,
+            frost::round2::sign(&package, &caller_nonces, key_package)?,
         );
     }
     while shares.len() < signers.len() {
@@ -502,15 +518,21 @@ pub async fn sign_as_coordinator<T: SigningTransport + 'static>(
         )
         .map_err(|_| SigningError::BadSignature)?;
 
-    let finished = ArbiterMessage::Finished {
+    let finished = &ArbiterMessage::Finished {
         outcome: winner,
         signature: signature.as_ref().to_vec(),
     };
-    for id in mux.participants.iter().filter(|id| **id != mux.caller) {
-        if let Err(e) = mux.send(id, escrow_id, finished.clone()).await {
-            warn!("could not send the result to {id:?}: {e}");
-        }
-    }
+    join_all(
+        mux.participants
+            .iter()
+            .filter(|id| **id != mux.caller)
+            .map(|id| async move {
+                if let Err(e) = mux.send(id, escrow_id, finished.clone()).await {
+                    warn!("could not send the result to {id:?}: {e}");
+                }
+            }),
+    )
+    .await;
 
     Ok((winner, signature))
 }
@@ -523,14 +545,15 @@ pub async fn sign_as_coordinator<T: SigningTransport + 'static>(
 /// talking to each other. If a slot fails, for example because its coordinator
 /// is offline, the next slot continues with another coordinator.
 ///
-/// The clocks of the arbiters have to be in sync.
+/// The clocks of the arbiters have to be in sync. `timeout` is checked at the
+/// start of every slot.
 #[allow(clippy::too_many_arguments)]
 pub async fn sign_with_failover<T: SigningTransport + 'static>(
     mux: &SigningMux<T>,
     key_package: &KeyPackage,
     pubkey_package: &PublicKeyPackage,
     escrow_id: EscrowId,
-    my_outcome: Outcome,
+    caller_outcome: Outcome,
     decision_hash_for: impl Fn(Outcome) -> [u8; 32],
     slot: Duration,
     timeout: Duration,
@@ -539,7 +562,7 @@ pub async fn sign_with_failover<T: SigningTransport + 'static>(
         return Err(SigningError::AlreadyInProgress);
     }
     let _active_escrow = ActiveEscrow {
-        active_escrows: mux.active_escrows.clone(),
+        active_escrows: &mux.active_escrows,
         escrow_id,
     };
 
@@ -547,6 +570,9 @@ pub async fn sign_with_failover<T: SigningTransport + 'static>(
     let deadline = now().checked_add(timeout).ok_or(SigningError::Timeout)?;
 
     loop {
+        if now() >= deadline {
+            return Err(SigningError::Timeout);
+        }
         let now_secs = duration_since_epoch().as_secs();
         let slot_number = now_secs / slot_secs;
         let slot_end = (slot_number + 1) * slot_secs;
@@ -569,7 +595,7 @@ pub async fn sign_with_failover<T: SigningTransport + 'static>(
                     key_package,
                     pubkey_package,
                     escrow_id,
-                    my_outcome,
+                    caller_outcome,
                     &decision_hash_for,
                     time_left,
                 )
@@ -581,7 +607,7 @@ pub async fn sign_with_failover<T: SigningTransport + 'static>(
                     &coordinator,
                     key_package,
                     escrow_id,
-                    my_outcome,
+                    caller_outcome,
                     &decision_hash_for,
                     time_left,
                 )
@@ -605,16 +631,10 @@ pub async fn sign_with_failover<T: SigningTransport + 'static>(
             }
         }
 
-        if now() >= deadline {
-            return Err(SigningError::Timeout);
-        }
         sleep(Duration::from_secs(
             (slot_end + 1).saturating_sub(duration_since_epoch().as_secs()),
         ))
         .await;
-        if now() >= deadline {
-            return Err(SigningError::Timeout);
-        }
     }
 }
 
@@ -658,6 +678,7 @@ mod tests {
         muxes: Vec<Arc<SigningMux<Loopback>>>,
     }
 
+    /// 4 arbiters, 3 of them have to sign
     fn cluster() -> Cluster {
         let (shares, pubkey_package) =
             frost::keys::generate_with_dealer(4, 3, frost::keys::IdentifierList::Default, OsRng)
@@ -676,12 +697,12 @@ mod tests {
             .collect();
         let muxes = participants
             .iter()
-            .map(|me| {
+            .map(|participant| {
                 let transport = Arc::new(Loopback {
                     peers: peers.clone(),
-                    rx: tokio::sync::Mutex::new(receivers.remove(&me.identifier).unwrap()),
+                    rx: tokio::sync::Mutex::new(receivers.remove(&participant.identifier).unwrap()),
                 });
-                SigningMux::start(transport, me, &participants)
+                SigningMux::start(transport, participant, &participants)
             })
             .collect();
         let key_packages = ids
@@ -722,7 +743,7 @@ mod tests {
             } else {
                 Outcome::Release
             };
-            signers.push(spawn("sign_as_signer", async move {
+            signers.push(spawn("test", async move {
                 sign_as_signer(
                     &mux,
                     &coordinator,
@@ -774,7 +795,7 @@ mod tests {
             } else {
                 Outcome::Refund
             };
-            spawn("sign_as_signer", async move {
+            spawn("test", async move {
                 sign_as_signer(
                     &mux,
                     &coordinator,
@@ -807,7 +828,7 @@ mod tests {
         for i in 1..4 {
             let (mux, key_package, coordinator) =
                 (c.muxes[i].clone(), c.key_packages[i].clone(), c.ids[0]);
-            signers.push(spawn("sign_as_sign", async move {
+            signers.push(spawn("test", async move {
                 sign_as_signer(
                     &mux,
                     &coordinator,
@@ -869,7 +890,7 @@ mod tests {
             for i in 1..4 {
                 let (mux, key_package, coordinator) =
                     (c.muxes[i].clone(), c.key_packages[i].clone(), c.ids[0]);
-                spawn("sign_as_signer", async move {
+                spawn("test", async move {
                     sign_as_signer(
                         &mux,
                         &coordinator,
@@ -917,7 +938,7 @@ mod tests {
                 c.key_packages[i].clone(),
                 c.pubkey_package.clone(),
             );
-            arbiters.push(spawn("sign_with_failover", async move {
+            arbiters.push(spawn("test", async move {
                 sign_with_failover(
                     &mux,
                     &key_package,
@@ -951,7 +972,7 @@ mod tests {
                 c.key_packages[i].clone(),
                 c.pubkey_package.clone(),
             );
-            arbiters.push(spawn("sign_with_failover", async move {
+            arbiters.push(spawn("test", async move {
                 sign_with_failover(
                     &mux,
                     &key_package,
@@ -978,7 +999,7 @@ mod tests {
             c.key_packages[1].clone(),
             c.pubkey_package.clone(),
         );
-        let first = spawn("sign_with_failover", {
+        let first = spawn("test", {
             let (mux, key_package, pubkey_package) =
                 (mux.clone(), key_package.clone(), pubkey_package.clone());
             async move {

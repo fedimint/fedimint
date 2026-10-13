@@ -1,8 +1,6 @@
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{OutPoint, impl_db_lookup, impl_db_record};
-use fedimint_escrow_common::{
-    EscrowContract, EscrowId, EscrowOutputOutcome, PendingArbiterFeePool, PendingSplitPool,
-};
+use fedimint_escrow_common::{ClaimPool, EscrowContract, EscrowId, EscrowOutputOutcome};
 use serde::Serialize;
 use strum_macros::EnumIter;
 
@@ -10,33 +8,29 @@ use strum_macros::EnumIter;
 #[derive(Clone, EnumIter, Debug, strum_macros::Display)]
 pub enum DbKeyPrefix {
     EscrowContract = 0x01,
-    PendingArbiterFeePool = 0x02,
-    PendingSplitPool = 0x03,
+    ClaimPool = 0x02,
     OutputOutcome = 0x04,
 }
+
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
+pub struct ClaimPoolKey(pub EscrowId);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct ClaimPoolPrefix;
+
+impl_db_record!(
+    key = ClaimPoolKey,
+    value = ClaimPool,
+    db_prefix = DbKeyPrefix::ClaimPool
+);
+
+impl_db_lookup!(key = ClaimPoolKey, query_prefix = ClaimPoolPrefix);
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
 pub struct EscrowContractKey(pub EscrowId);
 
 #[derive(Debug, Encodable, Decodable)]
 pub struct EscrowContractPrefix;
-
-#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
-pub struct PendingSplitPoolKey(pub EscrowId);
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct PendingSplitPoolPrefix;
-
-impl_db_record!(
-    key = PendingSplitPoolKey,
-    value = PendingSplitPool,
-    db_prefix = DbKeyPrefix::PendingSplitPool
-);
-
-impl_db_lookup!(
-    key = PendingSplitPoolKey,
-    query_prefix = PendingSplitPoolPrefix
-);
 
 impl_db_record!(
     key = EscrowContractKey,
@@ -57,24 +51,8 @@ impl_db_record!(
     value = EscrowOutputOutcome,
     db_prefix = DbKeyPrefix::OutputOutcome,
 );
+
 impl_db_lookup!(
     key = EscrowOutputOutcomeKey,
     query_prefix = EscrowOutputOutcomePrefix
-);
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct PendingArbiterFeePoolKey(pub EscrowId);
-
-#[derive(Debug, Encodable, Decodable)]
-pub struct PendingArbiterFeePrefix;
-
-impl_db_lookup!(
-    key = PendingArbiterFeePoolKey,
-    query_prefix = PendingArbiterFeePrefix
-);
-
-impl_db_record!(
-    key = PendingArbiterFeePoolKey,
-    value = PendingArbiterFeePool,
-    db_prefix = DbKeyPrefix::PendingArbiterFeePool
 );

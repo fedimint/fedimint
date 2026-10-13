@@ -1,11 +1,10 @@
 use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFederationApi};
 use fedimint_core::module::ApiRequestErased;
-use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::{MaybeSend, MaybeSync};
-use fedimint_core::{Amount, apply, async_trait_maybe_send};
+use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_escrow_common::{
-    EscrowContract, GET_CONTRACT_ENDPOINT, GET_PENDING_ARBITER_FEE_ENDPOINT, GetContractParams,
-    GetPendinFeeParams, LIST_CONTRACT_BY_KEY_ENDPOINT, ListContractParams,
+    ClaimPool, EscrowContract, GET_CLAIM_AMOUNT_ENDPOINT, GET_CONTRACT_ENDPOINT, GetClaimAmount,
+    GetContractParams, LIST_CONTRACT_BY_KEY_ENDPOINT, ListContractParams,
 };
 
 #[apply(async_trait_maybe_send!)]
@@ -15,10 +14,8 @@ pub trait EscrowFederationApi {
         params: GetContractParams,
     ) -> FederationResult<Option<EscrowContract>>;
 
-    async fn get_pending_arbiter_fee(
-        &self,
-        params: GetPendinFeeParams,
-    ) -> FederationResult<Option<(PublicKey, Amount)>>;
+    async fn get_claim_amount(&self, params: GetClaimAmount)
+    -> FederationResult<Option<ClaimPool>>;
 
     async fn list_contracts_by_key(
         &self,
@@ -42,13 +39,12 @@ where
         .await
     }
 
-    async fn get_pending_arbiter_fee(
+    async fn get_claim_amount(
         &self,
-        params: GetPendinFeeParams,
-    ) -> FederationResult<Option<(PublicKey, Amount)>> {
-        // fix: was Option<PendingArbiterFeePool>
+        params: GetClaimAmount,
+    ) -> FederationResult<Option<ClaimPool>> {
         self.request_current_consensus(
-            GET_PENDING_ARBITER_FEE_ENDPOINT.to_string(),
+            GET_CLAIM_AMOUNT_ENDPOINT.to_string(),
             ApiRequestErased::new(params),
         )
         .await

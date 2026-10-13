@@ -1,9 +1,9 @@
 use std::time::Duration;
 use std::{ffi, iter};
 
-use anyhow::Ok;
+use anyhow::{Ok, anyhow};
 use clap::Parser;
-use fedimint_core::secp256k1::schnorr;
+use fedimint_core::secp256k1::{PublicKey, schnorr};
 use fedimint_core::{Amount, secp256k1};
 use fedimint_escrow_common::{ContractHash, EscrowId, EscrowMessage, FallbackPolicy, Outcome};
 use futures::StreamExt;
@@ -24,11 +24,13 @@ enum Opts {
         #[clap(long)]
         arbiter_fee_msats: Amount,
         #[clap(long)]
+        arbiter_fee_key: Vec<PublicKey>,
+        #[clap(long)]
         amount_sats: u64,
         #[clap(long)]
         timeout: u64,
         #[clap(long)]
-        resolution_timeout: u64,
+        resolution_deadline: u64,
         #[clap(long)]
         default_fallback: FallbackPolicy,
     },
@@ -57,10 +59,7 @@ enum Opts {
     },
 
     /// Arbiter claims its fees for the escrow
-    ClaimArbiterFee {
-        escrow_id: String,
-        arbiter_signature: String,
-    },
+    ClaimPayout { escrow_id: String },
 
     SignMessage {
         #[command(subcommand)]
@@ -75,21 +74,18 @@ enum SignMessageOpts {
         escrow_id: String,
 
         #[clap(long)]
-        federation_id: String,
-
-        #[clap(long)]
         outcome: Outcome,
 
         #[clap(long)]
         contract_hash: String,
     },
 
-    ArbiterFeeClaim {
+    ArbiterEngaged {
         #[clap(long)]
         escrow_id: String,
 
         #[clap(long)]
-        fee_msats: Amount,
+        contract_hash: String,
     },
 }
 
@@ -104,9 +100,10 @@ pub(crate) async fn handle_cli_command(
             recipient_key,
             arbiter_key,
             arbiter_fee_msats,
+            arbiter_fee_key,
             amount_sats,
             timeout,
-            resolution_timeout,
+            resolution_deadline,
             default_fallback,
         } => {
             let result = client
@@ -116,7 +113,8 @@ pub(crate) async fn handle_cli_command(
                     arbiter_fee_msats,
                     Amount::from_sats(amount_sats),
                     Duration::from_secs(timeout),
-                    Duration::from_secs(resolution_timeout),
+                    arbiter_fee_key,
+                    Duration::from_secs(resolution_deadline),
                     default_fallback,
                 )
                 .await?;
@@ -191,10 +189,9 @@ pub(crate) async fn handle_cli_command(
                     }
                     EscrowInputSMState::Split => {}
                     EscrowInputSMState::Failed { reason } => {
-                        return Err(anyhow::anyhow!("Escrow creation failed: {reason}"));
+                        return Err(anyhow::anyhow!("Escrow resolution failed: {reason}"));
                     }
-                    EscrowInputSMState::FeeClaimed => {}
-                    EscrowInputSMState::FeeClaiming => {}
+                    EscrowInputSMState::Claimed => {}
                     EscrowInputSMState::Disputed => {}
                 }
             }
@@ -241,10 +238,11 @@ pub(crate) async fn handle_cli_command(
                         break;
                     }
                     EscrowInputSMState::Failed { reason } => {
-                        return Err(anyhow::anyhow!("Escrow creation failed: {reason}"));
+                        return Err(anyhow::anyhow!(
+                            "Escrow arbiter resolution failed: {reason}"
+                        ));
                     }
-                    EscrowInputSMState::FeeClaimed => {}
-                    EscrowInputSMState::FeeClaiming => {}
+                    EscrowInputSMState::Claimed => {}
                     EscrowInputSMState::Disputed => {}
                 }
             }
@@ -253,46 +251,15 @@ pub(crate) async fn handle_cli_command(
                 "operation_id": operation_id
             }))
         }
-        Opts::ClaimArbiterFee {
-            escrow_id,
-            arbiter_signature,
-        } => {
+        Opts::ClaimPayout { escrow_id } => {
             let escrow_id_bytes = hex::decode(&escrow_id)?;
             let escrow_id = EscrowId(
                 escrow_id_bytes
                     .try_into()
                     .map_err(|_| anyhow::anyhow!("Invalid escrow_id length"))?,
             );
-            let sig_bytes = hex::decode(&arbiter_signature)?;
 
-            let arbiter_signature = schnorr::Signature::from_slice(&sig_bytes)
-                .map_err(|e| anyhow::anyhow!("Invalid schnorr signature: {e}"))?;
-
-            let operation_id = client
-                .claim_arbiter_fee(escrow_id, arbiter_signature)
-                .await?;
-
-            let mut stream = client
-                .subscribe_fee_claim(operation_id)
-                .await?
-                .into_stream();
-
-            while let Some(state) = stream.next().await {
-                match &state {
-                    EscrowInputSMState::Pending => {}
-                    EscrowInputSMState::FeeClaiming => {}
-                    EscrowInputSMState::FeeClaimed => {
-                        break;
-                    }
-                    EscrowInputSMState::Disputed => {}
-                    EscrowInputSMState::Split => {}
-                    EscrowInputSMState::Refunded => {}
-                    EscrowInputSMState::Released => {}
-                    EscrowInputSMState::Failed { reason } => {
-                        return Err(anyhow::anyhow!("Escrow creation failed: {reason}"));
-                    }
-                }
-            }
+            let operation_id = client.claim_payout(escrow_id).await?;
 
             Ok(serde_json::json!({
                 "operation_id": operation_id
@@ -302,7 +269,6 @@ pub(crate) async fn handle_cli_command(
             let escrow_message = match message {
                 SignMessageOpts::Resolution {
                     escrow_id,
-                    federation_id,
                     outcome,
                     contract_hash,
                 } => {
@@ -318,7 +284,7 @@ pub(crate) async fn handle_cli_command(
                         .try_into()
                         .map_err(|_| anyhow::anyhow!("Invalid contract hash"))?;
 
-                    let federation_id = federation_id.parse()?;
+                    let federation_id = client.federation_id;
 
                     EscrowMessage::Resolution {
                         escrow_id,
@@ -328,20 +294,29 @@ pub(crate) async fn handle_cli_command(
                     }
                 }
 
-                SignMessageOpts::ArbiterFeeClaim {
+                SignMessageOpts::ArbiterEngaged {
                     escrow_id,
-                    fee_msats,
+                    contract_hash,
                 } => {
                     let escrow_id_bytes = hex::decode(escrow_id)?;
                     let escrow_id = EscrowId(
                         escrow_id_bytes
                             .try_into()
-                            .map_err(|_| anyhow::anyhow!("Invalid escrow_id"))?,
+                            .map_err(|_| anyhow!("Invalid escrow_id"))?,
                     );
 
-                    EscrowMessage::ArbiterFeeClaim {
+                    let contract_hash_bytes = hex::decode(contract_hash)?;
+                    let contract_hash = ContractHash(
+                        contract_hash_bytes
+                            .try_into()
+                            .map_err(|_| anyhow::anyhow!("Invalid contract hash"))?,
+                    );
+                    let federation_id = client.federation_id;
+
+                    EscrowMessage::ArbiterEngaged {
                         escrow_id,
-                        fee_amount: fee_msats,
+                        federation_id,
+                        contract_hash,
                     }
                 }
             };

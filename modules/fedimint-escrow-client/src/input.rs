@@ -31,8 +31,7 @@ pub enum EscrowInputSMState {
     Split,
     Pending,
     Disputed,
-    FeeClaimed,
-    FeeClaiming,
+    Claimed,
     Failed { reason: String },
 }
 
@@ -83,11 +82,8 @@ impl State for EscrowInputStateMachine {
                                         FallbackPolicy::Refund => EscrowInputSMState::Refunded,
                                         FallbackPolicy::Split { .. } => EscrowInputSMState::Split,
                                     },
-                                    Resolution::ArbiterFeeClaim { .. } => {
-                                        EscrowInputSMState::Failed {
-                                            reason: "unexpected: fee claim in resolution state"
-                                                .into(),
-                                        }
+                                    Resolution::ClaimPayout { claimer_pubkey: _ } => {
+                                        EscrowInputSMState::Claimed
                                     }
                                 },
                                 Err(e) => EscrowInputSMState::Failed { reason: e },
@@ -96,25 +92,6 @@ impl State for EscrowInputStateMachine {
                             EscrowInputStateMachine {
                                 common: old_state.common.clone(),
                                 state: new_state,
-                            }
-                        })
-                    },
-                )]
-            }
-            EscrowInputSMState::FeeClaiming => {
-                let txid = self.common.out_point.txid;
-                let global_context = global.clone();
-
-                vec![StateTransition::new(
-                    async move { global_context.await_tx_accepted(txid).await },
-                    |_dbtx, result, old_state: EscrowInputStateMachine| {
-                        Box::pin(async move {
-                            EscrowInputStateMachine {
-                                common: old_state.common.clone(),
-                                state: match result {
-                                    Ok(_) => EscrowInputSMState::FeeClaimed,
-                                    Err(e) => EscrowInputSMState::Failed { reason: e },
-                                },
                             }
                         })
                     },

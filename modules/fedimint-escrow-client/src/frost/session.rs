@@ -7,6 +7,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::secp256k1::PublicKey;
+use fedimint_escrow_common::x_only;
 use frost_secp256k1_tr;
 use frost_secp256k1_tr::keys::dkg::round1::{
     Package as Round1Package, SecretPackage as Round1SecretPackage,
@@ -77,7 +78,7 @@ impl<'de> Deserialize<'de> for FrostParticipant {
 
 impl FrostParticipant {
     pub fn from_pubkey(pubkey: PublicKey) -> anyhow::Result<Self> {
-        let identifier = Identifier::derive(&pubkey.serialize())?;
+        let identifier = Identifier::derive(&x_only(&pubkey).serialize())?;
 
         Ok(Self { identifier })
     }

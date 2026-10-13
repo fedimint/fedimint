@@ -3,10 +3,8 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Error, bail};
+use anyhow::{Error, anyhow, bail};
 use async_stream::{stream, try_stream};
-#[cfg(feature = "cli")]
-use fedimint_client_module::ClientModuleError;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{
@@ -18,8 +16,9 @@ use fedimint_client_module::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
     ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
-use fedimint_core::bitcoin::hashes::{HashEngine, sha256};
+use fedimint_client_module::{
+    ClientModuleError, DynGlobalClientContext, sm_enum_variant_translation,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
@@ -28,19 +27,17 @@ use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::secp256k1::{Keypair, Message, PublicKey, Secp256k1, schnorr};
 use fedimint_core::util::BoxStream;
-use fedimint_core::{Amount, BitcoinHash, apply, async_trait_maybe_send, push_db_pair_items};
+use fedimint_core::{Amount, apply, async_trait_maybe_send, push_db_pair_items};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_escrow_common::config::EscrowClientConfig;
 use fedimint_escrow_common::{
     EscrowCommonInit, EscrowContract, EscrowId, EscrowInput, EscrowMessage, EscrowModuleTypes,
-    EscrowOutput, EscrowStatus, FallbackPolicy, GET_CONTRACT_DOMAIN, GET_PENDING_FEE_DOMAIN,
-    GetContractParams, GetPendinFeeParams, KIND, LIST_CONTRACT_DOMAIN, ListContractParams, Outcome,
-    Resolution, compute_contract_hash, compute_escrow_message, compute_proof_message,
+    EscrowOutput, FallbackPolicy, GetClaimAmount, GetContractParams, KIND, ListContractParams,
+    Outcome, Resolution, compute_contract_hash, compute_escrow_message, x_only_eq,
 };
 use frost_secp256k1_tr::Identifier;
 use futures::{StreamExt, TryStreamExt};
 use iroh::{NodeAddr, SecretKey};
-use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
@@ -63,9 +60,6 @@ pub mod output;
 
 #[cfg(feature = "cli")]
 pub mod cli;
-
-const ESCROW_FEE_CLAIM_CHILD_ID: ChildId = ChildId(1);
-const IROH_IDENTITY_CHILD_ID: ChildId = ChildId(2);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum EscrowStateMachine {
@@ -134,11 +128,18 @@ impl fmt::Debug for EscrowClientContext {
     }
 }
 
+enum EscrowChildKeys {
+    Escrow = 0,
+    ArbiterFee = 1,
+    IrohKey = 3,
+}
+
 pub struct EscrowClientModule {
     federation_id: FederationId,
     cfg: EscrowClientConfig,
     pub client_ctx: ClientContext<Self>,
-    pub keypair: Keypair,
+    escrow_key: Keypair,
+    arbiter_fee_key: Keypair,
     secret: DerivableSecret,
     notifier: ModuleNotifier<EscrowStateMachine>,
 }
@@ -220,9 +221,13 @@ impl ClientModuleInit for EscrowClientInit {
             federation_id: args.federation_id,
             cfg: args.cfg.clone(),
             client_ctx: args.context.clone(),
-            keypair: args
+            escrow_key: args
                 .module_root_secret()
-                .clone()
+                .child_key(ChildId(EscrowChildKeys::Escrow as u64))
+                .to_secp_key(&Secp256k1::new()),
+            arbiter_fee_key: args
+                .module_root_secret()
+                .child_key(ChildId(EscrowChildKeys::ArbiterFee as u64))
                 .to_secp_key(&Secp256k1::new()),
             secret: args.module_root_secret.clone(),
             notifier: args.notifier().clone(),
@@ -279,9 +284,13 @@ impl ClientModule for EscrowClientModule {
     ) -> BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
         let stream: BoxStream<'_, anyhow::Result<serde_json::Value>> = Box::pin(try_stream! {
             match method.as_str() {
-                "get_client_escrow_keys"=>{
-                    let keypair=self.keypair.public_key().to_string();
-                    yield serde_json::to_value(keypair)?;
+                "get_client_escrow_pubkey"=>{
+                    let pubkey=self.escrow_key.public_key().to_string();
+                    yield serde_json::to_value(pubkey)?;
+                }
+                "get_arbiter_fee_pubkey"=>{
+                    let pubkey=self.arbiter_fee_key.public_key().to_string();
+                    yield serde_json::to_value(pubkey)?;
                 }
                 "get_contract" => {
                     let req:GetContractRequest= serde_json::from_value(request)?;
@@ -300,7 +309,8 @@ impl ClientModule for EscrowClientModule {
                         req.arbiter_fee,
                         req.amount,
                         req.timeout,
-                        req.resolution_timeout,
+                        req.arbiter_fee_key,
+                        req.resolution_deadline,
                         req.default_fallback
                     ).await?;
                     yield serde_json::to_value(result)?;
@@ -336,28 +346,14 @@ impl ClientModule for EscrowClientModule {
                         yield serde_json::to_value(state)?;
                     }
                 }
-                "claim_arbiter_fee"=>{
-                    let req:ClaimArbiterFeeRequest=serde_json::from_value(request)?;
-                    let result=self.claim_arbiter_fee(
-                        req.escrow_id,
-                        req.arbiter_signature
-                    ).await?;
+                "claim_payout"=>{
+                    let req:ClaimPayoutRequest=serde_json::from_value(request)?;
+                    let result=self.claim_payout(req.escrow_id).await?;
                     yield serde_json::to_value(result)?;
-                }
-                "subscribe_fee_claim"=>{
-                    let req:SubscribeFeeClaimRequest=serde_json::from_value(request)?;
-                    let stream=self.subscribe_fee_claim(req.operation_id).await?;
-                    for await state in stream.into_stream() {
-                        yield serde_json::to_value(state)?;
-                    }
                 }
                 "sign_message"=>{
                     let req:SignClientMessageRequest=serde_json::from_value(request)?;
                     let result=self.sign_message(req.message)?;
-                    yield serde_json::to_value(result)?;
-                }
-                "fee_claim_pubkey"=>{
-                    let result=self.fee_claim_key().public_key();
                     yield serde_json::to_value(result)?;
                 }
                 _ => {
@@ -382,7 +378,8 @@ struct CreateContractRequest {
     arbiter_fee: Amount,
     amount: Amount,
     timeout: Duration,
-    resolution_timeout: Duration,
+    arbiter_fee_key: Vec<PublicKey>,
+    resolution_deadline: Duration,
     default_fallback: FallbackPolicy,
 }
 
@@ -405,18 +402,12 @@ struct SubmitArbiterDecisionRequest {
 }
 
 #[derive(Deserialize)]
-struct ClaimArbiterFeeRequest {
+struct ClaimPayoutRequest {
     escrow_id: EscrowId,
-    arbiter_signature: schnorr::Signature,
 }
 
 #[derive(Deserialize)]
 struct SubscribeResolveRequest {
-    operation_id: OperationId,
-}
-
-#[derive(Deserialize)]
-struct SubscribeFeeClaimRequest {
     operation_id: OperationId,
 }
 
@@ -438,15 +429,9 @@ pub struct ConsortiumSession {
 }
 
 impl EscrowClientModule {
-    pub fn fee_claim_key(&self) -> Keypair {
-        self.secret
-            .child_key(ESCROW_FEE_CLAIM_CHILD_ID)
-            .to_secp_key(&Secp256k1::new())
-    }
-
     fn iroh_identity_key(&self) -> Keypair {
         self.secret
-            .child_key(IROH_IDENTITY_CHILD_ID)
+            .child_key(ChildId(EscrowChildKeys::IrohKey as u64))
             .to_secp_key(&Secp256k1::new())
     }
 
@@ -458,68 +443,48 @@ impl EscrowClientModule {
         arbiter_fee: Amount,
         amount: Amount,
         timeout: Duration,
-        resolution_timeout: Duration,
+        arbiter_fee_key: Vec<PublicKey>,
+        resolution_deadline: Duration,
         default_fallback: FallbackPolicy,
     ) -> Result<CreateContractResponse, anyhow::Error> {
-        let funder_key = self.keypair.public_key();
+        let funder_key = self.escrow_key.public_key();
         let timeout_deadline =
             fedimint_core::time::duration_since_epoch().as_secs() + timeout.as_secs();
-        let resolution_timeout = timeout_deadline + resolution_timeout.as_secs();
-
-        anyhow::ensure!(
-            funder_key != recipient_key,
-            "funder and recipient keys must differ"
-        );
-        anyhow::ensure!(
-            funder_key != arbiter_key,
-            "funder and arbiter keys must differ"
-        );
-        anyhow::ensure!(
-            recipient_key != arbiter_key,
-            "recipient and arbiter keys must differ"
-        );
-        anyhow::ensure!(amount > Amount::ZERO, "amount must be greater than zero");
-        anyhow::ensure!(arbiter_fee < amount, "arbiter fee must be less than amount");
-        anyhow::ensure!(!timeout.is_zero(), "timeout must be non-zero");
+        // resolution_deadline is calculated after the dispute
+        let resolution_deadline = resolution_deadline.as_secs();
 
         let contract_hash = compute_contract_hash(
             &funder_key,
             &recipient_key,
             &arbiter_key,
+            &arbiter_fee,
             &amount,
             &timeout_deadline,
             &self.federation_id,
-            &resolution_timeout,
+            &resolution_deadline,
+            &arbiter_fee_key,
             &default_fallback,
         );
 
-        let rng = SystemRandom::new();
-        let mut nonce = [0u8; 32];
-        let _ = rng.fill(&mut nonce);
-
         let operation_id = OperationId::new_random();
-        let escrow_id: EscrowId = {
-            let mut engine = sha256::HashEngine::default();
-            engine.input(b"escrow_id");
-            engine.input(&contract_hash.0);
-            engine.input(&nonce);
-            EscrowId(sha256::Hash::from_engine(engine).to_byte_array())
-        };
+        let escrow_id = EscrowId::new(&contract_hash)?;
 
-        let contract = EscrowContract {
+        let contract = EscrowContract::new(
             escrow_id,
             funder_key,
             recipient_key,
             arbiter_key,
+            arbiter_fee_key,
             amount,
             arbiter_fee,
             contract_hash,
-            timeout: timeout_deadline,
-            federation_id: self.federation_id,
-            status: EscrowStatus::Active,
-            resolution_timeout,
+            timeout_deadline,
+            self.federation_id,
+            resolution_deadline,
             default_fallback,
-        };
+            fedimint_core::time::duration_since_epoch().as_secs(),
+        )
+        .await?;
 
         let output_sm = ClientOutputSM {
             state_machines: Arc::new(move |out_point_range: OutPointRange| {
@@ -588,9 +553,14 @@ impl EscrowClientModule {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
+        anyhow::ensure!(
+            x_only_eq(&contract.recipient_key, &self.escrow_key.public_key()),
+            "only the recipient can submit the release"
+        );
+
         let input = ClientInput {
             amounts: Amounts::new_bitcoin(contract.amount),
-            keys: vec![self.keypair],
+            keys: vec![self.escrow_key],
             input: EscrowInput {
                 escrow_id,
                 resolution: Resolution::FunderRelease { funder_signature },
@@ -645,43 +615,36 @@ impl EscrowClientModule {
         Ok(operation_id)
     }
 
-    pub async fn set_arbiter_engaged(
-        &self,
-        escrow_id: EscrowId,
-        disputant_pubkey: PublicKey,
-        disputant_signature: Signature,
-    ) -> anyhow::Result<OperationId> {
+    pub async fn set_arbiter_engaged(&self, escrow_id: EscrowId) -> anyhow::Result<OperationId> {
         let operation_id = OperationId::new_random();
-        let secp = Secp256k1::new();
         let contract = self
             .get_contract(escrow_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
+        let is_valid_disputant = x_only_eq(&self.escrow_key.public_key(), &contract.funder_key)
+            || x_only_eq(&self.escrow_key.public_key(), &contract.recipient_key);
+
         anyhow::ensure!(
-            contract.arbiter_key == self.keypair.public_key(),
-            "Should be submitted by arbiter"
+            is_valid_disputant,
+            "Should be submitted by funder/reciepient"
         );
-        let message = EscrowMessage::ArbiterEngaged {
-            escrow_id,
-            federation_id: self.federation_id,
-            contract_hash: contract.contract_hash,
-        };
-        let msg_bytes = compute_escrow_message(&message);
-        let arbiter_signature = secp.sign_schnorr(&Message::from_digest(msg_bytes), &self.keypair);
+
+        let message = contract.engage_message();
+        let disputant_signature = self.sign_message(message)?;
 
         let input = ClientInput {
             amounts: Amounts::ZERO,
-            keys: vec![self.keypair],
+            keys: vec![self.escrow_key],
             input: EscrowInput {
                 escrow_id,
                 resolution: Resolution::ArbiterEngaged {
-                    disputant_pubkey,
+                    disputant_pubkey: self.escrow_key.public_key(),
                     disputant_signature,
-                    arbiter_signature,
                 },
             },
         };
+        let disputant_pubkey = self.escrow_key.public_key();
 
         let input_sm = ClientInputSM {
             state_machines: Arc::new(move |out_point_range: OutPointRange| {
@@ -697,7 +660,6 @@ impl EscrowClientModule {
                                 resolution: Resolution::ArbiterEngaged {
                                     disputant_pubkey,
                                     disputant_signature,
-                                    arbiter_signature,
                                 },
                             },
                             state: EscrowInputSMState::Pending,
@@ -750,47 +712,21 @@ impl EscrowClientModule {
         let now = fedimint_core::time::duration_since_epoch().as_secs();
         anyhow::ensure!(now >= contract.timeout, "arbiter cannot act before timeout");
 
-        let payout_amount = contract
-            .amount
-            .checked_sub(contract.arbiter_fee)
-            .ok_or_else(|| anyhow::anyhow!("arbiter fee exceeds contract amount"))?;
-
-        let claimer_pubkey = self.keypair.public_key();
-
-        let claim_amount = match outcome {
-            Outcome::Release | Outcome::Refund => payout_amount,
-            Outcome::Split {
-                funder_split_bps, ..
-            } => {
-                let funder_amount = Amount::from_msats(
-                    payout_amount
-                        .msats
-                        .saturating_mul(u64::from(funder_split_bps))
-                        / 10_000,
-                );
-                let recipient_amount = payout_amount
-                    .checked_sub(funder_amount)
-                    .ok_or_else(|| anyhow::anyhow!("split overflow"))?;
-                if claimer_pubkey == contract.funder_key {
-                    funder_amount
-                } else {
-                    recipient_amount
-                }
-            }
-        };
-
         let input = ClientInput {
-            amounts: Amounts::new_bitcoin(claim_amount),
-            keys: vec![self.keypair],
+            amounts: Amounts::new_bitcoin(contract.arbiter_fee),
+            keys: vec![self.arbiter_fee_key],
             input: EscrowInput {
                 escrow_id,
                 resolution: Resolution::ArbiterOutcome {
                     arbiter_signature,
                     outcome,
-                    claimer_pubkey,
+                    submitter_pubkey: self.arbiter_fee_key.public_key(),
                 },
             },
         };
+
+        let arbiter_fee = contract.arbiter_fee;
+        let submitter_pubkey = self.arbiter_fee_key.public_key();
 
         let input_sm = ClientInputSM {
             state_machines: Arc::new(move |out_point_range: OutPointRange| {
@@ -802,11 +738,11 @@ impl EscrowClientModule {
                                 operation_id,
                                 out_point,
                                 escrow_id,
-                                amount: claim_amount,
+                                amount: arbiter_fee,
                                 resolution: Resolution::ArbiterOutcome {
                                     arbiter_signature,
                                     outcome,
-                                    claimer_pubkey,
+                                    submitter_pubkey,
                                 },
                             },
                             state: EscrowInputSMState::Pending,
@@ -830,7 +766,7 @@ impl EscrowClientModule {
 
             EscrowOperationMeta {
                 escrow_id,
-                amount: claim_amount,
+                amount: contract.arbiter_fee,
                 action: match outcome {
                     Outcome::Release => EscrowAction::Released,
                     Outcome::Refund => EscrowAction::Refunded,
@@ -848,42 +784,38 @@ impl EscrowClientModule {
         Ok(operation_id)
     }
 
-    pub async fn claim_arbiter_fee(
-        &self,
-        escrow_id: EscrowId,
-        arbiter_signature: schnorr::Signature,
-    ) -> anyhow::Result<OperationId> {
+    /// The key stored in the pool is the key that must sign the claim.
+    fn keypair_for(&self, key: &PublicKey) -> Option<Keypair> {
+        [self.escrow_key, self.arbiter_fee_key]
+            .into_iter()
+            .find(|kp| x_only_eq(&kp.public_key(), key))
+    }
+
+    pub async fn claim_payout(&self, escrow_id: EscrowId) -> anyhow::Result<OperationId> {
         let operation_id = OperationId::new_random();
-        let secp = Secp256k1::new();
-
-        let msg_bytes = compute_proof_message(
-            GET_PENDING_FEE_DOMAIN.as_bytes(),
-            &escrow_id.0,
-            &self.keypair.public_key(),
-            None,
-        );
-        let arbiter_fee_signature =
-            secp.sign_schnorr(&Message::from_digest(msg_bytes), &self.keypair);
-
-        let (arbiter_pubkey, share) = self
+        let pool = self
             .client_ctx
             .module_api()
-            .get_pending_arbiter_fee(GetPendinFeeParams {
-                escrow_id,
-                pubkey: self.fee_claim_key().public_key(),
-                sign: arbiter_fee_signature,
-            })
+            .get_claim_amount(GetClaimAmount { escrow_id })
             .await?
-            .ok_or_else(|| anyhow::anyhow!("No pending arbiter fee for escrow"))?;
+            .ok_or_else(|| anyhow!("No pool found"))?;
+
+        let (signing_key, amount) = pool
+            .claimer
+            .iter()
+            .find_map(|(key, amount)| {
+                self.keypair_for(key)
+                    .map(|signing_key| (signing_key, *amount))
+            })
+            .ok_or_else(|| anyhow::anyhow!("No matching signing key found"))?;
 
         let input = ClientInput {
-            amounts: Amounts::new_bitcoin(share),
-            keys: vec![self.keypair],
+            amounts: Amounts::new_bitcoin(amount),
+            keys: vec![signing_key],
             input: EscrowInput {
                 escrow_id,
-                resolution: Resolution::ArbiterFeeClaim {
-                    arbiter_claim_pubkey: arbiter_pubkey,
-                    arbiter_signature,
+                resolution: Resolution::ClaimPayout {
+                    claimer_pubkey: signing_key.public_key(),
                 },
             },
         };
@@ -898,13 +830,12 @@ impl EscrowClientModule {
                                 operation_id,
                                 out_point,
                                 escrow_id,
-                                amount: share,
-                                resolution: Resolution::ArbiterFeeClaim {
-                                    arbiter_claim_pubkey: arbiter_pubkey,
-                                    arbiter_signature,
+                                amount,
+                                resolution: Resolution::ClaimPayout {
+                                    claimer_pubkey: signing_key.public_key(),
                                 },
                             },
-                            state: EscrowInputSMState::FeeClaiming,
+                            state: EscrowInputSMState::Pending,
                         })
                     })
                     .collect()
@@ -918,7 +849,7 @@ impl EscrowClientModule {
 
         let operation_meta_gen = move |out_point_range: OutPointRange| EscrowOperationMeta {
             escrow_id,
-            amount: share,
+            amount,
             action: EscrowAction::ArbiterFeeClaimed,
             txid: out_point_range.txid(),
             out_point_indices: out_point_range.into_iter().map(|op| op.out_idx).collect(),
@@ -932,7 +863,7 @@ impl EscrowClientModule {
     }
 
     pub fn get_frost_identity(&self) -> anyhow::Result<FrostParticipant> {
-        FrostParticipant::from_pubkey(self.keypair.public_key())
+        FrostParticipant::from_pubkey(self.escrow_key.public_key())
     }
 
     pub async fn create_arbiter_consortium(
@@ -990,70 +921,14 @@ impl EscrowClientModule {
         })
     }
 
-    pub async fn subscribe_fee_claim(
-        &self,
-        operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<EscrowInputSMState>> {
-        let operation: OperationLogEntry = self.escrow_operation(operation_id).await?;
-        let meta = operation.meta::<EscrowOperationMeta>();
-        let txid = meta.txid;
-
-        let client_ctx = self.client_ctx.clone();
-
-        Ok(self.client_ctx.outcome_or_updates(
-            &operation,
-            operation_id,
-            |state| {
-                matches!(
-                    state,
-                    EscrowInputSMState::FeeClaimed | EscrowInputSMState::Failed { .. }
-                )
-            },
-            move || {
-                let client_ctx = client_ctx.clone();
-                stream! {
-                    yield EscrowInputSMState::FeeClaiming;
-
-                    match client_ctx
-                        .transaction_updates(operation_id)
-                        .await
-                        .await_tx_accepted(txid)
-                        .await
-                    {
-                        Ok(()) => {
-                            yield EscrowInputSMState::FeeClaimed;
-                        }
-                        Err(e) => {
-                            yield EscrowInputSMState::Failed { reason: e.to_string() };
-                        }
-                    }
-                }
-            },
-        ))
-    }
-
     pub async fn get_contract(
         &self,
         escrow_id: EscrowId,
     ) -> Result<Option<EscrowContract>, anyhow::Error> {
-        let secp = Secp256k1::new();
-        let msg_bytes = compute_proof_message(
-            GET_CONTRACT_DOMAIN.as_bytes(),
-            &escrow_id.0,
-            &self.keypair.public_key(),
-            Some(&self.federation_id),
-        );
-
-        let signature = secp.sign_schnorr(&Message::from_digest(msg_bytes), &self.keypair);
-
         let contract: Option<EscrowContract> = self
             .client_ctx
             .module_api()
-            .get_contract(GetContractParams {
-                escrow_id,
-                pubkey: self.keypair.public_key(),
-                sign: signature,
-            })
+            .get_contract(GetContractParams { escrow_id })
             .await?;
 
         Ok(contract)
@@ -1071,20 +946,10 @@ impl EscrowClientModule {
     }
 
     pub async fn list_escrow_operations(&self) -> Vec<EscrowContract> {
-        let secp = Secp256k1::new();
-        let msg = compute_proof_message(
-            LIST_CONTRACT_DOMAIN.as_bytes(),
-            &self.federation_id.0.to_byte_array(),
-            &self.keypair.public_key(),
-            None,
-        );
-        let sig = secp.sign_schnorr(&Message::from_digest(msg), &self.keypair);
-
         self.client_ctx
             .module_api()
             .list_contracts_by_key(ListContractParams {
-                sig,
-                pubkey: self.keypair.public_key(),
+                pubkey: self.escrow_key.public_key(),
                 federation_id: self.federation_id,
             })
             .await
@@ -1207,6 +1072,6 @@ impl EscrowClientModule {
         let msg_bytes = compute_escrow_message(&message);
         let msg = Message::from_digest(msg_bytes);
 
-        Ok(secp.sign_schnorr(&msg, &self.keypair))
+        Ok(secp.sign_schnorr(&msg, &self.escrow_key))
     }
 }

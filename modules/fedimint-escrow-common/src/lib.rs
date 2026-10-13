@@ -8,8 +8,8 @@ use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersi
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::{Amount, hex, plugin_types_trait_impl_common};
+use ring::rand::{SecureRandom, SystemRandom};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use thiserror::Error;
 
 use crate::config::EscrowClientConfig;
 
@@ -65,6 +65,24 @@ impl<'de> Deserialize<'de> for EscrowId {
     }
 }
 
+impl EscrowId {
+    pub fn new(contract_hash: &ContractHash) -> anyhow::Result<Self> {
+        let rng = SystemRandom::new();
+        let mut nonce = [0u8; 32];
+        rng.fill(&mut nonce)
+            .map_err(|_| anyhow::anyhow!("failed to generate nonce"))?;
+
+        let escrow_id = {
+            let mut engine = sha256::HashEngine::default();
+            engine.input(b"escrow_id");
+            engine.input(&contract_hash.0);
+            engine.input(&nonce);
+            EscrowId(sha256::Hash::from_engine(engine).to_byte_array())
+        };
+        Ok(escrow_id)
+    }
+}
+
 impl Serialize for ContractHash {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -96,13 +114,14 @@ pub struct EscrowContract {
     pub funder_key: PublicKey,
     pub recipient_key: PublicKey,
     pub arbiter_key: PublicKey,
+    pub arbiter_fee_key: Vec<PublicKey>,
     pub amount: Amount,
     pub arbiter_fee: Amount,
     pub contract_hash: ContractHash,
     pub timeout: u64,
     pub federation_id: FederationId,
     pub status: EscrowStatus,
-    pub resolution_timeout: u64,
+    pub resolution_deadline: u64,
     pub default_fallback: FallbackPolicy,
 }
 
@@ -124,7 +143,45 @@ pub enum EscrowTransition {
 }
 
 impl EscrowContract {
-    pub fn transition(&mut self, transition: EscrowTransition) -> Result<(), EscrowInputError> {
+    #[allow(clippy::too_many_arguments)]
+    pub async fn new(
+        escrow_id: EscrowId,
+        funder_key: PublicKey,
+        recipient_key: PublicKey,
+        arbiter_key: PublicKey,
+        arbiter_fee_key: Vec<PublicKey>,
+        amount: Amount,
+        arbiter_fee: Amount,
+        contract_hash: ContractHash,
+        timeout: u64,
+        federation_id: FederationId,
+        resolution_deadline: u64,
+        default_fallback: FallbackPolicy,
+        now: u64,
+    ) -> Result<Self, EscrowContractValidationError> {
+        let contract = Self {
+            escrow_id,
+            funder_key,
+            recipient_key,
+            arbiter_key,
+            arbiter_fee_key,
+            amount,
+            arbiter_fee,
+            contract_hash,
+            timeout,
+            federation_id,
+            status: EscrowStatus::Active,
+            resolution_deadline,
+            default_fallback,
+        };
+        validate_contract_fields(&contract, now)?;
+
+        Ok(contract)
+    }
+    pub async fn transition(
+        &mut self,
+        transition: EscrowTransition,
+    ) -> Result<(), EscrowInputError> {
         let new_status = match (&self.status, transition) {
             // Funder can release an active contract.
             (EscrowStatus::Active, EscrowTransition::FunderRelease) => EscrowStatus::Released,
@@ -139,16 +196,32 @@ impl EscrowContract {
                 Outcome::Split { .. } => EscrowStatus::Split,
             },
 
-            (EscrowStatus::Active, EscrowTransition::Fallback) => match self.default_fallback {
-                FallbackPolicy::Refund => EscrowStatus::Refunded,
-                FallbackPolicy::Split { .. } => EscrowStatus::Split,
-            },
+            (EscrowStatus::Active | EscrowStatus::Disputed, EscrowTransition::Fallback) => {
+                match self.default_fallback {
+                    FallbackPolicy::Refund => EscrowStatus::Refunded,
+                    FallbackPolicy::Split { .. } => EscrowStatus::Split,
+                }
+            }
 
             _ => return Err(EscrowInputError::InvalidStateTransition),
         };
 
         self.status = new_status;
         Ok(())
+    }
+
+    pub fn is_terminal(&self) -> bool {
+        matches!(
+            self.status,
+            EscrowStatus::Released | EscrowStatus::Refunded | EscrowStatus::Split
+        )
+    }
+
+    pub fn contains_key(&self, pubkey: &PublicKey) -> bool {
+        x_only_eq(&self.funder_key, pubkey)
+            || x_only_eq(&self.recipient_key, pubkey)
+            || x_only_eq(&self.arbiter_key, pubkey)
+            || self.arbiter_fee_key.iter().any(|k| x_only_eq(k, pubkey))
     }
     pub fn engage_message(&self) -> EscrowMessage {
         EscrowMessage::ArbiterEngaged {
@@ -262,6 +335,12 @@ impl FromStr for FallbackPolicy {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct ClaimPool {
+    pub escrow_id: EscrowId,
+    pub claimer: Vec<(PublicKey, Amount)>, // Split case can have two claimers
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub enum Resolution {
     FunderRelease {
@@ -270,16 +349,14 @@ pub enum Resolution {
     ArbiterEngaged {
         disputant_pubkey: PublicKey,
         disputant_signature: Signature,
-        arbiter_signature: Signature,
     },
     ArbiterOutcome {
         arbiter_signature: Signature,
         outcome: Outcome,
-        claimer_pubkey: PublicKey,
+        submitter_pubkey: PublicKey,
     },
-    ArbiterFeeClaim {
-        arbiter_claim_pubkey: PublicKey,
-        arbiter_signature: Signature,
+    ClaimPayout {
+        claimer_pubkey: PublicKey,
     },
     ResolveFallbackPolicy {
         claimer_pubkey: PublicKey,
@@ -301,25 +378,6 @@ pub enum EscrowMessage {
         federation_id: FederationId,
         contract_hash: ContractHash,
     },
-
-    ArbiterFeeClaim {
-        escrow_id: EscrowId,
-        fee_amount: Amount,
-    },
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
-pub struct PendingArbiterFeePool {
-    pub escrow_id: EscrowId,
-    pub remaining_arbiters: Vec<PublicKey>,
-    pub remaining_amount: Amount,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
-pub struct PendingSplitPool {
-    pub escrow_id: EscrowId,
-    pub claimant_key: PublicKey,
-    pub amount: Amount,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -328,16 +386,14 @@ pub enum EscrowConsensusItem {
     Default { variant: u64, bytes: Vec<u8> },
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, thiserror::Error, Encodable, Decodable)]
 pub enum EscrowInputError {
     #[error("Contract not found")]
     ContractNotFound,
-    #[error("Invalid funder signature")]
-    InvalidFunderSignature,
-    #[error("Invalid arbiter signature")]
-    InvalidArbiterSignature,
     #[error("Timeout not reached")]
     TimeoutNotReached,
+    #[error("Invalid signature")]
+    InvalidSignature,
     #[error("Contract hash not matched")]
     ContractHashMismatch,
     #[error("Invalid contract state transition")]
@@ -346,8 +402,10 @@ pub enum EscrowInputError {
     ContractDisputed,
     #[error("Contract not disputed")]
     ContractNotDisputed,
-    #[error("No pending split claim for this key")]
-    NoPendingSplitClaim,
+    #[error("Contract already resolved,claim the amount if not!")]
+    ContractAlreadyResolved,
+    #[error("No pending claim")]
+    NoPendingClaim,
     #[error("Invalid split ratio")]
     InvalidSplitRatio,
     #[error("Fallback resolution is not yet available")]
@@ -356,16 +414,43 @@ pub enum EscrowInputError {
     InternalError(String),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Error, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, thiserror::Error, Encodable, Decodable)]
 pub enum EscrowOutputError {
     #[error("Contract hash mismatch")]
     ContractHashMismatch,
     #[error("Contract already exists")]
     AlreadyExists,
-    #[error("Identical input keys found")]
-    InvalidInputs,
+    #[error("Invalid input found {0}")]
+    InvalidInputs(EscrowContractValidationError),
     #[error("Internal error: {0}")]
     InternalError(String),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, thiserror::Error, Encodable, Decodable)]
+pub enum EscrowContractValidationError {
+    #[error("amount must be greater than zero")]
+    ZeroAmount,
+
+    #[error("arbiter fee must be less than the escrow amount")]
+    InvalidArbiterFee,
+
+    #[error("escrow timeout must be in the future")]
+    InvalidTimeout,
+
+    #[error("resolution timeout must be after escrow timeout")]
+    InvalidResolutionTimeout,
+
+    #[error("invalid split ratio")]
+    InvalidSplitRatio,
+
+    #[error("participant and arbiter fee keys must be distinct")]
+    DuplicateKeys,
+    #[error("invalid contract state")]
+    InvalidStatus,
+    #[error("missing arbiter fee keys")]
+    MissingArbiterFeeKeys,
+    #[error("invalid input")]
+    InvalidInput,
 }
 
 pub struct EscrowModuleTypes;
@@ -419,32 +504,65 @@ impl std::fmt::Display for EscrowInput {
 }
 
 pub const GET_CONTRACT_ENDPOINT: &str = "get_contract";
-pub const GET_PENDING_ARBITER_FEE_ENDPOINT: &str = "get_pending_arbiter_fee";
+pub const GET_CLAIM_AMOUNT_ENDPOINT: &str = "get_claim_amount";
 pub const LIST_CONTRACT_BY_KEY_ENDPOINT: &str = "list_contract_by_key";
-
-pub const GET_CONTRACT_DOMAIN: &str = "get_contract";
-pub const GET_PENDING_FEE_DOMAIN: &str = "get_pending_fee";
-pub const LIST_CONTRACT_DOMAIN: &str = "list_contracts";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 pub struct GetContractParams {
     pub escrow_id: EscrowId,
-    pub pubkey: PublicKey,
-    pub sign: Signature,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
-pub struct GetPendinFeeParams {
+pub struct GetClaimAmount {
     pub escrow_id: EscrowId,
-    pub pubkey: PublicKey,
-    pub sign: Signature,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 pub struct ListContractParams {
     pub pubkey: PublicKey,
     pub federation_id: FederationId,
-    pub sig: Signature,
+}
+
+/// Using xonly public key to compare the keys for schonorr signature
+/// verification
+pub fn x_only_eq(a: &PublicKey, b: &PublicKey) -> bool {
+    x_only(a) == x_only(b)
+}
+
+pub fn x_only(pk: &PublicKey) -> fedimint_core::bitcoin::XOnlyPublicKey {
+    pk.x_only_public_key().0
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn compute_contract_hash(
+    funder_key: &PublicKey,
+    recipient_key: &PublicKey,
+    arbiter_key: &PublicKey,
+    arbiter_fee: &Amount,
+    amount: &Amount,
+    timeout: &u64,
+    federation_id: &FederationId,
+    resolution_deadline: &u64,
+    arbiter_fee_key: &Vec<PublicKey>,
+    default_fallback: &FallbackPolicy,
+) -> ContractHash {
+    let mut engine = sha256::HashEngine::default();
+    engine.input(b"escrow_contract_hash");
+    engine.input(&funder_key.serialize());
+    engine.input(&recipient_key.serialize());
+    engine.input(&arbiter_key.serialize());
+    engine.input(&arbiter_fee.msats.to_le_bytes());
+    engine.input(&amount.msats.to_le_bytes());
+    engine.input(&timeout.to_le_bytes());
+    engine.input(&federation_id.0.to_byte_array());
+    engine.input(&resolution_deadline.to_le_bytes());
+    default_fallback
+        .consensus_encode(&mut engine)
+        .expect("hash engine writes can't fail");
+    for arbiter in arbiter_fee_key {
+        engine.input(&arbiter.serialize());
+    }
+    ContractHash(sha256::Hash::from_engine(engine).to_byte_array())
 }
 
 fn compute_resolution_message(
@@ -470,50 +588,6 @@ fn compute_resolution_message(
         }
     }
     engine.input(&contract_hash.0);
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn compute_contract_hash(
-    funder_key: &PublicKey,
-    recipient_key: &PublicKey,
-    arbiter_key: &PublicKey,
-    amount: &Amount,
-    timeout: &u64,
-    federation_id: &FederationId,
-    resolution_timeout: &u64,
-    default_fallback: &FallbackPolicy,
-) -> ContractHash {
-    let mut engine = sha256::HashEngine::default();
-    engine.input(b"escrow_contract_hash");
-    engine.input(&funder_key.serialize());
-    engine.input(&recipient_key.serialize());
-    engine.input(&arbiter_key.serialize());
-    engine.input(&amount.msats.to_le_bytes());
-    engine.input(&timeout.to_le_bytes());
-    engine.input(&federation_id.0.to_byte_array());
-    engine.input(&resolution_timeout.to_le_bytes());
-    default_fallback
-        .consensus_encode(&mut engine)
-        .expect("hash engine writes can't fail");
-    ContractHash(sha256::Hash::from_engine(engine).to_byte_array())
-}
-
-pub fn compute_proof_message(
-    domain: &[u8],
-    payload: &[u8],
-    pubkey: &PublicKey,
-    federation_id: Option<&FederationId>,
-) -> [u8; 32] {
-    let mut engine = sha256::HashEngine::default();
-    engine.input(b"escrow_proof");
-    engine.input(domain);
-    engine.input(payload);
-    engine.input(&pubkey.serialize());
-    engine.input(&(federation_id.is_some() as u8).to_le_bytes());
-    if let Some(id) = federation_id {
-        engine.input(&id.0.to_byte_array());
-    }
-    sha256::Hash::from_engine(engine).to_byte_array()
 }
 
 pub fn compute_escrow_message(message: &EscrowMessage) -> [u8; 32] {
@@ -543,15 +617,6 @@ pub fn compute_escrow_message(message: &EscrowMessage) -> [u8; 32] {
             engine.input(&federation_id.0.to_byte_array());
             engine.input(&contract_hash.0);
         }
-
-        EscrowMessage::ArbiterFeeClaim {
-            escrow_id,
-            fee_amount,
-        } => {
-            engine.input(b"arbiter_fee_claim");
-            engine.input(&escrow_id.0);
-            engine.input(&fee_amount.msats.to_le_bytes());
-        }
     }
 
     sha256::Hash::from_engine(engine).to_byte_array()
@@ -559,4 +624,60 @@ pub fn compute_escrow_message(message: &EscrowMessage) -> [u8; 32] {
 
 pub fn validate_split_bps(funder_split: u16, recipient_split: u16) -> bool {
     u32::from(funder_split) + u32::from(recipient_split) == u32::from(SPLIT_BPS_DENOMINATOR)
+}
+
+pub fn validate_contract_fields(
+    contract: &EscrowContract,
+    now: u64,
+) -> Result<(), EscrowContractValidationError> {
+    if contract.amount == Amount::ZERO {
+        return Err(EscrowContractValidationError::ZeroAmount);
+    }
+
+    if contract.arbiter_fee >= contract.amount {
+        return Err(EscrowContractValidationError::InvalidArbiterFee);
+    }
+
+    if contract.timeout <= now {
+        return Err(EscrowContractValidationError::InvalidTimeout);
+    }
+
+    if contract.resolution_deadline <= contract.timeout {
+        return Err(EscrowContractValidationError::InvalidResolutionTimeout);
+    }
+
+    if let FallbackPolicy::Split {
+        funder_split_bps,
+        recipient_split_bps,
+    } = contract.default_fallback
+        && !validate_split_bps(funder_split_bps, recipient_split_bps)
+    {
+        return Err(EscrowContractValidationError::InvalidSplitRatio);
+    }
+
+    if contract.status != EscrowStatus::Active {
+        return Err(EscrowContractValidationError::InvalidStatus);
+    }
+
+    let mut seen = std::collections::HashSet::new();
+    for key in [
+        &contract.funder_key,
+        &contract.recipient_key,
+        &contract.arbiter_key,
+    ]
+    .into_iter()
+    .chain(contract.arbiter_fee_key.iter())
+    {
+        if !seen.insert(x_only(key)) {
+            return Err(EscrowContractValidationError::DuplicateKeys);
+        }
+    }
+    // a fee needs someone to pay it to, otherwise every ruling fails to balance
+    if contract.arbiter_fee > Amount::ZERO && contract.arbiter_fee_key.is_empty() {
+        return Err(EscrowContractValidationError::MissingArbiterFeeKeys);
+    }
+    if contract.arbiter_fee_key.len() > 32 {
+        return Err(EscrowContractValidationError::InvalidInput);
+    }
+    Ok(())
 }
