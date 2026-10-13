@@ -1441,3 +1441,43 @@ async fn payment_info_names_its_refusals() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn peer_availability_reports_the_offline_peer() -> anyhow::Result<()> {
+    use fedimint_core::PeerId;
+
+    let fixtures = fixtures();
+    // Peers 0, 1 and 2 run, peer 3 never starts
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let offline = PeerId::from(3);
+
+    // Right after startup the guardians' coverage differs by whole slots,
+    // which can exclude a report; wait until every peer has a merged value
+    let merged = retry(
+        "availability of every peer",
+        aggressive_backoff_long(),
+        || async {
+            let merged = client.peer_availability().await;
+            if merged.windows.first().is_none_or(|week| week.len() < 4) {
+                bail!("not every peer has enough usable reports yet: {merged:?}");
+            }
+            Ok(merged)
+        },
+    )
+    .await?;
+
+    let week = &merged.windows[0];
+    assert_eq!(week[&offline], 0, "{merged:?}");
+    assert!(!merged.last_seen_secs.contains_key(&offline), "{merged:?}");
+    for peer in fed.online_peer_ids() {
+        assert!(9_000 <= week[&peer], "{merged:?}");
+        assert!(merged.last_seen_secs.contains_key(&peer), "{merged:?}");
+
+        // Each online guardian sees the offline one as down too
+        let report = client.api().peer_availability(peer).await?;
+        assert_eq!(report.windows[0].peers[&offline], 0, "{peer}: {report:?}");
+    }
+
+    Ok(())
+}
