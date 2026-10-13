@@ -192,10 +192,13 @@ pub enum MempoolVisibility {
     /// turned off, or because listing the mempool failed.
     #[default]
     Unavailable,
-    /// The mempool was listed, but fetching some of its transactions failed.
+    /// The mempool was listed, but not all of its transactions were
+    /// inspected: either fetching some of them failed, or the scan ran out of
+    /// its time budget and is still working through them. The latter is
+    /// normal on a healthy backend while a large mempool is first scanned.
     ///
-    /// Every unmined output reported is real, but the set may be short of a
-    /// few transactions the guardian has but could not fetch.
+    /// Every unmined output reported is real, but the set may be short of
+    /// transactions the guardian has but has not inspected yet.
     Partial,
     /// Every transaction in the guardian's mempool was inspected, so a deposit
     /// that is not reported had not reached this mempool when it was scanned.

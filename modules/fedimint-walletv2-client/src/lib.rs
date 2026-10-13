@@ -183,7 +183,9 @@ pub struct AddressReceiveProgress {
     /// yet, and a deposit mined long enough ago has left the reported block
     /// window. With [`MempoolVisibility::Partial`] the unmined deposits
     /// reported are real, but one may also be missing because a guardian
-    /// failed to fetch its transaction; with
+    /// failed to fetch its transaction or has not reached it yet while still
+    /// working through a large mempool, which is normal progress rather than
+    /// a backend fault; with
     /// [`MempoolVisibility::Unavailable`] the federation is blind to a
     /// payment until it is mined. One guardian that inspected its whole
     /// mempool is enough to make this `Complete` for everyone.

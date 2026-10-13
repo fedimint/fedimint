@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use std::collections::BTreeMap;
 
 use fedimint_api_client::api::{
@@ -16,9 +19,6 @@ use fedimint_walletv2_common::endpoint_constants::{
 use fedimint_walletv2_common::{
     FederationWallet, MempoolVisibility, OutputInfo, PendingOutput, PendingOutputs, TxInfo,
 };
-
-#[cfg(test)]
-mod tests;
 
 /// Renders each peer's fee answer so a divergence error names the odd one out.
 fn describe_fee_quotes(quotes: &BTreeMap<PeerId, Option<bitcoin::Amount>>) -> String {

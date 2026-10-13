@@ -388,7 +388,14 @@ pub(crate) fn spawn_pending_receive_scanner(
             // now rather than a full monitor interval later. Every such
             // pass fetches at least one transaction, so this terminates
             // once the cache has caught up with the mempool.
+            //
+            // Yield first: the bitcoind backend's RPC futures run
+            // synchronously via `block_in_place` and never return `Pending`,
+            // so without this a catch-up would run every slice inside a
+            // single poll and the enclosing `cancel_on_shutdown` could not
+            // observe shutdown in between.
             if out_of_budget {
+                tokio::task::yield_now().await;
                 continue;
             }
 
