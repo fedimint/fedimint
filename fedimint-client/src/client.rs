@@ -660,46 +660,64 @@ impl Client {
         &self,
         builder: &TransactionBuilder,
     ) -> Result<(Amounts, Amounts), TransactionSubmitError> {
-        let mut in_amounts = Amounts::ZERO;
-        let mut out_amounts = Amounts::ZERO;
-        let mut fee_amounts = Amounts::ZERO;
-
-        for input in builder.inputs() {
+        let inputs = builder.inputs().map(|input| {
             let module = self.get_module(input.input.module_instance_id());
 
             let item_fees = module.input_fee(&input.amounts, &input.input).expect(
                 "We only build transactions with input versions that are supported by the module",
             );
 
-            in_amounts
-                .checked_add_mut(&input.amounts)
-                .ok_or(TransactionSubmitError::AmountOverflow)?;
-            fee_amounts
-                .checked_add_mut(&item_fees)
-                .ok_or(TransactionSubmitError::AmountOverflow)?;
-        }
+            (&input.amounts, item_fees)
+        });
 
-        for output in builder.outputs() {
+        let outputs = builder.outputs().map(|output| {
             let module = self.get_module(output.output.module_instance_id());
 
             let item_fees = module.output_fee(&output.amounts, &output.output).expect(
                 "We only build transactions with output versions that are supported by the module",
             );
 
-            out_amounts
-                .checked_add_mut(&output.amounts)
-                .ok_or(TransactionSubmitError::AmountOverflow)?;
-            fee_amounts
-                .checked_add_mut(&item_fees)
-                .ok_or(TransactionSubmitError::AmountOverflow)?;
-        }
+            (&output.amounts, item_fees)
+        });
 
-        out_amounts
-            .checked_add_mut(&fee_amounts)
+        accumulate_transaction_balance(inputs, outputs)
+    }
+}
+
+/// Accumulate the transaction input and output amounts (including fees) and check for overflow.
+fn accumulate_transaction_balance<'a>(
+    inputs: impl IntoIterator<Item = (&'a Amounts, Amounts)>,
+    outputs: impl IntoIterator<Item = (&'a Amounts, Amounts)>,
+) -> Result<(Amounts, Amounts), TransactionSubmitError> {
+    let mut in_amounts = Amounts::ZERO;
+    let mut out_amounts = Amounts::ZERO;
+    let mut fee_amounts = Amounts::ZERO;
+
+    for (amount, item_fees) in inputs {
+        in_amounts
+            .checked_add_mut(amount)
             .ok_or(TransactionSubmitError::AmountOverflow)?;
-        Ok((in_amounts, out_amounts))
+        fee_amounts
+            .checked_add_mut(&item_fees)
+            .ok_or(TransactionSubmitError::AmountOverflow)?;
     }
 
+    for (amount, item_fees) in outputs {
+        out_amounts
+            .checked_add_mut(amount)
+            .ok_or(TransactionSubmitError::AmountOverflow)?;
+        fee_amounts
+            .checked_add_mut(&item_fees)
+            .ok_or(TransactionSubmitError::AmountOverflow)?;
+    }
+
+    out_amounts
+        .checked_add_mut(&fee_amounts)
+        .ok_or(TransactionSubmitError::AmountOverflow)?;
+    Ok((in_amounts, out_amounts))
+}
+
+impl Client {
     pub fn get_internal_payment_markers(
         &self,
     ) -> Result<(PublicKey, u64), bitcoin::secp256k1::Error> {
