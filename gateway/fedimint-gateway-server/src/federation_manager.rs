@@ -8,6 +8,7 @@ use fedimint_client::ClientHandleArc;
 use fedimint_core::config::{FederationId, FederationIdPrefix, JsonClientConfig};
 use fedimint_core::db::{Committable, DatabaseTransaction, NonCommittable};
 use fedimint_core::invite_code::InviteCode;
+use fedimint_core::module::AmountUnit;
 use fedimint_core::util::{FmtCompact as _, Spanned};
 use fedimint_core::{PeerId, TieredCounts};
 use fedimint_gateway_common::FederationInfo;
@@ -394,7 +395,10 @@ impl FederationManager {
         let counts = if let Ok(mint) = client.value().get_first_module::<MintClientModule>() {
             let mut dbtx = mint.client_ctx.module_db().begin_transaction_nc().await;
             mint.get_note_counts_by_denomination(&mut dbtx).await
-        } else if let Ok(mint) = client.value().get_first_module::<MintV2ClientModule>() {
+        } else if let Ok(mint) = client
+            .value()
+            .get_primary_module_for_unit::<MintV2ClientModule>(AmountUnit::BITCOIN)
+        {
             let mut counts = TieredCounts::default();
             for (denomination, count) in mint.get_count_by_denomination().await {
                 counts.inc(
