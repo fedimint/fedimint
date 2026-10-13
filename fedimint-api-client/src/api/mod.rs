@@ -597,8 +597,9 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     /// Returns the fedimintd version a peer is running
     async fn fedimintd_version(&self, peer_id: PeerId) -> ServerResult<String>;
 
-    /// Returns one guardian's view of the other guardians' availability
-    async fn peer_availability(&self, peer_id: PeerId) -> ServerResult<PeerAvailability>;
+    /// Returns every guardian's view of the other guardians' availability.
+    /// Guardians that do not answer within ten seconds are left out.
+    async fn peer_availability(&self) -> BTreeMap<PeerId, PeerAvailability>;
 
     /// Fetch the backup statistics from the federation (admin endpoint)
     async fn backup_statistics(&self, auth: ApiAuth) -> FederationResult<BackupStatistics>;
