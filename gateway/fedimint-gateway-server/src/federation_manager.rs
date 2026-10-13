@@ -16,6 +16,7 @@ use fedimint_gw_client::GatewayClientModule;
 use fedimint_gwv2_client::{GatewayClientModuleV2, GatewayOperationMetaV2};
 use fedimint_logging::LOG_GATEWAY;
 use fedimint_mint_client::MintClientModule;
+use fedimint_mintv2_client::MintClientModule as MintV2ClientModule;
 use tracing::{info, warn};
 
 use crate::error::{AdminGatewayError, FederationNotConnected};
@@ -390,12 +391,23 @@ impl FederationManager {
         let client = self.client(federation_id).ok_or(FederationNotConnected {
             federation_id_prefix: federation_id.to_prefix(),
         })?;
-        let mint = client
-            .value()
-            .get_first_module::<MintClientModule>()
-            .map_err(anyhow::Error::from)?;
-        let mut dbtx = mint.client_ctx.module_db().begin_transaction_nc().await;
-        let counts = mint.get_note_counts_by_denomination(&mut dbtx).await;
+        let counts = if let Ok(mint) = client.value().get_first_module::<MintClientModule>() {
+            let mut dbtx = mint.client_ctx.module_db().begin_transaction_nc().await;
+            mint.get_note_counts_by_denomination(&mut dbtx).await
+        } else if let Ok(mint) = client.value().get_first_module::<MintV2ClientModule>() {
+            let mut counts = TieredCounts::default();
+            for (denomination, count) in mint.get_count_by_denomination().await {
+                counts.inc(
+                    denomination.amount(),
+                    usize::try_from(count).expect("Note count fits in usize"),
+                );
+            }
+            counts
+        } else {
+            return Err(AdminGatewayError::Unexpected(anyhow::anyhow!(
+                "No mint module available"
+            )));
+        };
         info!(target: LOG_GATEWAY, ?counts, "Note counts");
         Ok(counts)
     }
