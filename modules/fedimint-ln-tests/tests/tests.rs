@@ -1473,12 +1473,9 @@ async fn peer_availability_reports_the_offline_peer() -> anyhow::Result<()> {
     for peer in fed.online_peer_ids() {
         assert!(9_000 <= week[&peer], "{merged:?}");
         assert!(merged.last_seen_secs.contains_key(&peer), "{merged:?}");
-    }
 
-    // Each online guardian sees the offline one as down too
-    let reports = client.api().peer_availability().await;
-    assert_eq!(reports.len(), 3, "{reports:?}");
-    for (peer, report) in &reports {
+        // Each online guardian sees the offline one as down too
+        let report = client.api().peer_availability(peer).await?;
         assert_eq!(report.windows[0].peers[&offline], 0, "{peer}: {report:?}");
     }
 

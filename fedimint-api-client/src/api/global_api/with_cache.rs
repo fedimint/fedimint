@@ -661,23 +661,13 @@ where
         .await
     }
 
-    async fn peer_availability(&self) -> BTreeMap<PeerId, PeerAvailability> {
-        futures::future::join_all(self.all_peers().iter().map(|peer| async move {
-            let report = fedimint_core::runtime::timeout(
-                std::time::Duration::from_secs(10),
-                self.request_single_peer::<PeerAvailability>(
-                    PEER_AVAILABILITY_ENDPOINT.to_owned(),
-                    ApiRequestErased::default(),
-                    *peer,
-                ),
-            )
-            .await;
-            (*peer, report)
-        }))
+    async fn peer_availability(&self, peer_id: PeerId) -> ServerResult<PeerAvailability> {
+        self.request_single_peer(
+            PEER_AVAILABILITY_ENDPOINT.to_owned(),
+            ApiRequestErased::default(),
+            peer_id,
+        )
         .await
-        .into_iter()
-        .filter_map(|(peer, report)| Some((peer, report.ok()?.ok()?)))
-        .collect()
     }
 
     async fn get_invite_code(&self, guardian: PeerId) -> ServerResult<InviteCode> {

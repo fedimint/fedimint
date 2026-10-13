@@ -2400,10 +2400,23 @@ impl Client {
     }
 
     /// Asks every guardian for its view of the others' availability and
-    /// combines the answers with [`merge_peer_availability`].
+    /// combines the answers with [`merge_peer_availability`]. Guardians that do
+    /// not answer within a few seconds are left out.
     pub async fn peer_availability(&self) -> MergedPeerAvailability {
+        let reports =
+            futures::future::join_all(self.api.all_peers().iter().map(|peer| async move {
+                let report =
+                    runtime::timeout(Duration::from_secs(10), self.api.peer_availability(*peer))
+                        .await;
+                (*peer, report)
+            }))
+            .await
+            .into_iter()
+            .filter_map(|(peer, report)| Some((peer, report.ok()?.ok()?)))
+            .collect();
+
         merge_peer_availability(
-            &self.api.peer_availability().await,
+            &reports,
             fedimint_core::NumPeersExt::to_num_peers(self.api.all_peers()),
         )
     }
