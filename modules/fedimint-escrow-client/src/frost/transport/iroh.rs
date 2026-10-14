@@ -32,6 +32,7 @@ pub struct IrohDkgTransport {
     session_id: SessionId,
     peers: BTreeMap<Identifier, NodeAddr>,
     inbox: Arc<Mutex<Inbox>>,
+    accept_task: fedimint_core::runtime::JoinHandle<()>,
 }
 
 impl IrohDkgTransport {
@@ -64,7 +65,7 @@ impl IrohDkgTransport {
 
         let accept_endpoint = endpoint.clone();
         let accept_inbox = inbox.clone();
-        spawn("iroh-dkg-accept", async move {
+        let accept_task = spawn("iroh-dkg-accept", async move {
             while let Some(incoming) = accept_endpoint.accept().await {
                 let inbox = accept_inbox.clone();
                 let receiver_mapping = receiver_mapping.clone();
@@ -83,6 +84,7 @@ impl IrohDkgTransport {
             session_id,
             peers,
             inbox,
+            accept_task,
         }
     }
     async fn send_tagged(
@@ -122,6 +124,16 @@ impl IrohDkgTransport {
         let _ = send.stopped().await;
 
         Ok(())
+    }
+}
+
+impl Drop for IrohDkgTransport {
+    fn drop(&mut self) {
+        self.accept_task.abort();
+        let endpoint = self.endpoint.clone();
+        spawn("iroh-dkg-close", async move {
+            endpoint.close().await;
+        });
     }
 }
 
@@ -181,14 +193,18 @@ impl DkgTransport for IrohDkgTransport {
         let bytes = package
             .serialize()
             .map_err(|e| TransportError::Serialization(e.to_string()))?;
-        for id in self.peers.keys() {
-            if id == sender {
-                continue;
+
+        let mut first_err = None;
+        for id in self.peers.keys().filter(|id| *id != sender) {
+            if let Err(e) = self.send_tagged(session_id, *id, ROUND1_TAG, &bytes).await {
+                tracing::warn!("round 1: could not reach {id:?}: {e}");
+                first_err.get_or_insert(e);
             }
-            self.send_tagged(session_id, *id, ROUND1_TAG, &bytes)
-                .await?;
         }
-        Ok(())
+        match first_err {
+            Some(e) => Err(e),
+            None => Ok(()),
+        }
     }
 
     async fn recv_round1_all(

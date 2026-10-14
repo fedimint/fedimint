@@ -40,6 +40,23 @@ pub enum DkgError {
     Other(#[from] anyhow::Error),
 }
 
+impl DkgError {
+    /// Retrying the same step can succeed (peer offline, timeout, ...).
+    /// Anything else means the data of this attempt is bad.
+    pub fn is_transient(&self) -> bool {
+        matches!(
+            self,
+            DkgError::TransportError(e)
+                if !matches!(
+                    e,
+                    TransportError::SessionMismatch { .. }
+                        | TransportError::InvalidReceiver
+                        | TransportError::Serialization(_)
+                )
+        )
+    }
+}
+
 pub struct DkgRunner<T> {
     transport: T,
 }
@@ -49,31 +66,35 @@ impl<T: DkgTransport> DkgRunner<T> {
         Self { transport }
     }
 
-    pub async fn run_round1(
+    pub fn start_round1(
+        &self,
+        participant_id: &FrostParticipant,
+        max_signers: u16,
+        min_signers: u16,
+    ) -> Result<(Round1SecretPackage, Round1Package), DkgError> {
+        frost_secp256k1_tr::keys::dkg::part1(
+            participant_id.identifier,
+            max_signers,
+            min_signers,
+            OsRng,
+        )
+        .map_err(|e| DkgError::FrostError(e.to_string()))
+    }
+
+    /// Sends an already created round 1 package and waits for everyone else's.
+    pub async fn exchange_round1(
         &self,
         session_id: &SessionId,
         participant_id: &FrostParticipant,
         participants: &[FrostParticipant],
-        min_signers: u16,
-    ) -> Result<DkgRound1, DkgError> {
-        let max_signers = participants.len() as u16;
-        let rng = OsRng;
-
-        let (round1_secret_package, round1_package) = frost_secp256k1_tr::keys::dkg::part1(
-            participant_id.identifier,
-            max_signers,
-            min_signers,
-            rng,
-        )
-        .map_err(|e| DkgError::FrostError(e.to_string()))?;
-
+        package: Round1Package,
+    ) -> Result<BTreeMap<Identifier, Round1Package>, DkgError> {
         self.transport
-            .broadcast_round1(session_id, &participant_id.identifier, round1_package)
+            .broadcast_round1(session_id, &participant_id.identifier, package)
             .await?;
 
         let receiver: Vec<Identifier> = participants.iter().map(|p| p.identifier).collect();
-
-        let mut round1_packages = self
+        let mut packages = self
             .transport
             .recv_round1_all(
                 session_id,
@@ -83,11 +104,8 @@ impl<T: DkgTransport> DkgRunner<T> {
             )
             .await?;
 
-        round1_packages.remove(&participant_id.identifier);
-        Ok(DkgRound1 {
-            round1_packages,
-            round1_secret_package,
-        })
+        packages.remove(&participant_id.identifier);
+        Ok(packages)
     }
 
     pub async fn run_round2(
@@ -102,10 +120,19 @@ impl<T: DkgTransport> DkgRunner<T> {
             frost_secp256k1_tr::keys::dkg::part2(round1_secret.clone(), round1_received)
                 .map_err(|e| DkgError::FrostError(e.to_string()))?;
 
+        let mut first_err = None;
         for (receiver, pkg) in round2_package {
-            self.transport
+            if let Err(e) = self
+                .transport
                 .send_round2(session_id, &participant_id.identifier, &receiver, pkg)
-                .await?;
+                .await
+            {
+                tracing::warn!("round 2: could not reach {receiver:?}: {e}");
+                first_err.get_or_insert(e);
+            }
+        }
+        if let Some(e) = first_err {
+            return Err(e.into());
         }
 
         let expected: Vec<Identifier> = participants.iter().map(|p| p.identifier).collect();
