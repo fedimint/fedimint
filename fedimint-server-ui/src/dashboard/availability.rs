@@ -23,9 +23,8 @@ pub(crate) fn loading() -> Markup {
             hx-get=(ROUTE) hx-trigger="load" hx-swap="outerHTML" {
             div class="card-header dashboard-header" { "Observed availability" }
             div class="card-body" {
-                p role="status" { "Loading this guardian’s observations…" }
-                p class="small text-muted mb-0" {
-                    "If observations do not load, reload this page to retry."
+                p class="mb-0" role="status" {
+                    "Loading observations… Reload to retry."
                 }
             }
         }
@@ -60,7 +59,7 @@ fn header() -> Markup {
             span { "Observed availability" }
             button class="btn btn-outline-primary btn-sm" hx-get=(ROUTE)
                 hx-target="#peer-availability" hx-swap="outerHTML" {
-                "Refresh observations"
+                "Refresh"
             }
         }
     }
@@ -72,7 +71,7 @@ fn unavailable() -> Markup {
             (header())
             div class="card-body" {
                 div class="alert alert-warning mb-0" role="status" {
-                    "Observations could not be loaded. Refresh to retry; no availability conclusion can be drawn."
+                    "Observations unavailable. Refresh to retry."
                 }
             }
         }
@@ -115,55 +114,45 @@ fn render(
         section class="card" id="peer-availability" {
             (header())
             div class="card-body" {
-                p class="mb-2" {
-                    strong { "This guardian’s observations" }
-                    " · Guardian " (identity.to_string())
-                }
-                p class="small text-muted" {
-                    "Consensus-message activity in observed one-minute slots, using exponential moving averages with 7-day and 30-day time constants — not calendar-window uptime. "
-                    "Idle or locally isolated periods are excluded. This is one observer’s view, not the federation’s merged estimate or proof that a guardian is online."
+                p class="small text-muted mb-2"
+                    title="This guardian’s observations, not the federation’s merged estimate. Idle or locally isolated periods are excluded; these values do not prove a peer is online." {
+                    "Local consensus activity · exponential averages, not uptime."
                 }
                 @if let Some(snapshot) = snapshot {
-                    p class="small text-muted" {
-                        "Last persisted: " (timestamp(snapshot.updated_at_secs))
-                        ". Page snapshot: " (timestamp(now)) ". Updates are persisted every 10 minutes; refresh to fetch a new snapshot."
+                    p class="small text-muted mb-2" title="Observations are persisted every 10 minutes. Refresh to fetch a new snapshot." {
+                        "Updated " (timestamp(snapshot.updated_at_secs))
                     }
                     @if stale {
-                        div class="alert alert-warning" role="status" {
-                            "Stale or invalid observation timestamp. Historical values below do not describe current availability."
+                        div class="alert alert-warning py-2 mb-2" role="status" {
+                            "Stale snapshot · historical values only."
                         }
-                    }
-                    div class="row g-2 mb-3" {
-                        @for (index, label) in ["7-day", "30-day"].iter().enumerate() {
-                            div class="col-sm-6" {
-                                div class="border rounded p-2 small" {
-                                    strong { (label) " observation coverage: " }
-                                    @if let Some(window) = window(snapshot, index) {
-                                        (percentage(window.coverage_bps))
-                                    } @else {
-                                        "No usable observations"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    p class="small text-muted" {
-                        "Coverage is the decayed observation weight, not elapsed calendar time. Low coverage means limited evidence, even when a peer’s value is 100%."
                     }
                 } @else {
-                    div class="alert alert-secondary" role="status" {
-                        "Waiting for the first persisted observations. This can take at least 10 minutes after startup."
+                    div class="alert alert-secondary py-2 mb-2" role="status" {
+                        "Awaiting observations · first save after ≥10 min."
                     }
                 }
-                p class="small text-muted d-md-none" { "Scroll the table horizontally to see all observations." }
                 div class="table-responsive" {
-                    table class="table table-striped align-middle mb-0" {
+                    table class="table table-sm table-striped text-nowrap align-middle mb-0" {
                         thead {
                             tr {
                                 th scope="col" { "Guardian" }
-                                th scope="col" { "7-day average" }
-                                th scope="col" { "30-day average" }
-                                th scope="col" { "Last observed message" }
+                                @for (index, label) in ["7-day EMA", "30-day EMA"].iter().enumerate() {
+                                    th scope="col" {
+                                        (label)
+                                        div class="small text-muted fw-normal"
+                                            title="Coverage: decayed observation weight, not elapsed time. Low coverage means limited evidence, even at 100% activity." {
+                                            "Coverage "
+                                            br class="d-sm-none";
+                                            @if let Some(window) = snapshot.and_then(|snapshot| window(snapshot, index)) {
+                                                (percentage(window.coverage_bps))
+                                            } @else {
+                                                "—"
+                                            }
+                                        }
+                                    }
+                                }
+                                th scope="col" { "Last message" }
                             }
                         }
                         tbody {
@@ -173,20 +162,19 @@ fn render(
                                         (name) " "
                                         span class="text-muted fw-normal" { "#" (peer.to_string()) }
                                         @if *peer == identity {
-                                            span class="badge bg-secondary ms-1" { "This guardian" }
+                                            span class="badge bg-secondary ms-1" { "Self" }
                                         }
                                     }
                                     @for index in 0..2 {
                                         td {
                                             @if *peer == identity {
-                                                span class="text-muted" { "Not measured" }
+                                                span class="text-muted" title="This guardian is not measured" { "—" }
                                             } @else if let Some(value) = snapshot
                                                 .and_then(|snapshot| window(snapshot, index))
                                                 .and_then(|window| window.peers.get(peer))
                                                 .filter(|value| **value <= 10_000) {
                                                 div class="small mb-1" {
                                                     (percentage(*value))
-                                                    @if stale { " · historical" }
                                                 }
                                                 div class="progress" style="height: 6px; min-width: 5rem;"
                                                     role="progressbar" aria-label="Observed consensus activity"
@@ -196,13 +184,13 @@ fn render(
                                                         style=(format!("width: {}", percentage(*value))) {}
                                                 }
                                             } @else {
-                                                span class="text-muted" { "No observations" }
+                                                span class="text-muted" { "No data" }
                                             }
                                         }
                                     }
                                     td class="small" {
                                         @if *peer == identity {
-                                            span class="text-muted" { "Not measured" }
+                                            span class="text-muted" title="This guardian is not measured" { "—" }
                                         } @else if let Some(seen) = snapshot
                                             .and_then(|snapshot| snapshot.report.last_seen_secs.get(peer))
                                             .filter(|seen| **seen > 0 && **seen <= now) {

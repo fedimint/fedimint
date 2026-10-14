@@ -48,20 +48,26 @@ fn renders_local_observations_without_claiming_live_health() {
     let html = render(PeerId::from(0), &names(), Some(&snapshot()), NOW).into_string();
     for expected in [
         "This guardian’s observations",
-        "not calendar-window uptime",
+        "exponential averages, not uptime",
         "100.00%",
         "84.32%",
         "72.00%",
         "26.00%",
-        "No observations",
-        "Not measured",
+        "No data",
+        "This guardian is not measured",
         "Unknown",
-        "Page snapshot:",
+        "Updated ",
+        "7-day EMA",
+        "30-day EMA",
+        "Coverage ",
     ] {
         assert!(html.contains(expected), "missing {expected}");
     }
     assert!(!html.contains("bg-success"));
-    assert!(!html.contains("Stale or invalid"));
+    assert!(!html.contains("Stale snapshot"));
+    assert!(!html.contains("Page snapshot:"));
+    assert!(!html.contains("observation coverage:"));
+    assert!(!html.contains("Refresh observations"));
 }
 
 #[test]
@@ -74,13 +80,13 @@ fn startup_and_empty_windows_are_not_perfect_availability() {
         let html = render(PeerId::from(0), &names(), snapshot, NOW).into_string();
         assert!(!html.contains("100.00%"));
         assert!(!html.contains("role=\"progressbar\""));
-        assert!(html.contains("No observations"));
+        assert!(html.contains("No data"));
         assert!(html.contains("Unknown"));
     }
     assert!(
         render(PeerId::from(0), &names(), None, NOW)
             .into_string()
-            .contains("Waiting for the first")
+            .contains("Awaiting observations")
     );
 }
 
@@ -90,8 +96,8 @@ fn stale_and_future_snapshots_are_explicitly_historical() {
         let mut snapshot = snapshot();
         snapshot.updated_at_secs = updated_at_secs;
         let html = render(PeerId::from(0), &names(), Some(&snapshot), NOW).into_string();
-        assert!(html.contains("Stale or invalid observation timestamp"));
-        assert!(html.contains("84.32% · historical"));
+        assert!(html.contains("Stale snapshot · historical values only."));
+        assert!(html.contains("84.32%"));
         assert!(html.contains("progress-bar bg-secondary"));
     }
 }
@@ -104,7 +110,7 @@ fn invalid_or_zero_coverage_does_not_show_a_score() {
             window.coverage_bps = coverage_bps;
         }
         let html = render(PeerId::from(0), &names(), Some(&snapshot), NOW).into_string();
-        assert!(html.contains("No usable observations"));
+        assert!(html.contains("Coverage <br class=\"d-sm-none\">—"));
         assert!(!html.contains("role=\"progressbar\""));
     }
     let mut snapshot = snapshot();
@@ -130,7 +136,7 @@ fn missing_and_invalid_values_stay_unknown_and_names_are_escaped() {
         .insert(PeerId::from(1), 10_001);
     let names = [(PeerId::from(1), "<script>bad()</script>".to_owned())].into();
     let html = render(PeerId::from(0), &names, Some(&snapshot), NOW).into_string();
-    assert!(html.contains("No observations"));
+    assert!(html.contains("No data"));
     assert!(html.contains("Unknown"));
     assert!(!html.contains("100.01%"));
     assert!(!html.contains("<script>bad()"));

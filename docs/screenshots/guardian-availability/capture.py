@@ -11,8 +11,10 @@ import threading
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("chromium", help="Path to a Chromium executable")
 parser.add_argument("fixtures", help="Directory produced by export_browser_fixtures")
+parser.add_argument("--output", type=pathlib.Path, help="Screenshot destination directory")
 args = parser.parse_args()
-destination = pathlib.Path(__file__).resolve().parent
+destination = args.output or pathlib.Path(__file__).resolve().parent
+destination.mkdir(parents=True, exist_ok=True)
 handler = functools.partial(
     http.server.SimpleHTTPRequestHandler, directory=args.fixtures
 )
@@ -21,10 +23,10 @@ thread = threading.Thread(target=server.serve_forever)
 thread.start()
 try:
     for page, size, name in [
-        ("observed", "1440,1200", "observed-desktop"),
-        ("observed", "390,2000", "observed-mobile"),
-        ("startup", "1440,1100", "startup"),
-        ("stale", "1440,1300", "stale"),
+        ("observed", "1440,1000", "observed-desktop"),
+        ("observed", "390,1350", "observed-mobile"),
+        ("startup", "1440,1000", "startup"),
+        ("stale", "1440,1000", "stale"),
     ]:
         with tempfile.TemporaryDirectory(
             prefix="guardian-browser.", dir=args.fixtures
