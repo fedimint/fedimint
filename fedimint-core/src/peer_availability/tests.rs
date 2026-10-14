@@ -78,7 +78,7 @@ fn ignores_self_reports_and_poorly_covered_reports() {
 }
 
 #[test]
-fn evil_reporter_cannot_exclude_honest_reports_by_its_coverage() {
+fn evil_reporter_claiming_full_coverage_cannot_exclude_equally_covered_honest_reports() {
     // A young federation: honest peers observed 30% of the window so far,
     // evil peer 3 claims full coverage to make them look poorly covered.
     let num_peers = NumPeers::from(4);

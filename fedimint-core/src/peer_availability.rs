@@ -16,14 +16,14 @@ use serde::{Deserialize, Serialize};
 use crate::{NumPeers, PeerId};
 
 /// Time constants of the availability windows in seconds: one week and 30
-/// days. Whether a peer is up right now is answered by `last_seen_secs`.
+/// days. Recent outages show in `last_seen_secs` instead.
 pub const PEER_AVAILABILITY_WINDOWS_SECS: [u64; 2] = [604_800, 2_592_000];
 
 /// One guardian's view of its peers' availability.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PeerAvailability {
     /// Unix time this guardian last received a consensus message from each
-    /// peer
+    /// peer, as of its last persisted update (every 10 minutes)
     pub last_seen_secs: BTreeMap<PeerId, u64>,
     /// One entry per window in [`PEER_AVAILABILITY_WINDOWS_SECS`]
     pub windows: Vec<WindowAvailability>,
