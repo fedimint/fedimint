@@ -121,7 +121,7 @@ pub struct EscrowContract {
     pub timeout: u64,
     pub federation_id: FederationId,
     pub status: EscrowStatus,
-    pub resolution_deadline: u64,
+    pub resolution_period: u64,
     pub default_fallback: FallbackPolicy,
 }
 
@@ -137,7 +137,7 @@ pub enum FallbackPolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EscrowTransition {
     FunderRelease,
-    ArbiterEngaged,
+    ArbiterEngaged { resolve_by: u64 },
     ArbiterOutcome(Outcome),
     Fallback,
 }
@@ -155,7 +155,7 @@ impl EscrowContract {
         contract_hash: ContractHash,
         timeout: u64,
         federation_id: FederationId,
-        resolution_deadline: u64,
+        resolution_period: u64,
         default_fallback: FallbackPolicy,
         now: u64,
     ) -> Result<Self, EscrowContractValidationError> {
@@ -171,7 +171,7 @@ impl EscrowContract {
             timeout,
             federation_id,
             status: EscrowStatus::Active,
-            resolution_deadline,
+            resolution_period,
             default_fallback,
         };
         validate_contract_fields(&contract, now)?;
@@ -187,16 +187,20 @@ impl EscrowContract {
             (EscrowStatus::Active, EscrowTransition::FunderRelease) => EscrowStatus::Released,
 
             // Active -> Disputed transitions by arbiter engagement.
-            (EscrowStatus::Active, EscrowTransition::ArbiterEngaged) => EscrowStatus::Disputed,
+            (EscrowStatus::Active, EscrowTransition::ArbiterEngaged { resolve_by }) => {
+                EscrowStatus::Disputed { resolve_by }
+            }
 
             // Arbiter can only resolve an already-disputed contract.
-            (EscrowStatus::Disputed, EscrowTransition::ArbiterOutcome(outcome)) => match outcome {
-                Outcome::Release => EscrowStatus::Released,
-                Outcome::Refund => EscrowStatus::Refunded,
-                Outcome::Split { .. } => EscrowStatus::Split,
-            },
+            (EscrowStatus::Disputed { .. }, EscrowTransition::ArbiterOutcome(outcome)) => {
+                match outcome {
+                    Outcome::Release => EscrowStatus::Released,
+                    Outcome::Refund => EscrowStatus::Refunded,
+                    Outcome::Split { .. } => EscrowStatus::Split,
+                }
+            }
 
-            (EscrowStatus::Active | EscrowStatus::Disputed, EscrowTransition::Fallback) => {
+            (EscrowStatus::Disputed { .. }, EscrowTransition::Fallback) => {
                 match self.default_fallback {
                     FallbackPolicy::Refund => EscrowStatus::Refunded,
                     FallbackPolicy::Split { .. } => EscrowStatus::Split,
@@ -246,7 +250,7 @@ pub enum EscrowStatus {
     Active,
     Released,
     Refunded,
-    Disputed,
+    Disputed { resolve_by: u64 },
     Split,
 }
 
@@ -437,7 +441,7 @@ pub enum EscrowContractValidationError {
     #[error("escrow timeout must be in the future")]
     InvalidTimeout,
 
-    #[error("resolution timeout must be after escrow timeout")]
+    #[error("resolution timeout must be greater than zero")]
     InvalidResolutionTimeout,
 
     #[error("invalid split ratio")]
@@ -542,7 +546,7 @@ pub fn compute_contract_hash(
     amount: &Amount,
     timeout: &u64,
     federation_id: &FederationId,
-    resolution_deadline: &u64,
+    resolution_period: &u64,
     arbiter_fee_key: &Vec<PublicKey>,
     default_fallback: &FallbackPolicy,
 ) -> ContractHash {
@@ -555,7 +559,7 @@ pub fn compute_contract_hash(
     engine.input(&amount.msats.to_le_bytes());
     engine.input(&timeout.to_le_bytes());
     engine.input(&federation_id.0.to_byte_array());
-    engine.input(&resolution_deadline.to_le_bytes());
+    engine.input(&resolution_period.to_le_bytes());
     default_fallback
         .consensus_encode(&mut engine)
         .expect("hash engine writes can't fail");
@@ -642,7 +646,7 @@ pub fn validate_contract_fields(
         return Err(EscrowContractValidationError::InvalidTimeout);
     }
 
-    if contract.resolution_deadline <= contract.timeout {
+    if contract.resolution_period == 0 {
         return Err(EscrowContractValidationError::InvalidResolutionTimeout);
     }
 

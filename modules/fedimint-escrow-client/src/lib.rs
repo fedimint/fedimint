@@ -310,7 +310,7 @@ impl ClientModule for EscrowClientModule {
                         req.amount,
                         req.timeout,
                         req.arbiter_fee_key,
-                        req.resolution_deadline,
+                        req.resolution_period,
                         req.default_fallback
                     ).await?;
                     yield serde_json::to_value(result)?;
@@ -379,7 +379,7 @@ struct CreateContractRequest {
     amount: Amount,
     timeout: Duration,
     arbiter_fee_key: Vec<PublicKey>,
-    resolution_deadline: Duration,
+    resolution_period: Duration,
     default_fallback: FallbackPolicy,
 }
 
@@ -444,14 +444,15 @@ impl EscrowClientModule {
         amount: Amount,
         timeout: Duration,
         arbiter_fee_key: Vec<PublicKey>,
-        resolution_deadline: Duration,
+        resolution_period: Duration,
         default_fallback: FallbackPolicy,
     ) -> Result<CreateContractResponse, anyhow::Error> {
         let funder_key = self.escrow_key.public_key();
         let timeout_deadline =
             fedimint_core::time::duration_since_epoch().as_secs() + timeout.as_secs();
-        // resolution_deadline is calculated after the dispute
-        let resolution_deadline = resolution_deadline.as_secs();
+        // resolution deadline will be calculated once the contract goes into disputed
+        // state
+        let resolution_period = resolution_period.as_secs();
 
         let contract_hash = compute_contract_hash(
             &funder_key,
@@ -461,7 +462,7 @@ impl EscrowClientModule {
             &amount,
             &timeout_deadline,
             &self.federation_id,
-            &resolution_deadline,
+            &resolution_period,
             &arbiter_fee_key,
             &default_fallback,
         );
@@ -480,7 +481,7 @@ impl EscrowClientModule {
             contract_hash,
             timeout_deadline,
             self.federation_id,
-            resolution_deadline,
+            resolution_period,
             default_fallback,
             fedimint_core::time::duration_since_epoch().as_secs(),
         )

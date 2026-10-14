@@ -309,7 +309,7 @@ impl ServerModule for Escrow {
                 module_instance_id,
                 &EscrowContractPrefix,
                 |_, contract: EscrowContract| match contract.status {
-                    EscrowStatus::Active | EscrowStatus::Disputed => {
+                    EscrowStatus::Active | EscrowStatus::Disputed { .. } => {
                         -(contract.amount.msats as i64)
                     }
                     EscrowStatus::Released | EscrowStatus::Refunded | EscrowStatus::Split => 0,
@@ -410,7 +410,7 @@ fn verify_contract_hash(contract_hash: &[u8; 32], contract: &EscrowContract) -> 
         &contract.amount,
         &contract.timeout,
         &contract.federation_id,
-        &contract.resolution_deadline,
+        &contract.resolution_period,
         &contract.arbiter_fee_key,
         &contract.default_fallback,
     ) == ContractHash(*contract_hash)
@@ -541,12 +541,11 @@ impl Escrow {
         funder_signature: &Signature,
     ) -> Result<InputMeta, EscrowInputError> {
         let mut contract = self.load_contract(input.escrow_id, dbtx).await?;
-        if contract.status == EscrowStatus::Disputed {
+        if matches!(contract.status, EscrowStatus::Disputed { .. }) {
             return Err(EscrowInputError::ContractDisputed);
         }
 
         let resolution_message = contract.resolution_message(Outcome::Release);
-
         let msg_bytes = compute_escrow_message(&resolution_message);
         info!(target: LOG_MODULE_ESCROW, "Computed resolution message");
 
@@ -575,8 +574,6 @@ impl Escrow {
         transition: EscrowTransition,
         include_fee: bool,
     ) -> Result<(), EscrowInputError> {
-        self.transition_and_persist(dbtx, contract, transition)
-            .await?;
         if dbtx
             .get_value(&ClaimPoolKey(contract.escrow_id))
             .await
@@ -584,6 +581,9 @@ impl Escrow {
         {
             return Err(EscrowInputError::InvalidStateTransition);
         }
+
+        self.transition_and_persist(dbtx, contract, transition)
+            .await?;
 
         let claims = calculate_claims(contract, &outcome, include_fee)?;
         dbtx.insert_entry(
@@ -624,14 +624,16 @@ impl Escrow {
             return Err(EscrowInputError::InvalidSignature);
         }
 
-        let updated_resolution_deadline = now.checked_add(contract.resolution_deadline).ok_or(
-            EscrowInputError::InternalError("invalid timeout deadline".to_string()),
-        )?;
+        let resolve_by = now
+            .checked_add(contract.resolution_period)
+            .ok_or_else(|| EscrowInputError::InternalError("resolution period overflows".into()))?;
 
-        contract.resolution_deadline = updated_resolution_deadline;
-
-        self.transition_and_persist(dbtx, &mut contract, EscrowTransition::ArbiterEngaged)
-            .await?;
+        self.transition_and_persist(
+            dbtx,
+            &mut contract,
+            EscrowTransition::ArbiterEngaged { resolve_by },
+        )
+        .await?;
 
         Ok(InputMeta {
             amount: TransactionItemAmounts {
@@ -656,19 +658,19 @@ impl Escrow {
             return Err(EscrowInputError::InternalError("invalid key".into()));
         }
 
-        if contract.status != EscrowStatus::Disputed {
+        let EscrowStatus::Disputed { resolve_by } = contract.status else {
             return Err(EscrowInputError::ContractNotDisputed);
+        };
+        if now > resolve_by {
+            return Err(EscrowInputError::InternalError(
+                "arbiter resolution timed out".into(),
+            ));
         }
         if now < contract.timeout {
             return Err(EscrowInputError::TimeoutNotReached);
         }
         if contract.is_terminal() {
             return Err(EscrowInputError::ContractAlreadyResolved);
-        }
-        if now > contract.resolution_deadline {
-            return Err(EscrowInputError::InternalError(
-                "arbiter resolution timed out".to_string(),
-            ));
         }
 
         let resolution_message = contract.resolution_message(*outcome);
@@ -705,12 +707,12 @@ impl Escrow {
         if !contract.contains_key(claimer_pubkey) {
             return Err(EscrowInputError::InternalError("invalid key".into()));
         }
-        if contract.status != EscrowStatus::Disputed {
+        let EscrowStatus::Disputed { resolve_by } = contract.status else {
             return Err(EscrowInputError::ContractNotDisputed);
-        }
+        };
 
         let now = fedimint_core::time::duration_since_epoch().as_secs();
-        if now <= contract.resolution_deadline {
+        if now <= resolve_by {
             return Err(EscrowInputError::FallbackNotAvailable);
         }
 
