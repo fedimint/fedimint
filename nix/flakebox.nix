@@ -993,6 +993,11 @@ in
 
     container =
       let
+        containerPackage = import ./container-package.nix { inherit pkgs; };
+        fedimintRuntime = containerPackage fedimint-pkgs;
+        gatewayRuntime = containerPackage gateway-pkgs;
+        recurringRuntime = containerPackage fedimint-recurringd-pkgs;
+        recurringV2Runtime = containerPackage fedimint-recurringdv2-pkgs;
         entrypointScript = pkgs.writeShellScriptBin "entrypoint" ''
           exec bash "${../misc/fedimintd-container-entrypoint.sh}" "$@"
         '';
@@ -1008,7 +1013,7 @@ in
       {
         fedimintd = pkgs.dockerTools.buildLayeredImage {
           name = "fedimintd";
-          contents = [ fedimint-pkgs ] ++ defaultPackages;
+          contents = [ fedimintRuntime ] ++ defaultPackages;
           config = {
             Cmd = [ ]; # entrypoint will handle empty vs non-empty cmd
             Env = [ "FM_DATA_DIR=/data" ];
@@ -1026,41 +1031,41 @@ in
 
         fedimint-cli = pkgs.dockerTools.buildLayeredImage {
           name = "fedimint-cli";
-          contents = [ fedimint-pkgs ] ++ defaultPackages;
+          contents = [ fedimintRuntime ] ++ defaultPackages;
           config = {
-            Cmd = [ "${fedimint-pkgs}/bin/fedimint-cli" ];
+            Cmd = [ "${fedimintRuntime}/bin/fedimint-cli" ];
           };
         };
 
         gatewayd = pkgs.dockerTools.buildLayeredImage {
           name = "gatewayd";
-          contents = [ gateway-pkgs ] ++ defaultPackages;
+          contents = [ gatewayRuntime ] ++ defaultPackages;
           config = {
-            Cmd = [ "${gateway-pkgs}/bin/gatewayd" ];
+            Cmd = [ "${gatewayRuntime}/bin/gatewayd" ];
           };
         };
 
         gateway-cli = pkgs.dockerTools.buildLayeredImage {
           name = "gateway-cli";
-          contents = [ gateway-pkgs ] ++ defaultPackages;
+          contents = [ gatewayRuntime ] ++ defaultPackages;
           config = {
-            Cmd = [ "${gateway-pkgs}/bin/gateway-cli" ];
+            Cmd = [ "${gatewayRuntime}/bin/gateway-cli" ];
           };
         };
 
         fedimint-recurringd = pkgs.dockerTools.buildLayeredImage {
           name = "fedimint-recurringd";
-          contents = [ fedimint-recurringd-pkgs ] ++ defaultPackages;
+          contents = [ recurringRuntime ] ++ defaultPackages;
           config = {
-            Cmd = [ "${fedimint-recurringd-pkgs}/bin/fedimint-recurringd" ];
+            Cmd = [ "${recurringRuntime}/bin/fedimint-recurringd" ];
           };
         };
 
         fedimint-recurringdv2 = pkgs.dockerTools.buildLayeredImage {
           name = "fedimint-recurringdv2";
-          contents = [ fedimint-recurringdv2-pkgs ] ++ defaultPackages;
+          contents = [ recurringV2Runtime ] ++ defaultPackages;
           config = {
-            Cmd = [ "${fedimint-recurringdv2-pkgs}/bin/fedimint-recurringdv2" ];
+            Cmd = [ "${recurringV2Runtime}/bin/fedimint-recurringdv2" ];
           };
         };
 

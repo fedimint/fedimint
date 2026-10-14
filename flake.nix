@@ -566,6 +566,12 @@
       {
         inherit devShells;
 
+        checks = lib.optionalAttrs stdenv.isLinux {
+          container-debug-references = import ./nix/tests/container-debug-references.nix {
+            inherit pkgs;
+          };
+        };
+
         # Technically nested sets are not allowed in `packages`, so we can
         # dump the nested things here. They'll work the same way for most
         # purposes (like `nix build`).
