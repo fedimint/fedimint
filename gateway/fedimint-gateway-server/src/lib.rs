@@ -125,9 +125,7 @@ use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes, ReissueEx
 use fedimint_mintv2_client::{
     MintClientInit as MintV2ClientInit, MintClientModule as MintV2ClientModule,
 };
-use fedimint_wallet_client::{
-    PegOutFees, WalletClientInit, WalletClientModule, WalletOperationMetaVariant, WithdrawState,
-};
+use fedimint_wallet_client::{PegOutFees, WalletClientInit, WalletClientModule, WithdrawState};
 use futures::stream::StreamExt;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use rand::rngs::OsRng;
@@ -3240,18 +3238,6 @@ impl IAdminGateway for Gateway {
         while let Some(update) = updates.next().await {
             match update {
                 WithdrawState::Succeeded(txid) => {
-                    if let Some(Ok(fedimint_wallet_client::WalletOperationMeta {
-                        variant: WalletOperationMetaVariant::Withdraw { change, .. },
-                        ..
-                    })) = client
-                        .value()
-                        .operation_log()
-                        .get_operation(operation_id)
-                        .await
-                        .map(|operation| operation.try_meta())
-                    {
-                        await_withdraw_change(client.value(), operation_id, change).await;
-                    }
                     info!(target: LOG_GATEWAY, amount = %withdraw_amount, address = %address, "Sent funds");
                     return Ok(WithdrawResponse { txid, fees });
                 }
@@ -3315,8 +3301,13 @@ impl IAdminGateway for Gateway {
                     })?;
                     // The wallet output carries the payment plus the on-chain
                     // fee; funding it costs the federation fees quoted here.
+                    let output_amount = btc_amount.checked_add(fee).ok_or_else(|| {
+                        AdminGatewayError::WithdrawError {
+                            failure_reason: "Withdrawal amount overflow".to_string(),
+                        }
+                    })?;
                     let federation_fees = wallet_module
-                        .send_fee_quote(btc_amount + fee)
+                        .send_fee_quote(output_amount)
                         .await
                         .map_err(|e| AdminGatewayError::WithdrawError {
                             failure_reason: e.fmt_compact().to_string(),
