@@ -314,41 +314,42 @@
 <a href=#314 id=314 data-nosnippet>314</a>            </span>server_db::DbKeyPrefix::Module
 <a href=#315 id=315 data-nosnippet>315</a>            | server_db::DbKeyPrefix::ServerInfo
 <a href=#316 id=316 data-nosnippet>316</a>            | server_db::DbKeyPrefix::DatabaseVersion
-<a href=#317 id=317 data-nosnippet>317</a>            | server_db::DbKeyPrefix::ClientBackup =&gt; {}
-<a href=#318 id=318 data-nosnippet>318</a>            server_db::DbKeyPrefix::ApiAnnouncements =&gt; {
-<a href=#319 id=319 data-nosnippet>319</a>                <span class="macro">push_db_pair_items_no_serde!</span>(
-<a href=#320 id=320 data-nosnippet>320</a>                    dbtx,
-<a href=#321 id=321 data-nosnippet>321</a>                    ApiAnnouncementPrefix,
-<a href=#322 id=322 data-nosnippet>322</a>                    ApiAnnouncementKey,
-<a href=#323 id=323 data-nosnippet>323</a>                    fedimint_core::net::api_announcement::SignedApiAnnouncement,
-<a href=#324 id=324 data-nosnippet>324</a>                    consensus,
-<a href=#325 id=325 data-nosnippet>325</a>                    <span class="string">"API Announcements"
-<a href=#326 id=326 data-nosnippet>326</a>                </span>);
-<a href=#327 id=327 data-nosnippet>327</a>            }
-<a href=#328 id=328 data-nosnippet>328</a>            server_db::DbKeyPrefix::GuardianMetadata =&gt; {
-<a href=#329 id=329 data-nosnippet>329</a>                <span class="macro">push_db_pair_items_no_serde!</span>(
-<a href=#330 id=330 data-nosnippet>330</a>                    dbtx,
-<a href=#331 id=331 data-nosnippet>331</a>                    fedimint_server::net::api::guardian_metadata::GuardianMetadataPrefix,
-<a href=#332 id=332 data-nosnippet>332</a>                    fedimint_server::net::api::guardian_metadata::GuardianMetadataKey,
-<a href=#333 id=333 data-nosnippet>333</a>                    fedimint_core::net::guardian_metadata::SignedGuardianMetadata,
-<a href=#334 id=334 data-nosnippet>334</a>                    consensus,
-<a href=#335 id=335 data-nosnippet>335</a>                    <span class="string">"Guardian Metadata"
-<a href=#336 id=336 data-nosnippet>336</a>                </span>);
-<a href=#337 id=337 data-nosnippet>337</a>            }
-<a href=#338 id=338 data-nosnippet>338</a>        }
-<a href=#339 id=339 data-nosnippet>339</a>    }
-<a href=#340 id=340 data-nosnippet>340</a>    <span class="kw">async fn </span>write_serialized_client_operation_log(
-<a href=#341 id=341 data-nosnippet>341</a>        serialized: <span class="kw-2">&amp;mut </span>BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt;,
-<a href=#342 id=342 data-nosnippet>342</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
-<a href=#343 id=343 data-nosnippet>343</a>    ) {
-<a href=#344 id=344 data-nosnippet>344</a>        <span class="macro">push_db_pair_items!</span>(
-<a href=#345 id=345 data-nosnippet>345</a>            dbtx,
-<a href=#346 id=346 data-nosnippet>346</a>            OperationLogKeyPrefix,
-<a href=#347 id=347 data-nosnippet>347</a>            OperationLogKey,
-<a href=#348 id=348 data-nosnippet>348</a>            OperationLogEntry,
-<a href=#349 id=349 data-nosnippet>349</a>            serialized,
-<a href=#350 id=350 data-nosnippet>350</a>            <span class="string">"Operations"
-<a href=#351 id=351 data-nosnippet>351</a>        </span>);
-<a href=#352 id=352 data-nosnippet>352</a>    }
-<a href=#353 id=353 data-nosnippet>353</a>}
+<a href=#317 id=317 data-nosnippet>317</a>            | server_db::DbKeyPrefix::ClientBackup
+<a href=#318 id=318 data-nosnippet>318</a>            | server_db::DbKeyPrefix::PeerAvailability =&gt; {}
+<a href=#319 id=319 data-nosnippet>319</a>            server_db::DbKeyPrefix::ApiAnnouncements =&gt; {
+<a href=#320 id=320 data-nosnippet>320</a>                <span class="macro">push_db_pair_items_no_serde!</span>(
+<a href=#321 id=321 data-nosnippet>321</a>                    dbtx,
+<a href=#322 id=322 data-nosnippet>322</a>                    ApiAnnouncementPrefix,
+<a href=#323 id=323 data-nosnippet>323</a>                    ApiAnnouncementKey,
+<a href=#324 id=324 data-nosnippet>324</a>                    fedimint_core::net::api_announcement::SignedApiAnnouncement,
+<a href=#325 id=325 data-nosnippet>325</a>                    consensus,
+<a href=#326 id=326 data-nosnippet>326</a>                    <span class="string">"API Announcements"
+<a href=#327 id=327 data-nosnippet>327</a>                </span>);
+<a href=#328 id=328 data-nosnippet>328</a>            }
+<a href=#329 id=329 data-nosnippet>329</a>            server_db::DbKeyPrefix::GuardianMetadata =&gt; {
+<a href=#330 id=330 data-nosnippet>330</a>                <span class="macro">push_db_pair_items_no_serde!</span>(
+<a href=#331 id=331 data-nosnippet>331</a>                    dbtx,
+<a href=#332 id=332 data-nosnippet>332</a>                    fedimint_server::net::api::guardian_metadata::GuardianMetadataPrefix,
+<a href=#333 id=333 data-nosnippet>333</a>                    fedimint_server::net::api::guardian_metadata::GuardianMetadataKey,
+<a href=#334 id=334 data-nosnippet>334</a>                    fedimint_core::net::guardian_metadata::SignedGuardianMetadata,
+<a href=#335 id=335 data-nosnippet>335</a>                    consensus,
+<a href=#336 id=336 data-nosnippet>336</a>                    <span class="string">"Guardian Metadata"
+<a href=#337 id=337 data-nosnippet>337</a>                </span>);
+<a href=#338 id=338 data-nosnippet>338</a>            }
+<a href=#339 id=339 data-nosnippet>339</a>        }
+<a href=#340 id=340 data-nosnippet>340</a>    }
+<a href=#341 id=341 data-nosnippet>341</a>    <span class="kw">async fn </span>write_serialized_client_operation_log(
+<a href=#342 id=342 data-nosnippet>342</a>        serialized: <span class="kw-2">&amp;mut </span>BTreeMap&lt;String, Box&lt;<span class="kw">dyn </span>Serialize&gt;&gt;,
+<a href=#343 id=343 data-nosnippet>343</a>        dbtx: <span class="kw-2">&amp;mut </span>DatabaseTransaction&lt;<span class="lifetime">'_</span>&gt;,
+<a href=#344 id=344 data-nosnippet>344</a>    ) {
+<a href=#345 id=345 data-nosnippet>345</a>        <span class="macro">push_db_pair_items!</span>(
+<a href=#346 id=346 data-nosnippet>346</a>            dbtx,
+<a href=#347 id=347 data-nosnippet>347</a>            OperationLogKeyPrefix,
+<a href=#348 id=348 data-nosnippet>348</a>            OperationLogKey,
+<a href=#349 id=349 data-nosnippet>349</a>            OperationLogEntry,
+<a href=#350 id=350 data-nosnippet>350</a>            serialized,
+<a href=#351 id=351 data-nosnippet>351</a>            <span class="string">"Operations"
+<a href=#352 id=352 data-nosnippet>352</a>        </span>);
+<a href=#353 id=353 data-nosnippet>353</a>    }
+<a href=#354 id=354 data-nosnippet>354</a>}
 </code></pre></div></section></main></body></html>
