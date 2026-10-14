@@ -892,6 +892,23 @@ impl IDashboardApi for ConsensusApi {
             .to_string()
     }
 
+    async fn peer_availability(
+        &self,
+    ) -> Option<fedimint_server_core::dashboard_ui::DashboardPeerAvailability> {
+        let state = self
+            .db
+            .begin_transaction_nc()
+            .await
+            .get_value(&PeerAvailabilityKey)
+            .await?;
+        Some(
+            fedimint_server_core::dashboard_ui::DashboardPeerAvailability {
+                updated_at_secs: state.updated_at_secs(),
+                report: state.report(fedimint_core::time::duration_since_epoch().as_secs()),
+            },
+        )
+    }
+
     async fn federation_audit(&self) -> AuditSummary {
         self.get_federation_audit()
             .await
