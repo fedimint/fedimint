@@ -39,10 +39,11 @@ fn evil_reporters_cannot_move_the_result_outside_honest_reports() {
         reports.insert(PeerId::from(evil), report(10_000, &[(0, 10_000)]));
     }
 
-    // Sorted: 10000 x3, 5400, 5300, ... so the 4th highest is honest 5400
+    // Sorted: 4900, 5000, 5100, 5200, ..., 10000 x3, so the 4th lowest is
+    // honest 5200
     assert_eq!(
         merge_peer_availability(&reports, num_peers).windows[0][&PeerId::from(0)],
-        5_400
+        5_200
     );
 
     // Evil peers claiming 0 instead cannot push it below the honest range
@@ -51,7 +52,7 @@ fn evil_reporters_cannot_move_the_result_outside_honest_reports() {
     }
     assert_eq!(
         merge_peer_availability(&reports, num_peers).windows[0][&PeerId::from(0)],
-        5_100
+        4_900
     );
 }
 
@@ -69,8 +70,8 @@ fn ignores_self_reports_and_poorly_covered_reports() {
 
     let merged = merge_peer_availability(&reports, num_peers).windows;
 
-    // max_evil() is 1, so the 2nd highest usable report: 2000 from peers 1 and 2
-    assert_eq!(merged[0][&PeerId::from(0)], 2_000);
+    // max_evil() is 1, so the 2nd lowest usable report: 3000 from peers 1 and 2
+    assert_eq!(merged[0][&PeerId::from(0)], 3_000);
     assert_eq!(merged[0][&PeerId::from(3)], 9_000);
     // Nobody reports on peer 1
     assert!(!merged[0].contains_key(&PeerId::from(1)));
@@ -98,6 +99,33 @@ fn evil_reporter_cannot_exclude_honest_reports_by_its_coverage() {
             (PeerId::from(2), 7_000),
         ])
     );
+}
+
+#[test]
+fn with_too_few_reports_an_evil_reporter_cannot_lower_a_value() {
+    // Peer 0 is up. Honest peer 3 observed little, so its report is not
+    // usable, and evil peer 2 claims peer 0 was never up.
+    let num_peers = NumPeers::from(4);
+    let mut reports = BTreeMap::from([
+        (PeerId::from(1), report(10_000, &[(0, 9_000)])),
+        (PeerId::from(2), report(10_000, &[(0, 0)])),
+        (PeerId::from(3), report(4_999, &[(0, 9_000)])),
+    ]);
+    // Peer 3's last-seen entry for peer 0 is missing, evil peer 2 claims 0
+    for (reporter, last_seen) in [(1, Some(1_000)), (2, Some(0)), (3, None)] {
+        reports
+            .get_mut(&PeerId::from(reporter))
+            .unwrap()
+            .last_seen_secs = last_seen
+            .map(|secs| (PeerId::from(0), secs))
+            .into_iter()
+            .collect();
+    }
+
+    let merged = merge_peer_availability(&reports, num_peers);
+
+    assert_eq!(merged.windows[0][&PeerId::from(0)], 9_000);
+    assert_eq!(merged.last_seen_secs[&PeerId::from(0)], 1_000);
 }
 
 #[test]

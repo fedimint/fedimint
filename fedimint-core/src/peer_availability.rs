@@ -54,25 +54,29 @@ pub struct WindowAvailability {
 /// Combines the reports of several guardians into one view.
 ///
 /// A peer's own report about itself is ignored. Of the other reports the
-/// [`NumPeers::one_honest`]-th highest value is used: at least one honest
-/// guardian saw the peer at least that recently or that available, and
-/// [`NumPeers::max_evil`] lying guardians cannot move the value outside the
-/// honest reports. For availability, windows whose `window_secs` does not
-/// match [`PEER_AVAILABILITY_WINDOWS_SECS`] are ignored, and so are reports
-/// that cover less than half of the [`NumPeers::one_honest`]-th best coverage,
-/// so lying about coverage cannot exclude honest reports either. A peer with
-/// fewer usable reports is omitted.
+/// [`NumPeers::one_honest`]-th lowest value is used, so
+/// [`NumPeers::max_evil`] lying guardians cannot push a value below every
+/// honest report. With at least [`NumPeers::threshold`] usable reports they
+/// cannot push it above every honest report either. With fewer, for example
+/// while a guardian is offline, they can.
+///
+/// For availability, windows whose `window_secs` does not match
+/// [`PEER_AVAILABILITY_WINDOWS_SECS`] are ignored, and so are reports that
+/// cover less than half of the [`NumPeers::one_honest`]-th best coverage.
+/// A peer with fewer than [`NumPeers::one_honest`] usable reports is omitted.
 pub fn merge_peer_availability(
     reports: &BTreeMap<PeerId, PeerAvailability>,
     num_peers: NumPeers,
 ) -> MergedPeerAvailability {
-    let one_honest_highest = |peer: PeerId, values: &mut dyn Iterator<Item = (PeerId, u64)>| {
+    let one_honest = num_peers.one_honest();
+    // The other reporters' values about `peer`, sorted ascending
+    let others = |peer: PeerId, values: &mut dyn Iterator<Item = (PeerId, u64)>| {
         let mut values: Vec<u64> = values
             .filter(|(reporter, _)| *reporter != peer)
             .map(|(_, value)| value)
             .collect();
-        values.sort_unstable_by(|a, b| b.cmp(a));
-        values.get(num_peers.one_honest() - 1).copied()
+        values.sort_unstable();
+        values
     };
 
     let last_seen_secs = num_peers
@@ -81,7 +85,7 @@ pub fn merge_peer_availability(
             let mut values = reports.iter().filter_map(|(reporter, report)| {
                 Some((*reporter, *report.last_seen_secs.get(&peer)?))
             });
-            Some((peer, one_honest_highest(peer, &mut values)?))
+            Some((peer, *others(peer, &mut values).get(one_honest - 1)?))
         })
         .collect();
 
@@ -101,14 +105,18 @@ pub fn merge_peer_availability(
                     let mut coverages = windows
                         .iter()
                         .map(|(reporter, window)| (*reporter, u64::from(window.coverage_bps)));
-                    let min_coverage = one_honest_highest(peer, &mut coverages)?.div_ceil(2);
+                    let min_coverage = others(peer, &mut coverages)
+                        .iter()
+                        .rev()
+                        .nth(one_honest - 1)?
+                        .div_ceil(2);
                     let mut values = windows
                         .iter()
                         .filter(|(_, window)| min_coverage <= u64::from(window.coverage_bps))
                         .filter_map(|(reporter, window)| {
                             Some((*reporter, u64::from(*window.peers.get(&peer)?)))
                         });
-                    let value = one_honest_highest(peer, &mut values)?;
+                    let value = *others(peer, &mut values).get(one_honest - 1)?;
                     Some((peer, u16::try_from(value).expect("came from a u16")))
                 })
                 .collect()
