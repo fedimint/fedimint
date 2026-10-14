@@ -863,13 +863,17 @@ pub async fn withdraw_preview_handler<E: Display>(
                                         (response.address.clone())
                                     }
                                 }
-                                tr {
-                                    td { "Fee Rate" }
-                                    td { (format!("{} sats/kvB", response.peg_out_fees.fee_rate.sats_per_kvb)) }
-                                }
-                                tr {
-                                    td { "Transaction Size" }
-                                    td { (format!("{} weight units", response.peg_out_fees.total_weight)) }
+                                // A flat walletv2 fee has no real fee rate or
+                                // transaction weight to show.
+                                @if !response.flat_peg_out_fee {
+                                    tr {
+                                        td { "Fee Rate" }
+                                        td { (format!("{} sats/kvB", response.peg_out_fees.fee_rate.sats_per_kvb)) }
+                                    }
+                                    tr {
+                                        td { "Transaction Size" }
+                                        td { (format!("{} weight units", response.peg_out_fees.total_weight)) }
+                                    }
                                 }
                                 tr {
                                     td { "Peg-out Fee" }
@@ -882,12 +886,12 @@ pub async fn withdraw_preview_handler<E: Display>(
                                 @if let Some(federation_fee) = response.mint_fees {
                                     tr {
                                         td { "Federation Fee (est.)" }
-                                        td { (format!("~{} sats", federation_fee.sats_round_down())) }
+                                        td { (format!("~{} msats", federation_fee.msats)) }
                                     }
                                 }
                                 tr {
                                     td { strong { "Total Deducted" } }
-                                    td { strong { (format!("{} sats", response.total_cost.sats_round_down())) } }
+                                    td { strong { (format!("{} msats", response.total_cost.msats)) } }
                                 }
                             }
                         }

@@ -420,6 +420,33 @@ struct WithdrawDetails {
     amount: Amount,
     mint_fees: Option<Amount>,
     peg_out_fees: PegOutFees,
+    flat_peg_out_fee: bool,
+}
+
+/// Waits for the ecash change of a successful withdrawal to be issued.
+///
+/// A withdrawal is reported successful once its transaction is accepted, but
+/// the primary module issues the change from funding it asynchronously. Until
+/// then the change is missing from the balance, so callers that read the
+/// balance right after a withdrawal would see it understated by the change.
+/// The withdrawal itself has already succeeded, so a failure here is only
+/// logged.
+async fn await_withdraw_change(
+    client: &ClientHandleArc,
+    operation_id: OperationId,
+    change: Vec<fedimint_core::OutPoint>,
+) {
+    if let Err(err) = client
+        .await_primary_bitcoin_module_outputs(operation_id, change)
+        .await
+    {
+        warn!(
+            target: LOG_GATEWAY,
+            err = %err.fmt_compact(),
+            ?operation_id,
+            "Failed to await withdrawal change outputs"
+        );
+    }
 }
 
 /// Executes a withdrawal using the walletv2 module
@@ -428,13 +455,33 @@ async fn withdraw_v2(
     wallet_module: &fedimint_walletv2_client::WalletClientModule,
     address: &Address,
     amount: BitcoinAmountOrAll,
+    quoted_fee: Option<bitcoin::Amount>,
 ) -> AdminResult<WithdrawResponse> {
-    let fee = wallet_module
-        .send_fee()
-        .await
-        .map_err(|e| AdminGatewayError::WithdrawError {
-            failure_reason: e.fmt_compact().to_string(),
-        })?;
+    let current_fee =
+        wallet_module
+            .send_fee()
+            .await
+            .map_err(|e| AdminGatewayError::WithdrawError {
+                failure_reason: e.fmt_compact().to_string(),
+            })?;
+
+    // The federation rejects any send whose fee is below its current send fee,
+    // so a quote that has gone stale would only produce a doomed transaction.
+    // Sending with the quoted fee otherwise keeps the operator paying exactly
+    // what they confirmed in the preview.
+    let fee = match quoted_fee {
+        Some(quoted_fee) if quoted_fee < current_fee => {
+            return Err(AdminGatewayError::WithdrawError {
+                failure_reason: format!(
+                    "The on-chain fee increased from {} to {} sats since the preview, please preview the withdrawal again",
+                    quoted_fee.to_sat(),
+                    current_fee.to_sat()
+                ),
+            });
+        }
+        Some(quoted_fee) => quoted_fee,
+        None => current_fee,
+    };
 
     let withdraw_amount = match amount {
         BitcoinAmountOrAll::All => {
@@ -485,6 +532,19 @@ async fn withdraw_v2(
 
     match result {
         fedimint_walletv2_client::FinalSendOperationState::Success(txid) => {
+            if let Some(Ok(fedimint_walletv2_client::WalletOperationMeta::Send(meta))) = client
+                .operation_log()
+                .get_operation(operation_id)
+                .await
+                .map(|operation| operation.try_meta())
+            {
+                await_withdraw_change(
+                    client,
+                    operation_id,
+                    meta.change_outpoint_range.into_iter().collect(),
+                )
+                .await;
+            }
             info!(target: LOG_GATEWAY, amount = %withdraw_amount, address = %address, "Sent funds via walletv2");
             Ok(WithdrawResponse { txid, fees })
         }
@@ -539,6 +599,7 @@ async fn calculate_max_withdrawable(
             amount: Amount::from_sats(max_withdrawable.to_sat()),
             mint_fees: Some(federation_fees),
             peg_out_fees: PegOutFees::from_amount(fee),
+            flat_peg_out_fee: true,
         });
     }
 
@@ -567,6 +628,7 @@ async fn calculate_max_withdrawable(
         amount: Amount::from_sats(max_withdrawable.to_sat()),
         mint_fees: Some(federation_fees),
         peg_out_fees,
+        flat_peg_out_fee: false,
     })
 }
 
@@ -3100,7 +3162,10 @@ impl IAdminGateway for Gateway {
             .value()
             .get_first_module::<fedimint_walletv2_client::WalletClientModule>()
         {
-            return withdraw_v2(client.value(), &wallet_module, &address, amount).await;
+            // The UI round-trips the walletv2 flat fee through
+            // `PegOutFees::from_amount`, so `amount()` recovers it exactly.
+            let quoted_fee = quoted_fees.map(|fees| fees.amount());
+            return withdraw_v2(client.value(), &wallet_module, &address, amount, quoted_fee).await;
         }
 
         let wallet_module = client
@@ -3209,6 +3274,7 @@ impl IAdminGateway for Gateway {
             amount,
             mint_fees,
             peg_out_fees,
+            flat_peg_out_fee,
         } = match payload.amount {
             BitcoinAmountOrAll::All => {
                 calculate_max_withdrawable(client.value(), &address_checked).await?
@@ -3222,6 +3288,7 @@ impl IAdminGateway for Gateway {
                             .get_withdraw_fees(&address_checked, btc_amount)
                             .await
                             .map_err(|e| AdminGatewayError::Unexpected(e.into()))?,
+                        flat_peg_out_fee: false,
                     }
                 } else if let Ok(wallet_module) = client
                     .value()
@@ -3232,10 +3299,26 @@ impl IAdminGateway for Gateway {
                             failure_reason: e.fmt_compact().to_string(),
                         }
                     })?;
+                    // The wallet output carries the payment plus the on-chain
+                    // fee; funding it costs the federation fees quoted here.
+                    let output_amount = btc_amount.checked_add(fee).ok_or_else(|| {
+                        AdminGatewayError::WithdrawError {
+                            failure_reason: "Withdrawal amount overflow".to_string(),
+                        }
+                    })?;
+                    let federation_fees = wallet_module
+                        .send_fee_quote(output_amount)
+                        .await
+                        .map_err(|e| AdminGatewayError::WithdrawError {
+                            failure_reason: e.fmt_compact().to_string(),
+                        })?
+                        .total()
+                        .get_bitcoin();
                     WithdrawDetails {
                         amount: btc_amount.into(),
-                        mint_fees: None,
+                        mint_fees: Some(federation_fees),
                         peg_out_fees: PegOutFees::from_amount(fee),
+                        flat_peg_out_fee: true,
                     }
                 } else {
                     return Err(AdminGatewayError::Unexpected(anyhow!(
@@ -3256,6 +3339,7 @@ impl IAdminGateway for Gateway {
             peg_out_fees,
             total_cost,
             mint_fees,
+            flat_peg_out_fee,
         })
     }
 
