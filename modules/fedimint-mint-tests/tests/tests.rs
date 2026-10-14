@@ -1126,11 +1126,14 @@ async fn repair_wallet() -> anyhow::Result<()> {
             .expect("Failed to insert test note index");
         dbtx.commit_tx().await;
 
+        // This scenario rewinds note indices below. An automatic OOB refund
+        // would allocate new indices concurrently with repair, even though the
+        // reissue has already spent the note.
         let (_, reissue_note) = client_mint
             .spend_notes_with_selector(
                 &SelectNotesWithExactAmount,
                 Amount::from_msats(1),
-                Some(TIMEOUT),
+                None,
                 false,
                 (),
             )
@@ -1146,6 +1149,11 @@ async fn repair_wallet() -> anyhow::Result<()> {
         );
 
         let mut dbtx = client_mint.db.begin_transaction().await;
+        assert_eq!(
+            dbtx.get_value(&TEST_NOTE_INDEX_KEY).await,
+            Some(old_nonce_index + 2),
+            "Reissue should advance past the intentionally skipped index"
+        );
         dbtx.insert_entry(&TEST_NOTE_INDEX_KEY, &(old_nonce_index - 1))
             .await
             .expect("Failed to insert test note index");
@@ -1171,6 +1179,16 @@ async fn repair_wallet() -> anyhow::Result<()> {
             repair_summary.used_indices.get(Amount::from_msats(1)),
             3,
             "We should have skipped one index and reused another"
+        );
+        assert_eq!(
+            client_mint
+                .db
+                .begin_transaction_nc()
+                .await
+                .get_value(&TEST_NOTE_INDEX_KEY)
+                .await,
+            Some(old_nonce_index + 2),
+            "Repair should restore the next index after the gap"
         );
 
         let new_balance = client_mint

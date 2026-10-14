@@ -1,8 +1,9 @@
 pub mod backoff_util;
 /// Copied from `tokio_stream` 0.1.12 to use our optional Send bounds
 pub mod broadcaststream;
+#[cfg(not(target_family = "wasm"))]
+mod secret_file;
 pub mod update_merge;
-
 use std::convert::Infallible;
 use std::fmt::{Debug, Display, Formatter};
 use std::future::Future;
@@ -17,6 +18,8 @@ use std::{fs, io};
 use fedimint_logging::LOG_CORE;
 pub use fedimint_util_error::*;
 use futures::StreamExt;
+#[cfg(not(target_family = "wasm"))]
+pub use secret_file::{SecretInputError, ensure_single_stdin, read_secret_file};
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tracing::{Instrument, Span, debug, warn};

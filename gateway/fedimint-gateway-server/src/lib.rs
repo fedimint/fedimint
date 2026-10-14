@@ -1217,6 +1217,23 @@ impl Gateway {
             return "lnv2";
         }
 
+        // A payment held for a registered LNv2 contract is left to that
+        // contract's receive, or to the Lightning node's expiry, even if its
+        // amount does not match: cancelling it would also fail back HTLCs the
+        // receive may already be settling.
+        if payment_request.incoming_circuit().is_none()
+            && let Err(PublicGatewayError::LNv2(err @ LNv2Error::IncomingAmountMismatch { .. })) =
+                &lnv2_result
+        {
+            warn!(
+                target: LOG_GATEWAY,
+                payment_hash = %payment_request.payment_hash,
+                err = %err.fmt_compact(),
+                "Ignoring payment for a registered LNv2 contract whose amount does not match",
+            );
+            return "ignore";
+        }
+
         let lnv1_start = fedimint_core::time::now();
         let lnv1_result = self
             .try_handle_lightning_payment_ln_legacy(&payment_request, lightning_context)
@@ -1315,6 +1332,17 @@ impl Gateway {
             )
             .await?;
 
+        // An intercepted forward, or an unknown current height, leaves no time
+        // to fund a fresh contract; see `lnv2_blocks_to_claim_deadline`.
+        let current_block_height = lightning_context
+            .lnrpc
+            .info()
+            .await
+            .ok()
+            .map(|info| info.block_height);
+        let blocks_to_claim_deadline =
+            htlc_request.lnv2_blocks_to_claim_deadline(current_block_height);
+
         if let Err(err) = client
             .get_first_module::<GatewayClientModuleV2>()
             .expect("Must have client module")
@@ -1324,6 +1352,7 @@ impl Gateway {
                 htlc_request.htlc_id,
                 contract,
                 htlc_request.incoming_amount_msat,
+                blocks_to_claim_deadline,
             )
             .await
         {
@@ -3537,7 +3566,10 @@ impl Gateway {
             return Err(PublicGatewayError::RateLimited);
         }
 
-        if !payload.contract.verify() {
+        // Verifying the contract is two pairings; keep them off the async workers.
+        let contract = payload.contract.clone();
+
+        if !fedimint_core::runtime::spawn_blocking(move || contract.verify()).await {
             return Err(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
                 "The contract is invalid".to_string(),
             )));
@@ -3721,10 +3753,7 @@ impl Gateway {
         let operation_id = OperationId::from_encodable(&registered_contract.contract);
 
         if !(wait || client.operation_exists(operation_id).await) {
-            return Ok(VerifyResponse {
-                settled: false,
-                preimage: None,
-            });
+            return Ok(VerifyResponse::pending());
         }
 
         let module = client
@@ -3733,10 +3762,7 @@ impl Gateway {
 
         let Ok(state) = timeout(VERIFY_WAIT_TIMEOUT, module.await_receive(operation_id)).await
         else {
-            return Ok(VerifyResponse {
-                settled: false,
-                preimage: None,
-            });
+            return Ok(VerifyResponse::pending());
         };
 
         let preimage = match state {
@@ -3746,10 +3772,7 @@ impl Gateway {
             FinalReceiveState::Rejected => Err("Payment has been rejected".to_string()),
         }?;
 
-        Ok(VerifyResponse {
-            settled: true,
-            preimage: Some(preimage),
-        })
+        Ok(VerifyResponse::settled(preimage))
     }
 
     /// Retrieves the persisted `CreateInvoicePayload` from the database
@@ -3771,10 +3794,12 @@ impl Gateway {
             )))?;
 
         if registered_incoming_contract.incoming_amount_msats != amount_msats {
-            return Err(PublicGatewayError::LNv2(LNv2Error::IncomingPayment(
-                "The available decryption contract's amount is not equal to the requested amount"
-                    .to_string(),
-            )));
+            return Err(PublicGatewayError::LNv2(
+                LNv2Error::IncomingAmountMismatch {
+                    registered_msats: registered_incoming_contract.incoming_amount_msats,
+                    payment_msats: amount_msats,
+                },
+            ));
         }
 
         // Turning receives off covers invoices issued before the switch was
@@ -3967,9 +3992,10 @@ impl IGatewayClientV2 for Gateway {
                     || GatewayClientV2Error::new("Amountless invoice not supported"),
                 )?),
             };
+        // Nothing has been paid out yet, so failing here only cancels the send.
         let lnv1 = client
             .get_first_module::<GatewayClientModule>()
-            .expect("No LNv1 module");
+            .map_err(|_| GatewayClientV2Error::new("Federation does not have an LNv1 module"))?;
         let Some(operation_id) = lnv1
             .gateway_handle_direct_swap(swap_params, allow_fresh_dispatch)
             .await
@@ -4034,10 +4060,26 @@ impl IGatewayClientV2 for Gateway {
             .await
             .expect("Retries until the transaction commits")
     }
+
+    async fn is_lightning_connected(&self) -> bool {
+        self.get_lightning_context().await.is_ok()
+    }
+
+    async fn await_lightning_connected(&self) {
+        self.await_lightning_context().await;
+    }
 }
 
 #[async_trait]
 impl IGatewayClientV1 for Gateway {
+    async fn claim_payment_image(
+        &self,
+        payment_image: &PaymentImage,
+        operation_id: OperationId,
+    ) -> bool {
+        IGatewayClientV2::claim_payment_image(self, payment_image, operation_id).await
+    }
+
     async fn verify_preimage_authentication(
         &self,
         payment_hash: sha256::Hash,

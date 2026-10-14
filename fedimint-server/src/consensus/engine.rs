@@ -79,6 +79,10 @@ pub struct ConsensusEngine {
     pub connections: DynP2PConnections<P2PMessage>,
     pub ci_status_senders: BTreeMap<PeerId, watch::Sender<Option<u64>>>,
     pub ord_latency_sender: watch::Sender<Option<Duration>>,
+    /// Notified whenever consensus accepts an item.
+    pub accepted_item_sender: watch::Sender<()>,
+    /// Notified whenever consensus completes a session.
+    pub completed_session_sender: watch::Sender<()>,
     pub task_group: TaskGroup,
     pub data_dir: PathBuf,
     pub db_checkpoint_retention: u64,
@@ -797,6 +801,8 @@ impl ConsensusEngine {
         dbtx.commit_tx_result()
             .await
             .expect("This is the only place where we write to this key");
+
+        self.completed_session_sender.send_replace(());
     }
 
     /// Returns the full path where the database checkpoints are stored.
@@ -1067,6 +1073,8 @@ impl ConsensusEngine {
         );
 
         dbtx.commit_tx_result().await?;
+
+        self.accepted_item_sender.send_replace(());
 
         // Counted here rather than in the caller so that only an attempt that actually
         // committed is counted: the replay and rejection paths above return early, and

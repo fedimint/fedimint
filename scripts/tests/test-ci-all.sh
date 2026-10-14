@@ -81,6 +81,13 @@ function gw_config_test_lnd() {
 }
 export -f gw_config_test_lnd
 
+function gw_refused_payment_refund_test() {
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" env FM_DISABLE_BASE_FEES=1 ./scripts/tests/gateway-module-test.sh refused-payment-refund-test
+  fi
+}
+export -f gw_refused_payment_refund_test
+
 function gw_restore_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-module-test.sh backup-restore-test
 }
@@ -163,6 +170,11 @@ function lnv2_module_duplicate_payment() {
 }
 export -f lnv2_module_duplicate_payment
 
+function lnv2_module_federation_outage() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/lnv2-module-test.sh federation-outage
+}
+export -f lnv2_module_federation_outage
+
 function lnv2_mintv2_walletv2_lightning_payments() {
   # v2 modules are not supported by older versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
@@ -180,6 +192,11 @@ function lnv2_module_lnurl_recovery() {
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/lnv2-module-test.sh lnurl-recovery
 }
 export -f lnv2_module_lnurl_recovery
+
+function lnv2_module_direct_htlc() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/lnv2-module-test.sh direct-htlc
+}
+export -f lnv2_module_direct_htlc
 
 function lnv1_lnv2_swap() {
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/lnv1-lnv2-swap-test.sh
@@ -484,6 +501,7 @@ tests_to_run_in_parallel+=(
   "ln_reconnect_test"
   "gw_reboot_test"
   "gw_config_test_lnd"
+  "gw_refused_payment_refund_test"
   "gw_restore_test"
   "gw_liquidity_test"
   "gw_liquidity_test_walletv2"
@@ -491,9 +509,11 @@ tests_to_run_in_parallel+=(
   "lnv2_module_gateway_registration"
   "lnv2_module_payments"
   "lnv2_module_duplicate_payment"
+  "lnv2_module_federation_outage"
   "lnv2_mintv2_walletv2_lightning_payments"
   "lnv2_module_lnurl_pay"
   "lnv2_module_lnurl_recovery"
+  "lnv2_module_direct_htlc"
   "lnv1_lnv2_swap"
   "walletv2_module"
   "mintv2_module_test"

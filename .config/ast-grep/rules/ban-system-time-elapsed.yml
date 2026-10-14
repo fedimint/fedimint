@@ -1,0 +1,19 @@
+id: ban-system-time-elapsed
+language: rust
+severity: error
+message: Use fedimint_core::time::now and std::time::duration_since to compare an elapsed time for better wasm compatibility.
+# Preserve the old rule's syntactic policy: the receiver need not be SystemTime.
+rule:
+  any:
+    - pattern:
+        context: $SYSTEM_TIME.elapsed()
+        strictness: relaxed
+    - pattern:
+        context: $SYSTEM_TIME.elapsed::<$$$TYPES>()
+        strictness: relaxed
+ignores:
+  # Server only.
+  - '**/fedimint-server/**'
+  # These tools do not run in wasm.
+  - '**/fedimint-load-test-tool/**'
+  - '**/devimint/**'

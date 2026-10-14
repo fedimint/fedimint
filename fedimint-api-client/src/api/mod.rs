@@ -174,15 +174,15 @@ pub trait FederationApiExt: IRawFederationApi {
     /// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
     #[instrument(target = LOG_CLIENT_NET_API, skip_all, fields(method=method))]
-    async fn request_with_strategy<PR: DeserializeOwned, FR: Debug>(
+    async fn request_with_strategy<PR: DeserializeOwned + MaybeSend, FR: Debug>(
         &self,
         mut strategy: impl QueryStrategy<PR, FR> + MaybeSend,
         method: String,
         params: ApiRequestErased,
     ) -> FederationResult<FR> {
-        // NOTE: `FuturesUnorderded` is a footgun, but all we do here is polling
-        // completed results from it and we don't do any `await`s when
-        // processing them, it should be totally OK.
+        // NOTE: `FuturesUnordered` is a footgun, but all we do here is poll
+        // completed results from it. Processing a result may await its
+        // verification, during which the remaining requests simply pause.
         #[cfg(not(target_family = "wasm"))]
         let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _> + Send>>>::new();
         #[cfg(target_family = "wasm")]
@@ -212,7 +212,7 @@ pub trait FederationApiExt: IRawFederationApi {
                 .expect("Query strategy ran out of peers to query without returning a result");
 
             match result {
-                Ok(response) => match strategy.process(peer, response) {
+                Ok(response) => match strategy.process(peer, response).await {
                     QueryStep::Retry(peers) => {
                         for peer in peers {
                             futures.push(Box::pin({
@@ -266,9 +266,9 @@ pub trait FederationApiExt: IRawFederationApi {
         method: String,
         params: ApiRequestErased,
     ) -> FR {
-        // NOTE: `FuturesUnorderded` is a footgun, but all we do here is polling
-        // completed results from it and we don't do any `await`s when
-        // processing them, it should be totally OK.
+        // NOTE: `FuturesUnordered` is a footgun, but all we do here is poll
+        // completed results from it. Processing a result may await its
+        // verification, during which the remaining requests simply pause.
         #[cfg(not(target_family = "wasm"))]
         let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _> + Send>>>::new();
         #[cfg(target_family = "wasm")]
@@ -304,7 +304,7 @@ pub trait FederationApiExt: IRawFederationApi {
                 None => pending().await,
             };
 
-            match strategy.process(peer, response) {
+            match strategy.process(peer, response).await {
                 QueryStep::Retry(peers) => {
                     for peer in peers {
                         futures.push(Box::pin({

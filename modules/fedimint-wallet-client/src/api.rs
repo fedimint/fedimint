@@ -1,7 +1,9 @@
+use std::future::ready;
+
 use bitcoin::{Address, Amount};
 use fedimint_api_client::api::{
     FederationApiExt, FederationError, FederationGeneralError, FederationResult,
-    IModuleFederationApi, ServerResult,
+    IModuleFederationApi,
 };
 use fedimint_api_client::query::{FilterMapThreshold, ThresholdAgreement};
 use fedimint_core::envs::BitcoinRpcConfig;
@@ -99,9 +101,7 @@ where
     }
 
     async fn fetch_block_count_local(&self) -> FederationResult<u32> {
-        let filter_map = |_peer: PeerId, block_count: Option<u32>| -> ServerResult<Option<u32>> {
-            Ok(block_count)
-        };
+        let filter_map = |_peer: PeerId, block_count: Option<u32>| ready(Ok(block_count));
 
         let block_count_responses = self
             .request_with_strategy(

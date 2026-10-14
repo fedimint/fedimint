@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
+use std::future::ready;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
@@ -393,7 +394,10 @@ where
         id: &secp256k1::PublicKey,
     ) -> FederationResult<BTreeMap<PeerId, Option<ClientBackupSnapshot>>> {
         self.request_with_strategy(
-            FilterMapThreshold::new(|_, snapshot| Ok(snapshot), self.all_peers().to_num_peers()),
+            FilterMapThreshold::new(
+                |_, snapshot| ready(Ok(snapshot)),
+                self.all_peers().to_num_peers(),
+            ),
             RECOVER_ENDPOINT.to_owned(),
             ApiRequestErased::new(id),
         )

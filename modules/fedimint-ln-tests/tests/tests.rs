@@ -767,6 +767,49 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The payee controls the invoice's `min_final_cltv_expiry_delta`, which is
+/// added to the contract's refund timelock. Like LNv2, the client refuses a
+/// total timelock delta above 1440 blocks before funding, so a payee cannot
+/// push the payer's refund out indefinitely or overflow the timelock.
+#[tokio::test(flavor = "multi_thread")]
+async fn rejects_invoice_with_excessive_min_final_cltv() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let gw = gateway(&fixtures, &fed).await;
+    let client = fed.new_client().await;
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
+        .await;
+
+    let ctx = secp256k1::Secp256k1::new();
+    let kp = Keypair::new(&ctx, &mut OsRng);
+    let invoice = InvoiceBuilder::new(Currency::Regtest)
+        .description(String::new())
+        .payment_hash(sha256::Hash::hash(&[0; 32]))
+        .current_timestamp()
+        .min_final_cltv_expiry_delta(942)
+        .payment_secret(PaymentSecret([0; 32]))
+        .amount_milli_satoshis(100_000)
+        .build_signed(|m| ctx.sign_ecdsa_recoverable(m, &secp256k1::SecretKey::from_keypair(&kp)))
+        .expect("Failed to build invoice");
+
+    let error = pay_invoice(&client, invoice, Some(gw.http_gateway_id().await))
+        .await
+        .expect_err("Payment of an invoice with an excessive CLTV delta should fail");
+    assert_matches!(
+        error.downcast::<PayBolt11InvoiceError>()?,
+        // 942 blocks plus the client's own 499 is one past the limit
+        PayBolt11InvoiceError::TimelockDeltaTooLarge {
+            found: 1441,
+            max: 1440
+        }
+    );
+    assert_eq!(client.get_balance_for_btc().await?, sats(1000));
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn rejects_expired_invoice() -> anyhow::Result<()> {
     let fixtures = fixtures();

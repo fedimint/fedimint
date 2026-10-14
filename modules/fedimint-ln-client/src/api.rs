@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::convert::identity;
+use std::future::ready;
 use std::time::Duration;
 
 use bitcoin::hashes::sha256::{self, Hash as Sha256Hash};
@@ -211,7 +212,7 @@ where
         let gateway_announcements = self
             .request_with_strategy(
                 FilterMapThreshold::new(
-                    |_, gateways| Ok(gateways),
+                    |_, gateways| ready(Ok(gateways)),
                     self.all_peers().to_num_peers(),
                 ),
                 LIST_GATEWAYS_ENDPOINT.to_string(),
