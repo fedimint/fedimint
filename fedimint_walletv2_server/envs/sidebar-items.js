@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["FM_WALLETV2_DISABLE_MEMPOOL_SCAN_ENV"]};

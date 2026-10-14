@@ -1,0 +1,408 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `modules/fedimint-walletv2-server/src/pending.rs`."><title>pending.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="fedimint_walletv2_server" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0-nightly (18d13b533 2026-02-09)" data-channel="nightly" data-search-js="search-fb33671b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-f9617a14.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-12f88f4f.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">fedimint_walletv2_server/</div>pending.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! The pending receive scanner: a guardian-local, non-consensus view of the
+<a href=#2 id=2 data-nosnippet>2</a>//! receive outputs in its mempool and in the blocks just below its chain tip,
+<a href=#3 id=3 data-nosnippet>3</a>//! served to clients so they can render peg-in progress.
+<a href=#4 id=4 data-nosnippet>4</a>
+<a href=#5 id=5 data-nosnippet>5</a></span><span class="kw">use </span>std::collections::{BTreeMap, BTreeSet};
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>std::time::Duration;
+<a href=#7 id=7 data-nosnippet>7</a>
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>anyhow::Context;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>bitcoin::hashes::sha256;
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>bitcoin::{Transaction, Txid};
+<a href=#11 id=11 data-nosnippet>11</a><span class="kw">use </span>fedimint_core::envs::{is_env_var_set, is_running_in_test_env};
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use </span>fedimint_core::task::TaskGroup;
+<a href=#13 id=13 data-nosnippet>13</a><span class="kw">use </span>fedimint_core::util::FmtCompact <span class="kw">as _</span>;
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">use </span>fedimint_logging::LOG_MODULE_WALLETV2;
+<a href=#15 id=15 data-nosnippet>15</a><span class="kw">use </span>fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
+<a href=#16 id=16 data-nosnippet>16</a><span class="kw">use </span>fedimint_walletv2_common::{
+<a href=#17 id=17 data-nosnippet>17</a>    BLOCK_COUNT_VOTE_DELAY, MempoolVisibility, PendingOutput, PendingOutputs, is_potential_receive,
+<a href=#18 id=18 data-nosnippet>18</a>};
+<a href=#19 id=19 data-nosnippet>19</a><span class="kw">use </span>tokio::sync::watch;
+<a href=#20 id=20 data-nosnippet>20</a><span class="kw">use </span>tracing::debug;
+<a href=#21 id=21 data-nosnippet>21</a>
+<a href=#22 id=22 data-nosnippet>22</a><span class="kw">use </span><span class="kw">crate</span>::envs::FM_WALLETV2_DISABLE_MEMPOOL_SCAN_ENV;
+<a href=#23 id=23 data-nosnippet>23</a>
+<a href=#24 id=24 data-nosnippet>24</a><span class="doccomment">/// Number of blocks below the local chain tip that the pending receive scanner
+<a href=#25 id=25 data-nosnippet>25</a>/// reports on.
+<a href=#26 id=26 data-nosnippet>26</a>///
+<a href=#27 id=27 data-nosnippet>27</a>/// Only the first [`BLOCK_COUNT_VOTE_DELAY`] blocks of this window are
+<a href=#28 id=28 data-nosnippet>28</a>/// strictly necessary, since deeper outputs are already in the consensus output
+<a href=#29 id=29 data-nosnippet>29</a>/// log. The window deliberately extends past that so a peg-in keeps being
+<a href=#30 id=30 data-nosnippet>30</a>/// reported for a while after it becomes final: a client needs a moment to
+<a href=#31 id=31 data-nosnippet>31</a>/// notice the consensus entry and start its claim, and without the overlap its
+<a href=#32 id=32 data-nosnippet>32</a>/// progress display would briefly fall back to reporting nothing at all.
+<a href=#33 id=33 data-nosnippet>33</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">const </span>MAX_PENDING_DEPTH: u64 = <span class="number">2 </span>* BLOCK_COUNT_VOTE_DELAY;
+<a href=#34 id=34 data-nosnippet>34</a>
+<a href=#35 id=35 data-nosnippet>35</a><span class="doccomment">/// Filtered receive outputs of the blocks in the pending window, keyed by
+<a href=#36 id=36 data-nosnippet>36</a>/// height and tagged with the hash they were derived from.
+<a href=#37 id=37 data-nosnippet>37</a></span><span class="kw">type </span>BlockCache = BTreeMap&lt;u64, (bitcoin::BlockHash, Vec&lt;PendingOutput&gt;)&gt;;
+<a href=#38 id=38 data-nosnippet>38</a>
+<a href=#39 id=39 data-nosnippet>39</a><span class="doccomment">/// Filtered receive outputs of the transactions currently in the mempool.
+<a href=#40 id=40 data-nosnippet>40</a>///
+<a href=#41 id=41 data-nosnippet>41</a>/// Every transaction is kept, including those with no matching outputs, so that
+<a href=#42 id=42 data-nosnippet>42</a>/// a scan only fetches transactions it has never seen. On a busy mainnet node
+<a href=#43 id=43 data-nosnippet>43</a>/// this holds on the order of tens of thousands of empty entries, which is a
+<a href=#44 id=44 data-nosnippet>44</a>/// few megabytes and far cheaper than refetching the mempool each scan.
+<a href=#45 id=45 data-nosnippet>45</a></span><span class="kw">type </span>MempoolCache = BTreeMap&lt;Txid, Vec&lt;PendingOutput&gt;&gt;;
+<a href=#46 id=46 data-nosnippet>46</a>
+<a href=#47 id=47 data-nosnippet>47</a><span class="doccomment">/// State the pending receive scanner carries between runs.
+<a href=#48 id=48 data-nosnippet>48</a></span><span class="attr">#[derive(Default)]
+<a href=#49 id=49 data-nosnippet>49</a></span><span class="kw">struct </span>PendingCache {
+<a href=#50 id=50 data-nosnippet>50</a>    blocks: BlockCache,
+<a href=#51 id=51 data-nosnippet>51</a>    mempool: MempoolCache,
+<a href=#52 id=52 data-nosnippet>52</a>}
+<a href=#53 id=53 data-nosnippet>53</a>
+<a href=#54 id=54 data-nosnippet>54</a><span class="doccomment">/// Returns the receive outputs of `tx` that pass the probabilistic filter.
+<a href=#55 id=55 data-nosnippet>55</a></span><span class="kw">fn </span>filtered_receive_outputs(
+<a href=#56 id=56 data-nosnippet>56</a>    tx: <span class="kw-2">&amp;</span>Transaction,
+<a href=#57 id=57 data-nosnippet>57</a>    pks_hash: <span class="kw-2">&amp;</span>sha256::Hash,
+<a href=#58 id=58 data-nosnippet>58</a>    height: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#59 id=59 data-nosnippet>59</a>) -&gt; Vec&lt;PendingOutput&gt; {
+<a href=#60 id=60 data-nosnippet>60</a>    <span class="kw">let </span>txid = tx.compute_txid();
+<a href=#61 id=61 data-nosnippet>61</a>
+<a href=#62 id=62 data-nosnippet>62</a>    tx.output
+<a href=#63 id=63 data-nosnippet>63</a>        .iter()
+<a href=#64 id=64 data-nosnippet>64</a>        .enumerate()
+<a href=#65 id=65 data-nosnippet>65</a>        .filter(|(<span class="kw">_</span>, tx_out)| is_potential_receive(<span class="kw-2">&amp;</span>tx_out.script_pubkey, pks_hash))
+<a href=#66 id=66 data-nosnippet>66</a>        .map(|(vout, tx_out)| PendingOutput {
+<a href=#67 id=67 data-nosnippet>67</a>            script: tx_out.script_pubkey.clone(),
+<a href=#68 id=68 data-nosnippet>68</a>            outpoint: bitcoin::OutPoint {
+<a href=#69 id=69 data-nosnippet>69</a>                txid,
+<a href=#70 id=70 data-nosnippet>70</a>                vout: u32::try_from(vout)
+<a href=#71 id=71 data-nosnippet>71</a>                    .expect(<span class="string">"Bitcoin transaction has more than u32::MAX outputs"</span>),
+<a href=#72 id=72 data-nosnippet>72</a>            },
+<a href=#73 id=73 data-nosnippet>73</a>            value: tx_out.value,
+<a href=#74 id=74 data-nosnippet>74</a>            height,
+<a href=#75 id=75 data-nosnippet>75</a>        })
+<a href=#76 id=76 data-nosnippet>76</a>        .collect()
+<a href=#77 id=77 data-nosnippet>77</a>}
+<a href=#78 id=78 data-nosnippet>78</a>
+<a href=#79 id=79 data-nosnippet>79</a><span class="doccomment">/// Collects the receive outputs of the most recently mined blocks.
+<a href=#80 id=80 data-nosnippet>80</a>///
+<a href=#81 id=81 data-nosnippet>81</a>/// Scans the last [`MAX_PENDING_DEPTH`] blocks below the guardian's local chain
+<a href=#82 id=82 data-nosnippet>82</a>/// tip. The window is relative to the tip rather than to the consensus block
+<a href=#83 id=83 data-nosnippet>83</a>/// count, so the work stays bounded even if the federation's consensus block
+<a href=#84 id=84 data-nosnippet>84</a>/// count is lagging badly, and so a peg-in keeps being reported for a while
+<a href=#85 id=85 data-nosnippet>85</a>/// after it becomes final.
+<a href=#86 id=86 data-nosnippet>86</a>///
+<a href=#87 id=87 data-nosnippet>87</a>/// Blocks are only fetched when the hash at a height is absent from `cache` or
+<a href=#88 id=88 data-nosnippet>88</a>/// differs from the cached one, which keeps the steady state cost at one block
+<a href=#89 id=89 data-nosnippet>89</a>/// fetch per new block and makes reorgs within the window self-repairing.
+<a href=#90 id=90 data-nosnippet>90</a></span><span class="kw">async fn </span>scan_pending_blocks(
+<a href=#91 id=91 data-nosnippet>91</a>    btc_rpc: <span class="kw-2">&amp;</span>ServerBitcoinRpcMonitor,
+<a href=#92 id=92 data-nosnippet>92</a>    pks_hash: <span class="kw-2">&amp;</span>sha256::Hash,
+<a href=#93 id=93 data-nosnippet>93</a>    block_count: u64,
+<a href=#94 id=94 data-nosnippet>94</a>    cache: <span class="kw-2">&amp;mut </span>BlockCache,
+<a href=#95 id=95 data-nosnippet>95</a>) -&gt; anyhow::Result&lt;()&gt; {
+<a href=#96 id=96 data-nosnippet>96</a>    <span class="kw">let </span>start = block_count.saturating_sub(MAX_PENDING_DEPTH);
+<a href=#97 id=97 data-nosnippet>97</a>
+<a href=#98 id=98 data-nosnippet>98</a>    <span class="comment">// Drop the blocks that have fallen out of the window as the chain advanced.
+<a href=#99 id=99 data-nosnippet>99</a>    </span>cache.retain(|height, <span class="kw">_</span>| (start..block_count).contains(height));
+<a href=#100 id=100 data-nosnippet>100</a>
+<a href=#101 id=101 data-nosnippet>101</a>    <span class="kw">for </span>height <span class="kw">in </span>start..block_count {
+<a href=#102 id=102 data-nosnippet>102</a>        <span class="kw">let </span>block_hash = btc_rpc.get_block_hash(height).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#103 id=103 data-nosnippet>103</a>
+<a href=#104 id=104 data-nosnippet>104</a>        <span class="kw">if </span>cache
+<a href=#105 id=105 data-nosnippet>105</a>            .get(<span class="kw-2">&amp;</span>height)
+<a href=#106 id=106 data-nosnippet>106</a>            .is_some_and(|(cached_hash, <span class="kw">_</span>)| <span class="kw-2">*</span>cached_hash == block_hash)
+<a href=#107 id=107 data-nosnippet>107</a>        {
+<a href=#108 id=108 data-nosnippet>108</a>            <span class="kw">continue</span>;
+<a href=#109 id=109 data-nosnippet>109</a>        }
+<a href=#110 id=110 data-nosnippet>110</a>
+<a href=#111 id=111 data-nosnippet>111</a>        <span class="kw">let </span>block = btc_rpc.get_block(<span class="kw-2">&amp;</span>block_hash).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#112 id=112 data-nosnippet>112</a>
+<a href=#113 id=113 data-nosnippet>113</a>        <span class="kw">let </span>outputs = block
+<a href=#114 id=114 data-nosnippet>114</a>            .txdata
+<a href=#115 id=115 data-nosnippet>115</a>            .iter()
+<a href=#116 id=116 data-nosnippet>116</a>            .flat_map(|tx| filtered_receive_outputs(tx, pks_hash, <span class="prelude-val">Some</span>(height)))
+<a href=#117 id=117 data-nosnippet>117</a>            .collect::&lt;Vec&lt;PendingOutput&gt;&gt;();
+<a href=#118 id=118 data-nosnippet>118</a>
+<a href=#119 id=119 data-nosnippet>119</a>        cache.insert(height, (block_hash, outputs));
+<a href=#120 id=120 data-nosnippet>120</a>    }
+<a href=#121 id=121 data-nosnippet>121</a>
+<a href=#122 id=122 data-nosnippet>122</a>    <span class="prelude-val">Ok</span>(())
+<a href=#123 id=123 data-nosnippet>123</a>}
+<a href=#124 id=124 data-nosnippet>124</a>
+<a href=#125 id=125 data-nosnippet>125</a><span class="doccomment">/// How long one pass may spend fetching mempool transactions before it
+<a href=#126 id=126 data-nosnippet>126</a>/// publishes what it has and starts the next pass.
+<a href=#127 id=127 data-nosnippet>127</a>///
+<a href=#128 id=128 data-nosnippet>128</a>/// Fetches are sequential, so a cold cache over a large mempool would otherwise
+<a href=#129 id=129 data-nosnippet>129</a>/// hold back the confirmations already gathered from the block scan until
+<a href=#130 id=130 data-nosnippet>130</a>/// every transaction had been fetched. Kept short under test so that a test can
+<a href=#131 id=131 data-nosnippet>131</a>/// observe a pass running out of budget without a large mempool.
+<a href=#132 id=132 data-nosnippet>132</a></span><span class="kw">fn </span>mempool_scan_budget() -&gt; Duration {
+<a href=#133 id=133 data-nosnippet>133</a>    <span class="kw">if </span>is_running_in_test_env() {
+<a href=#134 id=134 data-nosnippet>134</a>        Duration::from_millis(<span class="number">100</span>)
+<a href=#135 id=135 data-nosnippet>135</a>    } <span class="kw">else </span>{
+<a href=#136 id=136 data-nosnippet>136</a>        Duration::from_secs(<span class="number">5</span>)
+<a href=#137 id=137 data-nosnippet>137</a>    }
+<a href=#138 id=138 data-nosnippet>138</a>}
+<a href=#139 id=139 data-nosnippet>139</a>
+<a href=#140 id=140 data-nosnippet>140</a><span class="doccomment">/// How one pass over the guardian's mempool ended.
+<a href=#141 id=141 data-nosnippet>141</a>///
+<a href=#142 id=142 data-nosnippet>142</a>/// Clients only learn the resulting [`MempoolVisibility`]; the scanner also
+<a href=#143 id=143 data-nosnippet>143</a>/// needs to know *why* a pass stopped short, because a pass that ran out of
+<a href=#144 id=144 data-nosnippet>144</a>/// budget should continue right away while one that hit a failing backend
+<a href=#145 id=145 data-nosnippet>145</a>/// should wait before trying again.
+<a href=#146 id=146 data-nosnippet>146</a></span><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+<a href=#147 id=147 data-nosnippet>147</a></span><span class="kw">enum </span>MempoolScan {
+<a href=#148 id=148 data-nosnippet>148</a>    <span class="doccomment">/// The backend cannot enumerate a mempool, the scan is turned off, or
+<a href=#149 id=149 data-nosnippet>149</a>    /// listing the mempool failed.
+<a href=#150 id=150 data-nosnippet>150</a>    </span>Unavailable,
+<a href=#151 id=151 data-nosnippet>151</a>    <span class="doccomment">/// Fetching a transaction failed, so the pass gave up partway through.
+<a href=#152 id=152 data-nosnippet>152</a>    </span>Failed,
+<a href=#153 id=153 data-nosnippet>153</a>    <span class="doccomment">/// The pass spent its budget with transactions still left to fetch.
+<a href=#154 id=154 data-nosnippet>154</a>    </span>OutOfBudget,
+<a href=#155 id=155 data-nosnippet>155</a>    <span class="doccomment">/// Every transaction the backend listed is now in the cache.
+<a href=#156 id=156 data-nosnippet>156</a>    </span>Complete,
+<a href=#157 id=157 data-nosnippet>157</a>}
+<a href=#158 id=158 data-nosnippet>158</a>
+<a href=#159 id=159 data-nosnippet>159</a><span class="kw">impl </span>MempoolScan {
+<a href=#160 id=160 data-nosnippet>160</a>    <span class="kw">fn </span>visibility(<span class="self">self</span>) -&gt; MempoolVisibility {
+<a href=#161 id=161 data-nosnippet>161</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#162 id=162 data-nosnippet>162</a>            <span class="self">Self</span>::Unavailable =&gt; MempoolVisibility::Unavailable,
+<a href=#163 id=163 data-nosnippet>163</a>            <span class="self">Self</span>::Failed | <span class="self">Self</span>::OutOfBudget =&gt; MempoolVisibility::Partial,
+<a href=#164 id=164 data-nosnippet>164</a>            <span class="self">Self</span>::Complete =&gt; MempoolVisibility::Complete,
+<a href=#165 id=165 data-nosnippet>165</a>        }
+<a href=#166 id=166 data-nosnippet>166</a>    }
+<a href=#167 id=167 data-nosnippet>167</a>}
+<a href=#168 id=168 data-nosnippet>168</a>
+<a href=#169 id=169 data-nosnippet>169</a><span class="doccomment">/// Collects the receive outputs of the transactions in the node's mempool.
+<a href=#170 id=170 data-nosnippet>170</a>///
+<a href=#171 id=171 data-nosnippet>171</a>/// A pass never fails outright, because the mempool is only ever the weakest
+<a href=#172 id=172 data-nosnippet>172</a>/// half of the pending view: losing it must not cost the mined half, which is
+<a href=#173 id=173 data-nosnippet>173</a>/// the stronger signal and is gathered from a backend that may well still be
+<a href=#174 id=174 data-nosnippet>174</a>/// working. Instead it reports how far it got.
+<a href=#175 id=175 data-nosnippet>175</a>///
+<a href=#176 id=176 data-nosnippet>176</a>/// A pass stops fetching once `budget` has elapsed, after fetching at least one
+<a href=#177 id=177 data-nosnippet>177</a>/// transaction so that every pass makes progress.
+<a href=#178 id=178 data-nosnippet>178</a>///
+<a href=#179 id=179 data-nosnippet>179</a>/// Only transactions absent from `cache` are fetched, and entries that have
+<a href=#180 id=180 data-nosnippet>180</a>/// left the mempool are dropped, so eviction and replacement are handled by
+<a href=#181 id=181 data-nosnippet>181</a>/// rebuilding the retained set rather than by tracking them explicitly. A
+<a href=#182 id=182 data-nosnippet>182</a>/// transaction that disappears between being listed and being fetched is
+<a href=#183 id=183 data-nosnippet>183</a>/// skipped rather than treated as an error, since that is the ordinary outcome
+<a href=#184 id=184 data-nosnippet>184</a>/// of it being mined mid-scan.
+<a href=#185 id=185 data-nosnippet>185</a>///
+<a href=#186 id=186 data-nosnippet>186</a>/// `cache` is never emptied on failure. Refilling it costs one fetch per
+<a href=#187 id=187 data-nosnippet>187</a>/// mempool transaction, so discarding it because a single call failed would
+<a href=#188 id=188 data-nosnippet>188</a>/// turn a transient error into repeated bursts of RPC work; whether its
+<a href=#189 id=189 data-nosnippet>189</a>/// contents may be *reported* is what the returned [`MempoolScan`] decides. A
+<a href=#190 id=190 data-nosnippet>190</a>/// pass that stops short still reports its cache: it was pruned against a fresh
+<a href=#191 id=191 data-nosnippet>191</a>/// listing, so every entry in it is real and the set is merely short of a few
+<a href=#192 id=192 data-nosnippet>192</a>/// transactions.
+<a href=#193 id=193 data-nosnippet>193</a></span><span class="kw">async fn </span>scan_pending_mempool(
+<a href=#194 id=194 data-nosnippet>194</a>    btc_rpc: <span class="kw-2">&amp;</span>ServerBitcoinRpcMonitor,
+<a href=#195 id=195 data-nosnippet>195</a>    pks_hash: <span class="kw-2">&amp;</span>sha256::Hash,
+<a href=#196 id=196 data-nosnippet>196</a>    budget: Duration,
+<a href=#197 id=197 data-nosnippet>197</a>    cache: <span class="kw-2">&amp;mut </span>MempoolCache,
+<a href=#198 id=198 data-nosnippet>198</a>) -&gt; MempoolScan {
+<a href=#199 id=199 data-nosnippet>199</a>    <span class="kw">let </span>deadline = fedimint_core::time::now() + budget;
+<a href=#200 id=200 data-nosnippet>200</a>
+<a href=#201 id=201 data-nosnippet>201</a>    <span class="kw">let </span>txids = <span class="kw">match </span>btc_rpc.get_mempool_txids().<span class="kw">await </span>{
+<a href=#202 id=202 data-nosnippet>202</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(txids)) =&gt; txids,
+<a href=#203 id=203 data-nosnippet>203</a>        <span class="comment">// The backend has no mempool to enumerate, as esplora never does.
+<a href=#204 id=204 data-nosnippet>204</a>        </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; <span class="kw">return </span>MempoolScan::Unavailable,
+<a href=#205 id=205 data-nosnippet>205</a>        <span class="comment">// Without a fresh listing the cache cannot be pruned, so it may hold
+<a href=#206 id=206 data-nosnippet>206</a>        // transactions that have since been mined or evicted. Report nothing
+<a href=#207 id=207 data-nosnippet>207</a>        // from it until a listing succeeds and prunes it again.
+<a href=#208 id=208 data-nosnippet>208</a>        </span><span class="prelude-val">Err</span>(err) =&gt; {
+<a href=#209 id=209 data-nosnippet>209</a>            <span class="macro">debug!</span>(
+<a href=#210 id=210 data-nosnippet>210</a>                target: LOG_MODULE_WALLETV2,
+<a href=#211 id=211 data-nosnippet>211</a>                err = %err.fmt_compact(),
+<a href=#212 id=212 data-nosnippet>212</a>                <span class="string">"Error listing the mempool, reporting confirmations only"
+<a href=#213 id=213 data-nosnippet>213</a>            </span>);
+<a href=#214 id=214 data-nosnippet>214</a>
+<a href=#215 id=215 data-nosnippet>215</a>            <span class="kw">return </span>MempoolScan::Unavailable;
+<a href=#216 id=216 data-nosnippet>216</a>        }
+<a href=#217 id=217 data-nosnippet>217</a>    };
+<a href=#218 id=218 data-nosnippet>218</a>
+<a href=#219 id=219 data-nosnippet>219</a>    <span class="kw">let </span>txids: BTreeSet&lt;Txid&gt; = txids.into_iter().collect();
+<a href=#220 id=220 data-nosnippet>220</a>
+<a href=#221 id=221 data-nosnippet>221</a>    cache.retain(|txid, <span class="kw">_</span>| txids.contains(txid));
+<a href=#222 id=222 data-nosnippet>222</a>
+<a href=#223 id=223 data-nosnippet>223</a>    <span class="kw">let </span>missing: Vec&lt;Txid&gt; = txids
+<a href=#224 id=224 data-nosnippet>224</a>        .into_iter()
+<a href=#225 id=225 data-nosnippet>225</a>        .filter(|txid| !cache.contains_key(txid))
+<a href=#226 id=226 data-nosnippet>226</a>        .collect();
+<a href=#227 id=227 data-nosnippet>227</a>
+<a href=#228 id=228 data-nosnippet>228</a>    <span class="kw">let </span><span class="kw-2">mut </span>missing = missing.into_iter().peekable();
+<a href=#229 id=229 data-nosnippet>229</a>
+<a href=#230 id=230 data-nosnippet>230</a>    <span class="kw">while let </span><span class="prelude-val">Some</span>(txid) = missing.next() {
+<a href=#231 id=231 data-nosnippet>231</a>        <span class="kw">match </span>btc_rpc.get_mempool_tx(<span class="kw-2">&amp;</span>txid).<span class="kw">await </span>{
+<a href=#232 id=232 data-nosnippet>232</a>            <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(tx)) =&gt; {
+<a href=#233 id=233 data-nosnippet>233</a>                cache.insert(txid, filtered_receive_outputs(<span class="kw-2">&amp;</span>tx, pks_hash, <span class="prelude-val">None</span>));
+<a href=#234 id=234 data-nosnippet>234</a>            }
+<a href=#235 id=235 data-nosnippet>235</a>            <span class="comment">// The transaction left the mempool between being listed and being
+<a href=#236 id=236 data-nosnippet>236</a>            // fetched, so its absence from the cache is correct.
+<a href=#237 id=237 data-nosnippet>237</a>            </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; {}
+<a href=#238 id=238 data-nosnippet>238</a>            <span class="comment">// A node that has the transaction but declines to return it answers
+<a href=#239 id=239 data-nosnippet>239</a>            // with code `-5`, which the backend already reports as `Ok(None)`,
+<a href=#240 id=240 data-nosnippet>240</a>            // so an error here is the backend itself failing and every
+<a href=#241 id=241 data-nosnippet>241</a>            // remaining fetch would fail the same way. Abandon the pass rather
+<a href=#242 id=242 data-nosnippet>242</a>            // than walk the rest of the mempool collecting the same error, and
+<a href=#243 id=243 data-nosnippet>243</a>            // report what was gathered: everything fetched so far stays cached,
+<a href=#244 id=244 data-nosnippet>244</a>            // so the next pass resumes from here instead of starting over.
+<a href=#245 id=245 data-nosnippet>245</a>            </span><span class="prelude-val">Err</span>(err) =&gt; {
+<a href=#246 id=246 data-nosnippet>246</a>                <span class="macro">debug!</span>(
+<a href=#247 id=247 data-nosnippet>247</a>                    target: LOG_MODULE_WALLETV2,
+<a href=#248 id=248 data-nosnippet>248</a>                    %txid,
+<a href=#249 id=249 data-nosnippet>249</a>                    err = %err.fmt_compact(),
+<a href=#250 id=250 data-nosnippet>250</a>                    <span class="string">"Error fetching a mempool transaction, reporting a partial mempool"
+<a href=#251 id=251 data-nosnippet>251</a>                </span>);
+<a href=#252 id=252 data-nosnippet>252</a>
+<a href=#253 id=253 data-nosnippet>253</a>                <span class="kw">return </span>MempoolScan::Failed;
+<a href=#254 id=254 data-nosnippet>254</a>            }
+<a href=#255 id=255 data-nosnippet>255</a>        }
+<a href=#256 id=256 data-nosnippet>256</a>
+<a href=#257 id=257 data-nosnippet>257</a>        <span class="comment">// Checked after a fetch rather than before, so that even a budget
+<a href=#258 id=258 data-nosnippet>258</a>        // shorter than a single fetch makes progress on every pass.
+<a href=#259 id=259 data-nosnippet>259</a>        </span><span class="kw">if </span>missing.peek().is_some() &amp;&amp; fedimint_core::time::now() &gt;= deadline {
+<a href=#260 id=260 data-nosnippet>260</a>            <span class="kw">return </span>MempoolScan::OutOfBudget;
+<a href=#261 id=261 data-nosnippet>261</a>        }
+<a href=#262 id=262 data-nosnippet>262</a>    }
+<a href=#263 id=263 data-nosnippet>263</a>
+<a href=#264 id=264 data-nosnippet>264</a>    MempoolScan::Complete
+<a href=#265 id=265 data-nosnippet>265</a>}
+<a href=#266 id=266 data-nosnippet>266</a>
+<a href=#267 id=267 data-nosnippet>267</a><span class="doccomment">/// Collects every receive output a guardian can see but the federation has not
+<a href=#268 id=268 data-nosnippet>268</a>/// yet recorded, from the recent blocks and, unless `mempool_budget` is `None`
+<a href=#269 id=269 data-nosnippet>269</a>/// because the mempool scan is turned off, the mempool.
+<a href=#270 id=270 data-nosnippet>270</a>///
+<a href=#271 id=271 data-nosnippet>271</a>/// Also returns how the mempool pass ended, so the caller can tell whether to
+<a href=#272 id=272 data-nosnippet>272</a>/// continue straight away.
+<a href=#273 id=273 data-nosnippet>273</a></span><span class="kw">async fn </span>scan_pending_receives(
+<a href=#274 id=274 data-nosnippet>274</a>    btc_rpc: <span class="kw-2">&amp;</span>ServerBitcoinRpcMonitor,
+<a href=#275 id=275 data-nosnippet>275</a>    pks_hash: <span class="kw-2">&amp;</span>sha256::Hash,
+<a href=#276 id=276 data-nosnippet>276</a>    mempool_budget: <span class="prelude-ty">Option</span>&lt;Duration&gt;,
+<a href=#277 id=277 data-nosnippet>277</a>    cache: <span class="kw-2">&amp;mut </span>PendingCache,
+<a href=#278 id=278 data-nosnippet>278</a>) -&gt; anyhow::Result&lt;(PendingOutputs, MempoolScan)&gt; {
+<a href=#279 id=279 data-nosnippet>279</a>    <span class="kw">let </span>status = btc_rpc
+<a href=#280 id=280 data-nosnippet>280</a>        .status()
+<a href=#281 id=281 data-nosnippet>281</a>        .context(<span class="string">"Bitcoin backend is not connected"</span>)<span class="question-mark">?</span>;
+<a href=#282 id=282 data-nosnippet>282</a>
+<a href=#283 id=283 data-nosnippet>283</a>    scan_pending_blocks(btc_rpc, pks_hash, status.block_count, <span class="kw-2">&amp;mut </span>cache.blocks).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#284 id=284 data-nosnippet>284</a>
+<a href=#285 id=285 data-nosnippet>285</a>    <span class="comment">// The mempool pass never fails the whole scan. Propagating would discard
+<a href=#286 id=286 data-nosnippet>286</a>    // the mined progress gathered above, which is both the stronger signal and
+<a href=#287 id=287 data-nosnippet>287</a>    // still available: with an esplora fallback the block scan can succeed
+<a href=#288 id=288 data-nosnippet>288</a>    // while the mempool read, which only bitcoind can serve, does not.
+<a href=#289 id=289 data-nosnippet>289</a>    </span><span class="kw">let </span>mempool = <span class="kw">match </span>mempool_budget {
+<a href=#290 id=290 data-nosnippet>290</a>        <span class="prelude-val">Some</span>(budget) =&gt; scan_pending_mempool(btc_rpc, pks_hash, budget, <span class="kw-2">&amp;mut </span>cache.mempool).<span class="kw">await</span>,
+<a href=#291 id=291 data-nosnippet>291</a>        <span class="prelude-val">None </span>=&gt; MempoolScan::Unavailable,
+<a href=#292 id=292 data-nosnippet>292</a>    };
+<a href=#293 id=293 data-nosnippet>293</a>
+<a href=#294 id=294 data-nosnippet>294</a>    <span class="kw">let </span>mined = cache
+<a href=#295 id=295 data-nosnippet>295</a>        .blocks
+<a href=#296 id=296 data-nosnippet>296</a>        .values()
+<a href=#297 id=297 data-nosnippet>297</a>        .flat_map(|(<span class="kw">_</span>, outputs)| outputs.iter().cloned());
+<a href=#298 id=298 data-nosnippet>298</a>
+<a href=#299 id=299 data-nosnippet>299</a>    <span class="comment">// The cache survives a pass that could not report from it, so that a
+<a href=#300 id=300 data-nosnippet>300</a>    // transient failure does not force a refetch of the whole mempool next
+<a href=#301 id=301 data-nosnippet>301</a>    // time; what is reported is decided here instead of by emptying it.
+<a href=#302 id=302 data-nosnippet>302</a>    </span><span class="kw">let </span>unmined = (<span class="macro">mempool !</span>= MempoolScan::Unavailable)
+<a href=#303 id=303 data-nosnippet>303</a>        .then(|| cache.mempool.values().flatten().cloned())
+<a href=#304 id=304 data-nosnippet>304</a>        .into_iter()
+<a href=#305 id=305 data-nosnippet>305</a>        .flatten();
+<a href=#306 id=306 data-nosnippet>306</a>
+<a href=#307 id=307 data-nosnippet>307</a>    <span class="comment">// A transaction mined between the two scans appears in both; the mined
+<a href=#308 id=308 data-nosnippet>308</a>    // entry is the stronger signal, so it wins on the client side by way of the
+<a href=#309 id=309 data-nosnippet>309</a>    // per-outpoint merge preferring a known height.
+<a href=#310 id=310 data-nosnippet>310</a>    </span><span class="kw">let </span>outputs = mined.chain(unmined).collect::&lt;Vec&lt;PendingOutput&gt;&gt;();
+<a href=#311 id=311 data-nosnippet>311</a>
+<a href=#312 id=312 data-nosnippet>312</a>    <span class="macro">debug!</span>(
+<a href=#313 id=313 data-nosnippet>313</a>        target: LOG_MODULE_WALLETV2,
+<a href=#314 id=314 data-nosnippet>314</a>        block_count = status.block_count,
+<a href=#315 id=315 data-nosnippet>315</a>        <span class="question-mark">?</span>mempool,
+<a href=#316 id=316 data-nosnippet>316</a>        mempool_txs_num = cache.mempool.len(),
+<a href=#317 id=317 data-nosnippet>317</a>        pending_outputs_num = outputs.len(),
+<a href=#318 id=318 data-nosnippet>318</a>        <span class="string">"Scanned for pending receives"
+<a href=#319 id=319 data-nosnippet>319</a>    </span>);
+<a href=#320 id=320 data-nosnippet>320</a>
+<a href=#321 id=321 data-nosnippet>321</a>    <span class="kw">let </span>pending = PendingOutputs {
+<a href=#322 id=322 data-nosnippet>322</a>        block_count: status.block_count,
+<a href=#323 id=323 data-nosnippet>323</a>        outputs,
+<a href=#324 id=324 data-nosnippet>324</a>        mempool_visibility: mempool.visibility(),
+<a href=#325 id=325 data-nosnippet>325</a>    };
+<a href=#326 id=326 data-nosnippet>326</a>
+<a href=#327 id=327 data-nosnippet>327</a>    <span class="prelude-val">Ok</span>((pending, mempool))
+<a href=#328 id=328 data-nosnippet>328</a>}
+<a href=#329 id=329 data-nosnippet>329</a>
+<a href=#330 id=330 data-nosnippet>330</a><span class="doccomment">/// Maintains [`crate::Wallet::pending_outputs`] by scanning both the blocks
+<a href=#331 id=331 data-nosnippet>331</a>/// just below the guardian's local chain tip and its mempool.
+<a href=#332 id=332 data-nosnippet>332</a>///
+<a href=#333 id=333 data-nosnippet>333</a>/// This deliberately runs outside of consensus. Most of this window sits
+<a href=#334 id=334 data-nosnippet>334</a>/// above the consensus block count precisely because the federation does
+<a href=#335 id=335 data-nosnippet>335</a>/// not consider those blocks final yet, and each guardian sees a slightly
+<a href=#336 id=336 data-nosnippet>336</a>/// different tip, so nothing derived here may ever influence consensus
+<a href=#337 id=337 data-nosnippet>337</a>/// state. It exists only so clients can render peg-in progress rather than
+<a href=#338 id=338 data-nosnippet>338</a>/// showing nothing for the hour it takes a deposit to become claimable.
+<a href=#339 id=339 data-nosnippet>339</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>spawn_pending_receive_scanner(
+<a href=#340 id=340 data-nosnippet>340</a>    btc_rpc: ServerBitcoinRpcMonitor,
+<a href=#341 id=341 data-nosnippet>341</a>    pks_hash: sha256::Hash,
+<a href=#342 id=342 data-nosnippet>342</a>    sender: watch::Sender&lt;PendingOutputs&gt;,
+<a href=#343 id=343 data-nosnippet>343</a>    task_group: <span class="kw-2">&amp;</span>TaskGroup,
+<a href=#344 id=344 data-nosnippet>344</a>) {
+<a href=#345 id=345 data-nosnippet>345</a>    <span class="comment">// Read once rather than per scan: it selects how this guardian behaves
+<a href=#346 id=346 data-nosnippet>346</a>    // for its whole run, and a guardian that has opted out should not be
+<a href=#347 id=347 data-nosnippet>347</a>    // paying an env lookup on every chain tip either.
+<a href=#348 id=348 data-nosnippet>348</a>    </span><span class="kw">let </span>mempool_budget =
+<a href=#349 id=349 data-nosnippet>349</a>        (!is_env_var_set(FM_WALLETV2_DISABLE_MEMPOOL_SCAN_ENV)).then(mempool_scan_budget);
+<a href=#350 id=350 data-nosnippet>350</a>
+<a href=#351 id=351 data-nosnippet>351</a>    task_group.spawn_cancellable(<span class="string">"scan_pending_receives"</span>, <span class="kw">async move </span>{
+<a href=#352 id=352 data-nosnippet>352</a>        <span class="comment">// Carried across scans so that each one only fetches blocks and
+<a href=#353 id=353 data-nosnippet>353</a>        // mempool transactions it has not already seen.
+<a href=#354 id=354 data-nosnippet>354</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>cache = PendingCache::default();
+<a href=#355 id=355 data-nosnippet>355</a>
+<a href=#356 id=356 data-nosnippet>356</a>        <span class="comment">// Follow the monitor's own refresh cadence rather than an
+<a href=#357 id=357 data-nosnippet>357</a>        // independent timer, so we never scan a chain tip that is already
+<a href=#358 id=358 data-nosnippet>358</a>        // stale by up to a full update interval.
+<a href=#359 id=359 data-nosnippet>359</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>status = btc_rpc.subscribe_status();
+<a href=#360 id=360 data-nosnippet>360</a>
+<a href=#361 id=361 data-nosnippet>361</a>        <span class="kw">loop </span>{
+<a href=#362 id=362 data-nosnippet>362</a>            <span class="kw">let </span>scan = scan_pending_receives(<span class="kw-2">&amp;</span>btc_rpc, <span class="kw-2">&amp;</span>pks_hash, mempool_budget, <span class="kw-2">&amp;mut </span>cache).<span class="kw">await</span>;
+<a href=#363 id=363 data-nosnippet>363</a>
+<a href=#364 id=364 data-nosnippet>364</a>            <span class="kw">let </span>out_of_budget = <span class="kw">match </span>scan {
+<a href=#365 id=365 data-nosnippet>365</a>                <span class="prelude-val">Ok</span>((pending, mempool)) =&gt; {
+<a href=#366 id=366 data-nosnippet>366</a>                    sender.send_replace(pending);
+<a href=#367 id=367 data-nosnippet>367</a>
+<a href=#368 id=368 data-nosnippet>368</a>                    mempool == MempoolScan::OutOfBudget
+<a href=#369 id=369 data-nosnippet>369</a>                }
+<a href=#370 id=370 data-nosnippet>370</a>                <span class="prelude-val">Err</span>(err) =&gt; {
+<a href=#371 id=371 data-nosnippet>371</a>                    <span class="comment">// This view is advisory, so a guardian that cannot
+<a href=#372 id=372 data-nosnippet>372</a>                    // reach its bitcoin backend degrades to reporting
+<a href=#373 id=373 data-nosnippet>373</a>                    // nothing pending rather than failing.
+<a href=#374 id=374 data-nosnippet>374</a>                    </span><span class="macro">debug!</span>(
+<a href=#375 id=375 data-nosnippet>375</a>                        target: LOG_MODULE_WALLETV2,
+<a href=#376 id=376 data-nosnippet>376</a>                        err = %err.fmt_compact(),
+<a href=#377 id=377 data-nosnippet>377</a>                        <span class="string">"Error scanning for pending receives"
+<a href=#378 id=378 data-nosnippet>378</a>                    </span>);
+<a href=#379 id=379 data-nosnippet>379</a>
+<a href=#380 id=380 data-nosnippet>380</a>                    sender.send_replace(PendingOutputs::default());
+<a href=#381 id=381 data-nosnippet>381</a>
+<a href=#382 id=382 data-nosnippet>382</a>                    <span class="bool-val">false
+<a href=#383 id=383 data-nosnippet>383</a>                </span>}
+<a href=#384 id=384 data-nosnippet>384</a>            };
+<a href=#385 id=385 data-nosnippet>385</a>
+<a href=#386 id=386 data-nosnippet>386</a>            <span class="comment">// A pass that ran out of budget has published what it gathered
+<a href=#387 id=387 data-nosnippet>387</a>            // and still has mempool transactions left to fetch, so carry on
+<a href=#388 id=388 data-nosnippet>388</a>            // now rather than a full monitor interval later. Every such
+<a href=#389 id=389 data-nosnippet>389</a>            // pass fetches at least one transaction, so this terminates
+<a href=#390 id=390 data-nosnippet>390</a>            // once the cache has caught up with the mempool.
+<a href=#391 id=391 data-nosnippet>391</a>            //
+<a href=#392 id=392 data-nosnippet>392</a>            // Yield first: the bitcoind backend's RPC futures run
+<a href=#393 id=393 data-nosnippet>393</a>            // synchronously via `block_in_place` and never return `Pending`,
+<a href=#394 id=394 data-nosnippet>394</a>            // so without this a catch-up would run every slice inside a
+<a href=#395 id=395 data-nosnippet>395</a>            // single poll and the enclosing `cancel_on_shutdown` could not
+<a href=#396 id=396 data-nosnippet>396</a>            // observe shutdown in between.
+<a href=#397 id=397 data-nosnippet>397</a>            </span><span class="kw">if </span>out_of_budget {
+<a href=#398 id=398 data-nosnippet>398</a>                tokio::task::yield_now().<span class="kw">await</span>;
+<a href=#399 id=399 data-nosnippet>399</a>                <span class="kw">continue</span>;
+<a href=#400 id=400 data-nosnippet>400</a>            }
+<a href=#401 id=401 data-nosnippet>401</a>
+<a href=#402 id=402 data-nosnippet>402</a>            <span class="kw">if </span>status.changed().<span class="kw">await</span>.is_err() {
+<a href=#403 id=403 data-nosnippet>403</a>                <span class="kw">break</span>;
+<a href=#404 id=404 data-nosnippet>404</a>            }
+<a href=#405 id=405 data-nosnippet>405</a>        }
+<a href=#406 id=406 data-nosnippet>406</a>    });
+<a href=#407 id=407 data-nosnippet>407</a>}
+</code></pre></div></section></main></body></html>

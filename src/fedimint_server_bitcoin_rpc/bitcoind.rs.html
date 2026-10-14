@@ -2,7 +2,7 @@
 <a href=#2 id=2 data-nosnippet>2</a></span><span class="kw">mod </span>tests;
 <a href=#3 id=3 data-nosnippet>3</a>
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>anyhow::anyhow;
-<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>bitcoin::{BlockHash, Transaction};
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>bitcoin::{BlockHash, Transaction, Txid};
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>bitcoincore_rpc::Error::JsonRpc;
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 <a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>bitcoincore_rpc::jsonrpc::Error::Rpc;
@@ -105,8 +105,26 @@
 <a href=#105 id=105 data-nosnippet>105</a>        ))
 <a href=#106 id=106 data-nosnippet>106</a>    }
 <a href=#107 id=107 data-nosnippet>107</a>
-<a href=#108 id=108 data-nosnippet>108</a>    <span class="kw">async fn </span>get_chain_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ChainId&gt; {
-<a href=#109 id=109 data-nosnippet>109</a>        <span class="self">self</span>.get_block_hash(<span class="number">1</span>).<span class="kw">await</span>.map(ChainId::new)
-<a href=#110 id=110 data-nosnippet>110</a>    }
-<a href=#111 id=111 data-nosnippet>111</a>}
+<a href=#108 id=108 data-nosnippet>108</a>    <span class="kw">async fn </span>get_mempool_txids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;Vec&lt;Txid&gt;&gt;&gt; {
+<a href=#109 id=109 data-nosnippet>109</a>        block_in_place(|| <span class="self">self</span>.client.get_raw_mempool())
+<a href=#110 id=110 data-nosnippet>110</a>            .map(<span class="prelude-val">Some</span>)
+<a href=#111 id=111 data-nosnippet>111</a>            .map_err(anyhow::Error::from)
+<a href=#112 id=112 data-nosnippet>112</a>    }
+<a href=#113 id=113 data-nosnippet>113</a>
+<a href=#114 id=114 data-nosnippet>114</a>    <span class="kw">async fn </span>get_mempool_tx(<span class="kw-2">&amp;</span><span class="self">self</span>, txid: <span class="kw-2">&amp;</span>Txid) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;Transaction&gt;&gt; {
+<a href=#115 id=115 data-nosnippet>115</a>        <span class="comment">// Bitcoin Core resolves the mempool before the block index, so this
+<a href=#116 id=116 data-nosnippet>116</a>        // works without `txindex`. Error code -5 is the node saying it has no
+<a href=#117 id=117 data-nosnippet>117</a>        // such transaction, which for a mempool read is an ordinary outcome:
+<a href=#118 id=118 data-nosnippet>118</a>        // the transaction was mined or evicted since it was listed.
+<a href=#119 id=119 data-nosnippet>119</a>        </span><span class="kw">match </span>block_in_place(|| <span class="self">self</span>.client.get_raw_transaction(txid, <span class="prelude-val">None</span>)) {
+<a href=#120 id=120 data-nosnippet>120</a>            <span class="prelude-val">Ok</span>(tx) =&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(tx)),
+<a href=#121 id=121 data-nosnippet>121</a>            <span class="prelude-val">Err</span>(JsonRpc(Rpc(e))) <span class="kw">if </span>e.code == -<span class="number">5 </span>=&gt; <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
+<a href=#122 id=122 data-nosnippet>122</a>            <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(e.into()),
+<a href=#123 id=123 data-nosnippet>123</a>        }
+<a href=#124 id=124 data-nosnippet>124</a>    }
+<a href=#125 id=125 data-nosnippet>125</a>
+<a href=#126 id=126 data-nosnippet>126</a>    <span class="kw">async fn </span>get_chain_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;ChainId&gt; {
+<a href=#127 id=127 data-nosnippet>127</a>        <span class="self">self</span>.get_block_hash(<span class="number">1</span>).<span class="kw">await</span>.map(ChainId::new)
+<a href=#128 id=128 data-nosnippet>128</a>    }
+<a href=#129 id=129 data-nosnippet>129</a>}
 </code></pre></div></section></main></body></html>
