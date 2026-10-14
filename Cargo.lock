@@ -3710,6 +3710,7 @@ dependencies = [
  "fedimint-metrics",
  "fedimint-mint-client",
  "fedimint-mintv2-client",
+ "fedimint-mintv2-server",
  "fedimint-rocksdb",
  "fedimint-testing",
  "fedimint-testing-core",
