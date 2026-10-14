@@ -48,7 +48,7 @@ use crate::consensus::aleph_bft::spawner::Spawner;
 use crate::consensus::aleph_bft::to_node_index;
 use crate::consensus::db::{
     AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, AlephUnitsPrefix,
-    PeerAvailabilityKey, SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
+    SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
 };
 use crate::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
 use crate::consensus::peer_availability::PeerActivity;
@@ -779,32 +779,12 @@ impl ConsensusEngine {
             .await
     }
 
-    /// Folds the consensus traffic since the last session into this
-    /// guardian's view of its peers' availability.
-    async fn update_peer_availability(&self, dbtx: &mut DatabaseTransaction<'_>) {
-        let now_secs = fedimint_core::time::duration_since_epoch().as_secs();
-        let activity = self.peer_activity.lock().expect("poisoned").take(now_secs);
-
-        debug!(target: LOG_CONSENSUS, ?activity, "Peer activity since last session");
-
-        let mut state = dbtx
-            .get_value(&PeerAvailabilityKey)
-            .await
-            .unwrap_or_default();
-
-        state.update(now_secs, &activity);
-
-        dbtx.insert_entry(&PeerAvailabilityKey, &state).await;
-    }
-
     pub async fn complete_session(
         &self,
         session_index: u64,
         signed_session_outcome: SignedSessionOutcome,
     ) {
         let mut dbtx = self.db.begin_transaction().await;
-
-        self.update_peer_availability(&mut dbtx.to_ref_nc()).await;
 
         dbtx.remove_by_prefix(&AlephUnitsPrefix).await;
 

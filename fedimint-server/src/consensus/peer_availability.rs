@@ -1,27 +1,68 @@
 //! This guardian's view of its peers' availability.
 //!
-//! A peer counts as available in a 10-second slot if it sent us any AlephBFT
-//! message in it. Every running peer sends consensus traffic all the time,
-//! including a slow one that lags behind and still runs an older session,
-//! while an offline or frozen peer, or one whose consensus is stuck, sends
-//! nothing. A slot in which we heard from fewer than `threshold - 1` peers
-//! means we were down or cut off ourselves, so it does not count.
+//! A peer counts as available in a 1-minute slot if it sent us any AlephBFT
+//! message in it. Every running peer sends consensus traffic while the
+//! federation is active, including a slow one that lags behind and still runs
+//! an older session, while an offline or frozen peer, or one whose consensus
+//! is stuck, sends nothing. A slot in which we heard from fewer than
+//! `threshold - 1` peers means the federation was idle, or we were down or
+//! cut off ourselves, so it does not count.
 //!
-//! [`PeerActivity`] counts slots in memory; each completed session folds them
-//! into exponential moving averages with the time constants in
-//! [`PEER_AVAILABILITY_WINDOWS_SECS`], persisted as [`PeerAvailabilityState`].
+//! [`PeerActivity`] counts slots in memory; [`persist_peer_availability`]
+//! folds them every 10 minutes into exponential moving averages with the time
+//! constants in [`PEER_AVAILABILITY_WINDOWS_SECS`], persisted as
+//! [`PeerAvailabilityState`].
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Error, Read, Write};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
+use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::peer_availability::{
     PEER_AVAILABILITY_WINDOWS_SECS, PeerAvailability, WindowAvailability,
 };
+use fedimint_core::task::sleep;
+use fedimint_core::time::duration_since_epoch;
 use fedimint_core::{NumPeers, PeerId};
+use fedimint_logging::LOG_CONSENSUS;
+use tracing::debug;
 
-const SLOT_SECS: u64 = 10;
+use super::db::PeerAvailabilityKey;
+
+const SLOT_SECS: u64 = 60;
+
+/// Folds the [`PeerActivity`] into the persisted [`PeerAvailabilityState`]
+/// every 10 minutes, or every 10 seconds in tests. A restart loses at most one
+/// interval of activity.
+pub async fn persist_peer_availability(db: Database, peer_activity: Arc<Mutex<PeerActivity>>) {
+    let interval = if is_running_in_test_env() {
+        Duration::from_secs(10)
+    } else {
+        Duration::from_secs(600)
+    };
+
+    loop {
+        sleep(interval).await;
+
+        let now_secs = duration_since_epoch().as_secs();
+        let activity = peer_activity.lock().expect("poisoned").take(now_secs);
+
+        debug!(target: LOG_CONSENSUS, ?activity, "Peer activity since last update");
+
+        let mut dbtx = db.begin_transaction().await;
+        let mut state = dbtx
+            .get_value(&PeerAvailabilityKey)
+            .await
+            .unwrap_or_default();
+        state.update(now_secs, &activity);
+        dbtx.insert_entry(&PeerAvailabilityKey, &state).await;
+        dbtx.commit_tx().await;
+    }
+}
 
 /// Slots of consensus traffic per peer since the last [`PeerActivity::take`].
 #[derive(Debug)]

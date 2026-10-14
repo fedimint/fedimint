@@ -481,6 +481,16 @@ pub async fn run(
 
     let api_urls = get_api_urls(&db, &cfg.consensus).await;
 
+    let peer_activity = Arc::new(std::sync::Mutex::new(peer_availability::PeerActivity::new(
+        cfg.local.identity,
+        fedimint_core::NumPeersExt::to_num_peers(&cfg.consensus.broadcast_public_keys),
+    )));
+
+    task_group.spawn_cancellable(
+        "peer-availability",
+        peer_availability::persist_peer_availability(db.clone(), peer_activity.clone()),
+    );
+
     // FIXME: (@leonardo) How should this be handled ?
     // Using the `Connector::default()` for now!
     ConsensusEngine {
@@ -503,10 +513,7 @@ pub async fn run(
         data_dir,
         db_checkpoint_retention,
         session_timeout,
-        peer_activity: Arc::new(std::sync::Mutex::new(peer_availability::PeerActivity::new(
-            cfg.local.identity,
-            fedimint_core::NumPeersExt::to_num_peers(&cfg.consensus.broadcast_public_keys),
-        ))),
+        peer_activity,
     }
     .run()
     .await?;
