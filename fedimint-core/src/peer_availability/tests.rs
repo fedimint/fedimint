@@ -77,6 +77,45 @@ fn ignores_self_reports_and_poorly_covered_reports() {
 }
 
 #[test]
+fn evil_reporter_cannot_exclude_honest_reports_by_its_coverage() {
+    // A young federation: honest peers observed 30% of the window so far,
+    // evil peer 3 claims full coverage to make them look poorly covered.
+    let num_peers = NumPeers::from(4);
+    let reports = BTreeMap::from([
+        (PeerId::from(0), report(3_000, &[(1, 9_000), (2, 9_000)])),
+        (PeerId::from(1), report(3_000, &[(0, 8_000), (2, 7_000)])),
+        (PeerId::from(2), report(3_000, &[(0, 6_000), (1, 5_000)])),
+        (PeerId::from(3), report(u16::MAX, &[(0, 0), (1, 0), (2, 0)])),
+    ]);
+
+    let merged = merge_peer_availability(&reports, num_peers).windows;
+
+    assert_eq!(
+        merged[0],
+        BTreeMap::from([
+            (PeerId::from(0), 6_000),
+            (PeerId::from(1), 5_000),
+            (PeerId::from(2), 7_000),
+        ])
+    );
+}
+
+#[test]
+fn ignores_windows_of_other_lengths() {
+    let num_peers = NumPeers::from(4);
+    let mut reports: BTreeMap<PeerId, PeerAvailability> = (1..=3)
+        .map(|reporter| (PeerId::from(reporter), report(10_000, &[(0, 9_000)])))
+        .collect();
+    reports.get_mut(&PeerId::from(1)).unwrap().windows[0].window_secs = 86_400;
+    reports.get_mut(&PeerId::from(2)).unwrap().windows[0].window_secs = 86_400;
+
+    let merged = merge_peer_availability(&reports, num_peers).windows;
+
+    assert!(!merged[0].contains_key(&PeerId::from(0)));
+    assert_eq!(merged[1][&PeerId::from(0)], 9_000);
+}
+
+#[test]
 fn last_seen_ignores_self_reports_and_the_most_recent_evil_ones() {
     // 4 peers tolerate 1 evil one. Peer 3 has been offline since t=100.
     let num_peers = NumPeers::from(4);

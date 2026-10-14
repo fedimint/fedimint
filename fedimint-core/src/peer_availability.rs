@@ -22,7 +22,8 @@ pub const PEER_AVAILABILITY_WINDOWS_SECS: [u64; 2] = [604_800, 2_592_000];
 /// One guardian's view of its peers' availability.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PeerAvailability {
-    /// Unix time of the end of the last session in which each peer took part
+    /// Unix time this guardian last received a consensus message from each
+    /// peer
     pub last_seen_secs: BTreeMap<PeerId, u64>,
     /// One entry per window in [`PEER_AVAILABILITY_WINDOWS_SECS`]
     pub windows: Vec<WindowAvailability>,
@@ -31,7 +32,7 @@ pub struct PeerAvailability {
 /// The combined view of several guardians, see [`merge_peer_availability`].
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MergedPeerAvailability {
-    /// Unix time each peer was last seen taking part in consensus
+    /// Unix time each peer last sent a consensus message to the reporters
     pub last_seen_secs: BTreeMap<PeerId, u64>,
     /// Per window in [`PEER_AVAILABILITY_WINDOWS_SECS`]: each peer's
     /// availability in basis points
@@ -56,9 +57,11 @@ pub struct WindowAvailability {
 /// [`NumPeers::one_honest`]-th highest value is used: at least one honest
 /// guardian saw the peer at least that recently or that available, and
 /// [`NumPeers::max_evil`] lying guardians cannot move the value outside the
-/// honest reports. For availability, reports that cover less than half of the
-/// best-covered report of the window are ignored too. A peer with fewer
-/// usable reports is omitted.
+/// honest reports. For availability, windows whose `window_secs` does not
+/// match [`PEER_AVAILABILITY_WINDOWS_SECS`] are ignored, and so are reports
+/// that cover less than half of the [`NumPeers::one_honest`]-th best coverage,
+/// so lying about coverage cannot exclude honest reports either. A peer with
+/// fewer usable reports is omitted.
 pub fn merge_peer_availability(
     reports: &BTreeMap<PeerId, PeerAvailability>,
     num_peers: NumPeers,
@@ -82,27 +85,26 @@ pub fn merge_peer_availability(
         })
         .collect();
 
-    let windows = (0..PEER_AVAILABILITY_WINDOWS_SECS.len())
-        .map(|window| {
+    let windows = PEER_AVAILABILITY_WINDOWS_SECS
+        .iter()
+        .enumerate()
+        .map(|(window, window_secs)| {
             let windows: Vec<(PeerId, &WindowAvailability)> = reports
                 .iter()
                 .filter_map(|(reporter, report)| Some((*reporter, report.windows.get(window)?)))
+                .filter(|(_, window)| window.window_secs == *window_secs && 0 < window.coverage_bps)
                 .collect();
-
-            let max_coverage = windows
-                .iter()
-                .map(|(_, window)| window.coverage_bps)
-                .max()
-                .unwrap_or(0);
 
             num_peers
                 .peer_ids()
                 .filter_map(|peer| {
+                    let mut coverages = windows
+                        .iter()
+                        .map(|(reporter, window)| (*reporter, u64::from(window.coverage_bps)));
+                    let min_coverage = one_honest_highest(peer, &mut coverages)?.div_ceil(2);
                     let mut values = windows
                         .iter()
-                        .filter(|(_, window)| {
-                            0 < window.coverage_bps && max_coverage <= 2 * window.coverage_bps
-                        })
+                        .filter(|(_, window)| min_coverage <= u64::from(window.coverage_bps))
                         .filter_map(|(reporter, window)| {
                             Some((*reporter, u64::from(*window.peers.get(&peer)?)))
                         });
