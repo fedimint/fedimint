@@ -188,6 +188,11 @@ impl Decodable for Average {
 }
 
 impl PeerAvailabilityState {
+    /// When this local observation was last persisted, for dashboard freshness.
+    pub fn updated_at_secs(&self) -> u64 {
+        self.updated_at_secs
+    }
+
     /// Folds in the activity observed since the last update.
     pub fn update(&mut self, now_secs: u64, activity: &ObservedActivity) {
         for (peer, heard) in &activity.last_heard_secs {
