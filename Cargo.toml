@@ -411,16 +411,7 @@ debug = false
 opt-level = 1
 
 [profile.release]
-debug = "line-tables-only"
+# Keep function symbols and panic-origin locations, but not per-frame source lines.
+# On Linux, Cargo also strips linked-in dependency debuginfo when debug is disabled.
+debug = false
 lto = "thin"
-# Pack debug info into a single separate file (.dwp on Linux, .dSYM on
-# macOS/iOS, .pdb on Windows) instead of embedding it in the binary.
-#
-# On macOS this is already the default. On Linux and Android it uses DWARF
-# fission: the binary keeps only skeleton .debug_info entries pointing at
-# external .dwo files, while .debug_line (line tables) and symbols stay
-# intact. Because the .dwo files are not shipped, detailed type/variable
-# info is lost, but addr2line / backtraces still resolve to file:line.
-# Net effect on Linux: ~25 % smaller release binaries (e.g. gatewayd
-# 280 MB -> 216 MB) with no loss of backtrace quality.
-split-debuginfo = "packed"
