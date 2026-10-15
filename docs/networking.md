@@ -23,8 +23,9 @@ transport boundary is unsupported.
 
 `FM_IROH_RELAY` remains the Iroh 0.35 API relay setting.
 `FM_IROH_P2P_RELAY` configures Iroh 1.x relays for guardian P2P. If the latter is
-unset, guardian P2P uses Iroh's default 1.x-compatible relays. Do not configure a
-0.35-only relay as an Iroh 1.x P2P relay.
+unset, guardian P2P uses the Fedimint-operated Iroh 1.x relays; an explicit list
+overrides that default. `FM_IROH_RELAYS_ENABLE=0` disables relays regardless of
+the list. Do not configure a 0.35-only relay as an Iroh 1.x P2P relay.
 
 Guardian P2P publishes only its relay address through Pkarr when one is
 available. Without a relay address, it publishes its direct IP addresses instead
@@ -38,12 +39,18 @@ The client-facing API keeps its original identity and Iroh 0.35 listener for
 deployed clients. It also starts an Iroh 1.0 listener with a separately derived
 identity by default. Set `FM_IROH_NEXT_ENABLE=false` to disable it before it is
 advertised. Its bind address is configured by `FM_BIND_API_NEXT` and defaults
-to the original API bind port plus 10. The Iroh 1.0 listener uses the default
-1.x relay set; `FM_IROH_RELAY` remains exclusive to the Iroh 0.35 API. This
+to the original API bind port plus 10. The Iroh 1.0 listener and capable clients
+use the Fedimint-operated Iroh 1.x relay set. `FM_IROH_RELAYS_ENABLE=0` disables
+relays for the listener; `FM_IROH_RELAY` remains exclusive to the Iroh 0.35 API
+and `FM_IROH_P2P_RELAY` only overrides guardian P2P relays. This
 migration endpoint is only supported for a federation configured with the
 legacy Iroh API. Its runtime default is independent of the DKG-only
 `FM_ENABLE_IROH` option. Existing federations configured without the legacy
 Iroh API continue without either Iroh listener and log a warning.
+
+The Iroh 1.x default relay set selects Fedimint-operated home relays rather than
+n0's public relays. It is not an egress allowlist: clients and guardians can still
+dial peers through other relay URLs advertised in those peers' address records.
 
 Guardian metadata advertises the new identity in an optional field ignored by
 older clients. Capable clients use the advertised identity without falling back
