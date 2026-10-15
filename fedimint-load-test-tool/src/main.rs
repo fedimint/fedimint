@@ -45,6 +45,8 @@ use crate::common::{
     build_client, do_spend_notes, get_invite_code_cli, remint_denomination, try_get_notes_cli,
 };
 pub mod common;
+#[cfg(test)]
+mod tests;
 
 #[derive(Parser, Clone)]
 #[command(version)]
@@ -298,6 +300,7 @@ impl std::fmt::Display for EventMetricComparison {
 async fn main() -> anyhow::Result<()> {
     fedimint_logging::TracingSetup::default().init()?;
     let opts = Opts::parse();
+    validate_total_notes(&opts)?;
     let (event_sender, event_receiver) = tokio::sync::mpsc::unbounded_channel();
     let summary_handle = spawn("handle metrics summary", {
         let opts = opts.clone();
@@ -411,6 +414,28 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn validate_total_notes(opts: &Opts) -> anyhow::Result<()> {
+    match &opts.command {
+        Command::LoadTest(args) => {
+            checked_total(opts.users, args.notes_per_user)?;
+        }
+        Command::LnCircularLoadTest(args) => {
+            checked_total(opts.users, args.notes_per_user)?;
+        }
+        Command::TestConnect { .. } | Command::TestDownload { .. } => {}
+    }
+    Ok(())
+}
+
+fn checked_total(users: u16, notes_per_user: u16) -> anyhow::Result<u16> {
+    users.checked_mul(notes_per_user).ok_or_else(|| {
+        anyhow!(
+            "--users {users} multiplied by --notes-per-user {notes_per_user} exceeds the maximum supported combined note count of {}",
+            u16::MAX
+        )
+    })
+}
+
 async fn invite_code_or_fallback(invite_code: Option<InviteCode>) -> Option<InviteCode> {
     if let Some(invite_code) = invite_code {
         Some(invite_code)
@@ -444,9 +469,9 @@ async fn run_load_test(
     invoice_amount: Amount,
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
+    let minimum_notes = checked_total(users, notes_per_user)?;
     let db_path = get_db_path(&archive_dir);
     let (coordinator, invite_code) = get_coordinator_client(&db_path, &invite_code).await?;
-    let minimum_notes = notes_per_user * users;
     let minimum_amount_required = note_denomination * u64::from(minimum_notes);
 
     reissue_initial_notes(initial_notes, &coordinator, &event_sender).await?;
@@ -750,9 +775,9 @@ async fn run_ln_circular_load_test(
     strategy: LnCircularStrategy,
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
+    let minimum_notes = checked_total(users, notes_per_user)?;
     let db_path = get_db_path(&archive_dir);
     let (coordinator, invite_code) = get_coordinator_client(&db_path, &invite_code).await?;
-    let minimum_notes = notes_per_user * users;
     let minimum_amount_required = note_denomination * u64::from(minimum_notes);
 
     reissue_initial_notes(initial_notes, &coordinator, &event_sender).await?;
