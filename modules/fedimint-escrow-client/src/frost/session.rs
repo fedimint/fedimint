@@ -29,7 +29,7 @@ use crate::frost::transport::DkgTransport;
 const MAX_ATTEMPTS: u32 = 3;
 const RETRY_DELAY: Duration = Duration::from_secs(3);
 
-#[derive(Debug, Clone, Copy, Hash, Encodable, Decodable, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, Encodable, Decodable, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SessionId(pub [u8; 32]);
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]

@@ -3,6 +3,7 @@ pub mod iroh;
 
 use std::collections::BTreeMap;
 use std::error::Error;
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -99,4 +100,52 @@ pub trait SigningTransport: Sync + Send {
         self_id: &Identifier,
         timeout: Duration,
     ) -> Result<(Identifier, Vec<u8>), TransportError>;
+}
+
+#[async_trait]
+impl<T: DkgTransport + ?Sized> DkgTransport for Arc<T> {
+    async fn broadcast_round1(
+        &self,
+        session_id: &SessionId,
+        sender: &Identifier,
+        package: frost::keys::dkg::round1::Package,
+    ) -> Result<(), TransportError> {
+        (**self).broadcast_round1(session_id, sender, package).await
+    }
+
+    async fn recv_round1_all(
+        &self,
+        session_id: &SessionId,
+        self_id: &Identifier,
+        expected: &[Identifier],
+        timeout: Duration,
+    ) -> Result<BTreeMap<Identifier, frost::keys::dkg::round1::Package>, TransportError> {
+        (**self)
+            .recv_round1_all(session_id, self_id, expected, timeout)
+            .await
+    }
+
+    async fn send_round2(
+        &self,
+        session_id: &SessionId,
+        sender: &Identifier,
+        receiver: &Identifier,
+        package: frost::keys::dkg::round2::Package,
+    ) -> Result<(), TransportError> {
+        (**self)
+            .send_round2(session_id, sender, receiver, package)
+            .await
+    }
+
+    async fn recv_round2(
+        &self,
+        session_id: &SessionId,
+        self_id: &Identifier,
+        expected: &[Identifier],
+        timeout: Duration,
+    ) -> Result<BTreeMap<Identifier, frost::keys::dkg::round2::Package>, TransportError> {
+        (**self)
+            .recv_round2(session_id, self_id, expected, timeout)
+            .await
+    }
 }

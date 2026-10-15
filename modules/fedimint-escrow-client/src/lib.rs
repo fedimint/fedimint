@@ -37,6 +37,7 @@ use fedimint_escrow_common::{
     x_only_eq,
 };
 use frost_secp256k1_tr::Identifier;
+use futures::lock::Mutex;
 use futures::{StreamExt, TryStreamExt};
 use iroh::{NodeAddr, SecretKey};
 use serde::{Deserialize, Serialize};
@@ -143,6 +144,7 @@ pub struct EscrowClientModule {
     arbiter_fee_key: Keypair,
     secret: DerivableSecret,
     notifier: ModuleNotifier<EscrowStateMachine>,
+    dkg_transports: Mutex<BTreeMap<SessionId, Arc<IrohDkgTransport>>>,
 }
 
 impl fmt::Debug for EscrowClientModule {
@@ -232,6 +234,7 @@ impl ClientModuleInit for EscrowClientInit {
                 .to_secp_key(&Secp256k1::new()),
             secret: args.module_root_secret.clone(),
             notifier: args.notifier().clone(),
+            dkg_transports: Default::default(),
         })
     }
 }
@@ -887,12 +890,37 @@ impl EscrowClientModule {
             FrostDkgSessionRecord::new(self_participant_id, participants, self.federation_id, db)
                 .await?;
 
-        let iroh_secret =
-            SecretKey::from_bytes(&self.iroh_identity_key().secret_key().secret_bytes());
+        let transport = {
+            let mut transports = self.dkg_transports.lock().await;
+            match transports.get(&session.session_id) {
+                Some(t) => t.clone(),
+                None => {
+                    let iroh_secret = SecretKey::from_bytes(
+                        &self.iroh_identity_key().secret_key().secret_bytes(),
+                    );
+                    let t = Arc::new(
+                        IrohDkgTransport::new(session.session_id, iroh_secret, iroh_peers).await?,
+                    );
+                    transports.insert(session.session_id, t.clone());
+                    t
+                }
+            }
+        };
 
-        let transport = IrohDkgTransport::new(session.session_id, iroh_secret, iroh_peers).await?;
-        let result = session.run(db, transport).await?;
-        Ok(result)
+        let result = session.run(db, transport).await;
+
+        // Keep the transport only if the caller can retry the same
+        // attempt. On success or a non-transient error, drop it.
+        let keep = matches!(&result, Err(e) if e.is_transient());
+        if !keep {
+            self.dkg_transports.lock().await.remove(&session.session_id);
+        }
+        result
+    }
+
+    /// Give up on a consortium attempt and close its transport.
+    pub async fn abort_arbiter_consortium(&self, session_id: SessionId) {
+        self.dkg_transports.lock().await.remove(&session_id);
     }
 
     pub async fn create_arbiter_consortium_with_custom_transport<T: DkgTransport>(

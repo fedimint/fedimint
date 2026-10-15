@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use fedimint_core::config::FederationId;
@@ -13,11 +14,13 @@ use frost_secp256k1_tr::round2::sign as Round2Sign;
 use frost_secp256k1_tr::{Identifier, Signature, SigningPackage, aggregate};
 use iroh::{Endpoint, NodeAddr, RelayMode, SecretKey};
 use rand::rngs::OsRng;
+use tokio::time::timeout;
 
-use crate::frost::dkg::{DkgResult, DkgRunner};
+use crate::frost::dkg::{DkgResult, DkgRound1, DkgRunner};
 use crate::frost::session::{FrostDkgSessionRecord, FrostParticipant, SessionId};
 use crate::frost::transport::file::FileTransport;
 use crate::frost::transport::iroh::{DKG_ALPN, IrohDkgTransport};
+use crate::frost::transport::{DkgTransport, TransportError};
 
 fn dummy_federation_id() -> FederationId {
     FederationId::dummy()
@@ -393,10 +396,17 @@ async fn test_dkg_runner_steps_over_iroh() {
         handles.push(spawn("iroh_dkg_transport", async move {
             let runner = DkgRunner::new(transport);
 
-            let round1 = runner
-                .run_round1(&session_id, &me, &participants, min_signers)
+            let (round1_secret_package, package) = runner
+                .start_round1(&me, n as u16, min_signers)
+                .expect("start round1 failed");
+            let round1_packages = runner
+                .exchange_round1(&session_id, &me, &participants, package)
                 .await
                 .expect("round1 failed");
+            let round1 = DkgRound1 {
+                round1_packages,
+                round1_secret_package,
+            };
             // a package from every other participant, not from self runner
             assert_eq!(round1.round1_packages.len(), n - 1);
             assert!(!round1.round1_packages.contains_key(&me.identifier));
@@ -440,4 +450,119 @@ async fn test_dkg_runner_steps_over_iroh() {
     let signers: Vec<&DkgResult> = results.iter().take(min_signers as usize).collect();
     let sig = sign(&signers, b"msg").expect("signing failed");
     assert!(group_key.verify(b"msg", &sig).is_ok());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_early_round2_package_survives_timed_out_attempt() {
+    let consortium = Consortium::new(3).await.expect("consortium failed");
+    let net = consortium.iroh_net().await;
+    let session_id = consortium.session_id;
+    let participants = consortium.participants.clone();
+    let me = participants[0].clone();
+    let expected: Vec<Identifier> = participants.iter().map(|p| p.identifier).collect();
+    let (_, record) = consortium.sessions[0].clone();
+
+    // all transports exist before anything is sent
+    let transport = Arc::new(net.transport(0, session_id));
+    let other_transports: Vec<IrohDkgTransport> =
+        (1..3).map(|i| net.transport(i, session_id)).collect();
+    let other_sessions = consortium.sessions[1..].to_vec();
+
+    let runner = DkgRunner::new(transport.clone());
+    let (secret, package) = runner
+        .start_round1(&me, record.max_signers, record.min_signers)
+        .expect("start round1 failed");
+
+    // first attempt: nobody else has started, so waiting for round 1 times out
+    transport
+        .broadcast_round1(&session_id, &me.identifier, package.clone())
+        .await
+        .expect("broadcast failed");
+    let first = transport
+        .recv_round1_all(
+            &session_id,
+            &me.identifier,
+            &expected,
+            Duration::from_millis(100),
+        )
+        .await;
+    assert!(matches!(first, Err(TransportError::TimeoutError)));
+
+    // the others now run the full dkg and send me their round 2 packages
+    // while I am still not done with round 1
+    let mut handles = Vec::new();
+    for ((db, record), transport) in other_sessions.into_iter().zip(other_transports) {
+        handles.push(spawn("iroh_transport_dkg", async move {
+            record.run(&db, transport).await.expect("dkg failed")
+        }));
+    }
+    sleep(Duration::from_secs(1)).await;
+
+    // second attempt with the same transport: the early round 2 packages must still
+    // be there
+    let round1_packages = runner
+        .exchange_round1(&session_id, &me, &participants, package)
+        .await
+        .expect("round1 retry failed");
+    let round2 = runner
+        .run_round2(&session_id, &participants, &me, secret, &round1_packages)
+        .await
+        .expect("round2 failed");
+    let mine = runner
+        .finalize(
+            &round1_packages,
+            &round2.round2_secret_package,
+            &round2.round2_received,
+        )
+        .expect("finalize failed");
+
+    let group_key = mine.pubkey_package.verifying_key().serialize();
+    for handle in handles {
+        let result = handle.await.expect("task panicked");
+        assert_eq!(result.pubkey_package.verifying_key().serialize(), group_key);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_session_restarts_after_failed_run() {
+    let consortium = Consortium::new(3).await.expect("consortium failed");
+    let net = consortium.iroh_net().await;
+    let session_id = consortium.session_id;
+
+    let (db, record) = consortium.sessions[0].clone();
+    let transport = Arc::new(net.transport(0, session_id));
+    let other_transports: Vec<IrohDkgTransport> =
+        (1..3).map(|i| net.transport(i, session_id)).collect();
+    let other_sessions = consortium.sessions[1..].to_vec();
+
+    // nobody else is running, so this run cannot finish and gets cut off
+    let first = timeout(Duration::from_secs(1), record.run(&db, transport.clone())).await;
+    assert!(first.is_err(), "run must not finish alone");
+    assert!(
+        FrostDkgSessionRecord::load_dkg_result(&db, session_id)
+            .await
+            .is_err()
+    );
+
+    // the others start, and I run again from the saved state with the same
+    // transport
+    let mut handles = Vec::new();
+    for ((db, record), transport) in other_sessions.into_iter().zip(other_transports) {
+        handles.push(spawn("iroh_transport_dkg", async move {
+            record.run(&db, transport).await.expect("dkg failed")
+        }));
+    }
+    let mine = record.run(&db, transport).await.expect("second run failed");
+
+    let group_key = mine.pubkey_package.verifying_key().serialize();
+    for handle in handles {
+        let result = handle.await.expect("task panicked");
+        assert_eq!(result.pubkey_package.verifying_key().serialize(), group_key);
+    }
+
+    // the finished key is stored
+    let loaded = FrostDkgSessionRecord::load_dkg_result(&db, session_id)
+        .await
+        .expect("key must be saved");
+    assert_eq!(loaded.pubkey_package.verifying_key().serialize(), group_key);
 }
