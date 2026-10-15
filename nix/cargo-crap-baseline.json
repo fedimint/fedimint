@@ -14,19 +14,19 @@
     {
       "file": "/build/source/fedimint-cli/src/client.rs",
       "function": "handle_command",
-      "line": 220,
-      "cyclomatic": 84.0,
+      "line": 223,
+      "cyclomatic": 86.0,
       "coverage": null,
-      "crap": 7140.0,
+      "crap": 7482.0,
       "crate": "fedimint-cli"
     },
     {
       "file": "/build/source/devimint/src/tests.rs",
       "function": "handle_command",
       "line": 2875,
-      "cyclomatic": 71.0,
+      "cyclomatic": 72.0,
       "coverage": null,
-      "crap": 5112.0,
+      "crap": 5256.0,
       "crate": "devimint"
     },
     {
@@ -50,19 +50,19 @@
     {
       "file": "/build/source/fedimint-client/src/client/builder.rs",
       "function": "ClientBuilder::build_stopped",
-      "line": 590,
-      "cyclomatic": 37.0,
+      "line": 601,
+      "cyclomatic": 38.0,
       "coverage": null,
-      "crap": 1406.0,
+      "crap": 1482.0,
       "crate": "fedimint-client"
     },
     {
       "file": "/build/source/modules/fedimint-ln-client/src/cli.rs",
       "function": "handle_cli_command",
-      "line": 111,
-      "cyclomatic": 42.0,
+      "line": 116,
+      "cyclomatic": 43.0,
       "coverage": null,
-      "crap": 1806.0,
+      "crap": 1892.0,
       "crate": "fedimint-ln-client"
     },
     {
@@ -77,11 +77,20 @@
     {
       "file": "/build/source/modules/fedimint-lnv2-tests/bin/tests.rs",
       "function": "test_payments",
-      "line": 230,
-      "cyclomatic": 33.0,
+      "line": 281,
+      "cyclomatic": 35.0,
       "coverage": null,
-      "crap": 1122.0,
+      "crap": 1260.0,
       "crate": "fedimint-lnv2-tests"
+    },
+    {
+      "file": "/build/source/modules/fedimint-lnv2-client/src/cli.rs",
+      "function": "handle_htlc_command",
+      "line": 239,
+      "cyclomatic": 32.0,
+      "coverage": null,
+      "crap": 1056.0,
+      "crate": "fedimint-lnv2-client"
     },
     {
       "file": "/build/source/devimint/src/tests.rs",
