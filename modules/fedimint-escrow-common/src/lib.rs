@@ -34,6 +34,12 @@ impl AsRef<[u8]> for EscrowId {
     }
 }
 
+impl fmt::Display for EscrowId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", hex::encode(self.0))
+    }
+}
+
 impl AsRef<[u8]> for ContractHash {
     fn as_ref(&self) -> &[u8] {
         &self.0
@@ -66,7 +72,7 @@ impl<'de> Deserialize<'de> for EscrowId {
 }
 
 impl EscrowId {
-    pub fn new(contract_hash: &ContractHash) -> anyhow::Result<Self> {
+    pub fn build(contract_hash: &ContractHash) -> anyhow::Result<Self> {
         let rng = SystemRandom::new();
         let mut nonce = [0u8; 32];
         rng.fill(&mut nonce)
@@ -193,18 +199,11 @@ impl EscrowContract {
 
             // Arbiter can only resolve an already-disputed contract.
             (EscrowStatus::Disputed { .. }, EscrowTransition::ArbiterOutcome(outcome)) => {
-                match outcome {
-                    Outcome::Release => EscrowStatus::Released,
-                    Outcome::Refund => EscrowStatus::Refunded,
-                    Outcome::Split { .. } => EscrowStatus::Split,
-                }
+                EscrowStatus::from(outcome)
             }
 
             (EscrowStatus::Disputed { .. }, EscrowTransition::Fallback) => {
-                match self.default_fallback {
-                    FallbackPolicy::Refund => EscrowStatus::Refunded,
-                    FallbackPolicy::Split { .. } => EscrowStatus::Split,
-                }
+                EscrowStatus::from(Outcome::from(self.default_fallback))
             }
 
             _ => return Err(EscrowInputError::InvalidStateTransition),
@@ -252,6 +251,72 @@ pub enum EscrowStatus {
     Refunded,
     Disputed { resolve_by: u64 },
     Split,
+}
+
+impl From<Outcome> for EscrowStatus {
+    fn from(outcome: Outcome) -> Self {
+        match outcome {
+            Outcome::Release => EscrowStatus::Released,
+            Outcome::Refund => EscrowStatus::Refunded,
+            Outcome::Split { .. } => EscrowStatus::Split,
+        }
+    }
+}
+
+impl From<FallbackPolicy> for Outcome {
+    fn from(policy: FallbackPolicy) -> Self {
+        match policy {
+            FallbackPolicy::Refund => Outcome::Refund,
+            FallbackPolicy::Split {
+                funder_split_bps,
+                recipient_split_bps,
+            } => Outcome::Split {
+                funder_split_bps,
+                recipient_split_bps,
+            },
+        }
+    }
+}
+
+impl fmt::Display for EscrowStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            EscrowStatus::Active => "active",
+            EscrowStatus::Released => "released",
+            EscrowStatus::Refunded => "refunded",
+            EscrowStatus::Disputed { .. } => "disputed",
+            EscrowStatus::Split => "split",
+        })
+    }
+}
+
+impl fmt::Display for Outcome {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Outcome::Release => f.write_str("release"),
+            Outcome::Refund => f.write_str("refund"),
+            Outcome::Split {
+                funder_split_bps,
+                recipient_split_bps,
+            } => {
+                write!(f, "split:{funder_split_bps}:{recipient_split_bps}")
+            }
+        }
+    }
+}
+
+impl fmt::Display for FallbackPolicy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FallbackPolicy::Refund => f.write_str("refund"),
+            FallbackPolicy::Split {
+                funder_split_bps,
+                recipient_split_bps,
+            } => {
+                write!(f, "split:{funder_split_bps}:{recipient_split_bps}")
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
@@ -416,6 +481,10 @@ pub enum EscrowInputError {
     FallbackNotAvailable,
     #[error("Internal error: {0}")]
     InternalError(String),
+    #[error("Key is not part of this escrow")]
+    NotAParticipant,
+    #[error("The resolution deadline has passed")]
+    ResolutionDeadlinePassed,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, thiserror::Error, Encodable, Decodable)]
@@ -425,7 +494,7 @@ pub enum EscrowOutputError {
     #[error("Contract already exists")]
     AlreadyExists,
     #[error("Invalid input found {0}")]
-    InvalidInputs(EscrowContractValidationError),
+    InvalidInputs(#[from] EscrowContractValidationError),
     #[error("Internal error: {0}")]
     InternalError(String),
 }
@@ -455,6 +524,35 @@ pub enum EscrowContractValidationError {
     MissingArbiterFeeKeys,
     #[error("invalid input")]
     InvalidInput,
+}
+
+impl Resolution {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Resolution::FunderRelease { .. } => "funder_release",
+            Resolution::ArbiterEngaged { .. } => "arbiter_engaged",
+            Resolution::ArbiterOutcome { .. } => "arbiter_outcome",
+            Resolution::ClaimPayout { .. } => "claim_payout",
+            Resolution::ResolveFallbackPolicy { .. } => "fallback",
+        }
+    }
+}
+
+impl std::fmt::Display for EscrowInput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "EscrowInput({} on {})",
+            self.resolution.kind(),
+            self.escrow_id
+        )
+    }
+}
+
+impl std::fmt::Display for EscrowOutput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "EscrowOutput({})", self.contract.escrow_id)
+    }
 }
 
 pub struct EscrowModuleTypes;
@@ -492,18 +590,6 @@ impl std::fmt::Display for EscrowOutputOutcome {
 impl std::fmt::Display for EscrowConsensusItem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "EscrowConsensusItem")
-    }
-}
-
-impl std::fmt::Display for EscrowOutput {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "EscrowOutput")
-    }
-}
-
-impl std::fmt::Display for EscrowInput {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "EscrowInput")
     }
 }
 

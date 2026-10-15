@@ -22,7 +22,7 @@ use fedimint_escrow_common::config::{
 use fedimint_escrow_common::{
     ClaimPool, ContractHash, EscrowCommonInit, EscrowConsensusItem, EscrowContract, EscrowId,
     EscrowInput, EscrowInputError, EscrowModuleTypes, EscrowOutput, EscrowOutputError,
-    EscrowOutputOutcome, EscrowStatus, EscrowTransition, FallbackPolicy, GET_CLAIM_AMOUNT_ENDPOINT,
+    EscrowOutputOutcome, EscrowStatus, EscrowTransition, GET_CLAIM_AMOUNT_ENDPOINT,
     GET_CONTRACT_ENDPOINT, GetClaimAmount, GetContractParams, KIND, LIST_CONTRACT_BY_KEY_ENDPOINT,
     ListContractParams, MODULE_CONSENSUS_VERSION, Outcome, Resolution, compute_contract_hash,
     compute_escrow_message, validate_contract_fields, validate_split_bps, x_only_eq,
@@ -534,6 +534,14 @@ impl Escrow {
         Ok(())
     }
 
+    fn ensure_active(contract: &EscrowContract) -> Result<(), EscrowInputError> {
+        match contract.status {
+            EscrowStatus::Active => Ok(()),
+            EscrowStatus::Disputed { .. } => Err(EscrowInputError::ContractDisputed),
+            _ => Err(EscrowInputError::ContractAlreadyResolved),
+        }
+    }
+
     async fn handle_funder_release(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
@@ -541,9 +549,7 @@ impl Escrow {
         funder_signature: &Signature,
     ) -> Result<InputMeta, EscrowInputError> {
         let mut contract = self.load_contract(input.escrow_id, dbtx).await?;
-        if matches!(contract.status, EscrowStatus::Disputed { .. }) {
-            return Err(EscrowInputError::ContractDisputed);
-        }
+        Self::ensure_active(&contract)?;
 
         let resolution_message = contract.resolution_message(Outcome::Release);
         let msg_bytes = compute_escrow_message(&resolution_message);
@@ -606,6 +612,7 @@ impl Escrow {
         disputatant_signature: &Signature,
     ) -> Result<InputMeta, EscrowInputError> {
         let mut contract = self.load_contract(input.escrow_id, dbtx).await?;
+        Self::ensure_active(&contract)?;
 
         let now = fedimint_core::time::duration_since_epoch().as_secs();
         if now < contract.timeout {
@@ -653,24 +660,21 @@ impl Escrow {
         submitter_pubkey: &PublicKey,
     ) -> Result<InputMeta, EscrowInputError> {
         let mut contract = self.load_contract(input.escrow_id, dbtx).await?;
-        let now = fedimint_core::time::duration_since_epoch().as_secs();
-        if !contract.contains_key(submitter_pubkey) {
-            return Err(EscrowInputError::InternalError("invalid key".into()));
-        }
 
+        if !contract.contains_key(submitter_pubkey) {
+            return Err(EscrowInputError::NotAParticipant);
+        }
         let EscrowStatus::Disputed { resolve_by } = contract.status else {
-            return Err(EscrowInputError::ContractNotDisputed);
+            return Err(if contract.is_terminal() {
+                EscrowInputError::ContractAlreadyResolved
+            } else {
+                EscrowInputError::ContractNotDisputed
+            });
         };
+
+        let now = fedimint_core::time::duration_since_epoch().as_secs();
         if now > resolve_by {
-            return Err(EscrowInputError::InternalError(
-                "arbiter resolution timed out".into(),
-            ));
-        }
-        if now < contract.timeout {
-            return Err(EscrowInputError::TimeoutNotReached);
-        }
-        if contract.is_terminal() {
-            return Err(EscrowInputError::ContractAlreadyResolved);
+            return Err(EscrowInputError::ResolutionDeadlinePassed);
         }
 
         let resolution_message = contract.resolution_message(*outcome);
@@ -705,7 +709,7 @@ impl Escrow {
     ) -> Result<InputMeta, EscrowInputError> {
         let mut contract = self.load_contract(input.escrow_id, dbtx).await?;
         if !contract.contains_key(claimer_pubkey) {
-            return Err(EscrowInputError::InternalError("invalid key".into()));
+            return Err(EscrowInputError::NotAParticipant);
         }
         let EscrowStatus::Disputed { resolve_by } = contract.status else {
             return Err(EscrowInputError::ContractNotDisputed);
@@ -716,16 +720,7 @@ impl Escrow {
             return Err(EscrowInputError::FallbackNotAvailable);
         }
 
-        let outcome = match contract.default_fallback {
-            FallbackPolicy::Refund => Outcome::Refund,
-            FallbackPolicy::Split {
-                funder_split_bps,
-                recipient_split_bps,
-            } => Outcome::Split {
-                funder_split_bps,
-                recipient_split_bps,
-            },
-        };
+        let outcome = Outcome::from(contract.default_fallback);
 
         self.finalize_resolution(
             dbtx,

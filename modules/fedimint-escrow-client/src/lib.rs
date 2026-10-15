@@ -31,9 +31,10 @@ use fedimint_core::{Amount, apply, async_trait_maybe_send, push_db_pair_items};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_escrow_common::config::EscrowClientConfig;
 use fedimint_escrow_common::{
-    EscrowCommonInit, EscrowContract, EscrowId, EscrowInput, EscrowMessage, EscrowModuleTypes,
-    EscrowOutput, FallbackPolicy, GetClaimAmount, GetContractParams, KIND, ListContractParams,
-    Outcome, Resolution, compute_contract_hash, compute_escrow_message, x_only_eq,
+    ClaimPool, EscrowCommonInit, EscrowContract, EscrowId, EscrowInput, EscrowMessage,
+    EscrowModuleTypes, EscrowOutput, FallbackPolicy, GetClaimAmount, GetContractParams, KIND,
+    ListContractParams, Outcome, Resolution, compute_contract_hash, compute_escrow_message,
+    x_only_eq,
 };
 use frost_secp256k1_tr::Identifier;
 use futures::{StreamExt, TryStreamExt};
@@ -298,7 +299,7 @@ impl ClientModule for EscrowClientModule {
                     yield serde_json::to_value(result)?;
                 }
                 "list_escrows"=>{
-                    let result=self.list_escrow_operations().await;
+                    let result=self.list_contracts().await?;
                     yield serde_json::to_value(result)?;
                 }
                 "create_contract"=>{
@@ -350,6 +351,10 @@ impl ClientModule for EscrowClientModule {
                     let req:ClaimPayoutRequest=serde_json::from_value(request)?;
                     let result=self.claim_payout(req.escrow_id).await?;
                     yield serde_json::to_value(result)?;
+                }
+                "get_claim_pool" => {
+                    let req: GetClaimPoolRequest = serde_json::from_value(request)?;
+                    yield serde_json::to_value(self.get_claim_pool(req.escrow_id).await?)?;
                 }
                 "sign_message"=>{
                     let req:SignClientMessageRequest=serde_json::from_value(request)?;
@@ -403,6 +408,11 @@ struct SubmitArbiterDecisionRequest {
 
 #[derive(Deserialize)]
 struct ClaimPayoutRequest {
+    escrow_id: EscrowId,
+}
+
+#[derive(Deserialize)]
+struct GetClaimPoolRequest {
     escrow_id: EscrowId,
 }
 
@@ -468,7 +478,7 @@ impl EscrowClientModule {
         );
 
         let operation_id = OperationId::new_random();
-        let escrow_id = EscrowId::new(&contract_hash)?;
+        let escrow_id = EscrowId::build(&contract_hash)?;
 
         let contract = EscrowContract::new(
             escrow_id,
@@ -657,7 +667,7 @@ impl EscrowClientModule {
                                 operation_id,
                                 out_point,
                                 escrow_id,
-                                amount: contract.amount,
+                                amount: Amount::ZERO,
                                 resolution: Resolution::ArbiterEngaged {
                                     disputant_pubkey,
                                     disputant_signature,
@@ -714,7 +724,7 @@ impl EscrowClientModule {
         anyhow::ensure!(now >= contract.timeout, "arbiter cannot act before timeout");
 
         let input = ClientInput {
-            amounts: Amounts::new_bitcoin(contract.arbiter_fee),
+            amounts: Amounts::ZERO,
             keys: vec![self.arbiter_fee_key],
             input: EscrowInput {
                 escrow_id,
@@ -726,7 +736,6 @@ impl EscrowClientModule {
             },
         };
 
-        let arbiter_fee = contract.arbiter_fee;
         let submitter_pubkey = self.arbiter_fee_key.public_key();
 
         let input_sm = ClientInputSM {
@@ -739,7 +748,7 @@ impl EscrowClientModule {
                                 operation_id,
                                 out_point,
                                 escrow_id,
-                                amount: arbiter_fee,
+                                amount: Amount::ZERO,
                                 resolution: Resolution::ArbiterOutcome {
                                     arbiter_signature,
                                     outcome,
@@ -767,7 +776,7 @@ impl EscrowClientModule {
 
             EscrowOperationMeta {
                 escrow_id,
-                amount: contract.arbiter_fee,
+                amount: Amount::ZERO,
                 action: match outcome {
                     Outcome::Release => EscrowAction::Released,
                     Outcome::Refund => EscrowAction::Refunded,
@@ -946,15 +955,33 @@ impl EscrowClientModule {
         Ok(operation_log)
     }
 
-    pub async fn list_escrow_operations(&self) -> Vec<EscrowContract> {
-        self.client_ctx
+    pub async fn list_contracts(&self) -> anyhow::Result<Vec<EscrowContract>> {
+        let mut all = BTreeMap::new();
+        for pubkey in [
+            self.escrow_key.public_key(),
+            self.arbiter_fee_key.public_key(),
+        ] {
+            let found = self
+                .client_ctx
+                .module_api()
+                .list_contracts_by_key(ListContractParams {
+                    pubkey,
+                    federation_id: self.federation_id,
+                })
+                .await?;
+            for contract in found {
+                all.insert(contract.escrow_id, contract);
+            }
+        }
+        Ok(all.into_values().collect())
+    }
+
+    pub async fn get_claim_pool(&self, escrow_id: EscrowId) -> anyhow::Result<Option<ClaimPool>> {
+        Ok(self
+            .client_ctx
             .module_api()
-            .list_contracts_by_key(ListContractParams {
-                pubkey: self.escrow_key.public_key(),
-                federation_id: self.federation_id,
-            })
-            .await
-            .unwrap_or_default()
+            .get_claim_amount(GetClaimAmount { escrow_id })
+            .await?)
     }
 
     pub async fn subscribe_escrow_creation(

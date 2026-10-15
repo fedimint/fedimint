@@ -153,7 +153,7 @@ pub(crate) async fn handle_cli_command(
             Ok(serde_json::to_value(contract)?)
         }
         Opts::ListEscrow => {
-            let contracts = client.list_escrow_operations().await;
+            let contracts = client.list_contracts().await?;
             Ok(serde_json::to_value(contracts)?)
         }
         Opts::ResolveEscrow {
