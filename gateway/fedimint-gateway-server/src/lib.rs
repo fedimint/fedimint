@@ -400,6 +400,11 @@ pub struct Gateway {
 
     /// Rate limiter for the public invoice creation endpoint.
     invoice_rate_limiter: Arc<TokenBucketRateLimiter>,
+
+    /// Locks the payment hash of each HOLD invoice whose delivery is being
+    /// handled, so that a duplicate delivery is dropped; see
+    /// [`Self::handle_lightning_payment`].
+    lnv2_hold_invoice_lock_pool: Arc<lockable::LockPool<sha256::Hash>>,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -847,6 +852,7 @@ impl Gateway {
                 gateway_parameters.invoice_rate_limit_burst,
                 gateway_parameters.invoice_rate_limit_per_second,
             )),
+            lnv2_hold_invoice_lock_pool: Arc::new(lockable::LockPool::new()),
         })
     }
 
@@ -1244,7 +1250,8 @@ impl Gateway {
     /// a known federation but no LNv1 or LNv2 offer matched, cancels (fails
     /// back) the HTLC so the sender can retry rather than treating the
     /// gateway as a dead route. Otherwise (real-channel forwards), resumes
-    /// the HTLC so LND can route it as a normal forward.
+    /// the HTLC so LND can route it as a normal forward. A duplicate delivery
+    /// of a HOLD invoice that is still being handled is dropped.
     ///
     /// Returns the outcome label for metrics tracking.
     pub async fn handle_lightning_payment(
@@ -1257,6 +1264,33 @@ impl Gateway {
             lightning_payment = %PrettyInterceptPaymentRequest(&payment_request),
             "Intercepting lightning payment",
         );
+
+        // A payment without an incoming circuit is held by a HOLD invoice, which
+        // the node can deliver more than once. Only one delivery is handled at a
+        // time, from here through settling or cancelling the invoice. A
+        // duplicate is dropped rather than made to wait: whatever the first
+        // delivery decides resolves the whole invoice, and a duplicate handled
+        // afterwards could fund an invoice the first has just cancelled. LND,
+        // for one, replays every accepted invoice when the gateway resubscribes
+        // after a reconnect. Forwards are not deduplicated: each has
+        // its own circuit, and a replay after a reconnect may be the only
+        // delivery still able to resolve it.
+        let _hold_invoice_guard = if payment_request.incoming_circuit().is_none() {
+            let Some(guard) = self
+                .lnv2_hold_invoice_lock_pool
+                .try_lock(payment_request.payment_hash)
+            else {
+                info!(
+                    target: LOG_GATEWAY,
+                    payment_hash = %payment_request.payment_hash,
+                    "Dropping duplicate delivery of a HOLD invoice that is already being handled",
+                );
+                return "duplicate";
+            };
+            Some(guard)
+        } else {
+            None
+        };
 
         let lnv2_start = fedimint_core::time::now();
         let lnv2_result = self
