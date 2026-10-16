@@ -34,3 +34,6 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
