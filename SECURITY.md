@@ -2,7 +2,10 @@
 
 ## Reporting a Vulnerability
 
-Do **not** open a public GitHub issue for security bugs.
+Do **not** open a public GitHub issue for security bugs that affect released
+code. Bugs confined to unreleased code may be reported and discussed publicly.
+If an unreleased change exposes a vulnerability that also affects a released
+version, report it privately.
 
 Send a report to **security@fedimint.org** (this address forwards to the
 maintainers listed below) or message **`@elsirion.21`** on Signal.
@@ -34,8 +37,9 @@ gpg --fetch-keys 'https://api.protonmail.ch/pks/lookup?op=get&search=elsirion@pr
 
 Check the fingerprints against the table above before you use the keys.
 
-Please keep the bug private until a fix is released and federation operators
-had time to upgrade.
+Please keep vulnerabilities affecting released code private until a fix is
+released and federation operators had time to upgrade. Bugs confined to
+unreleased code do not require private handling.
 
 ## Supported Versions
 
@@ -58,3 +62,83 @@ Out of scope:
 - Attacks that need a majority of guardians to be malicious. The threat model
   assumes fewer than one third of guardians are faulty.
 - Test and development setups, such as `devimint`.
+
+
+## Guardian Bitcoin Backends
+
+Configured Bitcoin RPC endpoints, including Esplora, are trusted inputs to a
+guardian. Esplora is a trusted chain oracle: Fedimint does not independently
+verify its chain selection, work, consensus rules, or freshness. Block payload
+integrity checks and configured-network checks are defense in depth against
+inconsistent responses and misconfiguration, not the basis of this trust model.
+Use operator-controlled or explicitly trusted services, with encrypted transport
+across untrusted networks. A shared public provider can correlate guardian
+activity and influence multiple guardians at once; independent operators should
+consider this correlated trust dependency.
+
+In hybrid mode (`FM_BITCOIND_URL` and `FM_ESPLORA_URL` together), construction
+does not contact either endpoint or compare their chain identities. This avoids
+another startup dependency and comparison/reconnection complexity: matching a
+height-1 hash once would not validate subsequent chain answers. The first
+identity needed for ordinary status monitoring is read from bitcoind, or from
+Esplora if bitcoind fails, and cached without comparing endpoints. The monitor
+still needs Bitcoin RPC status, the wallet still checks its configured network,
+and consensus still waits for applicable Bitcoin readiness before starting.
+Runtime identity lookup, configured-network checks, and block payload integrity
+checks remain. Trusted endpoints must keep serving the intended chain; operators
+must restart the guardian when deliberately changing chains.
+
+Federation-level voting, validation, and threshold signing tolerate at most
+`f = floor((n - 1) / 3)` faulty guardians out of `n`, with `q = n - f` needed
+for threshold decisions. A guardian using a wrong or inconsistent backend
+consumes that fault budget, including any other faults. Not every fetched block
+is voted on: incorrect chain data can stall a guardian, corrupt its local wallet
+state, or require operator recovery; quorum decisions do not repair local state.
+Independent guardian backends matter because shared providers or correlated
+configuration mistakes can exceed the fault bound. This redundancy does not
+protect client or gateway local decisions or provider-facing privacy. Revisit
+the no-constructor-comparison policy if this wrapper gains non-guardian users or
+one guardian can authorize irreversible shared effects without a threshold
+decision, not simply because construction omits an identity check.
+
+Reads try bitcoind first and retry only the failed request on Esplora. Fee
+estimation also falls back when Core successfully responds without an estimate,
+which can happen during IBD or before it has observed enough fee-estimation
+history. The fallback uses the existing Esplora fee policy, which uses 1 sat/vB
+when a successful Esplora response contains no usable estimate. Block count is
+the other exception while Core is starting: until Core first reports that
+initial block download is complete, its IBD flag is checked on each count
+request and Esplora supplies the count while IBD remains active. Completion is
+then remembered for the process lifetime and normal bitcoind-first count reads
+resume. Fedimint does not compare endpoint tips or otherwise use Esplora to
+decide that a responsive Core node is stale.
+
+Broadcast is deliberately bitcoind-first: Esplora receives the transaction only
+if the primary attempt fails. A reachable, network-isolated bitcoind can accept
+a transaction without propagating it. Fedimint relies on multiple guardians
+rebroadcasting the same peg-out, assuming at least one broadcaster has working
+Bitcoin connectivity; successful local submission is not proof of propagation.
+We do not broadcast to both endpoints unconditionally. The federation's normal
+rebroadcast and confirmation handling remain necessary.
+
+Esplora sees fallback and IBD queries and, when used for broadcast
+fallback, complete peg-out transactions and guardian-origin timing. Any primary
+broadcast error, including policy rejection, may trigger this disclosure. Only
+configure a fallback if these trust and privacy consequences are acceptable.
+
+## Public Gateway Federation Status
+
+Configured gateways expose unauthenticated HTTP and Iroh `POST
+/federation_status` queries for one exact federation ID. The response contains
+only finite, detail-free connectivity, Lightning module capability, and
+registration-health classes for that ID. It must not reveal the gateway's
+federation inventory, guardian identities, balances, route hints, credentials,
+or raw errors; `/info` remains authenticated. A gateway that has not completed
+mnemonic setup exposes only its setup endpoints.
+
+Registration observations are process-local and cleared when the gateway leaves
+the federation. Concurrent results follow attempt begin order so stale work
+cannot overwrite a newer logical attempt, and advertised TTL uses monotonic
+elapsed time. Status assembly holds the federation-manager read lock only while
+capturing one coherent snapshot; do not clone the client solely for this public
+query because that would interfere with concurrent leave.

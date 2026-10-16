@@ -1,9 +1,10 @@
 use std::str::FromStr as _;
 use std::{ffi, iter};
 
-use anyhow::bail;
 use bitcoin::address::NetworkUnchecked;
 use clap::Parser;
+use fedimint_api_client::api::FederationError;
+use fedimint_client_module::error::{ModuleLookupError, TransactionSubmitError};
 use fedimint_core::BitcoinAmountOrAll;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::Encodable;
@@ -12,9 +13,12 @@ use serde::Serialize;
 use tracing::{debug, info};
 
 use super::WalletClientModule;
-use crate::WithdrawState;
 use crate::api::WalletFederationApi;
 use crate::client_db::TweakIdx;
+use crate::{
+    DepositAddressError, MaxWithdrawableAmountError, PegInError, SubscribeWithdrawError,
+    WithdrawFeesError, WithdrawState,
+};
 
 #[derive(Parser, Serialize)]
 enum Opts {
@@ -61,13 +65,13 @@ async fn await_deposit(
     operation_id: Option<OperationId>,
     tweak_idx: Option<TweakIdx>,
     num: usize,
-) -> anyhow::Result<()> {
+) -> Result<(), CliCommandError> {
     if u32::from(addr.is_some())
         + u32::from(operation_id.is_some())
         + u32::from(tweak_idx.is_some())
         != 1
     {
-        bail!("One and only one of the selector arguments must be set")
+        return Err(CliCommandError::SelectorCount);
     }
     if let Some(tweak_idx) = tweak_idx {
         module.await_num_deposits(tweak_idx, num).await?;
@@ -99,7 +103,7 @@ async fn withdraw(
     module: &WalletClientModule,
     amount: BitcoinAmountOrAll,
     address: bitcoin::Address<NetworkUnchecked>,
-) -> anyhow::Result<serde_json::Value> {
+) -> Result<serde_json::Value, CliCommandError> {
     let address = address.require_network(module.get_network())?;
     let (amount, fees) = match amount {
         // The on-chain fee is only part of the cost of withdrawing everything:
@@ -136,7 +140,7 @@ async fn withdraw(
                 }));
             }
             WithdrawState::Failed(e) => {
-                bail!("Withdraw failed: {e}");
+                return Err(CliCommandError::WithdrawFailed(e));
             }
             WithdrawState::Created => {}
         }
@@ -148,7 +152,7 @@ async fn withdraw(
 pub(crate) async fn handle_cli_command(
     module: &WalletClientModule,
     args: &[ffi::OsString],
-) -> anyhow::Result<serde_json::Value> {
+) -> Result<serde_json::Value, CliCommandError> {
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("wallet")).chain(args.iter()));
 
     let res = match opts {
@@ -172,7 +176,7 @@ pub(crate) async fn handle_cli_command(
             let auth = module
                 .admin_auth
                 .clone()
-                .ok_or(anyhow::anyhow!("Admin auth not set"))?;
+                .ok_or(CliCommandError::AdminAuthNotSet)?;
             serde_json::to_value(module.module_api.fetch_bitcoin_rpc_config(auth).await?)
                 .expect("JSON serialization failed")
         }
@@ -190,7 +194,7 @@ pub(crate) async fn handle_cli_command(
                 + u32::from(tweak_idx.is_some())
                 != 1
             {
-                bail!("One and only one of the selector arguments must be set")
+                return Err(CliCommandError::SelectorCount);
             }
             if let Some(tweak_idx) = tweak_idx {
                 module.recheck_pegin_address(tweak_idx).await?;
@@ -217,4 +221,62 @@ pub(crate) async fn handle_cli_command(
     };
 
     Ok(res)
+}
+
+/// A failure of a `wallet` module command.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum CliCommandError {
+    /// Not exactly one of the address, operation id and tweak index was
+    /// given.
+    #[error("One and only one of the selector arguments must be set")]
+    SelectorCount,
+
+    /// The deposits could not be awaited or rechecked.
+    #[error(transparent)]
+    PegIn(#[from] PegInError),
+
+    /// The argument is not a valid operation id.
+    #[error(transparent)]
+    OperationId(#[from] fedimint_core::hex::FromHexError),
+
+    /// The address is not valid, or not for the federation's network.
+    #[error(transparent)]
+    Address(#[from] bitcoin::address::ParseError),
+
+    /// The client's bitcoin balance could not be read.
+    #[error(transparent)]
+    Balance(#[from] ModuleLookupError),
+
+    /// The largest withdrawable amount could not be computed.
+    #[error(transparent)]
+    MaxWithdrawable(#[from] MaxWithdrawableAmountError),
+
+    /// The withdrawal fees could not be quoted.
+    #[error(transparent)]
+    WithdrawFees(#[from] WithdrawFeesError),
+
+    /// The withdrawal transaction could not be submitted.
+    #[error(transparent)]
+    Withdraw(#[from] TransactionSubmitError),
+
+    /// The withdrawal's updates could not be followed.
+    #[error(transparent)]
+    SubscribeWithdraw(#[from] SubscribeWithdrawError),
+
+    /// The withdrawal failed.
+    #[error("Withdraw failed: {0}")]
+    WithdrawFailed(String),
+
+    /// The federation did not serve the request.
+    #[error(transparent)]
+    Federation(#[from] FederationError),
+
+    /// The client has no admin credentials, which reading the Bitcoin RPC
+    /// config needs.
+    #[error("Admin auth not set")]
+    AdminAuthNotSet,
+
+    /// A deposit address could not be allocated.
+    #[error(transparent)]
+    DepositAddress(#[from] DepositAddressError),
 }

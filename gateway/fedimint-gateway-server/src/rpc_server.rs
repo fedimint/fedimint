@@ -18,18 +18,19 @@ use fedimint_gateway_common::{
     CONNECT_PEER_ENDPOINT, CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT,
     CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT, CloseChannelsWithPeerRequest, ConfigPayload,
     ConnectFedPayload, ConnectPeerRequest, CreateInvoiceForOperatorPayload, CreateOfferPayload,
-    DepositAddressPayload, DepositAddressRecheckPayload, GATEWAY_INFO_ENDPOINT,
-    GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT,
-    GetInvoiceRequest, INVITE_CODES_ENDPOINT, LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT,
-    LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload, ListTransactionsPayload, MNEMONIC_ENDPOINT,
-    OPEN_CHANNEL_ENDPOINT, OPEN_CHANNEL_WITH_PUSH_ENDPOINT, OpenChannelRequest,
+    DepositAddressPayload, DepositAddressRecheckPayload, FEDERATION_STATUS_ENDPOINT,
+    FederationStatusRequest, GATEWAY_INFO_ENDPOINT, GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT,
+    GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GetInvoiceRequest, INVITE_CODES_ENDPOINT, LEAVE_FED_ENDPOINT,
+    LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload, ListTransactionsPayload,
+    MNEMONIC_ENDPOINT, OPEN_CHANNEL_ENDPOINT, OPEN_CHANNEL_WITH_PUSH_ENDPOINT, OpenChannelRequest,
     PAY_INVOICE_FOR_OPERATOR_ENDPOINT, PAY_OFFER_FOR_OPERATOR_ENDPOINT, PAYMENT_LOG_ENDPOINT,
     PAYMENT_SUMMARY_ENDPOINT, PEGIN_FROM_ONCHAIN_ENDPOINT, PayInvoiceForOperatorPayload,
     PayOfferPayload, PaymentLogPayload, PaymentSummaryPayload, PeginFromOnchainPayload,
     RECEIVE_ECASH_ENDPOINT, ReceiveEcashPayload, SEND_ONCHAIN_ENDPOINT, SET_CHANNEL_FEES_ENDPOINT,
-    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest,
-    SetChannelFeesRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload, V1_API_ENDPOINT,
-    WITHDRAW_ENDPOINT, WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload, WithdrawToOnchainPayload,
+    SET_FEES_ENDPOINT, SET_PAYMENT_POLICY_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    SendOnchainRequest, SetChannelFeesRequest, SetFeesPayload, SetMnemonicPayload,
+    SetPaymentPolicyPayload, SpendEcashPayload, V1_API_ENDPOINT, WITHDRAW_ENDPOINT,
+    WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload, WithdrawToOnchainPayload,
 };
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_ln_common::gateway_endpoint_constants::{
@@ -48,13 +49,13 @@ use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
 use tracing::{info, instrument, warn};
 
-use crate::error::{GatewayError, LnurlError};
+use crate::error::{GatewayError, LnurlError, PublicGatewayError};
 use crate::iroh_server::{Handlers, start_iroh_endpoint};
 use crate::{Gateway, GatewayState};
 
 // Routes that the liquidity manager is allowed to access. Any authenticated
 // route NOT in this list requires the admin password.
-const LIQUIDITY_MANAGER_ROUTES: [&str; 21] = [
+const LIQUIDITY_MANAGER_ROUTES: [&str; 22] = [
     ADDRESS_ENDPOINT,
     ADDRESS_RECHECK_ENDPOINT,
     CLOSE_CHANNELS_WITH_PEER_ENDPOINT,
@@ -75,6 +76,7 @@ const LIQUIDITY_MANAGER_ROUTES: [&str; 21] = [
     PEGIN_FROM_ONCHAIN_ENDPOINT,
     SET_CHANNEL_FEES_ENDPOINT,
     SET_FEES_ENDPOINT,
+    SET_PAYMENT_POLICY_ENDPOINT,
     WITHDRAW_TO_ONCHAIN_ENDPOINT,
 ];
 
@@ -170,18 +172,18 @@ async fn not_configured_middleware(
         let method = request.method().clone();
         let path = request.uri().path();
 
-        // Allow the API mnemonic endpoint (for CLI usage)
-        let is_mnemonic_api =
-            method == axum::http::Method::POST && strip_v1_prefix(path) == MNEMONIC_ENDPOINT;
-
         let is_setup_route = fedimint_gateway_ui::is_allowed_setup_route(path);
 
-        if !is_mnemonic_api && !is_setup_route {
+        if !is_allowed_not_configured_api(&method, path) && !is_setup_route {
             return Err(StatusCode::NOT_FOUND);
         }
     }
 
     Ok(next.run(request).await)
+}
+
+pub(crate) fn is_allowed_not_configured_api(method: &axum::http::Method, path: &str) -> bool {
+    method == axum::http::Method::POST && strip_v1_prefix(path) == MNEMONIC_ENDPOINT
 }
 
 /// Middleware to authenticate an incoming request. Routes that are
@@ -292,6 +294,25 @@ fn lnv2_routes(handlers: &mut Handlers) -> Router {
     router.route("/verify/{payment_hash}", get(verify_bolt11_preimage_v2_get))
 }
 
+fn public_routes(handlers: &mut Handlers) -> Router {
+    let mut routes = register_post_handler(
+        handlers,
+        RECEIVE_ECASH_ENDPOINT,
+        receive_ecash,
+        false,
+        Router::new(),
+    );
+    routes = routes.merge(lnv1_routes(handlers));
+    routes = routes.merge(lnv2_routes(handlers));
+    register_post_handler(
+        handlers,
+        FEDERATION_STATUS_ENDPOINT,
+        federation_status,
+        false,
+        routes,
+    )
+}
+
 /// Gateway Webserver Routes. The gateway supports two types of routes
 /// - Always Authenticated: these routes always require a Bearer token. Used by
 ///   gateway administrators.
@@ -299,15 +320,7 @@ fn lnv2_routes(handlers: &mut Handlers) -> Router {
 ///   clients.
 fn routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handlers) -> Router {
     // Public routes on gateway webserver
-    let mut public_routes = register_post_handler(
-        handlers,
-        RECEIVE_ECASH_ENDPOINT,
-        receive_ecash,
-        false,
-        Router::new(),
-    );
-    public_routes = public_routes.merge(lnv1_routes(handlers));
-    public_routes = public_routes.merge(lnv2_routes(handlers));
+    let public_routes = public_routes(handlers);
 
     // Authenticated routes used for gateway administration
     let is_authenticated = true;
@@ -512,6 +525,13 @@ fn routes(gateway: Arc<Gateway>, task_group: TaskGroup, handlers: &mut Handlers)
     );
     let authenticated_routes = register_post_handler(
         handlers,
+        SET_PAYMENT_POLICY_ENDPOINT,
+        set_payment_policy,
+        is_authenticated,
+        authenticated_routes,
+    );
+    let authenticated_routes = register_post_handler(
+        handlers,
         CONFIGURATION_ENDPOINT,
         configuration,
         is_authenticated,
@@ -556,6 +576,20 @@ async fn info(
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     let info = gateway.handle_get_info().await?;
     Ok(Json(json!(info)))
+}
+
+/// Reports sanitized capability and health for exactly one requested
+/// federation.
+#[instrument(target = LOG_GATEWAY, skip_all, fields(federation_id = %payload.federation_id))]
+async fn federation_status(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<FederationStatusRequest>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    let status = gateway
+        .handle_federation_status(payload.federation_id)
+        .await
+        .map_err(PublicGatewayError::Internal)?;
+    Ok(Json(json!(status)))
 }
 
 /// Display high-level information about the Gateway config
@@ -675,6 +709,15 @@ async fn set_fees(
     Json(payload): Json<SetFeesPayload>,
 ) -> Result<Json<serde_json::Value>, GatewayError> {
     gateway.handle_set_fees_msg(payload).await?;
+    Ok(Json(json!(())))
+}
+
+#[instrument(target = LOG_GATEWAY, skip_all, err, fields(?payload))]
+async fn set_payment_policy(
+    Extension(gateway): Extension<Arc<Gateway>>,
+    Json(payload): Json<SetPaymentPolicyPayload>,
+) -> Result<Json<serde_json::Value>, GatewayError> {
+    gateway.handle_set_payment_policy_msg(payload).await?;
     Ok(Json(json!(())))
 }
 
@@ -928,24 +971,4 @@ async fn invite_codes(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn strip_v1_prefix_covers_both_api_mounts() {
-        for route in LIQUIDITY_MANAGER_ROUTES {
-            assert_eq!(strip_v1_prefix(route), route);
-            assert_eq!(
-                strip_v1_prefix(&format!("/{V1_API_ENDPOINT}{route}")),
-                route
-            );
-        }
-    }
-
-    #[test]
-    fn strip_v1_prefix_only_strips_a_full_leading_segment() {
-        assert_eq!(strip_v1_prefix("/v1"), "/v1");
-        assert_eq!(strip_v1_prefix("/v1x/address"), "/v1x/address");
-        assert_eq!(strip_v1_prefix("/v1/v1/address"), "/v1/address");
-    }
-}
+mod tests;

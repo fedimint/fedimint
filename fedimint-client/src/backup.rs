@@ -3,18 +3,18 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::io::{Cursor, Write};
 
-use anyhow::{Context, Result, bail, ensure};
 use bitcoin::secp256k1::{Keypair, PublicKey, Secp256k1, SignOnly};
-use fedimint_api_client::api::DynGlobalApi;
+use fedimint_api_client::api::{DynGlobalApi, FederationError};
 use fedimint_client_module::module::recovery::DynModuleBackup;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::core::backup::{
     BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES, BackupRequest, SignedBackupRequest,
 };
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
-use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeContext as _, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::serde_json;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::{Event, EventKind, EventPersistence};
 use fedimint_logging::{LOG_CLIENT, LOG_CLIENT_BACKUP, LOG_CLIENT_RECOVERY};
@@ -23,6 +23,7 @@ use tracing::{debug, info, warn};
 
 use super::Client;
 use crate::db::LastBackupKey;
+use crate::error::{BackupError, ClientSecretError};
 use crate::secret::DeriveableSecretClientExt;
 
 /// Backup metadata
@@ -57,13 +58,15 @@ impl Metadata {
     }
 
     /// Attempt to deserialize metadata as typed json
-    pub fn to_json_deserialized<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
-        Ok(serde_json::from_slice(&self.0)?)
+    pub fn to_json_deserialized<T: serde::de::DeserializeOwned>(
+        &self,
+    ) -> Result<T, serde_json::Error> {
+        serde_json::from_slice(&self.0)
     }
 
     /// Attempt to deserialize metadata as untyped json (`serde_json::Value`)
-    pub fn to_json_value(&self) -> Result<serde_json::Value> {
-        Ok(serde_json::from_slice(&self.0)?)
+    pub fn to_json_value(&self) -> Result<serde_json::Value, serde_json::Error> {
+        serde_json::from_slice(&self.0)
     }
 }
 
@@ -145,14 +148,20 @@ impl ClientBackup {
     }
 
     /// Encrypt with a key and turn into [`EncryptedClientBackup`]
-    pub fn encrypt_to(&self, key: &fedimint_aead::LessSafeKey) -> Result<EncryptedClientBackup> {
+    pub fn encrypt_to(
+        &self,
+        key: &fedimint_aead::LessSafeKey,
+    ) -> Result<EncryptedClientBackup, BackupError> {
         let mut encoded = Encodable::consensus_encode_to_vec(self);
 
         let alignment_size = Self::get_alignment_size(encoded.len());
         let padding_size = alignment_size - encoded.len();
-        encoded.write_all(&vec![0u8; padding_size])?;
+        encoded
+            .write_all(&vec![0u8; padding_size])
+            .expect("Writing to a Vec cannot fail");
 
-        let encrypted = fedimint_aead::encrypt(encoded, key)?;
+        let encrypted = fedimint_aead::encrypt(encoded, key)
+            .map_err(|err| BackupError::Encryption(err.into()))?;
         Ok(EncryptedClientBackup(encrypted))
     }
 
@@ -225,8 +234,9 @@ impl EncryptedClientBackup {
         mut self,
         key: &fedimint_aead::LessSafeKey,
         decoders: &ModuleDecoderRegistry,
-    ) -> Result<ClientBackup> {
-        let decrypted = fedimint_aead::decrypt(&mut self.0, key)?;
+    ) -> Result<ClientBackup, BackupError> {
+        let decrypted = fedimint_aead::decrypt(&mut self.0, key)
+            .map_err(|err| BackupError::Encryption(err.into()))?;
         let mut cursor = Cursor::new(decrypted);
         // We specifically want to ignore the padding in the backup here.
         let client_backup = ClientBackup::consensus_decode_partial(&mut cursor, decoders)?;
@@ -239,7 +249,7 @@ impl EncryptedClientBackup {
         Ok(client_backup)
     }
 
-    pub fn into_backup_request(self, keypair: &Keypair) -> Result<SignedBackupRequest> {
+    pub fn into_backup_request(self, keypair: &Keypair) -> SignedBackupRequest {
         let request = BackupRequest {
             id: keypair.public_key(),
             timestamp: fedimint_core::time::now(),
@@ -274,13 +284,19 @@ impl Client {
     #[deprecated(
         note = "Recovery is now efficient enough that backups are no longer necessary. Backups will be removed in v0.13.0 due to backups being inherently complicated and brittle."
     )]
-    pub async fn create_backup(&self, metadata: Metadata) -> anyhow::Result<ClientBackup> {
+    pub async fn create_backup(&self, metadata: Metadata) -> Result<ClientBackup, BackupError> {
         let session_count = self.api.session_count().await?;
         let mut modules = BTreeMap::new();
         for (id, kind, module) in self.modules.iter_modules() {
             debug!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Preparing module backup");
             if module.supports_backup() {
-                let backup = module.backup(id).await?;
+                let backup = module
+                    .backup(id)
+                    .await
+                    .map_err(|source| BackupError::Module {
+                        instance_id: id,
+                        source,
+                    })?;
 
                 debug!(target: LOG_CLIENT_BACKUP, module_id=id, module_kind=%kind, "Prepared module backup");
                 modules.insert(id, backup);
@@ -312,11 +328,10 @@ impl Client {
         note = "Recovery is now efficient enough that backups are no longer necessary. Backups will be removed in v0.13.0 due to backups being inherently complicated and brittle."
     )]
     #[allow(deprecated)]
-    pub async fn backup_to_federation(&self, metadata: Metadata) -> Result<()> {
-        ensure!(
-            !self.has_pending_recoveries(),
-            "Cannot backup while there are pending recoveries"
-        );
+    pub async fn backup_to_federation(&self, metadata: Metadata) -> Result<(), BackupError> {
+        if self.has_pending_recoveries() {
+            return Err(BackupError::PendingRecoveries);
+        }
 
         let last_backup = self.load_previous_backup().await;
         let new_backup = self.create_backup(metadata).await?;
@@ -340,9 +355,12 @@ impl Client {
     #[deprecated(
         note = "Recovery is now efficient enough that backups are no longer necessary. Backups will be removed in v0.13.0 due to backups being inherently complicated and brittle."
     )]
-    pub fn validate_backup(&self, backup: &EncryptedClientBackup) -> Result<()> {
+    pub fn validate_backup(&self, backup: &EncryptedClientBackup) -> Result<(), BackupError> {
         if BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES < backup.len() {
-            bail!("Backup payload too large");
+            return Err(BackupError::TooLarge {
+                size: backup.len(),
+                max: BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES,
+            });
         }
         Ok(())
     }
@@ -352,7 +370,7 @@ impl Client {
         note = "Recovery is now efficient enough that backups are no longer necessary. Backups will be removed in v0.13.0 due to backups being inherently complicated and brittle."
     )]
     #[allow(deprecated)]
-    pub async fn upload_backup(&self, backup: &EncryptedClientBackup) -> Result<()> {
+    pub async fn upload_backup(&self, backup: &EncryptedClientBackup) -> Result<(), BackupError> {
         self.validate_backup(backup)?;
         let size = backup.len();
         info!(
@@ -361,7 +379,7 @@ impl Client {
         );
         let backup_request = backup
             .clone()
-            .into_backup_request(&self.get_derived_backup_signing_key())?;
+            .into_backup_request(&self.get_derived_backup_signing_key());
         self.api.upload_backup(&backup_request).await?;
         info!(
             target: LOG_CLIENT_BACKUP,
@@ -374,7 +392,9 @@ impl Client {
         note = "Recovery is now efficient enough that backups are no longer necessary. Backups will be removed in v0.13.0 due to backups being inherently complicated and brittle."
     )]
     #[allow(deprecated)]
-    pub async fn download_backup_from_federation(&self) -> Result<Option<ClientBackup>> {
+    pub async fn download_backup_from_federation(
+        &self,
+    ) -> Result<Option<ClientBackup>, FederationError> {
         Self::download_backup_from_federation_static(
             &self.api,
             &self.root_secret(),
@@ -392,7 +412,7 @@ impl Client {
         api: &DynGlobalApi,
         root_secret: &DerivableSecret,
         decoders: &ModuleDecoderRegistry,
-    ) -> Result<Option<ClientBackup>> {
+    ) -> Result<Option<ClientBackup>, FederationError> {
         debug!(target: LOG_CLIENT, "Downloading backup from the federation");
         let mut responses: Vec<_> = api
             .download_backup(&Client::get_backup_id_static(root_secret))
@@ -407,7 +427,9 @@ impl Client {
                     Err(e) => {
                         warn!(
                             target: LOG_CLIENT_RECOVERY,
-                            "Invalid backup returned by {peer}: {e}"
+                            err = %e.fmt_compact(),
+                            %peer,
+                            "Invalid backup returned by peer"
                         );
                         None
                     }
@@ -465,82 +487,10 @@ impl Client {
         Self::get_derived_backup_signing_key_static(&self.root_secret())
     }
 
-    pub async fn get_decoded_client_secret<T: Decodable>(&self) -> anyhow::Result<T> {
+    pub async fn get_decoded_client_secret<T: Decodable>(&self) -> Result<T, ClientSecretError> {
         crate::db::get_decoded_client_secret::<T>(self.db()).await
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use std::collections::BTreeMap;
-
-    use anyhow::Result;
-    use fedimint_core::encoding::{Decodable, Encodable};
-    use fedimint_core::module::registry::ModuleRegistry;
-    use fedimint_derive_secret::DerivableSecret;
-
-    use crate::Client;
-    use crate::backup::{ClientBackup, Metadata};
-
-    #[test]
-    fn sanity_ecash_backup_align() {
-        assert_eq!(
-            ClientBackup::get_alignment_size(1),
-            ClientBackup::PADDING_ALIGNMENT
-        );
-        assert_eq!(
-            ClientBackup::get_alignment_size(ClientBackup::PADDING_ALIGNMENT),
-            ClientBackup::PADDING_ALIGNMENT
-        );
-        assert_eq!(
-            ClientBackup::get_alignment_size(ClientBackup::PADDING_ALIGNMENT + 1),
-            ClientBackup::PADDING_ALIGNMENT * 2
-        );
-    }
-
-    #[test]
-    fn sanity_ecash_backup_decode_encode() -> Result<()> {
-        let orig = ClientBackup {
-            session_count: 0,
-            metadata: Metadata::from_raw(vec![1, 2, 3]),
-            modules: BTreeMap::new(),
-        };
-
-        let encoded = orig.consensus_encode_to_vec();
-        assert_eq!(
-            orig,
-            ClientBackup::consensus_decode_whole(&encoded, &ModuleRegistry::default())?
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn sanity_ecash_backup_encrypt_decrypt() -> Result<()> {
-        const ENCRYPTION_HEADER_LEN: usize = 28;
-
-        let orig = ClientBackup {
-            modules: BTreeMap::new(),
-            session_count: 1,
-            metadata: Metadata::from_raw(vec![1, 2, 3]),
-        };
-
-        let secret = DerivableSecret::new_root(&[1; 32], &[1, 32]);
-        let key = Client::get_derived_backup_encryption_key_static(&secret);
-
-        let empty_encrypted = fedimint_aead::encrypt(vec![], &key)?;
-        assert_eq!(empty_encrypted.len(), ENCRYPTION_HEADER_LEN);
-
-        let encrypted = orig.encrypt_to(&key)?;
-        assert_eq!(
-            encrypted.len(),
-            ClientBackup::PADDING_ALIGNMENT + ENCRYPTION_HEADER_LEN
-        );
-
-        let decrypted = encrypted.decrypt_with(&key, &ModuleRegistry::default())?;
-
-        assert_eq!(orig, decrypted);
-
-        Ok(())
-    }
-}
+mod tests;

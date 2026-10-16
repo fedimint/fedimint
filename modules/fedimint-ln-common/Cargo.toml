@@ -15,15 +15,11 @@ normal = ["aquamarine"]
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
-[features]
-uniffi = ["dep:uniffi", "fedimint-core/uniffi"]
-
 [lib]
 name = "fedimint_ln_common"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 fedimint-connectors = { workspace = true }
@@ -36,11 +32,11 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 serde-big-array = { workspace = true }
 serde_json = { workspace = true }
+subtle = { workspace = true }
 thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-uniffi = { workspace = true, optional = true }
 
 [lints]
 workspace = true

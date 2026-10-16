@@ -29,8 +29,14 @@ pub fn deserialize<'de, T: Decodable, D>(de: D) -> Result<T, D::Error>
 where
     D: serde::de::Deserializer<'de>,
 {
-    Decodable::consensus_decode_hex(&String::deserialize(de)?, &ModuleRegistry::default())
-        .map_err(|e| serde::de::Error::custom(format!("decodable deserialization failed: {e:#}")))
+    Decodable::consensus_decode_hex(&String::deserialize(de)?, &ModuleRegistry::default()).map_err(
+        |e| {
+            serde::de::Error::custom(format!(
+                "decodable deserialization failed: {}",
+                crate::util::FmtCompact::fmt_compact(&e)
+            ))
+        },
+    )
 }
 
 #[macro_export]
@@ -63,7 +69,10 @@ macro_rules! deserialize_as_encodable_hex {
                     &Default::default(),
                 )
                 .map_err(|e| {
-                    serde::de::Error::custom(format!("decodable deserialization failed: {e:#}"))
+                    serde::de::Error::custom(format!(
+                        "decodable deserialization failed: {}",
+                        $crate::util::FmtCompact::fmt_compact(&e)
+                    ))
                 })
             }
         }
@@ -77,3 +86,6 @@ macro_rules! serde_as_encodable_hex {
         $crate::deserialize_as_encodable_hex!($name);
     };
 }
+
+#[cfg(test)]
+mod tests;

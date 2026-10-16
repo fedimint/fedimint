@@ -24,10 +24,14 @@ async fn get_metrics_handler() -> (StatusCode, String) {
 }
 
 /// Spawns an HTTP server that exposes Prometheus metrics on `/metrics`.
+///
+/// # Errors
+///
+/// Returns the error of binding `bind_address`.
 pub async fn spawn_api_server(
     bind_address: SocketAddr,
     task_group: TaskGroup,
-) -> anyhow::Result<()> {
+) -> std::io::Result<()> {
     let app = Router::new().route("/metrics", get(get_metrics_handler));
     let listener = TcpListener::bind(bind_address).await?;
 

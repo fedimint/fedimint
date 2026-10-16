@@ -1,5 +1,8 @@
+#[cfg(test)]
+mod tests;
+
 use anyhow::anyhow;
-use bitcoin::{BlockHash, Transaction};
+use bitcoin::{BlockHash, Transaction, Txid};
 use bitcoincore_rpc::Error::JsonRpc;
 use bitcoincore_rpc::bitcoincore_rpc_json::EstimateMode;
 use bitcoincore_rpc::jsonrpc::Error::Rpc;
@@ -58,6 +61,11 @@ impl IServerBitcoinRpc for BitcoindClient {
             .map_err(anyhow::Error::from)
     }
 
+    async fn get_block_count_and_initial_block_download(&self) -> anyhow::Result<(u64, bool)> {
+        let info = block_in_place(|| self.client.get_blockchain_info())?;
+        Ok((info.blocks + 1, info.initial_block_download))
+    }
+
     async fn get_block_hash(&self, height: u64) -> anyhow::Result<BlockHash> {
         block_in_place(|| self.client.get_block_hash(height)).map_err(anyhow::Error::from)
     }
@@ -95,6 +103,24 @@ impl IServerBitcoinRpc for BitcoindClient {
         Ok(Some(
             block_in_place(|| self.client.get_blockchain_info())?.verification_progress,
         ))
+    }
+
+    async fn get_mempool_txids(&self) -> anyhow::Result<Option<Vec<Txid>>> {
+        block_in_place(|| self.client.get_raw_mempool())
+            .map(Some)
+            .map_err(anyhow::Error::from)
+    }
+
+    async fn get_mempool_tx(&self, txid: &Txid) -> anyhow::Result<Option<Transaction>> {
+        // Bitcoin Core resolves the mempool before the block index, so this
+        // works without `txindex`. Error code -5 is the node saying it has no
+        // such transaction, which for a mempool read is an ordinary outcome:
+        // the transaction was mined or evicted since it was listed.
+        match block_in_place(|| self.client.get_raw_transaction(txid, None)) {
+            Ok(tx) => Ok(Some(tx)),
+            Err(JsonRpc(Rpc(e))) if e.code == -5 => Ok(None),
+            Err(e) => Err(e.into()),
+        }
     }
 
     async fn get_chain_id(&self) -> anyhow::Result<ChainId> {

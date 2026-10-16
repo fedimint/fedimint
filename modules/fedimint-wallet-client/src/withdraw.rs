@@ -9,6 +9,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 #[allow(deprecated)]
 use fedimint_core::endpoint_constants::AWAIT_OUTPUT_OUTCOME_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_wallet_common::WalletOutputOutcome;
 use futures::future::pending;
 use tracing::warn;
@@ -84,7 +85,7 @@ async fn await_withdraw_processed(
         .await;
 
     match deserialize_outcome::<WalletOutputOutcome>(&outcome, &context.wallet_decoder)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.fmt_compact().to_string())
         .and_then(|outcome| {
             outcome
                 .ensure_v0_ref()

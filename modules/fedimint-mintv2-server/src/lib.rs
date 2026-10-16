@@ -5,11 +5,11 @@
 #![allow(clippy::similar_names)]
 
 pub mod db;
+mod metrics;
 
 use std::collections::BTreeMap;
 
 use anyhow::{bail, ensure};
-use bitcoin::hashes::sha256;
 use fedimint_core::config::{
     ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
@@ -26,8 +26,8 @@ use fedimint_core::module::{
     ModuleConsensusVersion, ModuleInit, TransactionItemAmounts, public_api_endpoint,
 };
 use fedimint_core::{
-    Amount, BitcoinHash, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply,
-    async_trait_maybe_send, push_db_key_items, push_db_pair_items,
+    Amount, InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
+    push_db_key_items, push_db_pair_items,
 };
 use fedimint_mintv2_common::config::{
     FeeConsensus, MintClientConfig, MintConfig, MintConfigConsensus, MintConfigPrivate,
@@ -48,8 +48,7 @@ use fedimint_server_core::{
     ConfigGenModuleArgs, EnvVarDoc, ServerModule, ServerModuleInit, ServerModuleInitArgs,
 };
 use futures::StreamExt;
-use rand::SeedableRng;
-use rand_chacha::ChaChaRng;
+use rand::rngs::OsRng;
 use strum::IntoEnumIterator;
 use tbs::{
     AggregatePublicKey, BlindedSignatureShare, PublicKeyShare, SecretKeyShare, derive_pk_share,
@@ -62,6 +61,10 @@ use crate::db::{
     BlindedSignatureShareKey, BlindedSignatureSharePrefix, BlindedSignatureShareRecoveryKey,
     BlindedSignatureShareRecoveryPrefix, DbKeyPrefix, IssuanceCounterKey, IssuanceCounterPrefix,
     NonceKey, NonceKeyPrefix, RecoveryItemKey, RecoveryItemPrefix,
+};
+use crate::metrics::{
+    MINT_INOUT_FEES_SATS, MINT_INOUT_SATS, MINT_ISSUED_ECASH_FEES_SATS, MINT_ISSUED_ECASH_SATS,
+    MINT_REDEEMED_ECASH_FEES_SATS, MINT_REDEEMED_ECASH_SATS,
 };
 
 #[derive(Debug, Clone)]
@@ -151,10 +154,24 @@ impl ServerModuleInit for MintInit {
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
-        args.cfg().to_typed().map(|cfg| Mint {
+        // Eagerly register metrics so the series exist before the first transaction
+        for direction in ["incoming", "outgoing"] {
+            MINT_INOUT_SATS
+                .with_label_values(&[direction])
+                .get_sample_count();
+            MINT_INOUT_FEES_SATS
+                .with_label_values(&[direction])
+                .get_sample_count();
+        }
+        MINT_ISSUED_ECASH_SATS.get_sample_count();
+        MINT_ISSUED_ECASH_FEES_SATS.get_sample_count();
+        MINT_REDEEMED_ECASH_SATS.get_sample_count();
+        MINT_REDEEMED_ECASH_FEES_SATS.get_sample_count();
+
+        Ok(args.cfg().to_typed().map(|cfg| Mint {
             cfg,
             db: args.db().clone(),
-        })
+        })?)
     }
 
     fn trusted_dealer_gen(
@@ -168,20 +185,19 @@ impl ServerModuleInit for MintInit {
             FeeConsensus::new(0).expect("Relative fee is within range")
         };
 
+        let polynomials = consensus_denominations()
+            .map(|denomination| (denomination, dealer_polynomial(peers.to_num_peers())))
+            .collect::<BTreeMap<Denomination, Vec<Scalar>>>();
+
         let tbs_agg_pks = consensus_denominations()
-            .map(|denomination| (denomination, dealer_agg_pk(denomination.amount())))
+            .map(|denomination| (denomination, dealer_agg_pk(&polynomials[&denomination])))
             .collect::<BTreeMap<Denomination, AggregatePublicKey>>();
 
         let tbs_pks = consensus_denominations()
             .map(|denomination| {
                 let pks = peers
                     .iter()
-                    .map(|peer| {
-                        (
-                            *peer,
-                            dealer_pk(denomination.amount(), peers.to_num_peers(), *peer),
-                        )
-                    })
+                    .map(|peer| (*peer, dealer_pk(&polynomials[&denomination], *peer)))
                     .collect();
 
                 (denomination, pks)
@@ -201,10 +217,7 @@ impl ServerModuleInit for MintInit {
                     private: MintConfigPrivate {
                         tbs_sks: consensus_denominations()
                             .map(|denomination| {
-                                (
-                                    denomination,
-                                    dealer_sk(denomination.amount(), peers.to_num_peers(), *peer),
-                                )
+                                (denomination, dealer_sk(&polynomials[&denomination], *peer))
                             })
                             .collect(),
                     },
@@ -295,35 +308,34 @@ impl ServerModuleInit for MintInit {
     }
 }
 
-fn dealer_agg_pk(amount: Amount) -> AggregatePublicKey {
-    AggregatePublicKey((G2Projective::generator() * coefficient(amount, 0)).to_affine())
+fn dealer_polynomial(num_peers: NumPeers) -> Vec<Scalar> {
+    (0..num_peers.threshold())
+        .map(|_| Scalar::random(&mut OsRng))
+        .collect()
 }
 
-fn dealer_pk(amount: Amount, num_peers: NumPeers, peer: PeerId) -> PublicKeyShare {
-    derive_pk_share(&dealer_sk(amount, num_peers, peer))
+fn dealer_agg_pk(polynomial: &[Scalar]) -> AggregatePublicKey {
+    AggregatePublicKey((G2Projective::generator() * polynomial[0]).to_affine())
 }
 
-fn dealer_sk(amount: Amount, num_peers: NumPeers, peer: PeerId) -> SecretKeyShare {
+fn dealer_pk(polynomial: &[Scalar], peer: PeerId) -> PublicKeyShare {
+    derive_pk_share(&dealer_sk(polynomial, peer))
+}
+
+fn dealer_sk(polynomial: &[Scalar], peer: PeerId) -> SecretKeyShare {
     let x = Scalar::from(peer.to_usize() as u64 + 1);
 
     // We evaluate the scalar polynomial of degree threshold - 1 at the point x
     // using the Horner schema.
 
-    let y = (0..num_peers.threshold())
-        .map(|index| coefficient(amount, index as u64))
+    let y = polynomial
+        .iter()
+        .copied()
         .rev()
         .reduce(|accumulator, c| accumulator * x + c)
         .expect("We have at least one coefficient");
 
     SecretKeyShare(y)
-}
-
-fn coefficient(amount: Amount, index: u64) -> Scalar {
-    Scalar::random(&mut ChaChaRng::from_seed(
-        *(amount, index)
-            .consensus_hash::<sha256::Hash>()
-            .as_byte_array(),
-    ))
 }
 
 #[derive(Debug)]
@@ -416,11 +428,16 @@ impl ServerModule for Mint {
 
         let amount = input.note.amount();
         let unit = self.cfg.consensus.amount_unit;
+        let fee = self.cfg.consensus.fee_consensus.fee(amount);
+
+        if unit.is_bitcoin() {
+            calculate_mint_redeemed_ecash_metrics(dbtx, amount, fee);
+        }
 
         Ok(InputMeta {
             amount: TransactionItemAmounts {
                 amounts: Amounts::new_custom(unit, amount),
-                fees: Amounts::new_custom(unit, self.cfg.consensus.fee_consensus.fee(amount)),
+                fees: Amounts::new_custom(unit, fee),
             },
             pub_key: input.note.nonce,
         })
@@ -474,10 +491,15 @@ impl ServerModule for Mint {
 
         let amount = output.amount();
         let unit = self.cfg.consensus.amount_unit;
+        let fee = self.cfg.consensus.fee_consensus.fee(amount);
+
+        if unit.is_bitcoin() {
+            calculate_mint_issued_ecash_metrics(dbtx, amount, fee);
+        }
 
         Ok(TransactionItemAmounts {
             amounts: Amounts::new_custom(unit, amount),
-            fees: Amounts::new_custom(unit, self.cfg.consensus.fee_consensus.fee(amount)),
+            fees: Amounts::new_custom(unit, fee),
         })
     }
 
@@ -506,11 +528,13 @@ impl ServerModule for Mint {
         vec![
             public_api_endpoint! {
                 SIGNATURE_SHARES_ENDPOINT,
-                ApiVersion::new(0, 1),
+                ApiVersion::new(0, 2),
                 async |_module: &Mint, context, range: fedimint_core::OutPointRange| -> Vec<BlindedSignatureShare> {
-                    let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
-                    Ok(get_signature_shares(&mut dbtx, range).await)
+                    // Long-polls like the LNv2 decryption key share endpoint, so a
+                    // client can request the shares before acceptance and receive
+                    // them the instant they are written; a client of API 0.1 asks
+                    // after acceptance and is answered at once.
+                    Ok(await_signature_shares(&context.db(), range).await)
                 }
             },
             public_api_endpoint! {
@@ -551,6 +575,33 @@ impl ServerModule for Mint {
             },
         ]
     }
+}
+
+/// The signature shares of the range, waiting for them to be written. A
+/// transaction's outputs are processed in one database transaction, so the
+/// range's last share appearing means every share has, and the wait is on
+/// that one. An empty or descending range, which an untrusted request may
+/// carry, has no shares.
+async fn await_signature_shares(
+    db: &Database,
+    range: fedimint_core::OutPointRange,
+) -> Vec<BlindedSignatureShare> {
+    let last = match range.checked_count() {
+        Some(count) if count > 0 => OutPoint {
+            txid: range.txid(),
+            out_idx: range.end_out_point().out_idx - 1,
+        },
+        _ => return Vec::new(),
+    };
+
+    let mut dbtx = db
+        .wait_key_check(&BlindedSignatureShareKey(last), std::convert::identity)
+        .await
+        .1;
+
+    let shares = get_signature_shares(&mut dbtx.to_ref_nc(), range).await;
+
+    shares
 }
 
 async fn get_signature_shares(
@@ -605,3 +656,40 @@ async fn get_recovery_slice(
         .collect()
         .await
 }
+
+fn calculate_mint_issued_ecash_metrics(
+    dbtx: &mut DatabaseTransaction<'_>,
+    amount: Amount,
+    fee: Amount,
+) {
+    dbtx.on_commit(move || {
+        MINT_INOUT_SATS
+            .with_label_values(&["outgoing"])
+            .observe(amount.sats_f64());
+        MINT_INOUT_FEES_SATS
+            .with_label_values(&["outgoing"])
+            .observe(fee.sats_f64());
+        MINT_ISSUED_ECASH_SATS.observe(amount.sats_f64());
+        MINT_ISSUED_ECASH_FEES_SATS.observe(fee.sats_f64());
+    });
+}
+
+fn calculate_mint_redeemed_ecash_metrics(
+    dbtx: &mut DatabaseTransaction<'_>,
+    amount: Amount,
+    fee: Amount,
+) {
+    dbtx.on_commit(move || {
+        MINT_INOUT_SATS
+            .with_label_values(&["incoming"])
+            .observe(amount.sats_f64());
+        MINT_INOUT_FEES_SATS
+            .with_label_values(&["incoming"])
+            .observe(fee.sats_f64());
+        MINT_REDEEMED_ECASH_SATS.observe(amount.sats_f64());
+        MINT_REDEEMED_ECASH_FEES_SATS.observe(fee.sats_f64());
+    });
+}
+
+#[cfg(test)]
+mod tests;

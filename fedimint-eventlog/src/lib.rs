@@ -12,9 +12,6 @@
 //! potentially emitting events of its own, and atomically updating persisted
 //! event log position ("cursor") of events that were already processed.
 
-#[cfg(feature = "uniffi")]
-::uniffi::setup_scaffolding!();
-
 use std::borrow::Cow;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -26,11 +23,13 @@ use fedimint_core::db::{
     Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, NonCommittable,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::runtime::{Instant, timeout};
 use fedimint_core::{Amount, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT_EVENT_LOG;
 use futures::{Future, StreamExt};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use tokio::sync::{broadcast, watch};
 use tracing::{debug, trace};
 
@@ -138,9 +137,6 @@ impl UnordedEventLogId {
 )]
 pub struct EventLogId(u64);
 
-#[cfg(feature = "uniffi")]
-uniffi::custom_newtype!(EventLogId, u64);
-
 impl EventLogId {
     pub const LOG_START: EventLogId = EventLogId(0);
 
@@ -184,9 +180,6 @@ impl fmt::Display for EventLogId {
 #[derive(Debug, Clone, Encodable, Decodable, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventKind(Cow<'static, str>);
 
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(EventKind, String);
-
 impl EventKind {
     pub const fn from_static(value: &'static str) -> Self {
         Self(Cow::Borrowed(value))
@@ -205,12 +198,6 @@ impl From<String> for EventKind {
     }
 }
 
-impl From<EventKind> for String {
-    fn from(event_kind: EventKind) -> Self {
-        event_kind.0.into_owned()
-    }
-}
-
 impl fmt::Display for EventKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
@@ -218,7 +205,6 @@ impl fmt::Display for EventKind {
 }
 
 #[derive(Debug, Encodable, Decodable, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct EventLogModule {
     pub kind: ModuleKind,
     pub id: ModuleInstanceId,
@@ -244,7 +230,6 @@ impl UnorderedEventLogEntry {
 }
 
 #[derive(Debug, Encodable, Decodable, Clone)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct EventLogEntry {
     /// Type/kind of the event
     ///
@@ -291,7 +276,6 @@ impl EventLogEntry {
 
 /// An `EventLogEntry` that was already persisted (so has an id)
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PersistedLogEntry {
     id: EventLogId,
     inner: EventLogEntry,
@@ -707,6 +691,23 @@ async fn trim_trimable_log(db: &Database, current_time_usecs: u64) {
     dbtx.commit_tx().await;
 }
 
+/// How far before the newest unordered event already ordered the ordering task
+/// starts its next scan.
+///
+/// Every unordered event is deleted once ordered, and a key-value store keeps
+/// the deletion as a tombstone until compaction, so a scan of the whole
+/// unordered prefix walks every event ordered since then and its cost grows
+/// with the client's event volume. Unordered ids are wall-clock based and
+/// transactions commit in any order, so an event can only become visible after
+/// newer ones were ordered by as long as its transaction stayed open; the
+/// margin covers that, the periodic full scan below covers the rest.
+const UNORDERED_SCAN_MARGIN: Duration = Duration::from_secs(60);
+
+/// How often the ordering task scans the whole unordered prefix, so an event
+/// committed later than [`UNORDERED_SCAN_MARGIN`] after newer ones, or written
+/// across a backwards clock step, is still ordered within this bound.
+const UNORDERED_FULL_SCAN_INTERVAL: Duration = Duration::from_secs(60);
+
 /// The code that handles new unordered events and rewriters them fully ordered
 /// into the final event log.
 pub async fn run_event_log_ordering_task(
@@ -732,14 +733,41 @@ pub async fn run_event_log_ordering_task(
         .get_next_event_log_trimable_id()
         .await;
 
+    let mut scan_from_usecs = 0;
+    let mut next_full_scan = Instant::now();
+
     loop {
         let mut dbtx = db.begin_transaction().await;
 
-        let unordered_events = dbtx
-            .find_by_prefix(&UnorderedEventLogIdPrefixAll)
-            .await
-            .collect::<Vec<_>>()
-            .await;
+        let unordered_events = if Instant::now() >= next_full_scan {
+            next_full_scan = Instant::now() + UNORDERED_FULL_SCAN_INTERVAL;
+
+            dbtx.find_by_prefix(&UnorderedEventLogIdPrefixAll)
+                .await
+                .collect::<Vec<_>>()
+                .await
+        } else {
+            let start = UnordedEventLogId {
+                ts_usecs: scan_from_usecs,
+                counter: 0,
+            };
+
+            let end = UnordedEventLogId {
+                ts_usecs: u64::MAX,
+                counter: u64::MAX,
+            };
+
+            dbtx.find_by_range(start..end)
+                .await
+                .collect::<Vec<_>>()
+                .await
+        };
+
+        if let Some(newest_usecs) = unordered_events.iter().map(|entry| entry.0.ts_usecs).max() {
+            let margin_usecs = u64::try_from(UNORDERED_SCAN_MARGIN.as_micros()).unwrap_or(u64::MAX);
+
+            scan_from_usecs = scan_from_usecs.max(newest_usecs.saturating_sub(margin_usecs));
+        }
         trace!(target: LOG_CLIENT_EVENT_LOG, num=unordered_events.len(), "Fetched unordered events");
 
         for (unordered_id, entry) in &unordered_events {
@@ -794,7 +822,16 @@ pub async fn run_event_log_ordering_task(
         }
 
         trace!(target: LOG_CLIENT_EVENT_LOG, "Event log ordering task waits for more events");
-        if log_ordering_task_wakeup.changed().await.is_err() {
+
+        // Waking up for the periodic full scan even without new events keeps the
+        // bound on a late commit that a seeking scan skipped. The deadline is
+        // absolute so that notifications in between cannot postpone it.
+        if let Ok(Err(_)) = timeout(
+            next_full_scan.saturating_duration_since(Instant::now()),
+            log_ordering_task_wakeup.changed(),
+        )
+        .await
+        {
             break;
         }
     }
@@ -822,13 +859,13 @@ pub trait EventLogNonTrimableTracker {
         &mut self,
         dbtx: &mut DatabaseTransaction<NonCommittable>,
         pos: EventLogId,
-    ) -> anyhow::Result<()>;
+    ) -> Result<(), EventLogTrackerError>;
 
     /// Load the last previous stored position (or None if never stored)
     async fn load(
         &mut self,
         dbtx: &mut DatabaseTransaction<NonCommittable>,
-    ) -> anyhow::Result<Option<EventLogId>>;
+    ) -> Result<Option<EventLogId>, EventLogTrackerError>;
 }
 pub type DynEventLogTracker = Box<dyn EventLogNonTrimableTracker>;
 
@@ -840,29 +877,69 @@ pub trait EventLogTrimableTracker {
         &mut self,
         dbtx: &mut DatabaseTransaction<NonCommittable>,
         pos: EventLogTrimableId,
-    ) -> anyhow::Result<()>;
+    ) -> Result<(), EventLogTrackerError>;
 
     /// Load the last previous stored position (or None if never stored)
     async fn load(
         &mut self,
         dbtx: &mut DatabaseTransaction<NonCommittable>,
-    ) -> anyhow::Result<Option<EventLogTrimableId>>;
+    ) -> Result<Option<EventLogTrimableId>, EventLogTrackerError>;
 }
 pub type DynEventLogTrimableTracker = Box<dyn EventLogTrimableTracker>;
 
-pub async fn handle_events<F, R>(
+/// A failure of an event log tracker to load or store its position in the
+/// log.
+///
+/// Trackers are implemented by applications, so the causes are their own.
+/// This type carries them unchanged: its `Display` and its `source()` are the
+/// cause's.
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct EventLogTrackerError(Box<dyn std::error::Error + Send + Sync>);
+
+impl EventLogTrackerError {
+    /// Wraps a failure of an event log tracker, which may be any error value
+    /// or a plain message.
+    pub fn new<E>(source: E) -> Self
+    where
+        E: Into<Box<dyn std::error::Error + Send + Sync>>,
+    {
+        Self(source.into())
+    }
+}
+
+/// A failure while handling entries from the event log.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum EventHandlerError<E> {
+    /// The handler rejected an event.
+    #[error("The event handler failed")]
+    Handler(#[source] E),
+
+    /// The tracker could not load or store the position in the log.
+    #[error("The event log tracker failed")]
+    Tracker(#[source] Box<dyn std::error::Error + Send + Sync>),
+}
+
+/// Feeds every entry of the event log, past and future, to `call_fn`.
+///
+/// `tracker` remembers how far the log has been read so a restart resumes where
+/// it left off; the loop stops when `call_fn` fails or the client shuts down.
+pub async fn handle_events<F, R, E>(
     db: Database,
     mut tracker: DynEventLogTracker,
     mut log_event_added: watch::Receiver<()>,
     call_fn: F,
-) -> anyhow::Result<()>
+) -> Result<(), EventHandlerError<E>>
 where
     F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
-    R: Future<Output = anyhow::Result<()>>,
+    R: Future<Output = Result<(), E>>,
+    E: std::error::Error + 'static,
 {
     let mut next_key: EventLogId = tracker
         .load(&mut db.begin_transaction_nc().await)
-        .await?
+        .await
+        .map_err(|err| EventHandlerError::Tracker(err.into()))?
         .unwrap_or_default();
 
     trace!(target: LOG_CLIENT_EVENT_LOG, ?next_key, "Handling events");
@@ -872,11 +949,16 @@ where
 
         match dbtx.get_value(&next_key).await {
             Some(event) => {
-                (call_fn)(&mut dbtx.to_ref_nc(), event).await?;
+                (call_fn)(&mut dbtx.to_ref_nc(), event)
+                    .await
+                    .map_err(EventHandlerError::Handler)?;
 
                 next_key = next_key.next();
 
-                tracker.store(&mut dbtx.to_ref_nc(), next_key).await?;
+                tracker
+                    .store(&mut dbtx.to_ref_nc(), next_key)
+                    .await
+                    .map_err(|err| EventHandlerError::Tracker(err.into()))?;
 
                 dbtx.commit_tx().await;
             }
@@ -889,19 +971,23 @@ where
     }
 }
 
-pub async fn handle_trimable_events<F, R>(
+/// Like [`handle_events`], for the trimable part of the log: entries are handed
+/// to `call_fn` and the tracker's position drives when they can be trimmed.
+pub async fn handle_trimable_events<F, R, E>(
     db: Database,
     mut tracker: DynEventLogTrimableTracker,
     mut log_event_added: watch::Receiver<()>,
     call_fn: F,
-) -> anyhow::Result<()>
+) -> Result<(), EventHandlerError<E>>
 where
     F: Fn(&mut DatabaseTransaction<NonCommittable>, EventLogEntry) -> R,
-    R: Future<Output = anyhow::Result<()>>,
+    R: Future<Output = Result<(), E>>,
+    E: std::error::Error + 'static,
 {
     let mut next_key: EventLogTrimableId = tracker
         .load(&mut db.begin_transaction_nc().await)
-        .await?
+        .await
+        .map_err(|err| EventHandlerError::Tracker(err.into()))?
         .unwrap_or_default();
     trace!(target: LOG_CLIENT_EVENT_LOG, ?next_key, "Handling trimable events");
 
@@ -910,10 +996,15 @@ where
 
         match dbtx.get_value(&next_key).await {
             Some(event) => {
-                (call_fn)(&mut dbtx.to_ref_nc(), event).await?;
+                (call_fn)(&mut dbtx.to_ref_nc(), event)
+                    .await
+                    .map_err(EventHandlerError::Handler)?;
 
                 next_key = next_key.next();
-                tracker.store(&mut dbtx.to_ref_nc(), next_key).await?;
+                tracker
+                    .store(&mut dbtx.to_ref_nc(), next_key)
+                    .await
+                    .map_err(|err| EventHandlerError::Tracker(err.into()))?;
 
                 dbtx.commit_tx().await;
             }

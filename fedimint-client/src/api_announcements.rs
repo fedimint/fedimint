@@ -2,8 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, bail};
-use fedimint_api_client::api::DynGlobalApi;
+use fedimint_api_client::api::{DynGlobalApi, ServerError};
 use fedimint_connectors::iroh_next_endpoint_url;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
@@ -14,7 +13,7 @@ use fedimint_core::net::guardian_metadata::SignedGuardianMetadata;
 use fedimint_core::runtime::{self, sleep};
 use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::util::backoff_util::custom_backoff;
-use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{NumPeersExt as _, PeerId, impl_db_lookup, impl_db_record};
 use fedimint_logging::LOG_CLIENT;
 use futures::stream::{FuturesUnordered, StreamExt as _};
@@ -50,23 +49,19 @@ pub(crate) async fn run_api_announcement_refresh_task(client_inner: Arc<Client>)
     // Wait for the guardian keys to be available
     let guardian_pub_keys = client_inner.get_guardian_public_keys_blocking().await;
     loop {
-        if let Err(err) = {
-            let api: &DynGlobalApi = &client_inner.api;
-            let results = fetch_api_announcements_from_at_least_num_of_peers(
-                1,
-                api,
-                &guardian_pub_keys,
-                if is_running_in_test_env() {
-                    Duration::from_millis(1)
-                } else {
-                    Duration::from_secs(30)
-                },
-            )
-            .await;
-            store_api_announcements_updates_from_peers(client_inner.db(), &results).await
-        } {
-            debug!(target: LOG_CLIENT, err = %err.fmt_compact_anyhow(), "Refreshing api announcements failed");
-        }
+        let api: &DynGlobalApi = &client_inner.api;
+        let results = fetch_api_announcements_from_at_least_num_of_peers(
+            1,
+            api,
+            &guardian_pub_keys,
+            if is_running_in_test_env() {
+                Duration::from_millis(1)
+            } else {
+                Duration::from_secs(30)
+            },
+        )
+        .await;
+        store_api_announcements_updates_from_peers(client_inner.db(), &results).await;
 
         let duration = if is_running_in_test_env() {
             Duration::from_secs(1)
@@ -81,12 +76,10 @@ pub(crate) async fn run_api_announcement_refresh_task(client_inner: Arc<Client>)
 pub(crate) async fn store_api_announcements_updates_from_peers(
     db: &Database,
     updates: &[BTreeMap<PeerId, SignedApiAnnouncement>],
-) -> Result<(), anyhow::Error> {
+) {
     for announcements in updates {
         store_api_announcement_updates(db, announcements).await;
     }
-
-    Ok(())
 }
 
 pub(crate) type PeersSignedApiAnnouncements = BTreeMap<PeerId, SignedApiAnnouncement>;
@@ -112,23 +105,27 @@ pub(crate) async fn fetch_api_announcements_from_at_least_num_of_peers(
         peer_id: PeerId,
         api: &DynGlobalApi,
         guardian_pub_keys: &BTreeMap<PeerId, bitcoin::secp256k1::PublicKey>,
-    ) -> (PeerId, anyhow::Result<PeersSignedApiAnnouncements>) {
+    ) -> (
+        PeerId,
+        Result<PeersSignedApiAnnouncements, FetchApiAnnouncementsError>,
+    ) {
         runtime::sleep(delay).await;
 
         let result = async {
-            let announcements = api.api_announcements(peer_id).await.with_context(move || {
-                format!("Fetching API announcements from peer {peer_id} failed")
-            })?;
+            let announcements = api
+                .api_announcements(peer_id)
+                .await
+                .map_err(|source| FetchApiAnnouncementsError::Request { peer_id, source })?;
 
             // If any of the announcements is invalid something is fishy with that
             // guardian and we ignore all its responses
             for (peer_id, announcement) in &announcements {
                 let Some(guardian_pub_key) = guardian_pub_keys.get(peer_id) else {
-                    bail!("Guardian public key not found for peer {}", peer_id);
+                    return Err(FetchApiAnnouncementsError::UnknownGuardian { peer_id: *peer_id });
                 };
 
                 if !announcement.verify(SECP256K1, guardian_pub_key) {
-                    bail!("Failed to verify announcement for peer {}", peer_id);
+                    return Err(FetchApiAnnouncementsError::InvalidSignature { peer_id: *peer_id });
                 }
             }
             Ok(announcements)
@@ -174,7 +171,7 @@ pub(crate) async fn fetch_api_announcements_from_at_least_num_of_peers(
                 debug!(
                     target: LOG_CLIENT,
                     %peer_id,
-                    err = %err.fmt_compact_anyhow(),
+                    err = %err.fmt_compact(),
                     "Failed to fetch API announcements from peer"
                 );
                 requests.push(make_request(
@@ -296,7 +293,7 @@ pub async fn get_api_urls(
                             warn!(
                                 target: LOG_CLIENT,
                                 %peer_id,
-                                err = %err.fmt_compact_anyhow(),
+                                err = %err.fmt_compact(),
                                 "Ignoring peer with invalid advertised iroh-next endpoint",
                             );
                             return None;
@@ -308,4 +305,24 @@ pub async fn get_api_urls(
             Some((*peer_id, url))
         })
         .collect()
+}
+
+/// Why a peer's API announcements were not accepted.
+#[derive(Debug, thiserror::Error)]
+enum FetchApiAnnouncementsError {
+    /// The peer could not be asked.
+    #[error("Fetching API announcements from peer {peer_id} failed")]
+    Request {
+        peer_id: PeerId,
+        #[source]
+        source: ServerError,
+    },
+
+    /// The peer sent an announcement of a guardian the client does not know.
+    #[error("Guardian public key not found for peer {peer_id}")]
+    UnknownGuardian { peer_id: PeerId },
+
+    /// The peer sent an announcement whose signature does not verify.
+    #[error("Failed to verify announcement for peer {peer_id}")]
+    InvalidSignature { peer_id: PeerId },
 }

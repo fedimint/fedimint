@@ -13,7 +13,6 @@ use std::io::Read;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -55,13 +54,6 @@ pub mod backup;
 /// 256bit value collisions are impossible for all intents and purposes.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Encodable, Decodable, PartialOrd, Ord)]
 pub struct OperationId(pub [u8; 32]);
-
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(OperationId, String, {
-    lower: |obj| obj.fmt_full().to_string(),
-    try_lift: |s| OperationId::from_str(&s).map_err(|e| anyhow::anyhow!("Failed to parse OperationId from hex: {e}")),
-    }
-);
 
 pub struct OperationIdFullFmt<'a>(&'a OperationId);
 pub struct OperationIdShortFmt<'a>(&'a OperationId);
@@ -109,7 +101,7 @@ impl Debug for OperationId {
 }
 
 impl FromStr for OperationId {
-    type Err = anyhow::Error;
+    type Err = hex::FromHexError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bytes: [u8; 32] = hex::FromHex::from_hex(s)?;
@@ -170,9 +162,6 @@ pub const MODULE_INSTANCE_ID_GLOBAL: u16 = u16::MAX;
 #[derive(PartialEq, Eq, Clone, PartialOrd, Ord, Serialize, Deserialize, Encodable, Decodable)]
 pub struct ModuleKind(Cow<'static, str>);
 
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(ModuleKind, String);
-
 impl ModuleKind {
     pub fn clone_from_str(s: &str) -> Self {
         Self(Cow::from(s.to_owned()))
@@ -184,12 +173,6 @@ impl ModuleKind {
 
     pub fn as_str(&self) -> &str {
         &self.0
-    }
-}
-
-impl From<ModuleKind> for String {
-    fn from(module_kind: ModuleKind) -> Self {
-        module_kind.0.into_owned()
     }
 }
 
@@ -305,10 +288,7 @@ impl DecoderBuilder {
                 };
                 let typed_val =
                     Type::consensus_decode_partial(&mut reader, decoders).map_err(|err| {
-                        let err: anyhow::Error = err.into();
-                        DecodeError::new_custom(
-                            err.context(format!("while decoding Dyn type module_id={instance}")),
-                        )
+                        err.context(format!("while decoding Dyn type module_id={instance}"))
                     })?;
                 let dyn_val = typed_val.into_dyn(instance);
                 let any_val: Box<dyn Any> = Box::new(dyn_val);
@@ -364,15 +344,11 @@ impl Decoder {
         let left = reader.limit();
 
         if left != 0 {
-            return Err(fedimint_core::encoding::DecodeError::new_custom(
-                anyhow::anyhow!(
-                    "Dyn type did not consume all bytes during decoding; module_id={}; expected={}; left={}; type={}",
-                    module_id,
-                    total_len,
-                    left,
-                    std::any::type_name::<DynType>(),
-                ),
-            ));
+            return Err(fedimint_core::encoding::DecodeError::custom(format!(
+                "Dyn type did not consume all bytes during decoding; module_id={module_id}; \
+                 expected={total_len}; left={left}; type={}",
+                std::any::type_name::<DynType>(),
+            )));
         }
 
         Ok(val)
@@ -386,17 +362,14 @@ impl Decoder {
         module_id: ModuleInstanceId,
         decoders: &ModuleDecoderRegistry,
     ) -> Result<DynType, DecodeError> {
-        let decode_fn = self
-            .decode_fns
-            .get(&TypeId::of::<DynType>())
-            .ok_or_else(|| {
-                anyhow!(
-                    "Type unknown to decoder: {}, (registered decoders={})",
-                    std::any::type_name::<DynType>(),
-                    self.decode_fns.len()
-                )
-            })
-            .expect("Types being decoded must be registered");
+        let Some(decode_fn) = self.decode_fns.get(&TypeId::of::<DynType>()) else {
+            panic!(
+                "Types being decoded must be registered: Type unknown to decoder: {}, \
+                 (registered decoders={})",
+                std::any::type_name::<DynType>(),
+                self.decode_fns.len()
+            );
+        };
         Ok(*decode_fn(Box::new(reader), module_id, decoders)?
             .downcast::<DynType>()
             .expect("Decode fn returned wrong type, can't happen due to with_decodable_type"))

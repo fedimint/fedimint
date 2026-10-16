@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use async_channel::Sender;
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::PeerId;
@@ -6,7 +8,7 @@ use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::SerdeModuleEncoding;
 use fedimint_core::module::registry::ModuleRegistry;
-use fedimint_core::net::peers::{DynP2PConnections, Recipient};
+use fedimint_core::net::{DynP2PConnections, Recipient};
 use fedimint_core::secp256k1::schnorr;
 use fedimint_core::session_outcome::SignedSessionOutcome;
 use fedimint_core::util::FmtCompact as _;
@@ -15,6 +17,7 @@ use parity_scale_codec::{Decode, Encode, IoReader};
 use tracing::{error, trace};
 
 use super::super::db::SignedSessionOutcomeKey;
+use super::super::peer_availability::PeerActivity;
 use super::data_provider::UnitData;
 use super::keychain::Keychain;
 
@@ -38,6 +41,7 @@ pub type NetworkData = aleph_bft::NetworkData<
 
 pub struct Network {
     connections: DynP2PConnections<P2PMessage>,
+    peer_activity: Arc<Mutex<PeerActivity>>,
     signed_outcomes_sender: Sender<(PeerId, SignedSessionOutcome)>,
     signatures_sender: Sender<(PeerId, schnorr::Signature)>,
     db: Database,
@@ -46,12 +50,14 @@ pub struct Network {
 impl Network {
     pub fn new(
         connections: DynP2PConnections<P2PMessage>,
+        peer_activity: Arc<Mutex<PeerActivity>>,
         signed_outcomes_sender: Sender<(PeerId, SignedSessionOutcome)>,
         signatures_sender: Sender<(PeerId, schnorr::Signature)>,
         db: Database,
     ) -> Self {
         Self {
             connections,
+            peer_activity,
             signed_outcomes_sender,
             signatures_sender,
             db,
@@ -92,6 +98,11 @@ impl aleph_bft::Network<NetworkData> for Network {
 
             match message {
                 P2PMessage::Aleph(bytes) => {
+                    self.peer_activity.lock().expect("poisoned").heard(
+                        peer_id,
+                        fedimint_core::time::duration_since_epoch().as_secs(),
+                    );
+
                     match NetworkData::decode(&mut IoReader(bytes.as_slice())) {
                         Ok(network_data) => {
                             // in order to bound the RAM consumption of a session we have to bound

@@ -8,9 +8,10 @@ use std::pin::Pin;
 use std::result;
 use std::sync::Arc;
 
-use anyhow::{Context, anyhow};
 use bitcoin::secp256k1;
-pub use error::{FederationError, OutputOutcomeError};
+pub use error::{
+    ClientConfigDownloadError, FederationError, FederationGeneralError, OutputOutcomeError,
+};
 pub use fedimint_connectors::ServerResult;
 pub use fedimint_connectors::error::ServerError;
 use fedimint_connectors::{
@@ -30,6 +31,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
 use fedimint_core::net::guardian_metadata::SignedGuardianMetadata;
+use fedimint_core::peer_availability::PeerAvailability;
 use fedimint_core::session_outcome::{SessionOutcome, SessionStatus};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
@@ -148,7 +150,7 @@ pub trait FederationApiExt: IRawFederationApi {
             .await
             .and_then(|v| {
                 serde_json::from_value(v)
-                    .map_err(|e| ServerError::ResponseDeserialization(e.into()))
+                    .map_err(|e| ServerError::ResponseDeserialization(Box::new(e)))
             })
     }
 
@@ -165,7 +167,7 @@ pub trait FederationApiExt: IRawFederationApi {
             .await
             .and_then(|v| {
                 serde_json::from_value(v)
-                    .map_err(|e| ServerError::ResponseDeserialization(e.into()))
+                    .map_err(|e| ServerError::ResponseDeserialization(Box::new(e)))
             })
             .map_err(|e| error::FederationError::new_one_peer(peer_id, method, params, e))
     }
@@ -173,15 +175,15 @@ pub trait FederationApiExt: IRawFederationApi {
     /// Make an aggregate request to federation, using `strategy` to logically
     /// merge the responses.
     #[instrument(target = LOG_CLIENT_NET_API, skip_all, fields(method=method))]
-    async fn request_with_strategy<PR: DeserializeOwned, FR: Debug>(
+    async fn request_with_strategy<PR: DeserializeOwned + MaybeSend, FR: Debug>(
         &self,
         mut strategy: impl QueryStrategy<PR, FR> + MaybeSend,
         method: String,
         params: ApiRequestErased,
     ) -> FederationResult<FR> {
-        // NOTE: `FuturesUnorderded` is a footgun, but all we do here is polling
-        // completed results from it and we don't do any `await`s when
-        // processing them, it should be totally OK.
+        // NOTE: `FuturesUnordered` is a footgun, but all we do here is poll
+        // completed results from it. Processing a result may await its
+        // verification, during which the remaining requests simply pause.
         #[cfg(not(target_family = "wasm"))]
         let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _> + Send>>>::new();
         #[cfg(target_family = "wasm")]
@@ -211,7 +213,7 @@ pub trait FederationApiExt: IRawFederationApi {
                 .expect("Query strategy ran out of peers to query without returning a result");
 
             match result {
-                Ok(response) => match strategy.process(peer, response) {
+                Ok(response) => match strategy.process(peer, response).await {
                     QueryStep::Retry(peers) => {
                         for peer in peers {
                             futures.push(Box::pin({
@@ -235,6 +237,15 @@ pub trait FederationApiExt: IRawFederationApi {
                 },
                 Err(e) => {
                     e.report_if_unusual(peer, "RequestWithStrategy");
+
+                    // A strategy that tracks which peers are still outstanding
+                    // needs to see failures too, otherwise it cannot tell a slow
+                    // peer from one that will never answer. Defaults to
+                    // `Continue`, so other strategies are unaffected.
+                    if let QueryStep::Success(response) = strategy.process_error(peer, &e) {
+                        return Ok(response);
+                    }
+
                     peer_errors.insert(peer, e);
                 }
             }
@@ -256,9 +267,9 @@ pub trait FederationApiExt: IRawFederationApi {
         method: String,
         params: ApiRequestErased,
     ) -> FR {
-        // NOTE: `FuturesUnorderded` is a footgun, but all we do here is polling
-        // completed results from it and we don't do any `await`s when
-        // processing them, it should be totally OK.
+        // NOTE: `FuturesUnordered` is a footgun, but all we do here is poll
+        // completed results from it. Processing a result may await its
+        // verification, during which the remaining requests simply pause.
         #[cfg(not(target_family = "wasm"))]
         let mut futures = FuturesUnordered::<Pin<Box<dyn Future<Output = _> + Send>>>::new();
         #[cfg(target_family = "wasm")]
@@ -278,7 +289,6 @@ pub trait FederationApiExt: IRawFederationApi {
                                 .inspect_err(|e| {
                                     e.report_if_unusual(*peer, "QueryWithStrategyRetry");
                                 })
-                                .map_err(|e| anyhow!(e.to_string()))
                         },
                     )
                     .await
@@ -295,7 +305,7 @@ pub trait FederationApiExt: IRawFederationApi {
                 None => pending().await,
             };
 
-            match strategy.process(peer, response) {
+            match strategy.process(peer, response).await {
                 QueryStep::Retry(peers) => {
                     for peer in peers {
                         futures.push(Box::pin({
@@ -317,7 +327,6 @@ pub trait FederationApiExt: IRawFederationApi {
                                                 debug!(target: LOG_CLIENT_NET_API, err = %err.fmt_compact(), "Unusual peer error");
                                             }
                                         })
-                                        .map_err(|e| anyhow!(e.to_string()))
                                     },
                                 )
                                 .await
@@ -382,7 +391,7 @@ pub trait FederationApiExt: IRawFederationApi {
             return Err(FederationError::general(
                 method,
                 params,
-                anyhow::format_err!("Admin peer_id not set"),
+                FederationGeneralError::AdminPeerIdNotSet,
             ));
         };
 
@@ -402,7 +411,7 @@ pub trait FederationApiExt: IRawFederationApi {
             return Err(FederationError::general(
                 method,
                 params,
-                anyhow::format_err!("Admin peer_id not set"),
+                FederationGeneralError::AdminPeerIdNotSet,
             ));
         };
 
@@ -438,28 +447,26 @@ impl DynGlobalApi {
         connectors: ConnectorRegistry,
         peers: BTreeMap<PeerId, SafeUrl>,
         api_secret: Option<&str>,
-    ) -> anyhow::Result<Self> {
-        Ok(GlobalFederationApiWithCache::new(FederationApi::new(
-            connectors, peers, None, api_secret,
-        ))
-        .into())
+    ) -> Self {
+        GlobalFederationApiWithCache::new(FederationApi::new(connectors, peers, None, api_secret))
+            .into()
     }
     pub fn new_admin(
         connectors: ConnectorRegistry,
         peer: PeerId,
         url: SafeUrl,
         api_secret: Option<&str>,
-    ) -> anyhow::Result<DynGlobalApi> {
-        Ok(GlobalFederationApiWithCache::new(FederationApi::new(
+    ) -> DynGlobalApi {
+        GlobalFederationApiWithCache::new(FederationApi::new(
             connectors,
             [(peer, url)].into(),
             Some(peer),
             api_secret,
         ))
-        .into())
+        .into()
     }
 
-    pub fn new_admin_setup(connectors: ConnectorRegistry, url: SafeUrl) -> anyhow::Result<Self> {
+    pub fn new_admin_setup(connectors: ConnectorRegistry, url: SafeUrl) -> Self {
         // PeerIds are used only for informational purposes, but just in case, make a
         // big number so it stands out
         Self::new_admin(
@@ -484,7 +491,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         &self,
         block_index: u64,
         decoders: &ModuleDecoderRegistry,
-    ) -> anyhow::Result<SessionOutcome>;
+    ) -> FederationResult<SessionOutcome>;
 
     async fn get_session_status(
         &self,
@@ -492,7 +499,7 @@ pub trait IGlobalFederationApi: IRawFederationApi {
         decoders: &ModuleDecoderRegistry,
         core_api_version: ApiVersion,
         broadcast_public_keys: Option<&BTreeMap<PeerId, secp256k1::PublicKey>>,
-    ) -> anyhow::Result<SessionStatus>;
+    ) -> FederationResult<SessionStatus>;
 
     async fn session_count(&self) -> FederationResult<u64>;
 
@@ -590,6 +597,9 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     /// Returns the fedimintd version a peer is running
     async fn fedimintd_version(&self, peer_id: PeerId) -> ServerResult<String>;
 
+    /// Returns one guardian's view of the other guardians' availability
+    async fn peer_availability(&self, peer_id: PeerId) -> ServerResult<PeerAvailability>;
+
     /// Fetch the backup statistics from the federation (admin endpoint)
     async fn backup_statistics(&self, auth: ApiAuth) -> FederationResult<BackupStatistics>;
 
@@ -609,18 +619,18 @@ pub fn deserialize_outcome<R>(
 where
     R: OutputOutcome + MaybeSend,
 {
-    let dyn_outcome = outcome
-        .try_into_inner_known_module_kind(module_decoder)
-        .map_err(|e| OutputOutcomeError::ResponseDeserialization(e.into()))?;
+    let dyn_outcome = outcome.try_into_inner_known_module_kind(module_decoder)?;
 
-    let source_instance = dyn_outcome.module_instance_id();
+    let module_instance_id = dyn_outcome.module_instance_id();
 
-    dyn_outcome.as_any().downcast_ref().cloned().ok_or_else(|| {
-        let target_type = std::any::type_name::<R>();
-        OutputOutcomeError::ResponseDeserialization(anyhow!(
-            "Could not downcast output outcome with instance id {source_instance} to {target_type}"
-        ))
-    })
+    dyn_outcome
+        .as_any()
+        .downcast_ref()
+        .cloned()
+        .ok_or(OutputOutcomeError::WrongOutcomeType {
+            module_instance_id,
+            expected_type: std::any::type_name::<R>(),
+        })
 }
 
 /// Federation API client
@@ -694,9 +704,7 @@ impl FederationApi {
             .ok_or_else(|| ServerError::InvalidPeerId { peer_id: peer })?;
         let conn = self
             .get_or_create_connection(url, self.api_secret.as_deref())
-            .await
-            .context("Failed to connect to peer")
-            .map_err(ServerError::Connection)?;
+            .await?;
 
         let method_str = method.to_string();
         let peer_str = peer.to_string();

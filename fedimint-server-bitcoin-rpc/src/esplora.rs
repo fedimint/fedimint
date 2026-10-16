@@ -1,8 +1,12 @@
-use std::collections::HashMap;
-use std::sync::OnceLock;
+#[cfg(test)]
+mod tests;
 
-use anyhow::Context;
-use bitcoin::{BlockHash, Transaction};
+use std::collections::HashSet;
+use std::sync::OnceLock;
+use std::time::Duration;
+
+use anyhow::{Context, ensure};
+use bitcoin::{BlockHash, Transaction, Txid};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{ChainId, Feerate};
@@ -11,11 +15,46 @@ use fedimint_server_core::bitcoin_rpc::IServerBitcoinRpc;
 use tracing::info;
 
 const ESPLORA_CLIENT_TIMEOUT_SECONDS: u64 = 60;
-#[derive(Debug)]
+
+/// Check payload integrity against the caller's requested header hash.
+///
+/// This does not validate chain selection or proof of work: the configured
+/// Esplora server remains a trusted source of block hashes.
+fn validate_block(block: bitcoin::Block, requested: &BlockHash) -> anyhow::Result<bitcoin::Block> {
+    ensure!(
+        block.block_hash() == *requested,
+        "Esplora returned a different block"
+    );
+    ensure!(
+        block.check_merkle_root(),
+        "Esplora returned an invalid transaction merkle root"
+    );
+    // Merkle roots alone permit mutation by duplicating the final subtree.
+    // A valid block cannot repeat a txid, so reject all duplicate transactions.
+    let mut txids = HashSet::with_capacity(block.txdata.len());
+    ensure!(
+        block
+            .txdata
+            .iter()
+            .all(|tx| txids.insert(tx.compute_txid())),
+        "Esplora returned duplicate transactions"
+    );
+    Ok(block)
+}
+
 pub struct EsploraClient {
     client: esplora_client::AsyncClient,
     url: SafeUrl,
     cached_chain_id: OnceLock<ChainId>,
+}
+
+impl std::fmt::Debug for EsploraClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EsploraClient")
+            .field("url", &self.url)
+            .field("cached_chain_id", &self.cached_chain_id)
+            .finish_non_exhaustive()
+    }
 }
 
 impl EsploraClient {
@@ -28,8 +67,8 @@ impl EsploraClient {
         // URL needs to have any trailing path including '/' removed
         let without_trailing = url.as_str().trim_end_matches('/');
 
-        let builder =
-            esplora_client::Builder::new(without_trailing).timeout(ESPLORA_CLIENT_TIMEOUT_SECONDS);
+        let builder = esplora_client::Builder::new(without_trailing)
+            .timeout(Duration::from_secs(ESPLORA_CLIENT_TIMEOUT_SECONDS));
         let client = builder.build_async()?;
         Ok(Self {
             client,
@@ -64,35 +103,50 @@ impl IServerBitcoinRpc for EsploraClient {
     }
 
     async fn get_block(&self, block_hash: &BlockHash) -> anyhow::Result<bitcoin::Block> {
-        self.client
+        let block = self
+            .client
             .get_block_by_hash(block_hash)
             .await?
-            .context("Block with this hash is not available")
+            .context("Block with this hash is not available")?;
+        validate_block(block, block_hash)
     }
 
     async fn get_feerate(&self) -> anyhow::Result<Option<Feerate>> {
-        let fee_estimates: HashMap<u16, f64> = self.client.get_fee_estimates().await?;
-
-        let fee_rate_vb = esplora_client::convert_fee_rate(1, fee_estimates).unwrap_or(1.0);
-
-        let fee_rate_kvb = fee_rate_vb * 1_000f32;
+        let fee_estimates = self.client.get_fee_estimates().await?;
+        let fee_rate = esplora_client::convert_fee_rate(1, fee_estimates)
+            .unwrap_or(bitcoin::FeeRate::BROADCAST_MIN);
 
         Ok(Some(Feerate {
-            sats_per_kvb: (fee_rate_kvb).ceil() as u64,
+            // One virtual byte is four weight units.
+            sats_per_kvb: fee_rate
+                .to_sat_per_kwu()
+                .checked_mul(4)
+                .context("Esplora fee rate exceeds sats/kvB range")?,
         }))
     }
 
     async fn submit_transaction(&self, transaction: Transaction) -> anyhow::Result<()> {
-        // `esplora-client` v0.6.0 only surfaces HTTP error codes, which prevents us
-        // from detecting errors for transactions already submitted.
-        // TODO: Suppress `esplora-client` already submitted errors when client is
-        // updated
-        // https://github.com/fedimint/fedimint/issues/3732
+        // Preserve server rejections, including already-known transactions.
+        // Callers retry broadcasts and must not treat acceptance as confirmation.
         self.client.broadcast(&transaction).await?;
         Ok(())
     }
 
     async fn get_sync_progress(&self) -> anyhow::Result<Option<f64>> {
+        Ok(None)
+    }
+
+    /// Esplora has no API for reading the mempool as a whole.
+    ///
+    /// It exposes the full list of mempool txids, but nothing that returns
+    /// their outputs in bulk, so filtering the mempool by script would take one
+    /// request per transaction on every scan. Its other mempool endpoints are
+    /// per-address, which is of no use to a guardian that deliberately does not
+    /// know which addresses belong to which client.
+    ///
+    /// Reporting no visibility is the honest answer; callers degrade to
+    /// confirmation-only progress.
+    async fn get_mempool_txids(&self) -> anyhow::Result<Option<Vec<Txid>>> {
         Ok(None)
     }
 

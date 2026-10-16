@@ -7,6 +7,7 @@ use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{
     BitcoindRpcNoChainIdFactory, ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
+    ClientModuleRecoveryPrepareArgs, RecoveryMode,
 };
 use fedimint_client_module::module::recovery::{DynModuleBackup, RecoveryProgress};
 use fedimint_client_module::module::{ClientContext, DynClientModule, FinalClientIface};
@@ -24,6 +25,7 @@ use fedimint_derive_secret::DerivableSecret;
 use tokio::sync::watch;
 use tracing::Span;
 
+use crate::error::ClientModuleError;
 use crate::sm::notifier::Notifier;
 
 pub type ClientModuleInitRegistry = ModuleInitRegistry<DynClientModuleInit>;
@@ -38,6 +40,17 @@ pub trait IClientModuleInit: IDynCommonModuleInit + fmt::Debug + MaybeSend + May
 
     /// See [`ClientModuleInit::supported_api_versions`]
     fn supported_api_versions(&self) -> MultiApiVersion;
+
+    /// See [`ClientModuleInit::recovery_mode`]
+    fn recovery_mode(&self) -> RecoveryMode;
+
+    /// See [`ClientModuleInit::prepare_recovery`]
+    async fn prepare_recovery(
+        &self,
+        db: Database,
+        instance_id: ModuleInstanceId,
+        api: DynGlobalApi,
+    ) -> Result<(), ClientModuleError>;
 
     #[allow(clippy::too_many_arguments)]
     async fn recover(
@@ -60,7 +73,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + fmt::Debug + MaybeSend + May
         client_span: Span,
         user_bitcoind_rpc: Option<DynBitcoindRpc>,
         user_bitcoind_rpc_no_chain_id: Option<BitcoindRpcNoChainIdFactory>,
-    ) -> anyhow::Result<Option<Amount>>;
+    ) -> Result<Option<Amount>, ClientModuleError>;
 
     #[allow(clippy::too_many_arguments)]
     async fn init(
@@ -82,7 +95,7 @@ pub trait IClientModuleInit: IDynCommonModuleInit + fmt::Debug + MaybeSend + May
         connector_registry: ConnectorRegistry,
         user_bitcoind_rpc: Option<DynBitcoindRpc>,
         user_bitcoind_rpc_no_chain_id: Option<BitcoindRpcNoChainIdFactory>,
-    ) -> anyhow::Result<DynClientModule>;
+    ) -> Result<DynClientModule, ClientModuleError>;
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn>;
 
@@ -111,6 +124,28 @@ where
         <Self as ClientModuleInit>::supported_api_versions(self)
     }
 
+    fn recovery_mode(&self) -> RecoveryMode {
+        <Self as ClientModuleInit>::recovery_mode(self)
+    }
+
+    async fn prepare_recovery(
+        &self,
+        db: Database,
+        instance_id: ModuleInstanceId,
+        api: DynGlobalApi,
+    ) -> Result<(), ClientModuleError> {
+        let (module_db, _global_dbtx_access_token) = db.with_prefix_module_id(instance_id);
+
+        <Self as ClientModuleInit>::prepare_recovery(
+            self,
+            &ClientModuleRecoveryPrepareArgs {
+                db: module_db,
+                module_api: api.with_module(instance_id),
+            },
+        )
+        .await
+    }
+
     async fn recover(
         &self,
         final_client: FinalClientIface,
@@ -132,8 +167,10 @@ where
         client_span: Span,
         user_bitcoind_rpc: Option<DynBitcoindRpc>,
         user_bitcoind_rpc_no_chain_id: Option<BitcoindRpcNoChainIdFactory>,
-    ) -> anyhow::Result<Option<Amount>> {
-        let typed_cfg: &<<T as fedimint_core::module::ModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
+    ) -> Result<Option<Amount>, ClientModuleError> {
+        let typed_cfg = cfg
+            .cast::<<<T as ModuleInit>::Common as CommonModuleInit>::ClientConfig>()
+            .map_err(ClientModuleError::other)?;
         let snapshot: Option<&<<Self as ClientModuleInit>::Module as ClientModule>::Backup> =
             snapshot.map(|s| {
                 s.as_any()
@@ -193,8 +230,10 @@ where
         connector_registry: ConnectorRegistry,
         user_bitcoind_rpc: Option<DynBitcoindRpc>,
         user_bitcoind_rpc_no_chain_id: Option<BitcoindRpcNoChainIdFactory>,
-    ) -> anyhow::Result<DynClientModule> {
-        let typed_cfg: &<<T as fedimint_core::module::ModuleInit>::Common as CommonModuleInit>::ClientConfig = cfg.cast()?;
+    ) -> Result<DynClientModule, ClientModuleError> {
+        let typed_cfg = cfg
+            .cast::<<<T as ModuleInit>::Common as CommonModuleInit>::ClientConfig>()
+            .map_err(ClientModuleError::other)?;
         let (module_db, global_dbtx_access_token) = db.with_prefix_module_id(instance_id);
         Ok(<Self as ClientModuleInit>::init(
             self,

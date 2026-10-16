@@ -26,6 +26,7 @@ use fedimint_core::module::{
     admin_api_endpoint, public_api_endpoint,
 };
 use fedimint_core::setup_code::PeerEndpoints;
+use fedimint_core::version::DkgVersion;
 use fedimint_core::{PeerId, base32, runtime};
 use fedimint_server_core::setup_ui::ISetupApi;
 use iroh::SecretKey;
@@ -88,8 +89,8 @@ pub struct LocalParams {
     federation_size: Option<u32>,
     /// Bitcoin network configured locally
     network: bitcoin::Network,
-    /// Fedimint `x.y.z` cargo release version configured locally
-    fedimint_version: String,
+    /// Normalized Fedimint version used for setup and DKG compatibility
+    fedimint_version: DkgVersion,
 }
 
 impl LocalParams {
@@ -109,14 +110,13 @@ impl LocalParams {
 
 fn ensure_fedimint_version_matches(
     peer_setup_code: &PeerSetupCode,
-    local_fedimint_version: &str,
+    local_fedimint_version: &DkgVersion,
 ) -> anyhow::Result<()> {
-    let peer_fedimint_version =
-        fedimint_core::version::release_version(&peer_setup_code.fedimint_version);
-
     ensure!(
-        peer_fedimint_version == local_fedimint_version,
-        "Guardian uses Fedimint version {peer_fedimint_version} but we use {local_fedimint_version}",
+        peer_setup_code.fedimint_version.compatibility_version()
+            == local_fedimint_version.compatibility_version(),
+        "Guardian uses Fedimint version {} but we use {local_fedimint_version}",
+        peer_setup_code.fedimint_version,
     );
 
     Ok(())
@@ -133,7 +133,9 @@ pub struct SetupApi {
     db: Database,
     /// Triggers config generation or config restore
     sender: Sender<ConfigGenOutcome>,
-    /// Version of the running fedimintd binary
+    /// Exact running version exposed by the setup API and recorded after setup
+    ///
+    /// Compatibility checks parse this boundary value into [`DkgVersion`].
     code_version_str: String,
     /// Git hash of the running fedimintd binary
     code_version_hash: String,
@@ -367,6 +369,9 @@ impl ISetupApi for SetupApi {
             "A restore is already in progress"
         );
 
+        let fedimint_version =
+            DkgVersion::parse(&self.code_version_str).context("Invalid local Fedimint version")?;
+
         let lp = if self.settings.enable_iroh {
             let iroh_api_sk = if let Ok(var) = std::env::var(FM_IROH_API_SECRET_KEY_OVERRIDE_ENV) {
                 SecretKey::from_str(&var)
@@ -396,8 +401,7 @@ impl ISetupApi for SetupApi {
                 enabled_modules,
                 federation_size,
                 network: self.settings.network,
-                fedimint_version: fedimint_core::version::release_version(&self.code_version_str)
-                    .to_owned(),
+                fedimint_version: fedimint_version.clone(),
             }
         } else {
             let (tls_cert, tls_key) =
@@ -427,8 +431,7 @@ impl ISetupApi for SetupApi {
                 enabled_modules,
                 federation_size,
                 network: self.settings.network,
-                fedimint_version: fedimint_core::version::release_version(&self.code_version_str)
-                    .to_owned(),
+                fedimint_version,
             }
         };
 
@@ -805,192 +808,4 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<SetupApi>> {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::collections::BTreeSet;
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-
-    use base64::Engine as _;
-    use bitcoin::Network;
-    use fedimint_core::db::IRawDatabaseExt;
-    use fedimint_core::db::mem_impl::MemDatabase;
-    use tokio::sync::mpsc;
-
-    use super::*;
-
-    fn setup_api(network: Network) -> SetupApi {
-        setup_api_with_version(network, "1.2.3-alpha")
-    }
-
-    fn setup_api_with_version(network: Network, version: &str) -> SetupApi {
-        let (sender, _receiver) = mpsc::channel(1);
-        let bind = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
-
-        SetupApi::new(
-            ConfigGenSettings {
-                p2p_bind: bind,
-                api_bind: bind,
-                ui_bind: bind,
-                p2p_url: None,
-                api_url: None,
-                enable_iroh: true,
-                iroh_dns: None,
-                iroh_relays: Vec::new(),
-                network,
-                available_modules: BTreeSet::new(),
-                default_modules: BTreeSet::new(),
-            },
-            MemDatabase::new().into_database(),
-            sender,
-            version.to_owned(),
-            String::new(),
-            None,
-            None,
-        )
-    }
-
-    const INVALID_RESTORE_BACKUP_FIXTURE_B64: &str =
-        include_str!("../test_fixtures/guardian-backup-invalid-config.tar.b64");
-
-    async fn setup_code(api: &SetupApi, name: &str) -> String {
-        api.set_local_parameters(name.to_string(), None, None, None, None)
-            .await
-            .expect("setting local parameters should succeed")
-    }
-
-    #[tokio::test]
-    async fn accepts_peer_setup_code_with_matching_network() {
-        let api = setup_api(Network::Regtest);
-        let peer_api = setup_api(Network::Regtest);
-
-        setup_code(&api, "local").await;
-        let peer_code = setup_code(&peer_api, "peer").await;
-
-        let added_peer = api
-            .add_peer_setup_code(peer_code)
-            .await
-            .expect("peer setup code with matching network should be accepted");
-
-        assert_eq!(added_peer, "peer");
-    }
-
-    #[test]
-    fn checked_in_backup_fixture_reaches_config_validation() {
-        let backup = base64::prelude::BASE64_STANDARD
-            .decode(INVALID_RESTORE_BACKUP_FIXTURE_B64.trim())
-            .expect("checked-in backup fixture base64 should decode");
-        let Err(err) = parse_backup(&backup, Some("pass")) else {
-            panic!("invalid checked-in backup fixture should not restore");
-        };
-
-        assert!(
-            err.to_string().contains("Reading restored config"),
-            "unexpected restore error: {err:#}"
-        );
-    }
-
-    #[test]
-    fn backup_restore_rejects_non_file_entries() {
-        let mut backup = Vec::new();
-        {
-            let mut archive = tar::Builder::new(&mut backup);
-            let mut header = tar::Header::new_gnu();
-            header.set_entry_type(tar::EntryType::Directory);
-            header.set_size(0);
-            header.set_cksum();
-            archive
-                .append_data(
-                    &mut header,
-                    PathBuf::from(LOCAL_CONFIG).with_extension(JSON_EXT),
-                    std::io::empty(),
-                )
-                .expect("writing tar entry should succeed");
-            archive.finish().expect("finishing tar should succeed");
-        }
-
-        let Err(err) = parse_backup(&backup, None) else {
-            panic!("non-file backup entries should be rejected");
-        };
-
-        assert!(
-            err.to_string().contains("non-file entry"),
-            "unexpected restore error: {err:#}"
-        );
-    }
-
-    #[tokio::test]
-    async fn rejects_peer_setup_code_with_different_network() {
-        let api = setup_api(Network::Regtest);
-        let peer_api = setup_api(Network::Signet);
-
-        setup_code(&api, "local").await;
-        let peer_code = setup_code(&peer_api, "peer").await;
-
-        let err = api
-            .add_peer_setup_code(peer_code)
-            .await
-            .expect_err("peer setup code with different network should be rejected");
-
-        assert!(
-            err.to_string()
-                .contains("Guardian uses Bitcoin network signet but we use regtest")
-        );
-    }
-
-    #[tokio::test]
-    async fn rejects_peer_setup_code_with_different_fedimint_version() {
-        let api = setup_api_with_version(Network::Regtest, "1.2.3-alpha");
-        let peer_api = setup_api_with_version(Network::Regtest, "1.2.4-beta");
-
-        setup_code(&api, "local").await;
-        let peer_code = setup_code(&peer_api, "peer").await;
-
-        let err = api
-            .add_peer_setup_code(peer_code)
-            .await
-            .expect_err("peer setup code with different Fedimint version should be rejected");
-
-        assert!(
-            err.to_string()
-                .contains("Guardian uses Fedimint version 1.2.4 but we use 1.2.3")
-        );
-    }
-
-    #[tokio::test]
-    async fn accepts_peer_setup_code_with_same_release_fedimint_version() {
-        let api = setup_api_with_version(Network::Regtest, "1.2.3-alpha");
-        let peer_api = setup_api_with_version(Network::Regtest, "1.2.3-beta");
-
-        setup_code(&api, "local").await;
-        let peer_code = setup_code(&peer_api, "peer").await;
-
-        let added_peer = api
-            .add_peer_setup_code(peer_code)
-            .await
-            .expect("peer setup code with same Fedimint release version should be accepted");
-
-        assert_eq!(added_peer, "peer");
-    }
-
-    #[tokio::test]
-    async fn rejects_wrong_fedimint_version_during_dkg() {
-        let api = setup_api_with_version(Network::Regtest, "1.2.3-alpha");
-        let peer_api = setup_api_with_version(Network::Regtest, "1.2.4-beta");
-
-        setup_code(&api, "local").await;
-        let peer_code = setup_code(&peer_api, "peer").await;
-        let peer_code = base32::decode_prefixed(FEDIMINT_PREFIX, &peer_code)
-            .expect("peer setup code should decode");
-
-        api.state.lock().await.setup_codes.insert(peer_code);
-
-        let err = api
-            .start_dkg()
-            .await
-            .expect_err("DKG should reject peer setup code with different Fedimint version");
-
-        assert!(
-            err.to_string()
-                .contains("Guardian uses Fedimint version 1.2.4 but we use 1.2.3")
-        );
-    }
-}
+mod tests;

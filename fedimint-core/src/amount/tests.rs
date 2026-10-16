@@ -1,4 +1,4 @@
-use super::{Amount, FromStr};
+use super::{Amount, AmountConversionError, FromStr};
 
 #[test]
 fn amount_multiplication_by_scalar() {
@@ -59,5 +59,26 @@ fn test_amount_parsing() {
     assert_eq!(
         Amount::from_sats(12_345_600_000),
         Amount::from_str("123.456btc").unwrap()
+    );
+}
+
+#[test]
+fn try_into_sats_rejects_sub_satoshi_precision() {
+    assert_eq!(
+        Amount::from_msats(1500).try_into_sats(),
+        Err(AmountConversionError::SubSatoshiPrecision { msats: 1500 })
+    );
+    assert_eq!(Amount::from_msats(2000).try_into_sats(), Ok(2));
+}
+
+#[test]
+fn bitcoin_amount_conversion_rejects_sub_satoshi_precision() {
+    assert_eq!(
+        bitcoin::Amount::try_from(Amount::from_msats(1)),
+        Err(AmountConversionError::SubSatoshiPrecision { msats: 1 })
+    );
+    assert_eq!(
+        bitcoin::Amount::try_from(Amount::from_msats(1000)),
+        Ok(bitcoin::Amount::from_sat(1))
     );
 }

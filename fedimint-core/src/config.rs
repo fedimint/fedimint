@@ -1,12 +1,9 @@
-#[cfg(feature = "uniffi")]
-use std::collections::HashMap;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use anyhow::{Context, format_err};
 use bitcoin::hashes::sha256::HashEngine;
 use bitcoin::hashes::{Hash as BitcoinHash, hex, sha256};
 use bls12_381::Scalar;
@@ -21,16 +18,18 @@ use secp256k1::PublicKey;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::json;
+use thiserror::Error;
 use threshold_crypto::{G1Projective, G2Projective};
 use tracing::warn;
 
 use crate::core::DynClientConfig;
-use crate::encoding::Decodable;
+use crate::encoding::{Decodable, DecodeContext as _, DecodeError};
 use crate::module::{
     CoreConsensusVersion, DynCommonModuleInit, IDynCommonModuleInit, ModuleConsensusVersion,
     SerdeModuleEncoding,
 };
 use crate::session_outcome::SignedSessionOutcome;
+use crate::util::FmtCompact as _;
 use crate::{PeerId, maybe_add_send_sync, secp256k1};
 
 // TODO: make configurable
@@ -101,7 +100,6 @@ impl JsonWithKind {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PeerUrl {
     /// The peer's public URL (e.g. `wss://fedimint-server-1:5000`)
     pub url: SafeUrl,
@@ -120,38 +118,16 @@ pub struct ClientConfigV0 {
     pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
 }
 
-/// `uniffi::custom_type!` only accepts a bare identifier for the custom
-/// type, and `BTreeMap` isn't natively uniffi-representable (unlike
-/// `HashMap`, which is), so this map shape needs a type alias bridged to
-/// its `HashMap` equivalent.
-#[cfg(feature = "uniffi")]
-type ClientModulesMap = BTreeMap<ModuleInstanceId, ClientModuleConfig>;
-
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(ClientModulesMap, HashMap<ModuleInstanceId, ClientModuleConfig>, {
-    remote,
-    lower: |m| m.into_iter().collect(),
-    try_lift: |h| Ok(h.into_iter().collect()),
-});
-
 /// Total client config
 ///
 /// This includes global settings and client-side module configs.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ClientConfig {
     #[serde(flatten)]
     pub global: GlobalClientConfig,
     #[serde(deserialize_with = "de_int_key")]
     pub modules: BTreeMap<ModuleInstanceId, ClientModuleConfig>,
 }
-
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(PublicKey, String, {
-    remote,
-    lower: |pk| pk.to_string(),
-    try_lift: |s| PublicKey::from_str(&s).map_err(|e| anyhow::anyhow!(e)),
-});
 
 // FIXME: workaround for https://github.com/serde-rs/json/issues/989
 fn de_int_key<'de, D, K, V>(deserializer: D) -> Result<BTreeMap<K, V>, D::Error>
@@ -217,7 +193,6 @@ pub struct GlobalClientConfigV0 {
 
 /// Federation-wide client config
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct GlobalClientConfig {
     /// API endpoints for each federation member
     #[serde(deserialize_with = "de_int_key")]
@@ -232,38 +207,6 @@ pub struct GlobalClientConfig {
     /// Additional config the federation wants to transmit to the clients
     pub meta: BTreeMap<String, String>,
 }
-
-/// `uniffi::custom_type!` only accepts a bare identifier for the custom
-/// type, and `BTreeMap` isn't natively uniffi-representable (unlike
-/// `HashMap`, which is), so each map shape needs a type alias bridged to its
-/// `HashMap` equivalent.
-#[cfg(feature = "uniffi")]
-type ApiEndpointsMap = BTreeMap<PeerId, PeerUrl>;
-#[cfg(feature = "uniffi")]
-type BroadcastPublicKeysMap = BTreeMap<PeerId, PublicKey>;
-#[cfg(feature = "uniffi")]
-type MetaMap = BTreeMap<String, String>;
-
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(ApiEndpointsMap, HashMap<PeerId, PeerUrl>, {
-    remote,
-    lower: |m| m.into_iter().collect(),
-    try_lift: |h| Ok(h.into_iter().collect()),
-});
-
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(BroadcastPublicKeysMap, HashMap<PeerId, PublicKey>, {
-    remote,
-    lower: |m| m.into_iter().collect(),
-    try_lift: |h| Ok(h.into_iter().collect()),
-});
-
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(MetaMap, HashMap<String, String>, {
-    remote,
-    lower: |m| m.into_iter().collect(),
-    try_lift: |h| Ok(h.into_iter().collect()),
-});
 
 impl GlobalClientConfig {
     /// 0.4.0 and later uses a hash of broadcast public keys to calculate the
@@ -310,13 +253,17 @@ impl ClientConfig {
     pub fn meta<V: serde::de::DeserializeOwned + 'static>(
         &self,
         key: &str,
-    ) -> Result<Option<V>, anyhow::Error> {
+    ) -> Result<Option<V>, ModuleConfigError> {
         let Some(str_value) = self.global.meta.get(key) else {
             return Ok(None);
         };
-        let res = serde_json::from_str(str_value)
-            .map(Some)
-            .context(format!("Decoding meta field '{key}' failed"));
+        let res =
+            serde_json::from_str(str_value)
+                .map(Some)
+                .map_err(|source| ModuleConfigError::Meta {
+                    key: key.to_owned(),
+                    source,
+                });
 
         // In the past we encoded some string fields as "just a string" without quotes,
         // this code ensures that old meta values still parse since config is hard to
@@ -383,15 +330,6 @@ impl ClientConfig {
 )]
 pub struct FederationId(pub sha256::Hash);
 
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(FederationId, String, {
-    lower: |obj| obj.to_string(),
-    try_lift: |bytes| {
-        let obj: FederationId = bytes.parse().map_err(|e| anyhow::anyhow!("Failed to parse FederationId from string: {e}"))?;
-        Ok(obj)
-    },
-});
-
 #[derive(
     Debug,
     Copy,
@@ -426,7 +364,7 @@ impl Display for FederationId {
 }
 
 impl FromStr for FederationIdPrefix {
-    type Err = anyhow::Error;
+    type Err = hex::HexToArrayError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(<[u8; 4]>::from_hex(s)?))
@@ -466,14 +404,14 @@ impl FederationId {
     pub fn to_fake_ln_pub_key(
         &self,
         secp: &bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>,
-    ) -> anyhow::Result<bitcoin::secp256k1::PublicKey> {
+    ) -> Result<bitcoin::secp256k1::PublicKey, bitcoin::secp256k1::Error> {
         let sk = bitcoin::secp256k1::SecretKey::from_slice(&self.0.to_byte_array())?;
         Ok(bitcoin::secp256k1::PublicKey::from_secret_key(secp, &sk))
     }
 }
 
 impl FromStr for FederationId {
-    type Err = anyhow::Error;
+    type Err = hex::HexToArrayError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self::from_byte_array(<[u8; 32]>::from_hex(s)?))
@@ -489,17 +427,23 @@ impl ClientConfig {
         sha256::Hash::from_engine(engine)
     }
 
-    pub fn get_module<T: Decodable + 'static>(&self, id: ModuleInstanceId) -> anyhow::Result<&T> {
+    pub fn get_module<T: Decodable + 'static>(
+        &self,
+        id: ModuleInstanceId,
+    ) -> Result<&T, ModuleConfigError> {
         self.modules.get(&id).map_or_else(
-            || Err(format_err!("Client config for module id {id} not found")),
+            || Err(ModuleConfigError::ModuleNotFound { id }),
             |client_cfg| client_cfg.cast(),
         )
     }
 
     // TODO: rename this and one above
-    pub fn get_module_cfg(&self, id: ModuleInstanceId) -> anyhow::Result<ClientModuleConfig> {
+    pub fn get_module_cfg(
+        &self,
+        id: ModuleInstanceId,
+    ) -> Result<ClientModuleConfig, ModuleConfigError> {
         self.modules.get(&id).map_or_else(
-            || Err(format_err!("Client config for module id {id} not found")),
+            || Err(ModuleConfigError::ModuleNotFound { id }),
             |client_cfg| Ok(client_cfg.clone()),
         )
     }
@@ -514,10 +458,10 @@ impl ClientConfig {
     pub fn get_first_module_by_kind<T: Decodable + 'static>(
         &self,
         kind: impl Into<ModuleKind>,
-    ) -> anyhow::Result<(ModuleInstanceId, &T)> {
+    ) -> Result<(ModuleInstanceId, &T), ModuleConfigError> {
         let kind: ModuleKind = kind.into();
         let Some((id, module_cfg)) = self.modules.iter().find(|(_, v)| v.is_kind(&kind)) else {
-            anyhow::bail!("Module kind {kind} not found")
+            return Err(ModuleConfigError::KindNotFound { kind });
         };
         Ok((*id, module_cfg.cast()?))
     }
@@ -526,13 +470,13 @@ impl ClientConfig {
     pub fn get_first_module_by_kind_cfg(
         &self,
         kind: impl Into<ModuleKind>,
-    ) -> anyhow::Result<(ModuleInstanceId, ClientModuleConfig)> {
+    ) -> Result<(ModuleInstanceId, ClientModuleConfig), ModuleConfigError> {
         let kind: ModuleKind = kind.into();
         self.modules
             .iter()
             .find(|(_, v)| v.is_kind(&kind))
             .map(|(id, v)| (*id, v.clone()))
-            .ok_or_else(|| anyhow::format_err!("Module kind {kind} not found"))
+            .ok_or(ModuleConfigError::KindNotFound { kind })
     }
 }
 
@@ -645,7 +589,7 @@ where
     pub fn decoders<'a>(
         &self,
         modules: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
-    ) -> anyhow::Result<ModuleDecoderRegistry> {
+    ) -> Result<ModuleDecoderRegistry, ModuleConfigError> {
         self.decoders_strict(modules)
     }
 
@@ -653,13 +597,14 @@ where
     pub fn decoders_strict<'a>(
         &self,
         modules: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
-    ) -> anyhow::Result<ModuleDecoderRegistry> {
+    ) -> Result<ModuleDecoderRegistry, ModuleConfigError> {
         let mut decoders = BTreeMap::new();
         for (id, kind) in modules {
             let Some(init) = self.0.get(kind) else {
-                anyhow::bail!(
-                    "Detected configuration for unsupported module id: {id}, kind: {kind}"
-                )
+                return Err(ModuleConfigError::UnsupportedModule {
+                    id,
+                    kind: kind.clone(),
+                });
             };
 
             decoders.insert(id, (kind.clone(), init.as_ref().decoder()));
@@ -671,7 +616,7 @@ where
     pub fn available_decoders<'a>(
         &self,
         modules: impl Iterator<Item = (ModuleInstanceId, &'a ModuleKind)>,
-    ) -> anyhow::Result<ModuleDecoderRegistry> {
+    ) -> ModuleDecoderRegistry {
         let mut decoders = BTreeMap::new();
         for (id, kind) in modules {
             let Some(init) = self.0.get(kind) else {
@@ -681,7 +626,7 @@ where
 
             decoders.insert(id, (kind.clone(), init.as_ref().decoder()));
         }
-        Ok(ModuleDecoderRegistry::from(decoders))
+        ModuleDecoderRegistry::from(decoders)
     }
 }
 
@@ -693,31 +638,12 @@ pub struct ServerModuleConsensusConfig {
     pub config: Vec<u8>,
 }
 
-/// `uniffi::custom_type!` only accepts a bare identifier for the custom
-/// type, so this bridges the type-erased `DynRawFallback<DynClientConfig>`
-/// to its consensus-encoded hex representation. Since no
-/// `ModuleDecoderRegistry` is available across the FFI boundary, lifting
-/// always produces the `Raw` variant; callers can call `redecode_raw`
-/// afterwards once a decoder registry is available.
-#[cfg(feature = "uniffi")]
-type ClientModuleConfigRaw = DynRawFallback<DynClientConfig>;
-
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(ClientModuleConfigRaw, String, {
-    lower: |v| v.consensus_encode_to_hex(),
-    try_lift: |s| {
-        ClientModuleConfigRaw::consensus_decode_hex(&s, &ModuleDecoderRegistry::default())
-            .map_err(|e| anyhow::anyhow!("Failed to decode client module config: {e}"))
-    },
-});
-
 /// Config for the client-side of a particular Federation module
 ///
 /// Since modules are (tbd.) pluggable into Federations,
 /// it needs to be some form of an abstract type-erased-like
 /// value.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct ClientModuleConfig {
     pub kind: ModuleKind,
     pub version: ModuleConsensusVersion,
@@ -731,13 +657,13 @@ impl ClientModuleConfig {
         kind: ModuleKind,
         version: ModuleConsensusVersion,
         value: T,
-    ) -> anyhow::Result<Self> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             kind,
             version,
             config: fedimint_core::core::DynClientConfig::from_typed(module_instance_id, value)
                 .into(),
-        })
+        }
     }
 
     pub fn redecode_raw(
@@ -760,15 +686,27 @@ impl ClientModuleConfig {
 }
 
 impl ClientModuleConfig {
-    pub fn cast<T>(&self) -> anyhow::Result<&T>
+    pub fn cast<T>(&self) -> Result<&T, ModuleConfigError>
     where
         T: 'static,
     {
-        self.config
-            .expect_decoded_ref()
-            .as_any()
-            .downcast_ref::<T>()
-            .context("can't convert client module config to desired type")
+        match &self.config {
+            DynRawFallback::Decoded(config) => {
+                config
+                    .as_any()
+                    .downcast_ref::<T>()
+                    .ok_or_else(|| ModuleConfigError::WrongType {
+                        kind: self.kind.clone(),
+                        expected: std::any::type_name::<T>(),
+                    })
+            }
+            DynRawFallback::Raw {
+                module_instance_id, ..
+            } => Err(ModuleConfigError::NotDecoded {
+                id: *module_instance_id,
+                kind: self.kind.clone(),
+            }),
+        }
     }
 }
 
@@ -786,7 +724,7 @@ impl ServerModuleConfig {
         Self { private, consensus }
     }
 
-    pub fn to_typed<T: TypedServerModuleConfig>(&self) -> anyhow::Result<T> {
+    pub fn to_typed<T: TypedServerModuleConfig>(&self) -> Result<T, ModuleConfigError> {
         let private = serde_json::from_value(self.private.value().clone())?;
         let consensus = <T::Consensus>::consensus_decode_whole(
             &self.consensus.config[..],
@@ -805,7 +743,7 @@ pub trait TypedServerModuleConsensusConfig:
 
     fn version(&self) -> ModuleConsensusVersion;
 
-    fn from_erased(erased: &ServerModuleConsensusConfig) -> anyhow::Result<Self> {
+    fn from_erased(erased: &ServerModuleConsensusConfig) -> Result<Self, ModuleConfigError> {
         Ok(Self::consensus_decode_whole(
             &erased.config[..],
             &ModuleRegistry::default(),
@@ -896,7 +834,7 @@ impl<'de> Deserialize<'de> for DkgMessageG1 {
             &String::deserialize(deserializer)?,
             &ModuleDecoderRegistry::default(),
         )
-        .map_err(serde::de::Error::custom)
+        .map_err(|e| serde::de::Error::custom(e.fmt_compact()))
     }
 }
 
@@ -920,7 +858,7 @@ impl<'de> Deserialize<'de> for DkgMessageG2 {
             &String::deserialize(deserializer)?,
             &ModuleDecoderRegistry::default(),
         )
-        .map_err(serde::de::Error::custom)
+        .map_err(|e| serde::de::Error::custom(e.fmt_compact()))
     }
 }
 
@@ -928,9 +866,95 @@ impl<'de> Deserialize<'de> for DkgMessageG2 {
 /// of the config
 pub const META_FEDERATION_NAME_KEY: &str = "federation_name";
 
-pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> Result<T, anyhow::Error> {
-    let file = std::fs::File::open(path)?;
-    Ok(serde_json::from_reader(file)?)
+pub fn load_from_file<T: DeserializeOwned>(path: &Path) -> Result<T, ConfigFileError> {
+    let contents = std::fs::read(path).map_err(|source| ConfigFileError::Io {
+        path: path.to_owned(),
+        source,
+    })?;
+
+    serde_json::from_slice(&contents).map_err(|source| ConfigFileError::Json {
+        path: path.to_owned(),
+        source,
+    })
+}
+
+/// A module's configured relative fee is above what the module accepts.
+///
+/// Every module that charges a relative fee validates it the same way in its
+/// own `FeeConsensus::new`, so the failure is named once here rather than once
+/// per module.
+#[derive(Debug, Error)]
+#[error("The relative fee of {parts_per_million} parts per million is over the limit of {max}")]
+pub struct ExcessiveRelativeFeeError {
+    /// The fee that was asked for.
+    pub parts_per_million: u64,
+    /// The largest relative fee the module accepts.
+    pub max: u64,
+}
+
+/// Failure to look up or cast a module configuration.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ModuleConfigError {
+    /// No module with this instance id exists in the config.
+    #[error("Client config for module id {id} not found")]
+    ModuleNotFound { id: ModuleInstanceId },
+    /// No module of this kind exists in the config.
+    #[error("Module kind {kind} not found")]
+    KindNotFound { kind: ModuleKind },
+    /// The decoded module config is not of the requested type.
+    #[error("Client module config of kind {kind} is not a {expected}")]
+    WrongType {
+        kind: ModuleKind,
+        expected: &'static str,
+    },
+    /// The module config is still in its raw, undecoded form because no
+    /// decoder for its kind was available; see
+    /// [`ClientModuleConfig::redecode_raw`].
+    #[error("Client module config for module id {id} of kind {kind} has not been decoded")]
+    NotDecoded {
+        id: ModuleInstanceId,
+        kind: ModuleKind,
+    },
+    /// The config references a module kind this build has no support for.
+    #[error("Detected configuration for unsupported module id: {id}, kind: {kind}")]
+    UnsupportedModule {
+        id: ModuleInstanceId,
+        kind: ModuleKind,
+    },
+    /// A meta field exists but does not deserialize to the requested type.
+    #[error("Decoding meta field '{key}' failed")]
+    Meta {
+        key: String,
+        #[source]
+        source: serde_json::Error,
+    },
+    /// A JSON part of the config failed to (de)serialize.
+    #[error("Invalid JSON in module config")]
+    Json(#[from] serde_json::Error),
+    /// A consensus-encoded part of the config failed to decode.
+    #[error("Invalid consensus encoding in module config")]
+    Decode(#[from] DecodeError),
+}
+
+/// Failure to load a JSON config file.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ConfigFileError {
+    /// The file could not be opened or read.
+    #[error("Failed to read config file {}", path.display())]
+    Io {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    /// The file is not valid JSON for the requested type.
+    #[error("Invalid JSON in config file {}", path.display())]
+    Json {
+        path: PathBuf,
+        #[source]
+        source: serde_json::Error,
+    },
 }
 
 #[cfg(test)]

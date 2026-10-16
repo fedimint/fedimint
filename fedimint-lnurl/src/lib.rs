@@ -77,6 +77,10 @@ pub struct PayResponse {
 pub struct InvoiceResponse {
     /// The BOLT11 invoice
     pub pr: Bolt11Invoice,
+    /// Vestigial routing hints, always empty in practice, but required by
+    /// LUD-06. Defaulted when parsing since not all services send it.
+    #[serde(default)]
+    pub routes: Vec<serde_json::Value>,
     /// LUD-21 verify URL
     pub verify: Option<String>,
 }
@@ -85,9 +89,37 @@ pub struct InvoiceResponse {
 #[serde_as]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VerifyResponse {
+    /// Always "OK" for successful responses per LUD-21. Defaulted when
+    /// parsing since not all services send it.
+    #[serde(default = "ok_status")]
+    pub status: String,
     pub settled: bool,
     #[serde_as(as = "Option<Hex>")]
     pub preimage: Option<[u8; 32]>,
+}
+
+fn ok_status() -> String {
+    "OK".to_string()
+}
+
+impl VerifyResponse {
+    /// A LUD-21 response for a payment that has been settled
+    pub fn settled(preimage: [u8; 32]) -> Self {
+        Self {
+            status: ok_status(),
+            settled: true,
+            preimage: Some(preimage),
+        }
+    }
+
+    /// A LUD-21 response for a payment that is still pending
+    pub fn pending() -> Self {
+        Self {
+            status: ok_status(),
+            settled: false,
+            preimage: None,
+        }
+    }
 }
 
 /// Fetch and parse an LNURL-pay response
@@ -185,12 +217,63 @@ fn parse_pay_response_lud_06() {
 }
 
 #[test]
+fn serialize_invoice_response_lud_06() {
+    let invoice = "lnbc20m1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqhp58yjmdan79s6qqdhdzgynm4zwqd5d7xmw5fk98klysy043l2ahrqsfpp3qjmp7lwpagxun9pygexvgpjdc4jdj85fr9yq20q82gphp2nflc7jtzrcazrra7wwgzxqc8u7754cdlpfrmccae92qgzqvzq2ps8pqqqqqqpqqqqq9qqqvpeuqafqxu92d8lr6fvg0r5gv0heeeqgcrqlnm6jhphu9y00rrhy4grqszsvpcgpy9qqqqqqgqqqqq7qqzq9qrsgqdfjcdk6w3ak5pca9hwfwfh63zrrz06wwfya0ydlzpgzxkn5xagsqz7x9j4jwe7yj7vaf2k9lqsdk45kts2fd0fkr28am0u4w95tt2nsq76cqw0";
+
+    let response = InvoiceResponse {
+        pr: invoice.parse().unwrap(),
+        routes: vec![],
+        verify: Some("https://example.com/verify/abc".to_string()),
+    };
+
+    let json = serde_json::to_value(LnurlResponse::Ok(response)).unwrap();
+
+    assert_eq!(json["pr"], invoice);
+    // LUD-06 requires the routes field to be present as an empty array
+    assert_eq!(json["routes"], serde_json::json!([]));
+    assert_eq!(json["verify"], "https://example.com/verify/abc");
+}
+
+#[test]
+fn parse_invoice_response_without_routes() {
+    let json = r#"{
+        "pr": "lnbc20m1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqhp58yjmdan79s6qqdhdzgynm4zwqd5d7xmw5fk98klysy043l2ahrqsfpp3qjmp7lwpagxun9pygexvgpjdc4jdj85fr9yq20q82gphp2nflc7jtzrcazrra7wwgzxqc8u7754cdlpfrmccae92qgzqvzq2ps8pqqqqqqpqqqqq9qqqvpeuqafqxu92d8lr6fvg0r5gv0heeeqgcrqlnm6jhphu9y00rrhy4grqszsvpcgpy9qqqqqqgqqqqq7qqzq9qrsgqdfjcdk6w3ak5pca9hwfwfh63zrrz06wwfya0ydlzpgzxkn5xagsqz7x9j4jwe7yj7vaf2k9lqsdk45kts2fd0fkr28am0u4w95tt2nsq76cqw0",
+        "verify": null
+    }"#;
+
+    let response: LnurlResponse<InvoiceResponse> = serde_json::from_str(json).unwrap();
+
+    let invoice = response.into_result().unwrap();
+
+    assert!(invoice.routes.is_empty());
+    assert!(invoice.verify.is_none());
+}
+
+#[test]
 fn parse_error_response() {
     let json = r#"{"status": "ERROR", "reason": "Invalid request"}"#;
 
     let response: LnurlResponse<PayResponse> = serde_json::from_str(json).unwrap();
 
     assert_eq!(response.into_result().unwrap_err(), "Invalid request");
+}
+
+#[test]
+fn serialize_verify_response_lud_21() {
+    let json = serde_json::to_value(LnurlResponse::Ok(VerifyResponse::pending())).unwrap();
+
+    // LUD-21 responses carry an explicit "OK" status alongside the payment
+    // state
+    assert_eq!(json["status"], "OK");
+    assert_eq!(json["settled"], false);
+    assert_eq!(json["preimage"], serde_json::Value::Null);
+
+    let json =
+        serde_json::to_value(LnurlResponse::Ok(VerifyResponse::settled([0x42; 32]))).unwrap();
+
+    assert_eq!(json["status"], "OK");
+    assert_eq!(json["settled"], true);
+    assert_eq!(json["preimage"], "42".repeat(32));
 }
 
 #[test]

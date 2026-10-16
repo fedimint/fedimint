@@ -1,14 +1,16 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicU8;
+use std::time::Duration;
 
-use anyhow::bail;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{
-    DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _, IRawDatabaseExt as _,
+    Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _, IRawDatabaseExt as _,
     NonCommittable,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::runtime::sleep;
 use fedimint_core::task::TaskGroup;
+use fedimint_core::time::duration_since_epoch;
 use fedimint_core::{apply, async_trait_maybe_send, impl_db_record};
 use futures::StreamExt as _;
 use tokio::sync::{broadcast, watch};
@@ -16,11 +18,12 @@ use tokio::try_join;
 use tracing::info;
 
 use super::{
-    DBTransactionEventLogExt as _, EventKind, EventLogEntry, EventLogId, EventLogTrimableId,
-    EventLogTrimableIdPrefixAll, TRIMABLE_EVENTLOG_MIN_ID_AGE, TRIMABLE_EVENTLOG_MIN_TS_AGE,
-    handle_events, run_event_log_ordering_task, trim_trimable_log,
+    DBTransactionEventLogExt as _, EventHandlerError, EventKind, EventLogEntry, EventLogId,
+    EventLogTrimableId, EventLogTrimableIdPrefixAll, TRIMABLE_EVENTLOG_MIN_ID_AGE,
+    TRIMABLE_EVENTLOG_MIN_TS_AGE, UnordedEventLogId, UnorderedEventLogEntry, handle_events,
+    run_event_log_ordering_task, trim_trimable_log,
 };
-use crate::EventLogNonTrimableTracker;
+use crate::{EventLogNonTrimableTracker, EventLogTrackerError};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
 pub struct TestEventLogIdKey;
@@ -40,7 +43,7 @@ impl EventLogNonTrimableTracker for TestEventLogTracker {
         &mut self,
         dbtx: &mut DatabaseTransaction<NonCommittable>,
         pos: EventLogId,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), EventLogTrackerError> {
         dbtx.insert_entry(&TestEventLogIdKey, &pos).await;
         Ok(())
     }
@@ -49,15 +52,61 @@ impl EventLogNonTrimableTracker for TestEventLogTracker {
     async fn load(
         &mut self,
         dbtx: &mut DatabaseTransaction<NonCommittable>,
-    ) -> anyhow::Result<Option<EventLogId>> {
+    ) -> Result<Option<EventLogId>, EventLogTrackerError> {
         Ok(dbtx.get_value(&TestEventLogIdKey).await)
     }
 }
 
-#[test_log::test(tokio::test)]
-async fn sanity_handle_events() {
+/// Which of [`FailingTracker`]'s methods should fail.
+#[derive(Debug, Clone, Copy)]
+enum FailOn {
+    Load,
+    Store,
+}
+
+/// Like [`TestEventLogTracker`], but the configured method always fails.
+///
+/// Used to verify that a failure while loading or storing the tracked
+/// position surfaces as [`EventHandlerError::Tracker`].
+struct FailingTracker {
+    fail_on: FailOn,
+}
+
+#[apply(async_trait_maybe_send!)]
+impl EventLogNonTrimableTracker for FailingTracker {
+    async fn store(
+        &mut self,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        pos: EventLogId,
+    ) -> Result<(), EventLogTrackerError> {
+        if matches!(self.fail_on, FailOn::Store) {
+            return Err(EventLogTrackerError::new("tracker failed"));
+        }
+        dbtx.insert_entry(&TestEventLogIdKey, &pos).await;
+        Ok(())
+    }
+
+    async fn load(
+        &mut self,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
+    ) -> Result<Option<EventLogId>, EventLogTrackerError> {
+        if matches!(self.fail_on, FailOn::Load) {
+            return Err(EventLogTrackerError::new("tracker failed"));
+        }
+        Ok(dbtx.get_value(&TestEventLogIdKey).await)
+    }
+}
+
+/// The error the test handler returns to stop handling events.
+#[derive(Debug, thiserror::Error)]
+#[error("Time to wrap up")]
+struct WrapUp;
+
+/// Spawns the event log ordering task and returns the pieces `handle_events`
+/// and the event-logging code need: the database, the receiver that wakes up
+/// once new events are ordered, and the sender used to request ordering.
+fn spawn_ordering_task(tg: &TaskGroup) -> (Database, watch::Receiver<()>, watch::Sender<()>) {
     let db = MemDatabase::new().into_database();
-    let tg = TaskGroup::new();
 
     let (log_event_added_tx, log_event_added_rx) = watch::channel(());
     let (log_ordering_wakeup_tx, log_ordering_wakeup_rx) = watch::channel(());
@@ -73,9 +122,17 @@ async fn sanity_handle_events() {
         ),
     );
 
+    (db, log_event_added_rx, log_ordering_wakeup_tx)
+}
+
+#[test_log::test(tokio::test)]
+async fn sanity_handle_events() {
+    let tg = TaskGroup::new();
+    let (db, log_event_added_rx, log_ordering_wakeup_tx) = spawn_ordering_task(&tg);
+
     let counter = Arc::new(AtomicU8::new(0));
 
-    let _ = try_join!(
+    let res = try_join!(
         handle_events(
             db.clone(),
             Box::new(TestEventLogTracker),
@@ -94,7 +151,7 @@ async fn sanity_handle_events() {
                     );
 
                     if counter.load(std::sync::atomic::Ordering::Relaxed) == 4 {
-                        bail!("Time to wrap up");
+                        return Err(WrapUp);
                     }
                     counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     Ok(())
@@ -120,6 +177,52 @@ async fn sanity_handle_events() {
             Ok(())
         }
     );
+
+    // The handler stops the loop by returning `WrapUp` on the fifth event; make
+    // sure that error actually surfaces as `EventHandlerError::Handler` instead
+    // of being silently dropped.
+    let Err(err) = res else {
+        panic!("expected the handler's error to stop `handle_events`, got {res:?}");
+    };
+    assert!(matches!(err, EventHandlerError::Handler(WrapUp)));
+}
+
+#[test_log::test(tokio::test)]
+async fn handle_events_tracker_failure() {
+    for fail_on in [FailOn::Load, FailOn::Store] {
+        let tg = TaskGroup::new();
+        let (db, log_event_added_rx, log_ordering_wakeup_tx) = spawn_ordering_task(&tg);
+
+        // The `Store` case needs an event to reach the handler (and thus the
+        // tracker's `store`); the `Load` case fails before any event is needed.
+        if matches!(fail_on, FailOn::Store) {
+            let mut dbtx = db.begin_transaction().await;
+            dbtx.log_event_raw(
+                log_ordering_wakeup_tx.clone(),
+                EventKind::from("0"),
+                None,
+                None,
+                vec![],
+                crate::EventPersistence::Persistent,
+            )
+            .await;
+
+            dbtx.commit_tx().await;
+        }
+
+        let res = handle_events(
+            db.clone(),
+            Box::new(FailingTracker { fail_on }),
+            log_event_added_rx,
+            |_dbtx, _event| Box::pin(async { Ok::<(), WrapUp>(()) }),
+        )
+        .await;
+
+        let Err(EventHandlerError::Tracker(source)) = res else {
+            panic!("expected `EventHandlerError::Tracker` for {fail_on:?}, got {res:?}");
+        };
+        assert_eq!(source.to_string(), "tracker failed");
+    }
 }
 
 #[test_log::test(tokio::test)]
@@ -197,4 +300,104 @@ async fn test_trim_trimable_log() {
         assert_eq!(remaining_ids[0], expected_start_id);
         assert_eq!(remaining_ids.len(), expected_remaining);
     }
+}
+
+/// Logs a persistent event without a module and commits it, which wakes up the
+/// ordering task.
+async fn log_test_event(db: &Database, log_ordering_wakeup_tx: &watch::Sender<()>, kind: &str) {
+    let mut dbtx = db.begin_transaction().await;
+
+    dbtx.log_event_raw(
+        log_ordering_wakeup_tx.clone(),
+        EventKind::from(kind.to_string()),
+        None,
+        None,
+        vec![],
+        crate::EventPersistence::Persistent,
+    )
+    .await;
+
+    dbtx.commit_tx().await;
+}
+
+/// Kinds of all events in the ordered log, in order.
+async fn ordered_kinds(db: &Database) -> Vec<EventKind> {
+    db.begin_transaction_nc()
+        .await
+        .get_event_log(None, 100)
+        .await
+        .into_iter()
+        .map(|entry| entry.inner.kind)
+        .collect()
+}
+
+/// An event committed behind the seeking scan's watermark is only picked up by
+/// the periodic full scan, and a notification just before that scan's deadline
+/// must not postpone it.
+#[test_log::test(tokio::test(start_paused = true))]
+async fn full_scan_deadline_is_not_postponed_by_notifications() {
+    let tg = TaskGroup::new();
+    let (db, _log_event_added_rx, log_ordering_wakeup_tx) = spawn_ordering_task(&tg);
+
+    // The task starts with a full scan at t=0, so the next one is due at t=60s.
+    sleep(Duration::from_secs(1)).await;
+
+    log_test_event(&db, &log_ordering_wakeup_tx, "first").await;
+
+    sleep(Duration::from_secs(1)).await;
+
+    let late_ts_usecs = u64::try_from(
+        duration_since_epoch()
+            .saturating_sub(Duration::from_mins(2))
+            .as_micros(),
+    )
+    .expect("Fits in u64");
+
+    let mut dbtx = db.begin_transaction().await;
+
+    dbtx.insert_new_entry(
+        &UnordedEventLogId {
+            ts_usecs: late_ts_usecs,
+            counter: 0,
+        },
+        &UnorderedEventLogEntry {
+            flags: UnorderedEventLogEntry::FLAG_PERSIST,
+            inner: EventLogEntry {
+                kind: EventKind::from("late".to_string()),
+                module: None,
+                ts_usecs: late_ts_usecs,
+                payload: vec![],
+            },
+        },
+    )
+    .await;
+
+    dbtx.commit_tx().await;
+
+    sleep(Duration::from_secs(57)).await;
+
+    log_test_event(&db, &log_ordering_wakeup_tx, "second").await;
+
+    sleep(Duration::from_millis(500)).await;
+
+    assert_eq!(
+        ordered_kinds(&db).await,
+        vec![
+            EventKind::from("first".to_string()),
+            EventKind::from("second".to_string()),
+        ],
+        "The seeking scan at t=59s must skip the event behind its watermark"
+    );
+
+    sleep(Duration::from_secs(1)).await;
+
+    assert_eq!(
+        ordered_kinds(&db).await,
+        vec![
+            EventKind::from("first".to_string()),
+            EventKind::from("second".to_string()),
+            EventKind::from("late".to_string()),
+        ],
+        "The full scan due at t=60s must order the late event without another notification"
+    );
 }

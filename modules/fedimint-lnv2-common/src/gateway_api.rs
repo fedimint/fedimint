@@ -1,3 +1,4 @@
+use std::num::ParseIntError;
 use std::str::FromStr;
 
 use bitcoin::secp256k1::PublicKey;
@@ -6,7 +7,7 @@ use fedimint_connectors::error::ServerError;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send};
+use fedimint_core::{Amount, OutPoint, ParseAmountError, apply, async_trait_maybe_send};
 use fedimint_ln_common::client::GatewayApi;
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
 use reqwest::Method;
@@ -121,6 +122,12 @@ impl GatewayConnection for RealGatewayConnection {
     }
 }
 
+/// The maximum invoice expiry a client may request via
+/// `create_bolt11_invoice`. Bounding the expiry bounds the lifetime of both
+/// the hold invoice created on the gateway's Lightning node and the incoming
+/// contract record in the gateway's database.
+pub const MAX_INVOICE_EXPIRY_SECS: u32 = 60 * 60 * 24;
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct CreateBolt11InvoicePayload {
     pub federation_id: FederationId,
@@ -172,6 +179,19 @@ pub struct RoutingInfo {
     pub expiration_delta_default: u64,
     /// This is the fee the gateway charges for an incoming payment.
     pub receive_fee: PaymentFee,
+    /// Whether the gateway currently accepts incoming payments on behalf of
+    /// this federation's clients. When it does not, it refuses to create
+    /// invoices for the federation and fails back the incoming payments of
+    /// invoices it already issued.
+    ///
+    /// Gateways that predate this field always accept them, so it defaults to
+    /// `true` when absent.
+    #[serde(default = "default_receive_enabled")]
+    pub receive_enabled: bool,
+}
+
+const fn default_receive_enabled() -> bool {
+    true
 }
 
 impl RoutingInfo {
@@ -265,6 +285,29 @@ impl PaymentFee {
 #[error("Payment fee {0} exceeds the range of RoutingFees")]
 pub struct FeeOutOfRangeError(PaymentFee);
 
+/// A failure to read a [`PaymentFee`] out of its `<base>,<ppm>` text form.
+///
+/// This is what an operator sees when a fee passed on the gateway's command
+/// line or in its environment cannot be read, so each variant says which half
+/// of the pair the parser could not make sense of.
+// The messages interpolate their source because clap renders only the top-level Display of a
+// FromStr error (the #8821 FromStr carve-out).
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ParsePaymentFeeError {
+    /// The text is not a base fee and a relative fee separated by one comma.
+    #[error("Expected the format <base>,<ppm>")]
+    Format,
+
+    /// The part before the comma is not an amount.
+    #[error("The base fee is not an amount: {0}")]
+    Base(#[from] ParseAmountError),
+
+    /// The part after the comma is not a number of parts per million.
+    #[error("The relative fee is not a number of parts per million: {0}")]
+    PartsPerMillion(#[from] ParseIntError),
+}
+
 impl From<RoutingFees> for PaymentFee {
     fn from(value: RoutingFees) -> Self {
         PaymentFee {
@@ -293,154 +336,24 @@ impl std::fmt::Display for PaymentFee {
 }
 
 impl FromStr for PaymentFee {
-    type Err = anyhow::Error;
+    type Err = ParsePaymentFeeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.split(',');
-        let base_str = parts
-            .next()
-            .ok_or(anyhow::anyhow!("Failed to parse base fee"))?;
-        let ppm_str = parts.next().ok_or(anyhow::anyhow!("Failed to parse ppm"))?;
+        // `split_once` is what the pair actually is. The previous `split`
+        // could not fail on the base half at all, because `split` always
+        // yields a first item, so that branch was unreachable.
+        let (base_str, ppm_str) = s.split_once(',').ok_or(ParsePaymentFeeError::Format)?;
 
-        // Ensure no extra parts
-        if parts.next().is_some() {
-            return Err(anyhow::anyhow!(
-                "Failed to parse fees. Expected format <base>,<ppm>"
-            ));
+        if ppm_str.contains(',') {
+            return Err(ParsePaymentFeeError::Format);
         }
 
-        let base = Amount::from_str(base_str)?;
-        let parts_per_million = ppm_str.parse::<u64>()?;
-
         Ok(PaymentFee {
-            base,
-            parts_per_million,
+            base: Amount::from_str(base_str)?,
+            parts_per_million: ppm_str.parse::<u64>()?,
         })
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use fedimint_core::Amount;
-    use lightning_invoice::RoutingFees;
-
-    use super::PaymentFee;
-
-    /// A lower `base` must not let an over-limit `parts_per_million` through,
-    /// which is what the lexicographic ordering used to allow.
-    #[test]
-    fn is_within_enforces_both_components() {
-        // base under the limit, ppm over it, on the send side.
-        let over_ppm = PaymentFee {
-            base: Amount::from_sats(0),
-            parts_per_million: 1_000_000,
-        };
-        assert!(!over_ppm.is_within(&PaymentFee::SEND_FEE_LIMIT));
-
-        let over_ppm = PaymentFee {
-            base: Amount::from_sats(0),
-            parts_per_million: 5_000_000,
-        };
-        assert!(!over_ppm.is_within(&PaymentFee::SEND_FEE_LIMIT));
-
-        // Same on the receive side, which has the lower cap of the two.
-        let over_ppm = PaymentFee {
-            base: Amount::from_sats(0),
-            parts_per_million: 500_000,
-        };
-        assert!(!over_ppm.is_within(&PaymentFee::RECEIVE_FEE_LIMIT));
-
-        // The reverse case, which the ordering already rejected.
-        let over_base = PaymentFee {
-            base: Amount::from_sats(101),
-            parts_per_million: 0,
-        };
-        assert!(!over_base.is_within(&PaymentFee::SEND_FEE_LIMIT));
-
-        // Exactly at the limit is accepted.
-        assert!(PaymentFee::SEND_FEE_LIMIT.is_within(&PaymentFee::SEND_FEE_LIMIT));
-
-        // Strictly within on both components is accepted.
-        let ok = PaymentFee {
-            base: Amount::from_sats(50),
-            parts_per_million: 10_000,
-        };
-        assert!(ok.is_within(&PaymentFee::SEND_FEE_LIMIT));
-    }
-
-    /// Adding two operator-supplied fees must not panic on overflow, in either
-    /// component.
-    #[test]
-    fn checked_add_reports_overflow_instead_of_panicking() {
-        let max_base = PaymentFee {
-            base: Amount::from_msats(u64::MAX),
-            parts_per_million: 0,
-        };
-        let one_msat = PaymentFee {
-            base: Amount::from_msats(1),
-            parts_per_million: 0,
-        };
-        assert!(max_base.checked_add(one_msat).is_none());
-
-        let max_ppm = PaymentFee {
-            base: Amount::ZERO,
-            parts_per_million: u64::MAX,
-        };
-        let one_ppm = PaymentFee {
-            base: Amount::ZERO,
-            parts_per_million: 1,
-        };
-        assert!(max_ppm.checked_add(one_ppm).is_none());
-
-        assert_eq!(
-            PaymentFee::TRANSACTION_FEE_DEFAULT
-                .checked_add(PaymentFee::TRANSACTION_FEE_DEFAULT)
-                .expect("Two default fees fit"),
-            PaymentFee {
-                base: Amount::from_sats(4),
-                parts_per_million: 6_000,
-            }
-        );
-    }
-
-    /// A fee that outgrew the `u32`s of `RoutingFees` must surface as an error
-    /// rather than a panic: the conversion runs on every lightning payment and
-    /// on federation registration at startup, so a panic here boot-loops the
-    /// gateway.
-    #[test]
-    fn routing_fees_conversion_rejects_out_of_range_fees() {
-        let over_base = PaymentFee {
-            base: Amount::from_msats(u64::from(u32::MAX) + 1),
-            parts_per_million: 0,
-        };
-        assert!(RoutingFees::try_from(over_base).is_err());
-
-        let over_ppm = PaymentFee {
-            base: Amount::ZERO,
-            parts_per_million: u64::from(u32::MAX) + 1,
-        };
-        assert!(RoutingFees::try_from(over_ppm).is_err());
-
-        let fees = RoutingFees::try_from(PaymentFee::SEND_FEE_LIMIT)
-            .expect("The send fee limit is within range");
-        assert_eq!(fees.base_msat, 100_000);
-        assert_eq!(fees.proportional_millionths, 15_000);
-    }
-
-    /// Any fee that `set_fees` accepts is small enough for the fee arithmetic
-    /// to stay exact, and an out-of-range fee left in an old database must
-    /// saturate instead of panicking.
-    #[test]
-    fn absolute_fee_saturates_instead_of_panicking() {
-        let huge = PaymentFee {
-            base: Amount::from_msats(u64::MAX),
-            parts_per_million: u64::MAX,
-        };
-        assert_eq!(huge.fee(u64::MAX), Amount::from_msats(u64::MAX));
-
-        assert_eq!(
-            PaymentFee::TRANSACTION_FEE_DEFAULT.fee(1_000_000),
-            Amount::from_msats(2_000 + 3_000)
-        );
-    }
-}
+mod tests;

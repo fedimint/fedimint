@@ -2,9 +2,6 @@
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::module_name_repetitions)]
 
-#[cfg(feature = "uniffi")]
-::uniffi::setup_scaffolding!();
-
 pub mod api;
 #[cfg(feature = "cli")]
 pub mod cli;
@@ -14,12 +11,12 @@ pub mod states;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use anyhow::Context as _;
 use api::MetaFederationApi;
 use common::{KIND, MetaConsensusValue, MetaKey, MetaValue};
 use db::DbKeyPrefix;
-use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
+use fedimint_api_client::api::{DynGlobalApi, DynModuleApi, FederationError};
 use fedimint_client_module::db::ClientModuleMigrationFn;
+use fedimint_client_module::error::{ClientModuleError, MetaFetchError};
 use fedimint_client_module::meta::{FetchKind, LegacyMetaSource, MetaSource, MetaValues};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
@@ -32,32 +29,36 @@ use fedimint_core::module::{
     Amounts, ApiAuth, ApiVersion, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::util::backoff_util::FibonacciBackoff;
-#[cfg(feature = "uniffi")]
-use fedimint_core::util::ffi::UniffiError;
 use fedimint_core::util::{BoxStream, backoff_util, retry};
 use fedimint_core::{PeerId, apply, async_trait_maybe_send};
 use fedimint_logging::LOG_CLIENT_MODULE_META;
 pub use fedimint_meta_common as common;
 use fedimint_meta_common::{DEFAULT_META_KEY, MetaCommonInit, MetaModuleTypes};
-use futures::stream;
+use futures::{TryStreamExt as _, stream};
 use serde::Deserialize;
 use serde_json::json;
 use states::MetaStateMachine;
 use strum::IntoEnumIterator;
+use thiserror::Error;
 use tracing::{debug, warn};
 
 #[derive(Debug)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct MetaClientModule {
     module_api: DynModuleApi,
     admin_auth: Option<ApiAuth>,
 }
 
 impl MetaClientModule {
-    fn admin_auth(&self) -> anyhow::Result<ApiAuth> {
+    /// The admin credentials this client was built with.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`MetaAdminError::AdminAuthMissing`] if the client was built
+    /// without them.
+    fn admin_auth(&self) -> Result<ApiAuth, MetaAdminError> {
         self.admin_auth
             .clone()
-            .ok_or_else(|| anyhow::format_err!("Admin auth not set"))
+            .ok_or(MetaAdminError::AdminAuthMissing)
     }
 
     /// Submit a meta consensus value
@@ -67,7 +68,13 @@ impl MetaClientModule {
     ///
     /// To "cancel" previous vote, peer can submit a value equal to the current
     /// consensus value.
-    pub async fn submit(&self, key: MetaKey, value: MetaValue) -> anyhow::Result<()> {
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`MetaAdminError::AdminAuthMissing`] if this client holds no
+    /// admin credentials, and with [`MetaAdminError::Federation`] if the
+    /// guardians could not be asked to record the vote.
+    pub async fn submit(&self, key: MetaKey, value: MetaValue) -> Result<(), MetaAdminError> {
         self.module_api
             .submit(key, value, self.admin_auth()?)
             .await?;
@@ -78,11 +85,16 @@ impl MetaClientModule {
     /// Get the current meta consensus value along with it's revision
     ///
     /// See [`Self::get_consensus_value_rev`] to use when checking for updates.
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`FederationError`] if the federation could not be asked
+    /// for the value.
     pub async fn get_consensus_value(
         &self,
         key: MetaKey,
-    ) -> anyhow::Result<Option<MetaConsensusValue>> {
-        Ok(self.module_api.get_consensus(key).await?)
+    ) -> Result<Option<MetaConsensusValue>, FederationError> {
+        self.module_api.get_consensus(key).await
     }
 
     /// Get the current meta consensus value revision
@@ -90,17 +102,31 @@ impl MetaClientModule {
     /// Each time a meta consensus value changes, the revision increases,
     /// so checking just the revision can save a lot of bandwidth in periodic
     /// checks.
-    pub async fn get_consensus_value_rev(&self, key: MetaKey) -> anyhow::Result<Option<u64>> {
-        Ok(self.module_api.get_consensus_rev(key).await?)
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`FederationError`] if the federation could not be asked
+    /// for the revision.
+    pub async fn get_consensus_value_rev(
+        &self,
+        key: MetaKey,
+    ) -> Result<Option<u64>, FederationError> {
+        self.module_api.get_consensus_rev(key).await
     }
 
     /// Get current submissions to change the meta consensus value.
     ///
     /// Upon changing the consensus
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`MetaAdminError::AdminAuthMissing`] if this client holds no
+    /// admin credentials, and with [`MetaAdminError::Federation`] if the
+    /// guardians could not be asked for their submissions.
     pub async fn get_submissions(
         &self,
         key: MetaKey,
-    ) -> anyhow::Result<BTreeMap<PeerId, MetaValue>> {
+    ) -> Result<BTreeMap<PeerId, MetaValue>, MetaAdminError> {
         Ok(self
             .module_api
             .get_submissions(key, self.admin_auth()?)
@@ -108,18 +134,26 @@ impl MetaClientModule {
     }
 }
 
-#[cfg(feature = "uniffi")]
-#[uniffi::export(async_runtime = "tokio")]
-impl MetaClientModule {
-    #[uniffi::method(name = "get_consensus_value")]
-    pub async fn get_consensus_value_uniffi(
-        &self,
-        key: MetaKey,
-    ) -> Result<Option<MetaConsensusValue>, UniffiError> {
-        self.module_api
-            .get_consensus(key)
-            .await
-            .map_err(|e| UniffiError::from(anyhow::anyhow!(e.to_string())))
+/// A failure of one of the meta client's guardian-only operations.
+///
+/// These endpoints can fail before any request leaves the client, when it
+/// holds no admin credentials, as well as while talking to the federation.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum MetaAdminError {
+    /// This client was not built with admin credentials, so it cannot call a
+    /// guardian-only endpoint.
+    #[error("Admin auth not set")]
+    AdminAuthMissing,
+
+    /// The federation rejected the request, or could not be reached.
+    #[error("The federation request failed")]
+    Federation(#[source] Box<FederationError>),
+}
+
+impl From<FederationError> for MetaAdminError {
+    fn from(source: FederationError) -> Self {
+        Self::Federation(Box::new(source))
     }
 }
 
@@ -130,12 +164,12 @@ struct GetConsensusValueRequest {
 
 fn format_rpc_consensus_value_response(
     maybe_consensus_value: Option<MetaConsensusValue>,
-) -> anyhow::Result<serde_json::Value> {
+) -> Result<serde_json::Value, RpcError> {
     Ok(match maybe_consensus_value {
         Some(MetaConsensusValue { revision, value }) => {
             let value = value
                 .to_json_lossy()
-                .context("deserializing consensus value as json")?;
+                .map_err(RpcError::ConsensusValueJson)?;
 
             json!({
                 "revision": revision,
@@ -191,26 +225,53 @@ impl ClientModule for MetaClientModule {
         &self,
         method: String,
         request: serde_json::Value,
-    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
-        Box::pin(stream::once(async move {
-            match method.as_str() {
-                "get_consensus_value" => {
-                    let req: GetConsensusValueRequest = serde_json::from_value(request)?;
-                    let maybe_consensus_value = self.get_consensus_value(req.key).await?;
-                    format_rpc_consensus_value_response(maybe_consensus_value)
+    ) -> BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
+        Box::pin(
+            stream::once(async move {
+                match method.as_str() {
+                    "get_consensus_value" => {
+                        let req: GetConsensusValueRequest = serde_json::from_value(request)?;
+                        let maybe_consensus_value = self.get_consensus_value(req.key).await?;
+                        format_rpc_consensus_value_response(maybe_consensus_value)
+                    }
+                    _ => Err(RpcError::UnknownMethod {
+                        method: method.clone(),
+                    }),
                 }
-                _ => Err(anyhow::format_err!("Unknown method: {method}")),
-            }
-        }))
+            })
+            .map_err(ClientModuleError::other),
+        )
     }
 
     #[cfg(feature = "cli")]
     async fn handle_cli_command(
         &self,
         args: &[std::ffi::OsString],
-    ) -> anyhow::Result<serde_json::Value> {
-        cli::handle_cli_command(self, args).await
+    ) -> Result<serde_json::Value, ClientModuleError> {
+        cli::handle_cli_command(self, args)
+            .await
+            .map_err(ClientModuleError::other)
     }
+}
+
+/// A failure of a meta module RPC request.
+#[derive(Debug, Error)]
+enum RpcError {
+    /// The request's parameters do not fit the method.
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+
+    /// The federation did not serve the request.
+    #[error(transparent)]
+    Federation(#[from] FederationError),
+
+    /// The consensus value is not valid JSON.
+    #[error("deserializing consensus value as json")]
+    ConsensusValueJson(#[source] serde_json::Error),
+
+    /// The request names a method the module does not have.
+    #[error("Unknown method: {method}")]
+    UnknownMethod { method: String },
 }
 
 #[derive(Debug, Clone)]
@@ -249,7 +310,10 @@ impl ClientModuleInit for MetaClientInit {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         Ok(MetaClientModule {
             module_api: args.module_api().clone(),
             admin_auth: args.admin_auth().cloned(),
@@ -286,7 +350,7 @@ impl<S: MetaSource> MetaSource for MetaModuleMetaSourceWithFallback<S> {
         api: &DynGlobalApi,
         fetch_kind: fedimint_client_module::meta::FetchKind,
         last_revision: Option<u64>,
-    ) -> anyhow::Result<fedimint_client_module::meta::MetaValues> {
+    ) -> Result<fedimint_client_module::meta::MetaValues, MetaFetchError> {
         let backoff = match fetch_kind {
             // need to be fast the first time.
             FetchKind::Initial => backoff_util::aggressive_backoff(),
@@ -296,7 +360,7 @@ impl<S: MetaSource> MetaSource for MetaModuleMetaSourceWithFallback<S> {
         let maybe_meta_module_meta = get_meta_module_value(client_config, api, backoff)
             .await
             .map(|meta| {
-                Result::<_, anyhow::Error>::Ok(MetaValues {
+                Result::<_, MetaFetchError>::Ok(MetaValues {
                     values: serde_json::from_slice(meta.value.as_slice())?,
                     revision: meta.revision,
                 })
@@ -325,7 +389,7 @@ async fn get_meta_module_value(
             let meta_api = api.with_module(instance_id);
 
             let overrides_res = retry("fetch_meta_values", backoff, || async {
-                Ok(meta_api.get_consensus(DEFAULT_META_KEY).await?)
+                meta_api.get_consensus(DEFAULT_META_KEY).await
             })
             .await;
 
@@ -346,36 +410,4 @@ async fn get_meta_module_value(
 }
 
 #[cfg(test)]
-mod tests {
-    use fedimint_meta_common::MetaValue;
-    use serde_json::json;
-
-    use super::{MetaConsensusValue, format_rpc_consensus_value_response};
-
-    #[test]
-    fn formats_consensus_value_as_json() {
-        let response = format_rpc_consensus_value_response(Some(MetaConsensusValue {
-            revision: 7,
-            value: MetaValue::from(br#"{"welcome_message":"hello"}"#.as_slice()),
-        }))
-        .expect("valid json meta value should format");
-
-        assert_eq!(
-            response,
-            json!({
-                "revision": 7,
-                "value": {
-                    "welcome_message": "hello",
-                },
-            })
-        );
-    }
-
-    #[test]
-    fn formats_missing_consensus_value_as_null() {
-        let response =
-            format_rpc_consensus_value_response(None).expect("null response should format");
-
-        assert_eq!(response, serde_json::Value::Null);
-    }
-}
+mod tests;

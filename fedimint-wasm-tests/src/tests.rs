@@ -1,0 +1,243 @@
+use std::time::Duration;
+
+use anyhow::{anyhow, bail};
+use fedimint_core::Amount;
+use fedimint_derive_secret::DerivableSecret;
+use fedimint_ln_client::{
+    LightningClientModule, LnPayState, LnReceiveState, OutgoingLightningPayment, PayType,
+};
+use fedimint_ln_common::LightningGateway;
+use fedimint_ln_common::lightning_invoice::{Bolt11InvoiceDescription, Description};
+use fedimint_mint_client::{
+    MintClientModule, ReissueExternalNotesState, SelectNotesWithAtleastAmount, SpendOOBState,
+};
+use futures::StreamExt;
+use wasm_bindgen_test::wasm_bindgen_test;
+
+use super::{Result, client, faucet};
+
+#[wasm_bindgen_test]
+async fn build_client() -> Result<()> {
+    let _client = client(&faucet::invite_code().await?.parse()?).await?;
+    Ok(())
+}
+
+async fn get_gateway(
+    client: &fedimint_client::ClientHandleArc,
+) -> anyhow::Result<LightningGateway> {
+    let lightning_module = client.get_first_module::<LightningClientModule>()?;
+    let gws = lightning_module.list_gateways().await;
+    let gw_api = faucet::gateway_api().await?;
+    let lnd_gw = gws
+        .into_iter()
+        .find(|x| x.info.api.to_string() == gw_api)
+        .expect("no gateway with api");
+
+    Ok(lnd_gw.info)
+}
+
+#[wasm_bindgen_test]
+async fn receive() -> Result<()> {
+    let client = client(&faucet::invite_code().await?.parse()?).await?;
+    client.start_executor();
+    let ln_gateway = get_gateway(&client).await?;
+    futures::future::try_join_all(
+        (0..10).map(|_| receive_once(client.clone(), Amount::from_sats(21), ln_gateway.clone())),
+    )
+    .await?;
+    Ok(())
+}
+
+async fn receive_once(
+    client: fedimint_client::ClientHandleArc,
+    amount: Amount,
+    gateway: LightningGateway,
+) -> Result<()> {
+    let lightning_module = client.get_first_module::<LightningClientModule>()?;
+    let desc = Description::new("test".to_string())?;
+    let (opid, invoice, _) = lightning_module
+        .create_bolt11_invoice(
+            amount,
+            Bolt11InvoiceDescription::Direct(desc),
+            None,
+            (),
+            Some(gateway),
+        )
+        .await?;
+    faucet::pay_invoice(&invoice.to_string()).await?;
+
+    let mut updates = lightning_module
+        .subscribe_ln_receive(opid)
+        .await?
+        .into_stream();
+    while let Some(update) = updates.next().await {
+        match update {
+            LnReceiveState::Claimed => return Ok(()),
+            LnReceiveState::Canceled { reason } => {
+                return Err(reason.into());
+            }
+            _ => {}
+        }
+    }
+    Err(anyhow!("Lightning receive failed"))
+}
+
+// Tests that ChaCha20 crypto functions used for backup and recovery are
+// available in WASM at runtime. Related issue: https://github.com/fedimint/fedimint/issues/2843
+#[wasm_bindgen_test]
+#[allow(clippy::unused_async)]
+async fn derive_chacha_key() {
+    let root_secret = DerivableSecret::new_root(&[0x42; 32], &[0x2a; 32]);
+    let key = root_secret.to_chacha20_poly1305_key();
+
+    // Prevent optimization
+    // FIXME: replace with `std::hint::black_box` once stabilized
+    assert!(format!("key: {key:?}").len() > 8);
+}
+
+async fn pay_once(
+    client: fedimint_client::ClientHandleArc,
+    ln_gateway: LightningGateway,
+) -> Result<(), anyhow::Error> {
+    let lightning_module = client.get_first_module::<LightningClientModule>()?;
+    let bolt11 = faucet::generate_invoice(11).await?;
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = lightning_module
+        .pay_bolt11_invoice(Some(ln_gateway), bolt11.parse()?, ())
+        .await?;
+    let PayType::Lightning(operation_id) = payment_type else {
+        unreachable!("paying invoice over lightning");
+    };
+    let lightning_module = client.get_first_module::<LightningClientModule>()?;
+    let mut updates = lightning_module
+        .subscribe_ln_pay(operation_id)
+        .await?
+        .into_stream();
+    loop {
+        match updates.next().await {
+            Some(LnPayState::Success { preimage: _ }) => {
+                break;
+            }
+            Some(LnPayState::Refunded { gateway_error }) => {
+                return Err(anyhow!("refunded {gateway_error}"));
+            }
+            None => return Err(anyhow!("Lightning send failed")),
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+#[wasm_bindgen_test]
+async fn receive_and_pay() -> Result<()> {
+    let client = client(&faucet::invite_code().await?.parse()?).await?;
+    client.start_executor();
+    let ln_gateway = get_gateway(&client).await?;
+
+    futures::future::try_join_all(
+        (0..10).map(|_| receive_once(client.clone(), Amount::from_sats(21), ln_gateway.clone())),
+    )
+    .await?;
+    futures::future::try_join_all((0..10).map(|_| pay_once(client.clone(), ln_gateway.clone())))
+        .await?;
+
+    Ok(())
+}
+
+async fn send_and_recv_ecash_once(
+    client: fedimint_client::ClientHandleArc,
+) -> Result<(), anyhow::Error> {
+    let mint = client.get_first_module::<MintClientModule>()?;
+    let (_, notes) = mint
+        .spend_notes_with_selector(
+            &SelectNotesWithAtleastAmount,
+            Amount::from_sats(11),
+            Some(Duration::from_secs(10000)),
+            false,
+            (),
+        )
+        .await?;
+    let operation_id = mint.reissue_external_notes(notes, ()).await?;
+    let mut updates = mint
+        .subscribe_reissue_external_notes(operation_id)
+        .await?
+        .into_stream();
+    loop {
+        match updates.next().await {
+            Some(ReissueExternalNotesState::Done) => {
+                break;
+            }
+            Some(ReissueExternalNotesState::Failed(error)) => {
+                return Err(anyhow!("reissue failed {error}"));
+            }
+            Some(_) => {}
+            None => return Err(anyhow!("reissue failed")),
+        }
+    }
+    Ok(())
+}
+
+async fn send_ecash_exact(
+    client: fedimint_client::ClientHandleArc,
+    amount: Amount,
+) -> Result<(), anyhow::Error> {
+    let mint = client.get_first_module::<MintClientModule>()?;
+    'retry: loop {
+        let (operation_id, notes) = mint
+            .spend_notes_with_selector(
+                &SelectNotesWithAtleastAmount,
+                amount,
+                Some(Duration::from_secs(10000)),
+                false,
+                (),
+            )
+            .await?;
+        if notes.total_amount() == amount {
+            return Ok(());
+        }
+        mint.try_cancel_spend_notes(operation_id).await;
+        let mut updates = mint
+            .subscribe_spend_notes(operation_id)
+            .await?
+            .into_stream();
+        while let Some(update) = updates.next().await {
+            if update == SpendOOBState::UserCanceledSuccess {
+                continue 'retry;
+            }
+        }
+        bail!("failed to cancel notes");
+    }
+}
+
+#[wasm_bindgen_test]
+async fn test_ecash() -> Result<()> {
+    let client = client(&faucet::invite_code().await?.parse()?).await?;
+    client.start_executor();
+    let ln_gateway = get_gateway(&client).await?;
+
+    futures::future::try_join_all(
+        (0..10)
+            .map(|_| receive_once(client.clone(), Amount::from_sats(100), ln_gateway.clone())), // Increased from 25 to 100 sats to account for mint fees
+    )
+    .await?;
+    futures::future::try_join_all((0..10).map(|_| send_and_recv_ecash_once(client.clone())))
+        .await?;
+    Ok(())
+}
+
+#[wasm_bindgen_test]
+async fn test_ecash_exact() -> Result<()> {
+    let client = client(&faucet::invite_code().await?.parse()?).await?;
+    client.start_executor();
+    let ln_gateway = get_gateway(&client).await?;
+
+    receive_once(client.clone(), Amount::from_sats(100), ln_gateway).await?;
+    futures::future::try_join_all(
+        (0..3).map(|_| send_ecash_exact(client.clone(), Amount::from_sats(1))),
+    )
+    .await?;
+    Ok(())
+}

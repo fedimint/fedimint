@@ -207,8 +207,7 @@ impl Fixtures {
             .collect();
         let decoders = self
             .servers
-            .available_decoders(module_kinds.iter().map(|(id, kind)| (*id, kind)))
-            .unwrap();
+            .available_decoders(module_kinds.iter().map(|(id, kind)| (*id, kind)));
         let gateway_db = Database::new(MemDatabase::new(), decoders.clone());
 
         let mnemonic = Bip39RootSecretStrategy::<12>::random(&mut OsRng);

@@ -2,33 +2,56 @@ mod mock;
 
 use std::pin::pin;
 use std::sync::Arc;
+use std::time::Duration;
 
+use anyhow::Context as _;
+use assert_matches::assert_matches;
 use async_stream::stream;
+use bitcoin::hashes::{Hash as _, sha256};
 use fedimint_client::ClientHandleArc;
-use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
+use fedimint_client::error::GlobalRpcError;
+use fedimint_client::transaction::{
+    ClientInput, ClientInputBundle, ClientOutput, ClientOutputBundle, TransactionBuilder,
+};
+use fedimint_client_module::error::{ClientModuleError, ModuleLookupError, OperationLookupError};
 use fedimint_client_module::module::ClientModule;
+use fedimint_core::base32::{FEDIMINT_PREFIX, decode_prefixed};
 use fedimint_core::core::{IntoDynInstance, OperationId};
+use fedimint_core::encoding::Encodable as _;
 use fedimint_core::module::{AmountUnit, Amounts};
-use fedimint_core::util::NextOrPending as _;
-use fedimint_core::{Amount, OutPoint, sats};
+use fedimint_core::secp256k1::rand::rngs::OsRng;
+use fedimint_core::secp256k1::{Keypair, PublicKey, SECP256K1, Scalar};
+use fedimint_core::task::sleep_in_test;
+use fedimint_core::time::duration_since_epoch;
+use fedimint_core::util::{NextOrPending as _, SafeUrl, backoff_util, retry};
+use fedimint_core::{Amount, OutPoint, TransactionId, msats, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
+use fedimint_lnurl::parse_lnurl;
 use fedimint_lnv2_client::events::{
     ReceivePaymentEvent, SendPaymentEvent, SendPaymentStatus, SendPaymentUpdateEvent,
 };
+use fedimint_lnv2_client::htlc::HtlcError;
 use fedimint_lnv2_client::{
-    InvoiceSendStatus, LightningClientInit, LightningClientModule, LightningOperationMeta,
-    ReceiveOperationState, SendOperationState, SendPaymentError,
+    FinalReceiveOperationState, FinalSendOperationState, InvoiceSendStatus, LightningClientInit,
+    LightningClientModule, LightningOperationMeta, ReceiveError, ReceiveOperationState,
+    ReceiveWithTermsError, SelectGatewayError, SendOperationState, SendPaymentError,
+    SendWithTermsError, SpendableAmountError,
 };
+use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
+use fedimint_lnv2_common::gateway_api::PaymentFee;
+use fedimint_lnv2_common::lnurl::LnurlRequest;
 use fedimint_lnv2_common::{
-    Bolt11InvoiceDescription, KIND, LightningInput, LightningInputV0, OutgoingWitness,
+    Bolt11InvoiceDescription, KIND, LightningInput, LightningInputV0, LightningOutput,
+    LightningOutputV0, OutgoingWitness, tweak,
 };
 use fedimint_lnv2_server::LightningInit;
 use fedimint_logging::LOG_TEST;
 use fedimint_testing::fixtures::Fixtures;
 use futures::StreamExt;
 use serde_json::Value;
+use tpe::AggregatePublicKey;
 use tracing::warn;
 
 use crate::mock::{MOCK_INVOICE_PREIMAGE, MockGatewayConnection};
@@ -83,11 +106,15 @@ fn try_parse_ln_event(entry: &EventLogEntry) -> Option<LnEvent> {
 }
 
 fn fixtures() -> Fixtures {
+    fixtures_with_gateway(MockGatewayConnection::default())
+}
+
+fn fixtures_with_gateway(gateway_conn: MockGatewayConnection) -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit);
 
     fixtures.with_module(
         LightningClientInit {
-            gateway_conn: Some(Arc::new(MockGatewayConnection::default())),
+            gateway_conn: Some(Arc::new(gateway_conn)),
             custom_meta_fn: Arc::new(|| {
                 serde_json::json!({
                     "timestamp": chrono::Utc::now().timestamp(),
@@ -108,7 +135,7 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let gateway_api = mock::gateway();
     let invoice = mock::payable_invoice();
@@ -183,6 +210,138 @@ async fn can_pay_external_invoice_exactly_once() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn send_with_terms_funds_the_contract_at_the_checked_terms() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await;
+
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+    let gateway = mock::gateway();
+    let invoice = mock::payable_invoice();
+    let amount = invoice
+        .amount_milli_satoshis()
+        .expect("Invoice has an amount");
+
+    // The terms a caller would show the user before asking for approval.
+    let routing_info = lightning
+        .routing_info(&gateway)
+        .await?
+        .expect("Mock gateway supports the federation");
+    let (send_fee, expiration_delta) = routing_info.send_parameters(&invoice);
+
+    let operation_id = lightning
+        .send_with_terms(
+            invoice.clone(),
+            gateway,
+            send_fee,
+            expiration_delta,
+            Value::Null,
+        )
+        .await?;
+
+    // The funded contract carries exactly the approved fee.
+    let meta = client
+        .operation_log()
+        .get_operation(operation_id)
+        .await
+        .expect("Operation exists")
+        .meta::<LightningOperationMeta>();
+    let LightningOperationMeta::Send(meta) = meta else {
+        panic!("Expected a send operation");
+    };
+    assert_eq!(meta.contract.amount, send_fee.add_to(amount));
+
+    let mut sub = lightning
+        .subscribe_send_operation_state_updates(operation_id)
+        .await?
+        .into_stream();
+
+    assert_eq!(sub.ok().await?, SendOperationState::Funding);
+    assert_eq!(sub.ok().await?, SendOperationState::Funded);
+    assert_eq!(
+        sub.ok().await?,
+        SendOperationState::Success(MOCK_INVOICE_PREIMAGE)
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn send_with_terms_refuses_when_the_gateway_terms_changed() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await;
+
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+    let gateway = mock::gateway();
+    let invoice = mock::payable_invoice();
+
+    let routing_info = lightning
+        .routing_info(&gateway)
+        .await?
+        .expect("Mock gateway supports the federation");
+    let (send_fee, expiration_delta) = routing_info.send_parameters(&invoice);
+
+    // The caller checked a fee the gateway no longer offers.
+    let stale_fee = PaymentFee {
+        base: Amount::from_sats(1),
+        parts_per_million: 1,
+    };
+    assert_ne!(stale_fee, send_fee);
+
+    assert_eq!(
+        lightning
+            .send_with_terms(
+                invoice.clone(),
+                gateway.clone(),
+                stale_fee,
+                expiration_delta,
+                Value::Null,
+            )
+            .await,
+        Err(SendWithTermsError::TermsChanged {
+            send_fee,
+            expiration_delta,
+        }),
+    );
+
+    // The caller checked an expiration delta the gateway no longer offers.
+    assert_eq!(
+        lightning
+            .send_with_terms(
+                invoice.clone(),
+                gateway,
+                send_fee,
+                expiration_delta + 1,
+                Value::Null,
+            )
+            .await,
+        Err(SendWithTermsError::TermsChanged {
+            send_fee,
+            expiration_delta,
+        }),
+    );
+
+    // Nothing was funded.
+    assert_eq!(
+        lightning.get_invoice_send_status(&invoice).await?,
+        InvoiceSendStatus::NotAttempted,
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn refund_failed_payment() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
@@ -192,7 +351,7 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let mut events = pin!(ln_event_stream(&client));
 
@@ -236,6 +395,51 @@ async fn refund_failed_payment() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Waiting for the operation to have no active states follows a payment the
+/// gateway fails through its refund, without the caller naming the refund's
+/// outputs: once it returns, the outcome is settled and the refunded amount is
+/// back in the balance.
+#[tokio::test(flavor = "multi_thread")]
+async fn awaiting_no_active_states_follows_a_refund_to_its_end() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await;
+
+    let operation_id = client
+        .get_first_module::<LightningClientModule>()?
+        .send(
+            mock::unpayable_invoice(),
+            Some(mock::gateway()),
+            Value::Null,
+        )
+        .await?;
+
+    client.await_no_active_states(operation_id).await;
+
+    assert!(!client.has_active_states(operation_id).await);
+
+    // Checked before the outcome is read, which would itself wait for the
+    // refund. The invoice asks for 1000 sats, so a balance within that of the
+    // starting one means the refund has been credited: all that is missing
+    // are the federation's fees.
+    assert!(client.get_balance_for_btc().await? > sats(9_000));
+
+    assert_eq!(
+        client
+            .get_first_module::<LightningClientModule>()?
+            .await_final_send_operation_state(operation_id)
+            .await?,
+        FinalSendOperationState::Refunded,
+    );
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
     if Fixtures::is_real_test() {
@@ -254,7 +458,7 @@ async fn unilateral_refund_of_outgoing_contracts() -> anyhow::Result<()> {
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let mut events = pin!(ln_event_stream(&client));
 
@@ -318,7 +522,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     client
         .get_first_module::<DummyClientModule>()?
         .mock_receive(sats(10_000), AmountUnit::BITCOIN)
-        .await?;
+        .await;
 
     let mut events = pin!(ln_event_stream(&client));
 
@@ -349,10 +553,7 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
 
     let (contract, txid) = match operation.meta::<LightningOperationMeta>() {
         LightningOperationMeta::Send(meta) => (meta.contract, meta.change_outpoint_range.txid),
-        LightningOperationMeta::Receive(..) => panic!("Operation Meta is a Receive variant"),
-        LightningOperationMeta::LnurlReceive(..) => {
-            panic!("Operation Meta is a LnurlReceive variant")
-        }
+        _ => panic!("Operation Meta is not a Send variant"),
     };
 
     let client_input = ClientInput::<LightningInput> {
@@ -397,6 +598,432 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// A gateway that has turned receives off for the federation says so in its
+/// routing info. The client refuses to request an invoice from it, while it
+/// can still send through it.
+#[tokio::test(flavor = "multi_thread")]
+async fn receive_refuses_a_gateway_with_receives_turned_off() -> anyhow::Result<()> {
+    let fixtures = fixtures_with_gateway(MockGatewayConnection::with_receive_disabled());
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+
+    assert_eq!(
+        lightning
+            .receive(
+                Amount::from_sats(1000),
+                60,
+                Bolt11InvoiceDescription::Direct(String::new()),
+                Some(mock::gateway()),
+                Value::Null,
+            )
+            .await
+            .err(),
+        Some(ReceiveError::ReceiveDisabled)
+    );
+
+    let receive_fee = lightning
+        .routing_info(&mock::gateway())
+        .await?
+        .expect("The mock gateway serves the federation")
+        .receive_fee;
+
+    assert_eq!(
+        lightning
+            .receive_with_terms(
+                Amount::from_sats(1000),
+                60,
+                Bolt11InvoiceDescription::Direct(String::new()),
+                mock::gateway(),
+                receive_fee,
+                Value::Null,
+            )
+            .await
+            .err(),
+        Some(ReceiveWithTermsError::Receive(
+            ReceiveError::ReceiveDisabled
+        ))
+    );
+
+    // Sending is unaffected by the receive policy.
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await;
+
+    let operation_id = lightning
+        .send(mock::payable_invoice(), Some(mock::gateway()), Value::Null)
+        .await?;
+
+    let mut sub = lightning
+        .subscribe_send_operation_state_updates(operation_id)
+        .await?
+        .into_stream();
+
+    assert_eq!(sub.ok().await?, SendOperationState::Funding);
+    assert_eq!(sub.ok().await?, SendOperationState::Funded);
+    assert_eq!(
+        sub.ok().await?,
+        SendOperationState::Success(MOCK_INVOICE_PREIMAGE)
+    );
+
+    Ok(())
+}
+
+/// Wait until the federation has committed its first block count votes.
+///
+/// A freshly started federation reports a consensus block count of zero until
+/// the votes of its first consensus sessions are committed, while the backing
+/// chain may already be at a positive height - over one hundred blocks for
+/// the pre-mined regtest chain in CI. A contract created against the stale
+/// zero count would be expired the moment the votes land. Mining one block
+/// ensures even a pristine mock chain reaches a nonzero height for the votes
+/// to reflect.
+async fn await_block_count_consensus(
+    fixtures: &Fixtures,
+    client: &ClientHandleArc,
+) -> anyhow::Result<()> {
+    fixtures.bitcoin().mine_blocks(1).await;
+
+    loop {
+        match client
+            .get_first_module::<LightningClientModule>()?
+            .consensus_block_count()
+            .await
+        {
+            Ok(..) => return Ok(()),
+            Err(HtlcError::NoBlockCountConsensus) => {
+                sleep_in_test(
+                    "block count votes to be committed",
+                    Duration::from_millis(200),
+                )
+                .await;
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn direct_htlc_claim() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let funder = fed.new_client().await;
+    let claimer = fed.new_client().await;
+
+    funder
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await;
+
+    await_block_count_consensus(&fixtures, &funder).await?;
+
+    let preimage = [42_u8; 32];
+    let payment_image = PaymentImage::Hash(preimage.consensus_hash());
+    let claim_keypair = Keypair::new(SECP256K1, &mut OsRng);
+
+    let funder_lnv2 = funder.get_first_module::<LightningClientModule>()?;
+    let claimer_lnv2 = claimer.get_first_module::<LightningClientModule>()?;
+
+    // An expiration delta that overflows the block count is rejected before
+    // anything is submitted.
+    assert_eq!(
+        funder_lnv2
+            .create_htlc(
+                sats(1_000),
+                payment_image.clone(),
+                claim_keypair.public_key(),
+                u64::MAX,
+                Value::Null,
+            )
+            .await,
+        Err(HtlcError::InvalidExpirationDelta)
+    );
+
+    let (operation_id, outpoint, contract) = funder_lnv2
+        .create_htlc(
+            sats(1_000),
+            payment_image,
+            claim_keypair.public_key(),
+            100,
+            Value::Null,
+        )
+        .await?;
+
+    funder_lnv2
+        .await_htlc_operation_settled(operation_id)
+        .await?;
+
+    let remaining_blocks = claimer_lnv2.await_htlc_funded(outpoint, &contract).await?;
+
+    assert!(remaining_blocks > 0);
+
+    // An incorrect preimage is rejected before anything is submitted.
+    assert_eq!(
+        claimer_lnv2
+            .claim_htlc(
+                outpoint,
+                contract.clone(),
+                claim_keypair,
+                [21; 32],
+                Value::Null
+            )
+            .await,
+        Err(HtlcError::InvalidPreimage)
+    );
+
+    let claim_operation_id = claimer_lnv2
+        .claim_htlc(
+            outpoint,
+            contract.clone(),
+            claim_keypair,
+            preimage,
+            Value::Null,
+        )
+        .await?;
+
+    claimer_lnv2
+        .await_htlc_operation_settled(claim_operation_id)
+        .await?;
+
+    assert!(claimer.get_balance_for_btc().await? > Amount::ZERO);
+
+    // Retrying the claim after the contract is resolved yields the recorded
+    // operation.
+    assert_eq!(
+        claimer_lnv2
+            .claim_htlc(
+                outpoint,
+                contract.clone(),
+                claim_keypair,
+                preimage,
+                Value::Null,
+            )
+            .await,
+        Ok(claim_operation_id)
+    );
+
+    // The funder learns the preimage from the federation.
+    assert_eq!(
+        funder_lnv2
+            .await_htlc_resolution(outpoint, &contract)
+            .await?,
+        Some(preimage)
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn direct_htlc_refund() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let funder = fed.new_client().await;
+
+    funder
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await;
+
+    await_block_count_consensus(&fixtures, &funder).await?;
+
+    let preimage = [42_u8; 32];
+    let claim_keypair = Keypair::new(SECP256K1, &mut OsRng);
+
+    let funder_lnv2 = funder.get_first_module::<LightningClientModule>()?;
+
+    let (operation_id, outpoint, contract) = funder_lnv2
+        .create_htlc(
+            sats(1_000),
+            PaymentImage::Hash(preimage.consensus_hash()),
+            claim_keypair.public_key(),
+            20,
+            Value::Null,
+        )
+        .await?;
+
+    funder_lnv2
+        .await_htlc_operation_settled(operation_id)
+        .await?;
+
+    // The contract cannot be refunded before its expiration.
+    assert!(matches!(
+        funder_lnv2
+            .refund_htlc(outpoint, contract.clone(), Value::Null)
+            .await,
+        Err(HtlcError::NotExpired(..))
+    ));
+
+    fixtures.bitcoin().mine_blocks(30).await;
+
+    // The funder is notified that the contract expired unclaimed...
+    assert_eq!(
+        funder_lnv2
+            .await_htlc_resolution(outpoint, &contract)
+            .await?,
+        None
+    );
+
+    // A refund with a contract other than the funded one is rejected against
+    // the federation's view of the outpoint before any operation is recorded,
+    // so it does not block the refund with the correct contract below.
+    assert_eq!(
+        funder_lnv2
+            .refund_htlc(
+                outpoint,
+                OutgoingContract {
+                    amount: contract.amount + msats(1),
+                    ..contract.clone()
+                },
+                Value::Null
+            )
+            .await,
+        Err(HtlcError::ContractMismatch)
+    );
+
+    // ...and can refund it once the consensus block count catches up.
+    let refund_operation_id = loop {
+        match funder_lnv2
+            .refund_htlc(outpoint, contract.clone(), Value::Null)
+            .await
+        {
+            Ok(operation_id) => break operation_id,
+            Err(HtlcError::NotExpired(..)) => {
+                sleep_in_test(
+                    "consensus block count catches up",
+                    Duration::from_millis(100),
+                )
+                .await;
+            }
+            Err(error) => return Err(error.into()),
+        }
+    };
+
+    funder_lnv2
+        .await_htlc_operation_settled(refund_operation_id)
+        .await?;
+
+    // Retrying the refund after the contract is resolved yields the recorded
+    // operation.
+    assert_eq!(
+        funder_lnv2
+            .refund_htlc(outpoint, contract.clone(), Value::Null)
+            .await,
+        Ok(refund_operation_id)
+    );
+
+    // A retry with a contract other than the recorded one is rejected.
+    assert_eq!(
+        funder_lnv2
+            .refund_htlc(
+                outpoint,
+                OutgoingContract {
+                    amount: contract.amount + msats(1),
+                    ..contract.clone()
+                },
+                Value::Null
+            )
+            .await,
+        Err(HtlcError::ContractMismatch)
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn direct_htlc_cancel() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let funder = fed.new_client().await;
+    let claimer = fed.new_client().await;
+
+    funder
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await;
+
+    await_block_count_consensus(&fixtures, &funder).await?;
+
+    let preimage = [42_u8; 32];
+    let claim_keypair = Keypair::new(SECP256K1, &mut OsRng);
+
+    let funder_lnv2 = funder.get_first_module::<LightningClientModule>()?;
+    let claimer_lnv2 = claimer.get_first_module::<LightningClientModule>()?;
+
+    let (operation_id, outpoint, contract) = funder_lnv2
+        .create_htlc(
+            sats(1_000),
+            PaymentImage::Hash(preimage.consensus_hash()),
+            claim_keypair.public_key(),
+            1_000,
+            Value::Null,
+        )
+        .await?;
+
+    funder_lnv2
+        .await_htlc_operation_settled(operation_id)
+        .await?;
+
+    let balance_before_cancel = funder.get_balance_for_btc().await?;
+
+    // A cancellation with a contract other than the funded one, even one the
+    // claiming side has signed off on, is rejected against the federation's
+    // view of the outpoint before any operation is recorded, so it does not
+    // block the cancellation with the correct contract below.
+    let other_contract = OutgoingContract {
+        amount: contract.amount + msats(1),
+        ..contract.clone()
+    };
+
+    assert_eq!(
+        funder_lnv2
+            .cancel_htlc(
+                outpoint,
+                other_contract.clone(),
+                LightningClientModule::create_htlc_forfeit_signature(
+                    &other_contract,
+                    &claim_keypair
+                )?,
+                Value::Null
+            )
+            .await,
+        Err(HtlcError::ContractMismatch)
+    );
+
+    // The claiming side fails the HTLC cooperatively with a forfeit signature.
+    let forfeit_signature =
+        LightningClientModule::create_htlc_forfeit_signature(&contract, &claim_keypair)?;
+
+    let cancel_operation_id = funder_lnv2
+        .cancel_htlc(outpoint, contract.clone(), forfeit_signature, Value::Null)
+        .await?;
+
+    funder_lnv2
+        .await_htlc_operation_settled(cancel_operation_id)
+        .await?;
+
+    assert!(funder.get_balance_for_btc().await? > balance_before_cancel);
+
+    // Retrying the cancellation after the contract is resolved yields the
+    // recorded operation.
+    assert_eq!(
+        funder_lnv2
+            .cancel_htlc(outpoint, contract.clone(), forfeit_signature, Value::Null)
+            .await,
+        Ok(cancel_operation_id)
+    );
+
+    // The contract cannot be claimed anymore.
+    assert_eq!(
+        claimer_lnv2
+            .claim_htlc(outpoint, contract, claim_keypair, preimage, Value::Null)
+            .await,
+        Err(HtlcError::ContractNotFound)
+    );
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn receive_operation_expires() -> anyhow::Result<()> {
     let fixtures = fixtures();
@@ -428,6 +1055,252 @@ async fn receive_operation_expires() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn receive_with_terms_creates_the_contract_at_the_checked_fee() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+    let gateway = mock::gateway();
+    let amount = Amount::from_sats(1000);
+
+    let receive_fee = lightning
+        .routing_info(&gateway)
+        .await?
+        .expect("Mock gateway supports the federation")
+        .receive_fee;
+
+    let (invoice, operation_id) = lightning
+        .receive_with_terms(
+            amount,
+            60,
+            Bolt11InvoiceDescription::Direct(String::new()),
+            gateway,
+            receive_fee,
+            Value::Null,
+        )
+        .await?;
+
+    assert_eq!(invoice.amount_milli_satoshis(), Some(amount.msats));
+
+    let meta = client
+        .operation_log()
+        .get_operation(operation_id)
+        .await
+        .expect("Operation exists")
+        .meta::<LightningOperationMeta>();
+    let LightningOperationMeta::Receive(meta) = meta else {
+        panic!("Expected a receive operation");
+    };
+    // The created contract carries exactly the approved fee.
+    assert_eq!(
+        meta.contract.commitment.amount,
+        receive_fee.subtract_from(amount.msats)
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receive_with_terms_refuses_when_the_gateway_fee_changed() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+    let gateway = mock::gateway();
+
+    let receive_fee = lightning
+        .routing_info(&gateway)
+        .await?
+        .expect("Mock gateway supports the federation")
+        .receive_fee;
+
+    let stale_fee = PaymentFee {
+        base: Amount::from_sats(1),
+        parts_per_million: 1,
+    };
+    assert_ne!(stale_fee, receive_fee);
+
+    assert_eq!(
+        lightning
+            .receive_with_terms(
+                Amount::from_sats(1000),
+                60,
+                Bolt11InvoiceDescription::Direct(String::new()),
+                gateway,
+                stale_fee,
+                Value::Null,
+            )
+            .await,
+        Err(ReceiveWithTermsError::TermsChanged { receive_fee }),
+    );
+
+    // Nothing was created.
+    assert!(
+        client
+            .operation_log()
+            .paginate_operations_rev(10, None)
+            .await
+            .is_empty()
+    );
+
+    Ok(())
+}
+
+/// Builds an incoming contract addressed to `recipient_pk`, the way a sender
+/// does: the claim key is derived from the recipient's published static key and
+/// a fresh ephemeral key, so anyone who knows that static key can address one.
+fn incoming_contract_for(
+    recipient_pk: PublicKey,
+    aggregate_pk: AggregatePublicKey,
+    amount: Amount,
+) -> IncomingContract {
+    let (ephemeral_tweak, ephemeral_pk) = tweak::generate(recipient_pk);
+
+    let encryption_seed = ephemeral_tweak
+        .consensus_hash::<sha256::Hash>()
+        .to_byte_array();
+
+    let preimage = encryption_seed
+        .consensus_hash::<sha256::Hash>()
+        .to_byte_array();
+
+    let claim_pk = recipient_pk
+        .mul_tweak(
+            secp256k1::SECP256K1,
+            &Scalar::from_be_bytes(ephemeral_tweak).expect("Within curve order"),
+        )
+        .expect("Tweak is valid");
+
+    IncomingContract::new(
+        aggregate_pk,
+        encryption_seed,
+        preimage,
+        PaymentImage::Hash(preimage.consensus_hash()),
+        amount,
+        duration_since_epoch().as_secs().saturating_add(3600),
+        claim_pk,
+        mock::gateway_keypair().public_key(),
+        ephemeral_pk,
+    )
+}
+
+/// Funds `contract` straight from `funder`'s balance. No gateway is involved:
+/// consensus funds an incoming contract of any amount, so this is what an
+/// attacker with a little ecash can do to anyone whose static key they know.
+async fn fund_incoming_contract(
+    funder: &ClientHandleArc,
+    contract: &IncomingContract,
+) -> anyhow::Result<()> {
+    let lnv2_module_id = funder
+        .get_first_instance(&LightningClientModule::kind())
+        .expect("lnv2 module not found");
+
+    funder
+        .finalize_and_submit_transaction(
+            OperationId::new_random(),
+            "Funding an incoming contract",
+            |_| (),
+            TransactionBuilder::new().with_outputs(
+                ClientOutputBundle::new_no_sm(vec![ClientOutput {
+                    output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
+                    amounts: Amounts::new_bitcoin(contract.commitment.amount),
+                }])
+                .into_dyn(lnv2_module_id),
+            ),
+        )
+        .await?;
+
+    Ok(())
+}
+
+/// A contract worth less than the fee to claim it must be left alone rather
+/// than driven into a claim that cannot be funded.
+///
+/// Anyone can address an incoming contract to a published lnurl key, and
+/// consensus funds one of any amount, so the amount is entirely the sender's
+/// choice. The client used to start a claim for it regardless; with nothing in
+/// the wallet to cover the shortfall the claim panicked inside the state
+/// machine executor, and since nothing commits it panicked again on every
+/// restart — a wallet bricked for the price of a few sats.
+///
+/// The victim here holds no balance at all, which is the state a fresh wallet
+/// publishing an address is in.
+#[tokio::test(flavor = "multi_thread")]
+async fn unsolicited_dust_contract_does_not_wedge_the_client() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let victim = fed.new_client().await;
+    let attacker = fed.new_client().await;
+
+    attacker
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(10_000), AmountUnit::BITCOIN)
+        .await;
+
+    // Everything the attacker needs is in what the victim publishes.
+    let lnurl = victim
+        .get_first_module::<LightningClientModule>()?
+        .generate_lnurl(
+            SafeUrl::parse("https://recurring.xyz/").expect("Valid Url"),
+            Some(mock::gateway()),
+        )
+        .await?;
+    let url = parse_lnurl(&lnurl).expect("Generated lnurl decodes");
+    let payload = url.rsplit("pay/").next().expect("Url carries a payload");
+    let request = decode_prefixed::<LnurlRequest>(FEDIMINT_PREFIX, payload)?;
+
+    let dust = incoming_contract_for(request.recipient_pk, request.aggregate_pk, msats(1));
+    fund_incoming_contract(&attacker, &dust).await?;
+
+    // A second, claimable contract behind the dust one. Waiting for its operation
+    // proves the victim processed past the dust rather than dying on it: the
+    // lnurl task handles the stream in order.
+    let claimable = incoming_contract_for(
+        request.recipient_pk,
+        request.aggregate_pk,
+        Amount::from_sats(100),
+    );
+    fund_incoming_contract(&attacker, &claimable).await?;
+
+    let claimable_operation = OperationId::from_encodable(&claimable);
+    retry(
+        "waiting for the claimable contract to be picked up",
+        backoff_util::aggressive_backoff(),
+        || async {
+            victim
+                .operation_log()
+                .get_operation(claimable_operation)
+                .await
+                .context("Claimable contract was not picked up")
+        },
+    )
+    .await?;
+
+    // The dust never became an operation at all.
+    assert!(
+        victim
+            .operation_log()
+            .get_operation(OperationId::from_encodable(&dust))
+            .await
+            .is_none(),
+        "Dust contract should have been ignored"
+    );
+
+    // And the client is still running: it claimed the contract that was worth it.
+    assert_eq!(
+        victim
+            .get_first_module::<LightningClientModule>()?
+            .await_final_receive_operation_state(claimable_operation)
+            .await?,
+        FinalReceiveOperationState::Claimed
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_degraded().await;
@@ -452,441 +1325,243 @@ async fn rejects_wrong_network_invoice() -> anyhow::Result<()> {
     Ok(())
 }
 
-mod db {
-    use std::collections::BTreeMap;
+/// A balance too low to fund the outgoing contract is reported as a typed
+/// shortfall carrying both amounts, so a caller can tell it apart from any
+/// other funding failure without reading a message.
+#[tokio::test(flavor = "multi_thread")]
+async fn send_without_enough_funds_reports_the_shortfall() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
 
-    use anyhow::{Context, ensure};
-    use fedimint_client::module_init::DynClientModuleInit;
-    use fedimint_core::bitcoin::hashes::sha256;
-    use fedimint_core::core::{DynInput, DynOutput};
-    use fedimint_core::db::{
-        Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
-    };
-    use fedimint_core::epoch::ConsensusItem;
-    use fedimint_core::module::CommonModuleInit;
-    use fedimint_core::module::registry::ModuleDecoderRegistry;
-    use fedimint_core::secp256k1::{PublicKey, SECP256K1, SecretKey};
-    use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
-    use fedimint_core::transaction::{Transaction, TransactionSignature};
-    use fedimint_core::util::SafeUrl;
-    use fedimint_core::{Amount, BitcoinHash, OutPoint, PeerId};
-    use fedimint_lnv2_client::db;
-    use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract, PaymentImage};
-    use fedimint_lnv2_common::{
-        LightningCommonInit, LightningInput, LightningInputV0, LightningOutput, LightningOutputV0,
-        OutgoingWitness,
-    };
-    use fedimint_lnv2_server::db::{
-        DbKeyPrefix, IncomingContractIndexKey, IncomingContractIndexPrefix,
-        IncomingContractStreamIndexKey, IncomingContractStreamKey,
-    };
-    use fedimint_logging::TracingSetup;
-    use fedimint_server::consensus::db::{AcceptedItemKey, SignedSessionOutcomeKey};
-    use fedimint_server::core::DynServerModuleInit;
-    use fedimint_testing::db::{
-        TEST_MODULE_INSTANCE_ID, snapshot_db_migrations_client,
-        snapshot_db_migrations_with_decoders, validate_migrations_client,
-        validate_migrations_server,
-    };
-    use futures::StreamExt;
-    use strum::IntoEnumIterator;
-    use tpe::{AggregateDecryptionKey, AggregatePublicKey, G1Affine};
+    // The mock invoice asks for 1000 sats, so this is short of it even
+    // before the gateway's fee.
+    let balance = sats(500);
 
-    use crate::{LightningClientInit, LightningClientModule, LightningInit};
-
-    /// An incoming contract that is only well-formed enough to survive a
-    /// round-trip through the database. `migrate_to_v1` never inspects the
-    /// contract, it only moves it, so the cryptography does not have to check
-    /// out.
-    fn incoming_contract(seed: u8) -> IncomingContract {
-        let key = SecretKey::from_slice(&[seed; 32])
-            .expect("a repeated non-zero byte is a valid secret key")
-            .public_key(SECP256K1);
-
-        IncomingContract::new(
-            AggregatePublicKey(G1Affine::generator()),
-            [seed; 32],
-            [seed; 32],
-            PaymentImage::Hash(sha256::Hash::hash(&[seed; 32])),
-            Amount::from_sats(1000),
-            u64::from(seed),
-            key,
-            key,
-            key,
-        )
-    }
-
-    /// An outgoing contract, seeded purely so the replayed history contains an
-    /// output `migrate_to_v1` has to skip. Like `incoming_contract`, it is
-    /// never inspected, so the cryptography does not have to check out.
-    fn outgoing_contract(seed: u8) -> OutgoingContract {
-        let key = SecretKey::from_slice(&[seed; 32])
-            .expect("a repeated non-zero byte is a valid secret key")
-            .public_key(SECP256K1);
-
-        OutgoingContract {
-            payment_image: PaymentImage::Hash(sha256::Hash::hash(&[seed; 32])),
-            amount: Amount::from_sats(1000),
-            expiration: u64::from(seed),
-            claim_pk: key,
-            refund_pk: key,
-            ephemeral_pk: key,
-        }
-    }
-
-    /// A transaction carrying the given lnv2 inputs and outputs, with `nonce`
-    /// keeping the transaction ids of the seeded transactions apart.
-    fn transaction(
-        nonce: u8,
-        inputs: Vec<LightningInput>,
-        outputs: Vec<LightningOutput>,
-    ) -> Transaction {
-        Transaction {
-            inputs: inputs
-                .into_iter()
-                .map(|input| DynInput::from_typed(TEST_MODULE_INSTANCE_ID, input))
-                .collect(),
-            outputs: outputs
-                .into_iter()
-                .map(|output| DynOutput::from_typed(TEST_MODULE_INSTANCE_ID, output))
-                .collect(),
-            nonce: [nonce; 8],
-            signatures: TransactionSignature::NaiveMultisig(vec![]),
-        }
-    }
-
-    /// The transaction that funds the seeded contracts. Deterministic, so the
-    /// validation side can name its transaction id when checking the outpoints
-    /// the migration wrote.
-    ///
-    /// `migrate_to_v1` assigns the incoming contracts stream indices 0 and 1,
-    /// in output order, and skips the outgoing one: it must neither be
-    /// indexed nor allowed to advance the stream index.
-    fn funding_transaction() -> Transaction {
-        transaction(
-            0,
-            vec![],
-            vec![
-                LightningOutput::V0(LightningOutputV0::Incoming(incoming_contract(1))),
-                LightningOutput::V0(LightningOutputV0::Incoming(incoming_contract(2))),
-                LightningOutput::V0(LightningOutputV0::Outgoing(outgoing_contract(3))),
-            ],
-        )
-    }
-
-    /// Create a database with version 0 data. The database produced is not
-    /// intended to be real data or semantically correct. It is only intended to
-    /// provide coverage when reading the database in future code versions. This
-    /// function should not be updated when database keys or values change -
-    /// instead a new function should be added that creates a new database
-    /// backup that can be tested.
-    ///
-    /// `db` is the global database: `migrate_to_v1` replays the module history
-    /// out of the session log, which lives in the global namespace, while the
-    /// module's own rows live in the namespace isolated to
-    /// `TEST_MODULE_INSTANCE_ID`. Both have to be seeded here.
-    async fn create_server_db_with_v0_data(db: Database) {
-        let mut dbtx = db.begin_transaction().await;
-
-        // Two incoming contracts and one outgoing contract, funded by one transaction.
-        let funding_tx = funding_transaction();
-
-        // Spending the first contract, in a later session item so that the migration
-        // sees the output before the input that consumes it.
-        //
-        // The outgoing input names the outpoint of the contract that survives, which
-        // nothing in the migration cross-checks. That is what makes the input's type
-        // filter observable: without it the input would evict a live contract.
-        let spend_tx = transaction(
-            1,
-            vec![
-                LightningInput::V0(LightningInputV0::Incoming(
-                    OutPoint {
-                        txid: funding_tx.tx_hash(),
-                        out_idx: 0,
-                    },
-                    AggregateDecryptionKey(G1Affine::generator()),
-                )),
-                LightningInput::V0(LightningInputV0::Outgoing(
-                    OutPoint {
-                        txid: funding_tx.tx_hash(),
-                        out_idx: 1,
-                    },
-                    OutgoingWitness::Refund,
-                )),
-            ],
-            vec![],
-        );
-
-        // The funding transaction goes into a completed session and the spend into
-        // the current one. `get_typed_module_history_stream` reads
-        // `SignedSessionOutcomePrefix` and only then chains `AcceptedItemPrefix`, so
-        // splitting the two here exercises the completed-session path — which supplies
-        // nearly all of the history on an existing federation, and which a
-        // current-session-only fixture would leave untested — and pins the ordering
-        // across the boundary between the two.
-        dbtx.insert_new_entry(
-            &SignedSessionOutcomeKey(0),
-            &SignedSessionOutcome {
-                session_outcome: SessionOutcome {
-                    items: vec![AcceptedItem {
-                        item: ConsensusItem::Transaction(funding_tx),
-                        peer: PeerId::from(0),
-                    }],
-                },
-                signatures: BTreeMap::new(),
-            },
-        )
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(balance, AmountUnit::BITCOIN)
         .await;
 
-        dbtx.insert_new_entry(
-            &AcceptedItemKey(0),
-            &AcceptedItem {
-                item: ConsensusItem::Transaction(spend_tx),
-                peer: PeerId::from(0),
-            },
-        )
-        .await;
+    let invoice = mock::payable_invoice();
 
-        dbtx.commit_tx().await;
-
-        let module_db = db.with_prefix_module_id(TEST_MODULE_INSTANCE_ID).0;
-        let mut module_dbtx = module_db.begin_transaction().await;
-
-        // Will be migrated to `DatabaseVersionKey` during `apply_migrations`.
-        module_dbtx
-            .insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
-            .await;
-
-        module_dbtx.commit_tx().await;
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn snapshot_server_db_migrations() -> anyhow::Result<()> {
-        snapshot_db_migrations_with_decoders(
-            "lightningv2-server-v0",
-            |db| {
-                Box::pin(async {
-                    create_server_db_with_v0_data(db).await;
-                })
-            },
-            ModuleDecoderRegistry::from_iter([(
-                TEST_MODULE_INSTANCE_ID,
-                LightningCommonInit::KIND,
-                LightningCommonInit::decoder(),
-            )]),
-        )
+    let error = client
+        .get_first_module::<LightningClientModule>()?
+        .send(invoice.clone(), Some(mock::gateway()), Value::Null)
         .await
-    }
+        .expect_err("a send the balance cannot fund did not fail");
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_server_db_migrations() -> anyhow::Result<()> {
-        let _ = TracingSetup::default().init();
-        let module = DynServerModuleInit::from(LightningInit);
+    assert_matches!(
+        error,
+        SendPaymentError::InsufficientFunds(shortfall) => {
+            assert_eq!(shortfall.total_amount, balance);
+            assert!(shortfall.requested_amount > sats(1_000));
+        }
+    );
 
-        validate_migrations_server(module, "lightningv2-server", |db| async move {
-            let mut dbtx = db.begin_transaction_nc().await;
+    // Nothing was funded, so the invoice can still be paid once the balance
+    // allows it.
+    assert_eq!(
+        client
+            .get_first_module::<LightningClientModule>()?
+            .get_invoice_send_status(&invoice)
+            .await?,
+        InvoiceSendStatus::NotAttempted,
+    );
 
-            // Matching every variant explicitly, with no catch-all, is the point of this
-            // pattern: adding a new prefix breaks the build here until someone decides
-            // how the migration test should cover it.
-            for prefix in DbKeyPrefix::iter() {
-                match prefix {
-                    DbKeyPrefix::IncomingContractStreamIndex => {
-                        // The index counts every incoming contract output the replayed
-                        // history contained, spent ones included, and nothing else: of
-                        // the three seeded outputs the outgoing one must not advance
-                        // it, so it stays at 2 even though only one contract survives.
-                        let stream_index = dbtx
-                            .get_value(&IncomingContractStreamIndexKey)
-                            .await
-                            .context("migrate_to_v1 did not write the stream index")?;
-
-                        ensure!(
-                            stream_index == 2,
-                            "both seeded contract outputs must have advanced the stream \
-                             index, got {stream_index}"
-                        );
-                    }
-                    DbKeyPrefix::IncomingContractStream => {
-                        // The stream is read as a range, the way the module itself reads
-                        // it: `IncomingContractStreamPrefix` encodes its start index, so
-                        // as a key prefix it only ever matches that single index.
-                        let stream = dbtx
-                            .find_by_range(
-                                IncomingContractStreamKey(0)..IncomingContractStreamKey(u64::MAX),
-                            )
-                            .await
-                            .collect::<Vec<_>>()
-                            .await;
-
-                        ensure!(
-                            stream.len() == 1,
-                            "the stream must hold exactly the unspent contract, \
-                             got {} entries",
-                            stream.len()
-                        );
-
-                        // Indices are handed out per output seen and removing a spent
-                        // contract does not renumber the survivors, so the second
-                        // contract keeps the sparse index 1.
-                        ensure!(
-                            stream[0].0 == IncomingContractStreamKey(1),
-                            "the surviving contract must keep its original sparse index, \
-                             got {:?}",
-                            stream[0].0
-                        );
-                        ensure!(
-                            stream[0].1 == incoming_contract(2),
-                            "the surviving contract must be the unspent one"
-                        );
-                    }
-                    DbKeyPrefix::IncomingContractIndex => {
-                        // The reverse lookup `migrate_to_v1` writes alongside every
-                        // stream entry, so it mirrors the stream exactly.
-                        let index = dbtx
-                            .find_by_prefix(&IncomingContractIndexPrefix)
-                            .await
-                            .collect::<Vec<_>>()
-                            .await;
-
-                        ensure!(
-                            index.len() == 1,
-                            "the reverse lookup must hold exactly the unspent contract, \
-                             got {} entries",
-                            index.len()
-                        );
-
-                        let (IncomingContractIndexKey(outpoint), stream_index) = &index[0];
-
-                        // The whole outpoint, not just the output index: the point of
-                        // this assertion is that the reverse index was rebuilt from
-                        // module history, and an index-only check would still pass if
-                        // the transaction id were reconstructed wrongly.
-                        ensure!(
-                            *outpoint
-                                == OutPoint {
-                                    txid: funding_transaction().tx_hash(),
-                                    out_idx: 1,
-                                },
-                            "the reverse lookup must point at the unspent contract's \
-                             outpoint, got {outpoint}"
-                        );
-                        ensure!(
-                            *stream_index == 1,
-                            "the reverse lookup must agree with the stream index, \
-                             got {stream_index}"
-                        );
-                    }
-                    DbKeyPrefix::BlockCountVote
-                    | DbKeyPrefix::UnixTimeVote
-                    | DbKeyPrefix::IncomingContract
-                    | DbKeyPrefix::IncomingContractOutpoint
-                    | DbKeyPrefix::OutgoingContract
-                    | DbKeyPrefix::DecryptionKeyShare
-                    | DbKeyPrefix::Preimage
-                    | DbKeyPrefix::Gateway => {
-                        // Neither read nor written by `migrate_to_v1`, and
-                        // the v0 snapshot holds no rows under them, so there
-                        // is nothing to validate. Seeding them would widen
-                        // decode coverage for the next migration.
-                    }
-                }
-            }
-
-            Ok(())
-        })
-        .await
-    }
-
-    /// The gateway the client-side snapshot remembers. Nothing dials it, so the
-    /// key and the url only have to survive a database round-trip.
-    fn gateway_key() -> PublicKey {
-        SecretKey::from_slice(&[9; 32])
-            .expect("a repeated non-zero byte is a valid secret key")
-            .public_key(SECP256K1)
-    }
-
-    fn gateway_url() -> SafeUrl {
-        SafeUrl::parse("https://gateway.example/").expect("a hardcoded https url parses")
-    }
-
-    /// The client-side counterpart of `create_server_db_with_v0_data`, seeding
-    /// the module's isolated namespace. The lnv2 client has no migrations yet,
-    /// so what the paired test checks is that these rows still decode.
-    async fn create_client_db_with_v0_data(database: Database) {
-        let mut dbtx = database.begin_transaction().await;
-
-        // Will be migrated to `DatabaseVersionKey` during `apply_migrations`.
-        dbtx.insert_new_entry(&DatabaseVersionKeyV0, &DatabaseVersion(0))
-            .await;
-
-        dbtx.insert_new_entry(&db::GatewayKey(gateway_key()), &gateway_url())
-            .await;
-
-        dbtx.insert_new_entry(&db::IncomingContractStreamIndexKey, &7)
-            .await;
-
-        dbtx.commit_tx().await;
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
-        snapshot_db_migrations_client::<_, _, LightningCommonInit>(
-            "lightningv2-client-v0",
-            |database| Box::pin(async { create_client_db_with_v0_data(database).await }),
-            || (Vec::new(), Vec::new()),
-        )
-        .await
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_client_db_migrations() -> anyhow::Result<()> {
-        let _ = TracingSetup::default().init();
-        let module = DynClientModuleInit::from(LightningClientInit::default());
-
-        validate_migrations_client::<_, _, LightningClientModule>(
-            module,
-            "lightningv2-client",
-            |database, _, _| async move {
-                let mut dbtx = database.begin_transaction_nc().await;
-
-                for prefix in db::DbKeyPrefix::iter() {
-                    match prefix {
-                        db::DbKeyPrefix::Gateway => {
-                            let url = dbtx
-                                .get_value(&db::GatewayKey(gateway_key()))
-                                .await
-                                .context("the seeded gateway must still decode")?;
-
-                            ensure!(
-                                url == gateway_url(),
-                                "the gateway url must round-trip unchanged, got {url}"
-                            );
-                        }
-                        db::DbKeyPrefix::IncomingContractStreamIndex => {
-                            let index = dbtx
-                                .get_value(&db::IncomingContractStreamIndexKey)
-                                .await
-                                .context("the seeded stream index must still decode")?;
-
-                            ensure!(
-                                index == 7,
-                                "the stream index must round-trip unchanged, got {index}"
-                            );
-                        }
-                        db::DbKeyPrefix::ExternalReservedStart
-                        | db::DbKeyPrefix::CoreInternalReservedStart
-                        | db::DbKeyPrefix::CoreInternalReservedEnd => {
-                            // Range markers, not prefixes the client writes
-                            // under, so there is no row to seed or read back.
-                        }
-                    }
-                }
-
-                Ok(())
-            },
-        )
-        .await
-    }
+    Ok(())
 }
+
+/// Following an operation that was never started reports the shared
+/// operation-lookup error, so a caller can tell "I have never seen that id"
+/// apart from a genuine lightning failure without reading a message.
+#[tokio::test(flavor = "multi_thread")]
+async fn following_an_unknown_operation_reports_not_found() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+
+    assert_matches!(
+        lightning
+            .await_final_send_operation_state(OperationId::new_random())
+            .await,
+        Err(OperationLookupError::NotFound(_))
+    );
+
+    assert_matches!(
+        lightning
+            .subscribe_receive_operation_state_updates(OperationId::new_random())
+            .await,
+        Err(OperationLookupError::NotFound(_))
+    );
+
+    Ok(())
+}
+
+/// Working out what the wallet could spend over lightning fails for two very
+/// different reasons, and the caller needs to tell them apart: there is no
+/// gateway to quote a fee schedule against, or there is one and the balance
+/// still cannot cover the smallest payable amount plus fees.
+#[tokio::test(flavor = "multi_thread")]
+async fn spendable_amount_names_the_reason_it_has_no_answer() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+
+    // No gateway is registered with this federation, so there is nothing to
+    // select and no fee schedule to compute against.
+    assert_matches!(
+        lightning.spendable_amount(sats(1000), None).await,
+        Err(SpendableAmountError::SelectGateway(
+            SelectGatewayError::NoGatewaysAvailable
+        ))
+    );
+
+    // Naming the mock gateway gets past selection, and an empty wallet then
+    // cannot cover even one millisatoshi plus its fees.
+    assert_matches!(
+        lightning
+            .spendable_amount(Amount::ZERO, Some(mock::gateway()))
+            .await,
+        Err(SpendableAmountError::BalanceTooLow {
+            balance: Amount::ZERO
+        })
+    );
+
+    Ok(())
+}
+
+/// The LNv2 module is not a primary module and keeps no backup, so it leaves
+/// those operations to the module traits' default bodies, which refuse them
+/// with a typed error instead of panicking.
+#[tokio::test(flavor = "multi_thread")]
+async fn default_module_operations_are_unsupported() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+    let mut dbtx = lightning.db.begin_transaction_nc().await;
+
+    assert_matches!(
+        ClientModule::create_final_inputs_and_outputs(
+            &*lightning,
+            &mut dbtx,
+            OperationId::new_random(),
+            AmountUnit::BITCOIN,
+            Amount::ZERO,
+            sats(1),
+        )
+        .await,
+        Err(ClientModuleError::Unsupported {
+            kind,
+            operation: "create_final_inputs_and_outputs",
+        }) if kind == KIND
+    );
+    assert_matches!(
+        ClientModule::await_primary_module_output(
+            &*lightning,
+            OperationId::new_random(),
+            OutPoint {
+                txid: TransactionId::all_zeros(),
+                out_idx: 0,
+            },
+        )
+        .await,
+        Err(ClientModuleError::Unsupported {
+            kind,
+            operation: "await_primary_module_output",
+        }) if kind == KIND
+    );
+    assert_matches!(
+        ClientModule::backup(&*lightning).await,
+        Err(ClientModuleError::Unsupported {
+            kind,
+            operation: "backup",
+        }) if kind == KIND
+    );
+    assert_matches!(
+        ClientModule::leave(&*lightning, &mut dbtx).await,
+        Err(ClientModuleError::Unsupported {
+            kind,
+            operation: "leave",
+        }) if kind == KIND
+    );
+
+    Ok(())
+}
+
+/// A module without its own JSON command handlers refuses commands and RPC
+/// requests with a typed error: the LNv2 module serves no RPC requests, and the
+/// dummy module has no commands.
+#[tokio::test(flavor = "multi_thread")]
+async fn json_handlers_without_an_implementation_are_unsupported() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+    let dummy = client.get_first_module::<DummyClientModule>()?;
+
+    assert_matches!(
+        ClientModule::handle_rpc(&*lightning, "no_such_method".to_owned(), Value::Null)
+            .await
+            .next()
+            .await,
+        Some(Err(ClientModuleError::Unsupported {
+            kind,
+            operation: "handle_rpc",
+        })) if kind == KIND
+    );
+    assert_matches!(
+        ClientModule::handle_cli_command(&*dummy, &[]).await,
+        Err(ClientModuleError::Unsupported {
+            kind,
+            operation: "handle_cli_command",
+        }) if kind == DummyClientModule::kind()
+    );
+
+    Ok(())
+}
+
+/// The client's own JSON request handler names a method it does not have.
+#[tokio::test(flavor = "multi_thread")]
+async fn global_rpc_rejects_an_unknown_method() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    assert_matches!(
+        client
+            .handle_global_rpc("no_such_method".to_owned(), Value::Null)
+            .next()
+            .await,
+        Some(Err(GlobalRpcError::UnknownMethod { method })) if method == "no_such_method"
+    );
+
+    Ok(())
+}
+
+/// Looking a primary module up by type finds one only among the unit's
+/// primary modules, and names the kind it looked for when there is none.
+#[tokio::test(flavor = "multi_thread")]
+async fn primary_module_for_unit_is_looked_up_by_type() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+
+    assert!(
+        client
+            .get_primary_module_for_unit::<DummyClientModule>(AmountUnit::BITCOIN)
+            .is_ok()
+    );
+    assert_matches!(
+        client.get_primary_module_for_unit::<LightningClientModule>(AmountUnit::BITCOIN),
+        Err(ModuleLookupError::NoPrimaryModuleOfKind { kind, unit })
+            if kind == KIND && unit == AmountUnit::BITCOIN
+    );
+
+    Ok(())
+}
+
+mod db;

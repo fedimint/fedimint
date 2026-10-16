@@ -5,15 +5,15 @@ use std::fmt::{Display, Formatter};
 use std::io::Read;
 use std::str::FromStr;
 
-use anyhow::ensure;
 use bech32::{Bech32m, Hrp};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
-use crate::base32::FEDIMINT_PREFIX;
+use crate::base32::{FEDIMINT_PREFIX, PrefixedDecodeError};
 use crate::config::FederationId;
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
-use crate::util::SafeUrl;
+use crate::util::{FmtCompact as _, SafeUrl};
 use crate::{NumPeersExt, PeerId};
 
 /// Information required for client to join Federation
@@ -26,12 +26,6 @@ use crate::{NumPeersExt, PeerId};
 ///   * At least one Federation ID is present
 #[derive(Clone, Debug, Eq, PartialEq, Encodable, Hash, Ord, PartialOrd)]
 pub struct InviteCode(Vec<InviteCodePart>);
-
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(InviteCode, String, {
-    lower: |i| i.to_string(),
-    try_lift: |s| s.parse().map_err(|e: anyhow::Error| e),
-});
 
 impl Decodable for InviteCode {
     fn consensus_decode_partial<R: Read>(
@@ -218,20 +212,61 @@ enum InviteCodePart {
 const BECH32_HRP: Hrp = Hrp::parse_unchecked("fed1");
 
 impl FromStr for InviteCode {
-    type Err = anyhow::Error;
+    type Err = InviteCodeParseError;
 
     fn from_str(encoded: &str) -> Result<Self, Self::Err> {
-        if let Ok(invite_code) = crate::base32::decode_prefixed(FEDIMINT_PREFIX, encoded) {
-            return Ok(invite_code);
+        // The prefix is ASCII, so a case-insensitive match here agrees with the
+        // lowercasing `decode_prefixed` does before comparing the prefix.
+        if encoded
+            .get(..FEDIMINT_PREFIX.len())
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(FEDIMINT_PREFIX))
+        {
+            return Ok(crate::base32::decode_prefixed(FEDIMINT_PREFIX, encoded)?);
         }
 
         let (hrp, data) = bech32::decode(encoded)?;
 
-        ensure!(hrp == BECH32_HRP, "Invalid HRP in bech32 encoding");
+        if hrp != BECH32_HRP {
+            return Err(InviteCodeParseError::InvalidHrp { hrp });
+        }
 
         let invite = Self::consensus_decode_whole(&data, &ModuleRegistry::default())?;
 
         Ok(invite)
+    }
+}
+
+/// Failure to parse an [`InviteCode`] from its string form.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum InviteCodeParseError {
+    /// The string is not a valid bech32m encoding.
+    #[error("Invalid bech32 encoding: {0}")]
+    Bech32(#[from] bech32::DecodeError),
+    /// The bech32 human-readable part is not the invite code HRP.
+    #[error(
+        "Invalid bech32 human-readable part '{hrp}', expected '{}'",
+        BECH32_HRP
+    )]
+    InvalidHrp { hrp: bech32::Hrp },
+    /// The payload is not a valid consensus encoding of an invite code.
+    #[error("Invalid invite code payload: {}", .0.fmt_compact())]
+    Decode(DecodeError),
+    /// The string carries the [`FEDIMINT_PREFIX`] but its base 32 payload does
+    /// not decode into an invite code.
+    #[error("Invalid prefixed base32 invite code: {}", .0.fmt_compact())]
+    Base32(PrefixedDecodeError),
+}
+
+impl From<DecodeError> for InviteCodeParseError {
+    fn from(source: DecodeError) -> Self {
+        Self::Decode(source)
+    }
+}
+
+impl From<PrefixedDecodeError> for InviteCodeParseError {
+    fn from(source: PrefixedDecodeError) -> Self {
+        Self::Base32(source)
     }
 }
 
@@ -264,41 +299,4 @@ impl<'de> Deserialize<'de> for InviteCode {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::str::FromStr;
-
-    use fedimint_core::PeerId;
-    use fedimint_core::base32::FEDIMINT_PREFIX;
-
-    use crate::config::FederationId;
-    use crate::invite_code::InviteCode;
-
-    #[test]
-    fn test_invite_code_to_from_string() {
-        let invite_code_str = "fed11qgqpu8rhwden5te0vejkg6tdd9h8gepwd4cxcumxv4jzuen0duhsqqfqh6nl7sgk72caxfx8khtfnn8y436q3nhyrkev3qp8ugdhdllnh86qmp42pm";
-        let invite_code = InviteCode::from_str(invite_code_str).expect("valid invite code");
-
-        InviteCode::from_str(&crate::base32::encode_prefixed(
-            FEDIMINT_PREFIX,
-            &invite_code,
-        ))
-        .expect("Failed to parse base 32 invite code");
-
-        assert_eq!(invite_code.to_string(), invite_code_str);
-        assert_eq!(
-            invite_code.0,
-            [
-                crate::invite_code::InviteCodePart::Api {
-                    url: "wss://fedimintd.mplsfed.foo/".parse().expect("valid url"),
-                    peer: PeerId::new(0),
-                },
-                crate::invite_code::InviteCodePart::FederationId(FederationId(
-                    bitcoin::hashes::sha256::Hash::from_str(
-                        "bea7ff4116f2b1d324c7b5d699cce4ac7408cee41db2c88027e21b76fff3b9f4"
-                    )
-                    .expect("valid hash")
-                ))
-            ]
-        );
-    }
-}
+mod tests;

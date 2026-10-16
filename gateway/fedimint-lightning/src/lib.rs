@@ -15,7 +15,7 @@ use fedimint_core::envs::{FM_IN_DEVIMINT_ENV, is_env_var_set};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::time::now;
-use fedimint_core::util::{FmtCompactResult as _, backoff_util, retry};
+use fedimint_core::util::{FmtCompact as _, FmtCompactResult as _, backoff_util, retry};
 use fedimint_gateway_common::{
     ChannelInfo, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse, ConnectPeerRequest,
     GetInvoiceRequest, GetInvoiceResponse, LightningInfo, ListTransactionsResponse,
@@ -135,6 +135,11 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     ///   as if it were the first call.
     /// * If the payment has already been attempted and failed, return an error.
     /// * If the payment has already succeeded, return a success response.
+    ///
+    /// Consult that record before enforcing `max_delay` or `max_fee`: a state
+    /// machine resuming a payment it dispatched before a restart may pass a
+    /// placeholder `max_delay` of `0`, which must only ever fail a dispatch
+    /// that would otherwise start fresh.
     async fn pay(
         &self,
         invoice: Bolt11Invoice,
@@ -175,6 +180,21 @@ pub trait ILnRpcClient: Debug + Send + Sync {
         false
     }
 
+    /// Returns whether the node has any record of an outbound payment for
+    /// `payment_hash`, whatever its state: in-flight, succeeded, or failed.
+    ///
+    /// State machines call this when they resume after a restart to
+    /// distinguish a payment dispatched before the crash from one that never
+    /// left the gateway: pre-dispatch gates such as invoice expiry must not
+    /// cancel a payment the node may still settle. Implementations must
+    /// answer from the node's own payment store without waiting for the
+    /// payment to reach a terminal state, and must not count inbound records
+    /// for the same hash.
+    async fn outbound_payment_exists(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<bool, LightningRpcError>;
+
     /// Consumes the current client and returns a stream of intercepted HTLCs
     /// and a new client. `complete_htlc` must be called for all successfully
     /// intercepted HTLCs sent to the returned stream.
@@ -193,6 +213,12 @@ pub trait ILnRpcClient: Debug + Send + Sync {
     /// Completes an HTLC that was intercepted by the gateway. Must be called
     /// for all successfully intercepted HTLCs sent to the stream returned
     /// by `route_htlcs`.
+    ///
+    /// The gateway retries [`LightningRpcError::FailedToCompleteHtlc`] until
+    /// the call succeeds and records only
+    /// [`LightningRpcError::HtlcCompletionRejected`] as a terminal outcome, so
+    /// implementations must return the latter for a failure no retry can
+    /// change and the former for anything transient.
     async fn complete_htlc(&self, htlc: InterceptPaymentResponse) -> Result<(), LightningRpcError>;
 
     /// Requests the lightning node to create an invoice. The presence of a
@@ -336,13 +362,13 @@ impl dyn ILnRpcClient {
                     Ok(())
                 } else {
                     warn!(target: LOG_LIGHTNING, block_height = %block_height, "Lightning node is not synced yet");
-                    Err(anyhow::anyhow!("Not synced yet"))
+                    Err(ChainSyncAttemptError::NotSynced)
                 }
             },
         )
         .await
         .map_err(|e| LightningRpcError::FailedToSyncToChain {
-            failure_reason: format!("Failed to sync to chain: {e:?}"),
+            failure_reason: format!("Failed to sync to chain: {}", e.fmt_compact()),
         })?;
 
         info!(target: LOG_LIGHTNING, "Gateway successfully synced with the chain");
@@ -374,11 +400,48 @@ pub const NO_INCOMING_CIRCUIT: (u64, u64) = (0, 0);
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct InterceptPaymentRequest {
     pub payment_hash: sha256::Hash,
+    /// The amount the HTLC claims to deliver. On the LND forward-intercept path
+    /// this is the sender-written onion `amt_to_forward`, so it must never be
+    /// trusted for funding decisions. On the HOLD-invoice and LDK paths it is
+    /// the real received amount.
     pub amount_msat: u64,
+    /// The amount actually locked in the incoming HTLC -- the real value the
+    /// gateway receives on settlement. Funding and fee checks must use this.
+    pub incoming_amount_msat: u64,
+    /// Block height at which the HTLC can no longer be claimed; `0` if unknown.
+    /// On the LND forward-intercept path this is the HTLC's raw incoming
+    /// expiry instead, which the sender chooses and which LND fails back
+    /// `DefaultFinalCltvRejectDelta` blocks before (19 since LND v0.21, 13
+    /// before).
     pub expiry: u32,
     pub incoming_chan_id: u64,
     pub short_channel_id: Option<u64>,
     pub htlc_id: u64,
+}
+
+impl InterceptPaymentRequest {
+    /// The incoming circuit of an intercepted forward, or `None` when the
+    /// payment is held by a HOLD invoice or LDK (see [`NO_INCOMING_CIRCUIT`]).
+    pub fn incoming_circuit(&self) -> Option<(u64, u64)> {
+        let circuit = (self.incoming_chan_id, self.htlc_id);
+        (circuit != NO_INCOMING_CIRCUIT).then_some(circuit)
+    }
+
+    /// Blocks left before the gateway can no longer settle this payment, for
+    /// deciding whether a fresh LNv2 incoming contract may be funded from it.
+    ///
+    /// Honest LNv2 payments arrive through an LND HOLD invoice or an LDK
+    /// claimable payment, never as an intercepted forward. A forward's expiry
+    /// is chosen by the sender and does not account for LND failing it back
+    /// early, so it counts as having no time left. Without the current height
+    /// the deadline cannot be checked, which counts the same.
+    pub fn lnv2_blocks_to_claim_deadline(&self, current_block_height: Option<u32>) -> u32 {
+        if self.incoming_circuit().is_some() {
+            return 0;
+        }
+
+        current_block_height.map_or(0, |height| self.expiry.saturating_sub(height))
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -589,6 +652,17 @@ impl ILnRpcClient for LnRpcTracked {
         self.inner.supports_private_payments()
     }
 
+    async fn outbound_payment_exists(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<bool, LightningRpcError> {
+        tracked_call!(
+            self,
+            "outbound_payment_exists",
+            self.inner.outbound_payment_exists(payment_hash).await
+        )
+    }
+
     async fn route_htlcs<'a>(
         self: Box<Self>,
         _task_group: &TaskGroup,
@@ -734,33 +808,17 @@ impl ILnRpcClient for LnRpcTracked {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use bitcoin::hashes::{Hash as _, sha256};
+/// Why one check of `wait_for_chain_sync` did not find the node synced.
+#[derive(Debug, Error)]
+enum ChainSyncAttemptError {
+    /// The node's info could not be read.
+    #[error(transparent)]
+    Info(#[from] LightningRpcError),
 
-    use super::{InterceptPaymentResponse, NO_INCOMING_CIRCUIT, PaymentAction, Preimage};
-
-    fn response(incoming_chan_id: u64, htlc_id: u64) -> InterceptPaymentResponse {
-        InterceptPaymentResponse {
-            incoming_chan_id,
-            htlc_id,
-            payment_hash: sha256::Hash::all_zeros(),
-            action: PaymentAction::Settle(Preimage([0; 32])),
-        }
-    }
-
-    #[test]
-    fn payment_without_incoming_circuit_is_recognized() {
-        let (chan_id, htlc_id) = NO_INCOMING_CIRCUIT;
-        assert_eq!(response(chan_id, htlc_id).incoming_circuit(), None);
-    }
-
-    #[test]
-    fn intercepted_forward_keeps_its_circuit() {
-        // An intercepted forward must never be mistaken for a payment held by
-        // a HOLD invoice, including when it is the first HTLC on its channel
-        // and so has htlc id 0.
-        assert_eq!(response(101, 0).incoming_circuit(), Some((101, 0)));
-        assert_eq!(response(101, 7).incoming_circuit(), Some((101, 7)));
-    }
+    /// The node is not synced to the chain yet.
+    #[error("Not synced yet")]
+    NotSynced,
 }
+
+#[cfg(test)]
+mod tests;

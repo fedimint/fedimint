@@ -6,7 +6,6 @@ use std::mem;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::anyhow;
 use fedimint_client_module::sm::executor::{
     ActiveStateKey, ContextGen, IExecutor, InactiveStateKey,
 };
@@ -23,7 +22,7 @@ use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::fmt_utils::AbbreviateJson;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::{BoxFuture, FmtCompactAnyhow as _};
+use fedimint_core::util::BoxFuture;
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_eventlog::{DBTransactionEventLogExt as _, Event, EventKind, EventPersistence};
 use fedimint_logging::LOG_CLIENT_REACTOR;
@@ -31,6 +30,7 @@ use futures::future::{self, select_all};
 use futures::stream::{FuturesUnordered, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::select;
+use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::{mpsc, oneshot, watch};
 use tracing::{Instrument, debug, error, info, trace, warn};
 
@@ -186,7 +186,10 @@ impl Executor {
     ///
     /// **Attention**: do not use before background task is started!
     // TODO: remove warning once finality is an inherent state attribute
-    pub async fn add_state_machines(&self, states: Vec<DynState>) -> anyhow::Result<()> {
+    pub async fn add_state_machines(
+        &self,
+        states: Vec<DynState>,
+    ) -> Result<(), AddStateMachinesError> {
         self.inner
             .db
             .autocommit(
@@ -195,11 +198,10 @@ impl Executor {
             )
             .await
             .map_err(|e| match e {
-                AutocommitError::CommitFailed {
-                    last_error,
-                    attempts,
-                } => anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
-                AutocommitError::ClosureError { error, .. } => anyhow!("{error:?}"),
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    AddStateMachinesError::Database(last_error)
+                }
+                AutocommitError::ClosureError { error, .. } => error,
             })?;
 
         // TODO: notify subscribers to state changes?
@@ -226,7 +228,9 @@ impl Executor {
                 .valid_module_ids
                 .contains(&state.module_instance_id())
             {
-                return Err(AddStateMachinesError::Other(anyhow!("Unknown module")));
+                return Err(AddStateMachinesError::UnknownModule {
+                    module_instance_id: state.module_instance_id(),
+                });
             }
 
             let is_active_state = dbtx
@@ -260,9 +264,7 @@ impl Executor {
                 {
                     Some(context) => {
                         if state.is_terminal(module_context, &context) {
-                            return Err(AddStateMachinesError::Other(anyhow!(
-                                "State is already terminal, adding it to the executor doesn't make sense."
-                            )));
+                            return Err(AddStateMachinesError::StateAlreadyTerminal);
                         }
                     }
                     _ => {
@@ -350,6 +352,51 @@ impl Executor {
             .db
             .wait_key_exists(&ActiveStateKeyDb(ActiveStateKey::from_state(state)))
             .await
+    }
+
+    /// Whether any state machine of the operation is still running.
+    pub async fn has_active_states(&self, operation_id: OperationId) -> bool {
+        self.inner
+            .db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&ActiveOperationStateKeyPrefix { operation_id })
+            .await
+            .next()
+            .await
+            .is_some()
+    }
+
+    /// Waits until no state machine of the operation is running any more.
+    ///
+    /// Returns at once if none is, which includes an operation that never
+    /// started one. State machines added to the operation after this returns
+    /// make it active again.
+    ///
+    /// State machines only make progress while the executor runs, so this
+    /// never returns for an operation that still has some once the executor
+    /// has stopped.
+    pub async fn await_no_active_states(&self, operation_id: OperationId) {
+        // Subscribe before the first read: a state machine finishing between a
+        // read and the wait that follows it then still leaves a notification
+        // behind to wake this up.
+        let mut transitions = self.inner.notifier.subscribe();
+
+        while self.has_active_states(operation_id).await {
+            loop {
+                match transitions.recv().await {
+                    Ok(state) if state.operation_id() == operation_id => break,
+                    Ok(_) => {}
+                    // The skipped notifications may have been about this
+                    // operation, so look again.
+                    Err(RecvError::Lagged(_)) => break,
+                    // The executor holds a sender for as long as it lives, so
+                    // this cannot happen while `self` is borrowed. If it did,
+                    // nothing could change the answer any more.
+                    Err(RecvError::Closed) => future::pending::<()>().await,
+                }
+            }
+        }
     }
 
     /// Only meant for debug tooling
@@ -476,16 +523,8 @@ impl ExecutorInner {
         sm_update_rx: tokio::sync::mpsc::UnboundedReceiver<DynState>,
     ) {
         debug!(target: LOG_CLIENT_REACTOR, "Starting state machine executor task");
-        if let Err(err) = self
-            .run_state_machines_executor_inner(global_context_gen, sm_update_rx)
-            .await
-        {
-            warn!(
-                target: LOG_CLIENT_REACTOR,
-                err = %err.fmt_compact_anyhow(),
-                "An unexpected error occurred during a state transition"
-            );
-        }
+        self.run_state_machines_executor_inner(global_context_gen, sm_update_rx)
+            .await;
     }
 
     async fn get_transition_for(
@@ -531,7 +570,7 @@ impl ExecutorInner {
                 module_id = module_instance, "A terminal state where only active states are expected. Please report this bug upstream."
             );
             self.db
-                .autocommit::<_, _, anyhow::Error>(
+                .autocommit::<_, _, Infallible>(
                     |dbtx, _| {
                         Box::pin(async {
                             let k = InactiveStateKey::from_state(state.clone());
@@ -548,6 +587,10 @@ impl ExecutorInner {
                 )
                 .await
                 .expect("Autocommit here can't fail");
+
+            // The operation just lost an active state, which those waiting for
+            // it to have none need to hear about.
+            self.notifier.notify(state.clone());
         }
 
         transitions
@@ -557,7 +600,7 @@ impl ExecutorInner {
         &self,
         global_context_gen: ContextGen,
         mut sm_update_rx: tokio::sync::mpsc::UnboundedReceiver<DynState>,
-    ) -> anyhow::Result<()> {
+    ) {
         /// All futures in the executor resolve to this type, so the handling
         /// code can tell them apart.
         enum ExecutorLoopEvent {
@@ -846,7 +889,6 @@ impl ExecutorInner {
         }
 
         info!(target: LOG_CLIENT_REACTOR, "Terminated.");
-        Ok(())
     }
 
     async fn get_active_states(&self) -> Vec<(DynState, ActiveStateMeta)> {
@@ -913,7 +955,13 @@ impl ExecutorInner {
 impl ExecutorInner {
     /// See [`Executor::stop_executor`].
     fn stop_executor(&self) -> Option<()> {
-        let mut state = self.state.write().expect("Locking can't fail");
+        // This runs from destructors, which must never panic, so recover from a lock
+        // poisoned by a panic elsewhere. `ExecutorState` is always left in a coherent
+        // variant, so the poison can be ignored safely.
+        let mut state = self
+            .state
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         state.stop()
     }
@@ -1085,9 +1133,7 @@ impl Decodable for InactiveStateKeyBytes {
         let operation_id = OperationId::consensus_decode_partial(reader, modules)?;
         let module_instance_id = ModuleInstanceId::consensus_decode_partial(reader, modules)?;
         let mut bytes = Vec::new();
-        reader
-            .read_to_end(&mut bytes)
-            .map_err(DecodeError::from_err)?;
+        reader.read_to_end(&mut bytes)?;
 
         let mut instance_bytes = ModuleInstanceId::consensus_encode_to_vec(&module_instance_id);
         instance_bytes.append(&mut bytes);
@@ -1179,9 +1225,7 @@ impl Decodable for ActiveStateKeyBytes {
         let operation_id = OperationId::consensus_decode_partial(reader, modules)?;
         let module_instance_id = ModuleInstanceId::consensus_decode_partial(reader, modules)?;
         let mut bytes = Vec::new();
-        reader
-            .read_to_end(&mut bytes)
-            .map_err(DecodeError::from_err)?;
+        reader.read_to_end(&mut bytes)?;
 
         let mut instance_bytes = ModuleInstanceId::consensus_encode_to_vec(&module_instance_id);
         instance_bytes.append(&mut bytes);

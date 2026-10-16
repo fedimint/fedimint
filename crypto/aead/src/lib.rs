@@ -1,10 +1,10 @@
 pub mod envs;
+mod error;
 
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 
-use anyhow::{Result, bail, format_err};
 use argon2::password_hash::SaltString;
 use argon2::{Argon2, Params};
 use rand::Rng;
@@ -13,6 +13,9 @@ use ring::aead::Nonce;
 pub use ring::aead::{Aad, LessSafeKey, NONCE_LEN, UnboundKey};
 
 use crate::envs::FM_TEST_FAST_WEAK_CRYPTO_ENV;
+pub use crate::error::{
+    DecryptError, EncryptError, EncryptedReadError, EncryptedWriteError, EncryptionKeyError,
+};
 
 /// Get a random nonce.
 pub fn get_random_nonce() -> ring::aead::Nonce {
@@ -22,13 +25,13 @@ pub fn get_random_nonce() -> ring::aead::Nonce {
 /// Encrypt `plaintext` using `key`.
 ///
 /// Prefixes the ciphertext with a nonce.
-pub fn encrypt(mut plaintext: Vec<u8>, key: &LessSafeKey) -> Result<Vec<u8>> {
+pub fn encrypt(mut plaintext: Vec<u8>, key: &LessSafeKey) -> Result<Vec<u8>, EncryptError> {
     let nonce = get_random_nonce();
     // prefix ciphertext with nonce
     let mut ciphertext: Vec<u8> = nonce.as_ref().to_vec();
 
     key.seal_in_place_append_tag(nonce, Aad::empty(), &mut plaintext)
-        .map_err(|_| anyhow::format_err!("Encryption failed due to unspecified aead error"))?;
+        .map_err(|_| EncryptError)?;
 
     ciphertext.append(&mut plaintext);
 
@@ -38,9 +41,11 @@ pub fn encrypt(mut plaintext: Vec<u8>, key: &LessSafeKey) -> Result<Vec<u8>> {
 /// Decrypts a `ciphertext` using `key`.
 ///
 /// Expect nonce in the prefix, like [`encrypt`] produces.
-pub fn decrypt<'c>(ciphertext: &'c mut [u8], key: &LessSafeKey) -> Result<&'c [u8]> {
+pub fn decrypt<'c>(ciphertext: &'c mut [u8], key: &LessSafeKey) -> Result<&'c [u8], DecryptError> {
     if ciphertext.len() < NONCE_LEN {
-        bail!("Ciphertext too short: {}", ciphertext.len());
+        return Err(DecryptError::CiphertextTooShort {
+            len: ciphertext.len(),
+        });
     }
 
     let (nonce_bytes, encrypted_bytes) = ciphertext.split_at_mut(NONCE_LEN);
@@ -50,14 +55,18 @@ pub fn decrypt<'c>(ciphertext: &'c mut [u8], key: &LessSafeKey) -> Result<&'c [u
         Aad::empty(),
         encrypted_bytes,
     )
-    .map_err(|_| format_err!("Decryption failed due to unspecified aead error"))?;
+    .map_err(|_| DecryptError::Open)?;
 
     Ok(&encrypted_bytes[..encrypted_bytes.len() - key.algorithm().tag_len()])
 }
 
 /// Write `data` encrypted to a `file` with a random `nonce` that will be
 /// encoded in the file
-pub fn encrypted_write(data: Vec<u8>, key: &LessSafeKey, file: PathBuf) -> Result<()> {
+pub fn encrypted_write(
+    data: Vec<u8>,
+    key: &LessSafeKey,
+    file: PathBuf,
+) -> Result<(), EncryptedWriteError> {
     let mut file = fs::File::options()
         .write(true)
         .create_new(true)
@@ -70,7 +79,7 @@ pub fn encrypted_write(data: Vec<u8>, key: &LessSafeKey, file: PathBuf) -> Resul
 }
 
 /// Reads encrypted data from a file
-pub fn encrypted_read(key: &LessSafeKey, file: PathBuf) -> Result<Vec<u8>> {
+pub fn encrypted_read(key: &LessSafeKey, file: PathBuf) -> Result<Vec<u8>, EncryptedReadError> {
     let hex = fs::read_to_string(file)?;
     let mut bytes = hex::decode(hex)?;
 
@@ -95,14 +104,14 @@ pub fn encrypted_read(key: &LessSafeKey, file: PathBuf) -> Result<Vec<u8>> {
 ///
 /// * `password` - Strong user-created password
 /// * `salt` - Nonce >8 bytes to discourage rainbow attacks
-pub fn get_encryption_key(password: &str, salt: &str) -> Result<LessSafeKey> {
+pub fn get_encryption_key(password: &str, salt: &str) -> Result<LessSafeKey, EncryptionKeyError> {
     let mut key = [0u8; ring::digest::SHA256_OUTPUT_LEN];
 
     argon2()
         .hash_password_into(password.as_bytes(), salt.as_bytes(), &mut key)
-        .map_err(|e| format_err!("could not hash password").context(e))?;
+        .map_err(EncryptionKeyError)?;
     let key = UnboundKey::new(&ring::aead::CHACHA20_POLY1305, &key)
-        .map_err(|_| anyhow::Error::msg("Unable to create key"))?;
+        .expect("A SHA-256 output is as long as a ChaCha20-Poly1305 key");
     Ok(LessSafeKey::new(key))
 }
 

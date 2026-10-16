@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use fedimint_core::TransactionId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::transaction::{Transaction, TransactionSubmissionOutcome};
 use fedimint_core::util::backoff_util::custom_backoff;
@@ -284,7 +284,7 @@ impl TxSubmissionStates {
                             .await;
                     }
 
-                    Err(anyhow::anyhow!("Transaction is still valid"))
+                    Err(SubmitAttemptError::StillValid)
                 }
             },
         )
@@ -301,6 +301,20 @@ impl TxSubmissionStates {
         context.api().await_transaction(txid).await;
         debug!(target: LOG_CLIENT_NET_API, %txid, "Transaction accepted in consensus");
     }
+}
+
+/// Why one attempt to submit a transaction did not settle it, so that it is
+/// submitted again.
+#[derive(Debug, thiserror::Error)]
+enum SubmitAttemptError {
+    /// A peer's answer to the submission could not be decoded.
+    #[error(transparent)]
+    Decode(#[from] DecodeError),
+
+    /// The peer accepted the submission, so the transaction is still valid;
+    /// it is submitted again until it is rejected or accepted in consensus.
+    #[error("Transaction is still valid")]
+    StillValid,
 }
 
 impl IntoDynInstance for TxSubmissionStatesSM {

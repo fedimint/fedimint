@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, HashMap};
 use std::convert::identity;
+use std::future::ready;
 use std::time::Duration;
 
-use anyhow::anyhow;
 use bitcoin::hashes::sha256::{self, Hash as Sha256Hash};
 use fedimint_api_client::api::{
     FederationApiExt, FederationResult, IModuleFederationApi, ServerError,
@@ -212,7 +212,7 @@ where
         let gateway_announcements = self
             .request_with_strategy(
                 FilterMapThreshold::new(
-                    |_, gateways| Ok(gateways),
+                    |_, gateways| ready(Ok(gateways)),
                     self.all_peers().to_num_peers(),
                 ),
                 LIST_GATEWAYS_ENDPOINT.to_string(),
@@ -256,7 +256,7 @@ where
                 ),
             )
             .await
-            .map_err(|e| ServerError::Transport(anyhow!("Request timed out: {e}")))
+            .map_err(|e| ServerError::Transport(format!("Request timed out: {e}").into()))
             .and_then(identity)
             {
                 responses.insert(*peer, response);
@@ -280,7 +280,7 @@ where
                 ),
             )
             .await
-            .map_err(|e| ServerError::Transport(anyhow!("Request timed out: {e}")))
+            .map_err(|e| ServerError::Transport(format!("Request timed out: {e}").into()))
             .and_then(identity)
             {
                 if response {

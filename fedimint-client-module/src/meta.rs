@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::time::{Duration, SystemTime};
 
-use anyhow::{Context as _, bail};
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_core::config::ClientConfig;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
@@ -13,6 +12,8 @@ use fedimint_logging::LOG_CLIENT;
 use serde::{Deserialize, Serialize, de};
 use tracing::debug;
 
+use crate::error::MetaFetchError;
+
 #[apply(async_trait_maybe_send!)]
 pub trait MetaSource: MaybeSend + MaybeSync + 'static {
     /// Wait for next change in this source.
@@ -23,7 +24,7 @@ pub trait MetaSource: MaybeSend + MaybeSync + 'static {
         api: &DynGlobalApi,
         fetch_kind: FetchKind,
         last_revision: Option<u64>,
-    ) -> anyhow::Result<MetaValues>;
+    ) -> Result<MetaValues, MetaFetchError>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,7 +68,7 @@ impl MetaSource for LegacyMetaSource {
         _api: &DynGlobalApi,
         fetch_kind: FetchKind,
         last_revision: Option<u64>,
-    ) -> anyhow::Result<MetaValues> {
+    ) -> Result<MetaValues, MetaFetchError> {
         let config_iter = client_config.global.meta.iter().map(|(key, value)| {
             (
                 MetaFieldKey(key.clone()),
@@ -157,34 +158,28 @@ pub async fn fetch_meta_overrides(
     reqwest: &reqwest::Client,
     client_config: &ClientConfig,
     field_name: &str,
-) -> anyhow::Result<BTreeMap<MetaFieldKey, MetaFieldValue>> {
+) -> Result<BTreeMap<MetaFieldKey, MetaFieldValue>, MetaFetchError> {
     let Some(url) = client_config.meta::<String>(field_name)? else {
         return Ok(BTreeMap::new());
     };
-    let response = reqwest
-        .get(&url)
-        .send()
-        .await
-        .context("Meta override source could not be fetched")?;
+    let response = reqwest.get(&url).send().await?;
 
     debug!("Meta override source returned status: {response:?}");
 
     if response.status() != reqwest::StatusCode::OK {
-        bail!(
-            "Meta override request returned non-OK status code: {}",
-            response.status()
-        );
+        return Err(MetaFetchError::Status {
+            status: response.status(),
+        });
     }
 
-    let mut federation_map = response
-        .json::<BTreeMap<String, BTreeMap<String, serde_json::Value>>>()
-        .await
-        .context("Meta override could not be parsed as JSON")?;
+    let body = response.bytes().await?;
+    let mut federation_map =
+        serde_json::from_slice::<BTreeMap<String, BTreeMap<String, serde_json::Value>>>(&body)?;
 
-    let federation_id = client_config.calculate_federation_id().to_string();
+    let federation_id = client_config.calculate_federation_id();
     let meta_fields = federation_map
-        .remove(&federation_id)
-        .with_context(|| anyhow::format_err!("No entry for federation {federation_id} in {url}"))?
+        .remove(&federation_id.to_string())
+        .ok_or(MetaFetchError::NoEntry { federation_id })?
         .into_iter()
         .map(|(key, value)| (MetaFieldKey(key), MetaFieldValue(value)))
         .collect::<BTreeMap<_, _>>();

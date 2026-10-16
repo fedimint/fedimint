@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use anyhow::anyhow;
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1::{SECP256K1, SecretKey};
 use fedimint_api_client::api::ServerError;
@@ -73,12 +72,24 @@ pub fn signet_bolt_11_invoice() -> Bolt11Invoice {
 #[derive(Debug)]
 pub struct MockGatewayConnection {
     keypair: Keypair,
+    receive_enabled: bool,
+}
+
+impl MockGatewayConnection {
+    /// A gateway that has turned off receives for the federation.
+    pub fn with_receive_disabled() -> Self {
+        MockGatewayConnection {
+            receive_enabled: false,
+            ..Self::default()
+        }
+    }
 }
 
 impl Default for MockGatewayConnection {
     fn default() -> Self {
         MockGatewayConnection {
             keypair: gateway_keypair(),
+            receive_enabled: true,
         }
     }
 }
@@ -99,6 +110,7 @@ impl GatewayConnection for MockGatewayConnection {
             expiration_delta_default: 500,
             expiration_delta_minimum: 144,
             receive_fee: PaymentFee::TRANSACTION_FEE_DEFAULT,
+            receive_enabled: self.receive_enabled,
         }))
     }
 
@@ -140,9 +152,9 @@ impl GatewayConnection for MockGatewayConnection {
         match invoice {
             LightningInvoice::Bolt11(invoice) => {
                 if *invoice.payment_secret() == PaymentSecret(GATEWAY_CRASH_PAYMENT_SECRET) {
-                    return Err(ServerError::InvalidRequest(anyhow!(
-                        "Gateway crash payment secret"
-                    )));
+                    return Err(ServerError::InvalidRequest(
+                        "Gateway crash payment secret".to_string(),
+                    ));
                 }
 
                 if *invoice.payment_secret() == PaymentSecret(UNPAYABLE_PAYMENT_SECRET) {

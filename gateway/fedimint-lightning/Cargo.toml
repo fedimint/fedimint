@@ -13,7 +13,6 @@ name = "fedimint_lightning"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 fedimint-bip39 = { workspace = true }

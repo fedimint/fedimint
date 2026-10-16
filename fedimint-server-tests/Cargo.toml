@@ -16,6 +16,7 @@ name = "fedimint_server_migration"
 path = "tests/migration.rs"
 
 [dev-dependencies]
+anyhow = { workspace = true }
 bitcoin = { workspace = true }
 fedimint-api-client = { workspace = true }
 fedimint-core = { workspace = true }

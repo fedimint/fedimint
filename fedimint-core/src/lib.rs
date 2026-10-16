@@ -38,17 +38,12 @@
 
 extern crate self as fedimint_core;
 
-#[cfg(feature = "uniffi")]
-uniffi::setup_scaffolding!();
-
 use std::fmt::{self, Debug};
 use std::io::Error;
 use std::ops::{self, Range};
 use std::str::FromStr;
 
 pub use amount::*;
-/// Mostly re-exported for [`Decodable`] macros.
-pub use anyhow;
 use bitcoin::address::NetworkUnchecked;
 pub use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::{Address, Network};
@@ -86,7 +81,6 @@ pub mod encoding;
 pub mod endpoint_constants;
 /// Common environment variables
 pub mod envs;
-pub mod epoch;
 /// Formatting helpers
 pub mod fmt_utils;
 /// Federation invite code
@@ -101,6 +95,7 @@ pub mod base32;
 pub mod module;
 /// Peer networking
 pub mod net;
+pub mod peer_availability;
 /// `PeerId` type
 mod peer_id;
 /// Runtime (wasm32 vs native) differences handling
@@ -134,22 +129,8 @@ pub mod session_outcome;
 // It's necessary to wrap `hash_newtype!` in a module because the generated code
 // references a module called "core", but we export a conflicting module in this
 // file.
-mod txid {
-    use bitcoin::hashes::hash_newtype;
-    use bitcoin::hashes::sha256::Hash as Sha256;
-
-    hash_newtype!(
-        /// A transaction id for peg-ins, peg-outs and reissuances
-        pub struct TransactionId(Sha256);
-    );
-}
+mod txid;
 pub use txid::TransactionId;
-
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(TransactionId, String, {
-    lower: |txid| txid.to_string(),
-    try_lift: |s| TransactionId::from_str(&s).map_err(Into::into),
-});
 
 pub struct TransactionIdShortFmt<'a>(&'a TransactionId);
 pub struct TransactionIdFullFmt<'a>(&'a TransactionId);
@@ -192,12 +173,6 @@ impl std::fmt::Display for TransactionIdFullFmt<'_> {
 /// makes the intent clearer when passing chain identifiers through APIs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Encodable, Decodable)]
 pub struct ChainId(pub bitcoin::BlockHash);
-
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(ChainId, String, {
-    lower: |c| c.to_string(),
-    try_lift: |s| ChainId::from_str(&s).map_err(Into::into),
-});
 
 impl ChainId {
     /// Create a new `ChainId` from a `BlockHash`
@@ -272,7 +247,7 @@ impl std::fmt::Display for BitcoinAmountOrAll {
 }
 
 impl FromStr for BitcoinAmountOrAll {
-    type Err = anyhow::Error;
+    type Err = ParseBitcoinAmountOrAllError;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         if s.eq_ignore_ascii_case("all") {
@@ -282,6 +257,18 @@ impl FromStr for BitcoinAmountOrAll {
             Ok(Self::Amount(amount.try_into()?))
         }
     }
+}
+
+/// Failure to parse a [`BitcoinAmountOrAll`] from its string form.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ParseBitcoinAmountOrAllError {
+    /// The string is neither `all` nor a valid amount.
+    #[error("Invalid amount: {0}")]
+    Amount(#[from] ParseAmountError),
+    /// The amount is valid but has sub-satoshi precision.
+    #[error("Amount cannot be expressed in satoshis: {0}")]
+    Precision(#[from] AmountConversionError),
 }
 
 // Custom serde to handle both "all" and numbers/strings
@@ -397,7 +384,6 @@ impl std::fmt::Display for InPoint {
     Encodable,
     Decodable,
 )]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct OutPoint {
     /// The referenced transaction ID
     pub txid: TransactionId,
@@ -563,7 +549,7 @@ impl Decodable for TransactionId {
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let mut bytes = [0u8; 32];
-        d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
+        d.read_exact(&mut bytes)?;
         Ok(Self::from_byte_array(bytes))
     }
 }

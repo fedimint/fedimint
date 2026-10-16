@@ -131,6 +131,20 @@ Amount can be a raw number (millisats), a value with unit (e.g. "1000 sats"), or
 $GW ecash pegout-to-onchain --federation-id <FEDERATION_ID> --amount <AMOUNT_OR_ALL>
 ```
 
+If this fails with "Guardians disagree on peg-out fees" (or, on walletv2,
+"Guardians disagree on the onchain send fee"), **the federation has a problem —
+this is not something to work around from the CLI.**
+
+The quote is consensus state: every guardian derives it from the same ordered
+log, so guardians that are in sync always return the same value. A guardian
+returning a different number has diverged, usually because its Bitcoin backend
+is lagging or unreachable. The error lists each guardian's quote, so the odd one
+out names the broken guardian.
+
+Since the same consensus fee rate is what validates the peg-out, a federation
+that cannot agree on the quote will not accept the withdrawal either. Report the
+divergent guardian to the federation operators rather than retrying.
+
 ### On-chain
 
 **Get the LN node's on-chain deposit address:**

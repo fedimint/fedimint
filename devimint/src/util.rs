@@ -18,7 +18,7 @@ use fedimint_core::envs::{
 use fedimint_core::module::ApiAuth;
 use fedimint_core::task::{self};
 use fedimint_core::time::now;
-use fedimint_core::util::FmtCompactAnyhow as _;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_logging::LOG_DEVIMINT;
 use semver::Version;
@@ -483,7 +483,7 @@ where
                     .expect("time goes forward")
                     < timeout =>
             {
-                debug!(target: LOG_DEVIMINT, %attempt, err = %err.fmt_compact_anyhow(), "Polling {name} failed, will retry...");
+                debug!(target: LOG_DEVIMINT, %attempt, err = %err.fmt_compact(), "Polling {name} failed, will retry...");
                 task::sleep(backoff.next().unwrap_or(MAX_BACKOFF)).await;
             }
             Err(ControlFlow::Continue(err)) => {

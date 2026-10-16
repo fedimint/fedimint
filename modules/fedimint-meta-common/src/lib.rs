@@ -4,9 +4,6 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::needless_lifetimes)]
 
-#[cfg(feature = "uniffi")]
-uniffi::setup_scaffolding!();
-
 pub mod endpoint;
 
 use std::fmt;
@@ -59,9 +56,6 @@ pub const DEFAULT_META_KEY: MetaKey = MetaKey(0);
 )]
 pub struct MetaKey(pub u8);
 
-#[cfg(feature = "uniffi")]
-uniffi::custom_newtype!(MetaKey, u8);
-
 impl fmt::Display for MetaKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
@@ -83,11 +77,8 @@ impl FromStr for MetaKey {
 #[derive(Debug, Clone, Encodable, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MetaValue(Vec<u8>);
 
-#[cfg(feature = "uniffi")]
-uniffi::custom_newtype!(MetaValue, Vec<u8>);
-
 impl FromStr for MetaValue {
-    type Err = anyhow::Error;
+    type Err = hex::FromHexError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(hex::decode(s)?))
@@ -114,19 +105,30 @@ impl MetaValue {
         &self.0
     }
 
-    pub fn to_json(&self) -> anyhow::Result<serde_json::Value> {
-        Ok(serde_json::from_slice(&self.0)?)
+    /// The value read as JSON.
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`serde_json::Error`] if the bytes are not valid JSON,
+    /// including when they are not valid UTF-8.
+    pub fn to_json(&self) -> Result<serde_json::Value, serde_json::Error> {
+        serde_json::from_slice(&self.0)
     }
 
     /// Converts the value to a JSON value, ignoring invalid utf-8.
-    pub fn to_json_lossy(&self) -> anyhow::Result<serde_json::Value> {
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`serde_json::Error`] if the bytes are not valid JSON once
+    /// invalid UTF-8 has been replaced.
+    pub fn to_json_lossy(&self) -> Result<serde_json::Value, serde_json::Error> {
         let maybe_lossy_str = String::from_utf8_lossy(self.as_slice());
 
         if maybe_lossy_str.as_bytes() != self.as_slice() {
             warn!(target: LOG_MODULE_META, "Value contains invalid utf-8, converting to lossy string");
         }
 
-        Ok(serde_json::from_str(&maybe_lossy_str)?)
+        serde_json::from_str(&maybe_lossy_str)
     }
 }
 
@@ -138,7 +140,7 @@ impl Decodable for MetaValue {
         let bytes = Vec::consensus_decode_partial(r, modules)?;
 
         if Self::MAX_LEN_BYTES < bytes.len() {
-            return Err(DecodeError::new_custom(anyhow::format_err!("Too long")));
+            return Err(DecodeError::from_str("Too long"));
         }
 
         Ok(Self(bytes))
@@ -199,7 +201,6 @@ pub struct MetaConsensusItem {
 
 /// A [`MetaValue`] in a consensus (which means it has a revision number)
 #[derive(Debug, Clone, Encodable, Decodable, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct MetaConsensusValue {
     pub revision: u64,
     pub value: MetaValue,
@@ -289,3 +290,6 @@ impl fmt::Display for MetaConsensusItem {
         write!(f, "Meta - len: {}", self.value.0.len())
     }
 }
+
+#[cfg(test)]
+mod tests;

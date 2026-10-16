@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
@@ -26,6 +26,9 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod envs;
+pub mod federation_status;
+
+pub use federation_status::*;
 
 pub const V1_API_ENDPOINT: &str = "v1";
 
@@ -36,6 +39,7 @@ pub const CONFIGURATION_ENDPOINT: &str = "/config";
 pub const CONNECT_FED_ENDPOINT: &str = "/connect_fed";
 pub const CREATE_BOLT11_INVOICE_FOR_OPERATOR_ENDPOINT: &str = "/create_bolt11_invoice_for_operator";
 pub const CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT: &str = "/create_bolt12_offer_for_operator";
+pub const FEDERATION_STATUS_ENDPOINT: &str = "/federation_status";
 pub const GATEWAY_INFO_ENDPOINT: &str = "/info";
 pub const INVITE_CODES_ENDPOINT: &str = "/invite_codes";
 pub const GET_BALANCES_ENDPOINT: &str = "/balances";
@@ -57,6 +61,7 @@ pub const PEGIN_FROM_ONCHAIN_ENDPOINT: &str = "/pegin_from_onchain";
 pub const RECEIVE_ECASH_ENDPOINT: &str = "/receive_ecash";
 pub const SET_CHANNEL_FEES_ENDPOINT: &str = "/set_channel_fees";
 pub const SET_FEES_ENDPOINT: &str = "/set_fees";
+pub const SET_PAYMENT_POLICY_ENDPOINT: &str = "/set_payment_policy";
 pub const STOP_ENDPOINT: &str = "/stop";
 pub const SEND_ONCHAIN_ENDPOINT: &str = "/send_onchain";
 pub const SPEND_ECASH_ENDPOINT: &str = "/spend_ecash";
@@ -144,9 +149,15 @@ pub struct WithdrawPreviewResponse {
     pub address: String,
     pub peg_out_fees: PegOutFees,
     pub total_cost: Amount,
-    /// Estimated mint fees when withdrawing all. None for partial withdrawals.
+    /// Estimated federation fees (wallet output fee, mint input and change
+    /// fees, dust) on top of `peg_out_fees`. Always set when withdrawing all,
+    /// and for partial withdrawals on walletv2 federations.
     #[serde(default)]
     pub mint_fees: Option<Amount>,
+    /// True when `peg_out_fees` is a flat on-chain fee (walletv2) built via
+    /// `PegOutFees::from_amount`, so its fee rate and weight are not real.
+    #[serde(default)]
+    pub flat_peg_out_fee: bool,
 }
 
 /// Deprecated, unused, doesn't do anything
@@ -168,8 +179,48 @@ pub struct FederationConfig {
     pub federation_index: u64,
     pub lightning_fee: PaymentFee,
     pub transaction_fee: PaymentFee,
+    /// Restrictions on the payments the gateway performs on behalf of this
+    /// federation's clients. Empty means every kind of payment is performed.
+    /// Changed with `set_payment_policy`.
+    ///
+    /// Gateways that predate this field do not send it and perform every kind
+    /// of payment, so it defaults to no restrictions when absent.
+    #[serde(default)]
+    pub payment_policies: BTreeSet<PaymentPolicy>,
     #[allow(deprecated)] // only here for decoding backward-compat
     pub _connector: ConnectorType,
+}
+
+impl FederationConfig {
+    /// Whether the gateway accepts incoming Lightning payments on behalf of
+    /// this federation's clients.
+    pub fn receive_enabled(&self) -> bool {
+        !self
+            .payment_policies
+            .contains(&PaymentPolicy::ReceivesDisabled)
+    }
+}
+
+/// A restriction on the payments the gateway performs on behalf of a
+/// federation's clients.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Encodable,
+    Decodable,
+    Serialize,
+    Deserialize,
+)]
+pub enum PaymentPolicy {
+    /// Do not accept incoming Lightning payments: refuse to create invoices
+    /// and fail back the payments of invoices that were already issued.
+    ReceivesDisabled,
 }
 
 /// Information about one of the feds we are connected to
@@ -208,6 +259,19 @@ pub struct SetFeesPayload {
     pub lightning_parts_per_million: Option<u64>,
     pub transaction_base: Option<Amount>,
     pub transaction_parts_per_million: Option<u64>,
+}
+
+/// Changes which payments the gateway performs on behalf of a federation's
+/// clients. Like `SetFeesPayload`, every setting is optional and only the ones
+/// present change, so further kinds of payments can be added later.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SetPaymentPolicyPayload {
+    /// The federation to change, or every connected federation when absent
+    pub federation_id: Option<FederationId>,
+    /// Whether to accept incoming Lightning payments for the federation's
+    /// clients. Turning this off refuses new invoices and fails back the
+    /// payments of invoices that were already issued.
+    pub receive_enabled: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -770,82 +834,4 @@ pub struct SetMnemonicPayload {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    const NODE_PUBKEY: &str = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
-
-    #[test]
-    fn node_address_defaults_lightning_port() {
-        let node_address: NodeAddress = format!("{NODE_PUBKEY}@example.com")
-            .parse()
-            .expect("valid node address");
-
-        assert_eq!(node_address.host_with_port(), "example.com:9735");
-        assert_eq!(
-            node_address.to_string(),
-            format!("{NODE_PUBKEY}@example.com")
-        );
-    }
-
-    #[test]
-    fn node_address_keeps_explicit_non_default_port() {
-        let node_address: NodeAddress = format!("{NODE_PUBKEY}@example.com:9736")
-            .parse()
-            .expect("valid node address");
-
-        assert_eq!(node_address.host_with_port(), "example.com:9736");
-        assert_eq!(
-            node_address.to_string(),
-            format!("{NODE_PUBKEY}@example.com:9736")
-        );
-    }
-
-    #[test]
-    fn node_address_handles_bracketed_ipv6_address() {
-        let node_address: NodeAddress = format!("{NODE_PUBKEY}@[::1]")
-            .parse()
-            .expect("valid node address");
-
-        assert_eq!(
-            node_address.host_with_port(),
-            "[0000:0000:0000:0000:0000:0000:0000:0001]:9735"
-        );
-        assert_eq!(
-            node_address.to_string(),
-            format!("{NODE_PUBKEY}@[0000:0000:0000:0000:0000:0000:0000:0001]")
-        );
-
-        let node_address: NodeAddress = format!("{NODE_PUBKEY}@[::1]:9736")
-            .parse()
-            .expect("valid node address");
-
-        assert_eq!(
-            node_address.host_with_port(),
-            "[0000:0000:0000:0000:0000:0000:0000:0001]:9736"
-        );
-        assert_eq!(
-            node_address.to_string(),
-            format!("{NODE_PUBKEY}@[0000:0000:0000:0000:0000:0000:0000:0001]:9736")
-        );
-    }
-
-    #[test]
-    fn node_address_serde_uses_display_format() {
-        let request = ConnectPeerRequest {
-            node_address: format!("{NODE_PUBKEY}@127.0.0.1:9735")
-                .parse()
-                .expect("valid node address"),
-        };
-
-        let json = serde_json::to_string(&request).expect("can serialize request");
-        assert_eq!(
-            json,
-            format!(r#"{{"node_address":"{NODE_PUBKEY}@127.0.0.1"}}"#)
-        );
-
-        let request: ConnectPeerRequest =
-            serde_json::from_str(&json).expect("can deserialize request");
-        assert_eq!(request.node_address.host_with_port(), "127.0.0.1:9735");
-    }
-}
+mod tests;

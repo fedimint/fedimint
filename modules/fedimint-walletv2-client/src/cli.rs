@@ -3,12 +3,14 @@ use std::{ffi, iter};
 use bitcoin::Address;
 use bitcoin::address::NetworkUnchecked;
 use clap::{Parser, Subcommand};
+use fedimint_api_client::api::FederationError;
+use fedimint_client_module::error::{ModuleLookupError, OperationLookupError};
 use fedimint_core::BitcoinAmountOrAll;
 use fedimint_eventlog::EventLogId;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::WalletClientModule;
+use crate::{AwaitReceiveError, ReceiveError, SendError, WalletClientModule};
 
 #[derive(Parser, Serialize)]
 enum Opts {
@@ -60,7 +62,7 @@ enum InfoOpts {
 pub(crate) async fn handle_cli_command(
     wallet: &WalletClientModule,
     args: &[ffi::OsString],
-) -> anyhow::Result<Value> {
+) -> Result<Value, CliCommandError> {
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("walletv2")).chain(args.iter()));
 
     let value = match opts {
@@ -117,4 +119,32 @@ pub(crate) async fn handle_cli_command(
 
 fn json<T: Serialize>(value: T) -> Value {
     serde_json::to_value(value).expect("JSON serialization failed")
+}
+
+/// A failure of a `walletv2` module command.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum CliCommandError {
+    /// The federation did not serve the request.
+    #[error(transparent)]
+    Federation(#[from] FederationError),
+
+    /// The payment could not be quoted or sent.
+    #[error(transparent)]
+    Send(#[from] SendError),
+
+    /// The receive fee could not be quoted.
+    #[error(transparent)]
+    Receive(#[from] ReceiveError),
+
+    /// The client's bitcoin balance could not be read.
+    #[error(transparent)]
+    Balance(#[from] ModuleLookupError),
+
+    /// The send operation could not be looked up.
+    #[error(transparent)]
+    OperationLookup(#[from] OperationLookupError),
+
+    /// The next receive could not be awaited.
+    #[error(transparent)]
+    AwaitReceive(#[from] AwaitReceiveError),
 }

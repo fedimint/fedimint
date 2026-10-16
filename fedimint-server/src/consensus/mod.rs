@@ -4,6 +4,7 @@ pub mod db;
 pub mod debug;
 pub mod engine;
 mod iroh_api;
+pub mod peer_availability;
 pub mod transaction;
 
 use std::collections::BTreeMap;
@@ -22,11 +23,11 @@ use fedimint_core::config::P2PMessage;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::db::{Database, apply_migrations_dbtx, verify_module_db_integrity_dbtx};
 use fedimint_core::envs::is_running_in_test_env;
-use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ApiAuth, FEDIMINT_API_ALPN};
+use fedimint_core::net::DynP2PConnections;
 use fedimint_core::net::iroh::build_iroh_endpoint;
-use fedimint_core::net::peers::DynP2PConnections;
+use fedimint_core::session_outcome::ConsensusItem;
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::SafeUrl;
 use fedimint_logging::{LOG_CONSENSUS, LOG_CORE};
@@ -273,7 +274,7 @@ pub async fn run(
             .map(|(&peer_id, url)| (peer_id, url.url.clone()))
             .collect(),
         None,
-    )?;
+    );
 
     let bitcoin_rpc_connection = ServerBitcoinRpcMonitor::new(
         dyn_server_bitcoin_rpc,
@@ -339,6 +340,8 @@ pub async fn run(
     let (submission_sender, submission_receiver) = async_channel::bounded(TRANSACTION_BUFFER);
     let (shutdown_sender, shutdown_receiver) = watch::channel(None);
     let (ord_latency_sender, ord_latency_receiver) = watch::channel(None);
+    let (accepted_item_sender, accepted_item_receiver) = watch::channel(());
+    let (completed_session_sender, completed_session_receiver) = watch::channel(());
 
     let mut ci_status_senders = BTreeMap::new();
     let mut ci_status_receivers = BTreeMap::new();
@@ -372,6 +375,8 @@ pub async fn run(
         p2p_status_receivers,
         ci_status_receivers,
         ord_latency_receiver,
+        accepted_item_receiver,
+        completed_session_receiver,
         bitcoin_rpc_connection: bitcoin_rpc_connection.clone(),
         force_api_secret: force_api_secrets.get_active(),
         code_version_str,
@@ -455,7 +460,11 @@ pub async fn run(
                         break;
                     }
 
-                    info!(target: LOG_CONSENSUS, "Waiting for bitcoin backend to sync... {progress:.1}%");
+                    info!(
+                        target: LOG_CONSENSUS,
+                        "Waiting for bitcoin backend to sync... {:.1}%",
+                        progress * 100.0
+                    );
                 } else {
                     break;
                 }
@@ -472,6 +481,16 @@ pub async fn run(
 
     let api_urls = get_api_urls(&db, &cfg.consensus).await;
 
+    let peer_activity = Arc::new(std::sync::Mutex::new(peer_availability::PeerActivity::new(
+        cfg.local.identity,
+        fedimint_core::NumPeersExt::to_num_peers(&cfg.consensus.broadcast_public_keys),
+    )));
+
+    task_group.spawn_cancellable(
+        "peer-availability",
+        peer_availability::persist_peer_availability(db.clone(), peer_activity.clone()),
+    );
+
     // FIXME: (@leonardo) How should this be handled ?
     // Using the `Connector::default()` for now!
     ConsensusEngine {
@@ -480,10 +499,12 @@ pub async fn run(
             connectors,
             api_urls,
             force_api_secrets.get_active().as_deref(),
-        )?,
+        ),
         cfg: cfg.clone(),
         connections,
         ord_latency_sender,
+        accepted_item_sender,
+        completed_session_sender,
         ci_status_senders,
         submission_receiver,
         shutdown_receiver,
@@ -492,6 +513,7 @@ pub async fn run(
         data_dir,
         db_checkpoint_retention,
         session_timeout,
+        peer_activity,
     }
     .run()
     .await?;

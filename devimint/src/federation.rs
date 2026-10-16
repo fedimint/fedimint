@@ -18,7 +18,7 @@ use fedimint_core::module::ModuleCommon;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::runtime::block_in_place;
 use fedimint_core::task::block_on;
-use fedimint_core::task::jit::JitTryAnyhow;
+use fedimint_core::task::jit::JitTry;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, NumPeers, PeerId};
 use fedimint_gateway_common::WithdrawResponse;
@@ -62,7 +62,7 @@ pub struct Federation {
     pub bitcoind: Bitcoind,
 
     /// Built in [`Client`], already joined
-    client: JitTryAnyhow<Client>,
+    client: JitTry<Client, anyhow::Error>,
     #[allow(dead_code)] // Will need it later, maybe
     connectors: ConnectorRegistry,
 }
@@ -364,7 +364,7 @@ impl Federation {
         let mut admin_clients: BTreeMap<PeerId, DynGlobalApi> = BTreeMap::new();
         let mut api_endpoints: BTreeMap<PeerId, _> = BTreeMap::new();
 
-        let connectors = ConnectorRegistry::build_from_testing_env()?.bind().await?;
+        let connectors = ConnectorRegistry::build_from_testing_env().bind().await;
         for peer_id in num_peers.peer_ids() {
             let peer_env_vars = vars::Fedimintd::init(
                 &process_mgr.globals,
@@ -392,7 +392,7 @@ impl Federation {
                 SafeUrl::parse(&peer_env_vars.FM_API_URL)?,
                 // TODO: will need it somewhere
                 // &process_mgr.globals.FM_FORCE_API_SECRETS.get_active(),
-            )?;
+            );
             api_endpoints.insert(peer_id, peer_env_vars.FM_API_URL.clone());
             admin_clients.insert(peer_id, admin_client);
             peer_to_env_vars_map.insert(peer_id.to_usize(), peer_env_vars);
@@ -467,7 +467,7 @@ impl Federation {
             }
         }
 
-        let client = JitTryAnyhow::new_try({
+        let client = JitTry::<_, anyhow::Error>::new_try({
             move || async move {
                 let client = Client::open_or_create(federation_name.as_str())?;
                 let invite_code = Self::invite_code_static()?;
@@ -567,7 +567,7 @@ impl Federation {
 
     pub fn client_config(&self) -> Result<ClientConfig> {
         let cfg_path = self.vars[&0].FM_DATA_DIR.join("client.json");
-        load_from_file(&cfg_path)
+        Ok(load_from_file(&cfg_path)?)
     }
 
     /// Get the module instance ID for a given module kind
@@ -1110,7 +1110,8 @@ impl Federation {
     }
 
     /// Initiates multiple peg-outs from the same federation for the set of
-    /// gateways to save on mining blocks in parallel.
+    /// gateways and waits for their change to become spendable, sharing the
+    /// confirmation blocks across all peg-outs.
     pub async fn pegout_gateways(
         &self,
         amount: u64,
@@ -1137,14 +1138,16 @@ impl Federation {
                 .await?;
             peg_outs.insert(gw.ln.ln_type(), (prev_fed_ecash_balance, response));
         }
-        self.bitcoind.mine_blocks(21).await?;
-
+        // The gateway returns once the peg-out is accepted, before it is
+        // necessarily broadcast. Mining first can leave the peg-outs in the
+        // mempool, with no spendable change for a subsequent withdrawal.
         try_join_all(
             peg_outs
                 .values()
                 .map(|(_, pegout)| self.bitcoind.poll_get_transaction(pegout.txid)),
         )
         .await?;
+        self.finalize_mempool_tx().await?;
 
         for gw in gateways.clone() {
             let after_fed_ecash_balance = gw
@@ -1240,9 +1243,9 @@ impl Federation {
     }
 
     fn get_finality_delay(&self) -> Result<u32, anyhow::Error> {
-        // Walletv2 uses a constant finality delay
+        // Walletv2's consensus block count trails the backend by a constant
         if crate::util::supports_wallet_v2() {
-            return Ok(fedimint_walletv2_server::CONFIRMATION_FINALITY_DELAY as u32);
+            return Ok(fedimint_walletv2_server::BLOCK_COUNT_VOTE_DELAY as u32);
         }
 
         let wallet_instance_id = self.module_instance_id_by_kind(&fedimint_wallet_client::KIND)?;

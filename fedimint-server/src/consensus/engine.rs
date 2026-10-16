@@ -17,17 +17,18 @@ use fedimint_core::db::{
 use fedimint_core::encoding::Decodable;
 use fedimint_core::endpoint_constants::AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT;
 use fedimint_core::envs::is_running_in_test_env;
-use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{ApiRequestErased, SerdeModuleEncoding};
-use fedimint_core::net::peers::DynP2PConnections;
+use fedimint_core::net::DynP2PConnections;
 use fedimint_core::runtime::spawn;
 use fedimint_core::secp256k1::schnorr;
-use fedimint_core::session_outcome::{AcceptedItem, SessionOutcome, SignedSessionOutcome};
+use fedimint_core::session_outcome::{
+    AcceptedItem, ConsensusItem, SessionOutcome, SignedSessionOutcome,
+};
 use fedimint_core::task::{TaskGroup, TaskHandle, sleep};
 use fedimint_core::timing::TimeReporter;
-use fedimint_core::util::{FmtCompact as _, FmtCompactAnyhow as _};
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{NumPeers, NumPeersExt, PeerId, timing};
 use fedimint_server_core::{ServerModuleRegistry, ServerModuleRegistryExt};
 use futures::StreamExt;
@@ -50,6 +51,7 @@ use crate::consensus::db::{
     SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
 };
 use crate::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
+use crate::consensus::peer_availability::PeerActivity;
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
 use crate::metrics::{
     CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
@@ -78,10 +80,15 @@ pub struct ConsensusEngine {
     pub connections: DynP2PConnections<P2PMessage>,
     pub ci_status_senders: BTreeMap<PeerId, watch::Sender<Option<u64>>>,
     pub ord_latency_sender: watch::Sender<Option<Duration>>,
+    /// Notified whenever consensus accepts an item.
+    pub accepted_item_sender: watch::Sender<()>,
+    /// Notified whenever consensus completes a session.
+    pub completed_session_sender: watch::Sender<()>,
     pub task_group: TaskGroup,
     pub data_dir: PathBuf,
     pub db_checkpoint_retention: u64,
     pub session_timeout: Duration,
+    pub peer_activity: Arc<std::sync::Mutex<PeerActivity>>,
 }
 
 impl ConsensusEngine {
@@ -308,6 +315,7 @@ impl ConsensusEngine {
                 ),
                 Network::new(
                     connections.clone(),
+                    self.peer_activity.clone(),
                     signed_outcomes_sender,
                     signatures_sender,
                     self.db.clone(),
@@ -796,6 +804,8 @@ impl ConsensusEngine {
         dbtx.commit_tx_result()
             .await
             .expect("This is the only place where we write to this key");
+
+        self.completed_session_sender.send_replace(());
     }
 
     /// Returns the full path where the database checkpoints are stored.
@@ -862,7 +872,7 @@ impl ConsensusEngine {
             // Check if any old checkpoint need to be cleaned up
             let _timing /* logs on drop */ = timing::TimeReporter::new("remove-database-checkpoint").level(Level::TRACE);
             if let Err(err) = self.delete_old_database_checkpoint(session_index, &checkpoint_dir) {
-                warn!(target: LOG_CONSENSUS, err = %err.fmt_compact_anyhow(), "Could not delete old checkpoints");
+                warn!(target: LOG_CONSENSUS, err = %err.fmt_compact(), "Could not delete old checkpoints");
             }
         }
     }
@@ -1003,7 +1013,7 @@ impl ConsensusEngine {
                 target: LOG_CONSENSUS,
                 %peer,
                 item = ?DebugConsensusItem(item),
-                err = %err.fmt_compact_anyhow(),
+                err = %err.fmt_compact(),
                 "Rejected consensus item"
             );
 
@@ -1066,6 +1076,8 @@ impl ConsensusEngine {
         );
 
         dbtx.commit_tx_result().await?;
+
+        self.accepted_item_sender.send_replace(());
 
         // Counted here rather than in the caller so that only an attempt that actually
         // committed is counted: the replay and rejection paths above return early, and
@@ -1162,7 +1174,7 @@ impl ConsensusEngine {
         let filter_map = move |response: SerdeModuleEncoding<SignedSessionOutcome>| {
             let signed_session_outcome = response
                 .try_into_inner(&decoders)
-                .map_err(|x| ServerError::ResponseDeserialization(x.into()))?;
+                .map_err(|x| ServerError::ResponseDeserialization(Box::new(x)))?;
             let header = signed_session_outcome.session_outcome.header(index);
             if signed_session_outcome.signatures.len() == threshold
                 && signed_session_outcome
@@ -1172,7 +1184,9 @@ impl ConsensusEngine {
             {
                 Ok(signed_session_outcome)
             } else {
-                Err(ServerError::InvalidResponse(anyhow!("Invalid signatures")))
+                Err(ServerError::InvalidResponse(
+                    "Invalid signatures".to_string(),
+                ))
             }
         };
 

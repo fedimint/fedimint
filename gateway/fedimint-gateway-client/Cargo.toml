@@ -25,7 +25,6 @@ name = "fedimint_gateway_client"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 bcrypt = { workspace = true }
 bitcoin = { workspace = true }
 chrono = { workspace = true }

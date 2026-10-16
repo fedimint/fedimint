@@ -1,10 +1,10 @@
 use std::io::{Error, Write};
 use std::str::FromStr;
 
-use anyhow::format_err;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::hashes::Hash as BitcoinHash;
 use hex::{FromHex, ToHex};
+use lightning::ln::msgs;
 use lightning::util::ser::{BigSize, Readable, Writeable};
 use miniscript::{Descriptor, MiniscriptKey};
 use serde::{Deserialize, Serialize};
@@ -13,6 +13,35 @@ use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::get_network_for_address;
 use crate::module::registry::ModuleDecoderRegistry;
 
+/// Keeps a rust-bitcoin reader failure distinguishable as [`DecodeError::Io`].
+fn from_bitcoin_encode_error(error: bitcoin::consensus::encode::Error) -> DecodeError {
+    match error {
+        bitcoin::consensus::encode::Error::Io(io) => DecodeError::Io(io.into()),
+        other => DecodeError::from_err(other),
+    }
+}
+
+/// Keeps a PSBT reader failure distinguishable as [`DecodeError::Io`].
+fn from_psbt_error(error: bitcoin::psbt::Error) -> DecodeError {
+    match error {
+        bitcoin::psbt::Error::Io(io) => DecodeError::Io(io.into()),
+        bitcoin::psbt::Error::ConsensusEncoding(inner) => from_bitcoin_encode_error(inner),
+        other => DecodeError::from_err(other),
+    }
+}
+
+fn consensus_encode_with_buffer<T: bitcoin::consensus::Encodable, W: std::io::Write>(
+    value: &T,
+    writer: &mut W,
+) -> Result<(), std::io::Error> {
+    let mut buffered_writer = std::io::BufWriter::new(writer);
+    bitcoin::consensus::Encodable::consensus_encode(value, &mut buffered_writer)?;
+    buffered_writer
+        .into_inner()
+        .map_err(std::io::IntoInnerError::into_error)?;
+    Ok(())
+}
+
 macro_rules! impl_encode_decode_bridge {
     ($btc_type:ty) => {
         impl crate::encoding::Encodable for $btc_type {
@@ -20,11 +49,7 @@ macro_rules! impl_encode_decode_bridge {
                 &self,
                 writer: &mut W,
             ) -> Result<(), std::io::Error> {
-                bitcoin::consensus::Encodable::consensus_encode(
-                    self,
-                    &mut std::io::BufWriter::new(writer),
-                )?;
-                Ok(())
+                consensus_encode_with_buffer(self, writer)
             }
         }
 
@@ -36,7 +61,7 @@ macro_rules! impl_encode_decode_bridge {
                 bitcoin::consensus::Decodable::consensus_decode_from_finite_reader(
                     &mut SimpleBitcoinRead(d),
                 )
-                .map_err(crate::encoding::DecodeError::from_err)
+                .map_err(from_bitcoin_encode_error)
             }
         }
     };
@@ -62,18 +87,13 @@ impl crate::encoding::Decodable for bitcoin::psbt::Psbt {
         d: &mut D,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, crate::encoding::DecodeError> {
-        Self::deserialize_from_reader(&mut BufBitcoinReader::new(d))
-            .map_err(crate::encoding::DecodeError::from_err)
+        Self::deserialize_from_reader(&mut BufBitcoinReader::new(d)).map_err(from_psbt_error)
     }
 }
 
 impl crate::encoding::Encodable for bitcoin::Txid {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
-        bitcoin::consensus::Encodable::consensus_encode(
-            self,
-            &mut std::io::BufWriter::new(writer),
-        )?;
-        Ok(())
+        consensus_encode_with_buffer(self, writer)
     }
 
     fn consensus_encode_to_hex(&self) -> String {
@@ -95,16 +115,14 @@ impl crate::encoding::Decodable for bitcoin::Txid {
         bitcoin::consensus::Decodable::consensus_decode_from_finite_reader(&mut SimpleBitcoinRead(
             d,
         ))
-        .map_err(crate::encoding::DecodeError::from_err)
+        .map_err(from_bitcoin_encode_error)
     }
 
     fn consensus_decode_hex(
         hex: &str,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let mut bytes = Vec::<u8>::from_hex(hex)
-            .map_err(anyhow::Error::from)
-            .map_err(DecodeError::new_custom)?;
+        let mut bytes = Vec::<u8>::from_hex(hex).map_err(DecodeError::from_err)?;
 
         // Just Bitcoin things: transaction hashes are encoded reverse
         bytes.reverse();
@@ -163,9 +181,8 @@ impl Decodable for NetworkLegacyEncodingWrapper {
     ) -> Result<Self, DecodeError> {
         let num = u32::consensus_decode_partial(d, modules)?;
         let magic = bitcoin::p2p::Magic::from_bytes(num.to_le_bytes());
-        let network = bitcoin::Network::from_magic(magic).ok_or_else(|| {
-            DecodeError::new_custom(format_err!("Unknown network magic: {magic:x}"))
-        })?;
+        let network = bitcoin::Network::from_magic(magic)
+            .ok_or_else(|| DecodeError::custom(format!("Unknown network magic: {magic:x}")))?;
         Ok(Self(network))
     }
 }
@@ -183,7 +200,7 @@ impl Decodable for bitcoin::Network {
         Self::from_magic(bitcoin::p2p::Magic::from_bytes(
             Decodable::consensus_decode_partial(d, modules)?,
         ))
-        .ok_or_else(|| DecodeError::new_custom(format_err!("Unknown network magic")))
+        .ok_or_else(|| DecodeError::from_str("Unknown network magic"))
     }
 }
 
@@ -224,8 +241,8 @@ impl Decodable for bitcoin::Address<NetworkUnchecked> {
         let network = NetworkLegacyEncodingWrapper::consensus_decode_partial(&mut d, modules)?.0;
         let script_pk = bitcoin::ScriptBuf::consensus_decode_partial(&mut d, modules)?;
 
-        let address = bitcoin::Address::from_script(&script_pk, network)
-            .map_err(|e| DecodeError::new_custom(e.into()))?;
+        let address =
+            bitcoin::Address::from_script(&script_pk, network).map_err(DecodeError::from_err)?;
 
         Ok(address.into_unchecked())
     }
@@ -317,8 +334,13 @@ impl Decodable for BigSize {
         r: &mut R,
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        Self::read(&mut SimpleBitcoinRead(r))
-            .map_err(|e| DecodeError::new_custom(anyhow::anyhow!("BigSize decoding error: {e:?}")))
+        Self::read(&mut SimpleBitcoinRead(r)).map_err(|error| match error {
+            msgs::DecodeError::ShortRead => {
+                DecodeError::Io(std::io::ErrorKind::UnexpectedEof.into())
+            }
+            msgs::DecodeError::Io(kind) => DecodeError::Io(bitcoin_io::Error::from(kind).into()),
+            other => DecodeError::custom(format!("BigSize decoding error: {other:?}")),
+        })
     }
 }
 
@@ -437,183 +459,4 @@ impl<W: Write> bitcoin_io::Write for BitoinIoWriteAdapter<W> {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::str::FromStr;
-
-    use bitcoin::hashes::Hash as BitcoinHash;
-    use hex::FromHex;
-
-    use crate::ModuleDecoderRegistry;
-    use crate::db::DatabaseValue;
-    use crate::encoding::btc::NetworkLegacyEncodingWrapper;
-    use crate::encoding::tests::{test_roundtrip, test_roundtrip_expected};
-    use crate::encoding::{Decodable, Encodable};
-
-    #[test_log::test]
-    fn block_hash_roundtrip() {
-        let blockhash = bitcoin::BlockHash::from_str(
-            "0000000000000000000065bda8f8a88f2e1e00d9a6887a43d640e52a4c7660f2",
-        )
-        .unwrap();
-        test_roundtrip_expected(
-            &blockhash,
-            &[
-                242, 96, 118, 76, 42, 229, 64, 214, 67, 122, 136, 166, 217, 0, 30, 46, 143, 168,
-                248, 168, 189, 101, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            ],
-        );
-    }
-
-    #[test_log::test]
-    fn tx_roundtrip() {
-        let transaction: Vec<u8> = FromHex::from_hex(
-            "02000000000101d35b66c54cf6c09b81a8d94cd5d179719cd7595c258449452a9305ab9b12df250200000000fdffffff020cd50a0000000000160014ae5d450b71c04218e6e81c86fcc225882d7b7caae695b22100000000160014f60834ef165253c571b11ce9fa74e46692fc5ec10248304502210092062c609f4c8dc74cd7d4596ecedc1093140d90b3fd94b4bdd9ad3e102ce3bc02206bb5a6afc68d583d77d5d9bcfb6252a364d11a307f3418be1af9f47f7b1b3d780121026e5628506ecd33242e5ceb5fdafe4d3066b5c0f159b3c05a621ef65f177ea28600000000"
-        ).unwrap();
-        let transaction =
-            bitcoin::Transaction::from_bytes(&transaction, &ModuleDecoderRegistry::default())
-                .unwrap();
-        test_roundtrip_expected(
-            &transaction,
-            &[
-                2, 0, 0, 0, 0, 1, 1, 211, 91, 102, 197, 76, 246, 192, 155, 129, 168, 217, 76, 213,
-                209, 121, 113, 156, 215, 89, 92, 37, 132, 73, 69, 42, 147, 5, 171, 155, 18, 223,
-                37, 2, 0, 0, 0, 0, 253, 255, 255, 255, 2, 12, 213, 10, 0, 0, 0, 0, 0, 22, 0, 20,
-                174, 93, 69, 11, 113, 192, 66, 24, 230, 232, 28, 134, 252, 194, 37, 136, 45, 123,
-                124, 170, 230, 149, 178, 33, 0, 0, 0, 0, 22, 0, 20, 246, 8, 52, 239, 22, 82, 83,
-                197, 113, 177, 28, 233, 250, 116, 228, 102, 146, 252, 94, 193, 2, 72, 48, 69, 2,
-                33, 0, 146, 6, 44, 96, 159, 76, 141, 199, 76, 215, 212, 89, 110, 206, 220, 16, 147,
-                20, 13, 144, 179, 253, 148, 180, 189, 217, 173, 62, 16, 44, 227, 188, 2, 32, 107,
-                181, 166, 175, 198, 141, 88, 61, 119, 213, 217, 188, 251, 98, 82, 163, 100, 209,
-                26, 48, 127, 52, 24, 190, 26, 249, 244, 127, 123, 27, 61, 120, 1, 33, 2, 110, 86,
-                40, 80, 110, 205, 51, 36, 46, 92, 235, 95, 218, 254, 77, 48, 102, 181, 192, 241,
-                89, 179, 192, 90, 98, 30, 246, 95, 23, 126, 162, 134, 0, 0, 0, 0,
-            ],
-        );
-    }
-
-    #[test_log::test]
-    fn txid_roundtrip() {
-        let txid = bitcoin::Txid::from_str(
-            "51f7ed2f23e58cc6e139e715e9ce304a1e858416edc9079dd7b74fa8d2efc09a",
-        )
-        .unwrap();
-        test_roundtrip_expected(
-            &txid,
-            &[
-                154, 192, 239, 210, 168, 79, 183, 215, 157, 7, 201, 237, 22, 132, 133, 30, 74, 48,
-                206, 233, 21, 231, 57, 225, 198, 140, 229, 35, 47, 237, 247, 81,
-            ],
-        );
-    }
-
-    #[test_log::test]
-    fn network_roundtrip() {
-        let networks: [(bitcoin::Network, [u8; 5], [u8; 4]); 5] = [
-            (
-                bitcoin::Network::Bitcoin,
-                [0xFE, 0xD9, 0xB4, 0xBE, 0xF9],
-                [0xF9, 0xBE, 0xB4, 0xD9],
-            ),
-            (
-                bitcoin::Network::Testnet,
-                [0xFE, 0x07, 0x09, 0x11, 0x0B],
-                [0x0B, 0x11, 0x09, 0x07],
-            ),
-            (
-                bitcoin::Network::Testnet4,
-                [0xFE, 0x28, 0x3F, 0x16, 0x1C],
-                [0x1C, 0x16, 0x3F, 0x28],
-            ),
-            (
-                bitcoin::Network::Signet,
-                [0xFE, 0x40, 0xCF, 0x03, 0x0A],
-                [0x0A, 0x03, 0xCF, 0x40],
-            ),
-            (
-                bitcoin::Network::Regtest,
-                [0xFE, 0xDA, 0xB5, 0xBF, 0xFA],
-                [0xFA, 0xBF, 0xB5, 0xDA],
-            ),
-        ];
-
-        for (network, magic_legacy_bytes, magic_bytes) in networks {
-            let network_legacy_encoded =
-                NetworkLegacyEncodingWrapper(network).consensus_encode_to_vec();
-
-            let network_encoded = network.consensus_encode_to_vec();
-
-            let network_legacy_decoded = NetworkLegacyEncodingWrapper::consensus_decode_whole(
-                &network_legacy_encoded,
-                &ModuleDecoderRegistry::default(),
-            )
-            .unwrap()
-            .0;
-
-            let network_decoded = bitcoin::Network::consensus_decode_whole(
-                &network_encoded,
-                &ModuleDecoderRegistry::default(),
-            )
-            .unwrap();
-
-            assert_eq!(magic_legacy_bytes, *network_legacy_encoded);
-            assert_eq!(magic_bytes, *network_encoded);
-            assert_eq!(network, network_legacy_decoded);
-            assert_eq!(network, network_decoded);
-        }
-    }
-
-    #[test_log::test]
-    fn address_roundtrip() {
-        let addresses = [
-            "bc1p2wsldez5mud2yam29q22wgfh9439spgduvct83k3pm50fcxa5dps59h4z5",
-            "mxMYaq5yWinZ9AKjCDcBEbiEwPJD9n2uLU",
-            "1FK8o7mUxyd6QWJAUw7J4vW7eRxuyjj6Ne",
-            "3JSrSU7z7R1Yhh26pt1zzRjQz44qjcrXwb",
-            "tb1qunn0thpt8uk3yk2938ypjccn3urxprt78z9ccq",
-            "2MvUMRv2DRHZi3VshkP7RMEU84mVTfR9xjq",
-        ];
-
-        for address_str in addresses {
-            let address =
-                bitcoin::Address::from_str(address_str).expect("All tested addresses are valid");
-            let encoding = address.consensus_encode_to_vec();
-            let parsed_address = bitcoin::Address::consensus_decode_whole(
-                &encoding,
-                &ModuleDecoderRegistry::default(),
-            )
-            .expect("Decoding address failed");
-
-            assert_eq!(address, parsed_address);
-        }
-    }
-
-    #[test_log::test]
-    fn sha256_roundtrip() {
-        test_roundtrip_expected(
-            &bitcoin::hashes::sha256::Hash::hash(b"Hello world!"),
-            &[
-                192, 83, 94, 75, 226, 183, 159, 253, 147, 41, 19, 5, 67, 107, 248, 137, 49, 78, 74,
-                63, 174, 192, 94, 207, 252, 187, 125, 243, 26, 217, 229, 26,
-            ],
-        );
-    }
-
-    #[test_log::test]
-    fn bolt11_invoice_roundtrip() {
-        let invoice_str = "lnbc100p1psj9jhxdqud3jxktt5w46x7unfv9kz6mn0v3jsnp4q0d3p2sfluzdx45tqcs\
-			h2pu5qc7lgq0xs578ngs6s0s68ua4h7cvspp5q6rmq35js88zp5dvwrv9m459tnk2zunwj5jalqtyxqulh0l\
-			5gflssp5nf55ny5gcrfl30xuhzj3nphgj27rstekmr9fw3ny5989s300gyus9qyysgqcqpcrzjqw2sxwe993\
-			h5pcm4dxzpvttgza8zhkqxpgffcrf5v25nwpr3cmfg7z54kuqq8rgqqqqqqqq2qqqqq9qq9qrzjqd0ylaqcl\
-			j9424x9m8h2vcukcgnm6s56xfgu3j78zyqzhgs4hlpzvznlugqq9vsqqqqqqqlgqqqqqeqq9qrzjqwldmj9d\
-			ha74df76zhx6l9we0vjdquygcdt3kssupehe64g6yyp5yz5rhuqqwccqqyqqqqlgqqqqjcqq9qrzjqf9e58a\
-			guqr0rcun0ajlvmzq3ek63cw2w282gv3z5uupmuwvgjtq2z55qsqqg6qqqyqqqrtnqqqzq3cqygrzjqvphms\
-			ywntrrhqjcraumvc4y6r8v4z5v593trte429v4hredj7ms5z52usqq9ngqqqqqqqlgqqqqqqgq9qrzjq2v0v\
-			p62g49p7569ev48cmulecsxe59lvaw3wlxm7r982zxa9zzj7z5l0cqqxusqqyqqqqlgqqqqqzsqygarl9fh3\
-			8s0gyuxjjgux34w75dnc6xp2l35j7es3jd4ugt3lu0xzre26yg5m7ke54n2d5sym4xcmxtl8238xxvw5h5h5\
-			j5r6drg6k6zcqj0fcwg";
-        let invoice = invoice_str
-            .parse::<lightning_invoice::Bolt11Invoice>()
-            .unwrap();
-        test_roundtrip(&invoice);
-    }
-}
+mod tests;

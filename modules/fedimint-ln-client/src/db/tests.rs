@@ -86,7 +86,7 @@ async fn test_sm_migration_to_v2_submitted() {
 }
 
 #[tokio::test]
-async fn test_sm_migration_to_v2_confirmed() -> anyhow::Result<()> {
+async fn test_sm_migration_to_v2_confirmed() {
     let operation_id = OperationId::new_random();
     let instance_id = 0x42;
     let claim_key = Keypair::new(SECP256K1, &mut thread_rng());
@@ -149,8 +149,6 @@ async fn test_sm_migration_to_v2_confirmed() -> anyhow::Result<()> {
         new_active_states[0],
         (new_state.consensus_encode_to_vec(), operation_id)
     );
-
-    Ok(())
 }
 
 #[tokio::test]

@@ -1,13 +1,14 @@
 use std::collections::BTreeMap;
+use std::ffi::OsString;
 use std::str::FromStr;
 use std::{cmp, env};
 
-use anyhow::Context;
 use fedimint_core::util::SafeUrl;
 use fedimint_derive::{Decodable, Encodable};
 use fedimint_logging::LOG_CORE;
 use jsonrpsee_core::Serialize;
 use serde::Deserialize;
+use thiserror::Error;
 use tracing::warn;
 
 use crate::util::FmtCompact as _;
@@ -228,45 +229,127 @@ pub struct BitcoinRpcConfig {
 }
 
 impl BitcoinRpcConfig {
-    pub fn get_defaults_from_env_vars() -> anyhow::Result<Self> {
+    pub fn get_defaults_from_env_vars() -> Result<Self, EnvParseError> {
+        Self::defaults_from_lookup(&|var: &str| env::var_os(var))
+    }
+
+    /// The defaults, reading the variables through `lookup` rather than from
+    /// the process environment.
+    fn defaults_from_lookup<L>(lookup: &L) -> Result<Self, EnvParseError>
+    where
+        L: Fn(&str) -> Option<OsString>,
+    {
+        let (_, kind) = first_env_var_set(
+            BITCOIN_RPC_KIND_ENVS,
+            FM_DEFAULT_BITCOIN_RPC_KIND_ENV,
+            lookup,
+        )?;
+        let (url_var, url) =
+            first_env_var_set(BITCOIN_RPC_URL_ENVS, FM_DEFAULT_BITCOIN_RPC_URL_ENV, lookup)?;
+
         Ok(Self {
-        kind: env::var(FM_FORCE_BITCOIN_RPC_KIND_ENV)
-            .or_else(|_| env::var(FM_DEFAULT_BITCOIN_RPC_KIND_ENV))
-            .or_else(|_| env::var(FM_BITCOIN_RPC_KIND_ENV).inspect(|_v| {
-                warn!(target: LOG_CORE, "{FM_BITCOIN_RPC_KIND_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_KIND_ENV} instead");
-            }))
-            .or_else(|_| env::var(FM_FORCE_BITCOIN_RPC_KIND_BAD_ENV).inspect(|_v| {
-                warn!(target: LOG_CORE, "{FM_FORCE_BITCOIN_RPC_KIND_BAD_ENV} is obsolete, use {FM_FORCE_BITCOIN_RPC_KIND_ENV} instead");
-            }))
-            .or_else(|_| env::var(FM_DEFAULT_BITCOIN_RPC_KIND_BAD_ENV).inspect(|_v| {
-                warn!(target: LOG_CORE, "{FM_DEFAULT_BITCOIN_RPC_KIND_BAD_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_KIND_ENV} instead");
-            }))
-            .with_context(|| {
-                anyhow::anyhow!("failure looking up env var for Bitcoin RPC kind")
+            kind,
+            url: url.parse().map_err(|source| EnvParseError::InvalidUrl {
+                var: url_var,
+                source,
             })?,
-        url: env::var(FM_FORCE_BITCOIN_RPC_URL_ENV)
-            .or_else(|_| env::var(FM_DEFAULT_BITCOIN_RPC_URL_ENV))
-            .or_else(|_| env::var(FM_BITCOIN_RPC_URL_ENV).inspect(|_v| {
-                warn!(target: LOG_CORE, "{FM_BITCOIN_RPC_URL_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_URL_ENV} instead");
-            }))
-            .or_else(|_| env::var(FM_FORCE_BITCOIN_RPC_URL_BAD_ENV).inspect(|_v| {
-                warn!(target: LOG_CORE, "{FM_FORCE_BITCOIN_RPC_URL_BAD_ENV} is obsolete, use {FM_FORCE_BITCOIN_RPC_URL_ENV} instead");
-            }))
-            .or_else(|_| env::var(FM_DEFAULT_BITCOIN_RPC_URL_BAD_ENV).inspect(|_v| {
-                warn!(target: LOG_CORE, "{FM_DEFAULT_BITCOIN_RPC_URL_BAD_ENV} is obsolete, use {FM_DEFAULT_BITCOIN_RPC_URL_ENV} instead");
-            }))
-            .with_context(|| {
-                anyhow::anyhow!("failure looking up env var for Bitcoin RPC URL")
-            })?
-            .parse()
-            .with_context(|| {
-                anyhow::anyhow!("failure parsing Bitcoin RPC URL")
-            })?,
-    })
+        })
     }
 }
 
-pub fn parse_kv_list_from_env<K, V>(env: &str) -> anyhow::Result<BTreeMap<K, V>>
+/// The environment variables holding the Bitcoin RPC kind, in lookup order,
+/// each paired with the variable that replaces it if it is deprecated.
+const BITCOIN_RPC_KIND_ENVS: &[(&str, Option<&str>)] = &[
+    (FM_FORCE_BITCOIN_RPC_KIND_ENV, None),
+    (FM_DEFAULT_BITCOIN_RPC_KIND_ENV, None),
+    (
+        FM_BITCOIN_RPC_KIND_ENV,
+        Some(FM_DEFAULT_BITCOIN_RPC_KIND_ENV),
+    ),
+    (
+        FM_FORCE_BITCOIN_RPC_KIND_BAD_ENV,
+        Some(FM_FORCE_BITCOIN_RPC_KIND_ENV),
+    ),
+    (
+        FM_DEFAULT_BITCOIN_RPC_KIND_BAD_ENV,
+        Some(FM_DEFAULT_BITCOIN_RPC_KIND_ENV),
+    ),
+];
+
+/// The environment variables holding the Bitcoin RPC URL, in lookup order,
+/// each paired with the variable that replaces it if it is deprecated.
+const BITCOIN_RPC_URL_ENVS: &[(&str, Option<&str>)] = &[
+    (FM_FORCE_BITCOIN_RPC_URL_ENV, None),
+    (FM_DEFAULT_BITCOIN_RPC_URL_ENV, None),
+    (FM_BITCOIN_RPC_URL_ENV, Some(FM_DEFAULT_BITCOIN_RPC_URL_ENV)),
+    (
+        FM_FORCE_BITCOIN_RPC_URL_BAD_ENV,
+        Some(FM_FORCE_BITCOIN_RPC_URL_ENV),
+    ),
+    (
+        FM_DEFAULT_BITCOIN_RPC_URL_BAD_ENV,
+        Some(FM_DEFAULT_BITCOIN_RPC_URL_ENV),
+    ),
+];
+
+/// The value of the first variable of `vars` that `lookup` finds, together
+/// with the name of that variable, warning about the deprecated ones on the
+/// way.
+///
+/// `canonical` is the variable a user should set, reported when none of them
+/// is.
+///
+/// A variable that is set but does not hold valid Unicode fails even when a
+/// lower-priority variable holds a usable value, because silently ignoring a
+/// variable the user did set would surprise them.
+fn first_env_var_set<L>(
+    vars: &[(&'static str, Option<&'static str>)],
+    canonical: &'static str,
+    lookup: &L,
+) -> Result<(&'static str, String), EnvParseError>
+where
+    L: Fn(&str) -> Option<OsString>,
+{
+    for &(var, replacement) in vars {
+        let Some(value) = lookup(var) else {
+            continue;
+        };
+        let Ok(value) = value.into_string() else {
+            return Err(EnvParseError::NotUnicode { var });
+        };
+
+        if let Some(replacement) = replacement {
+            warn!(target: LOG_CORE, "{var} is obsolete, use {replacement} instead");
+        }
+
+        return Ok((var, value));
+    }
+
+    Err(EnvParseError::NotSet { var: canonical })
+}
+
+/// Failure to build a configuration value from environment variables.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum EnvParseError {
+    /// None of the accepted variables is set; `var` is the canonical one to
+    /// set.
+    #[error("Environment variable {var} (or one of its aliases) is not set")]
+    NotSet { var: &'static str },
+    /// The variable is set but its value is not valid Unicode. A lower-priority
+    /// alias is not consulted once a variable is set.
+    #[error("Environment variable {var} is not valid Unicode")]
+    NotUnicode { var: &'static str },
+    /// The variable is set but is not a valid URL.
+    #[error("Environment variable {var} is not a valid URL")]
+    InvalidUrl {
+        var: &'static str,
+        #[source]
+        source: url::ParseError,
+    },
+}
+
+pub fn parse_kv_list_from_env<K, V>(env: &str) -> BTreeMap<K, V>
 where
     K: FromStr + cmp::Ord,
     <K as FromStr>::Err: std::error::Error,
@@ -275,7 +358,7 @@ where
 {
     let mut map = BTreeMap::new();
     let Ok(env_value) = std::env::var(env) else {
-        return Ok(BTreeMap::new());
+        return BTreeMap::new();
     };
     for kv in env_value.split(',') {
         let kv = kv.trim();
@@ -314,5 +397,8 @@ where
         }
     }
 
-    Ok(map)
+    map
 }
+
+#[cfg(test)]
+mod tests;

@@ -8,7 +8,8 @@ use fedimint_client::ClientHandleArc;
 use fedimint_core::config::{FederationId, FederationIdPrefix, JsonClientConfig};
 use fedimint_core::db::{Committable, DatabaseTransaction, NonCommittable};
 use fedimint_core::invite_code::InviteCode;
-use fedimint_core::util::{FmtCompactAnyhow as _, Spanned};
+use fedimint_core::module::AmountUnit;
+use fedimint_core::util::{FmtCompact as _, Spanned};
 use fedimint_core::{PeerId, TieredCounts};
 use fedimint_gateway_common::FederationInfo;
 use fedimint_gateway_server_db::GatewayDbtxNcExt as _;
@@ -16,6 +17,7 @@ use fedimint_gw_client::GatewayClientModule;
 use fedimint_gwv2_client::{GatewayClientModuleV2, GatewayOperationMetaV2};
 use fedimint_logging::LOG_GATEWAY;
 use fedimint_mint_client::MintClientModule;
+use fedimint_mintv2_client::MintClientModule as MintV2ClientModule;
 use tracing::{info, warn};
 
 use crate::error::{AdminGatewayError, FederationNotConnected};
@@ -122,12 +124,17 @@ impl FederationManager {
                             if !meta.waits_for_completion() {
                                 continue;
                             }
-                            let lnv2 =
-                                client.value().get_first_module::<GatewayClientModuleV2>()?;
+                            let lnv2 = client
+                                .value()
+                                .get_first_module::<GatewayClientModuleV2>()
+                                .map_err(anyhow::Error::from)?;
                             lnv2.await_completion(op_id).await;
                         }
                         "ln" => {
-                            let lnv1 = client.value().get_first_module::<GatewayClientModule>()?;
+                            let lnv1 = client
+                                .value()
+                                .get_first_module::<GatewayClientModule>()
+                                .map_err(anyhow::Error::from)?;
                             lnv1.await_completion(op_id).await;
                         }
                         _ => {}
@@ -277,7 +284,7 @@ impl FederationManager {
                 Err(err) => {
                     warn!(
                         target: LOG_GATEWAY,
-                        err = %err.fmt_compact_anyhow(),
+                        err = %err.fmt_compact(),
                         "Skipped Federation due to lack of primary module"
                     );
                     continue;
@@ -385,9 +392,26 @@ impl FederationManager {
         let client = self.client(federation_id).ok_or(FederationNotConnected {
             federation_id_prefix: federation_id.to_prefix(),
         })?;
-        let mint = client.value().get_first_module::<MintClientModule>()?;
-        let mut dbtx = mint.client_ctx.module_db().begin_transaction_nc().await;
-        let counts = mint.get_note_counts_by_denomination(&mut dbtx).await;
+        let counts = if let Ok(mint) = client.value().get_first_module::<MintClientModule>() {
+            let mut dbtx = mint.client_ctx.module_db().begin_transaction_nc().await;
+            mint.get_note_counts_by_denomination(&mut dbtx).await
+        } else if let Ok(mint) = client
+            .value()
+            .get_primary_module_for_unit::<MintV2ClientModule>(AmountUnit::BITCOIN)
+        {
+            let mut counts = TieredCounts::default();
+            for (denomination, count) in mint.get_count_by_denomination().await {
+                counts.inc(
+                    denomination.amount(),
+                    usize::try_from(count).expect("Note count fits in usize"),
+                );
+            }
+            counts
+        } else {
+            return Err(AdminGatewayError::Unexpected(anyhow::anyhow!(
+                "No mint module available"
+            )));
+        };
         info!(target: LOG_GATEWAY, ?counts, "Note counts");
         Ok(counts)
     }

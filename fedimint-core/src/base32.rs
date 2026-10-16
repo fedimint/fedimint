@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
-use anyhow::{Context, ensure};
+use thiserror::Error;
 
-use crate::encoding::{Decodable, Encodable};
+use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::module::registry::ModuleDecoderRegistry;
+use crate::util::FmtCompact as _;
 
 /// Lowercase RFC 4648 Base32hex alphabet (32 characters).
 const RFC4648: [u8; 32] = *b"0123456789abcdefghijklmnopqrstuv";
@@ -40,7 +41,7 @@ pub fn encode(input: &[u8]) -> String {
 
 /// Decodes a base 32 string back to raw bytes. Returns an error
 /// if any invalid character is encountered.
-pub fn decode(input: &str) -> anyhow::Result<Vec<u8>> {
+pub fn decode(input: &str) -> Result<Vec<u8>, Base32DecodeError> {
     let decode_table = RFC4648
         .iter()
         .enumerate()
@@ -52,11 +53,12 @@ pub fn decode(input: &str) -> anyhow::Result<Vec<u8>> {
     let mut buffer = 0;
     let mut bits = 0;
 
-    for byte in input.as_bytes() {
-        let value = decode_table
-            .get(byte)
-            .copied()
-            .context("Invalid character encountered")?;
+    for (index, ch) in input.char_indices() {
+        let value = ch
+            .is_ascii()
+            .then(|| decode_table.get(&(ch as u8)).copied())
+            .flatten()
+            .ok_or(Base32DecodeError::InvalidCharacter { ch, index })?;
 
         buffer |= value << bits;
         bits += 5;
@@ -80,17 +82,66 @@ pub fn encode_prefixed_bytes(prefix: &str, bytes: &[u8]) -> String {
     format!("{prefix}{}", encode(bytes))
 }
 
-pub fn decode_prefixed<T: Decodable>(prefix: &str, s: &str) -> anyhow::Result<T> {
+pub fn decode_prefixed<T: Decodable>(prefix: &str, s: &str) -> Result<T, PrefixedDecodeError> {
     Ok(T::consensus_decode_whole(
         &decode_prefixed_bytes(prefix, s)?,
         &ModuleDecoderRegistry::default(),
     )?)
 }
 
-pub fn decode_prefixed_bytes(prefix: &str, s: &str) -> anyhow::Result<Vec<u8>> {
+pub fn decode_prefixed_bytes(prefix: &str, s: &str) -> Result<Vec<u8>, PrefixedDecodeError> {
     let s = s.to_lowercase();
-    ensure!(s.starts_with(prefix), "Invalid Prefix");
-    decode(&s[prefix.len()..])
+    if !s.starts_with(prefix) {
+        return Err(PrefixedDecodeError::InvalidPrefix {
+            expected: prefix.to_owned(),
+        });
+    }
+    Ok(decode(&s[prefix.len()..])?)
+}
+
+/// Failure to decode a raw base 32 string.
+#[derive(Debug, Error, Clone, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum Base32DecodeError {
+    /// A character outside the RFC 4648 base32hex alphabet was encountered.
+    ///
+    /// `index` is a byte offset into the string passed to [`decode`]. When the
+    /// error originates in [`decode_prefixed`] or [`decode_prefixed_bytes`],
+    /// that string is the payload after the prefix was stripped and the input
+    /// was lowercased, not the string the caller supplied.
+    #[error("Invalid base32 character {ch:?} at byte index {index}")]
+    InvalidCharacter { ch: char, index: usize },
+}
+
+/// Failure to decode a prefixed base 32 string into a value.
+///
+/// The byte offset in a [`Base32DecodeError::InvalidCharacter`] source refers
+/// to the payload after the prefix was stripped and the input was lowercased,
+/// not to the string the caller supplied.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum PrefixedDecodeError {
+    /// The string does not start with the expected prefix.
+    #[error("Invalid prefix, expected '{expected}'")]
+    InvalidPrefix { expected: String },
+    /// The payload is not valid base 32.
+    #[error("Invalid base32 payload: {0}")]
+    Base32Decode(Base32DecodeError),
+    /// The decoded bytes are not a valid consensus encoding of the target type.
+    #[error("Invalid consensus encoding in base32 payload: {}", .0.fmt_compact())]
+    ConsensusDecode(DecodeError),
+}
+
+impl From<DecodeError> for PrefixedDecodeError {
+    fn from(source: DecodeError) -> Self {
+        Self::ConsensusDecode(source)
+    }
+}
+
+impl From<Base32DecodeError> for PrefixedDecodeError {
+    fn from(source: Base32DecodeError) -> Self {
+        Self::Base32Decode(source)
+    }
 }
 
 #[test]
@@ -117,4 +168,71 @@ fn test_base_32_roundtrip() {
             bytes
         );
     }
+}
+
+#[test]
+fn decode_reports_invalid_character_position() {
+    assert_eq!(
+        decode("ab!c"),
+        Err(Base32DecodeError::InvalidCharacter { ch: '!', index: 2 })
+    );
+}
+
+#[test]
+fn decode_escapes_invalid_character_in_message() {
+    let err = decode("a\nb").expect_err("a newline is not in the base32 alphabet");
+
+    assert_eq!(
+        err,
+        Base32DecodeError::InvalidCharacter { ch: '\n', index: 1 }
+    );
+    assert_eq!(
+        err.to_string(),
+        "Invalid base32 character '\\n' at byte index 1"
+    );
+}
+
+#[test]
+fn decode_prefixed_bytes_rejects_wrong_prefix() {
+    assert!(matches!(
+        decode_prefixed_bytes("fed", "xyz00"),
+        Err(PrefixedDecodeError::InvalidPrefix { expected }) if expected == "fed"
+    ));
+}
+
+#[test]
+fn decode_prefixed_reports_the_whole_decode_chain() {
+    use std::str::FromStr;
+
+    use crate::encoding::Encodable;
+    use crate::invite_code::InviteCode;
+
+    // Dropping the last byte of a valid invite code cuts off mid-federation-id, so
+    // the reader runs out of input partway through the consensus decode instead of
+    // failing on the very first byte.
+    let invite_code_str = "fed11qgqpu8rhwden5te0vejkg6tdd9h8gepwd4cxcumxv4jzuen0duhsqqfqh6nl7sgk72caxfx8khtfnn8y436q3nhyrkev3qp8ugdhdllnh86qmp42pm";
+    let invite = InviteCode::from_str(invite_code_str).expect("valid invite code");
+    let bytes = invite.consensus_encode_to_vec();
+    let encoded = encode_prefixed_bytes(FEDIMINT_PREFIX, &bytes[..bytes.len() - 1]);
+
+    let err =
+        decode_prefixed::<InviteCode>(FEDIMINT_PREFIX, &encoded).expect_err("payload is truncated");
+    let text = err.to_string();
+    let err_fmt_compact = err.fmt_compact().to_string();
+    let PrefixedDecodeError::ConsensusDecode(inner) = err else {
+        panic!("a truncated payload is a decode error: {err:?}");
+    };
+
+    assert_eq!(
+        text,
+        format!(
+            "Invalid consensus encoding in base32 payload: {}",
+            inner.fmt_compact()
+        )
+    );
+    assert_ne!(inner.fmt_compact().to_string(), inner.to_string());
+    assert_eq!(
+        err_fmt_compact, text,
+        "no source, so nothing is printed twice"
+    );
 }

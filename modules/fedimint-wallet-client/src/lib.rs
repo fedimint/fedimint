@@ -5,9 +5,6 @@
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::must_use_candidate)]
 
-#[cfg(feature = "uniffi")]
-::uniffi::setup_scaffolding!();
-
 pub mod api;
 #[cfg(feature = "cli")]
 mod cli;
@@ -18,10 +15,10 @@ pub mod client_db;
 /// Legacy, state-machine based peg-ins, replaced by `pegin_monitor`
 /// but retained for time being to ensure existing peg-ins complete.
 mod deposit;
+/// Error types of the wallet client.
+pub mod error;
 pub mod events;
 use events::SendPaymentEvent;
-#[cfg(feature = "uniffi")]
-pub mod ffi;
 /// Peg-in monitor: a task monitoring deposit addresses for peg-ins.
 mod pegin_monitor;
 mod withdraw;
@@ -31,7 +28,6 @@ use std::future;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use anyhow::{Context as AnyhowContext, anyhow, bail, ensure};
 use async_stream::{stream, try_stream};
 use backup::WalletModuleBackup;
 use bitcoin::address::NetworkUnchecked;
@@ -39,9 +35,12 @@ use bitcoin::secp256k1::{All, SECP256K1, Secp256k1};
 use bitcoin::{Address, Network, ScriptBuf};
 use client_db::{DbKeyPrefix, PegInTweakIndexKey, SupportsSafeDepositKey, TweakIdx};
 use fedimint_api_client::api::{DynModuleApi, FederationResult};
-use fedimint_bitcoind::{BitcoindTracked, DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc};
+use fedimint_bitcoind::{
+    BitcoinRpcError, BitcoindTracked, DynBitcoindRpc, IBitcoindRpc, create_esplora_rpc,
+};
+use fedimint_client_module::error::{ClientModuleError, TransactionSubmitError};
 use fedimint_client_module::module::init::{
-    ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs,
+    ClientModuleInit, ClientModuleInitArgs, ClientModuleRecoverArgs, RecoveryMode,
 };
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
@@ -54,7 +53,7 @@ use fedimint_client_module::transaction::{
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
+    Committable, Database, DatabaseError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::{BitcoinRpcConfig, is_running_in_test_env};
@@ -64,7 +63,7 @@ use fedimint_core::module::{
 };
 use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, sleep};
 use fedimint_core::util::backoff_util::background_backoff;
-use fedimint_core::util::{BoxStream, backoff_util, retry};
+use fedimint_core::util::{BoxStream, FmtCompact as _, backoff_util, retry};
 use fedimint_core::{
     BitcoinHash, OutPoint, TransactionId, apply, async_trait_maybe_send, push_db_pair_items,
     runtime, secp256k1,
@@ -75,13 +74,13 @@ pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig};
 use fedimint_wallet_common::tweakable::Tweakable;
 pub use fedimint_wallet_common::*;
-use futures::{Stream, StreamExt};
+use futures::{Stream, StreamExt, TryStreamExt as _};
 use rand::{Rng, thread_rng};
 use secp256k1::Keypair;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use tokio::sync::watch;
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
 
 use crate::api::WalletFederationApi;
 use crate::backup::{FEDERATION_RECOVER_MAX_GAP, RecoveryStateV2, WalletRecovery};
@@ -91,6 +90,10 @@ use crate::client_db::{
     RecoveryStateKey, SupportsSafeDepositPrefix,
 };
 use crate::deposit::DepositStateMachine;
+pub use crate::error::{
+    ConsensusVersionVotingError, DepositAddressError, MaxWithdrawableAmountError, PegInError,
+    PegOutError, SubscribeDepositError, SubscribeWithdrawError, WithdrawFeesError,
+};
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
 
 const WALLET_TWEAK_CHILD_ID: ChildId = ChildId(0);
@@ -114,7 +117,6 @@ pub enum DepositStateV1 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum DepositStateV2 {
     WaitingForTransaction,
     WaitingForConfirmation {
@@ -175,7 +177,6 @@ pub enum AllocateDepositOutcome {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum WithdrawState {
     Created,
     Succeeded(bitcoin::Txid),
@@ -211,13 +212,12 @@ impl WalletClientInit {
     async fn recover_from_slices(
         &self,
         args: &ClientModuleRecoverArgs<Self>,
-    ) -> anyhow::Result<Option<fedimint_core::Amount>> {
+        total_items: u64,
+    ) -> Option<fedimint_core::Amount> {
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),
             module_root_secret: args.module_root_secret().clone(),
         };
-
-        let total_items = args.module_api().fetch_recovery_count().await?;
 
         let mut state = RecoveryStateV2::new();
 
@@ -226,7 +226,7 @@ impl WalletClientInit {
         for start in (0..total_items).step_by(SLICE_SIZE as usize) {
             let end = std::cmp::min(start + SLICE_SIZE, total_items);
 
-            let items = args.module_api().fetch_recovery_slice(start, end).await?;
+            let items = args.module_api().fetch_recovery_slice(start, end).await;
 
             for item in &items {
                 match item {
@@ -274,7 +274,7 @@ impl WalletClientInit {
         // The wallet only discovers which on-chain outputs belonged to the
         // client during recovery; their value isn't known until the deposits
         // are later claimed, so no amount is reported here.
-        Ok(None)
+        None
     }
 }
 
@@ -360,7 +360,10 @@ impl ClientModuleInit for WalletClientInit {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         let data = WalletClientModuleData {
             cfg: args.cfg().clone(),
             module_root_secret: args.module_root_secret().clone(),
@@ -382,14 +385,14 @@ impl ClientModuleInit for WalletClientInit {
             if let Some(rpc) = factory(rpc_config.url.clone()).await {
                 rpc
             } else {
-                self.0
-                    .clone()
-                    .unwrap_or(create_esplora_rpc(&rpc_config.url)?)
+                self.0.clone().unwrap_or(
+                    create_esplora_rpc(&rpc_config.url).map_err(ClientModuleError::other)?,
+                )
             }
         } else {
             self.0
                 .clone()
-                .unwrap_or(create_esplora_rpc(&rpc_config.url)?)
+                .unwrap_or(create_esplora_rpc(&rpc_config.url).map_err(ClientModuleError::other)?)
         };
         let btc_rpc = BitcoindTracked::new(btc_rpc, "wallet-client").into_dyn();
 
@@ -415,6 +418,10 @@ impl ClientModuleInit for WalletClientInit {
         })
     }
 
+    fn recovery_mode(&self) -> RecoveryMode {
+        RecoveryMode::Unusable
+    }
+
     /// Wallet recovery
     ///
     /// Uses slice-based recovery if supported by the federation, otherwise
@@ -423,7 +430,7 @@ impl ClientModuleInit for WalletClientInit {
         &self,
         args: &ClientModuleRecoverArgs<Self>,
         snapshot: Option<&<Self::Module as ClientModule>::Backup>,
-    ) -> anyhow::Result<Option<fedimint_core::Amount>> {
+    ) -> Result<Option<fedimint_core::Amount>, ClientModuleError> {
         // Check if V1 (session-based) recovery state exists (resuming interrupted
         // recovery)
         if args
@@ -439,12 +446,15 @@ impl ClientModuleInit for WalletClientInit {
                 .await;
         }
 
-        // Determine which method to use based on endpoint availability
-        if args.module_api().fetch_recovery_count().await.is_ok() {
-            self.recover_from_slices(args).await
-        } else {
-            args.recover_from_history::<WalletRecovery>(self, snapshot)
-                .await
+        // Determine which method to use based on endpoint availability. The
+        // count fetched here is reused by the slice recovery so that it is not
+        // requested a second time (and cannot transiently fail there).
+        match args.module_api().fetch_recovery_count().await {
+            Ok(total_items) => Ok(self.recover_from_slices(args, total_items).await),
+            Err(_) => {
+                args.recover_from_history::<WalletRecovery>(self, snapshot)
+                    .await
+            }
         }
     }
 
@@ -549,7 +559,6 @@ impl WalletClientModuleData {
 }
 
 #[derive(Debug)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Object))]
 pub struct WalletClientModule {
     data: WalletClientModuleData,
     db: Database,
@@ -623,9 +632,14 @@ impl ClientModule for WalletClientModule {
         true
     }
 
-    async fn backup(&self) -> anyhow::Result<backup::WalletModuleBackup> {
+    async fn backup(&self) -> Result<backup::WalletModuleBackup, ClientModuleError> {
         // fetch consensus height first
-        let session_count = self.client_ctx.global_api().session_count().await?;
+        let session_count = self
+            .client_ctx
+            .global_api()
+            .session_count()
+            .await
+            .map_err(ClientModuleError::other)?;
 
         let mut dbtx = self.db.begin_transaction_nc().await;
         let next_pegin_tweak_idx = dbtx
@@ -671,8 +685,8 @@ impl ClientModule for WalletClientModule {
         &self,
         method: String,
         request: serde_json::Value,
-    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
-        Box::pin(try_stream! {
+    ) -> BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
+        let stream: BoxStream<'_, Result<serde_json::Value, RpcError>> = Box::pin(try_stream! {
             match method.as_str() {
                 "get_wallet_summary" => {
                     let _req: WalletSummaryRequest = serde_json::from_value(request)?;
@@ -692,7 +706,7 @@ impl ClientModule for WalletClientModule {
                     let req: PegInRequest = serde_json::from_value(request)?;
                     let response = self.peg_in(req)
                         .await
-                        .map_err(|e| anyhow::anyhow!("peg_in failed: {e}"))?;
+                        .map_err(RpcError::PegIn)?;
                     let result = serde_json::to_value(&response)?;
                     yield result;
                 },
@@ -700,7 +714,7 @@ impl ClientModule for WalletClientModule {
                     let req: PegOutRequest = serde_json::from_value(request)?;
                     let response = self.peg_out(req)
                         .await
-                        .map_err(|e| anyhow::anyhow!("peg_out failed: {e}"))?;
+                        .map_err(RpcError::PegOut)?;
                     let result = serde_json::to_value(&response)?;
                     yield result;
                 },
@@ -717,19 +731,51 @@ impl ClientModule for WalletClientModule {
                     }
                 }
                 _ => {
-                    Err(anyhow::format_err!("Unknown method: {method}"))?;
+                    Err(RpcError::UnknownMethod { method: method.clone() })?;
                 }
             }
-        })
+        });
+        Box::pin(stream.map_err(ClientModuleError::other))
     }
 
     #[cfg(feature = "cli")]
     async fn handle_cli_command(
         &self,
         args: &[std::ffi::OsString],
-    ) -> anyhow::Result<serde_json::Value> {
-        cli::handle_cli_command(self, args).await
+    ) -> Result<serde_json::Value, ClientModuleError> {
+        cli::handle_cli_command(self, args)
+            .await
+            .map_err(ClientModuleError::other)
     }
+}
+
+/// A failure of a wallet module RPC request.
+#[derive(Debug, thiserror::Error)]
+enum RpcError {
+    /// The request's parameters do not fit the method, or its response could
+    /// not be serialized.
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
+
+    /// The peg-in could not be started.
+    #[error("peg_in failed")]
+    PegIn(#[source] DepositAddressError),
+
+    /// The peg-out could not be started.
+    #[error("peg_out failed")]
+    PegOut(#[source] PegOutError),
+
+    /// The deposit's updates could not be followed.
+    #[error(transparent)]
+    SubscribeDeposit(#[from] SubscribeDepositError),
+
+    /// The withdrawal's updates could not be followed.
+    #[error(transparent)]
+    SubscribeWithdraw(#[from] SubscribeWithdrawError),
+
+    /// The request names a method the module does not have.
+    #[error("Unknown method: {method}")]
+    UnknownMethod { method: String },
 }
 
 #[derive(Deserialize)]
@@ -749,12 +795,6 @@ pub struct PegInRequest {
     pub extra_meta: serde_json::Value,
 }
 
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(PegInRequest, String, {
-    lower: |v| serde_json::to_string(&v).expect("PegInRequest serialization cannot fail"),
-    try_lift: |s| serde_json::from_str::<PegInRequest>(&s).map_err(|e| anyhow!("Failed to parse PegInRequest: {e}")),
-});
-
 #[derive(Deserialize)]
 struct SubscribeDepositRequest {
     operation_id: OperationId,
@@ -766,14 +806,12 @@ struct SubscribeWithdrawRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PegInResponse {
     pub deposit_address: Address<NetworkUnchecked>,
     pub operation_id: OperationId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PegOutRequest {
     pub amount_sat: u64,
     pub destination_address: Address<NetworkUnchecked>,
@@ -781,7 +819,6 @@ pub struct PegOutRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PegOutResponse {
     pub operation_id: OperationId,
 }
@@ -863,11 +900,11 @@ impl WalletClientModule {
         &self,
         address: &bitcoin::Address,
         amount: bitcoin::Amount,
-    ) -> anyhow::Result<PegOutFees> {
+    ) -> Result<PegOutFees, WithdrawFeesError> {
         self.module_api
             .fetch_peg_out_fees(address, amount)
             .await?
-            .context("Federation didn't return peg-out fees")
+            .ok_or(WithdrawFeesError::NoQuote)
     }
 
     /// Computes the federation fee a peg-out of an on-chain output worth
@@ -884,7 +921,10 @@ impl WalletClientModule {
     /// The on-chain Bitcoin miner fee is deliberately excluded: it is part of
     /// the output `amount` (see [`Self::get_withdraw_fees`]), not the
     /// on-federation transaction fee.
-    pub async fn send_fee_quote(&self, amount: bitcoin::Amount) -> anyhow::Result<FeeQuote> {
+    pub async fn send_fee_quote(
+        &self,
+        amount: bitcoin::Amount,
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         let amount = fedimint_core::Amount::from_sats(amount.to_sat());
         self.client_ctx
             .fee_quote(
@@ -930,13 +970,14 @@ impl WalletClientModule {
     /// set or feerate moves before the peg-out is processed it is rejected, and
     /// the caller should retry with a fresh quote.
     ///
-    /// Returns an error if the balance cannot cover the destination's dust
-    /// limit plus fees.
+    /// Returns [`MaxWithdrawableAmountError::BalanceTooLow`] if the balance
+    /// cannot cover the destination's dust limit plus fees, or
+    /// [`MaxWithdrawableAmountError::Quote`] if the fee probe itself failed.
     pub async fn max_withdrawable_amount(
         &self,
         address: &bitcoin::Address,
         balance: fedimint_core::Amount,
-    ) -> anyhow::Result<(bitcoin::Amount, PegOutFees)> {
+    ) -> Result<(bitcoin::Amount, PegOutFees), MaxWithdrawableAmountError> {
         // Upper bound on the miner fee: the weight only grows as the federation
         // has to reach for more UTXOs, so no smaller withdrawal costs more.
         let max_fees = self
@@ -946,10 +987,11 @@ impl WalletClientModule {
             )
             .await?;
         let max_fee_msats = fedimint_core::Amount::from_sats(max_fees.amount().to_sat());
+        let dust_limit = address.script_pubkey().minimal_non_dust();
 
         let max = max_affordable_send_amount(
             balance,
-            fedimint_core::Amount::from_sats(address.script_pubkey().minimal_non_dust().to_sat()),
+            fedimint_core::Amount::from_sats(dust_limit.to_sat()),
             balance,
             // A peg-out funds a whole number of sats, so round the probe up to
             // the next sat before adding the miner fee; the solver searches
@@ -962,7 +1004,11 @@ impl WalletClientModule {
             },
         )
         .await
-        .ok_or_else(|| anyhow!("Balance is too low to withdraw any amount after fees"))?;
+        .map_err(MaxWithdrawableAmountError::Quote)?
+        .ok_or(MaxWithdrawableAmountError::BalanceTooLow {
+            balance,
+            dust_limit,
+        })?;
 
         // `gross_up` rounded up to whole satoshis, so the largest affordable
         // amount already sits on a satoshi boundary; no value is lost here.
@@ -978,12 +1024,12 @@ impl WalletClientModule {
     }
 
     /// Returns a summary of the wallet's coins
-    pub async fn get_wallet_summary(&self) -> anyhow::Result<WalletSummary> {
-        Ok(self.module_api.fetch_wallet_summary().await?)
+    pub async fn get_wallet_summary(&self) -> FederationResult<WalletSummary> {
+        self.module_api.fetch_wallet_summary().await
     }
 
-    pub async fn get_block_count_local(&self) -> anyhow::Result<u32> {
-        Ok(self.module_api.fetch_block_count_local().await?)
+    pub async fn get_block_count_local(&self) -> FederationResult<u32> {
+        self.module_api.fetch_block_count_local().await
     }
 
     pub fn create_withdraw_output(
@@ -992,7 +1038,7 @@ impl WalletClientModule {
         address: bitcoin::Address,
         amount: bitcoin::Amount,
         fees: PegOutFees,
-    ) -> anyhow::Result<ClientOutputBundle<WalletOutput, WalletClientStates>> {
+    ) -> ClientOutputBundle<WalletOutput, WalletClientStates> {
         let output = WalletOutput::new_v0_peg_out(address, amount, fees);
 
         let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
@@ -1011,7 +1057,7 @@ impl WalletClientModule {
             })]
         };
 
-        Ok(ClientOutputBundle::new(
+        ClientOutputBundle::new(
             vec![ClientOutput::<WalletOutput> {
                 output,
                 amounts: Amounts::new_bitcoin(amount),
@@ -1019,34 +1065,30 @@ impl WalletClientModule {
             vec![ClientOutputSM::<WalletClientStates> {
                 state_machines: Arc::new(sm_gen),
             }],
-        ))
+        )
     }
 
-    pub async fn peg_in(&self, req: PegInRequest) -> anyhow::Result<PegInResponse> {
+    pub async fn peg_in(&self, req: PegInRequest) -> Result<PegInResponse, DepositAddressError> {
         let deposit_address = self.safe_allocate_deposit_address(req.extra_meta).await?;
 
         Ok(PegInResponse {
-            deposit_address: Address::from_script(
-                &deposit_address.address.script_pubkey(),
-                self.get_network(),
-            )?
-            .as_unchecked()
-            .clone(),
+            deposit_address: deposit_address.address.into_unchecked(),
             operation_id: deposit_address.operation_id,
         })
     }
 
-    pub async fn peg_out(&self, req: PegOutRequest) -> anyhow::Result<PegOutResponse> {
+    pub async fn peg_out(&self, req: PegOutRequest) -> Result<PegOutResponse, PegOutError> {
         let amount = bitcoin::Amount::from_sat(req.amount_sat);
+        let network = self.get_network();
         let destination = req
             .destination_address
-            .require_network(self.get_network())?;
+            .require_network(network)
+            .map_err(|_| PegOutError::WrongNetwork { expected: network })?;
 
         let fees = self.get_withdraw_fees(&destination, amount).await?;
         let operation_id = self
             .withdraw(&destination, amount, fees, req.extra_meta)
-            .await
-            .context("Failed to initiate withdraw")?;
+            .await?;
 
         Ok(PegOutResponse { operation_id })
     }
@@ -1055,7 +1097,7 @@ impl WalletClientModule {
         &self,
         operation_id: OperationId,
         rbf: &Rbf,
-    ) -> anyhow::Result<ClientOutputBundle<WalletOutput, WalletClientStates>> {
+    ) -> ClientOutputBundle<WalletOutput, WalletClientStates> {
         let output = WalletOutput::new_v0_rbf(rbf.fees, rbf.txid);
 
         let amount = output.maybe_v0_ref().expect("v0 output").amount().into();
@@ -1074,7 +1116,7 @@ impl WalletClientModule {
             })]
         };
 
-        Ok(ClientOutputBundle::new(
+        ClientOutputBundle::new(
             vec![ClientOutput::<WalletOutput> {
                 output,
                 amounts: Amounts::new_bitcoin(amount),
@@ -1082,7 +1124,7 @@ impl WalletClientModule {
             vec![ClientOutputSM::<WalletClientStates> {
                 state_machines: Arc::new(sm_gen),
             }],
-        ))
+        )
     }
 
     pub async fn btc_tx_has_no_size_limit(&self) -> FederationResult<bool> {
@@ -1098,27 +1140,13 @@ impl WalletClientModule {
     /// verified the version, it must be online to fetch the latest wallet
     /// module consensus version.
     pub async fn supports_safe_deposit(&self) -> bool {
-        let mut dbtx = self.db.begin_transaction().await;
-
-        let already_verified_supports_safe_deposit =
-            dbtx.get_value(&SupportsSafeDepositKey).await.is_some();
-
-        already_verified_supports_safe_deposit || {
-            match self.module_api.module_consensus_version().await {
-                Ok(module_consensus_version) => {
-                    let supported_version =
-                        SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version;
-
-                    if supported_version {
-                        dbtx.insert_new_entry(&SupportsSafeDepositKey, &()).await;
-                        dbtx.commit_tx().await;
-                    }
-
-                    supported_version
-                }
-                Err(_) => false,
-            }
+        if supports_safe_deposit_verified(&self.db).await {
+            return true;
         }
+
+        verify_supports_safe_deposit(&self.db, &self.module_api)
+            .await
+            .unwrap_or(false)
     }
 
     /// Allocates a deposit address controlled by the federation, guaranteeing
@@ -1131,14 +1159,13 @@ impl WalletClientModule {
     pub async fn safe_allocate_deposit_address<M>(
         &self,
         extra_meta: M,
-    ) -> anyhow::Result<DepositAddressInfo>
+    ) -> Result<DepositAddressInfo, DepositAddressError>
     where
         M: Serialize + MaybeSend + MaybeSync,
     {
-        ensure!(
-            self.supports_safe_deposit().await,
-            "Wallet module consensus version doesn't support safe deposits",
-        );
+        if !self.supports_safe_deposit().await {
+            return Err(DepositAddressError::SafeDepositUnverified);
+        }
 
         self.allocate_deposit_address_expert_only(extra_meta).await
     }
@@ -1163,7 +1190,7 @@ impl WalletClientModule {
     pub async fn allocate_deposit_address_expert_only<M>(
         &self,
         extra_meta: M,
-    ) -> anyhow::Result<DepositAddressInfo>
+    ) -> Result<DepositAddressInfo, DepositAddressError>
     where
         M: Serialize + MaybeSend + MaybeSync,
     {
@@ -1216,14 +1243,7 @@ impl WalletClientModule {
                 },
                 Some(100),
             )
-            .await
-            .map_err(|e| match e {
-                AutocommitError::CommitFailed {
-                    last_error,
-                    attempts,
-                } => anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
-                AutocommitError::ClosureError { error, .. } => error,
-            })?;
+            .await?;
 
         Ok(deposit_address)
     }
@@ -1268,7 +1288,7 @@ impl WalletClientModule {
     pub async fn allocate_deposit_address_pooled_stateless(
         &self,
         max_gap_size: usize,
-    ) -> anyhow::Result<MaybeNewAddress> {
+    ) -> Result<MaybeNewAddress, DepositAddressError> {
         let max_gap_size_u64 = u64::try_from(max_gap_size).unwrap_or(u64::MAX);
         let extra_meta_value = serde_json::Value::Null;
         let result = self
@@ -1296,7 +1316,7 @@ impl WalletClientModule {
                                 })
                                 .collect();
 
-                            return Ok::<_, anyhow::Error>(
+                            return Ok::<_, DepositAddressError>(
                                 MaybeNewAddress::TooManyUnusedAddresses(addresses),
                             );
                         }
@@ -1341,14 +1361,7 @@ impl WalletClientModule {
                 },
                 Some(100),
             )
-            .await
-            .map_err(|e| match e {
-                AutocommitError::CommitFailed {
-                    last_error,
-                    attempts,
-                } => anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
-                AutocommitError::ClosureError { error, .. } => error,
-            })?;
+            .await?;
 
         Ok(result)
     }
@@ -1401,7 +1414,7 @@ impl WalletClientModule {
     pub async fn allocate_deposit_address_pooled(
         &self,
         max_gap_size: usize,
-    ) -> anyhow::Result<(DepositAddressInfo, AllocateDepositOutcome)> {
+    ) -> Result<(DepositAddressInfo, AllocateDepositOutcome), DepositAddressError> {
         let stateless = self
             .allocate_deposit_address_pooled_stateless(max_gap_size)
             .await?;
@@ -1434,18 +1447,15 @@ impl WalletClientModule {
                         let existing = dbtx
                             .get_value(&PegInTweakIndexKey(reused_address.tweak_idx))
                             .await
-                            .with_context(|| {
-                                format!(
-                                    "Pooled address disappeared while reusing {}",
-                                    reused_address.tweak_idx
-                                )
+                            .ok_or(DepositAddressError::PooledAddressDisappeared {
+                                tweak_idx: reused_address.tweak_idx,
                             })?;
 
-                        ensure!(
-                            existing.claimed.is_empty(),
-                            "Pooled address was used while reusing {}",
-                            reused_address.tweak_idx
-                        );
+                        if !existing.claimed.is_empty() {
+                            return Err(DepositAddressError::PooledAddressUsed {
+                                tweak_idx: reused_address.tweak_idx,
+                            });
+                        }
 
                         dbtx.insert_entry(&PegInPoolCursorKey, &reused_address.tweak_idx.next())
                             .await;
@@ -1475,7 +1485,7 @@ impl WalletClientModule {
                             sender.send_replace(());
                         });
 
-                        Ok::<_, anyhow::Error>((
+                        Ok::<_, DepositAddressError>((
                             reused_address,
                             AllocateDepositOutcome::Reused {
                                 original_tweak_idx: existing_tweak_idx,
@@ -1485,14 +1495,7 @@ impl WalletClientModule {
                 },
                 Some(100),
             )
-            .await
-            .map_err(|e| match e {
-                AutocommitError::CommitFailed {
-                    last_error,
-                    attempts,
-                } => anyhow!("Failed to commit after {attempts} attempts: {last_error}"),
-                AutocommitError::ClosureError { error, .. } => error,
-            })?;
+            .await?;
 
         Ok(result)
     }
@@ -1505,16 +1508,8 @@ impl WalletClientModule {
     pub async fn subscribe_deposit(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<DepositStateV2>> {
-        let operation = self
-            .client_ctx
-            .get_operation(operation_id)
-            .await
-            .with_context(|| anyhow!("Operation not found: {}", operation_id.fmt_short()))?;
-
-        if operation.operation_module_kind() != WalletCommonInit::KIND.as_str() {
-            bail!("Operation is not a wallet operation");
-        }
+    ) -> Result<UpdateStreamOrOutcome<DepositStateV2>, SubscribeDepositError> {
+        let operation = self.client_ctx.get_operation(operation_id).await?;
 
         let operation_meta = operation.meta::<WalletOperationMeta>();
 
@@ -1522,10 +1517,13 @@ impl WalletClientModule {
             address, tweak_idx, ..
         } = operation_meta.variant
         else {
-            bail!("Operation is not a deposit operation");
+            return Err(SubscribeDepositError::NotADeposit);
         };
 
-        let address = address.require_network(self.cfg().network.0)?;
+        let network = self.cfg().network.0;
+        let address = address
+            .require_network(network)
+            .map_err(|_| SubscribeDepositError::WrongNetwork { expected: network })?;
 
         // The old deposit operations don't have tweak_idx set
         let Some(tweak_idx) = tweak_idx else {
@@ -1534,7 +1532,7 @@ impl WalletClientModule {
             // the final state though if it reached any.
             let outcome_v1 = operation
                 .outcome::<DepositStateV1>()
-                .context("Old pending deposit, can't subscribe to updates")?;
+                .ok_or(SubscribeDepositError::OldPendingDeposit)?;
 
             let outcome_v2 = match outcome_v1 {
                 DepositStateV1::Claimed(tx_info) => DepositStateV2::Claimed {
@@ -1545,7 +1543,7 @@ impl WalletClientModule {
                     },
                 },
                 DepositStateV1::Failed(error) => DepositStateV2::Failed(error),
-                _ => bail!("Non-final outcome in operation log"),
+                _ => return Err(SubscribeDepositError::NonFinalOutcome),
             };
 
             return Ok(UpdateStreamOrOutcome::Outcome(outcome_v2));
@@ -1593,7 +1591,7 @@ impl WalletClientModule {
                                 },
                                 amount
                             ))
-                        }).context("No deposit transaction found")
+                        }).ok_or(FetchDepositTransactionError::NotFound)
                     }
                 ).await.expect("Will never give up");
 
@@ -1617,7 +1615,7 @@ impl WalletClientModule {
                         btc_deposited,
                         btc_out_point
                     },
-                    Err(e) => yield DepositStateV2::Failed(e.to_string())
+                    Err(e) => yield DepositStateV2::Failed(e.fmt_compact().to_string())
                 }
             }
         }}))
@@ -1639,7 +1637,7 @@ impl WalletClientModule {
     pub async fn find_tweak_idx_by_address(
         &self,
         address: bitcoin::Address<NetworkUnchecked>,
-    ) -> anyhow::Result<TweakIdx> {
+    ) -> Result<TweakIdx, PegInError> {
         let data = self.data.clone();
         let Some((tweak_idx, _)) = self
             .db
@@ -1654,7 +1652,7 @@ impl WalletClientModule {
             .next()
             .await
         else {
-            bail!("Address not found in the list of derived keys");
+            return Err(PegInError::AddressNotDerived);
         };
 
         Ok(tweak_idx.0)
@@ -1662,7 +1660,7 @@ impl WalletClientModule {
     pub async fn find_tweak_idx_by_operation_id(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<TweakIdx> {
+    ) -> Result<TweakIdx, PegInError> {
         Ok(self
             .client_ctx
             .module_db()
@@ -1674,7 +1672,7 @@ impl WalletClientModule {
             .filter(|(_k, v)| future::ready(v.operation_id == operation_id))
             .next()
             .await
-            .ok_or_else(|| anyhow::format_err!("OperationId not found"))?
+            .ok_or(PegInError::NoAddressForOperation { operation_id })?
             .0
             .0)
     }
@@ -1682,7 +1680,7 @@ impl WalletClientModule {
     pub async fn get_pegin_tweak_idx(
         &self,
         tweak_idx: TweakIdx,
-    ) -> anyhow::Result<PegInTweakIndexData> {
+    ) -> Result<PegInTweakIndexData, PegInError> {
         self.client_ctx
             .module_db()
             .clone()
@@ -1690,7 +1688,7 @@ impl WalletClientModule {
             .await
             .get_value(&PegInTweakIndexKey(tweak_idx))
             .await
-            .ok_or_else(|| anyhow::format_err!("TweakIdx not found"))
+            .ok_or(PegInError::TweakIdxNotFound { tweak_idx })
     }
 
     pub async fn get_claimed_pegins(
@@ -1732,7 +1730,7 @@ impl WalletClientModule {
     pub async fn recheck_pegin_address_by_op_id(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), PegInError> {
         let tweak_idx = self.find_tweak_idx_by_operation_id(operation_id).await?;
 
         self.recheck_pegin_address(tweak_idx).await
@@ -1742,13 +1740,13 @@ impl WalletClientModule {
     pub async fn recheck_pegin_address_by_address(
         &self,
         address: bitcoin::Address<NetworkUnchecked>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), PegInError> {
         self.recheck_pegin_address(self.find_tweak_idx_by_address(address).await?)
             .await
     }
 
     /// Schedule given address for immediate re-check for deposits
-    pub async fn recheck_pegin_address(&self, tweak_idx: TweakIdx) -> anyhow::Result<()> {
+    pub async fn recheck_pegin_address(&self, tweak_idx: TweakIdx) -> Result<(), PegInError> {
         self.db
             .autocommit(
                 |dbtx, _| {
@@ -1757,7 +1755,7 @@ impl WalletClientModule {
                         let db_val = dbtx
                             .get_value(&db_key)
                             .await
-                            .ok_or_else(|| anyhow::format_err!("DBKey not found"))?;
+                            .ok_or(PegInError::TweakIdxNotFound { tweak_idx })?;
 
                         dbtx.insert_entry(
                             &db_key,
@@ -1773,7 +1771,7 @@ impl WalletClientModule {
                             sender.send_replace(());
                         });
 
-                        Ok::<_, anyhow::Error>(())
+                        Ok::<_, PegInError>(())
                     })
                 },
                 Some(100),
@@ -1788,7 +1786,7 @@ impl WalletClientModule {
         &self,
         operation_id: OperationId,
         num_deposits: usize,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), PegInError> {
         let tweak_idx = self.find_tweak_idx_by_operation_id(operation_id).await?;
         self.await_num_deposits(tweak_idx, num_deposits).await
     }
@@ -1797,7 +1795,7 @@ impl WalletClientModule {
         &self,
         address: bitcoin::Address<NetworkUnchecked>,
         num_deposits: usize,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), PegInError> {
         self.await_num_deposits(self.find_tweak_idx_by_address(address).await?, num_deposits)
             .await
     }
@@ -1807,7 +1805,7 @@ impl WalletClientModule {
         &self,
         tweak_idx: TweakIdx,
         num_deposits: usize,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), PegInError> {
         let operation_id = self.get_pegin_tweak_idx(tweak_idx).await?.operation_id;
 
         let mut receiver = self.pegin_claimed_receiver.clone();
@@ -1825,7 +1823,10 @@ impl WalletClientModule {
                 debug!(target: LOG_CLIENT_MODULE_WALLET, has=pegins.len(), "Not enough deposits");
                 self.recheck_pegin_address(tweak_idx).await?;
                 runtime::sleep(backoff.next().unwrap_or_default()).await;
-                receiver.changed().await?;
+                receiver
+                    .changed()
+                    .await
+                    .map_err(|_| PegInError::MonitorStopped)?;
                 continue;
             }
 
@@ -1840,8 +1841,8 @@ impl WalletClientModule {
                 debug!(target: LOG_CLIENT_MODULE_WALLET, out_points=?change, "Ensuring deposists claimed");
                 let tx_subscriber = self.client_ctx.transaction_updates(operation_id).await;
 
-                if let Err(e) = tx_subscriber.await_tx_accepted(transaction_id).await {
-                    bail!("{e}");
+                if let Err(reason) = tx_subscriber.await_tx_accepted(transaction_id).await {
+                    return Err(PegInError::TransactionRejected { reason });
                 }
 
                 debug!(target: LOG_CLIENT_MODULE_WALLET, out_points=?change, "Ensuring outputs claimed");
@@ -1865,12 +1866,12 @@ impl WalletClientModule {
         amount: bitcoin::Amount,
         fee: PegOutFees,
         extra_meta: M,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, TransactionSubmitError> {
         {
             let operation_id = OperationId(thread_rng().r#gen());
 
             let withdraw_output =
-                self.create_withdraw_output(operation_id, address.clone(), amount, fee)?;
+                self.create_withdraw_output(operation_id, address.clone(), amount, fee);
             let tx_builder = TransactionBuilder::new()
                 .with_outputs(self.client_ctx.make_client_outputs(withdraw_output));
 
@@ -1927,10 +1928,10 @@ impl WalletClientModule {
         &self,
         rbf: Rbf,
         extra_meta: M,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, TransactionSubmitError> {
         let operation_id = OperationId(thread_rng().r#gen());
 
-        let withdraw_output = self.create_rbf_withdraw_output(operation_id, &rbf)?;
+        let withdraw_output = self.create_rbf_withdraw_output(operation_id, &rbf);
         let tx_builder = TransactionBuilder::new()
             .with_outputs(self.client_ctx.make_client_outputs(withdraw_output));
 
@@ -1956,23 +1957,15 @@ impl WalletClientModule {
     pub async fn subscribe_withdraw_updates(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<WithdrawState>> {
-        let operation = self
-            .client_ctx
-            .get_operation(operation_id)
-            .await
-            .with_context(|| anyhow!("Operation not found: {}", operation_id.fmt_short()))?;
-
-        if operation.operation_module_kind() != WalletCommonInit::KIND.as_str() {
-            bail!("Operation is not a wallet operation");
-        }
+    ) -> Result<UpdateStreamOrOutcome<WithdrawState>, SubscribeWithdrawError> {
+        let operation = self.client_ctx.get_operation(operation_id).await?;
 
         let operation_meta = operation.meta::<WalletOperationMeta>();
 
         let (WalletOperationMetaVariant::Withdraw { change, .. }
         | WalletOperationMetaVariant::RbfWithdraw { change, .. }) = operation_meta.variant
         else {
-            bail!("Operation is not a withdraw operation");
+            return Err(SubscribeWithdrawError::NotAWithdrawal);
         };
 
         let mut operation_stream = self.notifier.subscribe(operation_id).await;
@@ -2023,13 +2016,15 @@ impl WalletClientModule {
         ))
     }
 
-    fn admin_auth(&self) -> anyhow::Result<ApiAuth> {
+    fn admin_auth(&self) -> Result<ApiAuth, ConsensusVersionVotingError> {
         self.admin_auth
             .clone()
-            .ok_or_else(|| anyhow::format_err!("Admin auth not set"))
+            .ok_or(ConsensusVersionVotingError::AdminAuthMissing)
     }
 
-    pub async fn activate_consensus_version_voting(&self) -> anyhow::Result<()> {
+    pub async fn activate_consensus_version_voting(
+        &self,
+    ) -> Result<(), ConsensusVersionVotingError> {
         self.module_api
             .activate_consensus_version_voting(self.admin_auth()?)
             .await?;
@@ -2038,33 +2033,108 @@ impl WalletClientModule {
     }
 }
 
+/// Why a deposit address's funding transaction was not found, so that it is
+/// looked up again.
+#[derive(Debug, thiserror::Error)]
+enum FetchDepositTransactionError {
+    /// The Bitcoin backend could not report the address's history.
+    #[error(transparent)]
+    BitcoinRpc(#[from] BitcoinRpcError),
+
+    /// The address's history holds no transaction paying to it yet.
+    #[error("No deposit transaction found")]
+    NotFound,
+}
+
 /// Polls the federation checking if the activated module consensus version
 /// supports safe deposits, saving the result in the db once it does.
 async fn poll_supports_safe_deposit_version(db: Database, module_api: DynModuleApi) {
     loop {
-        let mut dbtx = db.begin_transaction().await;
-
-        if dbtx.get_value(&SupportsSafeDepositKey).await.is_some() {
+        if supports_safe_deposit_verified(&db).await {
             break;
         }
 
         module_api.wait_for_initialized_connections().await;
 
-        if let Ok(module_consensus_version) = module_api.module_consensus_version().await
-            && SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version
-        {
-            dbtx.insert_new_entry(&SupportsSafeDepositKey, &()).await;
-            dbtx.commit_tx().await;
+        if verify_supports_safe_deposit(&db, &module_api).await == Some(true) {
             break;
         }
-
-        drop(dbtx);
 
         if is_running_in_test_env() {
             // Even in tests we don't want to spam the federation with requests about it
             sleep(Duration::from_secs(10)).await;
         } else {
             sleep(Duration::from_hours(1)).await;
+        }
+    }
+}
+
+/// Whether the federation's wallet module consensus version was already
+/// verified to support safe deposits.
+async fn supports_safe_deposit_verified(db: &Database) -> bool {
+    db.begin_transaction_nc()
+        .await
+        .get_value(&SupportsSafeDepositKey)
+        .await
+        .is_some()
+}
+
+/// Fetches the federation's wallet module consensus version and records the
+/// marker if it supports safe deposits.
+///
+/// Returns `None` if the version could not be fetched, e.g. while offline.
+async fn verify_supports_safe_deposit(db: &Database, module_api: &DynModuleApi) -> Option<bool> {
+    let module_consensus_version = match module_api.module_consensus_version().await {
+        Ok(module_consensus_version) => module_consensus_version,
+        Err(err) => {
+            debug!(
+                target: LOG_CLIENT_MODULE_WALLET,
+                err = %err.fmt_compact(),
+                "Could not fetch the wallet module consensus version"
+            );
+            return None;
+        }
+    };
+
+    let supported_version = SAFE_DEPOSIT_MODULE_CONSENSUS_VERSION <= module_consensus_version;
+
+    if supported_version {
+        store_supports_safe_deposit(db.begin_transaction().await).await;
+    }
+
+    Some(supported_version)
+}
+
+/// Records in `dbtx` that the federation's wallet module consensus version
+/// was verified to support safe deposits, and commits it.
+///
+/// The marker is written by both the background version poller and
+/// [`WalletClientModule::supports_safe_deposit`], which race right after
+/// joining a federation. The loser's commit fails with a write conflict, but
+/// the winner stored the very same marker and nothing ever removes it, so the
+/// conflict is treated as success. That is only sound for a fresh `dbtx` whose
+/// sole write is the marker: any other write in it would be lost as well.
+///
+/// Any other commit error is logged rather than escalated: the marker only
+/// lets future checks skip re-verifying the version, callers already have
+/// their answer, and the next verification simply writes it again — an
+/// optional write is not worth crashing over.
+async fn store_supports_safe_deposit(mut dbtx: DatabaseTransaction<'_, Committable>) {
+    if dbtx.get_value(&SupportsSafeDepositKey).await.is_some() {
+        // The other writer won before this transaction started.
+        return;
+    }
+
+    dbtx.insert_entry(&SupportsSafeDepositKey, &()).await;
+
+    match dbtx.commit_tx_result().await {
+        Ok(()) | Err(DatabaseError::WriteConflict) => {}
+        Err(err) => {
+            warn!(
+                target: LOG_CLIENT_MODULE_WALLET,
+                err = %err.fmt_compact(),
+                "Failed to store the safe-deposit marker"
+            );
         }
     }
 }
@@ -2127,164 +2197,4 @@ impl State for WalletClientStates {
 }
 
 #[cfg(all(test, not(target_family = "wasm")))]
-mod tests {
-    use std::collections::BTreeSet;
-    use std::sync::atomic::{AtomicBool, Ordering};
-
-    use super::*;
-    use crate::backup::{
-        RECOVER_NUM_IDX_ADD_TO_LAST_USED, RecoverScanOutcome, recover_scan_idxes_for_activity,
-    };
-
-    #[allow(clippy::too_many_lines)] // shut-up clippy, it's a test
-    #[tokio::test(flavor = "multi_thread")]
-    async fn sanity_test_recover_inner() {
-        {
-            let last_checked = AtomicBool::new(false);
-            let last_checked = &last_checked;
-            assert_eq!(
-                recover_scan_idxes_for_activity(
-                    TweakIdx(0),
-                    &BTreeSet::new(),
-                    |cur_idx| async move {
-                        Ok(match cur_idx {
-                            TweakIdx(9) => {
-                                last_checked.store(true, Ordering::SeqCst);
-                                vec![]
-                            }
-                            TweakIdx(10) => panic!("Shouldn't happen"),
-                            TweakIdx(11) => {
-                                vec![0usize] /* just for type inference */
-                            }
-                            _ => vec![],
-                        })
-                    }
-                )
-                .await
-                .unwrap(),
-                RecoverScanOutcome {
-                    last_used_idx: None,
-                    new_start_idx: TweakIdx(RECOVER_NUM_IDX_ADD_TO_LAST_USED),
-                    tweak_idxes_with_pegins: BTreeSet::from([])
-                }
-            );
-            assert!(last_checked.load(Ordering::SeqCst));
-        }
-
-        {
-            let last_checked = AtomicBool::new(false);
-            let last_checked = &last_checked;
-            assert_eq!(
-                recover_scan_idxes_for_activity(
-                    TweakIdx(0),
-                    &BTreeSet::from([TweakIdx(1), TweakIdx(2)]),
-                    |cur_idx| async move {
-                        Ok(match cur_idx {
-                            TweakIdx(1) => panic!("Shouldn't happen: already used (1)"),
-                            TweakIdx(2) => panic!("Shouldn't happen: already used (2)"),
-                            TweakIdx(11) => {
-                                last_checked.store(true, Ordering::SeqCst);
-                                vec![]
-                            }
-                            TweakIdx(12) => panic!("Shouldn't happen"),
-                            TweakIdx(13) => {
-                                vec![0usize] /* just for type inference */
-                            }
-                            _ => vec![],
-                        })
-                    }
-                )
-                .await
-                .unwrap(),
-                RecoverScanOutcome {
-                    last_used_idx: Some(TweakIdx(2)),
-                    new_start_idx: TweakIdx(2 + RECOVER_NUM_IDX_ADD_TO_LAST_USED),
-                    tweak_idxes_with_pegins: BTreeSet::from([])
-                }
-            );
-            assert!(last_checked.load(Ordering::SeqCst));
-        }
-
-        {
-            let last_checked = AtomicBool::new(false);
-            let last_checked = &last_checked;
-            assert_eq!(
-                recover_scan_idxes_for_activity(
-                    TweakIdx(10),
-                    &BTreeSet::new(),
-                    |cur_idx| async move {
-                        Ok(match cur_idx {
-                            TweakIdx(10) => vec![()],
-                            TweakIdx(19) => {
-                                last_checked.store(true, Ordering::SeqCst);
-                                vec![]
-                            }
-                            TweakIdx(20) => panic!("Shouldn't happen"),
-                            _ => vec![],
-                        })
-                    }
-                )
-                .await
-                .unwrap(),
-                RecoverScanOutcome {
-                    last_used_idx: Some(TweakIdx(10)),
-                    new_start_idx: TweakIdx(10 + RECOVER_NUM_IDX_ADD_TO_LAST_USED),
-                    tweak_idxes_with_pegins: BTreeSet::from([TweakIdx(10)])
-                }
-            );
-            assert!(last_checked.load(Ordering::SeqCst));
-        }
-
-        assert_eq!(
-            recover_scan_idxes_for_activity(TweakIdx(0), &BTreeSet::new(), |cur_idx| async move {
-                Ok(match cur_idx {
-                    TweakIdx(6 | 15) => vec![()],
-                    _ => vec![],
-                })
-            })
-            .await
-            .unwrap(),
-            RecoverScanOutcome {
-                last_used_idx: Some(TweakIdx(15)),
-                new_start_idx: TweakIdx(15 + RECOVER_NUM_IDX_ADD_TO_LAST_USED),
-                tweak_idxes_with_pegins: BTreeSet::from([TweakIdx(6), TweakIdx(15)])
-            }
-        );
-        assert_eq!(
-            recover_scan_idxes_for_activity(TweakIdx(10), &BTreeSet::new(), |cur_idx| async move {
-                Ok(match cur_idx {
-                    TweakIdx(8) => {
-                        vec![()] /* for type inference only */
-                    }
-                    TweakIdx(9) => {
-                        panic!("Shouldn't happen")
-                    }
-                    _ => vec![],
-                })
-            })
-            .await
-            .unwrap(),
-            RecoverScanOutcome {
-                last_used_idx: None,
-                new_start_idx: TweakIdx(9 + RECOVER_NUM_IDX_ADD_TO_LAST_USED),
-                tweak_idxes_with_pegins: BTreeSet::from([])
-            }
-        );
-        assert_eq!(
-            recover_scan_idxes_for_activity(TweakIdx(10), &BTreeSet::new(), |cur_idx| async move {
-                Ok(match cur_idx {
-                    TweakIdx(9) => panic!("Shouldn't happen"),
-                    TweakIdx(15) => vec![()],
-                    _ => vec![],
-                })
-            })
-            .await
-            .unwrap(),
-            RecoverScanOutcome {
-                last_used_idx: Some(TweakIdx(15)),
-                new_start_idx: TweakIdx(15 + RECOVER_NUM_IDX_ADD_TO_LAST_USED),
-                tweak_idxes_with_pegins: BTreeSet::from([TweakIdx(15)])
-            }
-        );
-    }
-}
+mod tests;

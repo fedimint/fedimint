@@ -22,11 +22,14 @@ use ldk_node::config::ChannelConfig;
 use ldk_node::lightning::ln::msgs::SocketAddress;
 use ldk_node::lightning::routing::gossip::{NodeAlias, NodeId};
 use ldk_node::logger::{LogLevel, LogRecord, LogWriter};
-use ldk_node::payment::{PaymentDirection, PaymentKind, PaymentStatus, SendingParameters};
+use ldk_node::payment::{
+    PaymentDetails, PaymentDirection, PaymentKind, PaymentStatus, SendingParameters,
+};
 use lightning::ln::channelmanager::PaymentId;
 use lightning::offers::offer::{Offer, OfferId};
 use lightning::types::payment::{PaymentHash, PaymentPreimage};
 use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescription, Description};
+use thiserror::Error;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{RwLock, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
@@ -130,9 +133,8 @@ pub struct GatewayLdkClient {
     /// A map keyed by the `UserChannelId` of a channel that is currently
     /// opening. The `Sender` is used to communicate the `OutPoint` back to
     /// the API handler from the event handler when the channel has been
-    /// opened and is now pending.
-    pending_channels:
-        Arc<RwLock<BTreeMap<UserChannelId, oneshot::Sender<anyhow::Result<OutPoint>>>>>,
+    /// opened and is now pending, or the reason it closed before that.
+    pending_channels: Arc<RwLock<BTreeMap<UserChannelId, PendingChannelSender>>>,
 
     /// Waiters for outgoing LDK payments that are woken by terminal payment
     /// events (`PaymentSuccessful` / `PaymentFailed`). This lets `pay()` block
@@ -141,6 +143,10 @@ pub struct GatewayLdkClient {
     /// map only signals that a terminal event has arrived.
     pending_payments: Arc<RwLock<HashMap<PaymentId, oneshot::Sender<()>>>>,
 }
+
+/// Sends a channel's funding outpoint once the channel is pending, or the
+/// reason the channel closed before that.
+type PendingChannelSender = oneshot::Sender<Result<OutPoint, String>>;
 
 impl std::fmt::Debug for GatewayLdkClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -153,6 +159,13 @@ impl GatewayLdkClient {
     /// lightning node. All resources, including the lightning node, will be
     /// cleaned up when the returned `GatewayLdkClient` instance is dropped.
     /// There's no need to manually stop the node.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`LdkClientInitError::MissingEsploraHost`] or
+    /// [`LdkClientInitError::InvalidDataDir`] if the configuration cannot be
+    /// used, with [`LdkClientInitError::Build`] if LDK cannot build the node,
+    /// and with [`LdkClientInitError::Start`] if it cannot start it.
     pub fn new(
         data_dir: &Path,
         chain_source: ChainSource,
@@ -161,7 +174,7 @@ impl GatewayLdkClient {
         alias: String,
         mnemonic: Mnemonic,
         runtime: Arc<tokio::runtime::Runtime>,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, LdkClientInitError> {
         let mut bytes = [0u8; 32];
         let alias = if alias.is_empty() {
             "LDK Gateway".to_string()
@@ -215,15 +228,15 @@ impl GatewayLdkClient {
             }
         };
         let Some(data_dir_str) = data_dir.to_str() else {
-            return Err(anyhow::anyhow!("Invalid data dir path"));
+            return Err(LdkClientInitError::InvalidDataDir);
         };
         node_builder.set_storage_dir_path(data_dir_str.to_string());
 
         info!(chain_source = %chain_source, data_dir = %data_dir_str, alias = %alias, "Starting LDK Node...");
-        let node = Arc::new(node_builder.build()?);
+        let node = Arc::new(node_builder.build().map_err(LdkClientInitError::Build)?);
         node.start_with_runtime(runtime).map_err(|err| {
             crit!(target: LOG_LIGHTNING, err = %err.fmt_compact(), "Failed to start LDK Node");
-            LightningRpcError::FailedToConnect
+            LdkClientInitError::Start(err)
         })?;
 
         let (htlc_stream_sender, htlc_stream_receiver) = tokio::sync::mpsc::channel(1024);
@@ -263,9 +276,7 @@ impl GatewayLdkClient {
         node: &ldk_node::Node,
         htlc_stream_sender: &Sender<InterceptPaymentRequest>,
         handle: &TaskHandle,
-        pending_channels: Arc<
-            RwLock<BTreeMap<UserChannelId, oneshot::Sender<anyhow::Result<OutPoint>>>>,
-        >,
+        pending_channels: Arc<RwLock<BTreeMap<UserChannelId, PendingChannelSender>>>,
         pending_payments: Arc<RwLock<HashMap<PaymentId, oneshot::Sender<()>>>>,
     ) {
         // We manually check for task termination in case we receive a payment while the
@@ -292,7 +303,10 @@ impl GatewayLdkClient {
                     .send(InterceptPaymentRequest {
                         payment_hash: Hash::from_slice(&payment_hash.0)
                             .expect("Failed to create Hash"),
+                        // LDK reports the real claimable amount, so the two
+                        // amounts coincide here.
                         amount_msat: claimable_amount_msat,
+                        incoming_amount_msat: claimable_amount_msat,
                         expiry: claim_deadline.unwrap_or_default(),
                         short_channel_id: None,
                         // LDK claims payments through its own payment store,
@@ -337,7 +351,7 @@ impl GatewayLdkClient {
                     } else {
                         "Channel has been closed".to_string()
                     };
-                    let _ = sender.send(Err(anyhow::anyhow!(reason)));
+                    let _ = sender.send(Err(reason));
                 } else {
                     debug!(
                         ?user_channel_id,
@@ -385,6 +399,21 @@ impl GatewayLdkClient {
         }
     }
 
+    /// Returns the node's payment record for `payment_id`, but only when it is
+    /// one of our own outbound attempts.
+    ///
+    /// LDK keys BOLT11 payments by `PaymentId(payment_hash)` in both
+    /// directions, so a registered invoice or a claimed inbound payment for the
+    /// same hash shares a slot with our outbound send. Without this direction
+    /// check such an inbound record could be mistaken for the result of our
+    /// `pay()`: reported as a spurious success (a preimage we never sent for),
+    /// a spurious failure, or -- while still pending -- block `pay()` forever.
+    fn outbound_payment(&self, payment_id: PaymentId) -> Option<PaymentDetails> {
+        self.node
+            .payment(&payment_id)
+            .filter(|details| details.direction == PaymentDirection::Outbound)
+    }
+
     /// Reads the result of an outgoing payment from `node.payment()`.
     ///
     /// Returns `None` while the payment is still pending (or not yet known to
@@ -393,7 +422,7 @@ impl GatewayLdkClient {
         &self,
         payment_id: PaymentId,
     ) -> Option<Result<PayInvoiceResponse, LightningRpcError>> {
-        let payment_details = self.node.payment(&payment_id)?;
+        let payment_details = self.outbound_payment(payment_id)?;
         match payment_details.status {
             PaymentStatus::Pending => None,
             PaymentStatus::Succeeded => {
@@ -415,6 +444,113 @@ impl GatewayLdkClient {
                 failure_reason: "LDK payment failed".to_string(),
             })),
         }
+    }
+}
+
+/// A failure to create the LDK Lightning node behind a [`GatewayLdkClient`].
+///
+/// Creating the client configures an LDK node from the gateway's settings,
+/// builds it on top of the data directory and starts it.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum LdkClientInitError {
+    /// The Esplora chain source's URL names no host to connect to.
+    #[error("Missing esplora host")]
+    MissingEsploraHost,
+
+    /// The data directory's path is not valid UTF-8, which LDK needs for its
+    /// storage path.
+    #[error("Invalid data dir path")]
+    InvalidDataDir,
+
+    /// LDK could not build the node, for example because its storage could
+    /// not be read or was created for another network.
+    #[error("The LDK node could not be built")]
+    Build(#[source] ldk_node::BuildError),
+
+    /// LDK built the node but could not start it.
+    #[error("The LDK node could not be started")]
+    Start(#[source] ldk_node::NodeError),
+}
+
+/// Why an invoice must not be registered for a payment hash on the node.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InboundRegistrationRefusal {
+    /// `pay()` holds the per-hash lock, so an outbound payment for the hash
+    /// is being dispatched or awaited right now.
+    OutboundInFlight,
+    /// The node holds an outbound record for the hash, pending or terminal.
+    OutboundRecorded,
+}
+
+impl std::fmt::Display for InboundRegistrationRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::OutboundInFlight => {
+                write!(f, "an outbound payment for this hash is in flight")
+            }
+            Self::OutboundRecorded => {
+                write!(f, "the node holds an outbound payment for this hash")
+            }
+        }
+    }
+}
+
+/// Decides whether an invoice may be registered for a payment hash the node
+/// may already know as one of our outbound payments.
+///
+/// `ldk-node` keys BOLT11 payments by `PaymentId(payment_hash)` in both
+/// directions, and registering an invoice overwrites whatever record shares
+/// the key. Registering one for a hash we pay would erase the outbound record
+/// `pay()` reads its result from, so a settled payment would be reported as
+/// failed and the outgoing contract forfeited while the payee keeps the funds.
+///
+/// `outbound_lock_acquired` is whether the caller took the per-hash lock
+/// `pay()` holds for the whole life of a payment, and `existing_direction` is
+/// the direction of the node's record for the hash, if any. A terminal
+/// outbound record is refused as well: a restarted state machine re-runs
+/// `pay()` and needs that record to recover the payment's result instead of
+/// re-dispatching. An existing inbound record is left to the caller, whose
+/// own reservation already rejects duplicate registrations.
+fn check_inbound_registration(
+    outbound_lock_acquired: bool,
+    existing_direction: Option<PaymentDirection>,
+) -> Result<(), InboundRegistrationRefusal> {
+    if !outbound_lock_acquired {
+        return Err(InboundRegistrationRefusal::OutboundInFlight);
+    }
+
+    match existing_direction {
+        Some(PaymentDirection::Outbound) => Err(InboundRegistrationRefusal::OutboundRecorded),
+        Some(PaymentDirection::Inbound) | None => Ok(()),
+    }
+}
+
+/// Classifies an `ldk-node` claim or fail error for the gateway's completion
+/// retry loop.
+///
+/// `claim_for_hash` and `fail_for_hash` fail deterministically for an unknown
+/// payment hash, a preimage that does not hash to it, or an amount below the
+/// registered one. Retrying cannot change any of those, so they are reported
+/// as [`LightningRpcError::HtlcCompletionRejected`] and the completion state
+/// machine records the outcome instead of retrying forever. Everything else,
+/// today only a failed store write, is treated as transient: the incoming
+/// contract is already funded by the time this runs, so an error this list
+/// does not know must keep retrying rather than be recorded as final.
+fn htlc_completion_error(err: &ldk_node::NodeError, payment_hash: &str) -> LightningRpcError {
+    match err {
+        ldk_node::NodeError::InvalidPaymentHash
+        | ldk_node::NodeError::InvalidPaymentPreimage
+        | ldk_node::NodeError::InvalidAmount => LightningRpcError::HtlcCompletionRejected {
+            failure_reason: format!(
+                "LDK rejected completion of payment with hash {payment_hash}: {err}"
+            ),
+        },
+        _ => LightningRpcError::FailedToCompleteHtlc {
+            failure_reason: format!(
+                "Failed to complete LDK payment with hash {payment_hash}: {err}"
+            ),
+        },
     }
 }
 
@@ -499,13 +635,17 @@ impl ILnRpcClient for GatewayLdkClient {
             .await
             .insert(payment_id, payment_sender);
 
-        // If a payment is not known to the node we can initiate it, and if it is known
-        // we can skip calling `ldk-node::Bolt11Payment::send()` and wait for the
-        // payment to complete. The lock guard above guarantees that this block is only
-        // executed once at a time for a given payment hash, ensuring that there is no
-        // race condition between checking if a payment is known and initiating a new
+        // If no outbound attempt of ours is known to the node we can initiate
+        // it, and if one is known we can skip calling
+        // `ldk-node::Bolt11Payment::send()` and wait for the payment to
+        // complete. Checking specifically for an outbound record matters because
+        // an inbound payment shares `PaymentId(payment_hash)` with our send: a
+        // registered invoice for the same hash must not make us skip `send()`.
+        // The lock guard above guarantees that this block is only executed once
+        // at a time for a given payment hash, ensuring that there is no race
+        // condition between checking if a payment is known and initiating a new
         // payment if it isn't.
-        if self.node.payment(&payment_id).is_none() {
+        if self.outbound_payment(payment_id).is_none() {
             let sent_payment_id = match self.node.bolt11_payment().send(
                 &invoice,
                 Some(SendingParameters {
@@ -551,6 +691,15 @@ impl ILnRpcClient for GatewayLdkClient {
         })
     }
 
+    async fn outbound_payment_exists(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<bool, LightningRpcError> {
+        Ok(self
+            .outbound_payment(PaymentId(payment_hash.to_byte_array()))
+            .is_some())
+    }
+
     async fn route_htlcs<'a>(
         mut self: Box<Self>,
         _task_group: &TaskGroup,
@@ -590,16 +739,13 @@ impl ILnRpcClient for GatewayLdkClient {
             self.node
                 .bolt11_payment()
                 .claim_for_hash(ph, claimable_amount_msat, PaymentPreimage(preimage.0))
-                .map_err(|_| LightningRpcError::FailedToCompleteHtlc {
-                    failure_reason: format!("Failed to claim LDK payment with hash {ph_hex_str}"),
-                })?;
+                .map_err(|err| htlc_completion_error(&err, &ph_hex_str))?;
         } else {
             warn!(target: LOG_LIGHTNING, payment_hash = %ph_hex_str, "Unwinding payment because the action was not `Settle`");
-            self.node.bolt11_payment().fail_for_hash(ph).map_err(|_| {
-                LightningRpcError::FailedToCompleteHtlc {
-                    failure_reason: format!("Failed to unwind LDK payment with hash {ph_hex_str}"),
-                }
-            })?;
+            self.node
+                .bolt11_payment()
+                .fail_for_hash(ph)
+                .map_err(|err| htlc_completion_error(&err, &ph_hex_str))?;
         }
 
         return Ok(());
@@ -631,12 +777,44 @@ impl ILnRpcClient for GatewayLdkClient {
         };
 
         let invoice = match payment_hash_or {
-            Some(payment_hash) => self.node.bolt11_payment().receive_for_hash(
-                create_invoice_request.amount_msat,
-                &description,
-                create_invoice_request.expiry_secs,
-                payment_hash,
-            ),
+            Some(payment_hash) => {
+                // `pay()` holds this lock for the whole life of an outbound
+                // payment, so failing to take it means a payment for this hash
+                // is in flight right now. Keeping it until `receive_for_hash()`
+                // has run means `pay()` cannot write its outbound record between
+                // our check and the registration's insert, which would
+                // overwrite it.
+                let payment_id = PaymentId(payment_hash.0);
+                let outbound_lock_guard = self
+                    .outbound_lightning_payment_lock_pool
+                    .try_lock(payment_id);
+                let existing_direction = self
+                    .node
+                    .payment(&payment_id)
+                    .map(|details| details.direction);
+                if let Err(refusal) =
+                    check_inbound_registration(outbound_lock_guard.is_some(), existing_direction)
+                {
+                    warn!(
+                        target: LOG_LIGHTNING,
+                        payment_hash = %hex::encode(payment_hash.0),
+                        %refusal,
+                        "Refusing to register an invoice for a payment hash we pay outbound"
+                    );
+                    return Err(LightningRpcError::FailedToGetInvoice {
+                        failure_reason: format!(
+                            "Payment hash cannot be registered for an invoice: {refusal}"
+                        ),
+                    });
+                }
+
+                self.node.bolt11_payment().receive_for_hash(
+                    create_invoice_request.amount_msat,
+                    &description,
+                    create_invoice_request.expiry_secs,
+                    payment_hash,
+                )
+            }
             None => self.node.bolt11_payment().receive(
                 create_invoice_request.amount_msat,
                 &description,
@@ -750,7 +928,7 @@ impl ILnRpcClient for GatewayLdkClient {
             }
         };
 
-        let (tx, rx) = oneshot::channel::<anyhow::Result<OutPoint>>();
+        let (tx, rx) = oneshot::channel::<Result<OutPoint, String>>();
 
         {
             let mut channels = self.pending_channels.write().await;
@@ -786,9 +964,7 @@ impl ILnRpcClient for GatewayLdkClient {
                     funding_txid: funding_txid.to_string(),
                 })
             }
-            Err(err) => Err(LightningRpcError::FailedToOpenChannel {
-                failure_reason: err.to_string(),
-            }),
+            Err(failure_reason) => Err(LightningRpcError::FailedToOpenChannel { failure_reason }),
         }
     }
 
@@ -1225,11 +1401,11 @@ fn get_preimage_and_payment_hash(
 ///
 /// To handle this, we explicitly construct the esplora URL when a port is
 /// specified.
-fn get_esplora_url(server_url: SafeUrl) -> anyhow::Result<String> {
+fn get_esplora_url(server_url: SafeUrl) -> Result<String, LdkClientInitError> {
     // Esplora client cannot handle trailing slashes
     let host = server_url
         .host_str()
-        .ok_or(anyhow::anyhow!("Missing esplora host"))?;
+        .ok_or(LdkClientInitError::MissingEsploraHost)?;
     let server_url = if let Some(port) = server_url.port() {
         format!("{}://{}:{}", server_url.scheme(), host, port)
     } else {

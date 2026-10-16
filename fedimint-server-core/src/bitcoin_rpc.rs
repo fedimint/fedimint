@@ -2,11 +2,11 @@ use std::fmt::Debug;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-use anyhow::{Context, Result, ensure};
-use fedimint_core::bitcoin::{Block, BlockHash, Network, Transaction};
+use anyhow::{Result, ensure};
+use fedimint_core::bitcoin::{Block, BlockHash, Network, Transaction, Txid};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl};
+use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{ChainId, Feerate};
 use fedimint_logging::LOG_SERVER;
 use tokio::sync::watch;
@@ -80,7 +80,7 @@ impl ServerBitcoinRpcMonitor {
                     Err(err) => {
                         warn!(
                             target: LOG_SERVER,
-                            err = %err.fmt_compact_anyhow(),
+                            err = %err.fmt_compact(),
                             "Bitcoin status update failed"
                         );
                         status_sender.send_replace(None);
@@ -103,9 +103,9 @@ impl ServerBitcoinRpcMonitor {
         let sync_progress = rpc.get_sync_progress().await?;
 
         let fee_rate = if network == Network::Regtest {
-            Feerate { sats_per_kvb: 1000 }
+            Some(Feerate { sats_per_kvb: 1000 })
         } else {
-            rpc.get_feerate().await?.context("Feerate not available")?
+            rpc.get_feerate().await?
         };
 
         Ok(ServerBitcoinRpcStatus {
@@ -128,6 +128,20 @@ impl ServerBitcoinRpcMonitor {
         self.status_receiver.borrow().clone()
     }
 
+    /// Returns a receiver that can be awaited to be notified whenever the
+    /// status is refreshed.
+    ///
+    /// This lets a consumer react to the monitor's own polling cadence instead
+    /// of running an independent timer, which would otherwise read a status
+    /// that is already up to one update interval stale before sleeping again.
+    ///
+    /// Note the monitor republishes on every update interval regardless of
+    /// whether the status actually changed, so the receiver fires once per
+    /// interval rather than only on a real change.
+    pub fn subscribe_status(&self) -> watch::Receiver<Option<ServerBitcoinRpcStatus>> {
+        self.status_receiver.clone()
+    }
+
     pub async fn get_block(&self, hash: &BlockHash) -> Result<Block> {
         ensure!(
             self.status_receiver.borrow().is_some(),
@@ -135,6 +149,27 @@ impl ServerBitcoinRpcMonitor {
         );
 
         self.rpc.get_block(hash).await
+    }
+
+    /// See [`IServerBitcoinRpc::get_mempool_txids`]; `None` means the backend
+    /// has no mempool visibility, not that the mempool is empty.
+    pub async fn get_mempool_txids(&self) -> Result<Option<Vec<Txid>>> {
+        ensure!(
+            self.status_receiver.borrow().is_some(),
+            "Not connected to bitcoin backend"
+        );
+
+        self.rpc.get_mempool_txids().await
+    }
+
+    /// See [`IServerBitcoinRpc::get_mempool_tx`].
+    pub async fn get_mempool_tx(&self, txid: &Txid) -> Result<Option<Transaction>> {
+        ensure!(
+            self.status_receiver.borrow().is_some(),
+            "Not connected to bitcoin backend"
+        );
+
+        self.rpc.get_mempool_tx(txid).await
     }
 
     pub async fn get_block_hash(&self, height: u64) -> Result<BlockHash> {
@@ -147,11 +182,6 @@ impl ServerBitcoinRpcMonitor {
     }
 
     pub async fn submit_transaction(&self, tx: Transaction) -> Result<()> {
-        ensure!(
-            self.status_receiver.borrow().is_some(),
-            "Not connected to bitcoin backend"
-        );
-
         self.rpc.submit_transaction(tx).await
     }
 
@@ -209,6 +239,15 @@ pub trait IServerBitcoinRpc: Debug + Send + Sync + 'static {
     /// Returns the current block count
     async fn get_block_count(&self) -> Result<u64>;
 
+    /// Returns the current block count and whether initial block download is
+    /// still active.
+    ///
+    /// Backends without an explicit IBD flag are assumed ready. Full nodes
+    /// should override this method when both values come from one status call.
+    async fn get_block_count_and_initial_block_download(&self) -> Result<(u64, bool)> {
+        Ok((self.get_block_count().await?, false))
+    }
+
     /// Returns the block hash at a given height
     ///
     /// # Panics
@@ -247,6 +286,31 @@ pub trait IServerBitcoinRpc: Debug + Send + Sync + 'static {
     /// Returns the node's estimated chain sync percentage as a float between
     /// 0.0 and 1.0, or `None` if the node doesn't support this feature.
     async fn get_sync_progress(&self) -> Result<Option<f64>>;
+
+    /// Returns the ids of every transaction in the node's mempool, or `None`
+    /// if the backend cannot enumerate it.
+    ///
+    /// Enumerating the mempool is only possible on backends that expose the
+    /// whole of it. Esplora deliberately returns `None`: its mempool APIs are
+    /// per-address, and resolving a full mempool through them would take one
+    /// request per transaction.
+    ///
+    /// Callers must treat `None` as "this backend has no mempool visibility",
+    /// never as "the mempool is empty".
+    async fn get_mempool_txids(&self) -> Result<Option<Vec<Txid>>> {
+        Ok(None)
+    }
+
+    /// Returns a transaction from the node's mempool.
+    ///
+    /// `None` means either that the backend cannot serve mempool transactions
+    /// or that this transaction is no longer in the mempool, which is expected
+    /// when it is mined or evicted between listing and fetching it.
+    async fn get_mempool_tx(&self, txid: &Txid) -> Result<Option<Transaction>> {
+        let _ = txid;
+
+        Ok(None)
+    }
 
     /// Returns the chain ID (block hash at height 1)
     ///

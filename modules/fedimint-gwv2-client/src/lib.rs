@@ -8,14 +8,15 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::time::Duration;
 
-use anyhow::{anyhow, ensure};
 use async_trait::async_trait;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::Message;
 use events::{IncomingPaymentStarted, OutgoingPaymentStarted};
-use fedimint_api_client::api::DynModuleApi;
+use fedimint_api_client::api::{DynModuleApi, FederationError};
 use fedimint_client::ClientHandleArc;
+use fedimint_client_module::error::ClientModuleError;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
@@ -23,7 +24,9 @@ use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, State
 use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
-use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
+use fedimint_client_module::{
+    DynGlobalClientContext, TransactionSubmitError, sm_enum_variant_translation,
+};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::DatabaseTransaction;
@@ -32,9 +35,10 @@ use fedimint_core::module::{
     Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::secp256k1::Keypair;
+use fedimint_core::task::timeout;
 use fedimint_core::time::now;
-use fedimint_core::util::Spanned;
-use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send, secp256k1};
+use fedimint_core::util::{FmtCompact, Spanned, backoff_util, retry};
+use fedimint_core::{Amount, OutPoint, PeerId, apply, async_trait_maybe_send, secp256k1};
 use fedimint_lightning::{InterceptPaymentResponse, LightningRpcError};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -48,6 +52,7 @@ use receive_sm::{ReceiveSMState, ReceiveStateMachine};
 use secp256k1::schnorr::Signature;
 use send_sm::{SendSMState, SendStateMachine};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use tpe::{AggregatePublicKey, PublicKeyShare};
 use tracing::{info, warn};
 
@@ -58,6 +63,15 @@ use crate::complete_sm::{
 };
 use crate::receive_sm::ReceiveSMCommon;
 use crate::send_sm::SendSMCommon;
+
+/// Bound on the federation liveness probe that gates funding a fresh incoming
+/// contract. A healthy federation answers well within this; the bound only
+/// decides how quickly an unreachable one fails the HTLC back.
+const FEDERATION_LIVENESS_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Minimum number of blocks between the current height and an incoming HTLC's
+/// claim deadline for the gateway to fund its incoming contract.
+const LNV2_CLAIM_DEADLINE_MARGIN: u32 = 2;
 
 /// LNv2 CLTV Delta in blocks
 pub const EXPIRATION_DELTA_MINIMUM_V2: u64 = 144;
@@ -198,7 +212,10 @@ impl ClientModuleInit for GatewayClientInitV2 {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         Ok(GatewayClientModuleV2 {
             federation_id: *args.federation_id(),
             cfg: args.cfg().clone(),
@@ -372,10 +389,26 @@ pub enum FinalReceiveState {
 }
 
 impl GatewayClientModuleV2 {
+    /// Starts paying the invoice of an LNv2 outgoing contract, or joins the
+    /// payment already under way for it, and waits for its outcome.
+    ///
+    /// The `Ok` value is that outcome: the preimage if the payment succeeded,
+    /// or the gateway's forfeit signature, which lets the sender reclaim the
+    /// contract, if it was cancelled.
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`GatewaySendPaymentError`] if the request is refused
+    /// before any payment starts: the gateway is not connected to its
+    /// lightning node, the contract is another gateway's, the
+    /// request's signature does not verify, the federation has not confirmed
+    /// this contract at that outpoint or cannot be asked, the invoice has no
+    /// amount or does not match the contract, the gateway cannot price the
+    /// payment, or another contract already claimed the payment image.
     pub async fn send_payment(
         &self,
         payload: SendPaymentPayload,
-    ) -> anyhow::Result<Result<[u8; 32], Signature>> {
+    ) -> Result<Result<[u8; 32], Signature>, GatewaySendPaymentError> {
         let operation_start = now();
 
         // The operation id is equal to the contract id which also doubles as the
@@ -385,64 +418,90 @@ impl GatewayClientModuleV2 {
         // prevent replay attacks with a previously cancelled outgoing contract
         let operation_id = OperationId::from_encodable(&payload.contract.clone());
 
+        // Since the following checks may only fail due to client side
+        // programming error we do not have to enable cancellation and can check
+        // them before we start the state machine.
+        if payload.contract.claim_pk != self.keypair.public_key() {
+            return Err(GatewaySendPaymentError::NotOurContract);
+        }
+
+        // This prevents DOS attacks where an attacker submits a different invoice.
+        if secp256k1::SECP256K1
+            .verify_schnorr(
+                &payload.auth,
+                &Message::from_digest(*payload.invoice.consensus_hash::<sha256::Hash>().as_ref()),
+                &payload.contract.refund_pk.x_only_public_key().0,
+            )
+            .is_err()
+        {
+            return Err(GatewaySendPaymentError::InvalidAuthSignature);
+        }
+
+        // The operation id is derived from the contract, which is public in the
+        // funding transaction, and joining the operation yields its preimage. So
+        // the join belongs behind the signature above.
         if self.client_ctx.operation_exists(operation_id).await {
             return Ok(self.subscribe_send(operation_id).await);
         }
 
-        // Since the following four checks may only fail due to client side
-        // programming error we do not have to enable cancellation and can check
-        // them before we start the state machine.
-        ensure!(
-            payload.contract.claim_pk == self.keypair.public_key(),
-            "The outgoing contract is keyed to another gateway"
-        );
-
-        // This prevents DOS attacks where an attacker submits a different invoice.
-        ensure!(
-            secp256k1::SECP256K1
-                .verify_schnorr(
-                    &payload.auth,
-                    &Message::from_digest(
-                        *payload.invoice.consensus_hash::<sha256::Hash>().as_ref()
-                    ),
-                    &payload.contract.refund_pk.x_only_public_key().0,
-                )
-                .is_ok(),
-            "Invalid auth signature for the invoice data"
-        );
+        // A send accepted while the lightning node is unreachable would sit
+        // waiting for it, and nothing about the payment is known until then.
+        // Refusing up front keeps the sender free to use another gateway. Only
+        // new sends are refused: joining an existing operation above resumes
+        // one already started.
+        if !self.gateway.is_lightning_connected().await {
+            return Err(GatewaySendPaymentError::LightningNotConnected);
+        }
 
         // We need to check that the contract has been confirmed by the federation
         // before we start the state machine to prevent DOS attacks.
         let (contract_id, expiration) = self
             .module_api
             .outgoing_contract_expiration(payload.outpoint)
-            .await
-            .map_err(|_| anyhow!("The gateway can not reach the federation"))?
-            .ok_or(anyhow!("The outgoing contract has not yet been confirmed"))?;
+            .await?
+            .ok_or(GatewaySendPaymentError::ContractNotConfirmed)?;
 
-        ensure!(
-            contract_id == payload.contract.contract_id(),
-            "Contract Id returned by the federation does not match contract in request"
-        );
+        if contract_id != payload.contract.contract_id() {
+            return Err(GatewaySendPaymentError::ContractIdMismatch);
+        }
 
         let (payment_hash, amount) = match &payload.invoice {
             LightningInvoice::Bolt11(invoice) => (
                 invoice.payment_hash(),
                 invoice
                     .amount_milli_satoshis()
-                    .ok_or(anyhow!("Invoice is missing amount"))?,
+                    .ok_or(GatewaySendPaymentError::MissingInvoiceAmount)?,
             ),
         };
 
-        ensure!(
-            PaymentImage::Hash(*payment_hash) == payload.contract.payment_image,
-            "The invoices payment hash does not match the contracts payment hash"
-        );
+        if PaymentImage::Hash(*payment_hash) != payload.contract.payment_image {
+            return Err(GatewaySendPaymentError::PaymentHashMismatch);
+        }
 
         let min_contract_amount = self
             .gateway
             .min_contract_amount(&payload.federation_id, amount)
-            .await?;
+            .await
+            .map_err(GatewaySendPaymentError::MinContractAmount)?;
+
+        // Contracts for different invoices, on LNv1 or in other federations, can
+        // share a payment image, and paying one pays them all. So only the first
+        // operation to claim the image may ever pay it out; the claim is never
+        // released. It is taken before the state machine exists, so a refused
+        // contract has not been paid for. A retry of this operation finds its own
+        // claim.
+        //
+        // TODO(joschisan): review whether answering with a forfeit signature is
+        // safe here, so the sender is refunded immediately instead of at the
+        // contract's expiration. It should be: a refused contract can never take
+        // the claim later, so we never pay out on it.
+        if !self
+            .gateway
+            .claim_payment_image(&payload.contract.payment_image, operation_id)
+            .await
+        {
+            return Err(GatewaySendPaymentError::PaymentImageAlreadyClaimed);
+        }
 
         let send_sm = GatewayClientStateMachinesV2::Send(SendStateMachine {
             common: SendSMCommon {
@@ -484,6 +543,24 @@ impl GatewayClientModuleV2 {
         dbtx.commit_tx().await;
 
         Ok(self.subscribe_send(operation_id).await)
+    }
+
+    /// Returns the timelock budget, in blocks, that the outgoing contract at
+    /// `outpoint` leaves for a payment dispatched now, retrying until the
+    /// federation answers. A contract the federation no longer knows leaves
+    /// no budget.
+    async fn await_outgoing_contract_max_delay(&self, outpoint: OutPoint) -> u64 {
+        let expiration = retry(
+            "outgoing contract expiration",
+            backoff_util::background_backoff(),
+            || self.module_api.outgoing_contract_expiration(outpoint),
+        )
+        .await
+        .expect("Retries until the federation answers");
+
+        expiration.map_or(0, |(_, expiration)| {
+            expiration.saturating_sub(EXPIRATION_DELTA_MINIMUM_V2)
+        })
     }
 
     pub async fn subscribe_send(&self, operation_id: OperationId) -> Result<[u8; 32], Signature> {
@@ -540,6 +617,55 @@ impl GatewayClientModuleV2 {
         legacy_completion_in_states(&active, &inactive, circuit)
     }
 
+    /// Refuses to fund a fresh incoming contract unless a threshold of
+    /// guardians is answering. LNv1 gets this check implicitly by fetching the
+    /// offer from the federation first; LNv2 reads the contract from the
+    /// gateway's own database, so it has to probe explicitly.
+    async fn ensure_federation_responsive(
+        &self,
+        payment_hash: sha256::Hash,
+    ) -> Result<(), RelayIncomingHtlcError> {
+        match timeout(
+            FEDERATION_LIVENESS_TIMEOUT,
+            self.module_api.consensus_block_count(),
+        )
+        .await
+        {
+            Ok(Ok(_consensus_block_count)) => Ok(()),
+            Ok(Err(err)) => {
+                warn!(
+                    %payment_hash,
+                    err = %err.fmt_compact(),
+                    "Federation liveness probe failed, refusing to fund incoming contract"
+                );
+                Err(RelayIncomingHtlcError::FederationUnreachable(Box::new(err)))
+            }
+            Err(_elapsed) => {
+                warn!(
+                    %payment_hash,
+                    timeout_secs = FEDERATION_LIVENESS_TIMEOUT.as_secs(),
+                    "Federation liveness probe timed out, refusing to fund incoming contract"
+                );
+                Err(RelayIncomingHtlcError::FederationTimeout {
+                    timeout_secs: FEDERATION_LIVENESS_TIMEOUT.as_secs(),
+                })
+            }
+        }
+    }
+
+    /// Funds the incoming contract of an intercepted LNv2 HTLC and starts the
+    /// operation that completes the HTLC's circuit.
+    ///
+    /// A contract or circuit that is already being handled is joined rather
+    /// than started twice.
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`RelayIncomingHtlcError`] if a fresh contract is not
+    /// funded because the HTLC's claim deadline is too close or the federation
+    /// does not answer, or if the funding
+    /// transaction or the completion operation could not be started and no
+    /// earlier attempt had started it.
     pub async fn relay_incoming_htlc(
         &self,
         payment_hash: sha256::Hash,
@@ -547,7 +673,8 @@ impl GatewayClientModuleV2 {
         htlc_id: u64,
         contract: IncomingContract,
         amount_msat: u64,
-    ) -> anyhow::Result<()> {
+        blocks_to_claim_deadline: u32,
+    ) -> Result<(), RelayIncomingHtlcError> {
         let operation_start = now();
         let receive_operation_id = OperationId::from_encodable(&contract);
         let circuit = IncomingCircuitKey {
@@ -570,6 +697,20 @@ impl GatewayClientModuleV2 {
 
         let commitment = contract.commitment.clone();
         if plan == IncomingRelayPlan::CreateReceiveAndCompletion {
+            // Only gate fresh funding: the other plans resume an already
+            // funded contract and must not be cancelled.
+            //
+            // Funding is irreversible, and the gateway is only reimbursed by
+            // settling the HTLC before its claim deadline, so do not fund an
+            // HTLC that is about to expire. The margin is small because LDK's
+            // default invoices leave only 3 blocks before the claim deadline.
+            if blocks_to_claim_deadline < LNV2_CLAIM_DEADLINE_MARGIN {
+                return Err(RelayIncomingHtlcError::ClaimDeadlineTooClose {
+                    blocks_to_claim_deadline,
+                });
+            }
+            self.ensure_federation_responsive(payment_hash).await?;
+
             let refund_keypair = self.keypair;
             let client_output = ClientOutput::<LightningOutput> {
                 output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
@@ -609,7 +750,7 @@ impl GatewayClientModuleV2 {
             if let Err(error) = creation_result {
                 let operation_exists = self.client_ctx.operation_exists(receive_operation_id).await;
                 if operation_creation_failed_permanently(true, operation_exists) {
-                    return Err(error);
+                    return Err(error.into());
                 }
             } else {
                 let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
@@ -652,24 +793,44 @@ impl GatewayClientModuleV2 {
                 .operation_exists(completion_operation_id)
                 .await;
             if operation_creation_failed_permanently(true, operation_exists) {
-                return Err(error);
+                return Err(error.into());
             }
         }
 
         Ok(())
     }
 
+    /// Funds the incoming contract of a direct swap and waits for its final
+    /// state.
+    ///
+    /// A swap that was already started resumes unconditionally: its operation
+    /// is keyed on the contract, so a re-entrant call — a restarted state
+    /// machine, or a concurrent payer — joins the operation in progress
+    /// instead of funding twice. `allow_fresh_dispatch` is consulted only
+    /// when no such operation exists: callers pass `false` when a wall-clock
+    /// gate such as invoice expiry forbids starting a new swap, and receive
+    /// `Ok(None)` to signal that nothing was started.
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`TransactionSubmitError`] if the funding transaction of a
+    /// fresh swap could not be submitted.
     pub async fn relay_direct_swap(
         &self,
         contract: IncomingContract,
         amount_msat: u64,
-    ) -> anyhow::Result<FinalReceiveState> {
+        allow_fresh_dispatch: bool,
+    ) -> Result<Option<FinalReceiveState>, TransactionSubmitError> {
         let operation_start = now();
 
         let operation_id = OperationId::from_encodable(&contract);
 
         if self.client_ctx.operation_exists(operation_id).await {
-            return Ok(self.await_receive(operation_id).await);
+            return Ok(Some(self.await_receive(operation_id).await));
+        }
+
+        if !allow_fresh_dispatch {
+            return Ok(None);
         }
 
         let refund_keypair = self.keypair;
@@ -724,7 +885,7 @@ impl GatewayClientModuleV2 {
             .await;
         dbtx.commit_tx().await;
 
-        Ok(self.await_receive(operation_id).await)
+        Ok(Some(self.await_receive(operation_id).await))
     }
 
     pub async fn await_receive(&self, operation_id: OperationId) -> FinalReceiveState {
@@ -805,6 +966,97 @@ impl GatewayClientModuleV2 {
     }
 }
 
+/// A refusal to pay an invoice for an LNv2 client.
+///
+/// These are the checks the gateway makes before it starts paying. A payment
+/// that starts and is later cancelled is not a failure: it is reported as the
+/// forfeit signature in the `Ok` value.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum GatewaySendPaymentError {
+    /// The gateway is not connected to its lightning node, so a new send
+    /// would sit waiting for it.
+    #[error("The gateway is not connected to its lightning node")]
+    LightningNotConnected,
+
+    /// The outgoing contract names another gateway's key, so this gateway
+    /// could never claim it.
+    #[error("The outgoing contract is keyed to another gateway")]
+    NotOurContract,
+
+    /// The request's signature over the invoice does not verify against the
+    /// contract's refund key.
+    #[error("Invalid auth signature for the invoice data")]
+    InvalidAuthSignature,
+
+    /// The federation could not be asked about the outgoing contract.
+    #[error("The gateway can not reach the federation")]
+    Federation(#[source] Box<FederationError>),
+
+    /// The federation has not confirmed the outgoing contract yet.
+    #[error("The outgoing contract has not yet been confirmed")]
+    ContractNotConfirmed,
+
+    /// The contract the federation confirmed at the request's outpoint is not
+    /// the one in the request.
+    #[error("Contract Id returned by the federation does not match contract in request")]
+    ContractIdMismatch,
+
+    /// The invoice carries no amount.
+    #[error("Invoice is missing amount")]
+    MissingInvoiceAmount,
+
+    /// The invoice's payment hash is not the one the contract is locked to.
+    #[error("The invoices payment hash does not match the contracts payment hash")]
+    PaymentHashMismatch,
+
+    /// The gateway could not work out the smallest contract amount it accepts
+    /// for this payment.
+    #[error("The minimum contract amount could not be computed")]
+    MinContractAmount(#[source] GatewayClientV2Error),
+
+    /// Another operation already claimed the contract's payment image, so this
+    /// gateway will never pay it out for this contract.
+    #[error("Another contract for this payment image was already accepted")]
+    PaymentImageAlreadyClaimed,
+}
+
+/// Why the gateway did not relay an intercepted LNv2 HTLC.
+#[derive(Debug, Error)]
+pub enum RelayIncomingHtlcError {
+    /// The federation liveness probe failed, so a fresh incoming contract is
+    /// not funded.
+    #[error("The federation did not answer the liveness probe")]
+    FederationUnreachable(#[source] Box<FederationError>),
+
+    /// The federation liveness probe did not complete in time, so a fresh
+    /// incoming contract is not funded.
+    #[error("The federation did not answer the liveness probe within {timeout_secs}s")]
+    FederationTimeout {
+        /// How long the probe waited.
+        timeout_secs: u64,
+    },
+
+    /// The HTLC's claim deadline is too close to fund a fresh incoming
+    /// contract and still settle the HTLC in time.
+    #[error("HTLC claim deadline is only {blocks_to_claim_deadline} blocks away")]
+    ClaimDeadlineTooClose {
+        /// Blocks left until the HTLC's claim deadline.
+        blocks_to_claim_deadline: u32,
+    },
+
+    /// The funding transaction or the completion operation could not be
+    /// started.
+    #[error("The incoming contract could not be funded")]
+    Transaction(#[from] TransactionSubmitError),
+}
+
+impl From<FederationError> for GatewaySendPaymentError {
+    fn from(source: FederationError) -> Self {
+        Self::Federation(Box::new(source))
+    }
+}
+
 /// An interface between module implementation and the general `Gateway`
 ///
 /// To abstract away and decouple the core gateway from the modules, the
@@ -833,10 +1085,16 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
     /// are the same, then the gateway can use another client to complete
     /// the payment be swapping ecash instead of a payment over the
     /// Lightning network.
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`GatewayClientV2Error`] if the invoice is payable by a
+    /// direct swap but the gateway holds no incoming contract it can use for
+    /// it. The send state machine cancels the payment on a failure.
     async fn is_direct_swap(
         &self,
         invoice: &Bolt11Invoice,
-    ) -> anyhow::Result<Option<(IncomingContract, ClientHandleArc)>>;
+    ) -> Result<Option<(IncomingContract, ClientHandleArc)>, GatewayClientV2Error>;
 
     /// Initiates a payment over the Lightning network.
     async fn pay(
@@ -846,6 +1104,18 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
         max_fee: Amount,
     ) -> Result<[u8; 32], LightningRpcError>;
 
+    /// Returns whether the gateway's Lightning node has any record of an
+    /// outbound payment for `payment_hash`, whatever its state.
+    ///
+    /// The send state machine consults this when it resumes after a restart:
+    /// a payment the node already knows was dispatched before the crash and
+    /// must be resolved through [`IGatewayClientV2::pay`]'s idempotent resume
+    /// path rather than cancelled by pre-dispatch checks. A wrong `false`
+    /// forfeits a contract whose payment may still settle, so implementations
+    /// must absorb transient node failures and only answer once the node's
+    /// payment store could actually be consulted.
+    async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool;
+
     /// Computes the minimum contract amount necessary for making an outgoing
     /// payment.
     ///
@@ -853,23 +1123,40 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
     /// gateway's transaction fee and optionally additional fee to cover the
     /// gateway's Lightning fee if the payment goes over the Lightning
     /// network.
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`GatewayClientV2Error`] if the gateway cannot price a
+    /// payment for this federation.
     async fn min_contract_amount(
         &self,
         federation_id: &FederationId,
         amount: u64,
-    ) -> anyhow::Result<Amount>;
+    ) -> Result<Amount, GatewayClientV2Error>;
 
     /// Check if this invoice was created using LNv1 and if the gateway is
     /// connected to the target federation.
     async fn is_lnv1_invoice(&self, invoice: &Bolt11Invoice) -> Option<Spanned<ClientHandleArc>>;
 
     /// Perform a swap from an LNv2 `OutgoingContract` to an LNv1
-    /// `IncomingContract`
+    /// `IncomingContract`.
+    ///
+    /// A swap that was already started resumes unconditionally;
+    /// `allow_fresh_dispatch` is consulted only when no operation for this
+    /// swap exists yet. Callers pass `false` when a wall-clock gate such as
+    /// invoice expiry forbids starting a new swap, and receive `Ok(None)` to
+    /// signal that nothing was started.
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`GatewayClientV2Error`] if the swap could not be started
+    /// or followed. The send state machine cancels the payment on a failure.
     async fn relay_lnv1_swap(
         &self,
         client: &ClientHandleArc,
         invoice: &Bolt11Invoice,
-    ) -> anyhow::Result<FinalReceiveState>;
+        allow_fresh_dispatch: bool,
+    ) -> Result<Option<FinalReceiveState>, GatewayClientV2Error>;
 
     /// Claims the given payment image for `operation_id` in the gateway's
     /// global database, returning `true` if this operation may claim the
@@ -887,6 +1174,34 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
         payment_image: &PaymentImage,
         operation_id: OperationId,
     ) -> bool;
+
+    /// Returns whether the gateway currently holds a connection to its
+    /// lightning node. Only suitable for refusing new work: the answer is
+    /// local, so it must not decide the fate of a payment already started.
+    async fn is_lightning_connected(&self) -> bool;
+
+    /// Waits until the gateway holds a connection to its lightning node.
+    async fn await_lightning_connected(&self);
+}
+
+/// A failure reported by the gateway behind [`IGatewayClientV2`].
+///
+/// The trait is implemented by the gateway, not by this module, so the causes
+/// are the gateway's own. This type carries them unchanged: its `Display` and
+/// its `source()` are the cause's.
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct GatewayClientV2Error(Box<dyn std::error::Error + Send + Sync>);
+
+impl GatewayClientV2Error {
+    /// Wraps a failure of the gateway's [`IGatewayClientV2`] implementation,
+    /// which may be any error value or a plain message.
+    pub fn new<E>(source: E) -> Self
+    where
+        E: Into<Box<dyn std::error::Error + Send + Sync>>,
+    {
+        Self(source.into())
+    }
 }
 
 #[cfg(test)]

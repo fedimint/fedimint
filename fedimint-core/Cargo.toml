@@ -11,15 +11,11 @@ version = { workspace = true }
 [package.metadata.cargo-udeps.ignore]
 development = ["tokio-test"]
 
-[features]
-uniffi = ["dep:uniffi"]
-
 [lib]
 name = "fedimint_core"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 async-channel = { workspace = true }
 async-recursion = { workspace = true }
 async-trait = { workspace = true }
@@ -55,6 +51,7 @@ n0-future = { workspace = true }
 rand = { workspace = true }
 scopeguard = { workspace = true }
 secp256k1 = { workspace = true, features = ["global-context", "rand-std"] }
+semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serdect = { workspace = true }
@@ -65,7 +62,6 @@ subtle = { workspace = true }
 thiserror = { workspace = true }
 threshold_crypto = { workspace = true }
 tracing = { workspace = true }
-uniffi = { workspace = true, optional = true }
 url = { workspace = true, features = ["serde"] }
 z32 = { workspace = true }
 
@@ -93,6 +89,7 @@ wasm-bindgen-futures = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
+tempfile = { workspace = true }
 test-log = { workspace = true }
 tokio-test = { workspace = true }
 

@@ -8,6 +8,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::Amounts;
 use fedimint_core::secp256k1::Keypair;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, OutPoint};
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, LightningInvoice, OutgoingWitness};
@@ -120,13 +121,7 @@ impl State for SendStateMachine {
         match &self.state {
             SendSMState::Sending => {
                 vec![StateTransition::new(
-                    Self::send_payment(
-                        context.clone(),
-                        self.common.max_delay,
-                        self.common.min_contract_amount,
-                        self.common.invoice.clone(),
-                        self.common.contract.clone(),
-                    ),
+                    Self::send_payment(context.clone(), self.common.clone()),
                     move |dbtx, result, old_state| {
                         Box::pin(Self::transition_send_payment(
                             dbtx,
@@ -152,20 +147,24 @@ impl State for SendStateMachine {
 impl SendStateMachine {
     async fn send_payment(
         context: GatewayClientContextV2,
-        max_delay: u64,
-        min_contract_amount: Amount,
-        invoice: LightningInvoice,
-        contract: OutgoingContract,
+        common: SendSMCommon,
     ) -> Result<PaymentResponse, Cancelled> {
+        let SendSMCommon {
+            operation_id: _,
+            outpoint,
+            contract,
+            max_delay,
+            min_contract_amount,
+            invoice,
+            claim_keypair: _,
+        } = common;
         let LightningInvoice::Bolt11(invoice) = invoice;
 
-        // The following two checks may fail in edge cases since they have inherent
-        // timing assumptions. Therefore, they may only be checked after we have created
-        // the state machine such that we can cancel the contract.
-        if invoice.is_expired() {
-            return Err(Cancelled::InvoiceExpired);
-        }
-
+        // `max_delay` is computed once when the state machine is created and
+        // persisted, so this check cannot drift across a restart. It guards
+        // every rail, not just Lightning: after paying out, a swap races the
+        // outgoing contract's expiration to claim it, the same race an HTLC
+        // runs against the contract timelock.
         if max_delay == 0 {
             return Err(Cancelled::TimeoutTooClose);
         }
@@ -174,6 +173,31 @@ impl SendStateMachine {
             return Err(Cancelled::Underfunded);
         };
 
+        // The persisted `max_delay` was measured against the contract's
+        // remaining blocks when the send was accepted. A dispatch that happens
+        // later, after a restart or while waiting for the lightning node, must
+        // not spend blocks that have since passed: an HTLC whose timelock
+        // outlives the contract lets the payee settle after the gateway can no
+        // longer claim. So the budget for a fresh dispatch is measured again,
+        // waiting for the federation to answer. Every rail below needs the
+        // lightning node, so wait for it first: a budget measured before an
+        // outage would go stale for as long as the outage lasts.
+        context.gateway.await_lightning_connected().await;
+        let fresh_max_delay = context
+            .module
+            .await_outgoing_contract_max_delay(outpoint)
+            .await;
+
+        // Invoice expiry and the fresh budget, by contrast with the checks
+        // above, change over time, and this state machine re-runs from scratch
+        // on every restart: either can run out while a payment dispatched
+        // before a crash is still in flight, and that payment settles or fails
+        // regardless. Cancelling on them alone would forfeit a contract the
+        // in-flight payment can still claim. Each rail below therefore resumes
+        // anything it already started unconditionally and consults this
+        // verdict only before dispatching fresh.
+        let fresh_dispatch_refusal = fresh_dispatch_refusal(invoice.is_expired(), fresh_max_delay);
+
         // To make gateway operation easier, we check if the invoice was created using
         // the LNv1 protocol and if the gateway supports the target federation.
         // If it does, we can fund an LNv1 incoming contract to satisfy the LNv2
@@ -181,10 +205,10 @@ impl SendStateMachine {
         if let Some(client) = context.gateway.is_lnv1_invoice(&invoice).await {
             let final_state = context
                 .gateway
-                .relay_lnv1_swap(client.value(), &invoice)
+                .relay_lnv1_swap(client.value(), &invoice, fresh_dispatch_refusal.is_none())
                 .await;
             return match final_state {
-                Ok(final_receive_state) => match final_receive_state {
+                Ok(Some(final_receive_state)) => match final_receive_state {
                     FinalReceiveState::Rejected => Err(Cancelled::Rejected),
                     FinalReceiveState::Success(preimage) => Ok(PaymentResponse {
                         preimage,
@@ -193,7 +217,9 @@ impl SendStateMachine {
                     FinalReceiveState::Refunded => Err(Cancelled::Refunded),
                     FinalReceiveState::Failure => Err(Cancelled::Failure),
                 },
-                Err(e) => Err(Cancelled::FinalizationError(e.to_string())),
+                Ok(None) => Err(fresh_dispatch_refusal
+                    .expect("the relay only refuses a fresh dispatch when one was denied")),
+                Err(e) => Err(Cancelled::FinalizationError(e.fmt_compact().to_string())),
             };
         }
 
@@ -201,7 +227,7 @@ impl SendStateMachine {
             .gateway
             .is_direct_swap(&invoice)
             .await
-            .map_err(|e| Cancelled::RegistrationError(e.to_string()))?
+            .map_err(|e| Cancelled::RegistrationError(e.fmt_compact().to_string()))?
         {
             Some((contract, client)) => {
                 match client
@@ -212,10 +238,11 @@ impl SendStateMachine {
                         invoice
                             .amount_milli_satoshis()
                             .expect("amountless invoices are not supported"),
+                        fresh_dispatch_refusal.is_none(),
                     )
                     .await
                 {
-                    Ok(final_receive_state) => match final_receive_state {
+                    Ok(Some(final_receive_state)) => match final_receive_state {
                         FinalReceiveState::Rejected => Err(Cancelled::Rejected),
                         FinalReceiveState::Success(preimage) => Ok(PaymentResponse {
                             preimage,
@@ -224,13 +251,27 @@ impl SendStateMachine {
                         FinalReceiveState::Refunded => Err(Cancelled::Refunded),
                         FinalReceiveState::Failure => Err(Cancelled::Failure),
                     },
-                    Err(e) => Err(Cancelled::FinalizationError(e.to_string())),
+                    Ok(None) => Err(fresh_dispatch_refusal
+                        .expect("the relay only refuses a fresh dispatch when one was denied")),
+                    Err(e) => Err(Cancelled::FinalizationError(e.fmt_compact().to_string())),
                 }
             }
             None => {
+                // A payment the node already knows resolves through `pay`'s
+                // idempotent resume path, which ignores `max_delay`, so the
+                // verdict only refuses a dispatch that never happened.
+                if let Some(refusal) = fresh_dispatch_refusal
+                    && !context
+                        .gateway
+                        .outbound_payment_exists(*invoice.payment_hash())
+                        .await
+                {
+                    return Err(refusal);
+                }
+
                 let preimage = context
                     .gateway
-                    .pay(invoice, max_delay, max_fee)
+                    .pay(invoice, fresh_max_delay, max_fee)
                     .await
                     .map_err(|e| Cancelled::LightningRpcError(e.to_string()))?;
                 Ok(PaymentResponse {
@@ -250,36 +291,6 @@ impl SendStateMachine {
     ) -> SendStateMachine {
         match result {
             Ok(payment_response) => {
-                // A single Lightning payment yields a single preimage, so the gateway
-                // must claim at most one outgoing contract per payment image. If another
-                // contract for the same invoice has already been claimed, e.g. two
-                // clients racing to pay it, forfeit this one so the sender is refunded
-                // rather than the gateway being reimbursed twice for a single payment.
-                // The claim is recorded in the gateway's global database so it spans all
-                // of the gateway's federations, not just the one funding this contract.
-                if !client_ctx
-                    .gateway
-                    .claim_payment_image(
-                        &old_state.common.contract.payment_image,
-                        old_state.common.operation_id,
-                    )
-                    .await
-                {
-                    client_ctx
-                        .module
-                        .client_ctx
-                        .log_event(
-                            &mut dbtx.module_tx(),
-                            OutgoingPaymentFailed {
-                                payment_image: old_state.common.contract.payment_image.clone(),
-                                error: Cancelled::DuplicatePayment,
-                            },
-                        )
-                        .await;
-
-                    return old_state.update(SendSMState::Cancelled(Cancelled::DuplicatePayment));
-                }
-
                 client_ctx
                     .module
                     .client_ctx
@@ -327,5 +338,21 @@ impl SendStateMachine {
                 old_state.update(SendSMState::Cancelled(e))
             }
         }
+    }
+}
+
+/// Decides whether a send may dispatch a payment it has not started yet,
+/// returning the reason to cancel with if not. A payment already in flight
+/// resumes regardless.
+pub(crate) fn fresh_dispatch_refusal(
+    invoice_expired: bool,
+    fresh_max_delay: u64,
+) -> Option<Cancelled> {
+    if invoice_expired {
+        Some(Cancelled::InvoiceExpired)
+    } else if fresh_max_delay == 0 {
+        Some(Cancelled::TimeoutTooClose)
+    } else {
+        None
     }
 }

@@ -4,10 +4,11 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::anyhow;
 use bitcoin::key::Secp256k1;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
+use fedimint_client_module::OperationId;
+use fedimint_client_module::error::{ClientModuleError, OperationNotFoundError};
 use fedimint_client_module::meta::LegacyMetaSource;
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{ClientModuleRegistry, FinalClientIface};
@@ -30,7 +31,9 @@ use tokio::sync::{broadcast, oneshot, watch};
 use tokio::task::yield_now;
 
 use super::{Client, ModuleRecoveryFuture, RecoveryStatus};
+use crate::ClientHandle;
 use crate::db::ClientModuleRecovery;
+use crate::error::RecoveryError;
 use crate::meta::MetaService;
 use crate::oplog::OperationLog;
 use crate::sm::executor::Executor;
@@ -38,8 +41,18 @@ use crate::sm::notifier::Notifier;
 
 const FAILING_MODULE_INSTANCE_ID: ModuleInstanceId = 1;
 const RECOVERING_MODULE_INSTANCE_ID: ModuleInstanceId = 2;
-const RECOVERY_ERROR: &str = "module recovery went wrong";
 const WAIT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// The failure the failing module's recovery reports. A type of its own, so
+/// the assertions can tell it apart from any failure the client produces.
+#[derive(Debug, thiserror::Error)]
+#[error("module recovery went wrong")]
+struct RecoveryFailure;
+
+/// Whether `error` is the [`RecoveryFailure`] the failing module reported.
+fn is_recovery_failure(error: &ClientModuleError) -> bool {
+    matches!(error, ClientModuleError::Other(source) if source.is::<RecoveryFailure>())
+}
 
 struct ModuleRecoveries {
     task: Pin<Box<dyn Future<Output = ()>>>,
@@ -55,7 +68,8 @@ fn run_module_recoveries() -> ModuleRecoveries {
     let module_recoveries: BTreeMap<ModuleInstanceId, ModuleRecoveryFuture> = [
         (
             FAILING_MODULE_INSTANCE_ID,
-            Box::pin(async { Err(anyhow!(RECOVERY_ERROR)) }) as ModuleRecoveryFuture,
+            Box::pin(async { Err(ClientModuleError::other(RecoveryFailure)) })
+                as ModuleRecoveryFuture,
         ),
         (
             RECOVERING_MODULE_INSTANCE_ID,
@@ -144,8 +158,7 @@ async fn client_for_recovery_test(
     let federation_id = config.calculate_federation_id();
     let connectors = ConnectorRegistry::build_from_testing_defaults()
         .bind()
-        .await
-        .expect("Connector registry must build");
+        .await;
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
     let task_group = TaskGroup::new();
     let (log_ordering_wakeup_tx, _log_ordering_wakeup_rx) = watch::channel(());
@@ -172,7 +185,7 @@ async fn client_for_recovery_test(
         modules: ClientModuleRegistry::default(),
         module_inits: ModuleInitRegistry::new(),
         executor,
-        api: DynGlobalApi::new(connectors, BTreeMap::new(), None).expect("Global API must build"),
+        api: DynGlobalApi::new(connectors, BTreeMap::new(), None),
         root_secret: DerivableSecret::new_root(&[0; 32], &[0; 32]),
         operation_log: OperationLog::new(db),
         secp_ctx: Secp256k1::new(),
@@ -305,6 +318,21 @@ async fn persisted_recovery_progress(db: &Database) -> Option<RecoveryProgress> 
         .map(|state| state.progress)
 }
 
+/// Asserts that `err` is the terminal failure of `module_instance_id`,
+/// carrying the error the module's recovery failed with.
+fn assert_module_recovery_failed(err: &RecoveryError, module_instance_id: ModuleInstanceId) {
+    match err {
+        RecoveryError::Failed {
+            module_instance_id: failed,
+            source,
+        } => {
+            assert_eq!(*failed, module_instance_id, "{err:?}");
+            assert!(is_recovery_failure(source), "{source:?}");
+        }
+        other => panic!("Expected a failed module recovery, got {other:?}"),
+    }
+}
+
 #[tokio::test]
 async fn forged_done_recovery_progress_does_not_mask_a_later_failure() {
     // `ClientModuleRecoverArgs::progress_tx` is public, so a module can report a
@@ -331,7 +359,7 @@ async fn forged_done_recovery_progress_does_not_mask_a_later_failure() {
             failure_released
                 .await
                 .expect("Release channel must stay open");
-            Err(anyhow!(RECOVERY_ERROR))
+            Err(ClientModuleError::other(RecoveryFailure))
         }) as ModuleRecoveryFuture,
     );
     let client = client_for_recovery_test(status_receiver.clone(), recovery_module_kinds()).await;
@@ -379,14 +407,9 @@ async fn forged_done_recovery_progress_does_not_mask_a_later_failure() {
     })
     .await
     .expect("Waiting on a failed module recovery must not block forever")
-    .expect_err("A failure after a forged done progress must still be reported as an error")
-    .to_string();
+    .expect_err("A failure after a forged done progress must still be reported as an error");
 
-    assert!(error.contains(RECOVERY_ERROR), "{error}");
-    assert!(
-        error.contains(&format!("module_instance_id={FAILING_MODULE_INSTANCE_ID}")),
-        "{error}"
-    );
+    assert_module_recovery_failed(&error, FAILING_MODULE_INSTANCE_ID);
 }
 
 #[tokio::test]
@@ -494,15 +517,9 @@ async fn wait_for_all_recoveries_reports_failed_module_recovery() {
     })
     .await
     .expect("Waiting on a failed module recovery must not block forever");
-    let error = result
-        .expect_err("Failed module recovery must be reported as an error")
-        .to_string();
+    let error = result.expect_err("Failed module recovery must be reported as an error");
 
-    assert!(error.contains(RECOVERY_ERROR), "{error}");
-    assert!(
-        error.contains(&format!("module_instance_id={FAILING_MODULE_INSTANCE_ID}")),
-        "{error}"
-    );
+    assert_module_recovery_failed(&error, FAILING_MODULE_INSTANCE_ID);
     // Reporting the failure doesn't finish the recovery: the failed module's
     // progress stays pending, which is what the progress-based observers keep
     // reporting.
@@ -550,13 +567,11 @@ async fn wait_for_all_recoveries_reports_a_recovery_task_that_went_away() {
     let error = timeout(WAIT_TIMEOUT, client.wait_for_all_recoveries())
         .await
         .expect("A recovery task that went away must not block the wait forever")
-        .expect_err("An unfinished recovery whose task went away must be reported as an error")
-        .to_string();
+        .expect_err("An unfinished recovery whose task went away must be reported as an error");
 
-    assert!(error.contains("disconnected"), "{error}");
     assert!(
-        !error.contains("module_instance_id="),
-        "A closed status channel must not be reported as a module failure: {error}"
+        matches!(error, RecoveryError::ClientStopped),
+        "A closed status channel must not be reported as a module failure: {error:?}"
     );
 }
 
@@ -618,7 +633,7 @@ async fn recovery_failure_wins_if_completion_is_also_observable() {
                         complete: 0,
                         total: 10,
                     },
-                    error: RECOVERY_ERROR.to_string(),
+                    error: Arc::new(ClientModuleError::other(RecoveryFailure)),
                 },
             ),
             (
@@ -637,14 +652,9 @@ async fn recovery_failure_wins_if_completion_is_also_observable() {
     let error = timeout(WAIT_TIMEOUT, client.wait_for_all_recoveries())
         .await
         .expect("Recovery outcome must be determinate")
-        .expect_err("A recovery failure must take precedence over a completed recovery")
-        .to_string();
+        .expect_err("A recovery failure must take precedence over a completed recovery");
 
-    assert!(error.contains(RECOVERY_ERROR), "{error}");
-    assert!(
-        error.contains(&format!("module_instance_id={FAILING_MODULE_INSTANCE_ID}")),
-        "{error}"
-    );
+    assert_module_recovery_failed(&error, FAILING_MODULE_INSTANCE_ID);
 }
 
 #[tokio::test]
@@ -672,7 +682,7 @@ async fn failed_status_is_not_overwritten_by_late_module_progress() {
             failure_released
                 .await
                 .expect("Release channel must stay open");
-            Err(anyhow!(RECOVERY_ERROR))
+            Err(ClientModuleError::other(RecoveryFailure))
         }) as ModuleRecoveryFuture,
     );
 
@@ -714,7 +724,7 @@ async fn failed_status_is_not_overwritten_by_late_module_progress() {
                 progress_tuple(initial_progress),
                 "A late progress update must not advance a failed recovery"
             );
-            assert!(error.contains(RECOVERY_ERROR), "{error}");
+            assert!(is_recovery_failure(error), "{error:?}");
         }
         RecoveryStatus::InProgress(_) => {
             panic!("A late progress update must not erase a recorded recovery failure")
@@ -737,14 +747,9 @@ async fn failed_status_is_not_overwritten_by_late_module_progress() {
     })
     .await
     .expect("A late waiter on a failed module recovery must not block forever")
-    .expect_err("A late waiter must still be told about the failed module recovery")
-    .to_string();
+    .expect_err("A late waiter must still be told about the failed module recovery");
 
-    assert!(error.contains(RECOVERY_ERROR), "{error}");
-    assert!(
-        error.contains(&format!("module_instance_id={FAILING_MODULE_INSTANCE_ID}")),
-        "{error}"
-    );
+    assert_module_recovery_failed(&error, FAILING_MODULE_INSTANCE_ID);
 }
 
 #[tokio::test]
@@ -782,7 +787,7 @@ async fn wait_for_module_kind_recovery_reports_failure_despite_other_kind_failin
             FAILING_MODULE_INSTANCE_ID,
             RecoveryStatus::Failed {
                 last_progress: in_progress,
-                error: RECOVERY_ERROR.to_string(),
+                error: Arc::new(ClientModuleError::other(RecoveryFailure)),
             },
         );
     });
@@ -794,7 +799,7 @@ async fn wait_for_module_kind_recovery_reports_failure_despite_other_kind_failin
             OTHER_FAILING_MODULE_INSTANCE_ID,
             RecoveryStatus::Failed {
                 last_progress: in_progress,
-                error: "other module recovery went wrong".to_string(),
+                error: Arc::new(ClientModuleError::other("other module recovery went wrong")),
             },
         );
     });
@@ -818,12 +823,158 @@ async fn wait_for_module_kind_recovery_reports_failure_despite_other_kind_failin
     )
     .await
     .expect("Waiting on a failed module recovery must not block forever")
-    .expect_err("Failure of the requested kind must be reported despite an unrelated failure")
-    .to_string();
+    .expect_err("Failure of the requested kind must be reported despite an unrelated failure");
 
-    assert!(error.contains(RECOVERY_ERROR), "{error}");
+    assert_module_recovery_failed(&error, FAILING_MODULE_INSTANCE_ID);
+}
+
+/// The last [`ClientHandle`] may get dropped on a thread without a tokio
+/// runtime context, e.g. while unwinding from a panic on a plain thread. The
+/// drop impl must fall back to a non-blocking shutdown instead of panicking,
+/// which during unwind would abort the process.
+///
+/// <https://github.com/fedimint/fedimint/issues/9053>
+#[tokio::test]
+async fn client_handle_drop_outside_runtime_does_not_panic() {
+    let (_status_sender, status_receiver) = watch::channel(BTreeMap::new());
+    let client = client_for_recovery_test(status_receiver, BTreeMap::new()).await;
+    let handle = ClientHandle::new(Arc::new(client));
+
+    std::thread::spawn(move || drop(handle))
+        .join()
+        .expect("Dropping a ClientHandle outside a runtime must not panic");
+}
+
+/// A client with no modules and an empty database, enough to exercise the
+/// lookups that only read the operation log.
+async fn client_for_lookup_test() -> Client {
+    let (_status_sender, status_receiver) = watch::channel(BTreeMap::new());
+    client_for_recovery_test(status_receiver, BTreeMap::new()).await
+}
+
+#[tokio::test]
+async fn operation_fees_of_a_missing_operation_are_reported_as_not_found() {
+    let client = client_for_lookup_test().await;
+    let operation_id = OperationId::new_random();
+
+    let err = client
+        .get_operation_fees(operation_id)
+        .await
+        .expect_err("An operation that was never started has no fees");
+
+    assert_eq!(err.operation_id, operation_id);
+}
+
+#[tokio::test]
+async fn visualizing_a_missing_operation_is_reported_as_not_found() {
+    let client = client_for_lookup_test().await;
+    let operation_id = OperationId::new_random();
+
+    // `OperationVisData` is not `Debug`, so `expect_err` is not available here.
+    let Err(err) = client.get_operations_vis(Some(operation_id), None).await else {
+        panic!("An operation that was never started cannot be visualized");
+    };
+    let err: OperationNotFoundError = err;
+
+    assert_eq!(err.operation_id, operation_id);
+}
+
+#[tokio::test]
+async fn quoting_a_fee_without_a_primary_module_is_typed() {
+    use fedimint_client_module::error::TransactionSubmitError;
+    use fedimint_client_module::transaction::FeeQuoteRequest;
+    use fedimint_core::module::{AmountUnit, Amounts};
+
+    let client = client_for_lookup_test().await;
+
+    let err = client
+        .fee_quote(
+            OperationId::new_random(),
+            FeeQuoteRequest {
+                input_amount: Amounts::ZERO,
+                output_amount: Amounts::new_bitcoin(fedimint_core::Amount::from_sats(1)),
+                input_fee: Amounts::ZERO,
+                output_fee: Amounts::ZERO,
+            },
+        )
+        .await
+        .expect_err("A client without a primary module cannot balance a transaction");
+
     assert!(
-        error.contains(&format!("module_instance_id={FAILING_MODULE_INSTANCE_ID}")),
-        "{error}"
+        matches!(
+            err,
+            TransactionSubmitError::NoPrimaryModule {
+                unit: AmountUnit::BITCOIN
+            }
+        ),
+        "{err:?}"
     );
+}
+
+#[tokio::test]
+async fn an_unknown_module_instance_is_reported_as_such() {
+    use fedimint_client_module::error::ModuleLookupError;
+
+    let client = client_for_lookup_test().await;
+
+    let err = client
+        .get_module_client_dyn(7)
+        .expect_err("A client without modules has no instance 7");
+
+    assert!(
+        matches!(err, ModuleLookupError::UnknownInstance { instance_id: 7 }),
+        "{err:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_balance_without_a_primary_module_is_reported_as_such() {
+    use fedimint_client_module::error::ModuleLookupError;
+    use fedimint_core::module::AmountUnit;
+
+    let client = client_for_lookup_test().await;
+
+    let err = client
+        .get_balance_for_unit(AmountUnit::BITCOIN)
+        .await
+        .expect_err("A client without a primary module has no balance");
+
+    assert!(
+        matches!(
+            err,
+            ModuleLookupError::NoPrimaryModule {
+                unit: AmountUnit::BITCOIN
+            }
+        ),
+        "{err:?}"
+    );
+}
+
+#[tokio::test]
+async fn loading_a_client_secret_that_was_never_stored_is_typed() {
+    use crate::error::ClientSecretError;
+
+    let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+
+    let err = Client::load_decodable_client_secret::<[u8; 64]>(&db)
+        .await
+        .expect_err("Nothing was ever stored");
+
+    assert!(matches!(err, ClientSecretError::NotPresent), "{err:?}");
+}
+
+#[tokio::test]
+async fn storing_a_second_client_secret_is_typed() {
+    use crate::error::ClientSecretError;
+
+    let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+
+    Client::store_encodable_client_secret(&db, [0u8; 64])
+        .await
+        .expect("The first secret must be stored");
+    let err = Client::store_encodable_client_secret(&db, [1u8; 64])
+        .await
+        .expect_err("A stored secret must not be overwritten");
+
+    assert!(matches!(err, ClientSecretError::AlreadyExists), "{err:?}");
 }

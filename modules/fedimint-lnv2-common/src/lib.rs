@@ -19,12 +19,11 @@ pub mod tweak;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::schnorr::Signature;
 use config::LightningClientConfig;
+pub use fedimint_core::config::ExcessiveRelativeFeeError;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::{
-    Amount, OutPoint, extensible_associated_module_type, plugin_types_trait_impl_common,
-};
+use fedimint_core::{OutPoint, extensible_associated_module_type, plugin_types_trait_impl_common};
 pub use fedimint_ln_common::client::GatewayApi;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
@@ -46,10 +45,6 @@ pub enum LightningInvoice {
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("lnv2");
 pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(1, 0);
-
-/// Minimum contract amount to ensure the incoming contract can be claimed
-/// without additional funds.
-pub const MINIMUM_INCOMING_CONTRACT_AMOUNT: Amount = Amount::from_sats(5);
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
 pub struct ContractId(pub sha256::Hash);

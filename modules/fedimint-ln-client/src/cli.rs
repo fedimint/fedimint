@@ -2,21 +2,26 @@ use std::collections::BTreeMap;
 use std::time::UNIX_EPOCH;
 use std::{ffi, iter};
 
-use anyhow::{Context as _, bail, ensure};
 use clap::{Parser, Subcommand};
+use fedimint_api_client::api::FederationError;
+use fedimint_client_module::error::{ModuleLookupError, OperationLookupError};
 use fedimint_core::Amount;
 use fedimint_core::core::OperationId;
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::SafeUrl;
 use futures::StreamExt;
-use lightning_invoice::{Bolt11InvoiceDescription, Description};
+use lightning_invoice::{Bolt11InvoiceDescription, CreationError, Description};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{debug, info};
 
+use crate::receive::LightningReceiveError;
+use crate::recurring::api::RecurringdApiError;
 use crate::recurring::{PaymentCodeRootKey, RecurringPaymentProtocol};
 use crate::{
-    LightningOperationMeta, LightningOperationMetaVariant, LnReceiveState, OutgoingLightningPayment,
+    CreateBolt11InvoiceError, GatewaySelectionError, LightningOperationMeta,
+    LightningOperationMetaVariant, LnReceiveState, LnSubscribeError, OutgoingLightningPayment,
+    PayBolt11InvoiceError, PaymentInfoError, SpendableAmountError,
 };
 
 #[derive(Parser, Serialize)]
@@ -111,7 +116,7 @@ pub struct LnInvoiceResponse {
 pub(crate) async fn handle_cli_command(
     module: &super::LightningClientModule,
     args: &[ffi::OsString],
-) -> anyhow::Result<serde_json::Value> {
+) -> Result<serde_json::Value, CliCommandError> {
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("meta")).chain(args.iter()));
 
     Ok(match opts {
@@ -156,14 +161,12 @@ pub(crate) async fn handle_cli_command(
 
             let amount = if all {
                 let crate::PaymentInfo::Lnurl(pay_response) = &payment_info else {
-                    bail!(
-                        "--all is only valid for LNURL/Lightning Address payments, not fixed-amount invoices"
-                    );
+                    return Err(CliCommandError::AllRequiresLnurl);
                 };
 
-                let gateway = ln_gateway.clone().context(
-                    "--all requires a gateway to price the payment; internal payments are not supported",
-                )?;
+                let gateway = ln_gateway
+                    .clone()
+                    .ok_or(CliCommandError::AllRequiresGateway)?;
                 let balance = module.client_ctx.get_balance_for_btc().await?;
                 let spendable = module.spendable_amount(balance, Some(gateway)).await?;
 
@@ -172,10 +175,12 @@ pub(crate) async fn handle_cli_command(
                 let max_sendable = Amount::from_msats(pay_response.max_sendable);
                 let min_sendable = Amount::from_msats(pay_response.min_sendable);
                 let capped = spendable.min(max_sendable);
-                ensure!(
-                    capped >= min_sendable,
-                    "--all can send at most {capped}, but the recipient requires at least {min_sendable} (LNURL minSendable)"
-                );
+                if capped < min_sendable {
+                    return Err(CliCommandError::BelowMinSendable {
+                        capped,
+                        min_sendable,
+                    });
+                }
                 if capped < spendable {
                     info!(
                         "Balance supports sending {spendable}, but the recipient's LNURL maxSendable caps the payment at {capped}"
@@ -292,7 +297,7 @@ pub(crate) async fn handle_cli_command(
             let invoices = module
                 .list_recurring_payment_code_invoices(payment_code_idx)
                 .await
-                .context("Unknown payment code index")?
+                .ok_or(CliCommandError::UnknownPaymentCodeIndex)?
                 .into_iter()
                 .map(|(idx, operation_id)| {
                     let invoice = json!({
@@ -313,7 +318,7 @@ pub(crate) async fn handle_cli_command(
                 .meta::<LightningOperationMeta>()
                 .variant
             else {
-                bail!("Operation is not a recurring lightning receive");
+                return Err(CliCommandError::NotRecurringReceive);
             };
 
             json!({
@@ -330,7 +335,7 @@ pub(crate) async fn handle_cli_command(
                 .meta::<LightningOperationMeta>()
                 .variant
             else {
-                bail!("Operation is not a recurring lightning receive")
+                return Err(CliCommandError::NotRecurringReceive);
             };
             let mut stream = module
                 .subscribe_ln_recurring_receive(operation_id)
@@ -356,4 +361,83 @@ pub(crate) async fn handle_cli_command(
             unreachable!("Stream should not end without an outcome");
         }
     })
+}
+
+/// A failure of an `ln` module command.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum CliCommandError {
+    /// No gateway could be selected.
+    #[error(transparent)]
+    GatewaySelection(#[from] GatewaySelectionError),
+
+    /// The invoice description is not valid.
+    #[error(transparent)]
+    InvoiceDescription(#[from] CreationError),
+
+    /// The invoice could not be created.
+    #[error(transparent)]
+    CreateInvoice(#[from] CreateBolt11InvoiceError),
+
+    /// The payment information could not be parsed or resolved to an
+    /// invoice.
+    #[error(transparent)]
+    PaymentInfo(#[from] PaymentInfoError),
+
+    /// `--all` was given for a fixed-amount invoice.
+    #[error("--all is only valid for LNURL/Lightning Address payments, not fixed-amount invoices")]
+    AllRequiresLnurl,
+
+    /// `--all` was given without a gateway to price the payment with.
+    #[error("--all requires a gateway to price the payment; internal payments are not supported")]
+    AllRequiresGateway,
+
+    /// The client's bitcoin balance could not be read.
+    #[error(transparent)]
+    Balance(#[from] ModuleLookupError),
+
+    /// The spendable amount could not be computed.
+    #[error(transparent)]
+    SpendableAmount(#[from] SpendableAmountError),
+
+    /// The balance cannot cover the least the recipient accepts.
+    #[error(
+        "--all can send at most {capped}, but the recipient requires at least \
+         {min_sendable} (LNURL minSendable)"
+    )]
+    BelowMinSendable {
+        capped: Amount,
+        min_sendable: Amount,
+    },
+
+    /// The invoice could not be paid.
+    #[error(transparent)]
+    Pay(#[from] PayBolt11InvoiceError),
+
+    /// An operation's updates could not be followed.
+    #[error(transparent)]
+    Subscribe(#[from] LnSubscribeError),
+
+    /// The incoming payment was canceled.
+    #[error(transparent)]
+    Receive(#[from] LightningReceiveError),
+
+    /// The federation could not be asked for its gateways.
+    #[error(transparent)]
+    Federation(#[from] FederationError),
+
+    /// The LNURL server did not register the payment code.
+    #[error(transparent)]
+    RecurringdApi(#[from] RecurringdApiError),
+
+    /// No LNURL payment code has this index.
+    #[error("Unknown payment code index")]
+    UnknownPaymentCodeIndex,
+
+    /// The operation could not be looked up.
+    #[error(transparent)]
+    OperationLookup(#[from] OperationLookupError),
+
+    /// The operation is not an LNURL-triggered receive.
+    #[error("Operation is not a recurring lightning receive")]
+    NotRecurringReceive,
 }

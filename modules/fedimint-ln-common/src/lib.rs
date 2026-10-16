@@ -14,14 +14,18 @@
 //! If this module is active the consensus' conflict filter must ensure that at
 //! most one operation (spend, funding) happens per contract per round
 
-#[cfg(feature = "uniffi")]
-uniffi::setup_scaffolding!();
-
 pub mod client;
 pub mod config;
 pub mod contracts;
 pub mod federation_endpoint_constants;
 pub mod gateway_endpoint_constants;
+mod preimage_auth;
+/// Hack to get a route hint that implements `serde` traits.
+pub mod route_hints;
+pub mod serde_option_routing_fees;
+pub mod serde_routing_fees;
+#[cfg(test)]
+mod tests;
 
 /// Exclusive remaining-CLTV safety margin for funding LNv1 incoming contracts.
 ///
@@ -45,11 +49,10 @@ use std::collections::BTreeMap;
 use std::io::{Error, Read, Write};
 use std::time::{Duration, SystemTime};
 
-use anyhow::Context as AnyhowContext;
 use bitcoin::hashes::{Hash, sha256};
 use config::LightningClientConfig;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
-use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
+use fedimint_core::encoding::{Decodable, DecodeContext, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
 use fedimint_core::secp256k1::Message;
@@ -59,6 +62,7 @@ use fedimint_core::{
     extensible_associated_module_type, plugin_types_trait_impl_common, secp256k1,
 };
 use lightning_invoice::{Bolt11Invoice, RoutingFees};
+pub use preimage_auth::PreimageAuth;
 pub use reqwest::Method;
 use secp256k1::schnorr::Signature;
 use serde::{Deserialize, Serialize};
@@ -295,7 +299,6 @@ impl std::fmt::Display for LightningOutputOutcomeV0 {
 /// to identity hijacking as soon as it upgrades, without needing any other
 /// gateway, guardian or client to upgrade with it.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct GatewayRegistrationAuth {
     /// Strictly increasing per gateway, so a captured signature cannot be
     /// replayed to roll a registration back to stale settings. Guardians only
@@ -343,11 +346,10 @@ impl Decodable for LightningGatewayRegistration {
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let json_repr = String::consensus_decode_partial(r, modules)?;
-        serde_json::from_str(&json_repr).map_err(|e| {
-            DecodeError::new_custom(
-                anyhow::Error::new(e).context("Failed to deserialize LightningGatewayRegistration"),
-            )
-        })
+        DecodeContext::context(
+            serde_json::from_str(&json_repr).map_err(DecodeError::from_err),
+            "Failed to deserialize LightningGatewayRegistration",
+        )
     }
 }
 
@@ -381,7 +383,6 @@ impl LightningGatewayRegistration {
 /// Should only be serialized and deserialized in formats that can ignore
 /// additional fields as this struct may be extended in the future.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct LightningGatewayAnnouncement {
     pub info: LightningGateway,
     /// Indicates if this announcement has been vetted by the federation
@@ -395,16 +396,6 @@ pub struct LightningGatewayAnnouncement {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth: Option<GatewayRegistrationAuth>,
 }
-
-#[cfg(feature = "uniffi")]
-use std::str::FromStr;
-
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(Signature, String, {
-    remote,
-    lower: |sig| sig.to_string(),
-    try_lift: |s| Signature::from_str(&s).map_err(|e| anyhow::anyhow!(e)),
-});
 
 /// Upper bound guardians place on a registration's lifetime. Gateways announce
 /// a TTL two orders of magnitude below this, so it only ever binds on
@@ -454,7 +445,6 @@ impl LightningGatewayAnnouncement {
 
 /// Information a gateway registers with a federation
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct LightningGateway {
     /// Unique per-federation identifier assigned by the gateway.
     /// All clients in this federation should use this value as
@@ -481,29 +471,6 @@ pub struct LightningGateway {
     /// Indicates if the gateway supports private payments
     pub supports_private_payments: bool,
 }
-
-#[cfg(feature = "uniffi")]
-#[derive(uniffi::Record)]
-pub struct RoutingFeesFfi {
-    /// Flat routing fee in millisatoshis.
-    pub base_msat: u32,
-    /// Liquidity-based routing fee in millionths of a routed amount.
-    /// In other words, 10000 is 1%.
-    pub proportional_millionths: u32,
-}
-
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(RoutingFees, RoutingFeesFfi, {
-    remote,
-    lower: |fees| RoutingFeesFfi {
-        base_msat: fees.base_msat,
-        proportional_millionths: fees.proportional_millionths,
-    },
-    try_lift: |fees_ffi| Ok(RoutingFees {
-        base_msat: fees_ffi.base_msat,
-        proportional_millionths: fees_ffi.proportional_millionths,
-    }),
-});
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Encodable, Decodable, Serialize, Deserialize)]
 pub enum LightningConsensusItem {
@@ -565,188 +532,6 @@ plugin_types_trait_impl_common!(
     LightningInputError,
     LightningOutputError
 );
-
-// TODO: upstream serde support to LDK
-/// Hack to get a route hint that implements `serde` traits.
-pub mod route_hints {
-    #[cfg(feature = "uniffi")]
-    use std::str::FromStr;
-
-    use fedimint_core::encoding::{Decodable, Encodable};
-    use fedimint_core::secp256k1::PublicKey;
-    use lightning_invoice::RoutingFees;
-    use serde::{Deserialize, Serialize};
-
-    #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
-    #[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
-    pub struct RouteHintHop {
-        /// The `node_id` of the non-target end of the route
-        pub src_node_id: PublicKey,
-        /// The `short_channel_id` of this channel
-        pub short_channel_id: u64,
-        /// Flat routing fee in millisatoshis
-        pub base_msat: u32,
-        /// Liquidity-based routing fee in millionths of a routed amount.
-        /// In other words, 10000 is 1%.
-        pub proportional_millionths: u32,
-        /// The difference in CLTV values between this node and the next node.
-        pub cltv_expiry_delta: u16,
-        /// The minimum value, in msat, which must be relayed to the next hop.
-        pub htlc_minimum_msat: Option<u64>,
-        /// The maximum value in msat available for routing with a single HTLC.
-        pub htlc_maximum_msat: Option<u64>,
-    }
-
-    #[cfg(feature = "uniffi")]
-    uniffi::custom_type!(PublicKey, String, {
-    remote,
-    lower: |pk| pk.to_string(),
-    try_lift: |s| PublicKey::from_str(&s).map_err(|e| anyhow::anyhow!(e)),
-    });
-
-    /// A list of hops along a payment path terminating with a channel to the
-    /// recipient.
-    #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, Encodable, Decodable)]
-    pub struct RouteHint(pub Vec<RouteHintHop>);
-
-    #[cfg(feature = "uniffi")]
-    uniffi::custom_newtype!(RouteHint, Vec<RouteHintHop>);
-
-    impl RouteHint {
-        pub fn to_ldk_route_hint(&self) -> lightning_invoice::RouteHint {
-            lightning_invoice::RouteHint(
-                self.0
-                    .iter()
-                    .map(|hop| lightning_invoice::RouteHintHop {
-                        src_node_id: hop.src_node_id,
-                        short_channel_id: hop.short_channel_id,
-                        fees: RoutingFees {
-                            base_msat: hop.base_msat,
-                            proportional_millionths: hop.proportional_millionths,
-                        },
-                        cltv_expiry_delta: hop.cltv_expiry_delta,
-                        htlc_minimum_msat: hop.htlc_minimum_msat,
-                        htlc_maximum_msat: hop.htlc_maximum_msat,
-                    })
-                    .collect(),
-            )
-        }
-    }
-
-    impl From<lightning_invoice::RouteHint> for RouteHint {
-        fn from(rh: lightning_invoice::RouteHint) -> Self {
-            RouteHint(rh.0.into_iter().map(Into::into).collect())
-        }
-    }
-
-    impl From<lightning_invoice::RouteHintHop> for RouteHintHop {
-        fn from(rhh: lightning_invoice::RouteHintHop) -> Self {
-            RouteHintHop {
-                src_node_id: rhh.src_node_id,
-                short_channel_id: rhh.short_channel_id,
-                base_msat: rhh.fees.base_msat,
-                proportional_millionths: rhh.fees.proportional_millionths,
-                cltv_expiry_delta: rhh.cltv_expiry_delta,
-                htlc_minimum_msat: rhh.htlc_minimum_msat,
-                htlc_maximum_msat: rhh.htlc_maximum_msat,
-            }
-        }
-    }
-}
-
-// TODO: Upstream serde serialization for
-// lightning_invoice::RoutingFees
-// See https://github.com/lightningdevkit/rust-lightning/blob/b8ed4d2608e32128dd5a1dee92911638a4301138/lightning/src/routing/gossip.rs#L1057-L1065
-pub mod serde_routing_fees {
-    use lightning_invoice::RoutingFees;
-    use serde::ser::SerializeStruct;
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    #[allow(missing_docs)]
-    pub fn serialize<S>(fees: &RoutingFees, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut state = serializer.serialize_struct("RoutingFees", 2)?;
-        state.serialize_field("base_msat", &fees.base_msat)?;
-        state.serialize_field("proportional_millionths", &fees.proportional_millionths)?;
-        state.end()
-    }
-
-    #[allow(missing_docs)]
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<RoutingFees, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let fees = serde_json::Value::deserialize(deserializer)?;
-        // While we deserialize fields as u64, RoutingFees expects u32 for the fields
-        let base_msat = fees["base_msat"]
-            .as_u64()
-            .ok_or_else(|| serde::de::Error::custom("base_msat is not a u64"))?;
-        let proportional_millionths = fees["proportional_millionths"]
-            .as_u64()
-            .ok_or_else(|| serde::de::Error::custom("proportional_millionths is not a u64"))?;
-
-        Ok(RoutingFees {
-            base_msat: base_msat
-                .try_into()
-                .map_err(|_| serde::de::Error::custom("base_msat is greater than u32::MAX"))?,
-            proportional_millionths: proportional_millionths.try_into().map_err(|_| {
-                serde::de::Error::custom("proportional_millionths is greater than u32::MAX")
-            })?,
-        })
-    }
-}
-
-pub mod serde_option_routing_fees {
-    use lightning_invoice::RoutingFees;
-    use serde::ser::SerializeStruct;
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    #[allow(missing_docs)]
-    pub fn serialize<S>(fees: &Option<RoutingFees>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        if let Some(fees) = fees {
-            let mut state = serializer.serialize_struct("RoutingFees", 2)?;
-            state.serialize_field("base_msat", &fees.base_msat)?;
-            state.serialize_field("proportional_millionths", &fees.proportional_millionths)?;
-            state.end()
-        } else {
-            let state = serializer.serialize_struct("RoutingFees", 0)?;
-            state.end()
-        }
-    }
-
-    #[allow(missing_docs)]
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<RoutingFees>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let fees = serde_json::Value::deserialize(deserializer)?;
-        // While we deserialize fields as u64, RoutingFees expects u32 for the fields
-        let base_msat = fees["base_msat"].as_u64();
-
-        if let Some(base_msat) = base_msat
-            && let Some(proportional_millionths) = fees["proportional_millionths"].as_u64()
-        {
-            let base_msat: u32 = base_msat
-                .try_into()
-                .map_err(|_| serde::de::Error::custom("base_msat is greater than u32::MAX"))?;
-            let proportional_millionths: u32 =
-                proportional_millionths.try_into().map_err(|_| {
-                    serde::de::Error::custom("proportional_millionths is greater than u32::MAX")
-                })?;
-            return Ok(Some(RoutingFees {
-                base_msat,
-                proportional_millionths,
-            }));
-        }
-
-        Ok(None)
-    }
-}
 
 #[derive(Debug, Error, Eq, PartialEq, Encodable, Decodable, Hash, Clone)]
 pub enum LightningInputError {
@@ -843,8 +628,14 @@ impl PrunedInvoice {
     }
 }
 
+/// A BOLT11 invoice carried no amount, so it cannot be pruned to the fields a
+/// gateway needs to pay it.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, thiserror::Error)]
+#[error("The invoice does not specify an amount")]
+pub struct MissingInvoiceAmountError;
+
 impl TryFrom<Bolt11Invoice> for PrunedInvoice {
-    type Error = anyhow::Error;
+    type Error = MissingInvoiceAmountError;
 
     fn try_from(invoice: Bolt11Invoice) -> Result<Self, Self::Error> {
         Ok(PrunedInvoice::new(
@@ -852,7 +643,7 @@ impl TryFrom<Bolt11Invoice> for PrunedInvoice {
             Amount::from_msats(
                 invoice
                     .amount_milli_satoshis()
-                    .context("Invoice amount is missing")?,
+                    .ok_or(MissingInvoiceAmountError)?,
             ),
         ))
     }

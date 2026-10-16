@@ -1,7 +1,5 @@
 use std::collections::BTreeMap;
 
-use anyhow::anyhow;
-
 pub use crate::core::ModuleInstanceId;
 use crate::core::{Decoder, ModuleKind};
 
@@ -122,18 +120,14 @@ impl<M: std::fmt::Debug, State> ModuleRegistry<M, State> {
     /// # Panics
     /// If the module isn't in the registry
     pub fn get_expect(&self, id: ModuleInstanceId) -> &M {
-        &self
-            .inner
-            .get(&id)
-            .ok_or_else(|| {
-                anyhow!(
-                    "Instance ID not found: got {}, expected one of {:?}",
-                    id,
-                    self.inner.keys().collect::<Vec<_>>()
-                )
-            })
-            .expect("Only existing instance should be fetched")
-            .1
+        let Some((_, module)) = self.inner.get(&id) else {
+            panic!(
+                "Only existing instance should be fetched: Instance ID not found: got {id}, \
+                 expected one of {:?}",
+                self.inner.keys().collect::<Vec<_>>()
+            );
+        };
+        module
     }
 
     /// Add a module to the registry

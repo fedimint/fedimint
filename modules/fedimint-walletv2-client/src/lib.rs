@@ -5,6 +5,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 pub use fedimint_walletv2_common as common;
+pub use fedimint_walletv2_common::MempoolVisibility;
 
 mod api;
 #[cfg(feature = "cli")]
@@ -18,19 +19,21 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::anyhow;
 use api::WalletFederationApi;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, ScriptBuf};
 use db::{NextOutputIndexKey, ValidAddressIndexKey, ValidAddressIndexPrefix};
 use events::{ReceivePaymentEvent, SendPaymentEvent};
-use fedimint_api_client::api::{DynModuleApi, FederationResult};
+use fedimint_api_client::api::{DynModuleApi, FederationError, FederationResult};
 use fedimint_client::DynGlobalClientContext;
 use fedimint_client::transaction::{
     ClientInput, ClientInputBundle, ClientInputSM, ClientOutput, ClientOutputBundle,
     ClientOutputSM, FeeQuote, FeeQuoteRequest, TransactionBuilder, max_affordable_send_amount,
 };
 use fedimint_client_module::db::ClientModuleMigrationFn;
+use fedimint_client_module::error::{
+    ClientModuleError, OperationLookupError, TransactionSubmitError,
+};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
@@ -38,21 +41,23 @@ use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, State
 use fedimint_client_module::sm_enum_variant_translation;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+    AutocommitError, Database, DatabaseError, DatabaseTransaction, DatabaseVersion,
+    IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::task::{TaskGroup, TaskHandle, sleep};
+use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, TaskHandle, sleep};
 use fedimint_core::{Amount, OutPoint, TransactionId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_eventlog::{Event, EventLogId};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
 use fedimint_walletv2_common::config::WalletClientConfig;
 use fedimint_walletv2_common::{
-    KIND, OutputInfo, StandardScript, TxInfo, WalletCommonInit, WalletInput, WalletInputV0,
-    WalletModuleTypes, WalletOutput, WalletOutputV0, descriptor, is_potential_receive,
+    BLOCK_COUNT_VOTE_DELAY, KIND, OutputInfo, PendingOutput, StandardScript, TxInfo,
+    WalletCommonInit, WalletInput, WalletInputV0, WalletModuleTypes, WalletOutput, WalletOutputV0,
+    descriptor, is_potential_receive,
 };
 use futures::StreamExt;
 use receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
@@ -114,6 +119,83 @@ pub enum FinalReceiveOperationState {
     Aborted,
 }
 
+/// Progress of a single incoming peg-in.
+///
+/// Each variant describes one deposit, identified by the outpoint it is looked
+/// up or paired with. An address that has been paid more than once has one of
+/// these per payment rather than a combined view, so nothing is aggregated
+/// away.
+///
+/// There is no "nothing has arrived" variant: a deposit no guardian has seen
+/// has no outpoint to describe it, so absence is expressed by
+/// [`WalletClientModule::address_receive_progress`] reporting no deposits.
+///
+/// Every variant is derived from advisory, non-consensus data reported by
+/// individual guardians, so none of them is authoritative and progress may move
+/// backwards: a reorg or an eviction can take a deposit back to being unseen
+/// entirely. No variant means money has been received - a deposit is only
+/// actually claimed once [`WalletClientModule::await_receive`] returns, and an
+/// output is deliberately still reported here for a short while after that.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ReceiveProgress {
+    /// The deposit is in a guardian's mempool but is not mined.
+    ///
+    /// The weakest signal there is: an unmined transaction can be replaced or
+    /// evicted, and a deposit in this state can disappear again. Treat it as
+    /// "we have seen your payment", never as money received.
+    ///
+    /// Only guardians whose bitcoin backend can enumerate a mempool report
+    /// these, so on a federation without one a deposit stays unseen until it is
+    /// mined.
+    Mempool { value: bitcoin::Amount },
+    /// The deposit has been mined but is not yet deep enough for the federation
+    /// to act on it.
+    Confirming {
+        value: bitcoin::Amount,
+        /// Height of the block that mined the deposit.
+        ///
+        /// Reported as the guardians saw it, so a reorg can move a deposit to a
+        /// different height or back to being unseen entirely.
+        height: u64,
+        /// Confirmations counting the block that mined the transaction as the
+        /// first, matching what a block explorer displays.
+        confirmations: u64,
+        /// Confirmations needed before the federation records the output.
+        required: u64,
+    },
+}
+
+/// What the federation currently reports about the deposits to one address.
+///
+/// Returned by [`WalletClientModule::address_receive_progress`]. The two fields
+/// are only meaningful together: they come from a single query, so the
+/// visibility flag describes exactly the view the deposits were read from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AddressReceiveProgress {
+    /// One entry per deposit the guardians can see, ordered by outpoint.
+    pub deposits: Vec<(bitcoin::OutPoint, ReceiveProgress)>,
+    /// The best mempool view any guardian had for this query.
+    ///
+    /// With [`MempoolVisibility::Complete`], empty `deposits` mean no
+    /// matching deposit was observed in the reported snapshot. That is not
+    /// proof that no payment was sent: a guardian only inspects its own
+    /// mempool, which a freshly broadcast transaction may not have reached
+    /// yet, and a deposit mined long enough ago has left the reported block
+    /// window. With [`MempoolVisibility::Partial`] the unmined deposits
+    /// reported are real, but one may also be missing because a guardian
+    /// failed to fetch its transaction or has not reached it yet while still
+    /// working through a large mempool, which is normal progress rather than
+    /// a backend fault; with
+    /// [`MempoolVisibility::Unavailable`] the federation is blind to a
+    /// payment until it is mined. One guardian that inspected its whole
+    /// mempool is enough to make this `Complete` for everyone.
+    ///
+    /// A wallet showing a receive screen wants this to choose between "we have
+    /// not seen your payment yet" and "waiting for the first confirmation",
+    /// which are very different things to tell a user who has just paid.
+    pub mempool_visibility: MempoolVisibility,
+}
+
 #[derive(Debug, Clone)]
 pub struct WalletClientModule {
     root_secret: DerivableSecret,
@@ -171,8 +253,10 @@ impl ClientModule for WalletClientModule {
     async fn handle_cli_command(
         &self,
         args: &[std::ffi::OsString],
-    ) -> anyhow::Result<serde_json::Value> {
-        cli::handle_cli_command(self, args).await
+    ) -> Result<serde_json::Value, ClientModuleError> {
+        cli::handle_cli_command(self, args)
+            .await
+            .map_err(ClientModuleError::other)
     }
 }
 
@@ -200,7 +284,10 @@ impl ClientModuleInit for WalletClientInit {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         let module = WalletClientModule {
             root_secret: args.module_root_secret().clone(),
             cfg: args.cfg().clone(),
@@ -263,7 +350,7 @@ impl WalletClientModule {
         self.module_api
             .send_fee()
             .await
-            .map_err(|e| SendError::FederationError(e.to_string()))?
+            .map_err(|e| SendError::Federation(Box::new(e)))?
             .ok_or(SendError::NoConsensusFeerateAvailable)
     }
 
@@ -281,7 +368,10 @@ impl WalletClientModule {
     /// The on-chain Bitcoin miner fee is deliberately excluded: it is part of
     /// the output `amount` (see [`Self::send_fee`]), not the on-federation
     /// transaction fee.
-    pub async fn send_fee_quote(&self, amount: bitcoin::Amount) -> anyhow::Result<FeeQuote> {
+    pub async fn send_fee_quote(
+        &self,
+        amount: bitcoin::Amount,
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         let amount = Amount::from_sats(amount.to_sat());
         self.client_ctx
             .fee_quote(
@@ -328,13 +418,14 @@ impl WalletClientModule {
     /// federation's own on-chain constraints — a send whose change UTXO would
     /// fall below the dust limit is still rejected by the guardians.
     ///
-    /// Returns an error if the balance cannot cover even the dust limit plus
-    /// fees.
+    /// Returns [`SendError::InsufficientFunds`] if the balance cannot cover
+    /// the dust limit plus fees, or [`SendError::Failed`] if the fee probe
+    /// itself failed.
     pub async fn max_sendable_amount(
         &self,
         balance: Amount,
         fee: bitcoin::Amount,
-    ) -> anyhow::Result<bitcoin::Amount> {
+    ) -> Result<bitcoin::Amount, SendError> {
         let fee_msats = Amount::from_sats(fee.to_sat());
 
         let max = max_affordable_send_amount(
@@ -349,7 +440,8 @@ impl WalletClientModule {
             |funded: Amount| self.send_fee_quote(bitcoin::Amount::from_sat(funded.msats / 1000)),
         )
         .await
-        .ok_or_else(|| anyhow!("Balance is too low to send any amount on chain after fees"))?;
+        .map_err(SendError::Failed)?
+        .ok_or(SendError::InsufficientFunds)?;
 
         // `gross_up` rounded up to whole satoshis, so the largest affordable
         // amount already sits on a satoshi boundary; no value is lost here.
@@ -361,7 +453,7 @@ impl WalletClientModule {
         self.module_api
             .receive_fee()
             .await
-            .map_err(|e| ReceiveError::FederationError(e.to_string()))?
+            .map_err(|e| ReceiveError::Federation(Box::new(e)))?
             .ok_or(ReceiveError::NoConsensusFeerateAvailable)
     }
 
@@ -387,7 +479,7 @@ impl WalletClientModule {
                 .module_api
                 .send_fee()
                 .await
-                .map_err(|e| SendError::FederationError(e.to_string()))?
+                .map_err(|e| SendError::Federation(Box::new(e)))?
                 .ok_or(SendError::NoConsensusFeerateAvailable)?,
         };
 
@@ -429,39 +521,30 @@ impl WalletClientModule {
 
         let address_clone = address.clone();
 
-        self.client_ctx
-            .finalize_and_submit_transaction(
-                operation_id,
-                WalletCommonInit::KIND.as_str(),
-                move |change_outpoint_range| {
-                    WalletOperationMeta::Send(SendMeta {
-                        change_outpoint_range,
-                        address: address_clone.clone(),
-                        value,
-                        fee,
-                        custom_meta: custom_meta.clone(),
-                    })
-                },
-                TransactionBuilder::new().with_outputs(client_output_bundle),
-            )
-            .await
-            .map_err(|_| SendError::InsufficientFunds)?;
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                SendPaymentEvent {
-                    operation_id,
-                    address,
+        self.submit_with_event(
+            operation_id,
+            move |change_outpoint_range| {
+                WalletOperationMeta::Send(SendMeta {
+                    change_outpoint_range,
+                    address: address_clone.clone(),
                     value,
                     fee,
-                },
-            )
-            .await;
-
-        dbtx.commit_tx().await;
+                    custom_meta: custom_meta.clone(),
+                })
+            },
+            TransactionBuilder::new().with_outputs(client_output_bundle),
+            SendPaymentEvent {
+                operation_id,
+                address,
+                value,
+                fee,
+            },
+        )
+        .await
+        .map_err(|error| match error {
+            TransactionSubmitError::InsufficientFunds(_) => SendError::InsufficientFunds,
+            error => SendError::Failed(error),
+        })?;
 
         Ok(operation_id)
     }
@@ -470,7 +553,7 @@ impl WalletClientModule {
     pub async fn await_final_send_operation_state(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<FinalSendOperationState> {
+    ) -> Result<FinalSendOperationState, OperationLookupError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
 
@@ -514,7 +597,7 @@ impl WalletClientModule {
     pub async fn await_final_receive_operation_state(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<FinalReceiveOperationState> {
+    ) -> Result<FinalReceiveOperationState, OperationLookupError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
 
@@ -548,6 +631,148 @@ impl WalletClientModule {
         }
 
         Ok(final_state.expect("Stream contains one final state"))
+    }
+
+    /// Resolves one of our receive addresses back to the index it was derived
+    /// at.
+    ///
+    /// Only addresses handed out by [`Self::receive`] resolve; the set of valid
+    /// indices is small, so this is a short scan rather than a stored reverse
+    /// index.
+    async fn address_index(&self, address: &Address) -> Option<u64> {
+        let script = address.script_pubkey();
+
+        let indices: Vec<u64> = self
+            .db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&ValidAddressIndexPrefix)
+            .await
+            .map(|entry| entry.0.0)
+            .collect()
+            .await;
+
+        indices
+            .into_iter()
+            .find(|index| self.derive_address(*index).script_pubkey() == script)
+    }
+
+    /// The current progress of the deposit at `outpoint`.
+    ///
+    /// Reads only the guardians' pending view, which is advisory and may move
+    /// backwards, and which cannot tell a claimed deposit from a reorged one.
+    /// Use [`Self::await_receive`] to establish that a deposit has actually
+    /// been claimed.
+    ///
+    /// Each call queries the federation, so poll it sparingly.
+    ///
+    /// Errors if no deposit at `outpoint` is known to this client, which
+    /// includes one that has been reorged out or evicted since it was last
+    /// seen, and one paying an address this client did not derive.
+    pub async fn receive_progress(
+        &self,
+        outpoint: bitcoin::OutPoint,
+    ) -> Result<ReceiveProgress, ReceiveProgressError> {
+        let pending = self.module_api.pending_outputs().await;
+
+        // Guardians report every output passing the receive filter, most of
+        // which belong to other clients, so ownership is established by matching
+        // the script against our own addresses.
+        let ours = self.address_map().await;
+
+        pending
+            .outputs
+            .iter()
+            .find(|output| output.outpoint == outpoint && ours.contains_key(&output.script))
+            .map(|output| Self::pending_progress(output, pending.block_count))
+            .ok_or(ReceiveProgressError::UnknownDeposit)
+    }
+
+    /// The progress of every deposit to `address` the federation has seen,
+    /// ordered by outpoint.
+    ///
+    /// Empty deposits mean no guardian has reported a payment to the address
+    /// yet. Even when [`AddressReceiveProgress::mempool_visibility`] is
+    /// [`MempoolVisibility::Complete`], that only means no matching deposit
+    /// was observed in the reported snapshot, never proof that no payment was
+    /// sent: a broadcast transaction may not have reached the guardians'
+    /// mempools yet. Without `Complete` an unmined deposit may be invisible
+    /// to the federation altogether.
+    ///
+    /// Errors if `address` was not handed out by [`Self::receive`].
+    pub async fn address_receive_progress(
+        &self,
+        address: &Address,
+    ) -> Result<AddressReceiveProgress, ReceiveProgressError> {
+        self.address_index(address)
+            .await
+            .ok_or(ReceiveProgressError::UnknownAddress)?;
+
+        Ok(self.deposits_paying(&address.script_pubkey()).await)
+    }
+
+    /// Every deposit the federation currently reports against `script`.
+    async fn deposits_paying(&self, script: &ScriptBuf) -> AddressReceiveProgress {
+        let pending = self.module_api.pending_outputs().await;
+
+        let mut deposits: Vec<(bitcoin::OutPoint, ReceiveProgress)> = pending
+            .outputs
+            .iter()
+            .filter(|output| output.script == *script)
+            .map(|output| {
+                (
+                    output.outpoint,
+                    Self::pending_progress(output, pending.block_count),
+                )
+            })
+            .collect();
+
+        deposits.sort_by_key(|(outpoint, _)| *outpoint);
+
+        AddressReceiveProgress {
+            deposits,
+            mempool_visibility: pending.mempool_visibility,
+        }
+    }
+
+    /// The scripts of every receive address derived so far, by index.
+    async fn address_map(&self) -> BTreeMap<ScriptBuf, u64> {
+        self.db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&ValidAddressIndexPrefix)
+            .await
+            .map(|entry| entry.0.0)
+            .map(|index| (self.derive_address(index).script_pubkey(), index))
+            .collect()
+            .await
+    }
+
+    fn pending_progress(output: &PendingOutput, block_count: u64) -> ReceiveProgress {
+        // Block count votes trail the chain tip by the vote delay, and an output
+        // is only recorded once the consensus block count is past the block that
+        // mined it, so a peg-in is claimable one standard confirmation later than
+        // the vote delay itself.
+        let required = BLOCK_COUNT_VOTE_DELAY + 1;
+
+        match output.height {
+            Some(height) => ReceiveProgress::Confirming {
+                value: output.value,
+                height,
+                // Confirmations count the block that mined the deposit as the
+                // first, matching what a block explorer displays.
+                //
+                // Guardians keep reporting an output for a while after it turns
+                // final, so that progress does not blank out before the claim
+                // begins. Clamp so a progress display cannot run past its own
+                // target during that overlap.
+                confirmations: block_count.saturating_sub(height).min(required),
+                required,
+            },
+            None => ReceiveProgress::Mempool {
+                value: output.value,
+            },
+        }
     }
 
     /// Returns the highest valid receive address index that the background
@@ -598,7 +823,7 @@ impl WalletClientModule {
     pub async fn await_receive(
         &self,
         position: EventLogId,
-    ) -> anyhow::Result<(FinalReceiveOperationState, EventLogId)> {
+    ) -> Result<(FinalReceiveOperationState, EventLogId), AwaitReceiveError> {
         let mut position = position;
 
         loop {
@@ -760,10 +985,8 @@ impl WalletClientModule {
 
         let meta_address = address.clone();
         let range = self
-            .client_ctx
-            .finalize_and_submit_transaction(
+            .submit_with_event(
                 operation_id,
-                WalletCommonInit::KIND.as_str(),
                 move |change_outpoint_range| {
                     WalletOperationMeta::Receive(ReceiveMeta {
                         change_outpoint_range,
@@ -774,15 +997,6 @@ impl WalletClientModule {
                     })
                 },
                 TransactionBuilder::new().with_inputs(client_input_bundle),
-            )
-            .await
-            .ok()?;
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
                 ReceivePaymentEvent {
                     operation_id,
                     value,
@@ -791,11 +1005,62 @@ impl WalletClientModule {
                     outpoint,
                 },
             )
-            .await;
-
-        dbtx.commit_tx().await;
+            .await
+            .ok()?;
 
         Some((operation_id, range.txid()))
+    }
+
+    /// Submits a transaction as a new operation and logs the event that
+    /// announces the operation, in one database transaction.
+    ///
+    /// Committing the two together is what lets a reader of the event log rely
+    /// on it: an operation that exists has its event, also after the client
+    /// stopped at any point in between.
+    async fn submit_with_event<F, E>(
+        &self,
+        operation_id: OperationId,
+        operation_meta_gen: F,
+        tx_builder: TransactionBuilder,
+        event: E,
+    ) -> Result<OutPointRange, TransactionSubmitError>
+    where
+        F: Fn(OutPointRange) -> WalletOperationMeta + Clone + MaybeSend + MaybeSync + 'static,
+        E: Event + Clone + Send + MaybeSync,
+    {
+        self.client_ctx
+            .module_db()
+            .autocommit(
+                |dbtx, _| {
+                    let operation_meta_gen = operation_meta_gen.clone();
+                    let tx_builder = tx_builder.clone();
+                    let event = event.clone();
+                    Box::pin(async move {
+                        let range = self
+                            .client_ctx
+                            .finalize_and_submit_transaction_dbtx(
+                                dbtx,
+                                operation_id,
+                                WalletCommonInit::KIND.as_str(),
+                                operation_meta_gen,
+                                tx_builder,
+                            )
+                            .await?;
+
+                        self.client_ctx.log_event(dbtx, event).await;
+
+                        Ok::<_, TransactionSubmitError>(range)
+                    })
+                },
+                Some(100),
+            )
+            .await
+            .map_err(|error| match error {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    TransactionSubmitError::Database(last_error)
+                }
+            })
     }
 
     fn spawn_output_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
@@ -846,7 +1111,7 @@ impl WalletClientModule {
         });
     }
 
-    async fn check_outputs(&self, handle: &TaskHandle) -> anyhow::Result<bool> {
+    async fn check_outputs(&self, handle: &TaskHandle) -> Result<bool, CheckOutputsError> {
         let mut dbtx = self.db.begin_transaction_nc().await;
 
         let next_output_index = dbtx.get_value(&NextOutputIndexKey).await.unwrap_or(0);
@@ -931,7 +1196,7 @@ impl WalletClientModule {
         &self,
         output: &OutputInfo,
         address_index: u64,
-    ) -> anyhow::Result<bool> {
+    ) -> Result<bool, ProcessOutputError> {
         debug!(
             target: LOG_CLIENT_MODULE_WALLETV2,
             output_index = output.index,
@@ -958,7 +1223,7 @@ impl WalletClientModule {
             .module_api
             .receive_fee()
             .await?
-            .ok_or(anyhow!("No consensus feerate is available"))?;
+            .ok_or(ProcessOutputError::NoFeerate)?;
 
         if let Some((operation_id, txid)) = self
             .receive_output(
@@ -982,7 +1247,7 @@ impl WalletClientModule {
                 .await
                 .await_tx_accepted(txid)
                 .await
-                .map_err(|e| anyhow!("Claim transaction was rejected: {e}"))?;
+                .map_err(ProcessOutputError::ClaimRejected)?;
             debug!(
                 target: LOG_CLIENT_MODULE_WALLETV2,
                 output_index = output.index,
@@ -1004,28 +1269,115 @@ impl WalletClientModule {
     }
 }
 
-#[derive(Error, Debug, Clone, Eq, PartialEq)]
+/// A failure to send an on-chain payment.
+#[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum SendError {
-    #[error("Address is from a different network than the federation.")]
+    /// The destination address is not valid on the federation's network.
+    #[error("Address is from a different network than the federation")]
     WrongNetwork,
+
+    /// The value to send is below the federation's dust limit.
     #[error("The value is too small")]
     DustValue,
-    #[error("Federation returned an error: {0}")]
-    FederationError(String),
+
+    /// The federation could not be asked for the current on-chain fee.
+    #[error("The federation returned an error")]
+    Federation(#[source] Box<FederationError>),
+
+    /// The guardians have not agreed a feerate yet, so no on-chain fee can be
+    /// quoted.
     #[error("No consensus feerate is available at this time")]
     NoConsensusFeerateAvailable,
+
+    /// The client cannot fund the wallet output this send needs.
     #[error("The client does not have sufficient funds to send the payment")]
     InsufficientFunds,
+
+    /// The destination is not an address type the federation can pay.
     #[error("Unsupported address type")]
     UnsupportedAddress,
+
+    /// The send transaction could not be submitted for a reason that is not
+    /// about funding.
+    #[error("The send transaction could not be submitted")]
+    Failed(#[source] TransactionSubmitError),
 }
 
-#[derive(Error, Debug, Clone, Eq, PartialEq)]
+/// A failure to quote the fee for claiming an on-chain deposit.
+#[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum ReceiveError {
-    #[error("Federation returned an error: {0}")]
-    FederationError(String),
+    /// The federation could not be asked for the current claim fee.
+    #[error("The federation returned an error")]
+    Federation(#[source] Box<FederationError>),
+
+    /// The guardians have not agreed a feerate yet, so no claim fee can be
+    /// quoted.
     #[error("No consensus feerate is available at this time")]
     NoConsensusFeerateAvailable,
+}
+
+/// A failure to wait for the next on-chain payment to be received.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum AwaitReceiveError {
+    /// The receive operation could not be looked up.
+    #[error("The receive operation could not be looked up")]
+    Operation(#[from] OperationLookupError),
+
+    /// The deposit was claimed, but the ecash it mints was never issued.
+    #[error("The ecash for the claimed deposit could not be issued")]
+    Issuance(#[from] TransactionSubmitError),
+}
+
+/// A failure to look up the progress of an incoming peg-in.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum ReceiveProgressError {
+    /// No guardian reports a deposit at this outpoint to one of our addresses.
+    /// This includes a deposit that was reorged out or evicted since it was
+    /// last seen.
+    #[error("No deposit of ours at this outpoint")]
+    UnknownDeposit,
+
+    /// The address was not handed out by [`WalletClientModule::receive`].
+    #[error("Address was not derived by this client")]
+    UnknownAddress,
+}
+
+/// A failure while scanning the federation's outputs for payments to this
+/// client.
+#[derive(Debug, Error)]
+enum CheckOutputsError {
+    /// The federation did not serve the scan.
+    #[error(transparent)]
+    Federation(#[from] FederationError),
+
+    /// The scan's progress could not be committed.
+    #[error(transparent)]
+    Database(#[from] DatabaseError),
+
+    /// An unspent output paid to this client could not be claimed.
+    #[error(transparent)]
+    ProcessOutput(#[from] ProcessOutputError),
+}
+
+/// A failure to claim an unspent output paid to this client.
+#[derive(Debug, Error)]
+enum ProcessOutputError {
+    /// The federation could not report its pending transactions or the
+    /// receive fee.
+    #[error(transparent)]
+    Federation(#[from] FederationError),
+
+    /// The federation has no consensus feerate to price the claim with.
+    #[error("No consensus feerate is available")]
+    NoFeerate,
+
+    /// The claim transaction was rejected.
+    #[error("Claim transaction was rejected: {0}")]
+    ClaimRejected(String),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]

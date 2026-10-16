@@ -1,8 +1,8 @@
 use anyhow::Result;
-use bitcoin::{Block, BlockHash, Transaction};
+use bitcoin::{Block, BlockHash, Transaction, Txid};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::time::now;
-use fedimint_core::util::{FmtCompactResultAnyhow as _, SafeUrl};
+use fedimint_core::util::{FmtCompactResult as _, SafeUrl};
 use fedimint_core::{ChainId, Feerate};
 use fedimint_logging::LOG_BITCOIND;
 use fedimint_metrics::HistogramExt as _;
@@ -63,7 +63,7 @@ macro_rules! tracked_call {
             method = $method,
             name = $self.name,
             duration_ms,
-            error = %result.fmt_compact_result_anyhow(),
+            error = %result.as_ref().map_err(|e| &**e).fmt_compact_result(),
             "completed bitcoind rpc"
         );
         result
@@ -82,6 +82,16 @@ impl IServerBitcoinRpc for ServerBitcoinRpcTracked {
 
     async fn get_block_count(&self) -> Result<u64> {
         tracked_call!(self, "get_block_count", self.inner.get_block_count().await)
+    }
+
+    async fn get_block_count_and_initial_block_download(&self) -> Result<(u64, bool)> {
+        tracked_call!(
+            self,
+            "get_block_count_and_initial_block_download",
+            self.inner
+                .get_block_count_and_initial_block_download()
+                .await
+        )
     }
 
     async fn get_block_hash(&self, height: u64) -> Result<BlockHash> {
@@ -113,6 +123,22 @@ impl IServerBitcoinRpc for ServerBitcoinRpcTracked {
             self,
             "get_sync_progress",
             self.inner.get_sync_progress().await
+        )
+    }
+
+    async fn get_mempool_txids(&self) -> Result<Option<Vec<Txid>>> {
+        tracked_call!(
+            self,
+            "get_mempool_txids",
+            self.inner.get_mempool_txids().await
+        )
+    }
+
+    async fn get_mempool_tx(&self, txid: &Txid) -> Result<Option<Transaction>> {
+        tracked_call!(
+            self,
+            "get_mempool_tx",
+            self.inner.get_mempool_tx(txid).await
         )
     }
 

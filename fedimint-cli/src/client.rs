@@ -215,6 +215,9 @@ pub enum ClientCmd {
     /// Gets the current fedimint AlephBFT session count
     #[clap(hide = true)]
     SessionCount,
+    /// Shows how available each guardian has been, as combined from all
+    /// guardians' views of each other
+    PeerAvailability,
 }
 
 pub async fn handle_command(
@@ -635,11 +638,11 @@ pub async fn handle_command(
             if let Some(module) = module {
                 let module_instance_id = module.resolve(&client)?;
 
-                client
+                Ok(client
                     .get_module_client_dyn(module_instance_id)
                     .context("Module not found")?
                     .handle_cli_command(&args)
-                    .await
+                    .await?)
             } else {
                 let module_list: Vec<ModuleInfo> = client
                     .config()
@@ -677,6 +680,8 @@ pub async fn handle_command(
             let count = client.api().session_count().await?;
             Ok(json!({ "count": count }))
         }
+        ClientCmd::PeerAvailability => Ok(serde_json::to_value(client.peer_availability().await)
+            .expect("Peer availability is serializable")),
     }
 }
 

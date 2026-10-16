@@ -18,14 +18,12 @@ rustc-args = ["--cfg", "tokio_unstable"]
 
 [features]
 tor = ["fedimint-api-client/tor"]
-uniffi = ["dep:uniffi"]
 
 [lib]
 name = "fedimint_client_module"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 aquamarine = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
@@ -49,7 +47,9 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time", "macros", "rt"] }
 tokio-stream = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
-uniffi = { workspace = true, optional = true }
+
+[dev-dependencies]
+assert_matches = { workspace = true }
 
 [build-dependencies]
 fedimint-build = { workspace = true }

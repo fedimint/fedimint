@@ -76,9 +76,6 @@ pub struct InputMeta {
 )]
 pub struct AmountUnit(u64);
 
-#[cfg(feature = "uniffi")]
-uniffi::custom_newtype!(AmountUnit, u64);
-
 impl AmountUnit {
     /// [`AmountUnit`] with id `0` is reserved for the native Bitcoin currency.
     /// So e.g. for a mainnet Federation it's a real Bitcoin (msats), for a
@@ -95,6 +92,16 @@ impl AmountUnit {
 
     pub const fn bitcoin() -> Self {
         Self::BITCOIN
+    }
+}
+
+impl fmt::Display for AmountUnit {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.is_bitcoin() {
+            f.write_str("bitcoin")
+        } else {
+            write!(f, "{}", self.0)
+        }
     }
 }
 
@@ -362,7 +369,7 @@ pub struct IrohGatewayResponse {
 pub const FEDIMINT_API_ALPN: &[u8] = b"FEDIMINT_API_ALPN";
 pub const FEDIMINT_GATEWAY_ALPN: &[u8] = b"FEDIMINT_GATEWAY_ALPN";
 
-/// Authentication secret used to verify guardian admin API requests.
+/// Authentication secret used to verify privileged API requests.
 ///
 /// The inner value is private to prevent timing leaks via direct comparison.
 /// Use [`Self::verify`] for authentication checks.

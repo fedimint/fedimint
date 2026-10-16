@@ -2,8 +2,10 @@ use clap::Subcommand;
 use fedimint_core::Amount;
 use fedimint_core::config::FederationId;
 use fedimint_core::util::SafeUrl;
-use fedimint_gateway_client::{get_config, get_info, set_fees, set_mnemonic};
-use fedimint_gateway_common::{ConfigPayload, SetFeesPayload, SetMnemonicPayload};
+use fedimint_gateway_client::{get_config, get_info, set_fees, set_mnemonic, set_payment_policy};
+use fedimint_gateway_common::{
+    ConfigPayload, SetFeesPayload, SetMnemonicPayload, SetPaymentPolicyPayload,
+};
 use fedimint_ln_common::client::GatewayApi;
 
 use crate::{CliOutput, CliOutputResult};
@@ -38,6 +40,19 @@ pub enum ConfigCommands {
 
         #[clap(long)]
         tx_ppm: Option<u64>,
+    },
+    /// Set which payments the gateway performs on behalf of a federation's
+    /// clients. Applies to every connected federation unless a federation id
+    /// is given.
+    SetPaymentPolicy {
+        #[clap(long)]
+        federation_id: Option<FederationId>,
+
+        /// Whether to accept incoming Lightning payments for the federation's
+        /// clients. Turning this off also fails back the payments of invoices
+        /// that were already issued.
+        #[clap(long)]
+        receive_enabled: Option<bool>,
     },
     /// Instructs the gateway to create a new mnemonic or set it to the provided
     /// mnemonic
@@ -85,6 +100,21 @@ impl ConfigCommands {
                         lightning_parts_per_million: ln_ppm,
                         transaction_base: tx_base,
                         transaction_parts_per_million: tx_ppm,
+                    },
+                )
+                .await?;
+                Ok(CliOutput::Empty)
+            }
+            Self::SetPaymentPolicy {
+                federation_id,
+                receive_enabled,
+            } => {
+                set_payment_policy(
+                    client,
+                    base_url,
+                    SetPaymentPolicyPayload {
+                        federation_id,
+                        receive_enabled,
                     },
                 )
                 .await?;

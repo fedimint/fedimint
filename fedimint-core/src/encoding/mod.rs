@@ -19,11 +19,10 @@ mod threshold_crypto;
 
 use std::borrow::Cow;
 use std::cmp;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display};
 use std::io::{self, Error, Read, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use anyhow::Context;
 use bitcoin::hashes::sha256;
 pub use fedimint_derive::{Decodable, Encodable};
 use hex::{FromHex, ToHex};
@@ -238,14 +237,11 @@ pub trait Decodable: Sized {
         let left = r.limit();
 
         if left != 0 {
-            return Err(fedimint_core::encoding::DecodeError::new_custom(
-                anyhow::anyhow!(
-                    "Type did not consume all bytes during decoding; expected={}; left={}; type={}",
-                    total_len,
-                    left,
-                    std::any::type_name::<Self>(),
-                ),
-            ));
+            return Err(fedimint_core::encoding::DecodeError::custom(format!(
+                "Type did not consume all bytes during decoding; expected={total_len}; \
+                 left={left}; type={}",
+                std::any::type_name::<Self>(),
+            )));
         }
         Ok(res)
     }
@@ -274,9 +270,7 @@ pub trait Decodable: Sized {
         hex: &str,
         modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
-        let bytes = Vec::<u8>::from_hex(hex)
-            .map_err(anyhow::Error::from)
-            .map_err(DecodeError::new_custom)?;
+        let bytes = Vec::<u8>::from_hex(hex).map_err(DecodeError::from_err)?;
         Decodable::consensus_decode_whole(&bytes, modules)
     }
 }
@@ -305,7 +299,13 @@ pub fn decode_legacy_system_time_from_finite_reader<D: std::io::Read>(
     modules: &ModuleDecoderRegistry,
 ) -> Result<SystemTime, DecodeError> {
     let duration = Duration::consensus_decode_partial_from_finite_reader(decoder, modules)?;
-    Ok(UNIX_EPOCH + duration)
+    // `UNIX_EPOCH + duration` panics ("overflow when adding duration to instant")
+    // instead of erroring when `duration` is past what `SystemTime` can hold. A
+    // decoder must not abort the process on arbitrary bytes, so use the checked
+    // form. Anything that round-trips today still round-trips.
+    UNIX_EPOCH
+        .checked_add(duration)
+        .ok_or_else(|| DecodeError::from_str("SystemTime overflow: duration too large"))
 }
 
 /// Encodes an optional timestamp in the legacy `SystemTime` representation.
@@ -362,7 +362,120 @@ pub fn with_decoding_context<T>(
     result: Result<T, DecodeError>,
     context: &'static str,
 ) -> Result<T, DecodeError> {
-    result.map_err(|error| DecodeError::new_custom(anyhow::Error::new(error).context(context)))
+    result.context(context)
+}
+
+/// Failure to consensus-decode a value.
+///
+/// `Display` prints only the outermost layer: the context of the decoding step
+/// that failed, or the leaf cause when there is no context. The full chain is
+/// reachable through [`std::error::Error::source`] and printed flat by
+/// [`FmtCompact::fmt_compact`](crate::util::FmtCompact).
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum DecodeError {
+    /// The reader failed or ran out of input.
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    /// The input names an enum variant the type does not have.
+    #[error("Invalid enum variant {variant} while decoding {type_name}")]
+    InvalidVariant {
+        /// The variant index found in the input.
+        variant: u64,
+        /// The name of the type being decoded.
+        type_name: &'static str,
+    },
+    /// A decoding step failed; `context` names the step and `source` says why.
+    #[error("{context}")]
+    Context {
+        /// The decoding step that failed.
+        context: String,
+        /// Why it failed.
+        #[source]
+        source: Box<Self>,
+    },
+    /// The input decoded but is not a valid value of the type; the source
+    /// says why.
+    #[error(transparent)]
+    Invalid(Box<dyn std::error::Error + Send + Sync>),
+    /// The input is malformed in a way only a message describes.
+    #[error("{message}")]
+    Custom {
+        /// What is wrong with the input.
+        message: String,
+    },
+}
+
+impl DecodeError {
+    /// A decode failure described by a message.
+    pub fn custom(message: impl Into<String>) -> Self {
+        Self::Custom {
+            message: message.into(),
+        }
+    }
+
+    /// A decode failure described by a static message.
+    // TODO: think about better name
+    #[allow(clippy::should_implement_trait)]
+    pub fn from_str(s: &'static str) -> Self {
+        Self::custom(s)
+    }
+
+    /// A decode failure caused by a typed error, shown as that error.
+    pub fn from_err<E>(e: E) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        Self::Invalid(Box::new(e))
+    }
+
+    /// Wraps this error in the context of the decoding step that failed.
+    pub fn context(self, context: impl Display) -> Self {
+        Self::Context {
+            context: context.to_string(),
+            source: Box::new(self),
+        }
+    }
+}
+
+/// Adds the context of a decoding step to a failed result.
+///
+/// Implemented for every `Result` whose error converts into [`DecodeError`],
+/// so it applies to results of `Decodable` calls and to `std::io::Result`.
+/// Its method names match `anyhow::Context`'s; where both traits are in scope,
+/// call it as `DecodeContext::context(result, ..)` to avoid the clash.
+pub trait DecodeContext<T> {
+    /// Wraps the error in `context`.
+    fn context<C>(self, context: C) -> Result<T, DecodeError>
+    where
+        C: Display;
+
+    /// Wraps the error in the context produced by `context`, which only runs
+    /// on failure.
+    fn with_context<C, F>(self, context: F) -> Result<T, DecodeError>
+    where
+        C: Display,
+        F: FnOnce() -> C;
+}
+
+impl<T, E> DecodeContext<T> for Result<T, E>
+where
+    E: Into<DecodeError>,
+{
+    fn context<C>(self, context: C) -> Result<T, DecodeError>
+    where
+        C: Display,
+    {
+        self.map_err(|error| error.into().context(context))
+    }
+
+    fn with_context<C, F>(self, context: F) -> Result<T, DecodeError>
+    where
+        C: Display,
+        F: FnOnce() -> C,
+    {
+        self.map_err(|error| error.into().context(context()))
+    }
 }
 
 impl Encodable for SafeUrl {
@@ -382,21 +495,6 @@ impl Decodable for SafeUrl {
     }
 }
 
-#[derive(Debug, Error)]
-pub struct DecodeError(pub(crate) anyhow::Error);
-
-impl DecodeError {
-    pub fn new_custom(e: anyhow::Error) -> Self {
-        Self(e)
-    }
-}
-
-impl From<anyhow::Error> for DecodeError {
-    fn from(e: anyhow::Error) -> Self {
-        Self(e)
-    }
-}
-
 macro_rules! impl_encode_decode_num_as_plain {
     ($num_type:ty) => {
         impl Encodable for $num_type {
@@ -413,7 +511,7 @@ macro_rules! impl_encode_decode_num_as_plain {
                 _modules: &ModuleDecoderRegistry,
             ) -> Result<Self, crate::encoding::DecodeError> {
                 let mut bytes = [0u8; (<$num_type>::BITS / 8) as usize];
-                d.read_exact(&mut bytes).map_err(DecodeError::from_err)?;
+                d.read_exact(&mut bytes)?;
                 Ok(<$num_type>::from_be_bytes(bytes))
             }
         }
@@ -433,8 +531,7 @@ macro_rules! impl_encode_decode_num_as_bigsize {
                 d: &mut D,
                 _modules: &ModuleDecoderRegistry,
             ) -> Result<Self, crate::encoding::DecodeError> {
-                let varint = BigSize::consensus_decode_partial(d, &Default::default())
-                    .context(concat!("VarInt inside ", stringify!($num_type)))?;
+                let varint = BigSize::consensus_decode_partial(d, &Default::default())?;
                 <$num_type>::try_from(varint.0).map_err(crate::encoding::DecodeError::from_err)
             }
         }
@@ -631,6 +728,13 @@ impl Decodable for Duration {
     ) -> Result<Self, DecodeError> {
         let secs = Decodable::consensus_decode_partial(d, modules)?;
         let nsecs = Decodable::consensus_decode_partial(d, modules)?;
+        // The encoder writes `subsec_nanos()`, which is always below one billion,
+        // so a larger `nsecs` is never something we wrote. Accepting it makes the
+        // encoding non-canonical and lets `Duration::new` panic when the carried
+        // second overflows `secs`.
+        if 1_000_000_000 <= nsecs {
+            return Err(DecodeError::from_str("Duration nanoseconds out of range"));
+        }
         Ok(Self::new(secs, nsecs))
     }
 }
@@ -649,42 +753,12 @@ impl Decodable for bool {
         _modules: &ModuleDecoderRegistry,
     ) -> Result<Self, DecodeError> {
         let mut bool_as_u8 = [0u8];
-        d.read_exact(&mut bool_as_u8)
-            .map_err(DecodeError::from_err)?;
+        d.read_exact(&mut bool_as_u8)?;
         match bool_as_u8[0] {
             0 => Ok(false),
             1 => Ok(true),
             _ => Err(DecodeError::from_str("Out of range, expected 0 or 1")),
         }
-    }
-}
-
-impl DecodeError {
-    // TODO: think about better name
-    #[allow(clippy::should_implement_trait)]
-    pub fn from_str(s: &'static str) -> Self {
-        #[derive(Debug)]
-        struct StrError(&'static str);
-
-        impl std::fmt::Display for StrError {
-            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-                std::fmt::Display::fmt(&self.0, f)
-            }
-        }
-
-        impl std::error::Error for StrError {}
-
-        Self(anyhow::Error::from(StrError(s)))
-    }
-
-    pub fn from_err<E: std::error::Error + Send + Sync + 'static>(e: E) -> Self {
-        Self(anyhow::Error::from(e))
-    }
-}
-
-impl std::fmt::Display for DecodeError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{:#}", self.0))
     }
 }
 
@@ -879,416 +953,4 @@ where
 }
 
 #[cfg(test)]
-mod tests {
-    use std::fmt::Debug;
-    use std::io::Cursor;
-
-    use super::*;
-    use crate::encoding::{Decodable, Encodable};
-    use crate::module::registry::ModuleRegistry;
-
-    pub(crate) fn test_roundtrip<T>(value: &T)
-    where
-        T: Encodable + Decodable + Eq + Debug,
-    {
-        let mut bytes = Vec::new();
-        value.consensus_encode(&mut bytes).unwrap();
-
-        let mut cursor = Cursor::new(bytes);
-        let decoded =
-            T::consensus_decode_partial(&mut cursor, &ModuleDecoderRegistry::default()).unwrap();
-        assert_eq!(value, &decoded);
-    }
-
-    pub(crate) fn test_roundtrip_expected<T>(value: &T, expected: &[u8])
-    where
-        T: Encodable + Decodable + Eq + Debug,
-    {
-        let mut bytes = Vec::new();
-        value.consensus_encode(&mut bytes).unwrap();
-        assert_eq!(&expected, &bytes);
-
-        let mut cursor = Cursor::new(bytes);
-        let decoded =
-            T::consensus_decode_partial(&mut cursor, &ModuleDecoderRegistry::default()).unwrap();
-        assert_eq!(value, &decoded);
-    }
-
-    #[derive(Debug, Eq, PartialEq, Encodable, Decodable)]
-    enum NoDefaultEnum {
-        Foo,
-        Bar(u32, String),
-        Baz { baz: u8 },
-    }
-
-    #[derive(Debug, Eq, PartialEq, Encodable, Decodable)]
-    enum DefaultEnum {
-        Foo,
-        Bar(u32, String),
-        #[encodable_default]
-        Default {
-            variant: u64,
-            bytes: Vec<u8>,
-        },
-    }
-
-    #[test_log::test]
-    fn test_derive_enum_no_default_roundtrip_success() {
-        let enums = [
-            NoDefaultEnum::Foo,
-            NoDefaultEnum::Bar(
-                42,
-                "The answer to life, the universe, and everything".to_string(),
-            ),
-            NoDefaultEnum::Baz { baz: 0 },
-        ];
-
-        for e in enums {
-            test_roundtrip(&e);
-        }
-    }
-
-    #[test_log::test]
-    fn test_derive_enum_no_default_decode_fail() {
-        let unknown_variant = DefaultEnum::Default {
-            variant: 42,
-            bytes: vec![0, 1, 2, 3],
-        };
-        let mut unknown_variant_encoding = vec![];
-        unknown_variant
-            .consensus_encode(&mut unknown_variant_encoding)
-            .unwrap();
-
-        let mut cursor = Cursor::new(&unknown_variant_encoding);
-        let decode_res =
-            NoDefaultEnum::consensus_decode_partial(&mut cursor, &ModuleRegistry::default());
-
-        match decode_res {
-            Ok(_) => panic!("Should return error"),
-            Err(e) => assert!(e.to_string().contains("Invalid enum variant")),
-        }
-    }
-
-    #[test_log::test]
-    fn test_derive_enum_default_decode_success() {
-        let unknown_variant = NoDefaultEnum::Baz { baz: 123 };
-        let mut unknown_variant_encoding = vec![];
-        unknown_variant
-            .consensus_encode(&mut unknown_variant_encoding)
-            .unwrap();
-
-        let mut cursor = Cursor::new(&unknown_variant_encoding);
-        let decode_res =
-            DefaultEnum::consensus_decode_partial(&mut cursor, &ModuleRegistry::default());
-
-        assert_eq!(
-            decode_res.unwrap(),
-            DefaultEnum::Default {
-                variant: 2,
-                bytes: vec![123],
-            }
-        );
-    }
-
-    #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
-    struct TestStruct {
-        vec: Vec<u8>,
-        num: u32,
-    }
-
-    #[test_log::test]
-    fn test_derive_struct() {
-        let reference = TestStruct {
-            vec: vec![1, 2, 3],
-            num: 42,
-        };
-        let bytes = [3, 1, 2, 3, 42];
-
-        test_roundtrip_expected(&reference, &bytes);
-    }
-
-    #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
-    struct TestTupleStruct(Vec<u8>, u32);
-
-    #[derive(Debug)]
-    struct TestFiniteReader;
-
-    impl Decodable for TestFiniteReader {
-        fn consensus_decode_partial_from_finite_reader<R: std::io::Read>(
-            reader: &mut R,
-            modules: &ModuleDecoderRegistry,
-        ) -> Result<Self, DecodeError> {
-            let _: Vec<u8> = decode_field_from_finite_reader(
-                reader,
-                modules,
-                "Decoding tuple block TestFiniteReader field field_0",
-            )?;
-            let _: Vec<u8> = decode_field_from_finite_reader(
-                reader,
-                modules,
-                "Decoding tuple block TestFiniteReader field field_1",
-            )?;
-            Ok(Self)
-        }
-    }
-
-    #[test_log::test]
-    fn test_derive_tuple_struct() {
-        let reference = TestTupleStruct(vec![1, 2, 3], 42);
-        let bytes = [3, 1, 2, 3, 42];
-
-        test_roundtrip_expected(&reference, &bytes);
-    }
-
-    #[test_log::test]
-    fn test_legacy_system_time_encoding() {
-        let time = UNIX_EPOCH + Duration::new(42, 100);
-        let expected = [42, 100];
-        let mut bytes = vec![];
-        encode_legacy_system_time(&time, &mut bytes).expect("encoding to a vector cannot fail");
-        assert_eq!(bytes, expected);
-
-        let mut cursor = Cursor::new(expected);
-        let decoded = decode_legacy_system_time_from_finite_reader(
-            &mut cursor,
-            &ModuleDecoderRegistry::default(),
-        )
-        .expect("valid encoding");
-        assert_eq!(decoded, time);
-    }
-
-    #[test_log::test]
-    fn test_client_backup_snapshot_uses_legacy_system_time_encoding() {
-        let reference = crate::backup::ClientBackupSnapshot {
-            timestamp: UNIX_EPOCH + Duration::new(42, 100),
-            data: vec![1, 2, 3],
-        };
-        let expected = [42, 100, 3, 1, 2, 3];
-
-        test_roundtrip_expected(&reference, &expected);
-    }
-
-    #[test_log::test]
-    fn test_legacy_optional_system_time_encoding() {
-        let time = Some(UNIX_EPOCH + Duration::new(42, 100));
-        let expected = [1, 42, 100];
-        let mut bytes = vec![];
-        encode_legacy_option_system_time(&time, &mut bytes)
-            .expect("encoding to a vector cannot fail");
-        assert_eq!(bytes, expected);
-
-        let mut cursor = Cursor::new(expected);
-        let decoded = decode_legacy_option_system_time_from_finite_reader(
-            &mut cursor,
-            &ModuleDecoderRegistry::default(),
-        )
-        .expect("valid encoding");
-        assert_eq!(decoded, time);
-    }
-
-    #[test_log::test]
-    fn test_legacy_optional_system_time_encoding_none() {
-        let mut bytes = vec![];
-        encode_legacy_option_system_time(&None, &mut bytes)
-            .expect("encoding to a vector cannot fail");
-        assert_eq!(bytes, [0]);
-
-        let mut cursor = Cursor::new(bytes);
-        let decoded = decode_legacy_option_system_time_from_finite_reader(
-            &mut cursor,
-            &ModuleDecoderRegistry::default(),
-        )
-        .expect("valid encoding");
-        assert_eq!(decoded, None);
-    }
-
-    #[test_log::test]
-    fn test_legacy_optional_system_time_encoding_rejects_invalid_flag() {
-        let error = decode_legacy_option_system_time_from_finite_reader(
-            &mut Cursor::new([2]),
-            &ModuleDecoderRegistry::default(),
-        )
-        .expect_err("invalid option flag must fail");
-        assert_eq!(
-            error.to_string(),
-            "Invalid flag for option enum, expected 0 or 1"
-        );
-    }
-
-    #[test_log::test]
-    fn test_legacy_system_time_field_decode_adds_context() {
-        let error = with_decoding_context(
-            decode_legacy_system_time_from_finite_reader(
-                &mut Cursor::new([42]),
-                &ModuleDecoderRegistry::default(),
-            ),
-            "Decoding named block field: Test{ ... timestamp ... }",
-        )
-        .expect_err("truncated timestamp must fail");
-        assert!(
-            error
-                .to_string()
-                .contains("Decoding named block field: Test{ ... timestamp ... }")
-        );
-    }
-
-    #[test_log::test]
-    fn test_finite_reader_shares_decode_limit_between_fields() {
-        let field = vec![0u8; MAX_DECODE_SIZE / 2];
-        let mut bytes = vec![];
-        field
-            .consensus_encode(&mut bytes)
-            .expect("encoding to a vector cannot fail");
-        field
-            .consensus_encode(&mut bytes)
-            .expect("encoding to a vector cannot fail");
-
-        let error = TestFiniteReader::consensus_decode_partial(
-            &mut Cursor::new(bytes),
-            &ModuleDecoderRegistry::default(),
-        )
-        .expect_err("both fields cannot exceed one decode limit");
-        assert!(
-            error
-                .to_string()
-                .contains("Decoding tuple block TestFiniteReader field field_1")
-        );
-    }
-
-    #[derive(Debug, Encodable, Decodable, Eq, PartialEq)]
-    enum TestEnum {
-        Foo(Option<u64>),
-        Bar { bazz: Vec<u8> },
-    }
-
-    #[test_log::test]
-    fn test_derive_enum() {
-        let test_cases = [
-            (TestEnum::Foo(Some(42)), vec![0, 2, 1, 42]),
-            (TestEnum::Foo(None), vec![0, 1, 0]),
-            (
-                TestEnum::Bar {
-                    bazz: vec![1, 2, 3],
-                },
-                vec![1, 4, 3, 1, 2, 3],
-            ),
-        ];
-
-        for (reference, bytes) in test_cases {
-            test_roundtrip_expected(&reference, &bytes);
-        }
-    }
-
-    #[test]
-    fn test_derive_empty_enum_decode() {
-        #[derive(Debug, Encodable, Decodable)]
-        enum NotConstructable {}
-
-        let vec = vec![42u8];
-        let mut cursor = Cursor::new(vec);
-
-        assert!(
-            NotConstructable::consensus_decode_partial(
-                &mut cursor,
-                &ModuleDecoderRegistry::default()
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn test_custom_index_enum() {
-        #[derive(Debug, PartialEq, Eq, Encodable, Decodable)]
-        enum Old {
-            Foo,
-            Bar,
-            Baz,
-        }
-
-        #[derive(Debug, PartialEq, Eq, Encodable, Decodable)]
-        enum New {
-            #[encodable(index = 0)]
-            Foo,
-            #[encodable(index = 2)]
-            Baz,
-            #[encodable_default]
-            Default { variant: u64, bytes: Vec<u8> },
-        }
-
-        let test_vector = vec![
-            (Old::Foo, New::Foo),
-            (
-                Old::Bar,
-                New::Default {
-                    variant: 1,
-                    bytes: vec![],
-                },
-            ),
-            (Old::Baz, New::Baz),
-        ];
-
-        for (old, new) in test_vector {
-            let old_bytes = old.consensus_encode_to_vec();
-            let decoded_new = New::consensus_decode_whole(&old_bytes, &ModuleRegistry::default())
-                .expect("Decoding failed");
-            assert_eq!(decoded_new, new);
-        }
-    }
-
-    fn encode_value<T: Encodable>(value: &T) -> Vec<u8> {
-        let mut writer = Vec::new();
-        value.consensus_encode(&mut writer).unwrap();
-        writer
-    }
-
-    fn decode_value<T: Decodable>(bytes: &[u8]) -> T {
-        T::consensus_decode_whole(bytes, &ModuleDecoderRegistry::default()).unwrap()
-    }
-
-    fn keeps_ordering_after_serialization<T: Ord + Encodable + Decodable + Debug>(mut vec: Vec<T>) {
-        vec.sort();
-        let mut encoded = vec.iter().map(encode_value).collect::<Vec<_>>();
-        encoded.sort();
-        let decoded = encoded.iter().map(|v| decode_value(v)).collect::<Vec<_>>();
-        for (i, (a, b)) in vec.iter().zip(decoded.iter()).enumerate() {
-            assert_eq!(a, b, "difference at index {i}");
-        }
-    }
-
-    #[test]
-    fn test_lexicographical_sorting() {
-        #[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
-        struct TestAmount(u64);
-
-        #[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
-        struct TestComplexAmount(u16, u32, u64);
-
-        #[derive(Ord, PartialOrd, Eq, PartialEq, Debug, Encodable, Decodable)]
-        struct Text(String);
-
-        let amounts = (0..20000).map(TestAmount).collect::<Vec<_>>();
-        keeps_ordering_after_serialization(amounts);
-
-        let complex_amounts = (10..20000)
-            .flat_map(|i| {
-                (i - 1..=i + 1).flat_map(move |j| {
-                    (i - 1..=i + 1).map(move |k| TestComplexAmount(i as u16, j as u32, k as u64))
-                })
-            })
-            .collect::<Vec<_>>();
-        keeps_ordering_after_serialization(complex_amounts);
-
-        let texts = (' '..'~')
-            .flat_map(|i| {
-                (' '..'~')
-                    .map(|j| Text(format!("{i}{j}")))
-                    .collect::<Vec<_>>()
-            })
-            .collect::<Vec<_>>();
-        keeps_ordering_after_serialization(texts);
-
-        // bitcoin structures are not lexicographically sortable so we cannot
-        // test them here. in future we may crate a wrapper type that is
-        // lexicographically sortable to use when needed
-    }
-}
+mod tests;

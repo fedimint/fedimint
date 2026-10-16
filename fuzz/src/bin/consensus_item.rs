@@ -1,4 +1,4 @@
-use fedimint_core::epoch::ConsensusItem;
+use fedimint_core::session_outcome::ConsensusItem;
 use fedimint_fuzz::all_standard_modules;
 use honggfuzz::fuzz;
 

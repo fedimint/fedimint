@@ -6,7 +6,6 @@ use std::pin::Pin;
 use std::sync::{Arc, Weak};
 use std::{ffi, marker, ops};
 
-use anyhow::{anyhow, bail};
 use bitcoin::secp256k1::PublicKey;
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi};
 use fedimint_core::config::ClientConfig;
@@ -34,6 +33,10 @@ use serde::de::DeserializeOwned;
 use tracing::warn;
 
 use self::init::ClientModuleInit;
+use crate::error::{
+    ClientModuleError, ModuleLookupError, OperationAlreadyExistsError, OperationLookupError,
+    OperationNotFoundError, TransactionSubmitError,
+};
 use crate::module::recovery::{DynModuleBackup, ModuleBackup};
 use crate::oplog::{IOperationLog, OperationLogEntry, UpdateStreamOrOutcome};
 use crate::sm::executor::{ActiveStateKey, IExecutor, InactiveStateKey};
@@ -67,7 +70,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         operation_type: &str,
         operation_meta_gen: Box<maybe_add_send_sync!(dyn Fn(OutPointRange) -> serde_json::Value)>,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange>;
+    ) -> Result<OutPointRange, TransactionSubmitError>;
 
     async fn finalize_and_submit_transaction_dbtx(
         &self,
@@ -76,7 +79,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         operation_type: &str,
         operation_meta_gen: Box<maybe_add_send_sync!(dyn Fn(OutPointRange) -> serde_json::Value)>,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange>;
+    ) -> Result<OutPointRange, TransactionSubmitError>;
 
     // TODO: unify
     async fn finalize_and_submit_transaction_inner(
@@ -84,7 +87,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange>;
+    ) -> Result<OutPointRange, TransactionSubmitError>;
 
     /// Computes the fee finalizing and submitting a transaction with the
     /// explicit items described by `request` would incur, without submitting
@@ -93,11 +96,11 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         &self,
         operation_id: OperationId,
         request: FeeQuoteRequest,
-    ) -> anyhow::Result<FeeQuote>;
+    ) -> Result<FeeQuote, TransactionSubmitError>;
 
     /// The client's balance for `unit`, held by the primary module. See
     /// `Client::get_balance_for_unit`.
-    async fn get_balance_for_unit(&self, unit: AmountUnit) -> anyhow::Result<Amount>;
+    async fn get_balance_for_unit(&self, unit: AmountUnit) -> Result<Amount, ModuleLookupError>;
 
     async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates;
 
@@ -106,11 +109,15 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         operation_id: OperationId,
         // TODO: make `impl Iterator<Item = ...>`
         outputs: Vec<OutPoint>,
-    ) -> anyhow::Result<()>;
+    ) -> Result<(), TransactionSubmitError>;
 
     fn operation_log(&self) -> &dyn IOperationLog;
 
     async fn has_active_states(&self, operation_id: OperationId) -> bool;
+
+    /// Waits until no state machine of the operation is running any more.
+    /// See `Client::await_no_active_states`.
+    async fn await_no_active_states(&self, operation_id: OperationId);
 
     async fn operation_exists(&self, operation_id: OperationId) -> bool;
 
@@ -122,7 +129,7 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
 
     async fn invite_code(&self, peer: PeerId) -> Option<InviteCode>;
 
-    fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)>;
+    fn get_internal_payment_markers(&self) -> Result<(PublicKey, u64), bitcoin::secp256k1::Error>;
 
     #[allow(clippy::too_many_arguments)]
     async fn log_event_json(
@@ -379,7 +386,7 @@ where
         operation_type: &str,
         operation_meta_gen: F,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange>
+    ) -> Result<OutPointRange, TransactionSubmitError>
     where
         F: Fn(OutPointRange) -> Meta + Clone + MaybeSend + MaybeSync + 'static,
         Meta: serde::Serialize + MaybeSend,
@@ -404,7 +411,7 @@ where
         operation_type: &str,
         operation_meta_gen: F,
         tx_builder: TransactionBuilder,
-    ) -> anyhow::Result<OutPointRange>
+    ) -> Result<OutPointRange, TransactionSubmitError>
     where
         F: Fn(OutPointRange) -> Meta + MaybeSend + MaybeSync + 'static,
         Meta: serde::Serialize + MaybeSend,
@@ -435,13 +442,13 @@ where
         &self,
         operation_id: OperationId,
         request: FeeQuoteRequest,
-    ) -> anyhow::Result<FeeQuote> {
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         self.client.get().fee_quote(operation_id, request).await
     }
 
     /// The client's Bitcoin balance, held by the primary module. See
     /// `Client::get_balance_for_btc`.
-    pub async fn get_balance_for_btc(&self) -> anyhow::Result<Amount> {
+    pub async fn get_balance_for_btc(&self) -> Result<Amount, ModuleLookupError> {
         self.client
             .get()
             .get_balance_for_unit(AmountUnit::BITCOIN)
@@ -457,7 +464,7 @@ where
         operation_id: OperationId,
         // TODO: make `impl Iterator<Item = ...>`
         outputs: Vec<OutPoint>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), TransactionSubmitError> {
         self.client
             .get()
             .await_primary_module_outputs(operation_id, outputs)
@@ -468,17 +475,21 @@ where
     pub async fn get_operation(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<oplog::OperationLogEntry> {
+    ) -> Result<oplog::OperationLogEntry, OperationLookupError> {
         let operation = self
             .client
             .get()
             .operation_log()
             .get_operation(operation_id)
             .await
-            .ok_or(anyhow::anyhow!("Operation not found"))?;
+            .ok_or(OperationNotFoundError { operation_id })?;
 
         if operation.operation_module_kind() != M::kind().as_str() {
-            bail!("Operation is not a lightning operation");
+            return Err(OperationLookupError::WrongModuleKind {
+                operation_id,
+                expected: M::kind(),
+                found: operation.operation_module_kind().to_owned(),
+            });
         }
 
         Ok(operation)
@@ -519,6 +530,18 @@ where
 
     pub async fn has_active_states(&self, op_id: OperationId) -> bool {
         self.client.get().has_active_states(op_id).await
+    }
+
+    /// Waits until no state machine of the operation is running any more:
+    /// every transaction it submitted has been accepted or rejected, and
+    /// every input and output state machine those started, the primary
+    /// module's among them, has reached its final state.
+    ///
+    /// Unlike [`Self::await_primary_module_outputs`] this needs no outputs
+    /// named, and does not report whether they were issued. See
+    /// `Client::await_no_active_states`.
+    pub async fn await_no_active_states(&self, op_id: OperationId) {
+        self.client.get().await_no_active_states(op_id).await;
     }
 
     pub async fn operation_exists(&self, op_id: OperationId) -> bool {
@@ -621,7 +644,9 @@ where
             .expect("The guardian we requested an invite code for exists")
     }
 
-    pub fn get_internal_payment_markers(&self) -> anyhow::Result<(PublicKey, u64)> {
+    pub fn get_internal_payment_markers(
+        &self,
+    ) -> Result<(PublicKey, u64), bitcoin::secp256k1::Error> {
         self.client.get().get_internal_payment_markers()
     }
 
@@ -633,7 +658,7 @@ where
         op_type: &str,
         operation_meta: impl serde::Serialize + Debug,
         sms: Vec<DynState>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), TransactionSubmitError> {
         let db = self.module_db();
         let mut dbtx = db.begin_transaction().await;
         {
@@ -649,12 +674,7 @@ where
             .await?;
         }
 
-        dbtx.commit_tx_result().await.map_err(|_| {
-            anyhow!(
-                "Operation with id {} already exists",
-                operation_id.fmt_short()
-            )
-        })?;
+        dbtx.commit_tx_result().await?;
 
         Ok(())
     }
@@ -666,7 +686,7 @@ where
         op_type: &str,
         operation_meta: impl serde::Serialize + Debug,
         sms: Vec<DynState>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), OperationAlreadyExistsError> {
         self.manual_operation_start_inner(
             &mut dbtx.global_dbtx(self.global_dbtx_access_token),
             operation_id,
@@ -686,7 +706,7 @@ where
         op_type: &str,
         operation_meta: impl serde::Serialize + Debug,
         sms: Vec<DynState>,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), OperationAlreadyExistsError> {
         dbtx.ensure_global()
             .expect("Must deal with global dbtx here");
 
@@ -698,10 +718,7 @@ where
             .await
             .is_some()
         {
-            bail!(
-                "Operation with id {} already exists",
-                operation_id.fmt_short()
-            );
+            return Err(OperationAlreadyExistsError { operation_id });
         }
 
         self.client
@@ -802,7 +819,7 @@ where
         dbtx: &mut DatabaseTransaction<'_>,
         inputs: ClientInputBundle<I, S>,
         operation_id: OperationId,
-    ) -> anyhow::Result<OutPointRange>
+    ) -> Result<OutPointRange, TransactionSubmitError>
     where
         I: IInput + MaybeSend + MaybeSync + 'static,
         S: sm::IState + MaybeSend + MaybeSync + 'static,
@@ -816,7 +833,7 @@ where
         dbtx: &mut DatabaseTransaction<'_>,
         inputs: InstancelessDynClientInputBundle,
         operation_id: OperationId,
-    ) -> anyhow::Result<OutPointRange> {
+    ) -> Result<OutPointRange, TransactionSubmitError> {
         let tx_builder =
             TransactionBuilder::new().with_inputs(inputs.into_dyn(self.module_instance_id));
 
@@ -985,22 +1002,39 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     /// access to global client is allowed.
     async fn start(&self) {}
 
+    /// Runs a `fedimint-cli module` command, given as its arguments.
+    ///
+    /// # Errors
+    ///
+    /// The default body fails with [`ClientModuleError::Unsupported`], for a
+    /// module that has no commands.
     async fn handle_cli_command(
         &self,
         _args: &[ffi::OsString],
-    ) -> anyhow::Result<serde_json::Value> {
-        Err(anyhow::format_err!(
-            "This module does not implement cli commands"
-        ))
+    ) -> Result<serde_json::Value, ClientModuleError> {
+        Err(ClientModuleError::Unsupported {
+            kind: <Self as ClientModule>::kind(),
+            operation: "handle_cli_command",
+        })
     }
 
+    /// Serves a JSON request, such as one `fedimint-client-rpc` forwards.
+    ///
+    /// # Errors
+    ///
+    /// The stream yields the module's failures. The default body yields a
+    /// single [`ClientModuleError::Unsupported`], for a module that serves no
+    /// requests.
     async fn handle_rpc(
         &self,
         _method: String,
         _request: serde_json::Value,
-    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
+    ) -> BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
         Box::pin(futures::stream::once(std::future::ready(Err(
-            anyhow::format_err!("This module does not implement rpc"),
+            ClientModuleError::Unsupported {
+                kind: <Self as ClientModule>::kind(),
+                operation: "handle_rpc",
+            },
         ))))
     }
 
@@ -1036,8 +1070,17 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         false
     }
 
-    async fn backup(&self) -> anyhow::Result<Self::Backup> {
-        anyhow::bail!("Backup not supported");
+    /// The module's part of a client backup.
+    ///
+    /// # Errors
+    ///
+    /// The default body fails with [`ClientModuleError::Unsupported`]; a
+    /// module whose [`Self::supports_backup`] is `true` must override it.
+    async fn backup(&self) -> Result<Self::Backup, ClientModuleError> {
+        Err(ClientModuleError::Unsupported {
+            kind: <Self as ClientModule>::kind(),
+            operation: "backup",
+        })
     }
 
     /// Does this module support being a primary module
@@ -1053,8 +1096,6 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     }
 
     /// Creates all inputs and outputs necessary to balance the transaction.
-    /// The function returns an error if and only if the client's funds are not
-    /// sufficient to create the inputs necessary to fully fund the transaction.
     ///
     /// A returned input also contains:
     /// * A set of private keys belonging to the input for signing the
@@ -1069,6 +1110,14 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     ///   takes the transaction id of the transaction in which the output was
     ///   used and the output index as input since these cannot be known at time
     ///   of calling `create_change_output` and have to be injected later.
+    ///
+    /// # Errors
+    ///
+    /// A module whose funds cannot cover the transaction must fail with
+    /// [`ClientModuleError::InsufficientBalance`]: the client reports that as
+    /// [`TransactionSubmitError::InsufficientFunds`], and any other failure as
+    /// [`TransactionSubmitError::PrimaryModule`]. The default body fails with
+    /// [`ClientModuleError::Unsupported`].
     async fn create_final_inputs_and_outputs(
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
@@ -1076,23 +1125,38 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         _unit: AmountUnit,
         _input_amount: Amount,
         _output_amount: Amount,
-    ) -> anyhow::Result<(
-        ClientInputBundle<<Self::Common as ModuleCommon>::Input, Self::States>,
-        ClientOutputBundle<<Self::Common as ModuleCommon>::Output, Self::States>,
-    )> {
-        unimplemented!()
+    ) -> Result<
+        (
+            ClientInputBundle<<Self::Common as ModuleCommon>::Input, Self::States>,
+            ClientOutputBundle<<Self::Common as ModuleCommon>::Output, Self::States>,
+        ),
+        ClientModuleError,
+    > {
+        Err(ClientModuleError::Unsupported {
+            kind: <Self as ClientModule>::kind(),
+            operation: "create_final_inputs_and_outputs",
+        })
     }
 
     /// Waits for the funds from an output created by
     /// [`Self::create_final_inputs_and_outputs`] to become available. This
     /// function returning typically implies a change in the output of
     /// [`Self::get_balance`].
+    ///
+    /// # Errors
+    ///
+    /// Fails if the output does not become available, for example because
+    /// the federation rejected its transaction. The default body fails with
+    /// [`ClientModuleError::Unsupported`].
     async fn await_primary_module_output(
         &self,
         _operation_id: OperationId,
         _out_point: OutPoint,
-    ) -> anyhow::Result<()> {
-        unimplemented!()
+    ) -> Result<(), ClientModuleError> {
+        Err(ClientModuleError::Unsupported {
+            kind: <Self as ClientModule>::kind(),
+            operation: "await_primary_module_output",
+        })
     }
 
     /// Returns the balance held by this module and available for funding
@@ -1168,8 +1232,17 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
     /// Calling code should allow the user to override and ignore any
     /// outstanding errors, after sufficient amount of warnings. Ideally,
     /// this should be done on per-module basis, to avoid mistakes.
-    async fn leave(&self, _dbtx: &mut DatabaseTransaction<'_>) -> anyhow::Result<()> {
-        bail!("Unable to determine if safe to leave the federation: Not implemented")
+    ///
+    /// # Errors
+    ///
+    /// The default body fails with [`ClientModuleError::Unsupported`], since a
+    /// module that does not implement this cannot tell whether leaving is
+    /// safe.
+    async fn leave(&self, _dbtx: &mut DatabaseTransaction<'_>) -> Result<(), ClientModuleError> {
+        Err(ClientModuleError::Unsupported {
+            kind: <Self as ClientModule>::kind(),
+            operation: "leave",
+        })
     }
 }
 
@@ -1178,22 +1251,22 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
 pub trait IClientModule: Debug {
     fn as_any(&self) -> &(maybe_add_send_sync!(dyn std::any::Any));
 
-    fn as_any_arc(self: Arc<Self>) -> Arc<maybe_add_send_sync!(dyn std::any::Any + 'static)>;
-
     fn decoder(&self) -> Decoder;
 
     fn context(&self, instance: ModuleInstanceId) -> DynContext;
 
     async fn start(&self);
 
-    async fn handle_cli_command(&self, args: &[ffi::OsString])
-    -> anyhow::Result<serde_json::Value>;
+    async fn handle_cli_command(
+        &self,
+        args: &[ffi::OsString],
+    ) -> Result<serde_json::Value, ClientModuleError>;
 
     async fn handle_rpc(
         &self,
         method: String,
         request: serde_json::Value,
-    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>>;
+    ) -> BoxStream<'_, Result<serde_json::Value, ClientModuleError>>;
 
     fn input_fee(&self, amount: &Amounts, input: &DynInput) -> Option<Amounts>;
 
@@ -1201,8 +1274,10 @@ pub trait IClientModule: Debug {
 
     fn supports_backup(&self) -> bool;
 
-    async fn backup(&self, module_instance_id: ModuleInstanceId)
-    -> anyhow::Result<DynModuleBackup>;
+    async fn backup(
+        &self,
+        module_instance_id: ModuleInstanceId,
+    ) -> Result<DynModuleBackup, ClientModuleError>;
 
     fn supports_being_primary(&self) -> PrimaryModuleSupport;
 
@@ -1214,13 +1289,13 @@ pub trait IClientModule: Debug {
         unit: AmountUnit,
         input_amount: Amount,
         output_amount: Amount,
-    ) -> anyhow::Result<(ClientInputBundle, ClientOutputBundle)>;
+    ) -> Result<(ClientInputBundle, ClientOutputBundle), ClientModuleError>;
 
     async fn await_primary_module_output(
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<()>;
+    ) -> Result<(), ClientModuleError>;
 
     async fn get_balance(
         &self,
@@ -1241,10 +1316,6 @@ where
         self
     }
 
-    fn as_any_arc(self: Arc<Self>) -> Arc<maybe_add_send_sync!(dyn Any + 'static)> {
-        self
-    }
-
     fn decoder(&self) -> Decoder {
         T::decoder()
     }
@@ -1260,7 +1331,7 @@ where
     async fn handle_cli_command(
         &self,
         args: &[ffi::OsString],
-    ) -> anyhow::Result<serde_json::Value> {
+    ) -> Result<serde_json::Value, ClientModuleError> {
         <T as ClientModule>::handle_cli_command(self, args).await
     }
 
@@ -1268,7 +1339,7 @@ where
         &self,
         method: String,
         request: serde_json::Value,
-    ) -> BoxStream<'_, anyhow::Result<serde_json::Value>> {
+    ) -> BoxStream<'_, Result<serde_json::Value, ClientModuleError>> {
         <T as ClientModule>::handle_rpc(self, method, request).await
     }
 
@@ -1301,7 +1372,7 @@ where
     async fn backup(
         &self,
         module_instance_id: ModuleInstanceId,
-    ) -> anyhow::Result<DynModuleBackup> {
+    ) -> Result<DynModuleBackup, ClientModuleError> {
         Ok(DynModuleBackup::from_typed(
             module_instance_id,
             <T as ClientModule>::backup(self).await?,
@@ -1320,7 +1391,7 @@ where
         unit: AmountUnit,
         input_amount: Amount,
         output_amount: Amount,
-    ) -> anyhow::Result<(ClientInputBundle, ClientOutputBundle)> {
+    ) -> Result<(ClientInputBundle, ClientOutputBundle), ClientModuleError> {
         let (inputs, outputs) = <T as ClientModule>::create_final_inputs_and_outputs(
             self,
             &mut dbtx.to_ref_with_prefix_module_id(module_instance).0,
@@ -1342,7 +1413,7 @@ where
         &self,
         operation_id: OperationId,
         out_point: OutPoint,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ClientModuleError> {
         <T as ClientModule>::await_primary_module_output(self, operation_id, out_point).await
     }
 
@@ -1369,12 +1440,6 @@ dyn_newtype_define!(
     #[derive(Clone)]
     pub DynClientModule(Arc<IClientModule>)
 );
-
-impl DynClientModule {
-    pub fn as_any_arc(&self) -> Arc<maybe_add_send_sync!(dyn Any + 'static)> {
-        self.inner.clone().as_any_arc()
-    }
-}
 
 impl AsRef<maybe_add_send_sync!(dyn IClientModule + 'static)> for DynClientModule {
     fn as_ref(&self) -> &maybe_add_send_sync!(dyn IClientModule + 'static) {

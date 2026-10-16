@@ -1,0 +1,5 @@
+ruleDirs:
+  - .config/ast-grep/rules
+
+testConfigs:
+  - testDir: .config/ast-grep/rule-tests

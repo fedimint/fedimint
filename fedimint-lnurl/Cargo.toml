@@ -16,7 +16,5 @@ bech32 = { workspace = true }
 lightning-invoice = { workspace = true, features = ["serde"] }
 reqwest = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 serde_with = { workspace = true }
-
-[dev-dependencies]
-serde_json.workspace = true

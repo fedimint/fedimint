@@ -21,11 +21,9 @@ use fedimint_lnv2_common::gateway_api::{
     GatewayConnection, PaymentFee, RealGatewayConnection, RoutingInfo,
 };
 use fedimint_lnv2_common::lnurl::LnurlRequest;
-use fedimint_lnv2_common::{
-    Bolt11InvoiceDescription, GatewayApi, MINIMUM_INCOMING_CONTRACT_AMOUNT, tweak,
-};
+use fedimint_lnv2_common::{Bolt11InvoiceDescription, GatewayApi, tweak};
 use fedimint_logging::TracingSetup;
-use lightning_invoice::Bolt11Invoice;
+use lightning_invoice::{Bolt11Invoice, Bolt11InvoiceDescriptionRef};
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 use tower_http::cors;
@@ -35,6 +33,11 @@ use tracing::{info, warn};
 
 const MAX_SENDABLE_MSAT: u64 = 100_000_000_000;
 const MIN_SENDABLE_MSAT: u64 = 100_000;
+
+/// LNURL-pay metadata served in the initial `payRequest` response. Per LUD-06
+/// the invoice returned by the callback has to commit to this exact string via
+/// its description hash, so it must not change between the two requests.
+const LNURL_METADATA: &str = "[[\"text/plain\", \"Pay to Recurringd\"]]";
 
 #[derive(Debug, Parser)]
 struct CliOpts {
@@ -67,9 +70,9 @@ async fn main() -> anyhow::Result<()> {
     let cli_opts = CliOpts::parse();
 
     let connector_registry = ConnectorRegistry::build_from_client_defaults()
-        .with_env_var_overrides()?
+        .with_env_var_overrides()
         .bind()
-        .await?;
+        .await;
 
     if cli_opts.api_address.scheme() != "https" {
         warn!(
@@ -126,7 +129,7 @@ async fn pay(
         max_sendable: MAX_SENDABLE_MSAT,
         min_sendable: MIN_SENDABLE_MSAT,
         tag: pay_request_tag(),
-        metadata: "[[\"text/plain\", \"Pay to Recurringd\"]]".to_string(),
+        metadata: LNURL_METADATA.to_string(),
     }))
 }
 
@@ -172,6 +175,7 @@ async fn invoice(
 
     Json(LnurlResponse::Ok(InvoiceResponse {
         pr: invoice.clone(),
+        routes: vec![],
         verify: Some(
             gateway
                 .join_path(&format!("verify/{}", invoice.payment_hash()))
@@ -215,12 +219,10 @@ async fn create_contract_and_fetch_invoice(
         "Payment fee exceeds limit"
     );
 
+    // `amount` is at least `MIN_SENDABLE_MSAT` and the fee just cleared
+    // `RECEIVE_FEE_LIMIT`, so this cannot produce a contract below 49.5 sats - far
+    // above any federation's claim fee. The recipient prices its own claim.
     let contract_amount = routing_info.receive_fee.subtract_from(amount);
-
-    ensure!(
-        contract_amount >= MINIMUM_INCOMING_CONTRACT_AMOUNT,
-        "Amount too small"
-    );
 
     // Encode the gateway fee in the contract expiration so the receiving client
     // can recover it and report the invoice amount in its payment events. These
@@ -241,13 +243,15 @@ async fn create_contract_and_fetch_invoice(
         ephemeral_pk,
     );
 
+    let metadata_hash = sha256::Hash::hash(LNURL_METADATA.as_bytes());
+
     let invoice = gateway_conn
         .bolt11_invoice(
             gateway.clone(),
             federation_id,
             contract.clone(),
             Amount::from_msats(amount),
-            Bolt11InvoiceDescription::Direct("LNURL Payment".to_string()),
+            Bolt11InvoiceDescription::Hash(metadata_hash),
             expiry_secs,
         )
         .await?;
@@ -260,6 +264,14 @@ async fn create_contract_and_fetch_invoice(
     ensure!(
         invoice.amount_milli_satoshis() == Some(amount),
         "Invalid invoice amount"
+    );
+
+    ensure!(
+        matches!(
+            invoice.description(),
+            Bolt11InvoiceDescriptionRef::Hash(hash) if hash.0 == metadata_hash
+        ),
+        "Invoice does not commit to the LNURL metadata via its description hash"
     );
 
     Ok((gateway, invoice))

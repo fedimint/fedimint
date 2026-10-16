@@ -12,12 +12,12 @@ services:
       - FM_ENABLE_IROH=true
       - FM_BITCOIN_NETWORK=bitcoin
       - FM_ESPLORA_URL=https://mempool.space/api
-      # To use your own bitcoind, uncomment the following lines. When both
-      # FM_BITCOIND_URL and FM_ESPLORA_URL are set, fedimintd uses bitcoind as
-      # the primary bitcoin backend and automatically falls back to esplora if
-      # bitcoind is unavailable (e.g. while it is still syncing). Transactions
-      # are broadcast to both backends simultaneously. Once bitcoind is fully
-      # synced you can remove FM_ESPLORA_URL to use bitcoind exclusively.
+      # To use your own bitcoind, remove FM_ESPLORA_URL and uncomment below.
+      # This sample's pinned image predates the sync-aware hybrid routing fixes;
+      # use one backend unless upgrading to a release containing those fixes.
+      # Hybrid mode trusts Esplora for chain selection. Broadcast is always
+      # bitcoind-first, with Esplora attempted only after a primary error,
+      # NOT simultaneous. See SECURITY.md before configuring a trusted fallback.
       # - FM_BITCOIND_URL=http://bitcoind:8332
       # - FM_BITCOIND_USERNAME=bitcoin
       # - FM_BITCOIND_PASSWORD=bitcoin

@@ -4,8 +4,7 @@ use std::fmt::Debug;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::epoch::ConsensusItem;
-use fedimint_core::session_outcome::{AcceptedItem, SignedSessionOutcome};
+use fedimint_core::session_outcome::{AcceptedItem, ConsensusItem, SignedSessionOutcome};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{
     OutPoint, TransactionId, apply, async_trait_maybe_send, impl_db_lookup, impl_db_record,
@@ -16,6 +15,7 @@ use fedimint_server_core::migration::{
 use futures::StreamExt;
 use serde::Serialize;
 
+use crate::consensus::peer_availability::PeerAvailabilityState;
 use crate::db::DbKeyPrefix;
 
 #[derive(Clone, Debug, Encodable, Decodable)]
@@ -64,6 +64,16 @@ impl_db_record!(
 impl_db_lookup!(
     key = SignedSessionOutcomeKey,
     query_prefix = SignedSessionOutcomePrefix
+);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct PeerAvailabilityKey;
+
+impl_db_record!(
+    key = PeerAvailabilityKey,
+    value = PeerAvailabilityState,
+    db_prefix = DbKeyPrefix::PeerAvailability,
+    notify_on_modify = false,
 );
 
 #[derive(Debug, Encodable, Decodable)]

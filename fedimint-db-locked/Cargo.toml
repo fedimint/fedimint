@@ -16,11 +16,11 @@ name = "fedimint_db_locked"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { workspace = true }
 async-trait = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fs-lock = { workspace = true }
+thiserror = { workspace = true }
 tracing = { workspace = true }
 
 [lints]

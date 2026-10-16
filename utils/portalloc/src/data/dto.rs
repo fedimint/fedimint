@@ -1,9 +1,13 @@
 use std::collections::BTreeMap;
 use std::net::{TcpListener, UdpSocket};
 
+use anyhow::{Result, anyhow};
 use fedimint_core::util::FmtCompact as _;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
+
+#[cfg(test)]
+mod tests;
 
 /// The lowest port number to try. Ports below 10k are typically used by normal
 /// software, increasing chance they would get in a way.
@@ -53,7 +57,7 @@ impl Default for RootData {
 }
 
 impl RootData {
-    pub fn get_free_port_range(&mut self, range_size: u16) -> u16 {
+    pub fn get_free_port_range(&mut self, range_size: u16) -> Result<u16> {
         trace!(target: LOG_PORT_ALLOC, range_size, "Looking for port");
 
         self.reclaim();
@@ -65,7 +69,7 @@ impl RootData {
                 self.reclaim();
                 base_port = LOW;
             }
-            let range = base_port..base_port + range_size;
+            let range = port_range(base_port, range_size)?;
             if let Some(next_port) = self.contains(range.clone()) {
                 warn!(
                     base_port,
@@ -95,7 +99,7 @@ impl RootData {
 
             self.insert(range);
             debug!(target: LOG_PORT_ALLOC, base_port, range_size, "Allocated port range");
-            return base_port;
+            return Ok(base_port);
         }
     }
 
@@ -148,21 +152,9 @@ impl RootData {
     }
 }
 
-#[test]
-fn root_data_sanity() {
-    let mut r = RootData::default();
-
-    r.insert(2..4);
-    r.insert(6..8);
-    r.insert(100..108);
-    assert_eq!(r.contains(0..2), None);
-    assert_eq!(r.contains(0..3), Some(4));
-    assert_eq!(r.contains(2..4), Some(4));
-    assert_eq!(r.contains(3..4), Some(4));
-    assert_eq!(r.contains(3..5), Some(4));
-    assert_eq!(r.contains(4..6), None);
-    assert_eq!(r.contains(0..10), Some(8));
-    assert_eq!(r.contains(6..10), Some(8));
-    assert_eq!(r.contains(7..8), Some(8));
-    assert_eq!(r.contains(8..10), None);
+fn port_range(base_port: u16, range_size: u16) -> Result<std::ops::Range<u16>> {
+    let end = base_port.checked_add(range_size).ok_or_else(|| {
+        anyhow!("Port range starting at {base_port} with size {range_size} exceeds u16 bounds")
+    })?;
+    Ok(base_port..end)
 }

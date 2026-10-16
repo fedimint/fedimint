@@ -84,7 +84,6 @@ impl DatabaseDump {
             // db
             let decoders = module_inits
                 .available_decoders(cfg.iter_module_instances())
-                .unwrap()
                 .with_fallback();
             (Some(cfg), None, decoders)
         } else {
@@ -100,7 +99,6 @@ impl DatabaseDump {
                     let kinds = client_cfg.modules.iter().map(|(k, v)| (*k, &v.kind));
                     let decoders = client_module_inits
                         .available_decoders(kinds)
-                        .unwrap()
                         .with_fallback();
                     let client_cfg = client_cfg.redecode_raw(&decoders)?;
                     (None, Some(client_cfg), decoders)
@@ -316,7 +314,8 @@ impl DatabaseDump {
             server_db::DbKeyPrefix::Module
             | server_db::DbKeyPrefix::ServerInfo
             | server_db::DbKeyPrefix::DatabaseVersion
-            | server_db::DbKeyPrefix::ClientBackup => {}
+            | server_db::DbKeyPrefix::ClientBackup
+            | server_db::DbKeyPrefix::PeerAvailability => {}
             server_db::DbKeyPrefix::ApiAnnouncements => {
                 push_db_pair_items_no_serde!(
                     dbtx,

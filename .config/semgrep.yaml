@@ -8,21 +8,6 @@ rules:
 
   severity: ERROR
 
-- id: ban-system-time-elapsed
-  languages:
-    - rust
-  message: Use fedimint_core::time::now and std::time::duration_since to compare an elapsed time for better wasm compatibility.
-  pattern: $SYSTEM_TIME.elapsed()
-  paths:
-    exclude:
-      # server only
-      - fedimint-server/
-      # doesn't run in wasm
-      - fedimint-load-test-tool/
-      # doesn't run in wasm
-      - devimint/
-  severity: ERROR
-
 - id: ban-instant-now
   languages:
     - rust
@@ -72,6 +57,17 @@ rules:
   pattern: tokio::time::sleep
   severity: ERROR
 
+- id: ban-tokio-timeout
+  languages:
+    - rust
+  message: "`tokio::time::timeout` doesn't work in WASM. Use `fedimint_core::runtime::timeout` instead."
+  pattern: tokio::time::timeout
+  paths:
+    include:
+      - modules/fedimint-*-client/
+      - modules/fedimint-*-common/
+  severity: ERROR
+
 - id: ban-raw-block-on
   languages:
     - rust
@@ -100,7 +96,7 @@ rules:
 - id: use-err-formatting
   languages:
     - rust
-  message: Use `.fmt_compact` or `.fmt_compact_anyhow` to include error causes when reporting them, or .as_str if the error itself is a string.
+  message: Use `.fmt_compact` to include error causes when reporting them (an `anyhow::Error` included), or .as_str if the error itself is a string.
   patterns:
     # semgrep struggles with finding boundaries of rust macro invocation when ellipsis (`...`) is used
     # so matching this one with raw regexes instead
@@ -212,4 +208,3 @@ rules:
 #   pattern: "error!(...)"
 #   message: "Don't use error logging level, use `crit!` wrapper to avoid conflating any `error` with `error logging level`"
 #   severity: WARNING
-

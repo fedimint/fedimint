@@ -1,0 +1,23 @@
+id: no-inline-modules
+valid:
+  - mod transport;
+  - pub mod protocol;
+  - pub(crate) mod internal;
+  - |
+      #[cfg(test)]
+      mod tests;
+invalid:
+  - mod transport {}
+  - pub mod protocol {}
+  - pub(crate) mod internal {}
+  - |
+      #[cfg(test)]
+      mod tests {}
+  - |
+      mod protocol {
+          pub fn encode() {}
+      }
+  - |
+      fn install() {
+          mod nested {}
+      }

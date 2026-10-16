@@ -5,8 +5,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use fedimint_core::core::{DynInput, DynModuleConsensusItem, DynOutput, ModuleInstanceId};
 use fedimint_core::db::{
-    Database, DatabaseTransaction, DatabaseVersion, DbMigrationFn, DbMigrationFnContext,
-    apply_migrations_dbtx,
+    Database, DatabaseTransaction, DatabaseVersion, DbMigrationError, DbMigrationFn,
+    DbMigrationFnContext, apply_migrations_dbtx,
 };
 use fedimint_core::module::ModuleCommon;
 use fedimint_core::util::BoxStream;
@@ -153,14 +153,11 @@ pub async fn apply_migrations_server(
     db: &Database,
     kind: String,
     migrations: BTreeMap<DatabaseVersion, DynServerDbMigrationFn>,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), DbMigrationError> {
     let mut global_dbtx = db.begin_transaction().await;
     global_dbtx.ensure_global()?;
     apply_migrations_server_dbtx(&mut global_dbtx.to_ref_nc(), ctx, kind, migrations).await?;
-    global_dbtx
-        .commit_tx_result()
-        .await
-        .map_err(|e| anyhow::Error::msg(e.to_string()))
+    Ok(global_dbtx.commit_tx_result().await?)
 }
 
 /// Applies the database migrations to a non-isolated database.
@@ -169,7 +166,7 @@ pub async fn apply_migrations_server_dbtx(
     ctx: DynServerDbMigrationContext,
     kind: String,
     migrations: BTreeMap<DatabaseVersion, DynServerDbMigrationFn>,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), DbMigrationError> {
     global_dbtx.ensure_global()?;
     apply_migrations_dbtx(global_dbtx, ctx, kind, migrations, None, None).await
 }

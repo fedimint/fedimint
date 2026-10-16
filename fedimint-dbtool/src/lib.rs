@@ -242,6 +242,7 @@ async fn open_db(options: &Options) -> fedimint_core::db::Database {
     fedimint_rocksdb::RocksDb::build(&options.database_dir)
         .open()
         .await
+        .map_err(anyhow::Error::from)
         .unwrap()
         .into_database()
 }

@@ -7,18 +7,18 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
-use anyhow::bail;
 use api::{RecurringdApiError, RecurringdClient};
 use async_stream::stream;
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::SECP256K1;
 use fedimint_client_module::OperationId;
+use fedimint_client_module::error::OperationAlreadyExistsError;
 use fedimint_client_module::module::ClientContext;
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
 use fedimint_core::BitcoinHash;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleKind;
-use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
+use fedimint_core::db::{DatabaseError, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{
     Decodable, DecodeError, Encodable, decode_field_from_finite_reader,
     decode_legacy_system_time_from_finite_reader, encode_legacy_system_time, with_decoding_context,
@@ -26,7 +26,7 @@ use fedimint_core::encoding::{
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::secp256k1::{Keypair, PublicKey};
 use fedimint_core::task::sleep;
-use fedimint_core::util::{BoxFuture, FmtCompact, FmtCompactAnyhow, SafeUrl};
+use fedimint_core::util::{BoxFuture, FmtCompact, SafeUrl};
 use fedimint_derive_secret::ChildId;
 use fedimint_eventlog::{Event, EventKind, EventPersistence};
 use futures::StreamExt;
@@ -41,8 +41,9 @@ use tracing::{debug, trace, warn};
 use crate::db::{RecurringPaymentCodeKey, RecurringPaymentCodeKeyPrefix};
 use crate::receive::LightningReceiveError;
 use crate::{
-    LightningClientModule, LightningClientStateMachines, LightningOperationMeta,
-    LightningOperationMetaVariant, LnReceiveState, tweak_user_key, tweak_user_secret_key,
+    CreateBolt11InvoiceError, LightningClientModule, LightningClientStateMachines,
+    LightningOperationMeta, LightningOperationMetaVariant, LnReceiveState, LnSubscribeError,
+    tweak_user_key, tweak_user_secret_key,
 };
 
 const LOG_CLIENT_RECURRING: &str = "fm::client::ln::recurring";
@@ -296,7 +297,7 @@ impl LightningClientModule {
         payment_code: &RecurringPaymentCodeEntry,
         invoice_index: u64,
         invoice: lightning_invoice::Bolt11Invoice,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, OperationAlreadyExistsError> {
         // TODO: pipe secure secp context to here
         let invoice_key =
             tweak_user_secret_key(SECP256K1, payment_code.root_keypair, invoice_index);
@@ -348,7 +349,7 @@ impl LightningClientModule {
                 ?operation_id,
                 payment_code_key=?payment_code.root_keypair.public_key(),
                 invoice_index=%invoice_index,
-                err = %e.fmt_compact_anyhow(),
+                err = %e.fmt_compact(),
                 "Failed to create recurring receive operation"
             );
             Err(e)
@@ -360,14 +361,14 @@ impl LightningClientModule {
     pub async fn subscribe_ln_recurring_receive(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<LnReceiveState>> {
+    ) -> Result<UpdateStreamOrOutcome<LnReceiveState>, LnSubscribeError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let LightningOperationMetaVariant::RecurringPaymentReceive(ReurringPaymentReceiveMeta {
             invoice,
             ..
         }) = operation.meta::<LightningOperationMeta>().variant
         else {
-            bail!("Operation is not a recurring lightning receive")
+            return Err(LnSubscribeError::NotARecurringReceive);
         };
 
         let client_ctx = self.client_ctx.clone();
@@ -502,7 +503,7 @@ impl Display for PaymentCodeId {
 }
 
 impl FromStr for PaymentCodeId {
-    type Err = anyhow::Error;
+    type Err = bitcoin::hashes::hex::HexToArrayError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(sha256::Hash::from_str(s)?))
@@ -516,7 +517,7 @@ impl Display for PaymentCodeRootKey {
 }
 
 impl FromStr for PaymentCodeRootKey {
-    type Err = anyhow::Error;
+    type Err = fedimint_core::secp256k1::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(PublicKey::from_str(s)?))
@@ -565,10 +566,23 @@ pub enum RecurringPaymentError {
     PaymentCodeAlreadyExists(PaymentCodeRootKey),
     #[error("Federation already registered: {0}")]
     FederationAlreadyRegistered(FederationId),
-    #[error("Error joining federation: {0}")]
-    JoiningFederationFailed(anyhow::Error),
-    #[error("Error registering with recurring payment service: {0}")]
-    Other(#[from] anyhow::Error),
+    /// The client could not download the federation's config or build itself
+    /// against it.
+    #[error("Error joining federation")]
+    JoiningFederationFailed(#[source] Box<dyn std::error::Error + Send + Sync>),
+    /// A database operation failed.
+    #[error("Database error")]
+    Database(#[from] DatabaseError),
+    /// An invoice could not be created in the federation.
+    #[error("The invoice could not be created")]
+    InvoiceCreation(#[source] CreateBolt11InvoiceError),
+    /// The receive operation backing an invoice could not be followed.
+    #[error("The lightning receive could not be followed")]
+    Subscribe(#[source] LnSubscribeError),
+    /// The receive operation's update stream ended before the federation
+    /// confirmed the invoice.
+    #[error("BOLT11 invoice not confirmed")]
+    InvoiceNotConfirmed,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -657,3 +671,6 @@ impl Event for RecurringInvoiceCreatedEvent {
     const KIND: EventKind = EventKind::from_static("recurring_invoice_created");
     const PERSISTENCE: EventPersistence = EventPersistence::Persistent;
 }
+
+#[cfg(test)]
+mod tests;

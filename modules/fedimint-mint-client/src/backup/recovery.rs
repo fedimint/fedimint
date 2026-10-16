@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::ops::Add;
 
+use fedimint_client_module::error::ClientModuleError;
 use fedimint_client_module::module::init::ClientModuleRecoverArgs;
 use fedimint_client_module::module::init::recovery::{
     RecoveryFromHistory, RecoveryFromHistoryCommon,
@@ -50,7 +51,7 @@ impl RecoveryFromHistory for MintRecovery {
         _init: &Self::Init,
         args: &ClientModuleRecoverArgs<Self::Init>,
         snapshot: Option<&EcashBackup>,
-    ) -> anyhow::Result<(Self, u64)> {
+    ) -> Result<(Self, u64), ClientModuleError> {
         let snapshot_v0 = match snapshot {
             Some(EcashBackup::V0(snapshot_v0)) => Some(snapshot_v0),
             Some(EcashBackup::Default { variant, .. }) => {
@@ -89,7 +90,7 @@ impl RecoveryFromHistory for MintRecovery {
         _init: &Self::Init,
         dbtx: &mut DatabaseTransaction<'_>,
         args: &ClientModuleRecoverArgs<Self::Init>,
-    ) -> anyhow::Result<Option<(Self, RecoveryFromHistoryCommon)>> {
+    ) -> Result<Option<(Self, RecoveryFromHistoryCommon)>, ClientModuleError> {
         dbtx.ensure_isolated()
             .expect("Must be in prefixed database");
         Ok(dbtx
@@ -147,7 +148,7 @@ impl RecoveryFromHistory for MintRecovery {
         _idx: usize,
         input: &MintInput,
         _session_idx: u64,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ClientModuleError> {
         self.state.handle_input(input);
         Ok(())
     }
@@ -158,7 +159,7 @@ impl RecoveryFromHistory for MintRecovery {
         out_point: OutPoint,
         output: &MintOutput,
         _session_idx: u64,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ClientModuleError> {
         self.state.handle_output(out_point, output, &self.secret);
         Ok(())
     }
@@ -167,7 +168,7 @@ impl RecoveryFromHistory for MintRecovery {
     async fn finalize_dbtx(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-    ) -> anyhow::Result<Option<Amount>> {
+    ) -> Result<Option<Amount>, ClientModuleError> {
         let finalized = self.state.clone().finalize();
 
         let restored_amount = finalized
@@ -249,7 +250,8 @@ impl RecoveryFromHistory for MintRecovery {
                         )])
                         .collect(),
                 )
-                .await?;
+                .await
+                .map_err(ClientModuleError::other)?;
         }
 
         debug!(

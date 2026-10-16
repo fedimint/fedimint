@@ -13,9 +13,10 @@ impl Display for PrettyInterceptPaymentRequest<'_> {
         let PrettyInterceptPaymentRequest(payment_request) = self;
         write!(
             f,
-            "InterceptPaymentRequest {{ payment_hash: {}, amount_msat: {:?}, expiry: {:?}, short_channel_id: {:?}, incoming_chan_id: {:?}, htlc_id: {:?} }}",
+            "InterceptPaymentRequest {{ payment_hash: {}, amount_msat: {:?}, incoming_amount_msat: {:?}, expiry: {:?}, short_channel_id: {:?}, incoming_chan_id: {:?}, htlc_id: {:?} }}",
             payment_request.payment_hash.encode_hex::<String>(),
             payment_request.amount_msat,
+            payment_request.incoming_amount_msat,
             payment_request.expiry,
             payment_request.short_channel_id,
             payment_request.incoming_chan_id,

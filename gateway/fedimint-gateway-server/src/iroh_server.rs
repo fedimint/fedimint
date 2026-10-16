@@ -10,7 +10,7 @@ use bitcoin::hashes::sha256;
 use fedimint_core::module::{FEDIMINT_GATEWAY_ALPN, IrohGatewayRequest, IrohGatewayResponse};
 use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::FmtCompactAnyhow as _;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_gateway_common::STOP_ENDPOINT;
 use fedimint_logging::LOG_GATEWAY;
 use futures::FutureExt as _;
@@ -21,9 +21,9 @@ use serde_json::json;
 use tracing::{error, info, warn};
 use url::Url;
 
-use crate::Gateway;
 use crate::error::{GatewayError, PublicGatewayError};
 use crate::rpc_server::verify_bolt11_preimage_v2_get;
+use crate::{Gateway, GatewayState};
 
 /// Handler for a GET request, which must contain no parameters and return
 /// `serde_json::Value`
@@ -261,7 +261,7 @@ async fn run_handler(
         warn!(
             target: LOG_GATEWAY,
             route,
-            err = %err.fmt_compact_anyhow(),
+            err = %err.fmt_compact(),
             "Gateway API handler returned an error"
         );
 
@@ -273,12 +273,22 @@ async fn run_handler(
 /// if the authentication is incorrect. Then it will lookup the specific handler
 /// in `Handlers`, execute it, and return the function's JSON along with an HTTP
 /// status code.
-async fn handle_request(
+pub(crate) async fn handle_request(
     request: &IrohGatewayRequest,
     gateway: Arc<Gateway>,
     handlers: Arc<Handlers>,
     task_group: TaskGroup,
 ) -> anyhow::Result<(StatusCode, Json<serde_json::Value>)> {
+    if matches!(
+        gateway.get_state().await,
+        GatewayState::NotConfigured { .. }
+    ) && !crate::rpc_server::is_allowed_not_configured_api(
+        &axum::http::Method::POST,
+        &request.route,
+    ) {
+        return Ok(unknown_route(&request.route));
+    }
+
     if handlers.is_authenticated(&request.route) && iroh_verify_password(&gateway, request).is_err()
     {
         return Ok((StatusCode::UNAUTHORIZED, Json(json!(()))));
@@ -405,84 +415,4 @@ fn iroh_verify_password(
 }
 
 #[cfg(test)]
-mod tests {
-    use bitcoin::hashes::Hash as _;
-
-    use super::*;
-
-    #[tokio::test]
-    async fn panicking_handler_returns_an_error_instead_of_unwinding() {
-        let (status, _body) = run_handler("/pay_invoice", async { panic!("handler panic") }).await;
-
-        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-    }
-
-    #[tokio::test]
-    async fn failing_handler_is_answered_instead_of_ending_the_connection() {
-        let (status, _body) = run_handler("/verify/nonsense", async {
-            Err(anyhow!("Verify route does not contain a payment hash"))
-        })
-        .await;
-
-        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-    }
-
-    #[test]
-    fn verify_route_parses_the_payment_hash_not_the_route_prefix() {
-        let payment_hash = sha256::Hash::hash(b"payment hash");
-
-        let (parsed_hash, _query) = parse_verify_route(&format!("/verify/{payment_hash}"))
-            .expect("the route is the verify route")
-            .expect("the payment hash is the second path segment, not the first");
-
-        assert_eq!(parsed_hash, payment_hash);
-    }
-
-    #[test]
-    fn verify_route_parses_the_wait_query_parameter() {
-        let payment_hash = sha256::Hash::hash(b"payment hash");
-
-        let (parsed_hash, query) = parse_verify_route(&format!("/verify/{payment_hash}?wait"))
-            .expect("the route is the verify route")
-            .expect("query parameters do not affect path parsing");
-
-        assert_eq!(parsed_hash, payment_hash);
-        assert!(query.contains_key("wait"));
-    }
-
-    #[test]
-    fn verify_route_with_a_malformed_payment_hash_is_rejected() {
-        parse_verify_route("/verify/")
-            .expect("the route is shaped like the verify route")
-            .expect_err("a route with an empty payment hash has nothing to verify");
-        parse_verify_route("/verify/not-a-payment-hash")
-            .expect("the route is shaped like the verify route")
-            .expect_err("a payment hash that is not a sha256 hash is rejected");
-    }
-
-    #[test]
-    fn only_the_exact_verify_route_reaches_the_verify_endpoint() {
-        let payment_hash = sha256::Hash::hash(b"payment hash");
-
-        // A route that is not exactly `/verify/{payment_hash}` is not this endpoint,
-        // no matter that it starts with `/verify` or contains a valid payment hash
-        // somewhere. Falling through to the handler lookup answers it with a 404,
-        // like the HTTP path's exact route does.
-        for route in [
-            "/verify".to_string(),
-            format!("/verifyfoo/{payment_hash}"),
-            format!("/verify_something/{payment_hash}?wait"),
-            format!("/verify/{payment_hash}/extra"),
-            // Routes the URL parser normalizes are not the verify route either,
-            // whether they normalize into it or out of it.
-            format!("/../verify/{payment_hash}"),
-            format!("/verify/{payment_hash}/../../stop"),
-            "/verify/../stop".to_string(),
-        ] {
-            assert!(
-                parse_verify_route(&route).is_none(),
-                "{route} must not reach the unauthenticated verify handler"
-            );
-        }
-    }
-}
+mod tests;

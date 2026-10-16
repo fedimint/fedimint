@@ -1,12 +1,13 @@
 use std::{ffi, iter};
 
 use clap::Parser;
+use fedimint_client_module::error::OperationLookupError;
 use fedimint_core::Amount;
-use fedimint_core::base32::{self, FEDIMINT_PREFIX};
+use fedimint_core::base32::{self, FEDIMINT_PREFIX, PrefixedDecodeError};
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::MintClientModule;
+use crate::{MintClientModule, ReceiveECashError, SendECashError};
 
 #[derive(Parser, Serialize)]
 enum Opts {
@@ -27,7 +28,7 @@ enum Opts {
 pub(crate) async fn handle_cli_command(
     mint: &MintClientModule,
     args: &[ffi::OsString],
-) -> anyhow::Result<Value> {
+) -> Result<Value, CliCommandError> {
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("mintv2")).chain(args.iter()));
 
     match opts {
@@ -57,4 +58,24 @@ pub(crate) async fn handle_cli_command(
 
 fn json<T: Serialize>(value: T) -> Value {
     serde_json::to_value(value).expect("JSON serialization failed")
+}
+
+/// A failure of a `mintv2` module command.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum CliCommandError {
+    /// The e-cash could not be sent.
+    #[error(transparent)]
+    Send(#[from] SendECashError),
+
+    /// The e-cash string is not valid.
+    #[error(transparent)]
+    Decode(#[from] PrefixedDecodeError),
+
+    /// The e-cash could not be received.
+    #[error(transparent)]
+    Receive(#[from] ReceiveECashError),
+
+    /// The receive operation could not be looked up.
+    #[error(transparent)]
+    OperationLookup(#[from] OperationLookupError),
 }

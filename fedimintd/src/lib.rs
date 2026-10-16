@@ -29,7 +29,7 @@ use fedimint_core::module::{ApiAuth, CORE_CONSENSUS_VERSION};
 use fedimint_core::rustls::install_crypto_provider;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::timing;
-use fedimint_core::util::{FmtCompactAnyhow as _, SafeUrl, handle_version_hash_command};
+use fedimint_core::util::{FmtCompact as _, SafeUrl, handle_version_hash_command};
 use fedimint_ln_server::LightningInit;
 use fedimint_logging::{LOG_CORE, LOG_SERVER, TracingSetup};
 use fedimint_meta_server::MetaInit;
@@ -126,6 +126,10 @@ struct ServerOpts {
     /// Bitcoind RPC URL, e.g. <http://127.0.0.1:8332>
     /// This should not include authentication parameters, they should be
     /// included in `FM_BITCOIND_USERNAME` and `FM_BITCOIND_PASSWORD`
+    ///
+    /// With Esplora configured, reads remain bitcoind-first except block count
+    /// uses Esplora while bitcoind reports initial block download. Broadcast
+    /// remains bitcoind-first.
     #[arg(long, env = FM_BITCOIND_URL_ENV)]
     bitcoind_url: Option<SafeUrl>,
 
@@ -139,7 +143,16 @@ struct ServerOpts {
     #[arg(long, env = FM_BITCOIND_URL_PASSWORD_FILE_ENV)]
     bitcoind_url_password_file: Option<PathBuf>,
 
-    /// Esplora HTTP base URL, e.g. <https://mempool.space/api>
+    /// Trusted Esplora HTTP base URL, e.g. <https://mempool.space/api>
+    ///
+    /// With bitcoind configured, retries individual failed reads and supplies
+    /// block count while bitcoind reports initial block download. Hybrid
+    /// construction does not probe either backend or compare their chain
+    /// identities. Esplora can bootstrap while bitcoind is offline and must
+    /// be trusted to serve the intended chain; its chain selection is not
+    /// independently verified.
+    /// Transactions go to Esplora only after a bitcoind broadcast error.
+    /// See SECURITY.md for the trust model.
     #[arg(long, env = FM_ESPLORA_URL_ENV)]
     esplora_url: Option<SafeUrl>,
 
@@ -310,11 +323,13 @@ impl ServerOpts {
 ///   (`fedimintd version-hash`). See `fedimint-build` crate for easy way to
 ///   obtain it.
 ///
-/// * `code_version_vendor_suffix` - An optional suffix that will be appended to
-///   the internal fedimint release version, to distinguish binaries built by
-///   different vendors, usually with a different set of modules. The suffix is
-///   informational in setup/DKG: compatibility and consensus config generation
-///   use the normalized `x.y.z` release version.
+/// * `code_version_vendor_suffix` - An optional vendor string appended to the
+///   internal Fedimint release version, to distinguish binaries built by
+///   different vendors, usually with a different set of modules. It is encoded
+///   as `SemVer` build metadata and therefore must contain dot-separated,
+///   non-empty identifiers with only ASCII alphanumeric characters and hyphens.
+///   Setup/DKG compatibility and consensus config generation require the same
+///   exact optional vendor string as well as the same `major.minor` series.
 #[allow(clippy::too_many_lines)]
 pub async fn run(
     module_init_registry: ServerModuleInitRegistry,
@@ -357,7 +372,7 @@ pub async fn run(
         .tokio_console_bind(server_opts.bind_tokio_console)
         .with_jaeger(server_opts.with_jaeger);
 
-    tracing_builder.init().unwrap();
+    tracing_builder.init().map_err(anyhow::Error::from).unwrap();
 
     info!("Starting fedimintd (version: {fedimint_version} version_hash: {code_version_hash})");
 
@@ -381,6 +396,8 @@ pub async fn run(
         || fedimint_version.to_string(),
         |suffix| format!("{fedimint_version}+{suffix}"),
     );
+    fedimint_core::version::DkgVersion::parse(&code_version_str)
+        .context("Invalid Fedimint version vendor string")?;
 
     let timing_total_runtime = timing::TimeReporter::new("total-runtime").info();
 
@@ -420,6 +437,7 @@ pub async fn run(
         RocksDb::build(server_opts.data_dir.join(DB_FILE))
             .open()
             .await
+            .map_err(anyhow::Error::from)
             .unwrap(),
         ModuleRegistry::default(),
     );
@@ -457,10 +475,11 @@ pub async fn run(
                 &bitcoind_url,
                 esplora_url,
             )
+            .await
             .unwrap()
             .into_dyn()
         }
-        _ => unreachable!("ArgGroup already enforced XOR relation"),
+        _ => unreachable!("ArgGroup already enforced at least one Bitcoin backend"),
     };
     let dyn_server_bitcoin_rpc =
         ServerBitcoinRpcTracked::new(dyn_server_bitcoin_rpc, "server").into_dyn();
@@ -512,7 +531,7 @@ pub async fn run(
             iroh_next_api_settings,
         )
         .await
-        .unwrap_or_else(|err| panic!("Main task returned error: {}", err.fmt_compact_anyhow()));
+        .unwrap_or_else(|err| panic!("Main task returned error: {}", err.fmt_compact()));
     });
 
     let shutdown_future = root_task_group
@@ -527,7 +546,7 @@ pub async fn run(
     debug!(target: LOG_CORE, "Terminating main task");
 
     if let Err(err) = root_task_group.join_all(Some(SHUTDOWN_TIMEOUT)).await {
-        error!(target: LOG_CORE, err = %err.fmt_compact_anyhow(), "Error while shutting down task group");
+        error!(target: LOG_CORE, err = %err.fmt_compact(), "Error while shutting down task group");
     }
 
     debug!(target: LOG_CORE, "Shutdown complete");
@@ -563,95 +582,4 @@ pub fn default_modules() -> ServerModuleInitRegistry {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn server_opts_args() -> Vec<&'static str> {
-        vec![
-            "fedimintd",
-            "--data-dir",
-            "/tmp/fedimintd-test",
-            "--bitcoind-url",
-            "http://127.0.0.1:18443",
-            "--bitcoind-username",
-            "user",
-            "--bitcoind-password",
-            "pass",
-        ]
-    }
-
-    fn parse_server_opts() -> ServerOpts {
-        ServerOpts::try_parse_from(server_opts_args()).expect("server opts should parse")
-    }
-
-    fn parse_server_opts_with_enable_iroh_env(value: &str) -> ServerOpts {
-        let previous = std::env::var_os(FM_ENABLE_IROH_ENV);
-        // This test does not spawn threads while mutating the process
-        // environment.
-        unsafe {
-            std::env::set_var(FM_ENABLE_IROH_ENV, value);
-        }
-
-        let opts = parse_server_opts();
-
-        // This test does not spawn threads while mutating the process
-        // environment.
-        unsafe {
-            if let Some(previous) = previous {
-                std::env::set_var(FM_ENABLE_IROH_ENV, previous);
-            } else {
-                std::env::remove_var(FM_ENABLE_IROH_ENV);
-            }
-        }
-
-        opts
-    }
-
-    #[test]
-    fn enable_iroh_env_accepts_numeric_booleans() {
-        assert_eq!(
-            parse_server_opts_with_enable_iroh_env("1").enable_iroh,
-            Some(true)
-        );
-        assert_eq!(
-            parse_server_opts_with_enable_iroh_env("0").enable_iroh,
-            Some(false)
-        );
-    }
-
-    #[test]
-    fn iroh_next_api_defaults_to_enabled_and_accepts_false() {
-        let command = ServerOpts::command();
-        let enable_iroh_next = command
-            .get_arguments()
-            .find(|arg| arg.get_id() == "enable_iroh_next")
-            .expect("enable-iroh-next argument exists");
-        assert_eq!(enable_iroh_next.get_default_values(), ["true"]);
-
-        let mut args = server_opts_args();
-        args.push("--enable-iroh-next=false");
-        let opts = ServerOpts::try_parse_from(args).expect("explicit false should parse");
-        assert!(!opts.enable_iroh_next);
-    }
-
-    #[test]
-    fn p2p_relay_does_not_require_enable_iroh_or_change_api_relays() {
-        let opts = ServerOpts::try_parse_from([
-            "fedimintd",
-            "--data-dir",
-            "/tmp/fedimintd-test",
-            "--bitcoind-url",
-            "http://127.0.0.1:18443",
-            "--bitcoind-username",
-            "user",
-            "--bitcoind-password",
-            "pass",
-            "--iroh-p2p-relays",
-            "https://relay.example.com/",
-        ])
-        .expect("P2P relay should parse independently");
-
-        assert!(opts.iroh_relays.is_empty());
-        assert_eq!(opts.iroh_p2p_relays.len(), 1);
-    }
-}
+mod tests;

@@ -1,4 +1,5 @@
 mod complete;
+pub mod error;
 pub mod events;
 pub mod pay;
 #[cfg(test)]
@@ -20,6 +21,7 @@ use complete::{GatewayCompleteCommon, GatewayCompleteStates, WaitForPreimageStat
 use events::{IncomingPaymentStarted, OutgoingPaymentStarted};
 use fedimint_api_client::api::DynModuleApi;
 use fedimint_client::ClientHandleArc;
+use fedimint_client_module::error::ClientModuleError;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, IClientModule, OutPointRange};
@@ -29,12 +31,13 @@ use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client_module::{
-    AddStateMachinesError, DynGlobalClientContext, sm_enum_variant_translation,
+    AddStateMachinesError, DynGlobalClientContext, OperationLookupError,
+    sm_enum_variant_translation,
 };
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::{AutocommitError, DatabaseTransaction};
+use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::time::duration_since_epoch;
@@ -56,13 +59,14 @@ use fedimint_ln_client::{
 };
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
-use fedimint_ln_common::contracts::{ContractId, Preimage};
+use fedimint_ln_common::contracts::{ContractId, FundedContract, Preimage};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
     GatewayRegistrationAuth, KIND, LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA,
     LNV1_INCOMING_HTLC_EXPIRY_SAFETY_MARGIN, LightningCommonInit, LightningGateway,
     LightningGatewayAnnouncement, LightningModuleTypes, LightningOutput, LightningOutputV0,
-    RemoveGatewayRequest, create_gateway_registration_message, create_gateway_remove_message,
+    MissingInvoiceAmountError, PreimageAuth, RemoveGatewayRequest,
+    create_gateway_registration_message, create_gateway_remove_message,
 };
 use fedimint_lnv2_common::GatewayApi;
 use futures::StreamExt;
@@ -74,8 +78,11 @@ use tracing::{debug, error, info, warn};
 
 use self::complete::GatewayCompleteStateMachine;
 use self::pay::{
-    GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
-    OutgoingContractError, OutgoingPaymentError,
+    GatewayPayCancelContract, GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine,
+    GatewayPayStates, OutgoingPaymentError,
+};
+pub use crate::error::{
+    GatewayClientV1Error, GatewayPayInvoiceError, HandleDirectSwapError, HandleInterceptedHtlcError,
 };
 
 /// Exclusive remaining-CLTV safety margin for an intercepted LNv1 HTLC.
@@ -133,7 +140,16 @@ pub enum GatewayExtReceiveStates {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GatewayMeta {
-    Pay,
+    /// Carries the `preimage_auth` of the request that started the payment.
+    ///
+    /// The operation id of a payment is its contract id, which is public in the
+    /// funding transaction, and joining the operation yields the preimage. So
+    /// the operation has to record who is allowed to join it. Entries written
+    /// before this field existed decode as an error and are treated as
+    /// unauthorized, which only affects payments in flight across an upgrade.
+    Pay {
+        preimage_auth: sha256::Hash,
+    },
     Receive,
 }
 
@@ -164,7 +180,10 @@ impl ClientModuleInit for GatewayClientInit {
             .expect("no version conflicts")
     }
 
-    async fn init(&self, args: &ClientModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
+    async fn init(
+        &self,
+        args: &ClientModuleInitArgs<Self>,
+    ) -> Result<Self::Module, ClientModuleError> {
         Ok(GatewayClientModule {
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
@@ -334,10 +353,18 @@ impl GatewayClientModule {
         IncomingSmError,
     > {
         let operation_id = OperationId(htlc.payment_hash.to_byte_array());
+        // The amount passed here only guards solvency: the contract is always
+        // funded at the offer amount, and `create_incoming_contract_output`
+        // rejects the HTLC if this value falls short of it. It must therefore
+        // be the amount actually locked in the incoming HTLC, never the
+        // sender-controlled onion forward amount -- otherwise a sender could
+        // lock a token amount while declaring a large `amt_to_forward`, pass
+        // the check, and have the gateway fund the full offer amount from its
+        // own ecash against a near-worthless HTLC.
         let (incoming_output, amount, contract_id) = create_incoming_contract_output(
             &self.module_api,
             htlc.payment_hash,
-            htlc.outgoing_amount_msat,
+            htlc.incoming_amount_msat,
             &self.redeem_key,
         )
         .await?;
@@ -424,7 +451,11 @@ impl GatewayClientModule {
         Ok((operation_id, client_output, client_output_sm))
     }
 
-    /// Register gateway with federation
+    /// Registers the gateway with a federation and reports whether it
+    /// succeeded.
+    ///
+    /// Detailed errors remain in gateway logs; callers can retain the boolean
+    /// result without exposing federation internals.
     pub async fn try_register_with_federation(
         &self,
         route_hints: Vec<RouteHint>,
@@ -433,7 +464,7 @@ impl GatewayClientModule {
         lightning_context: LightningContext,
         api: SafeUrl,
         gateway_keypair: Keypair,
-    ) {
+    ) -> bool {
         let registration_info = self.to_gateway_registration_info(
             route_hints,
             time_to_live,
@@ -456,39 +487,25 @@ impl GatewayClientModule {
                     e = %e.fmt_compact(),
                     "Failed to register gateway {gateway_id} with federation {federation_id}"
                 );
+                false
             }
             _ => {
                 info!(
                     "Successfully registered gateway {gateway_id} with federation {federation_id}"
                 );
+                true
             }
         }
     }
 
-    /// Attempts to remove a gateway's registration from the federation. Since
-    /// removing gateway registrations is best effort, this does not return
-    /// an error and simply emits a warning when the registration cannot be
-    /// removed.
+    /// Attempts to remove a gateway's registration from the federation.
+    ///
+    /// Each peer keeps its own list of registered gateways, so the gateway
+    /// signs every peer's removal challenge with the private key of its
+    /// gateway id. Removal is best effort and reports nothing: a peer that
+    /// fails or does not answer within a second is skipped, and one that
+    /// declines the removal is logged.
     pub async fn remove_from_federation(&self, gateway_keypair: Keypair) {
-        // Removing gateway registrations is best effort, so just emit a warning if it
-        // fails
-        if let Err(e) = self.remove_from_federation_inner(gateway_keypair).await {
-            let gateway_id = gateway_keypair.public_key();
-            let federation_id = self
-                .client_ctx
-                .get_config()
-                .await
-                .global
-                .calculate_federation_id();
-            warn!("Failed to remove gateway {gateway_id} from federation {federation_id}: {e:?}");
-        }
-    }
-
-    /// Retrieves the signing challenge from each federation peer. Since each
-    /// peer maintains their own list of registered gateways, the gateway
-    /// needs to provide a signature that is signed by the private key of the
-    /// gateway id to remove the registration.
-    async fn remove_from_federation_inner(&self, gateway_keypair: Keypair) -> anyhow::Result<()> {
         let gateway_id = gateway_keypair.public_key();
         let challenges = self
             .module_api
@@ -511,8 +528,6 @@ impl GatewayClientModule {
         };
 
         self.module_api.remove_gateway(remove_gateway_request).await;
-
-        Ok(())
     }
 
     /// Attempt to fulfill an HTLC by buying its preimage from the federation.
@@ -531,11 +546,22 @@ impl GatewayClientModule {
     /// `current_block_height` resolves to the Lightning backend's absolute best
     /// Bitcoin block height. It is awaited only after replay detection, before
     /// any fresh funding.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`HandleInterceptedHtlcError::BlockHeight`] if
+    /// `current_block_height` fails,
+    /// [`HandleInterceptedHtlcError::UnsafeExpiry`] if the HTLC expires too
+    /// soon, [`HandleInterceptedHtlcError::IncomingContract`]
+    /// if the federation's offer cannot be funded, and
+    /// [`HandleInterceptedHtlcError::Transaction`] if the funding transaction
+    /// cannot be submitted. A replay of a circuit already handled does not
+    /// fail.
     pub async fn gateway_handle_intercepted_htlc(
         &self,
         htlc: Htlc,
-        current_block_height: impl Future<Output = anyhow::Result<u32>>,
-    ) -> anyhow::Result<OperationId> {
+        current_block_height: impl Future<Output = Result<u32, LightningRpcError>>,
+    ) -> Result<OperationId, HandleInterceptedHtlcError> {
         debug!("Handling intercepted HTLC {htlc:?}");
 
         let operation_id = OperationId(htlc.payment_hash.to_byte_array());
@@ -585,7 +611,9 @@ impl GatewayClientModule {
             return Ok(operation_id);
         }
 
-        let current_block_height = current_block_height.await?;
+        let current_block_height = current_block_height
+            .await
+            .map_err(HandleInterceptedHtlcError::BlockHeight)?;
         htlc.ensure_safe_expiry(current_block_height)?;
         let remaining_blocks = htlc.incoming_expiry.saturating_sub(current_block_height);
         if remaining_blocks <= u32::from(LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA) {
@@ -605,10 +633,12 @@ impl GatewayClientModule {
             .await?;
         // Keep the direct derivation above in sync with the funding helper. Return
         // an error instead of panicking so the caller can fail back the HTLC cleanly.
-        anyhow::ensure!(
-            op_id_from_funding == operation_id,
-            "operation id derivation must match: {op_id_from_funding:?} != {operation_id:?}"
-        );
+        if op_id_from_funding != operation_id {
+            return Err(HandleInterceptedHtlcError::OperationIdMismatch {
+                expected: operation_id,
+                derived: op_id_from_funding,
+            });
+        }
 
         let output = ClientOutput {
             output: LightningOutput::V0(client_output.output),
@@ -630,7 +660,7 @@ impl GatewayClientModule {
                 IncomingPaymentStarted {
                     contract_id,
                     payment_hash: htlc.payment_hash,
-                    invoice_amount: htlc.outgoing_amount_msat,
+                    invoice_amount: htlc.incoming_amount_msat,
                     contract_amount: amount,
                     operation_id,
                 },
@@ -653,10 +683,24 @@ impl GatewayClientModule {
     /// instead would cancel the outgoing contract that this swap is the other
     /// half of, refunding the sender while the recipient still gets paid out of
     /// the gateway's own funds.
+    ///
+    /// `allow_fresh_dispatch` is consulted only when no such operation exists:
+    /// callers pass `false` when a wall-clock gate such as invoice expiry
+    /// forbids starting a new swap, and receive `Ok(None)` to signal that
+    /// nothing was started.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`HandleDirectSwapError::IncomingContract`] if the
+    /// federation's offer cannot be funded,
+    /// [`HandleDirectSwapError::Transaction`] if the funding transaction
+    /// cannot be submitted, and [`HandleDirectSwapError::Database`] if it
+    /// cannot be recorded.
     pub async fn gateway_handle_direct_swap(
         &self,
         swap_params: SwapParameters,
-    ) -> anyhow::Result<OperationId> {
+        allow_fresh_dispatch: bool,
+    ) -> Result<Option<OperationId>, HandleDirectSwapError> {
         debug!("Handling direct swap {swap_params:?}");
 
         let payment_hash = swap_params.payment_hash;
@@ -673,17 +717,23 @@ impl GatewayClientModule {
                 "Direct swap already in progress, returning the operation already funding it"
             );
 
-            return Ok(operation_id);
+            return Ok(Some(operation_id));
+        }
+
+        if !allow_fresh_dispatch {
+            return Ok(None);
         }
 
         let (op_id_from_funding, client_output, client_output_sm) = self
             .create_funding_incoming_contract_output_from_swap(swap_params.clone())
             .await?;
         // Keep the direct derivation above in sync with the funding helper.
-        anyhow::ensure!(
-            op_id_from_funding == operation_id,
-            "operation id derivation must match: {op_id_from_funding:?} != {operation_id:?}"
-        );
+        if op_id_from_funding != operation_id {
+            return Err(HandleDirectSwapError::OperationIdMismatch {
+                expected: operation_id,
+                derived: op_id_from_funding,
+            });
+        }
 
         self.client_ctx
             .module_db()
@@ -708,7 +758,7 @@ impl GatewayClientModule {
                                 "Concurrent direct swap won the race, returning the operation already funding it"
                             );
 
-                            return Ok(operation_id);
+                            return Ok(Some(operation_id));
                         }
 
                         let output = ClientOutput {
@@ -738,26 +788,26 @@ impl GatewayClientModule {
                             "Submitted funding transaction for direct swap"
                         );
 
-                        Ok(operation_id)
+                        Ok::<_, HandleDirectSwapError>(Some(operation_id))
                     })
                 },
                 Some(100),
             )
             .await
-            .map_err(|e| match e {
-                AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    anyhow::anyhow!("Commit to DB failed: {last_error}")
-                }
-            })
+            .map_err(HandleDirectSwapError::from)
     }
 
     /// Subscribe to updates when the gateway is handling an intercepted HTLC,
     /// or direct swap between federations
+    ///
+    /// # Errors
+    ///
+    /// Fails with an [`OperationLookupError`] if no operation with this id
+    /// exists, or if another module started it.
     pub async fn gateway_subscribe_ln_receive(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<GatewayExtReceiveStates>> {
+    ) -> Result<UpdateStreamOrOutcome<GatewayExtReceiveStates>, OperationLookupError> {
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let mut stream = self.notifier.subscribe(operation_id).await;
         let client_ctx = self.client_ctx.clone();
@@ -790,7 +840,7 @@ impl GatewayClientModule {
                                     },
                                     Err(e) => {
                                         warn!(?operation_id, "Got failure {e:?} while awaiting for refund outputs {out_points:?}");
-                                        break GatewayExtReceiveStates::RefundError{ error_message: e.to_string(), error }
+                                        break GatewayExtReceiveStates::RefundError{ error_message: e.fmt_compact().to_string(), error }
                                     },
                                 }
                             },
@@ -843,10 +893,30 @@ impl GatewayClientModule {
     }
 
     /// Pay lightning invoice on behalf of federation user
+    ///
+    /// A funded contract whose invoice hash belongs to another operation is
+    /// cancelled without attempting a payment. The hash claim is retained.
+    ///
+    /// # Errors
+    ///
+    /// Fails with [`GatewayPayInvoiceError::MissingInvoiceAmount`] if the
+    /// invoice has no amount, [`GatewayPayInvoiceError::PrunedInvoiceRejected`]
+    /// if the gateway cannot pay a pruned invoice,
+    /// [`GatewayPayInvoiceError::PaymentHashAlreadyClaimed`] if another
+    /// operation already claimed the invoice's payment hash and this request
+    /// has no matching funded contract to refund,
+    /// [`GatewayPayInvoiceError::ContractLookup`] if the contract cannot be
+    /// fetched for a refund,
+    /// [`GatewayPayInvoiceError::Unauthorized`] if a payment of this contract
+    /// is already under way and the request does not carry the
+    /// authentication it was started with,
+    /// [`GatewayPayInvoiceError::StateMachines`] if the payment cannot be
+    /// started, and [`GatewayPayInvoiceError::Database`] if it cannot be
+    /// recorded.
     pub async fn gateway_pay_bolt11_invoice(
         &self,
         pay_invoice_payload: PayInvoicePayload,
-    ) -> anyhow::Result<OperationId> {
+    ) -> Result<OperationId, GatewayPayInvoiceError> {
         let payload = pay_invoice_payload.clone();
 
         // `payment_data` is caller-supplied on the unauthenticated `/pay_invoice`
@@ -857,11 +927,54 @@ impl GatewayClientModule {
         let invoice_amount = pay_invoice_payload
             .payment_data
             .amount()
-            .ok_or(OutgoingContractError::InvoiceMissingAmount)?;
+            .ok_or(GatewayPayInvoiceError::MissingInvoiceAmount)?;
 
         self.lightning_manager
             .verify_pruned_invoice(pay_invoice_payload.payment_data)
-            .await?;
+            .await
+            .map_err(GatewayPayInvoiceError::PrunedInvoiceRejected)?;
+
+        // Only the first operation to claim a payment image may ever pay it out,
+        // across LNv1, LNv2 and all federations; see the LNv2 `send_payment`.
+        // The claim is taken before the operation is created, and a retry of the
+        // same contract finds its own claim.
+        let initial_state = if self
+            .lightning_manager
+            .claim_payment_image(
+                &fedimint_lnv2_common::contracts::PaymentImage::Hash(
+                    payload.payment_data.payment_hash(),
+                ),
+                OperationId(payload.contract_id.to_byte_array()),
+            )
+            .await
+        {
+            GatewayPayStates::PayInvoice(GatewayPayInvoice {
+                pay_invoice_payload: payload.clone(),
+            })
+        } else {
+            let account = self
+                .module_api
+                .fetch_contract(payload.contract_id)
+                .await
+                .map_err(GatewayPayInvoiceError::ContractLookup)?
+                .ok_or(GatewayPayInvoiceError::PaymentHashAlreadyClaimed)?;
+            let FundedContract::Outgoing(contract) = account.contract else {
+                return Err(GatewayPayInvoiceError::PaymentHashAlreadyClaimed);
+            };
+
+            if account.amount == Amount::ZERO
+                || contract.gateway_key != self.redeem_key.public_key()
+                || contract.hash != payload.payment_data.payment_hash()
+            {
+                return Err(GatewayPayInvoiceError::PaymentHashAlreadyClaimed);
+            }
+            GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract::for_claimed_hash(
+                OutgoingContractAccount {
+                    amount: account.amount,
+                    contract,
+                },
+            )))
+        };
 
         self.client_ctx.module_db()
             .autocommit(
@@ -876,12 +989,27 @@ impl GatewayClientModule {
                         // and would have us buy the preimage a second time, spending the
                         // gateway's funds twice against a contract that only pays out once.
                         // Hand back the operation already under way instead.
-                        if self
-                            .client_ctx
-                            .get_operation_dbtx(dbtx, operation_id)
-                            .await
-                            .is_some()
+                        if let Some(entry) =
+                            self.client_ctx.get_operation_dbtx(dbtx, operation_id).await
                         {
+                            // This operation id yields the preimage, so only the
+                            // caller that started the payment may join it. The
+                            // state machine's own check comes too late for a
+                            // request that never reaches one, and it is keyed on
+                            // `payment_data`, which the caller supplies
+                            // independently of `contract_id` -- so it would answer
+                            // for the wrong payment here.
+                            if !matches!(
+                                entry.try_meta::<GatewayMeta>(),
+                                Ok(GatewayMeta::Pay { preimage_auth })
+                                    if PreimageAuth::new(preimage_auth)
+                                        .verifies(payload.preimage_auth)
+                            ) {
+                                return Err(GatewayPayInvoiceError::Unauthorized {
+                                    contract_id: payload.contract_id,
+                                });
+                            }
+
                             debug!(
                                 operation_id = %operation_id.fmt_short(),
                                 contract_id = %payload.contract_id,
@@ -900,9 +1028,7 @@ impl GatewayClientModule {
                         let state_machines =
                             vec![GatewayClientStateMachines::Pay(GatewayPayStateMachine {
                                 common: GatewayPayCommon { operation_id },
-                                state: GatewayPayStates::PayInvoice(GatewayPayInvoice {
-                                    pay_invoice_payload: payload.clone(),
-                                }),
+                                state: initial_state.clone(),
                             })];
 
                         let dyn_states = state_machines
@@ -917,7 +1043,9 @@ impl GatewayClientModule {
                                             dbtx,
                                             operation_id,
                                             KIND.as_str(),
-                                            GatewayMeta::Pay,
+                                            GatewayMeta::Pay {
+                                                preimage_auth: payload.preimage_auth,
+                                            },
                                         )
                                         .await;
                                 }
@@ -925,27 +1053,29 @@ impl GatewayClientModule {
                                     info!("State machine for operation {} already exists, will not add a new one", operation_id.fmt_short());
                                 }
                                 Err(other) => {
-                                    anyhow::bail!("Failed to add state machines: {other:?}")
+                                    return Err(GatewayPayInvoiceError::StateMachines(other));
                                 }
                             }
-                            Ok(operation_id)
+                            Ok::<_, GatewayPayInvoiceError>(operation_id)
                     })
                 },
                 Some(100),
             )
             .await
-            .map_err(|e| match e {
-                AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    anyhow::anyhow!("Commit to DB failed: {last_error}")
-                }
-            })
+            .map_err(GatewayPayInvoiceError::from)
     }
 
+    /// Subscribe to updates of a payment started with
+    /// [`Self::gateway_pay_bolt11_invoice`].
+    ///
+    /// # Errors
+    ///
+    /// Fails with an [`OperationLookupError`] if no operation with this id
+    /// exists, or if another module started it.
     pub async fn gateway_subscribe_ln_pay(
         &self,
         operation_id: OperationId,
-    ) -> anyhow::Result<UpdateStreamOrOutcome<GatewayExtPayStates>> {
+    ) -> Result<UpdateStreamOrOutcome<GatewayExtPayStates>, OperationLookupError> {
         let mut stream = self.notifier.subscribe(operation_id).await;
         let operation = self.client_ctx.get_operation(operation_id).await?;
         let client_ctx = self.client_ctx.clone();
@@ -1159,19 +1289,21 @@ impl Htlc {
     }
 }
 
-impl TryFrom<InterceptPaymentRequest> for Htlc {
-    type Error = anyhow::Error;
-
-    fn try_from(s: InterceptPaymentRequest) -> Result<Self, Self::Error> {
-        Ok(Self {
+impl From<InterceptPaymentRequest> for Htlc {
+    fn from(s: InterceptPaymentRequest) -> Self {
+        Self {
             payment_hash: s.payment_hash,
-            incoming_amount_msat: Amount::from_msats(s.amount_msat),
+            // Keep the two amounts distinct: `incoming_amount_msat` is the real
+            // value locked in the HTLC, while `amount_msat` is the sender-written
+            // onion forward amount. Collapsing them lets a sender forge the
+            // amount the gateway funds against.
+            incoming_amount_msat: Amount::from_msats(s.incoming_amount_msat),
             outgoing_amount_msat: Amount::from_msats(s.amount_msat),
             incoming_expiry: s.expiry,
             short_channel_id: s.short_channel_id,
             incoming_chan_id: s.incoming_chan_id,
             htlc_id: s.htlc_id,
-        })
+        }
     }
 }
 
@@ -1182,13 +1314,11 @@ pub struct SwapParameters {
 }
 
 impl TryFrom<PaymentData> for SwapParameters {
-    type Error = anyhow::Error;
+    type Error = MissingInvoiceAmountError;
 
     fn try_from(s: PaymentData) -> Result<Self, Self::Error> {
         let payment_hash = s.payment_hash();
-        let amount_msat = s
-            .amount()
-            .ok_or_else(|| anyhow::anyhow!("Amountless invoice cannot be used in direct swap"))?;
+        let amount_msat = s.amount().ok_or(MissingInvoiceAmountError)?;
         Ok(Self {
             payment_hash,
             amount_msat,
@@ -1217,7 +1347,15 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
 
     /// Verify that the lightning node supports private payments if a pruned
     /// invoice is supplied.
-    async fn verify_pruned_invoice(&self, payment_data: PaymentData) -> anyhow::Result<()>;
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`GatewayClientV1Error`] if the invoice is pruned and the
+    /// gateway cannot pay it.
+    async fn verify_pruned_invoice(
+        &self,
+        payment_data: PaymentData,
+    ) -> Result<(), GatewayClientV1Error>;
 
     /// Retrieves the federation's routing fees from the federation's config.
     async fn get_routing_fees(&self, federation_id: FederationId) -> Option<RoutingFees>;
@@ -1246,7 +1384,29 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
         max_fee: Amount,
     ) -> Result<PayInvoiceResponse, LightningRpcError>;
 
-    /// Use the gateway's lightning node to send a complete HTLC response.
+    /// Returns whether the gateway's Lightning node has any record of an
+    /// outbound payment for `payment_hash`, whatever its state.
+    ///
+    /// The pay state machine consults this when it resumes after a restart:
+    /// a payment the node already knows was dispatched before the crash and
+    /// must be resolved through [`IGatewayClientV1::pay`]'s idempotent resume
+    /// path rather than cancelled by pre-dispatch checks. A wrong `false`
+    /// cancels a contract whose payment may still settle, so implementations
+    /// must absorb transient node failures and only answer once the node's
+    /// payment store could actually be consulted.
+    async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool;
+
+    /// Uses the gateway's lightning node to complete (settle or cancel) a
+    /// previously intercepted HTLC.
+    ///
+    /// By the time the gateway settles the upstream HTLC it has already funded
+    /// the incoming contract, so a transient failure here must not strand it
+    /// out of pocket. Implementations must absorb and retry every transient
+    /// node or connectivity failure, returning `Err` only when Lightning has
+    /// reached a permanent state that makes the requested outcome impossible.
+    /// The future may block while retrying and must remain cancellation-safe.
+    /// The completion state machine persists any returned error as a terminal
+    /// failure.
     async fn complete_htlc(
         &self,
         htlc_response: InterceptPaymentResponse,
@@ -1254,14 +1414,29 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
 
     /// Check if the gateway satisfy the LNv1 payment by funding an LNv2
     /// `IncomingContract`
+    ///
+    /// # Errors
+    ///
+    /// Fails with a [`GatewayClientV1Error`] if the gateway holds no LNv2
+    /// incoming contract it can use for this payment. The pay state machine
+    /// treats a failure like `None` and pays the invoice some other way.
     async fn is_lnv2_direct_swap(
         &self,
         payment_hash: sha256::Hash,
         amount: Amount,
-    ) -> anyhow::Result<
+    ) -> Result<
         Option<(
             fedimint_lnv2_common::contracts::IncomingContract,
             ClientHandleArc,
         )>,
+        GatewayClientV1Error,
     >;
+
+    /// Claims the payment image for `operation_id` in the claim table shared
+    /// with LNv2, returning `false` if another operation already claimed it.
+    async fn claim_payment_image(
+        &self,
+        payment_image: &fedimint_lnv2_common::contracts::PaymentImage,
+        operation_id: OperationId,
+    ) -> bool;
 }

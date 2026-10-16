@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, Txid};
 use fedimint_connectors::ServerResult;
+use fedimint_connectors::error::ServerError;
 use fedimint_core::PeerId;
 use fedimint_core::config::FederationId;
 use fedimint_core::invite_code::InviteCode;
@@ -14,7 +15,8 @@ use fedimint_gateway_common::{
     CREATE_BOLT12_OFFER_FOR_OPERATOR_ENDPOINT, ChannelInfo, CloseChannelsWithPeerRequest,
     CloseChannelsWithPeerResponse, ConfigPayload, ConnectFedPayload, ConnectPeerRequest,
     CreateInvoiceForOperatorPayload, CreateOfferPayload, CreateOfferResponse,
-    DepositAddressPayload, DepositAddressRecheckPayload, FederationInfo, GATEWAY_INFO_ENDPOINT,
+    DepositAddressPayload, DepositAddressRecheckPayload, FEDERATION_STATUS_ENDPOINT,
+    FederationInfo, FederationStatusRequest, FederationStatusResponse, GATEWAY_INFO_ENDPOINT,
     GET_BALANCES_ENDPOINT, GET_INVOICE_ENDPOINT, GET_LN_ONCHAIN_ADDRESS_ENDPOINT, GatewayBalances,
     GatewayFedConfig, GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, INVITE_CODES_ENDPOINT,
     LEAVE_FED_ENDPOINT, LIST_CHANNELS_ENDPOINT, LIST_TRANSACTIONS_ENDPOINT, LeaveFedPayload,
@@ -25,10 +27,10 @@ use fedimint_gateway_common::{
     PayOfferPayload, PayOfferResponse, PaymentLogPayload, PaymentLogResponse,
     PaymentSummaryPayload, PaymentSummaryResponse, PeginFromOnchainPayload, RECEIVE_ECASH_ENDPOINT,
     ReceiveEcashPayload, ReceiveEcashResponse, SEND_ONCHAIN_ENDPOINT, SET_CHANNEL_FEES_ENDPOINT,
-    SET_FEES_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT, SendOnchainRequest,
-    SetChannelFeesRequest, SetFeesPayload, SetMnemonicPayload, SpendEcashPayload,
-    SpendEcashResponse, WITHDRAW_ENDPOINT, WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload,
-    WithdrawResponse, WithdrawToOnchainPayload,
+    SET_FEES_ENDPOINT, SET_PAYMENT_POLICY_ENDPOINT, SPEND_ECASH_ENDPOINT, STOP_ENDPOINT,
+    SendOnchainRequest, SetChannelFeesRequest, SetFeesPayload, SetMnemonicPayload,
+    SetPaymentPolicyPayload, SpendEcashPayload, SpendEcashResponse, WITHDRAW_ENDPOINT,
+    WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload, WithdrawResponse, WithdrawToOnchainPayload,
 };
 use fedimint_ln_common::Method;
 use fedimint_ln_common::client::GatewayApi;
@@ -38,6 +40,40 @@ pub async fn get_info(client: &GatewayApi, base_url: &SafeUrl) -> ServerResult<G
     client
         .request::<(), GatewayInfo>(base_url, Method::GET, GATEWAY_INFO_ENDPOINT, None)
         .await
+}
+
+/// Queries one federation's public, sanitized gateway capability and
+/// registration status.
+///
+/// Gateway UI, CLI, and server use one release, so the request does not
+/// negotiate endpoint versions. Transport failures, malformed responses, and
+/// non-success statuses remain errors.
+pub async fn get_federation_status(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    federation_id: FederationId,
+) -> ServerResult<FederationStatusResponse> {
+    let status = client
+        .request::<_, FederationStatusResponse>(
+            base_url,
+            Method::POST,
+            FEDERATION_STATUS_ENDPOINT,
+            Some(FederationStatusRequest { federation_id }),
+        )
+        .await?;
+    validate_federation_status(status, federation_id)
+}
+
+fn validate_federation_status(
+    status: FederationStatusResponse,
+    federation_id: FederationId,
+) -> ServerResult<FederationStatusResponse> {
+    if status.federation_id() != federation_id {
+        return Err(ServerError::InvalidResponse(
+            "Gateway federation status response names a different federation".to_string(),
+        ));
+    }
+    Ok(status)
 }
 
 pub async fn get_config(
@@ -142,6 +178,21 @@ pub async fn set_fees(
 ) -> ServerResult<()> {
     client
         .request(base_url, Method::POST, SET_FEES_ENDPOINT, Some(payload))
+        .await
+}
+
+pub async fn set_payment_policy(
+    client: &GatewayApi,
+    base_url: &SafeUrl,
+    payload: SetPaymentPolicyPayload,
+) -> ServerResult<()> {
+    client
+        .request(
+            base_url,
+            Method::POST,
+            SET_PAYMENT_POLICY_ENDPOINT,
+            Some(payload),
+        )
         .await
 }
 
@@ -440,3 +491,6 @@ pub async fn get_invite_codes(
         )
         .await
 }
+
+#[cfg(test)]
+mod tests;

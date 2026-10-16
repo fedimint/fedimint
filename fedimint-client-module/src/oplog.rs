@@ -21,15 +21,6 @@ use serde::{Deserialize, Serialize};
 #[serde(transparent)]
 pub struct JsonStringed(pub serde_json::Value);
 
-#[cfg(feature = "uniffi")]
-uniffi::custom_type!(JsonStringed, String, {
-    lower: |j| serde_json::to_string(&j.0).expect("JSON serialization should not fail"),
-    try_lift: |s| {
-        let value = serde_json::from_str(&s).map_err(|e| DecodeError::from_err(e))?;
-        Ok(JsonStringed(value))
-    },
-});
-
 impl Encodable for JsonStringed {
     fn consensus_encode<W: std::io::Write>(&self, writer: &mut W) -> Result<(), std::io::Error> {
         let json_str = serde_json::to_string(&self.0).expect("JSON serialization should not fail");
@@ -84,7 +75,6 @@ pub trait IOperationLog {
 /// Represents the outcome of an operation, combining both the outcome value and
 /// its timestamp
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct OperationOutcome {
     pub time: SystemTime,
     pub outcome: JsonStringed,
@@ -136,7 +126,6 @@ impl Decodable for OperationOutcome {
 ///        has to be called. See the respective client extension trait for these
 ///        functions.
 #[derive(Debug, Serialize, Deserialize, Encodable, Decodable)]
-#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct OperationLogEntry {
     pub(crate) operation_module_kind: String,
     pub(crate) meta: JsonStringed,
@@ -187,7 +176,7 @@ impl OperationLogEntry {
     /// [`OperationLogEntry::meta`] should tell you the which operation type of
     /// a given module the outcome belongs to. The operation type will have a
     /// corresponding `async fn subscribe_type(&self, operation_id:
-    /// OperationId) -> anyhow::Result<UpdateStreamOrOutcome<TypeState>>;`
+    /// OperationId) -> Result<UpdateStreamOrOutcome<TypeState>, E>;`
     /// function that returns a `UpdateStreamOrOutcome<S>` where `S` is the
     /// high-level state the operation is in. If this state is terminal, i.e.
     /// the stream closes after returning it, it will be cached as the `outcome`
@@ -271,45 +260,4 @@ where
 }
 
 #[cfg(test)]
-mod tests {
-    use futures::stream;
-    use serde_json::Value;
-
-    use super::*;
-
-    #[tokio::test]
-    async fn test_await_outcome_cached() {
-        let test_value = serde_json::json!({"status": "completed", "amount": 100});
-        let cached_outcome = UpdateStreamOrOutcome::Outcome(test_value.clone());
-        let result = cached_outcome.await_outcome().await;
-        assert_eq!(result, Some(test_value));
-    }
-
-    #[tokio::test]
-    async fn test_await_outcome_uncached_with_updates() {
-        let update_stream = Box::pin(stream::iter(vec![
-            Value::from(0),
-            Value::from(1),
-            Value::from(2),
-        ]));
-        let uncached_outcome = UpdateStreamOrOutcome::UpdateStream(update_stream);
-        let result = uncached_outcome.await_outcome().await;
-        assert_eq!(result, Some(Value::from(2)));
-    }
-
-    #[tokio::test]
-    async fn test_await_outcome_uncached_empty_stream() {
-        let empty_stream = Box::pin(stream::empty::<serde_json::Value>());
-        let uncached_outcome = UpdateStreamOrOutcome::UpdateStream(empty_stream);
-        let result = uncached_outcome.await_outcome().await;
-        assert_eq!(result, None);
-    }
-
-    #[tokio::test]
-    async fn test_await_outcome_uncached_single_update() {
-        let update_stream = Box::pin(stream::once(async { Value::from(0) }));
-        let uncached_outcome = UpdateStreamOrOutcome::UpdateStream(update_stream);
-        let result = uncached_outcome.await_outcome().await;
-        assert_eq!(result, Some(Value::from(0)));
-    }
-}
+mod tests;

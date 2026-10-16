@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::panic::AssertUnwindSafe;
@@ -7,7 +8,7 @@ use std::time::Duration;
 use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::module::{ApiEndpoint, ApiError, ApiMethod, IrohApiRequest};
 use fedimint_core::task::TaskGroup;
-use fedimint_core::util::FmtCompactAnyhow as _;
+use fedimint_core::util::FmtCompact as _;
 use fedimint_logging::LOG_NET_API;
 use fedimint_metrics::prometheus::HistogramTimer;
 use fedimint_server_core::DynServerModule;
@@ -36,6 +37,10 @@ const IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_CODE: u32 = 0;
 /// Application-level QUIC close reason for idle Iroh API connection reaping.
 const IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_REASON: &[u8] = b"idle timeout";
 
+/// Metric label used for every request that does not resolve to a registered
+/// endpoint.
+const UNKNOWN_METHOD: &str = "unknown";
+
 pub(super) async fn run_iroh_api(
     api: Arc<IrohApiState>,
     endpoint: Endpoint,
@@ -62,7 +67,7 @@ pub(super) async fn run_iroh_api(
                     )
                     .then(|result| async {
                         if let Err(err) = result {
-                            warn!(target: LOG_NET_API, err = %err.fmt_compact_anyhow(), "Failed to handle iroh connection");
+                            warn!(target: LOG_NET_API, err = %err.fmt_compact(), "Failed to handle iroh connection");
                         }
                     }),
                 );
@@ -329,7 +334,7 @@ async fn handle_iroh_api_connection(
             )
             .then(|result| async {
                 if let Err(err) = result {
-                    warn!(target: LOG_NET_API, err = %err.fmt_compact_anyhow(), "Failed to handle Iroh API request");
+                    warn!(target: LOG_NET_API, err = %err.fmt_compact(), "Failed to handle Iroh API request");
                 }
             }),
         );
@@ -354,21 +359,63 @@ async fn handle_iroh_api_request(
     version_label: &'static str,
 ) -> anyhow::Result<Vec<u8>> {
     let request = serde_json::from_slice::<IrohApiRequest>(request)?;
-    let method = request.method.to_string();
+    let request_method = request.method.clone();
+    let response = record_request_metrics(
+        &api.core,
+        &api.modules,
+        &request_method,
+        version_label,
+        await_response(api, request),
+    )
+    .await;
+
+    Ok(serde_json::to_vec(&response)?)
+}
+
+fn metric_method<'a, C, M>(
+    core: &'a BTreeMap<String, C>,
+    modules: &'a BTreeMap<ModuleInstanceId, BTreeMap<String, M>>,
+    method: &ApiMethod,
+) -> Cow<'a, str> {
+    match method {
+        ApiMethod::Core(method) => core
+            .get_key_value(method)
+            .map_or(Cow::Borrowed(UNKNOWN_METHOD), |(method, _)| {
+                Cow::Borrowed(method)
+            }),
+        ApiMethod::Module(module_id, method) => modules
+            .get_key_value(module_id)
+            .and_then(|(module_id, endpoints)| {
+                endpoints
+                    .get_key_value(method)
+                    .map(|(method, _)| Cow::Owned(format!("{module_id}-{method}")))
+            })
+            .unwrap_or(Cow::Borrowed(UNKNOWN_METHOD)),
+    }
+}
+
+async fn record_request_metrics<T, C, M>(
+    core: &BTreeMap<String, C>,
+    modules: &BTreeMap<ModuleInstanceId, BTreeMap<String, M>>,
+    request_method: &ApiMethod,
+    version_label: &'static str,
+    response: impl Future<Output = Result<T, ApiError>>,
+) -> Result<T, ApiError> {
+    let method = metric_method(core, modules, request_method);
     let timer = IROH_API_REQUEST_DURATION_SECONDS
-        .with_label_values(&[&method])
+        .with_label_values(&[method.as_ref()])
         .start_timer();
-    let response = await_response(api, request).await;
+    let response = response.await;
     timer.observe_duration();
 
     let response_code = response
         .as_ref()
         .map_or_else(|err| err.code.to_string(), |_| "0".to_string());
     IROH_API_REQUEST_RESPONSE_CODE
-        .with_label_values(&[method.as_str(), response_code.as_str(), version_label])
+        .with_label_values(&[method.as_ref(), response_code.as_str(), version_label])
         .inc();
 
-    Ok(serde_json::to_vec(&response)?)
+    response
 }
 
 async fn await_response(api: &IrohApiState, request: IrohApiRequest) -> Result<Value, ApiError> {
@@ -469,7 +516,7 @@ pub(super) async fn run_iroh_api_next(
                     )
                     .then(|result| async {
                         if let Err(err) = result {
-                            warn!(target: LOG_NET_API, err = %err.fmt_compact_anyhow(), "Failed to handle iroh-next connection");
+                            warn!(target: LOG_NET_API, err = %err.fmt_compact(), "Failed to handle iroh-next connection");
                         }
                     }),
                 );
@@ -499,105 +546,4 @@ async fn handle_incoming_next(
 }
 
 #[cfg(test)]
-mod tests {
-    use std::net::SocketAddr;
-
-    use anyhow::Context as _;
-    use iroh_next::endpoint::presets::Minimal;
-    use iroh_next::{EndpointAddr, RelayMode, SecretKey, TransportAddr};
-
-    use super::*;
-
-    const TEST_ALPN: &[u8] = b"fedimint-iroh-api-adapter-test";
-
-    #[tokio::test]
-    async fn panicking_handler_returns_an_error_instead_of_unwinding() {
-        let error = run_handler(None, "test_endpoint", async { panic!("handler panic") })
-            .await
-            .expect_err("a panicking handler is reported as a server error");
-
-        assert_eq!(error.code, 500);
-
-        let error = run_handler(Some(3), "test_endpoint", async {
-            panic!("module handler panic")
-        })
-        .await
-        .expect_err("a panicking module handler is reported as a server error");
-
-        assert_eq!(error.code, 500);
-    }
-
-    #[tokio::test]
-    async fn shared_connection_limit_applies_across_versions() {
-        let limit = Arc::new(Semaphore::new(1));
-        let legacy_permit = acquire_iroh_api_permit(&limit, 1, "0.35", "connection").await;
-
-        assert!(
-            tokio::time::timeout(
-                Duration::from_millis(20),
-                acquire_iroh_api_permit(&limit, 1, "1.0", "connection"),
-            )
-            .await
-            .is_err()
-        );
-
-        drop(legacy_permit);
-        let _permit = tokio::time::timeout(
-            Duration::from_secs(1),
-            acquire_iroh_api_permit(&limit, 1, "1.0", "connection"),
-        )
-        .await
-        .expect("v1 acquires the shared permit after the legacy connection releases it");
-    }
-
-    #[tokio::test]
-    async fn iroh_v1_request_uses_shared_stream_adapter() -> anyhow::Result<()> {
-        let server = iroh_next::Endpoint::builder(Minimal)
-            .relay_mode(RelayMode::Disabled)
-            .secret_key(SecretKey::from_bytes(&[11; 32]))
-            .alpns(vec![TEST_ALPN.to_vec()])
-            .bind_addr(SocketAddr::from(([127, 0, 0, 1], 0)))?
-            .bind()
-            .await?;
-        let client = iroh_next::Endpoint::builder(Minimal)
-            .relay_mode(RelayMode::Disabled)
-            .bind()
-            .await?;
-        let server_addr = EndpointAddr::from_parts(
-            server.id(),
-            server.bound_sockets().into_iter().map(TransportAddr::Ip),
-        );
-        let (client_done_tx, client_done_rx) = tokio::sync::oneshot::channel();
-
-        let server_request = async {
-            let incoming = server.accept().await.context("server endpoint closed")?;
-            let connection = incoming.accept()?.await?;
-            let (send, mut recv) = VersionedIrohConnection::Next(connection)
-                .accept_bi()
-                .await?;
-            assert_eq!(recv.read_request().await?, b"request");
-            send.write_response(b"response").await?;
-            client_done_rx.await?;
-            anyhow::Ok(())
-        };
-        let client_request = async {
-            let connection = client.connect(server_addr, TEST_ALPN).await?;
-            let (mut send, mut recv) = connection.open_bi().await?;
-            send.write_all(b"request").await?;
-            send.finish()?;
-            let response = recv.read_to_end(100_000).await?;
-            anyhow::ensure!(response == b"response");
-            client_done_tx.send(()).expect("server is still running");
-            anyhow::Ok(())
-        };
-
-        tokio::time::timeout(Duration::from_secs(10), async {
-            tokio::try_join!(server_request, client_request)
-        })
-        .await
-        .context("Iroh v1 adapter test timed out")??;
-        client.close().await;
-        server.close().await;
-        Ok(())
-    }
-}
+mod tests;

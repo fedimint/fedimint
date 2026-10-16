@@ -1,8 +1,9 @@
 //! Implements the client API through which users interact with the federation
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
+use std::future::pending;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result, ensure};
 use async_trait::async_trait;
@@ -29,13 +30,12 @@ use fedimint_core::endpoint_constants::{
     CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT, CONSENSUS_ORD_LATENCY_ENDPOINT,
     FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
     GUARDIAN_METADATA_ENDPOINT, INVITE_CODE_ENDPOINT, P2P_CONNECTION_STATUS_ENDPOINT,
-    RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT,
-    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT,
-    SIGN_API_ANNOUNCEMENT_ENDPOINT, SIGN_GUARDIAN_METADATA_ENDPOINT, STATUS_ENDPOINT,
-    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_GUARDIAN_METADATA_ENDPOINT,
-    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    PEER_AVAILABILITY_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
+    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT,
+    SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT,
+    SIGN_GUARDIAN_METADATA_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
+    SUBMIT_GUARDIAN_METADATA_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
-use fedimint_core::epoch::ConsensusItem;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::{Audit, AuditSummary};
 use fedimint_core::module::{
@@ -47,9 +47,10 @@ use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
 };
 use fedimint_core::net::auth::GuardianAuthToken;
+use fedimint_core::peer_availability::PeerAvailability;
 use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::session_outcome::{
-    SessionOutcome, SessionStatus, SessionStatusV2, SignedSessionOutcome,
+    ConsensusItem, SessionOutcome, SessionStatus, SessionStatusV2, SignedSessionOutcome,
 };
 use fedimint_core::task::TaskGroup;
 use fedimint_core::transaction::{
@@ -71,14 +72,14 @@ use tracing::{debug, info, warn};
 use crate::config::io::{CONSENSUS_CONFIG, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG};
 use crate::config::{ServerConfig, legacy_consensus_config_hash};
 use crate::consensus::db::{
-    AcceptedItemKey, AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey,
+    AcceptedItemPrefix, AcceptedTransactionKey, PeerAvailabilityKey, SignedSessionOutcomeKey,
 };
 use crate::consensus::engine::get_finished_session_count_static;
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 use crate::net::api::HasApiContext;
 use crate::net::api::announcement::{ApiAnnouncementKey, ApiAnnouncementPrefix, get_api_urls};
-use crate::net::p2p::P2PStatusReceivers;
+use crate::net::p2p::{P2PConnectionState, P2PStatusReceivers};
 
 /// Maximum number of output outcomes a single `await_outputs_outcomes` request
 /// may ask for. The endpoint is public and unauthenticated and the requested
@@ -88,6 +89,18 @@ use crate::net::p2p::P2PStatusReceivers;
 /// Real transactions have a handful of outputs; a client that somehow needs
 /// more can still ask for them one outpoint at a time.
 const MAX_OUTPUTS_OUTCOMES_BATCH: usize = 1024;
+
+/// Maximum clock lead accepted for a signed client backup request.
+///
+/// This matches the one-hour limit used for signed guardian metadata
+/// timestamps.
+const MAX_BACKUP_FUTURE_TIMESTAMP_SECS: u64 = 60 * 60;
+
+fn backup_timestamp_is_too_far_in_future(timestamp: SystemTime, now: SystemTime) -> bool {
+    timestamp
+        .duration_since(now)
+        .is_ok_and(|lead| lead > Duration::from_secs(MAX_BACKUP_FUTURE_TIMESTAMP_SECS))
+}
 
 /// Number of output outcomes `outpoint_range` asks for, if it is a range we are
 /// willing to serve.
@@ -107,6 +120,38 @@ fn checked_outputs_outcomes_count(outpoint_range: OutPointRange) -> Result<usize
     Ok(count)
 }
 
+/// Status of a single peer, read from the p2p and consensus-item watch
+/// channels it is tracked by.
+///
+/// Each channel is read exactly once, into a local. `watch::Receiver::borrow`
+/// returns a guard over a `parking_lot::RwLock`, and Rust drops temporaries at
+/// the end of the enclosing *statement* rather than the sub-expression, so
+/// borrowing inline in a struct literal would keep several guards alive at
+/// once. That deadlocks the whole process: `parking_lot`'s `RwLock` is
+/// write-preferring, so a second `borrow()` of a channel this thread already
+/// holds a guard on blocks behind any writer that queued in between, and that
+/// writer can never drain because the first guard is still held. These are
+/// blocking waits, so every stuck request burns a tokio worker until the
+/// runtime has none left to poll the reactor with.
+fn legacy_peer_status(
+    p2p_receiver: &watch::Receiver<P2PConnectionState>,
+    ci_receiver: &watch::Receiver<Option<u64>>,
+    session_count: u64,
+) -> LegacyPeerStatus {
+    let p2p_connected = p2p_receiver.borrow().connected.is_some();
+    let last_contribution = *ci_receiver.borrow();
+
+    LegacyPeerStatus {
+        connection_status: if p2p_connected {
+            LegacyP2PConnectionStatus::Connected
+        } else {
+            LegacyP2PConnectionStatus::Disconnected
+        },
+        last_contribution,
+        flagged: last_contribution.unwrap_or(0) + 1 < session_count,
+    }
+}
+
 #[derive(Clone)]
 pub struct ConsensusApi {
     /// Our server configuration
@@ -123,6 +168,10 @@ pub struct ConsensusApi {
     pub shutdown_receiver: Receiver<Option<u64>>,
     pub shutdown_sender: Sender<Option<u64>>,
     pub ord_latency_receiver: watch::Receiver<Option<Duration>>,
+    /// Notified whenever consensus accepts an item.
+    pub accepted_item_receiver: watch::Receiver<()>,
+    /// Notified whenever consensus completes a session.
+    pub completed_session_receiver: watch::Receiver<()>,
     pub p2p_status_receivers: P2PStatusReceivers,
     pub ci_status_receivers: BTreeMap<PeerId, Receiver<Option<u64>>>,
     pub bitcoin_rpc_connection: ServerBitcoinRpcMonitor,
@@ -156,6 +205,14 @@ impl ConsensusApi {
 
         debug!(target: LOG_NET_API, %txid, "Received a submitted transaction");
 
+        // Marked as seen before the transaction is checked, so that every item
+        // accepted and every session completed from here on wakes the loop below.
+        let mut accepted_item = self.accepted_item_receiver.clone();
+        let mut completed_session = self.completed_session_receiver.clone();
+
+        accepted_item.mark_unchanged();
+        completed_session.mark_unchanged();
+
         // Create read-only DB tx so that the read state is consistent
         let mut dbtx = self.db.begin_transaction_nc().await;
         // we already processed the transaction before
@@ -183,10 +240,6 @@ impl ConsensusApi {
             debug!(target: LOG_NET_API, %txid, err = %err.fmt_compact(), "Transaction rejected");
         })?;
 
-        let mut session_index = get_finished_session_count_static(&mut dbtx).await;
-
-        let mut item_index = dbtx.find_by_prefix(&AcceptedItemPrefix).await.count().await as u64;
-
         drop(dbtx);
 
         let _ = self
@@ -198,13 +251,16 @@ impl ConsensusApi {
             });
 
         loop {
-            let accepted_item_key = AcceptedItemKey(item_index);
-            let signed_session_outcome_key = SignedSessionOutcomeKey(session_index);
-
-            let session_completed = tokio::select! {
-                _ = self.db.wait_key_exists(&accepted_item_key) => false,
-                _ = self.db.wait_key_exists(&signed_session_outcome_key) => true,
+            let (changed, session_completed) = tokio::select! {
+                changed = accepted_item.changed() => (changed, false),
+                changed = completed_session.changed() => (changed, true),
             };
+
+            // The engine owns the senders for the life of the server, so this only
+            // fails at shutdown, which cancels the request anyway.
+            if changed.is_err() {
+                pending::<()>().await;
+            }
 
             let mut dbtx = self.db.begin_transaction_nc().await;
 
@@ -245,11 +301,6 @@ impl ConsensusApi {
                     .inspect_err(|err| {
                         warn!(target: LOG_NET_API, %txid, err = %err.fmt_compact(), "Unable to submit the tx into consensus");
                     });
-
-                session_index += 1;
-                item_index = 0;
-            } else {
-                item_index += 1;
             }
         }
     }
@@ -368,16 +419,10 @@ impl ConsensusApi {
             .map(|(peer, p2p_receiver)| {
                 let ci_receiver = self.ci_status_receivers.get(peer).unwrap();
 
-                let consensus_status = LegacyPeerStatus {
-                    connection_status: match p2p_receiver.borrow().connected {
-                        Some(..) => LegacyP2PConnectionStatus::Connected,
-                        None => LegacyP2PConnectionStatus::Disconnected,
-                    },
-                    last_contribution: *ci_receiver.borrow(),
-                    flagged: ci_receiver.borrow().unwrap_or(0) + 1 < session_count,
-                };
-
-                (*peer, consensus_status)
+                (
+                    *peer,
+                    legacy_peer_status(p2p_receiver, ci_receiver, session_count),
+                )
             })
             .collect::<BTreeMap<_, _>>();
 
@@ -482,6 +527,12 @@ impl ConsensusApi {
         let request = request
             .verify_valid(SECP256K1)
             .map_err(|_| ApiError::bad_request("invalid request".into()))?;
+
+        if backup_timestamp_is_too_far_in_future(request.timestamp, fedimint_core::time::now()) {
+            return Err(ApiError::bad_request(
+                "timestamp too far in the future".into(),
+            ));
+        }
 
         if request.payload.len() > BACKUP_REQUEST_MAX_PAYLOAD_SIZE_BYTES {
             return Err(ApiError::bad_request("snapshot too large".into()));
@@ -1008,6 +1059,20 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         public_api_endpoint! {
+            PEER_AVAILABILITY_ENDPOINT,
+            ApiVersion::new(0, 0),
+            async |fedimint: &ConsensusApi, _c, _v: ()| -> PeerAvailability {
+                Ok(fedimint
+                    .db
+                    .begin_transaction_nc()
+                    .await
+                    .get_value(&PeerAvailabilityKey)
+                    .await
+                    .unwrap_or_default()
+                    .report(fedimint_core::time::duration_since_epoch().as_secs()))
+            }
+        },
+        public_api_endpoint! {
             SESSION_COUNT_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> u64 {
@@ -1200,94 +1265,4 @@ pub(crate) async fn backup_statistics_static(
 }
 
 #[cfg(test)]
-mod tests {
-    use fedimint_core::db::IRawDatabaseExt as _;
-    use fedimint_core::db::mem_impl::MemDatabase;
-    use fedimint_core::net::guardian_metadata::GuardianMetadata;
-    use fedimint_core::{BitcoinHash as _, IdxRange, TransactionId};
-
-    use super::*;
-    use crate::net::api::guardian_metadata::GuardianMetadataKey;
-
-    /// `AWAIT_OUTPUTS_OUTCOMES` is public and unauthenticated, and the range it
-    /// takes has no validation of its own. A single request used to size a
-    /// `Vec` from `u64::MAX` indexes.
-    #[test]
-    fn outputs_outcomes_range_is_bounded() {
-        let txid = TransactionId::from_slice(&[0; 32]).expect("32 bytes is a valid txid");
-        let range = |start, end| OutPointRange::new(txid, IdxRange::from(start..end));
-
-        assert_eq!(
-            checked_outputs_outcomes_count(range(0, MAX_OUTPUTS_OUTCOMES_BATCH as u64))
-                .expect("a range at the limit is served"),
-            MAX_OUTPUTS_OUTCOMES_BATCH
-        );
-
-        for rejected in [
-            range(0, u64::MAX),
-            range(0, MAX_OUTPUTS_OUTCOMES_BATCH as u64 + 1),
-            // Descending ranges are rejected here rather than left to the
-            // iterator's tolerance of them.
-            range(u64::MAX, 0),
-            range(5, 4),
-        ] {
-            assert!(
-                checked_outputs_outcomes_count(rejected).is_err(),
-                "{rejected:?} must be rejected"
-            );
-        }
-    }
-
-    #[tokio::test]
-    async fn admin_metadata_update_preserves_persisted_iroh_endpoint() {
-        let db: Database = MemDatabase::new().into_database();
-        let identity = PeerId::from(0);
-        let broadcast_secret_key =
-            secp256k1::SecretKey::from_slice(&[42; 32]).expect("valid test key");
-        let ctx = secp256k1::Secp256k1::new();
-
-        let existing = GuardianMetadata::new(
-            vec!["wss://old.example".parse().expect("valid URL")],
-            "old-pkarr".to_owned(),
-            1,
-        )
-        .with_iroh_next_endpoint("persisted-iroh-id".to_owned())
-        .sign(&ctx, &broadcast_secret_key.keypair(&ctx));
-        let mut dbtx = db.begin_transaction().await;
-        dbtx.insert_entry(&GuardianMetadataKey(identity), &existing)
-            .await;
-        dbtx.commit_tx().await;
-
-        let updated = GuardianMetadata::new(
-            vec!["wss://new.example".parse().expect("valid URL")],
-            "new-pkarr".to_owned(),
-            2,
-        );
-        let signed = sign_guardian_metadata_preserving_iroh_endpoint(
-            &db,
-            identity,
-            &broadcast_secret_key,
-            updated,
-        )
-        .await;
-
-        assert_eq!(
-            signed.guardian_metadata().iroh_next_endpoint.as_deref(),
-            Some("persisted-iroh-id")
-        );
-        assert_eq!(
-            signed.guardian_metadata().api_urls,
-            vec!["wss://new.example".parse().expect("valid URL")]
-        );
-        assert_eq!(signed.guardian_metadata().pkarr_id_z32, "new-pkarr");
-        assert_eq!(
-            db.begin_transaction_nc()
-                .await
-                .get_value(&GuardianMetadataKey(identity))
-                .await
-                .expect("metadata was persisted")
-                .tagged_hash(),
-            signed.tagged_hash()
-        );
-    }
-}
+mod tests;

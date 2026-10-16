@@ -35,8 +35,8 @@ use fedimint_gateway_common::{
     OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
     PaymentLogPayload, PaymentLogResponse, PaymentSummaryPayload, PaymentSummaryResponse,
     ReceiveEcashPayload, ReceiveEcashResponse, SendOnchainRequest, SetFeesPayload,
-    SetMnemonicPayload, SpendEcashPayload, SpendEcashResponse, WithdrawPayload,
-    WithdrawPreviewPayload, WithdrawPreviewResponse, WithdrawResponse,
+    SetMnemonicPayload, SetPaymentPolicyPayload, SpendEcashPayload, SpendEcashResponse,
+    WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse, WithdrawResponse,
 };
 use fedimint_ln_common::contracts::Preimage;
 use fedimint_logging::LOG_GATEWAY_UI;
@@ -53,7 +53,8 @@ use tracing::debug;
 use crate::connect_fed::connect_federation_handler;
 use crate::federation::{
     deposit_address_handler, leave_federation_handler, receive_ecash_handler, set_fees_handler,
-    spend_ecash_handler, withdraw_confirm_handler, withdraw_preview_handler,
+    set_payment_policy_handler, spend_ecash_handler, withdraw_confirm_handler,
+    withdraw_preview_handler,
 };
 use crate::lightning::{
     channels_fragment_handler, close_channel_handler, connect_peer_handler,
@@ -75,6 +76,7 @@ pub(crate) const CHANNEL_FRAGMENT_ROUTE: &str = "/ui/channels/fragment";
 pub(crate) const LEAVE_FEDERATION_ROUTE: &str = "/ui/federations/{id}/leave";
 pub(crate) const CONNECT_FEDERATION_ROUTE: &str = "/ui/federations/join";
 pub(crate) const SET_FEES_ROUTE: &str = "/ui/federation/set-fees";
+pub(crate) const SET_PAYMENT_POLICY_ROUTE: &str = "/ui/federation/set-payment-policy";
 pub(crate) const SEND_ONCHAIN_ROUTE: &str = "/ui/wallet/send";
 pub(crate) const WALLET_FRAGMENT_ROUTE: &str = "/ui/wallet/fragment";
 pub(crate) const LN_ONCHAIN_ADDRESS_ROUTE: &str = "/ui/wallet/receive";
@@ -156,6 +158,11 @@ pub trait IAdminGateway {
     ) -> Result<FederationInfo, Self::Error>;
 
     async fn handle_set_fees_msg(&self, payload: SetFeesPayload) -> Result<(), Self::Error>;
+
+    async fn handle_set_payment_policy_msg(
+        &self,
+        payload: SetPaymentPolicyPayload,
+    ) -> Result<(), Self::Error>;
 
     async fn handle_mnemonic_msg(&self) -> Result<MnemonicResponse, Self::Error>;
 
@@ -486,6 +493,7 @@ pub fn router<E: Display + Send + Sync + std::fmt::Debug + 'static>(
         .route(LEAVE_FEDERATION_ROUTE, post(leave_federation_handler))
         .route(CONNECT_FEDERATION_ROUTE, post(connect_federation_handler))
         .route(SET_FEES_ROUTE, post(set_fees_handler))
+        .route(SET_PAYMENT_POLICY_ROUTE, post(set_payment_policy_handler))
         .route(SEND_ONCHAIN_ROUTE, post(send_onchain_handler))
         .route(
             LN_ONCHAIN_ADDRESS_ROUTE,
