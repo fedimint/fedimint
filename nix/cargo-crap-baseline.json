@@ -47287,6 +47287,15 @@
       "coverage": null,
       "crap": 2.0,
       "crate": "fedimint-walletv2-tests"
+    },
+    {
+      "file": "/build/source/modules/fedimint-lnv2-client/src/cli.rs",
+      "function": "handle_htlc_command",
+      "line": 239,
+      "cyclomatic": 32.0,
+      "coverage": null,
+      "crap": 1056.0,
+      "crate": "fedimint-lnv2-client"
     }
   ]
 }

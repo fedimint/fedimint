@@ -2294,7 +2294,7 @@ impl StatelessWallet<'_> {
                 .and_then(|target| target.checked_add(fees))
                 .ok_or(WalletOutputError::NotEnoughSpendableUTXO)?;
 
-            if total_selected_value >= target {
+            if target <= total_selected_value {
                 break;
             }
 

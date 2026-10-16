@@ -242,7 +242,7 @@ async fn await_btc_transaction_confirmed(
         );
 
         if !confirmation_block_count.is_some_and(|confirmation_block_count| {
-            consensus_block_count >= confirmation_block_count
+            confirmation_block_count <= consensus_block_count
         }) {
             trace!(
                 "Not confirmed yet, confirmation_block_count={confirmation_block_count:?}, consensus_block_count={consensus_block_count}"

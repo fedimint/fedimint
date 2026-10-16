@@ -1,0 +1,14 @@
+id: prefer-less-than-comparisons
+snapshots:
+  larger > smaller:
+    labels:
+    - source: larger > smaller
+      style: primary
+      start: 0
+      end: 16
+  larger >= smaller:
+    labels:
+    - source: larger >= smaller
+      style: primary
+      start: 0
+      end: 17
