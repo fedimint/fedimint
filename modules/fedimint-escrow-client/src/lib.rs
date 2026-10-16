@@ -27,14 +27,14 @@ use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::secp256k1::{Keypair, Message, PublicKey, Secp256k1, schnorr};
 use fedimint_core::util::BoxStream;
-use fedimint_core::{Amount, apply, async_trait_maybe_send, push_db_pair_items};
+use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send, push_db_pair_items};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_escrow_common::config::EscrowClientConfig;
 use fedimint_escrow_common::{
-    ClaimPool, EscrowCommonInit, EscrowContract, EscrowId, EscrowInput, EscrowMessage,
-    EscrowModuleTypes, EscrowOutput, FallbackPolicy, GetClaimAmount, GetContractParams, KIND,
-    ListContractParams, Outcome, Resolution, compute_contract_hash, compute_escrow_message,
-    x_only_eq,
+    ClaimPool, ContractHash, EscrowCommonInit, EscrowContract, EscrowId, EscrowInput,
+    EscrowMessage, EscrowModuleTypes, EscrowOutput, FallbackPolicy, GetClaimAmount,
+    GetContractParams, KIND, ListContractParams, Outcome, Resolution, compute_contract_hash,
+    compute_escrow_message, x_only_eq,
 };
 use frost_secp256k1_tr::Identifier;
 use futures::lock::Mutex;
@@ -334,6 +334,11 @@ impl ClientModule for EscrowClientModule {
                     ).await?;
                     yield serde_json::to_value(result)?;
                 }
+                "engage_arbiter"=>{
+                    let req:EngageArbiterRequest=serde_json::from_value(request)?;
+                    let result=self.engage_arbiter(req.escrow_id).await?;
+                    yield serde_json::to_value(result)?;
+                }
                 "submit_arbiter_decision"=>{
                     let req:SubmitArbiterDecisionRequest=serde_json::from_value(request)?;
                     let result=self.submit_arbiter_decision(
@@ -350,9 +355,21 @@ impl ClientModule for EscrowClientModule {
                         yield serde_json::to_value(state)?;
                     }
                 }
+                "subscribe_claim_payout"=>{
+                    let req:SubscribeClaimPayoutRequest=serde_json::from_value(request)?;
+                    let stream=self.subscribe_claim_payout(req.operation_id).await?;
+                    for await state in stream.into_stream(){
+                        yield serde_json::to_value(state)?;
+                    }
+                }
                 "claim_payout"=>{
                     let req:ClaimPayoutRequest=serde_json::from_value(request)?;
                     let result=self.claim_payout(req.escrow_id).await?;
+                    yield serde_json::to_value(result)?;
+                }
+                "trigger_fallback"=>{
+                    let req:FallbackRequest=serde_json::from_value(request)?;
+                    let result=self.trigger_fallback(req.escrow_id).await?;
                     yield serde_json::to_value(result)?;
                 }
                 "get_claim_pool" => {
@@ -403,6 +420,16 @@ struct ResolveEscrowRequest {
 }
 
 #[derive(Deserialize)]
+struct EngageArbiterRequest {
+    escrow_id: EscrowId,
+}
+
+#[derive(Deserialize)]
+struct FallbackRequest {
+    escrow_id: EscrowId,
+}
+
+#[derive(Deserialize)]
 struct SubmitArbiterDecisionRequest {
     escrow_id: EscrowId,
     outcome: Outcome,
@@ -425,6 +452,11 @@ struct SubscribeResolveRequest {
 }
 
 #[derive(Deserialize)]
+struct SubscribeClaimPayoutRequest {
+    operation_id: OperationId,
+}
+
+#[derive(Deserialize)]
 struct SignClientMessageRequest {
     message: EscrowMessage,
 }
@@ -433,6 +465,8 @@ struct SignClientMessageRequest {
 pub struct CreateContractResponse {
     pub operation_id: OperationId,
     pub escrow_id: EscrowId,
+    pub contract_hash: ContractHash,
+    pub timeout: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -552,6 +586,8 @@ impl EscrowClientModule {
         let result = CreateContractResponse {
             operation_id,
             escrow_id,
+            contract_hash,
+            timeout: timeout_deadline,
         };
         Ok(result)
     }
@@ -629,7 +665,7 @@ impl EscrowClientModule {
         Ok(operation_id)
     }
 
-    pub async fn set_arbiter_engaged(&self, escrow_id: EscrowId) -> anyhow::Result<OperationId> {
+    pub async fn engage_arbiter(&self, escrow_id: EscrowId) -> anyhow::Result<OperationId> {
         let operation_id = OperationId::new_random();
         let contract = self
             .get_contract(escrow_id)
@@ -863,9 +899,87 @@ impl EscrowClientModule {
         let operation_meta_gen = move |out_point_range: OutPointRange| EscrowOperationMeta {
             escrow_id,
             amount,
-            action: EscrowAction::ArbiterFeeClaimed,
+            action: EscrowAction::Claimed,
             txid: out_point_range.txid(),
             out_point_indices: out_point_range.into_iter().map(|op| op.out_idx).collect(),
+        };
+
+        self.client_ctx
+            .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
+            .await?;
+
+        Ok(operation_id)
+    }
+
+    pub async fn trigger_fallback(&self, escrow_id: EscrowId) -> anyhow::Result<OperationId> {
+        let operation_id = OperationId::new_random();
+        let contract = self
+            .get_contract(escrow_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
+
+        let is_valid_claimer = x_only_eq(&self.escrow_key.public_key(), &contract.funder_key)
+            || x_only_eq(&self.escrow_key.public_key(), &contract.recipient_key);
+
+        anyhow::ensure!(is_valid_claimer, "Should be triggered by funder/reciepient");
+        let claimer_pubkey = self.escrow_key.public_key();
+        let fallback = contract.default_fallback;
+        let resolution = Resolution::ResolveFallbackPolicy {
+            claimer_pubkey,
+            fallback,
+        };
+
+        let input = ClientInput {
+            amounts: Amounts::ZERO,
+            keys: vec![self.escrow_key],
+            input: EscrowInput {
+                escrow_id,
+                resolution,
+            },
+        };
+
+        let input_sm = ClientInputSM {
+            state_machines: Arc::new(move |out_point_range: OutPointRange| {
+                out_point_range
+                    .into_iter()
+                    .map(|out_point| {
+                        EscrowStateMachine::Input(EscrowInputStateMachine {
+                            common: EscrowInputSMCommon {
+                                operation_id,
+                                out_point,
+                                escrow_id,
+                                amount: Amount::ZERO,
+                                resolution,
+                            },
+                            state: EscrowInputSMState::Pending,
+                        })
+                    })
+                    .collect()
+            }),
+        };
+
+        let tx = TransactionBuilder::new().with_inputs(
+            self.client_ctx
+                .make_dyn(ClientInputBundle::new(vec![input], vec![input_sm])),
+        );
+
+        let operation_meta_gen = move |out_point_range: OutPointRange| {
+            let txid = out_point_range.txid();
+            let out_point_indices = out_point_range
+                .into_iter()
+                .map(|out_point| out_point.out_idx)
+                .collect();
+
+            EscrowOperationMeta {
+                escrow_id,
+                amount: Amount::ZERO,
+                action: match fallback {
+                    FallbackPolicy::Refund => EscrowAction::Refunded,
+                    FallbackPolicy::Split { .. } => EscrowAction::Split,
+                },
+                txid,
+                out_point_indices,
+            }
         };
 
         self.client_ctx
@@ -1019,12 +1133,6 @@ impl EscrowClientModule {
         let operation: OperationLogEntry = self.escrow_operation(operation_id).await?;
         let meta = operation.meta::<EscrowOperationMeta>();
         let txid = meta.txid;
-        // let out_points: Vec<OutPoint> = meta
-        //     .out_point_indices
-        //     .into_iter()
-        //     .map(|out_idx| OutPoint { txid, out_idx })
-        //     .collect();
-
         let client_ctx = self.client_ctx.clone();
 
         Ok(self.client_ctx.outcome_or_updates(
@@ -1055,20 +1163,6 @@ impl EscrowClientModule {
                             return;
                         }
                     }
-
-                    // Should we use outpoints from EscrowOutputOutcome
-                    // for out_point in out_points {
-                    //     if let Err(e) = client_ctx
-                    //         .await_output_outcome::<EscrowOutputOutcome>(
-                    //             out_point,
-                    //             operation_id,
-                    //         )
-                    //         .await
-                    //     {
-                    //         yield EscrowOutputSMState::Failed { reason: e.to_string() };
-                    //         return;
-                    //     }
-                    // }
                 }
             },
         ))
@@ -1081,7 +1175,6 @@ impl EscrowClientModule {
         let operation: OperationLogEntry = self.escrow_operation(operation_id).await?;
         let meta = operation.meta::<EscrowOperationMeta>();
         let txid = meta.txid;
-
         let client_ctx = self.client_ctx.clone();
 
         Ok(self.client_ctx.outcome_or_updates(
@@ -1105,17 +1198,64 @@ impl EscrowClientModule {
                                 EscrowAction::Released => yield EscrowInputSMState::Released,
                                 EscrowAction::Refunded  => yield EscrowInputSMState::Refunded,
                                 EscrowAction::Split => yield EscrowInputSMState::Split,
-                                EscrowAction::ArbiterEngaged=>yield EscrowInputSMState::Disputed,
-                                EscrowAction::Created | EscrowAction::ArbiterFeeClaimed => {
-                                    yield EscrowInputSMState::Failed {
+                                EscrowAction::ArbiterEngaged => yield EscrowInputSMState::Disputed,
+                                _ => yield EscrowInputSMState::Failed {
                                         reason: "unexpected action in resolution stream".to_string()
-                                    };
                                 }
                             }
                         }
                         Err(e) => {
                             yield EscrowInputSMState::Failed { reason: e.to_string() };
                         }
+                    }
+                }
+            },
+        ))
+    }
+
+    pub async fn subscribe_claim_payout(
+        &self,
+        operation_id: OperationId,
+    ) -> anyhow::Result<UpdateStreamOrOutcome<EscrowInputSMState>> {
+        let operation = self.escrow_operation(operation_id).await?;
+        let meta = operation.meta::<EscrowOperationMeta>();
+        let txid = meta.txid;
+        let out_points: Vec<OutPoint> = meta
+            .out_point_indices
+            .into_iter()
+            .map(|out_idx| OutPoint { txid, out_idx })
+            .collect();
+        let client_ctx = self.client_ctx.clone();
+
+        Ok(self.client_ctx.outcome_or_updates(
+            &operation,
+            operation_id,
+            |state| {
+                matches!(
+                    state,
+                    EscrowInputSMState::Claimed | EscrowInputSMState::Failed { .. }
+                )
+            },
+            move || {
+                let client_ctx = client_ctx.clone();
+                stream! {
+                    yield EscrowInputSMState::Pending;
+                    if let Err(e) = client_ctx
+                        .transaction_updates(operation_id)
+                        .await
+                        .await_tx_accepted(txid)
+                        .await
+                    {
+                        yield EscrowInputSMState::Failed { reason: e.to_string() };
+                        return;
+                    }
+
+                    match client_ctx
+                        .await_primary_module_outputs(operation_id, out_points)
+                        .await
+                    {
+                        Ok(()) => yield EscrowInputSMState::Claimed,
+                        Err(err) => yield EscrowInputSMState::Failed { reason: err.to_string() },
                     }
                 }
             },

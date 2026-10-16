@@ -66,5 +66,5 @@ pub enum EscrowAction {
     Split,
     Created,
     ArbiterEngaged,
-    ArbiterFeeClaimed,
+    Claimed,
 }

@@ -25,7 +25,7 @@ use fedimint_escrow_common::{
     EscrowOutputOutcome, EscrowStatus, EscrowTransition, GET_CLAIM_AMOUNT_ENDPOINT,
     GET_CONTRACT_ENDPOINT, GetClaimAmount, GetContractParams, KIND, LIST_CONTRACT_BY_KEY_ENDPOINT,
     ListContractParams, MODULE_CONSENSUS_VERSION, Outcome, Resolution, compute_contract_hash,
-    compute_escrow_message, validate_contract_fields, validate_split_bps, x_only_eq,
+    compute_escrow_message, validate_contract_fields, x_only_eq,
 };
 use fedimint_logging::LOG_MODULE_ESCROW;
 use fedimint_server_core::config::PeerHandleOps;
@@ -466,9 +466,9 @@ fn calculate_claims(
         Outcome::Refund => vec![(contract.funder_key, payout_amount)],
         Outcome::Split {
             funder_split_bps,
-            recipient_split_bps,
+            recipient_split_bps: _,
         } => {
-            if !validate_split_bps(*funder_split_bps, *recipient_split_bps) {
+            if !outcome.is_valid() {
                 return Err(EscrowInputError::InvalidSplitRatio);
             }
 
@@ -622,7 +622,7 @@ impl Escrow {
             || x_only_eq(disputant_pubkey, &contract.recipient_key);
 
         if !is_valid_disputant {
-            return Err(EscrowInputError::InvalidSignature);
+            return Err(EscrowInputError::NotAParticipant);
         }
 
         let engage_message = contract.engage_message();

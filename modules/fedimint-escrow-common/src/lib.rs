@@ -1,4 +1,5 @@
 use std::fmt;
+use std::str::FromStr;
 
 use fedimint_core::bitcoin::hashes::{Hash, HashEngine, sha256};
 use fedimint_core::config::FederationId;
@@ -22,21 +23,15 @@ pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVers
 /// Splits are expressed in basis points (parts per 10,000)
 pub const SPLIT_BPS_DENOMINATOR: u16 = 10_000;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Encodable, Decodable)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Encodable, Decodable)]
 pub struct EscrowId(pub [u8; 32]);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Encodable, Decodable)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Encodable, Decodable)]
 pub struct ContractHash(pub [u8; 32]);
 
 impl AsRef<[u8]> for EscrowId {
     fn as_ref(&self) -> &[u8] {
         &self.0
-    }
-}
-
-impl fmt::Display for EscrowId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", hex::encode(self.0))
     }
 }
 
@@ -278,6 +273,93 @@ impl From<FallbackPolicy> for Outcome {
     }
 }
 
+fn parse_split(rest: &str) -> anyhow::Result<(u16, u16)> {
+    let (f, r) = rest
+        .split_once(':')
+        .ok_or_else(|| anyhow::anyhow!("expected <funder_bps>:<recipient_bps>"))?;
+    Ok((
+        f.parse()
+            .map_err(|e| anyhow::anyhow!("invalid funder_bps '{f}': {e}"))?,
+        r.parse()
+            .map_err(|e| anyhow::anyhow!("invalid recipient_bps '{r}': {e}"))?,
+    ))
+}
+
+impl Outcome {
+    pub fn is_valid(&self) -> bool {
+        match *self {
+            Outcome::Split {
+                funder_split_bps,
+                recipient_split_bps,
+            } => validate_split_bps(funder_split_bps, recipient_split_bps),
+            _ => true,
+        }
+    }
+}
+
+impl FallbackPolicy {
+    pub fn is_valid(&self) -> bool {
+        match *self {
+            FallbackPolicy::Split {
+                funder_split_bps,
+                recipient_split_bps,
+            } => validate_split_bps(funder_split_bps, recipient_split_bps),
+            FallbackPolicy::Refund => true,
+        }
+    }
+}
+
+impl FromStr for Outcome {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let lower = s.trim().to_ascii_lowercase();
+        let outcome = match lower.as_str() {
+            "release" => Outcome::Release,
+            "refund" => Outcome::Refund,
+            other => {
+                let rest = other.strip_prefix("split:").ok_or_else(|| {
+                    anyhow::anyhow!("invalid outcome '{s}', expected release, refund or split:<funder_bps>:<recipient_bps>")
+                })?;
+                let (funder_split_bps, recipient_split_bps) = parse_split(rest)?;
+                Outcome::Split {
+                    funder_split_bps,
+                    recipient_split_bps,
+                }
+            }
+        };
+        anyhow::ensure!(
+            outcome.is_valid(),
+            "split must add up to {SPLIT_BPS_DENOMINATOR} basis points"
+        );
+        Ok(outcome)
+    }
+}
+
+impl FromStr for FallbackPolicy {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let lower = s.trim().to_ascii_lowercase();
+        let policy = match lower.as_str() {
+            "refund" => FallbackPolicy::Refund,
+            other => {
+                let rest = other.strip_prefix("split:").ok_or_else(|| {
+                    anyhow::anyhow!("invalid fallback '{s}', expected refund or split:<funder_bps>:<recipient_bps>")
+                })?;
+                let (funder_split_bps, recipient_split_bps) = parse_split(rest)?;
+                FallbackPolicy::Split {
+                    funder_split_bps,
+                    recipient_split_bps,
+                }
+            }
+        };
+        anyhow::ensure!(
+            policy.is_valid(),
+            "split must add up to {SPLIT_BPS_DENOMINATOR} basis points"
+        );
+        Ok(policy)
+    }
+}
+
 impl fmt::Display for EscrowStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
@@ -287,35 +369,6 @@ impl fmt::Display for EscrowStatus {
             EscrowStatus::Disputed { .. } => "disputed",
             EscrowStatus::Split => "split",
         })
-    }
-}
-
-impl fmt::Display for Outcome {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Outcome::Release => f.write_str("release"),
-            Outcome::Refund => f.write_str("refund"),
-            Outcome::Split {
-                funder_split_bps,
-                recipient_split_bps,
-            } => {
-                write!(f, "split:{funder_split_bps}:{recipient_split_bps}")
-            }
-        }
-    }
-}
-
-impl fmt::Display for FallbackPolicy {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            FallbackPolicy::Refund => f.write_str("refund"),
-            FallbackPolicy::Split {
-                funder_split_bps,
-                recipient_split_bps,
-            } => {
-                write!(f, "split:{funder_split_bps}:{recipient_split_bps}")
-            }
-        }
     }
 }
 
@@ -341,67 +394,6 @@ pub enum Outcome {
         funder_split_bps: u16,
         recipient_split_bps: u16,
     },
-}
-
-use std::str::FromStr;
-
-impl FromStr for Outcome {
-    type Err = anyhow::Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_ascii_lowercase().as_str() {
-            "release" => Ok(Outcome::Release),
-            "refund" => Ok(Outcome::Refund),
-            other => {
-                let rest = other
-                    .strip_prefix("split:")
-                    .ok_or_else(|| anyhow::anyhow!(
-                        "invalid outcome '{s}', expected 'release', 'refund', or 'split:<funder_bps>:<recipient_bps>'"
-                    ))?;
-                let mut parts = rest.split(':');
-                let funder_split_bps: u16 = parts
-                    .next()
-                    .ok_or_else(|| anyhow::anyhow!("missing funder_split"))?
-                    .parse()?;
-                let recipient_split_bps: u16 = parts
-                    .next()
-                    .ok_or_else(|| anyhow::anyhow!("missing recipient_split"))?
-                    .parse()?;
-                Ok(Outcome::Split {
-                    funder_split_bps,
-                    recipient_split_bps,
-                })
-            }
-        }
-    }
-}
-
-impl FromStr for FallbackPolicy {
-    type Err = anyhow::Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_ascii_lowercase().as_str() {
-            "refund" => Ok(FallbackPolicy::Refund),
-            other => {
-                let rest = other
-                    .strip_prefix("split:")
-                    .ok_or_else(|| anyhow::anyhow!(
-                        "invalid fallback '{s}', expected 'refund' or 'split:<funder_bps>:<recipient_bps>'"
-                    ))?;
-                let mut parts = rest.split(':');
-                let funder_split_bps: u16 = parts
-                    .next()
-                    .ok_or_else(|| anyhow::anyhow!("missing funder_split"))?
-                    .parse()?;
-                let recipient_split_bps: u16 = parts
-                    .next()
-                    .ok_or_else(|| anyhow::anyhow!("missing recipient_split"))?
-                    .parse()?;
-                Ok(FallbackPolicy::Split {
-                    funder_split_bps,
-                    recipient_split_bps,
-                })
-            }
-        }
-    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -736,12 +728,7 @@ pub fn validate_contract_fields(
         return Err(EscrowContractValidationError::InvalidResolutionTimeout);
     }
 
-    if let FallbackPolicy::Split {
-        funder_split_bps,
-        recipient_split_bps,
-    } = contract.default_fallback
-        && !validate_split_bps(funder_split_bps, recipient_split_bps)
-    {
+    if !contract.default_fallback.is_valid() {
         return Err(EscrowContractValidationError::InvalidSplitRatio);
     }
 
@@ -762,7 +749,6 @@ pub fn validate_contract_fields(
             return Err(EscrowContractValidationError::DuplicateKeys);
         }
     }
-    // a fee needs someone to pay it to, otherwise every ruling fails to balance
     if contract.arbiter_fee > Amount::ZERO && contract.arbiter_fee_key.is_empty() {
         return Err(EscrowContractValidationError::MissingArbiterFeeKeys);
     }
@@ -771,3 +757,36 @@ pub fn validate_contract_fields(
     }
     Ok(())
 }
+
+macro_rules! hex_id {
+    ($t:ident) => {
+        impl fmt::Display for $t {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str(&hex::encode(self.0))
+            }
+        }
+
+        impl fmt::Debug for $t {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "{}({})", stringify!($t), self)
+            }
+        }
+
+        impl FromStr for $t {
+            type Err = anyhow::Error;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                let bytes = hex::decode(s).map_err(|e| anyhow::anyhow!("invalid hex: {e}"))?;
+
+                let arr: [u8; 32] = bytes
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("expected 32 bytes (64 hex characters)"))?;
+
+                Ok(Self(arr))
+            }
+        }
+    };
+}
+
+hex_id!(EscrowId);
+hex_id!(ContractHash);

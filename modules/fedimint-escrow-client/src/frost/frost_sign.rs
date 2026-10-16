@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime};
 use fedimint_core::runtime::{sleep, spawn};
 use fedimint_core::secp256k1::{self, Message, schnorr};
 use fedimint_core::time::{duration_since_epoch, now};
-use fedimint_escrow_common::{EscrowId, Outcome, validate_split_bps};
+use fedimint_escrow_common::{EscrowId, Outcome};
 use frost_secp256k1_tr as frost;
 use frost_secp256k1_tr::Identifier;
 use frost_secp256k1_tr::keys::{KeyPackage, PublicKeyPackage};
@@ -287,14 +287,10 @@ pub async fn sign_as_signer<T: SigningTransport + 'static>(
     decision_hash_for: impl Fn(Outcome) -> [u8; 32],
     timeout: Duration,
 ) -> Result<SignerOutcome, SigningError> {
-    if let Outcome::Split {
-        funder_split_bps,
-        recipient_split_bps,
-    } = caller_outcome
-        && !validate_split_bps(funder_split_bps, recipient_split_bps)
-    {
+    if caller_outcome.is_valid() {
         return Err(SigningError::InvalidOutcome);
     }
+
     let deadline = now().checked_add(timeout).ok_or(SigningError::Timeout)?;
     let min_signers = *key_package.min_signers() as usize;
     let caller_decision_hash = decision_hash_for(caller_outcome);
@@ -388,14 +384,10 @@ pub async fn sign_as_coordinator<T: SigningTransport + 'static>(
     decision_hash_for: impl Fn(Outcome) -> [u8; 32],
     timeout: Duration,
 ) -> Result<(Outcome, schnorr::Signature), SigningError> {
-    if let Outcome::Split {
-        funder_split_bps,
-        recipient_split_bps,
-    } = caller_outcome
-        && !validate_split_bps(funder_split_bps, recipient_split_bps)
-    {
+    if !caller_outcome.is_valid() {
         return Err(SigningError::InvalidOutcome);
     }
+
     let min_signers = *key_package.min_signers() as usize;
     let deadline = now().checked_add(timeout).ok_or(SigningError::Timeout)?;
     let consortium_pubkey = FrostDkgSessionRecord::consortium_pubkey(pubkey_package)?;
@@ -426,7 +418,7 @@ pub async fn sign_as_coordinator<T: SigningTransport + 'static>(
         if expires_at <= now()
             || expires_at > now() + MAX_VOTE_LIFETIME
             || matches!(outcome, Outcome::Split { funder_split_bps, recipient_split_bps }
-                if !validate_split_bps(funder_split_bps, recipient_split_bps))
+                if !outcome.is_valid())
         {
             continue;
         }

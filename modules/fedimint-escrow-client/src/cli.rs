@@ -1,11 +1,11 @@
 use std::time::Duration;
 use std::{ffi, iter};
 
-use anyhow::{Ok, anyhow};
 use clap::Parser;
-use fedimint_core::secp256k1::{PublicKey, schnorr};
+use fedimint_core::secp256k1::PublicKey;
+use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::{Amount, secp256k1};
-use fedimint_escrow_common::{ContractHash, EscrowId, EscrowMessage, FallbackPolicy, Outcome};
+use fedimint_escrow_common::{EscrowId, EscrowMessage, FallbackPolicy, Outcome};
 use futures::StreamExt;
 use serde::Serialize;
 
@@ -38,7 +38,7 @@ enum Opts {
     /// Get the created contract for the escrow_id
     GetContract {
         #[clap(long)]
-        escrow_id: String,
+        escrow_id: EscrowId,
     },
 
     /// List the client's escrow operations
@@ -46,20 +46,27 @@ enum Opts {
 
     /// Resolve the specific escrow with the funder signature
     ResolveEscrow {
-        escrow_id: String,
-        funder_signature: String,
+        escrow_id: EscrowId,
+        funder_signature: Signature,
     },
 
-    /// Resolve the escrow with the arbiter outcome (tx submitted by winner
-    /// party)
+    /// Resolve the escrow with the arbiter outcom
     SubmitArbiterDecision {
-        escrow_id: String,
+        escrow_id: EscrowId,
         outcome: Outcome,
-        arbiter_signature: String,
+        arbiter_signature: Signature,
     },
+
+    /// Contract get in disputed state, resolution timeout is calculated from
+    /// when the contract goes in disputed state
+    EngageArbiter { escrow_id: EscrowId },
+
+    /// parties(funder/recipient) can trigger a fallback after resolution
+    /// timeout for a disputed contract
+    TriggerFallback { escrow_id: EscrowId },
 
     /// Arbiter claims its fees for the escrow
-    ClaimPayout { escrow_id: String },
+    ClaimPayout { escrow_id: EscrowId },
 
     SignMessage {
         #[command(subcommand)]
@@ -71,21 +78,15 @@ enum Opts {
 enum SignMessageOpts {
     Resolution {
         #[clap(long)]
-        escrow_id: String,
+        escrow_id: EscrowId,
 
         #[clap(long)]
         outcome: Outcome,
-
-        #[clap(long)]
-        contract_hash: String,
     },
 
     ArbiterEngaged {
         #[clap(long)]
-        escrow_id: String,
-
-        #[clap(long)]
-        contract_hash: String,
+        escrow_id: EscrowId,
     },
 }
 
@@ -138,17 +139,12 @@ pub(crate) async fn handle_cli_command(
 
             Ok(serde_json::json!({
                 "operation_id": result.operation_id,
-                "escrow_id": hex::encode(result.escrow_id),
+                "escrow_id": result.escrow_id,
+                "contract_hash": result.contract_hash,
+                "timeout": result.timeout,
             }))
         }
         Opts::GetContract { escrow_id } => {
-            let escrow_id_bytes = hex::decode(&escrow_id)?;
-            let escrow_id = EscrowId(
-                escrow_id_bytes
-                    .try_into()
-                    .map_err(|_| anyhow::anyhow!("Invalid escrow_id length"))?,
-            );
-
             let contract = client.get_contract(escrow_id).await?;
             Ok(serde_json::to_value(contract)?)
         }
@@ -156,21 +152,34 @@ pub(crate) async fn handle_cli_command(
             let contracts = client.list_contracts().await?;
             Ok(serde_json::to_value(contracts)?)
         }
+        Opts::EngageArbiter { escrow_id } => {
+            let operation_id = client.engage_arbiter(escrow_id).await?;
+
+            let mut stream = client
+                .subscribe_escrow_resolution(operation_id)
+                .await?
+                .into_stream();
+
+            while let Some(state) = stream.next().await {
+                match &state {
+                    EscrowInputSMState::Failed { reason } => {
+                        return Err(anyhow::anyhow!("Escrow resolution failed: {reason}"));
+                    }
+                    EscrowInputSMState::Disputed => {
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+
+            Ok(serde_json::json!({
+                "operation_id": operation_id
+            }))
+        }
         Opts::ResolveEscrow {
             escrow_id,
             funder_signature,
         } => {
-            let escrow_id_bytes = hex::decode(&escrow_id)?;
-            let escrow_id = EscrowId(
-                escrow_id_bytes
-                    .try_into()
-                    .map_err(|_| anyhow::anyhow!("Invalid escrow_id length"))?,
-            );
-            let sig_bytes = hex::decode(&funder_signature)?;
-
-            let funder_signature = schnorr::Signature::from_slice(&sig_bytes)
-                .map_err(|e| anyhow::anyhow!("Invalid schnorr signature: {e}"))?;
-
             let operation_id = client.resolve_escrow(escrow_id, funder_signature).await?;
 
             let mut stream = client
@@ -180,19 +189,13 @@ pub(crate) async fn handle_cli_command(
 
             while let Some(state) = stream.next().await {
                 match &state {
-                    EscrowInputSMState::Pending => {}
-                    EscrowInputSMState::Refunded => {
-                        break;
-                    }
                     EscrowInputSMState::Released => {
                         break;
                     }
-                    EscrowInputSMState::Split => {}
                     EscrowInputSMState::Failed { reason } => {
                         return Err(anyhow::anyhow!("Escrow resolution failed: {reason}"));
                     }
-                    EscrowInputSMState::Claimed => {}
-                    EscrowInputSMState::Disputed => {}
+                    _ => {}
                 }
             }
 
@@ -205,17 +208,6 @@ pub(crate) async fn handle_cli_command(
             outcome,
             arbiter_signature,
         } => {
-            let escrow_id_bytes = hex::decode(&escrow_id)?;
-            let escrow_id = EscrowId(
-                escrow_id_bytes
-                    .try_into()
-                    .map_err(|_| anyhow::anyhow!("Invalid escrow_id length"))?,
-            );
-            let sig_bytes = hex::decode(&arbiter_signature)?;
-
-            let arbiter_signature = schnorr::Signature::from_slice(&sig_bytes)
-                .map_err(|e| anyhow::anyhow!("Invalid schnorr signature: {e}"))?;
-
             let operation_id = client
                 .submit_arbiter_decision(escrow_id, outcome, arbiter_signature)
                 .await?;
@@ -227,7 +219,6 @@ pub(crate) async fn handle_cli_command(
 
             while let Some(state) = stream.next().await {
                 match &state {
-                    EscrowInputSMState::Pending => {}
                     EscrowInputSMState::Refunded => {
                         break;
                     }
@@ -242,8 +233,7 @@ pub(crate) async fn handle_cli_command(
                             "Escrow arbiter resolution failed: {reason}"
                         ));
                     }
-                    EscrowInputSMState::Claimed => {}
-                    EscrowInputSMState::Disputed => {}
+                    _ => {}
                 }
             }
 
@@ -252,74 +242,91 @@ pub(crate) async fn handle_cli_command(
             }))
         }
         Opts::ClaimPayout { escrow_id } => {
-            let escrow_id_bytes = hex::decode(&escrow_id)?;
-            let escrow_id = EscrowId(
-                escrow_id_bytes
-                    .try_into()
-                    .map_err(|_| anyhow::anyhow!("Invalid escrow_id length"))?,
-            );
-
             let operation_id = client.claim_payout(escrow_id).await?;
+
+            let mut stream = client
+                .subscribe_claim_payout(operation_id)
+                .await?
+                .into_stream();
+
+            while let Some(state) = stream.next().await {
+                match &state {
+                    EscrowInputSMState::Failed { reason } => {
+                        return Err(anyhow::anyhow!(
+                            "Escrow arbiter resolution failed: {reason}"
+                        ));
+                    }
+                    EscrowInputSMState::Claimed => {
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+
+            Ok(serde_json::json!({
+                "operation_id": operation_id
+            }))
+        }
+        Opts::TriggerFallback { escrow_id } => {
+            let operation_id = client.trigger_fallback(escrow_id).await?;
+
+            let mut stream = client
+                .subscribe_escrow_resolution(operation_id)
+                .await?
+                .into_stream();
+
+            while let Some(state) = stream.next().await {
+                match &state {
+                    EscrowInputSMState::Refunded => {
+                        break;
+                    }
+                    EscrowInputSMState::Released => {
+                        break;
+                    }
+                    EscrowInputSMState::Split => {
+                        break;
+                    }
+                    EscrowInputSMState::Failed { reason } => {
+                        return Err(anyhow::anyhow!(
+                            "Escrow arbiter resolution failed: {reason}"
+                        ));
+                    }
+                    _ => {}
+                }
+            }
 
             Ok(serde_json::json!({
                 "operation_id": operation_id
             }))
         }
         Opts::SignMessage { message } => {
-            let escrow_message = match message {
-                SignMessageOpts::Resolution {
-                    escrow_id,
-                    outcome,
-                    contract_hash,
-                } => {
-                    let escrow_id_bytes = hex::decode(escrow_id)?;
-                    let escrow_id = EscrowId(
-                        escrow_id_bytes
-                            .try_into()
-                            .map_err(|_| anyhow::anyhow!("Invalid escrow_id"))?,
-                    );
-
-                    let contract_hash_bytes = hex::decode(contract_hash)?;
-                    let contract_hash: [u8; 32] = contract_hash_bytes
-                        .try_into()
-                        .map_err(|_| anyhow::anyhow!("Invalid contract hash"))?;
-
-                    let federation_id = client.federation_id;
-
-                    EscrowMessage::Resolution {
-                        escrow_id,
-                        federation_id,
-                        outcome,
-                        contract_hash: ContractHash(contract_hash),
+            let escrow_message =
+                match message {
+                    SignMessageOpts::Resolution { escrow_id, outcome } => {
+                        let federation_id = client.federation_id;
+                        let contract = client.get_contract(escrow_id).await?.ok_or_else(|| {
+                            anyhow::anyhow!("Contract not found for this escrow_id")
+                        })?;
+                        EscrowMessage::Resolution {
+                            escrow_id,
+                            federation_id,
+                            outcome,
+                            contract_hash: contract.contract_hash,
+                        }
                     }
-                }
 
-                SignMessageOpts::ArbiterEngaged {
-                    escrow_id,
-                    contract_hash,
-                } => {
-                    let escrow_id_bytes = hex::decode(escrow_id)?;
-                    let escrow_id = EscrowId(
-                        escrow_id_bytes
-                            .try_into()
-                            .map_err(|_| anyhow!("Invalid escrow_id"))?,
-                    );
-
-                    let contract_hash_bytes = hex::decode(contract_hash)?;
-                    let contract_hash = ContractHash(
-                        contract_hash_bytes
-                            .try_into()
-                            .map_err(|_| anyhow::anyhow!("Invalid contract hash"))?,
-                    );
-                    let federation_id = client.federation_id;
-
-                    EscrowMessage::ArbiterEngaged {
-                        escrow_id,
-                        federation_id,
-                        contract_hash,
+                    SignMessageOpts::ArbiterEngaged { escrow_id } => {
+                        let federation_id = client.federation_id;
+                        let contract = client.get_contract(escrow_id).await?.ok_or_else(|| {
+                            anyhow::anyhow!("Contract not found for this escrow_id")
+                        })?;
+                        EscrowMessage::ArbiterEngaged {
+                            escrow_id,
+                            federation_id,
+                            contract_hash: contract.contract_hash,
+                        }
                     }
-                }
-            };
+                };
 
             let sig = client.sign_message(escrow_message)?;
 
