@@ -53,6 +53,7 @@ use fedimint_core::module::{
     SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
+use fedimint_core::peer_availability::{MergedPeerAvailability, merge_peer_availability};
 use fedimint_core::runtime::sleep;
 use fedimint_core::task::{
     Elapsed, MaybeSend, MaybeSync, ShuttingDownError, TaskGroup, TaskHandle,
@@ -1215,15 +1216,32 @@ impl Client {
         active_state_exists || inactive_state_exists
     }
 
+    /// Whether any state machine of the operation is still running.
     pub async fn has_active_states(&self, operation_id: OperationId) -> bool {
-        self.db
-            .begin_transaction_nc()
-            .await
-            .find_by_prefix(&ActiveOperationStateKeyPrefix { operation_id })
-            .await
-            .next()
-            .await
-            .is_some()
+        self.executor.has_active_states(operation_id).await
+    }
+
+    /// Waits until no state machine of the operation is running any more:
+    /// every transaction it submitted has been accepted or rejected, and
+    /// every input and output state machine those started, the primary
+    /// module's among them, has reached its final state.
+    ///
+    /// This is the wait to use for "the operation is over", whatever it
+    /// consisted of. Unlike [`Self::await_primary_bitcoin_module_outputs`] it
+    /// needs no outputs named, and it also covers transactions the
+    /// operation's state machines submit along the way, such as a refund. It
+    /// does not report how the operation ended; ask the module the operation
+    /// belongs to for that.
+    ///
+    /// Returns at once if no state machine of the operation is running, which
+    /// includes an operation that never started one. State machines added to
+    /// the operation after this returns make it active again.
+    ///
+    /// State machines only make progress while the client runs, so this never
+    /// returns for an operation that still has some once the client has shut
+    /// down.
+    pub async fn await_no_active_states(&self, operation_id: OperationId) {
+        self.executor.await_no_active_states(operation_id).await;
     }
 
     /// Calculates the federation fees paid in the course of the operation.
@@ -2381,6 +2399,28 @@ impl Client {
             .await
     }
 
+    /// Asks every guardian for its view of the others' availability and
+    /// combines the answers with [`merge_peer_availability`]. Guardians that do
+    /// not answer within a few seconds are left out.
+    pub async fn peer_availability(&self) -> MergedPeerAvailability {
+        let reports =
+            futures::future::join_all(self.api.all_peers().iter().map(|peer| async move {
+                let report =
+                    runtime::timeout(Duration::from_secs(10), self.api.peer_availability(*peer))
+                        .await;
+                (*peer, report)
+            }))
+            .await
+            .into_iter()
+            .filter_map(|(peer, report)| Some((peer, report.ok()?.ok()?)))
+            .collect();
+
+        merge_peer_availability(
+            &reports,
+            fedimint_core::NumPeersExt::to_num_peers(self.api.all_peers()),
+        )
+    }
+
     /// Returns a list of guardian API URLs
     pub async fn get_peer_urls(&self) -> BTreeMap<PeerId, SafeUrl> {
         get_api_urls(&self.db, &self.config().await, self.iroh_enable_next).await
@@ -2975,6 +3015,10 @@ impl ClientContextIface for Client {
 
     async fn has_active_states(&self, operation_id: OperationId) -> bool {
         Client::has_active_states(self, operation_id).await
+    }
+
+    async fn await_no_active_states(&self, operation_id: OperationId) {
+        Client::await_no_active_states(self, operation_id).await;
     }
 
     async fn operation_exists(&self, operation_id: OperationId) -> bool {

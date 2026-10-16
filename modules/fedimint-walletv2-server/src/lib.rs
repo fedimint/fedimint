@@ -11,7 +11,9 @@
 #![allow(clippy::too_many_lines)]
 
 pub mod db;
+pub mod envs;
 mod metrics;
+mod pending;
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -32,6 +34,7 @@ use db::{
     SignaturesKey, SignaturesPrefix, SignaturesTxidPrefix, SpentOutputKey, SpentOutputPrefix,
     TxInfoIndexKey, TxInfoIndexPrefix,
 };
+use envs::FM_WALLETV2_DISABLE_MEMPOOL_SCAN_ENV;
 use fedimint_core::config::{
     ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
     TypedServerModuleConsensusConfig,
@@ -69,12 +72,15 @@ use fedimint_walletv2_common::config::{
 };
 use fedimint_walletv2_common::endpoint_constants::{
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
-    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT,
-    SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
+    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_OUTPUTS_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT,
+    RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 };
+/// Re-exported for existing callers; the constants live in the common crate so
+/// that the client can render peg-in confirmation progress against them.
+pub use fedimint_walletv2_common::{BLOCK_COUNT_VOTE_DELAY, CONFIRMATION_FINALITY_DELAY};
 use fedimint_walletv2_common::{
-    FederationWallet, MODULE_CONSENSUS_VERSION, TxInfo, WalletInputError, WalletOutputError,
-    descriptor, is_potential_receive, tweak_public_key,
+    FederationWallet, MODULE_CONSENSUS_VERSION, PendingOutputs, TxInfo, WalletInputError,
+    WalletOutputError, descriptor, is_potential_receive, tweak_public_key,
 };
 use futures::StreamExt;
 use miniscript::descriptor::Wsh;
@@ -83,6 +89,7 @@ use secp256k1::ecdsa::Signature;
 use secp256k1::{PublicKey, Scalar, SecretKey};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
+use tokio::sync::watch;
 use tracing::{debug, info};
 
 use crate::db::{
@@ -93,11 +100,6 @@ use crate::metrics::{
     WALLET_BLOCK_COUNT, WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS,
     WALLET_PEGIN_SATS, WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
 };
-
-/// Number of confirmations required for a transaction to be considered as
-/// final by the federation. The block that mines the transaction does
-/// not count towards the number of confirmations.
-pub const CONFIRMATION_FINALITY_DELAY: u64 = 6;
 
 /// Maximum number of blocks the consensus block count can advance in a single
 /// consensus item to limit the work done in one `process_consensus_item` step.
@@ -282,10 +284,18 @@ impl ServerModuleInit for WalletInit {
     }
 
     fn get_documented_env_vars(&self) -> Vec<EnvVarDoc> {
-        vec![EnvVarDoc {
-            name: FM_ENABLE_MODULE_WALLETV2_ENV,
-            description: "Set to 0/false to disable the WalletV2 module. Enabled by default.",
-        }]
+        vec![
+            EnvVarDoc {
+                name: FM_ENABLE_MODULE_WALLETV2_ENV,
+                description: "Set to 0/false to disable the WalletV2 module. Enabled by default.",
+            },
+            EnvVarDoc {
+                name: FM_WALLETV2_DISABLE_MEMPOOL_SCAN_ENV,
+                description: "Set to 1/true to stop scanning the mempool for pending receives. \
+                              Peg-in progress is then only reported once a deposit is mined, as \
+                              it already is on an esplora backend. Enabled by default.",
+            },
+        ]
     }
 
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
@@ -443,9 +453,7 @@ impl ServerModule for Wallet {
         if let Some(status) = self.btc_rpc.status() {
             assert_eq!(status.network, self.cfg.consensus.network);
 
-            let block_count_vote = status
-                .block_count
-                .saturating_sub(CONFIRMATION_FINALITY_DELAY);
+            let block_count_vote = status.block_count.saturating_sub(BLOCK_COUNT_VOTE_DELAY);
 
             let consensus_block_count = self.consensus_block_count(dbtx).await;
 
@@ -906,11 +914,21 @@ impl ServerModule for Wallet {
                     Ok(module.tx_chain(&mut dbtx).await)
                 }
             },
+            public_api_endpoint! {
+                PENDING_OUTPUTS_ENDPOINT,
+                ApiVersion::new(0, 2),
+                async |module: &Wallet, _context, _params: ()| -> PendingOutputs {
+                    // Deliberately reads local, non-consensus state rather than
+                    // the database. Clients must not request this via threshold
+                    // consensus; see the client side api for details.
+                    Ok(module.pending_outputs.borrow().clone())
+                }
+            },
         ]
     }
 
     fn supported_api_versions(&self) -> MultiApiVersion {
-        MultiApiVersion::try_from_iter([ApiVersion::new(0, 1)])
+        MultiApiVersion::try_from_iter([ApiVersion::new(0, 2)])
             .expect("walletv2 declares one API version per major version")
     }
 }
@@ -920,6 +938,17 @@ pub struct Wallet {
     cfg: WalletConfig,
     db: Database,
     btc_rpc: ServerBitcoinRpcMonitor,
+    /// Local, non-consensus view of the receive outputs this guardian can see
+    /// ahead of the consensus output log: mempool candidates plus the receive
+    /// outputs of the last [`pending::MAX_PENDING_DEPTH`] blocks, the latter
+    /// retained past finality so that clients see continuous progress.
+    ///
+    /// Maintained by the `scan_pending_receives` background task and read by
+    /// the pending outputs endpoint. This is intentionally in-memory only: it
+    /// is per-guardian divergent data that has no business in the consensus
+    /// database, and it is cheap to rebuild from a handful of blocks on
+    /// restart.
+    pending_outputs: watch::Receiver<PendingOutputs>,
 }
 
 impl Wallet {
@@ -931,10 +960,20 @@ impl Wallet {
     ) -> Wallet {
         Self::spawn_broadcast_unconfirmed_txs_task(btc_rpc.clone(), db.clone(), task_group);
 
+        let (pending_sender, pending_outputs) = watch::channel(PendingOutputs::default());
+
+        pending::spawn_pending_receive_scanner(
+            btc_rpc.clone(),
+            cfg.consensus.bitcoin_pks.consensus_hash(),
+            pending_sender,
+            task_group,
+        );
+
         Wallet {
             cfg,
             btc_rpc,
             db: db.clone(),
+            pending_outputs,
         }
     }
 

@@ -1,5 +1,6 @@
 use core::fmt;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use fedimint_api_client::api::{FederationApiExt, ServerError};
 use fedimint_api_client::query::FilterMapThreshold;
@@ -11,12 +12,16 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiRequestErased};
 use fedimint_core::secp256k1::Keypair;
 use fedimint_core::util::FmtCompact;
-use fedimint_core::{NumPeersExt, OutPoint, PeerId};
+use fedimint_core::{NumPeersExt, OutPoint, PeerId, runtime};
 use fedimint_lnv2_common::contracts::IncomingContract;
 use fedimint_lnv2_common::endpoint_constants::DECRYPTION_KEY_SHARE_ENDPOINT;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0};
 use fedimint_logging::LOG_CLIENT_MODULE_GW;
-use tpe::{AggregatePublicKey, DecryptionKeyShare, PublicKeyShare, aggregate_dk_shares};
+use serde::{Deserialize, Serialize};
+use tpe::{
+    AggregateDecryptionKey, AggregatePublicKey, DecryptionKeyShare, PublicKeyShare,
+    aggregate_dk_shares,
+};
 use tracing::warn;
 
 use super::events::{IncomingPaymentFailed, IncomingPaymentSucceeded};
@@ -76,6 +81,22 @@ impl fmt::Display for ReceiveSMState {
     }
 }
 
+/// What the funding trigger resolves to.
+///
+/// The shares are verified and aggregated in the trigger, off the async
+/// workers, so the transition only records the outcome.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum DecryptionOutcome {
+    /// The funding transaction was rejected.
+    Rejected(String),
+    /// The shares aggregate to a key the config's aggregate key does not
+    /// verify, so the config's public keys are inconsistent.
+    InconsistentKeys,
+    /// The aggregate decryption key, and the preimage if the ciphertext holds
+    /// one that matches the payment image.
+    Decrypted(AggregateDecryptionKey, Option<[u8; 32]>),
+}
+
 #[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that handles the relay of an incoming Lightning payment.
 ///
@@ -106,16 +127,16 @@ impl State for ReceiveStateMachine {
                     Self::await_decryption_shares(
                         global_context.clone(),
                         context.tpe_pks.clone(),
+                        tpe_agg_pk,
                         self.common.outpoint,
                         self.common.contract.clone(),
                     ),
-                    move |dbtx, output_outcomes, old_state| {
+                    move |dbtx, outcome, old_state| {
                         Box::pin(Self::transition_decryption_shares(
                             dbtx,
-                            output_outcomes,
+                            outcome,
                             old_state,
                             gc.clone(),
-                            tpe_agg_pk,
                             gateway_context_ready.clone(),
                         ))
                     },
@@ -139,11 +160,14 @@ impl ReceiveStateMachine {
     async fn await_decryption_shares(
         global_context: DynGlobalClientContext,
         tpe_pks: BTreeMap<PeerId, PublicKeyShare>,
+        tpe_agg_pk: AggregatePublicKey,
         outpoint: OutPoint,
         contract: IncomingContract,
-    ) -> Result<BTreeMap<PeerId, DecryptionKeyShare>, String> {
+    ) -> DecryptionOutcome {
         let num_peers = global_context.api().all_peers().to_num_peers();
         let module_api = global_context.module_api();
+        let tpe_pks = Arc::new(tpe_pks);
+        let contract = Arc::new(contract);
 
         // The decryption key share endpoint long-polls until the share exists, which
         // happens atomically when the funding transaction is accepted. We can therefore
@@ -152,21 +176,32 @@ impl ReceiveStateMachine {
         // path. Acceptance is still awaited to detect a rejected funding transaction.
         let decryption_shares = module_api.request_with_strategy_retry(
             FilterMapThreshold::new(
-                move |peer_id, share: DecryptionKeyShare| {
-                    if !contract.verify_decryption_share(
-                        tpe_pks
-                            .get(&peer_id)
-                            .ok_or(ServerError::InternalClientError(format!(
-                                "Missing TPE PK for peer {peer_id}?!"
-                            )))?,
-                        &share,
-                    ) {
-                        return Err(fedimint_api_client::api::ServerError::InvalidResponse(
-                            "Invalid decryption share".to_string(),
-                        ));
-                    }
+                {
+                    let tpe_pks = tpe_pks.clone();
+                    let contract = contract.clone();
 
-                    Ok(share)
+                    move |peer_id, share: DecryptionKeyShare| {
+                        let tpe_pks = tpe_pks.clone();
+                        let contract = contract.clone();
+
+                        // Four pairings per share; keep them off the async workers.
+                        runtime::spawn_blocking(move || {
+                            let pk =
+                                tpe_pks
+                                    .get(&peer_id)
+                                    .ok_or(ServerError::InternalClientError(format!(
+                                        "Missing TPE PK for peer {peer_id}?!"
+                                    )))?;
+
+                            if !contract.verify_decryption_share(pk, &share) {
+                                return Err(ServerError::InvalidResponse(
+                                    "Invalid decryption share".to_string(),
+                                ));
+                            }
+
+                            Ok(share)
+                        })
+                    }
                 },
                 num_peers,
             ),
@@ -177,42 +212,56 @@ impl ReceiveStateMachine {
         let decryption_shares = std::pin::pin!(decryption_shares);
         let tx_accepted = std::pin::pin!(global_context.await_tx_accepted(outpoint.txid));
 
-        match futures::future::select(decryption_shares, tx_accepted).await {
-            futures::future::Either::Left((shares, _)) => Ok(shares),
+        let decryption_shares = match futures::future::select(decryption_shares, tx_accepted).await
+        {
+            futures::future::Either::Left((shares, _)) => shares,
             futures::future::Either::Right((accepted, decryption_shares)) => {
-                accepted?;
+                if let Err(error) = accepted {
+                    return DecryptionOutcome::Rejected(error);
+                }
 
-                Ok(decryption_shares.await)
+                decryption_shares.await
             }
-        }
+        };
+
+        // Aggregating the shares and verifying the key is four more pairings.
+        runtime::spawn_blocking(move || {
+            let agg_decryption_key = aggregate_dk_shares(
+                &decryption_shares
+                    .into_iter()
+                    .map(|(peer, share)| (peer.to_usize() as u64, share))
+                    .collect(),
+            );
+
+            if !contract.verify_agg_decryption_key(&tpe_agg_pk, &agg_decryption_key) {
+                return DecryptionOutcome::InconsistentKeys;
+            }
+
+            let preimage = contract.decrypt_preimage(&agg_decryption_key);
+
+            DecryptionOutcome::Decrypted(agg_decryption_key, preimage)
+        })
+        .await
     }
 
     async fn transition_decryption_shares(
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
-        decryption_shares: Result<BTreeMap<PeerId, DecryptionKeyShare>, String>,
+        outcome: DecryptionOutcome,
         old_state: ReceiveStateMachine,
         global_context: DynGlobalClientContext,
-        tpe_agg_pk: AggregatePublicKey,
         client_ctx: GatewayClientContextV2,
     ) -> ReceiveStateMachine {
-        let decryption_shares = match decryption_shares {
-            Ok(decryption_shares) => decryption_shares
-                .into_iter()
-                .map(|(peer, share)| (peer.to_usize() as u64, share))
-                .collect(),
-            Err(error) => {
+        let payment_image = old_state.common.contract.commitment.payment_image.clone();
+
+        let (agg_decryption_key, preimage) = match outcome {
+            DecryptionOutcome::Rejected(error) => {
                 client_ctx
                     .module
                     .client_ctx
                     .log_event(
                         &mut dbtx.module_tx(),
                         IncomingPaymentFailed {
-                            payment_image: old_state
-                                .common
-                                .contract
-                                .commitment
-                                .payment_image
-                                .clone(),
+                            payment_image,
                             error: error.clone(),
                         },
                     )
@@ -220,45 +269,35 @@ impl ReceiveStateMachine {
 
                 return old_state.update(ReceiveSMState::Rejected(error));
             }
+            DecryptionOutcome::InconsistentKeys => {
+                warn!(target: LOG_CLIENT_MODULE_GW, "Failed to obtain decryption key. Client config's public keys are inconsistent");
+
+                client_ctx
+                    .module
+                    .client_ctx
+                    .log_event(
+                        &mut dbtx.module_tx(),
+                        IncomingPaymentFailed {
+                            payment_image,
+                            error: "Client config's public keys are inconsistent".to_string(),
+                        },
+                    )
+                    .await;
+
+                return old_state.update(ReceiveSMState::Failure);
+            }
+            DecryptionOutcome::Decrypted(agg_decryption_key, preimage) => {
+                (agg_decryption_key, preimage)
+            }
         };
 
-        let agg_decryption_key = aggregate_dk_shares(&decryption_shares);
-
-        if !old_state
-            .common
-            .contract
-            .verify_agg_decryption_key(&tpe_agg_pk, &agg_decryption_key)
-        {
-            warn!(target: LOG_CLIENT_MODULE_GW, "Failed to obtain decryption key. Client config's public keys are inconsistent");
-
+        if let Some(preimage) = preimage {
             client_ctx
                 .module
                 .client_ctx
                 .log_event(
                     &mut dbtx.module_tx(),
-                    IncomingPaymentFailed {
-                        payment_image: old_state.common.contract.commitment.payment_image.clone(),
-                        error: "Client config's public keys are inconsistent".to_string(),
-                    },
-                )
-                .await;
-
-            return old_state.update(ReceiveSMState::Failure);
-        }
-
-        if let Some(preimage) = old_state
-            .common
-            .contract
-            .decrypt_preimage(&agg_decryption_key)
-        {
-            client_ctx
-                .module
-                .client_ctx
-                .log_event(
-                    &mut dbtx.module_tx(),
-                    IncomingPaymentSucceeded {
-                        payment_image: old_state.common.contract.commitment.payment_image.clone(),
-                    },
+                    IncomingPaymentSucceeded { payment_image },
                 )
                 .await;
 

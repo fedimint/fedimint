@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use bitcoin_hashes::sha256;
@@ -53,12 +54,23 @@ impl MintV2ModuleApi for DynModuleApi {
         issuance_requests: Vec<NoteIssuanceRequest>,
         tbs_pks: BTreeMap<Denomination, BTreeMap<PeerId, PublicKeyShare>>,
     ) -> BTreeMap<PeerId, Vec<BlindedSignatureShare>> {
+        let issuance_requests = Arc::new(issuance_requests);
+        let tbs_pks = Arc::new(tbs_pks);
+
         self.request_with_strategy_retry(
             // This query collects a threshold of 2f + 1 valid blind signature shares
             FilterMapThreshold::new(
-                move |peer, signature_shares| {
-                    verify_blind_shares(peer, signature_shares, &issuance_requests, &tbs_pks)
-                        .map_err(|err| ServerError::InvalidResponse(err.fmt_compact().to_string()))
+                move |peer, signature_shares: Vec<BlindedSignatureShare>| {
+                    let issuance_requests = issuance_requests.clone();
+                    let tbs_pks = tbs_pks.clone();
+
+                    // Two pairings per note; keep them off the async workers.
+                    runtime::spawn_blocking(move || {
+                        verify_blind_shares(peer, signature_shares, &issuance_requests, &tbs_pks)
+                            .map_err(|err| {
+                                ServerError::InvalidResponse(err.fmt_compact().to_string())
+                            })
+                    })
                 },
                 self.all_peers().to_num_peers(),
             ),
@@ -78,12 +90,23 @@ impl MintV2ModuleApi for DynModuleApi {
             .map(NoteIssuanceRequest::blinded_message)
             .collect();
 
+        let issuance_requests = Arc::new(issuance_requests);
+        let tbs_pks = Arc::new(tbs_pks);
+
         self.request_with_strategy_retry(
             // This query collects a threshold of 2f + 1 valid blind signature shares
             FilterMapThreshold::new(
-                move |peer, signature_shares| {
-                    verify_blind_shares(peer, signature_shares, &issuance_requests, &tbs_pks)
-                        .map_err(|err| ServerError::InvalidResponse(err.fmt_compact().to_string()))
+                move |peer, signature_shares: Vec<BlindedSignatureShare>| {
+                    let issuance_requests = issuance_requests.clone();
+                    let tbs_pks = tbs_pks.clone();
+
+                    // Two pairings per note; keep them off the async workers.
+                    runtime::spawn_blocking(move || {
+                        verify_blind_shares(peer, signature_shares, &issuance_requests, &tbs_pks)
+                            .map_err(|err| {
+                                ServerError::InvalidResponse(err.fmt_compact().to_string())
+                            })
+                    })
                 },
                 self.all_peers().to_num_peers(),
             ),

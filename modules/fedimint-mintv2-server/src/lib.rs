@@ -528,11 +528,13 @@ impl ServerModule for Mint {
         vec![
             public_api_endpoint! {
                 SIGNATURE_SHARES_ENDPOINT,
-                ApiVersion::new(0, 1),
+                ApiVersion::new(0, 2),
                 async |_module: &Mint, context, range: fedimint_core::OutPointRange| -> Vec<BlindedSignatureShare> {
-                    let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
-                    Ok(get_signature_shares(&mut dbtx, range).await)
+                    // Long-polls like the LNv2 decryption key share endpoint, so a
+                    // client can request the shares before acceptance and receive
+                    // them the instant they are written; a client of API 0.1 asks
+                    // after acceptance and is answered at once.
+                    Ok(await_signature_shares(&context.db(), range).await)
                 }
             },
             public_api_endpoint! {
@@ -573,6 +575,33 @@ impl ServerModule for Mint {
             },
         ]
     }
+}
+
+/// The signature shares of the range, waiting for them to be written. A
+/// transaction's outputs are processed in one database transaction, so the
+/// range's last share appearing means every share has, and the wait is on
+/// that one. An empty or descending range, which an untrusted request may
+/// carry, has no shares.
+async fn await_signature_shares(
+    db: &Database,
+    range: fedimint_core::OutPointRange,
+) -> Vec<BlindedSignatureShare> {
+    let last = match range.checked_count() {
+        Some(count) if count > 0 => OutPoint {
+            txid: range.txid(),
+            out_idx: range.end_out_point().out_idx - 1,
+        },
+        _ => return Vec::new(),
+    };
+
+    let mut dbtx = db
+        .wait_key_check(&BlindedSignatureShareKey(last), std::convert::identity)
+        .await
+        .1;
+
+    let shares = get_signature_shares(&mut dbtx.to_ref_nc(), range).await;
+
+    shares
 }
 
 async fn get_signature_shares(
@@ -661,3 +690,6 @@ fn calculate_mint_redeemed_ecash_metrics(
         MINT_REDEEMED_ECASH_FEES_SATS.observe(fee.sats_f64());
     });
 }
+
+#[cfg(test)]
+mod tests;

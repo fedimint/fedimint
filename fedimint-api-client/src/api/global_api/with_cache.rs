@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
+use std::future::ready;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
@@ -14,12 +15,13 @@ use fedimint_core::endpoint_constants::{
     AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
     BACKUP_STATISTICS_ENDPOINT, CHAIN_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
     GET_SETUP_CODE_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, GUARDIAN_METADATA_ENDPOINT,
-    INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT, RESET_PEER_SETUP_CODES_ENDPOINT,
-    RESTART_FEDERATION_SETUP_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
-    SESSION_STATUS_V2_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT, SETUP_STATUS_ENDPOINT,
-    SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, SIGN_GUARDIAN_METADATA_ENDPOINT,
-    START_DKG_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_GUARDIAN_METADATA_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
+    INVITE_CODE_ENDPOINT, PEER_AVAILABILITY_ENDPOINT, RECOVER_ENDPOINT,
+    RESET_PEER_SETUP_CODES_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT, SESSION_COUNT_ENDPOINT,
+    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT,
+    SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT,
+    SIGN_GUARDIAN_METADATA_ENDPOINT, START_DKG_ENDPOINT, STATUS_ENDPOINT,
+    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_GUARDIAN_METADATA_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT,
 };
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
@@ -30,6 +32,7 @@ use fedimint_core::module::{
 use fedimint_core::net::api_announcement::{
     SignedApiAnnouncement, SignedApiAnnouncementSubmission,
 };
+use fedimint_core::peer_availability::PeerAvailability;
 use fedimint_core::session_outcome::{
     AcceptedItem, SessionOutcome, SessionStatus, SessionStatusV2,
 };
@@ -393,7 +396,10 @@ where
         id: &secp256k1::PublicKey,
     ) -> FederationResult<BTreeMap<PeerId, Option<ClientBackupSnapshot>>> {
         self.request_with_strategy(
-            FilterMapThreshold::new(|_, snapshot| Ok(snapshot), self.all_peers().to_num_peers()),
+            FilterMapThreshold::new(
+                |_, snapshot| ready(Ok(snapshot)),
+                self.all_peers().to_num_peers(),
+            ),
             RECOVER_ENDPOINT.to_owned(),
             ApiRequestErased::new(id),
         )
@@ -649,6 +655,15 @@ where
     async fn fedimintd_version(&self, peer_id: PeerId) -> ServerResult<String> {
         self.request_single_peer(
             FEDIMINTD_VERSION_ENDPOINT.to_owned(),
+            ApiRequestErased::default(),
+            peer_id,
+        )
+        .await
+    }
+
+    async fn peer_availability(&self, peer_id: PeerId) -> ServerResult<PeerAvailability> {
+        self.request_single_peer(
+            PEER_AVAILABILITY_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
             peer_id,
         )

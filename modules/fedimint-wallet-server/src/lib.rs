@@ -341,7 +341,7 @@ impl ServerModuleInit for WalletInit {
             },
             EnvVarDoc {
                 name: envs::FM_WALLET_FEERATE_MULTIPLIER_ENV,
-                description: "Multiplier applied to fee rate estimates (float, clamped 1.0–32.0). Defaults to 1.0.",
+                description: "Multiplier applied to fee rate estimates (float, clamped 1.0–32.0). Defaults to 2.0.",
             },
             EnvVarDoc {
                 name: FM_WALLET_FEERATE_SOURCES_ENV,

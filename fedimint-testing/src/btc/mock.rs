@@ -3,7 +3,7 @@ use std::iter::repeat_n;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use bitcoin::absolute::LockTime;
 use bitcoin::block::{Header as BlockHeader, Version};
@@ -41,6 +41,15 @@ struct FakeBitcoinTestInner {
     scripts: BTreeMap<ScriptBuf, Vec<Transaction>>,
     /// Tracks the block height a transaction was included
     txid_to_block_height: BTreeMap<Txid, usize>,
+    /// Makes every mempool transaction fetch fail, to model a backend that goes
+    /// away partway through a guardian's mempool scan.
+    ///
+    /// Listing the mempool is deliberately left working, so a scan still sees
+    /// which transactions exist and fails only when fetching them.
+    fail_mempool_tx_fetches: bool,
+    /// How long every mempool transaction fetch takes, to model a scan that
+    /// outlasts a guardian's time budget.
+    mempool_tx_fetch_delay: Duration,
 }
 
 #[derive(Clone, Debug)]
@@ -63,6 +72,8 @@ impl FakeBitcoinTest {
             proofs: BTreeMap::new(),
             scripts: BTreeMap::new(),
             txid_to_block_height: BTreeMap::new(),
+            fail_mempool_tx_fetches: false,
+            mempool_tx_fetch_delay: Duration::ZERO,
         };
         let res = FakeBitcoinTest {
             inner: std::sync::RwLock::new(inner).into(),
@@ -174,6 +185,26 @@ impl BitcoinTest for FakeBitcoinTest {
         if block_count < 100 {
             self.mine_blocks(100 - block_count).await;
         }
+    }
+
+    async fn send_without_mining(&self, address: &Address, amount: bitcoin::Amount) -> Transaction {
+        let mut inner = self.inner.write().unwrap();
+
+        let transaction = FakeBitcoinTest::new_transaction(
+            vec![TxOut {
+                value: amount,
+                script_pubkey: address.script_pubkey(),
+            }],
+            inner.blocks.len() as u32,
+        );
+
+        inner
+            .addresses
+            .insert(transaction.compute_txid(), amount.into());
+
+        inner.pending.push(transaction.clone());
+
+        transaction
     }
 
     async fn send_and_mine_block(
@@ -291,6 +322,20 @@ impl BitcoinTest for FakeBitcoinTest {
             .find(|tx| tx.compute_txid() == *txid)
             .map(std::borrow::ToOwned::to_owned)
     }
+
+    fn fail_mempool_tx_fetches(&self, failing: bool) {
+        self.inner
+            .write()
+            .expect("RwLock poisoned")
+            .fail_mempool_tx_fetches = failing;
+    }
+
+    fn delay_mempool_tx_fetches(&self, delay: Duration) {
+        self.inner
+            .write()
+            .expect("RwLock poisoned")
+            .mempool_tx_fetch_delay = delay;
+    }
 }
 
 #[async_trait]
@@ -386,6 +431,46 @@ impl IServerBitcoinRpc for FakeBitcoinTest {
 
     async fn get_feerate(&self) -> Result<Option<Feerate>> {
         Ok(Some(Feerate { sats_per_kvb: 2000 }))
+    }
+
+    /// Models a backend that can enumerate its mempool, as bitcoind can.
+    ///
+    /// Esplora-backed guardians return `None` here instead, so tests that need
+    /// to cover the no-visibility path cannot use this fixture.
+    async fn get_mempool_txids(&self) -> Result<Option<Vec<bitcoin::Txid>>> {
+        Ok(Some(
+            self.inner
+                .read()
+                .unwrap()
+                .pending
+                .iter()
+                .map(bitcoin::Transaction::compute_txid)
+                .collect(),
+        ))
+    }
+
+    async fn get_mempool_tx(&self, txid: &bitcoin::Txid) -> Result<Option<bitcoin::Transaction>> {
+        // Read before sleeping, so the lock is not held across the delay.
+        let delay = self.inner.read().unwrap().mempool_tx_fetch_delay;
+
+        if !delay.is_zero() {
+            sleep_in_test("delaying a mempool transaction fetch", delay).await;
+        }
+
+        let inner = self.inner.read().unwrap();
+
+        // Bitcoin Core reports "no such transaction" as `Ok(None)`, so an error
+        // here models the backend itself failing rather than the transaction
+        // having left the mempool.
+        if inner.fail_mempool_tx_fetches {
+            bail!("Mempool transaction fetches are failing");
+        }
+
+        Ok(inner
+            .pending
+            .iter()
+            .find(|tx| tx.compute_txid() == *txid)
+            .cloned())
     }
 
     async fn submit_transaction(&self, transaction: bitcoin::Transaction) -> anyhow::Result<()> {

@@ -51,6 +51,7 @@ use crate::consensus::db::{
     SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
 };
 use crate::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
+use crate::consensus::peer_availability::PeerActivity;
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
 use crate::metrics::{
     CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
@@ -79,10 +80,15 @@ pub struct ConsensusEngine {
     pub connections: DynP2PConnections<P2PMessage>,
     pub ci_status_senders: BTreeMap<PeerId, watch::Sender<Option<u64>>>,
     pub ord_latency_sender: watch::Sender<Option<Duration>>,
+    /// Notified whenever consensus accepts an item.
+    pub accepted_item_sender: watch::Sender<()>,
+    /// Notified whenever consensus completes a session.
+    pub completed_session_sender: watch::Sender<()>,
     pub task_group: TaskGroup,
     pub data_dir: PathBuf,
     pub db_checkpoint_retention: u64,
     pub session_timeout: Duration,
+    pub peer_activity: Arc<std::sync::Mutex<PeerActivity>>,
 }
 
 impl ConsensusEngine {
@@ -309,6 +315,7 @@ impl ConsensusEngine {
                 ),
                 Network::new(
                     connections.clone(),
+                    self.peer_activity.clone(),
                     signed_outcomes_sender,
                     signatures_sender,
                     self.db.clone(),
@@ -797,6 +804,8 @@ impl ConsensusEngine {
         dbtx.commit_tx_result()
             .await
             .expect("This is the only place where we write to this key");
+
+        self.completed_session_sender.send_replace(());
     }
 
     /// Returns the full path where the database checkpoints are stored.
@@ -1067,6 +1076,8 @@ impl ConsensusEngine {
         );
 
         dbtx.commit_tx_result().await?;
+
+        self.accepted_item_sender.send_replace(());
 
         // Counted here rather than in the caller so that only an attempt that actually
         // committed is counted: the replay and rejection paths above return early, and

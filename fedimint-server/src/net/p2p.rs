@@ -23,8 +23,8 @@ use fedimint_logging::{LOG_CONSENSUS, LOG_NET_PEER};
 use fedimint_server_core::dashboard_ui::P2PConnectionStatus;
 use futures::future::select_all;
 use futures::{FutureExt, StreamExt};
-use tokio::sync::watch;
-use tokio::time::{Instant, sleep_until};
+use tokio::sync::{Notify, watch};
+use tokio::time::{Instant, sleep_until, timeout};
 use tracing::{Instrument, debug, info, info_span, warn};
 
 use crate::metrics::{PEER_CONNECT_COUNT, PEER_DISCONNECT_COUNT, PEER_MESSAGES_COUNT};
@@ -274,6 +274,12 @@ enum P2PConnectionSMState<M> {
 /// re-published while a connection stays up.
 const METADATA_REFRESH_INTERVAL: Duration = Duration::from_secs(10);
 
+/// How long a halted send half waits for a frame that is already being read.
+/// A peer that stalls part way through a frame must not hold the state machine
+/// forever, so the wait is bounded. The same grace was proposed for both halves
+/// in #9121.
+const RECEIVE_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
+
 /// Why the send half of the connection stopped.
 enum SendHalt<M> {
     /// The state machine is shutting down.
@@ -284,6 +290,13 @@ enum SendHalt<M> {
     Replaced(DynP2PConnection<M>),
     /// The connection exceeded the maximum age and should be re-established.
     MaxAge,
+}
+
+enum ReceiveHalt {
+    /// The connection failed and should be re-established.
+    Failed(anyhow::Error),
+    /// The send half halted and the receive half stopped between frames.
+    Stopped,
 }
 
 impl<M: Send + 'static> P2PConnectionStateMachine<M> {
@@ -338,7 +351,8 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
         //
         // Replacement connections and the max-age deadline are observed inside
         // the send half, between messages, so they can never cancel a send that
-        // is already in flight.
+        // is already in flight. A send half that halts stops the receive half
+        // between frames for the same reason.
         let send_loop = Self::send_loop(
             &connection,
             &self.outgoing_receiver,
@@ -347,9 +361,12 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
             &self.our_id_str,
             &self.peer_id_str,
         );
+        let stop_receiving = Notify::new();
+
         let receive_loop = Self::receive_loop(
             &connection,
             &self.incoming_sender,
+            &stop_receiving,
             &self.our_id_str,
             &self.peer_id_str,
         );
@@ -359,6 +376,16 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
         loop {
             tokio::select! {
                 halt = &mut send_loop => {
+                    // A frame may be part way through `read_to_end`, which is not
+                    // cancel-safe, so the receive half is stopped between frames
+                    // rather than dropped here. Shutdown is the exception: nothing
+                    // reads the incoming queue after it.
+                    if !matches!(halt, SendHalt::Shutdown) {
+                        stop_receiving.notify_one();
+
+                        let _ = timeout(RECEIVE_DRAIN_TIMEOUT, &mut receive_loop).await;
+                    }
+
                     return match halt {
                         SendHalt::Shutdown => None,
                         SendHalt::Failed(e) => Some(self.disconnect(e)),
@@ -375,8 +402,11 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
                         }
                     };
                 },
-                e = &mut receive_loop => {
-                    return Some(self.disconnect(e));
+                halt = &mut receive_loop => {
+                    return Some(self.disconnect(match halt {
+                        ReceiveHalt::Failed(e) => e,
+                        ReceiveHalt::Stopped => anyhow!("Receive half stopped unprompted"),
+                    }));
                 },
                 Some(()) = async {
                     match status_updates.as_mut() {
@@ -446,13 +476,20 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
     async fn receive_loop(
         connection: &DynP2PConnection<M>,
         incoming_sender: &Sender<M>,
+        stop: &Notify,
         our_id_str: &str,
         peer_id_str: &str,
-    ) -> anyhow::Error {
+    ) -> ReceiveHalt {
         loop {
-            let mut frame = match connection.receive().await {
-                Ok(frame) => frame,
-                Err(e) => return e,
+            // `receive` is cancel-safe, `read_to_end` below is not, so this is
+            // the only point at which the halted send half may stop us.
+            let mut frame = tokio::select! {
+                biased;
+                () = stop.notified() => return ReceiveHalt::Stopped,
+                frame = connection.receive() => match frame {
+                    Ok(frame) => frame,
+                    Err(e) => return ReceiveHalt::Failed(e),
+                },
             };
 
             match frame.read_to_end().await {
@@ -465,7 +502,7 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
                         debug!(target: LOG_NET_PEER, "Incoming message channel is full");
                     }
                 }
-                Err(e) => return e,
+                Err(e) => return ReceiveHalt::Failed(e),
             }
         }
     }
