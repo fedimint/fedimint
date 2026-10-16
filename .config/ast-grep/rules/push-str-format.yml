@@ -1,0 +1,12 @@
+id: push-str-format
+language: rust
+severity: warning
+rule:
+  all:
+    - any:
+        - pattern: $BUFFER.push_str(&format!($$$ARGS))
+        - pattern: $BUFFER.push_str(format!($$$ARGS).as_str())
+    - inside:
+        kind: for_expression
+        stopBy: end
+message: Repeated `push_str(format!(...))` allocates a temporary; use `std::fmt::Write` and `let _ = write!(&mut buffer, ...)` for a String.
