@@ -208,6 +208,11 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// The two parties of the escrow, without the arbiter or fee keys.
+    pub fn is_party(&self, pubkey: &PublicKey) -> bool {
+        x_only_eq(&self.funder_key, pubkey) || x_only_eq(&self.recipient_key, pubkey)
+    }
+
     pub fn is_terminal(&self) -> bool {
         matches!(
             self.status,

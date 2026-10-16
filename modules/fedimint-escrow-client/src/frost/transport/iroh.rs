@@ -19,6 +19,7 @@ const ROUND1_TAG: u8 = 1;
 const ROUND2_TAG: u8 = 2;
 const SIGNING_TAG: u8 = 3;
 pub const DKG_ALPN: &[u8] = b"fedimint_escrow_iroh_dkg_consortium";
+const MAX_MESSAGE_BYTES: usize = 128 * 1024;
 
 #[derive(Default)]
 struct Inbox {
@@ -131,9 +132,11 @@ impl Drop for IrohDkgTransport {
     fn drop(&mut self) {
         self.accept_task.abort();
         let endpoint = self.endpoint.clone();
-        spawn("iroh-dkg-close", async move {
-            endpoint.close().await;
-        });
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn(async move {
+                endpoint.close().await;
+            });
+        }
     }
 }
 
@@ -151,7 +154,7 @@ async fn handle_incoming(
     };
 
     let (_send, mut recv) = conn.accept_bi().await?;
-    let bytes = recv.read_to_end(10 * 1024 * 1024).await?;
+    let bytes = recv.read_to_end(MAX_MESSAGE_BYTES).await?;
 
     if bytes.len() < 33 {
         anyhow::bail!("message too short to contain tag + session_id");

@@ -708,7 +708,7 @@ impl Escrow {
         claimer_pubkey: &PublicKey,
     ) -> Result<InputMeta, EscrowInputError> {
         let mut contract = self.load_contract(input.escrow_id, dbtx).await?;
-        if !contract.contains_key(claimer_pubkey) {
+        if !contract.is_party(claimer_pubkey) {
             return Err(EscrowInputError::NotAParticipant);
         }
         let EscrowStatus::Disputed { resolve_by } = contract.status else {
@@ -745,7 +745,7 @@ impl Escrow {
     ) -> Result<InputMeta, EscrowInputError> {
         let contract = self.load_contract(input.escrow_id, dbtx).await?;
         if !contract.contains_key(claimer) {
-            return Err(EscrowInputError::InternalError("invalid key".into()));
+            return Err(EscrowInputError::NotAParticipant);
         }
 
         let mut pool = dbtx

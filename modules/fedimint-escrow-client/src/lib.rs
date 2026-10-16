@@ -32,7 +32,7 @@ use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_escrow_common::config::EscrowClientConfig;
 use fedimint_escrow_common::{
     ClaimPool, ContractHash, EscrowCommonInit, EscrowContract, EscrowId, EscrowInput,
-    EscrowMessage, EscrowModuleTypes, EscrowOutput, FallbackPolicy, GetClaimAmount,
+    EscrowMessage, EscrowModuleTypes, EscrowOutput, EscrowStatus, FallbackPolicy, GetClaimAmount,
     GetContractParams, KIND, ListContractParams, Outcome, Resolution, compute_contract_hash,
     compute_escrow_message, x_only_eq,
 };
@@ -136,6 +136,12 @@ enum EscrowChildKeys {
     IrohKey = 3,
 }
 
+#[derive(Clone)]
+struct DkgSlot {
+    transport: Arc<IrohDkgTransport>,
+    running: Arc<Mutex<()>>,
+}
+
 pub struct EscrowClientModule {
     federation_id: FederationId,
     cfg: EscrowClientConfig,
@@ -144,7 +150,7 @@ pub struct EscrowClientModule {
     arbiter_fee_key: Keypair,
     secret: DerivableSecret,
     notifier: ModuleNotifier<EscrowStateMachine>,
-    dkg_transports: Mutex<BTreeMap<SessionId, Arc<IrohDkgTransport>>>,
+    dkg_transports: Mutex<BTreeMap<SessionId, DkgSlot>>,
 }
 
 impl fmt::Debug for EscrowClientModule {
@@ -672,9 +678,12 @@ impl EscrowClientModule {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
-        let is_valid_disputant = x_only_eq(&self.escrow_key.public_key(), &contract.funder_key)
-            || x_only_eq(&self.escrow_key.public_key(), &contract.recipient_key);
+        let is_valid_disputant = contract.is_party(&self.escrow_key.public_key());
 
+        anyhow::ensure!(
+            contract.status == EscrowStatus::Active,
+            "contract is not in active state"
+        );
         anyhow::ensure!(
             is_valid_disputant,
             "Should be submitted by funder/reciepient"
@@ -762,20 +771,25 @@ impl EscrowClientModule {
         let now = fedimint_core::time::duration_since_epoch().as_secs();
         anyhow::ensure!(now >= contract.timeout, "arbiter cannot act before timeout");
 
+        let signing_key = [self.escrow_key, self.arbiter_fee_key]
+            .into_iter()
+            .find(|key| contract.contains_key(&key.public_key()))
+            .ok_or_else(|| anyhow!("No matching key found in contract"))?;
+
+        let submitter_pubkey = signing_key.public_key();
+
         let input = ClientInput {
             amounts: Amounts::ZERO,
-            keys: vec![self.arbiter_fee_key],
+            keys: vec![signing_key],
             input: EscrowInput {
                 escrow_id,
                 resolution: Resolution::ArbiterOutcome {
                     arbiter_signature,
                     outcome,
-                    submitter_pubkey: self.arbiter_fee_key.public_key(),
+                    submitter_pubkey,
                 },
             },
         };
-
-        let submitter_pubkey = self.arbiter_fee_key.public_key();
 
         let input_sm = ClientInputSM {
             state_machines: Arc::new(move |out_point_range: OutPointRange| {
@@ -918,10 +932,9 @@ impl EscrowClientModule {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
-        let is_valid_claimer = x_only_eq(&self.escrow_key.public_key(), &contract.funder_key)
-            || x_only_eq(&self.escrow_key.public_key(), &contract.recipient_key);
-
+        let is_valid_claimer = contract.is_party(&self.escrow_key.public_key());
         anyhow::ensure!(is_valid_claimer, "Should be triggered by funder/reciepient");
+
         let claimer_pubkey = self.escrow_key.public_key();
         let fallback = contract.default_fallback;
         let resolution = Resolution::ResolveFallbackPolicy {
@@ -1004,27 +1017,40 @@ impl EscrowClientModule {
             FrostDkgSessionRecord::new(self_participant_id, participants, self.federation_id, db)
                 .await?;
 
-        let transport = {
-            let mut transports = self.dkg_transports.lock().await;
-            match transports.get(&session.session_id) {
-                Some(t) => t.clone(),
+        if let Ok(done) = FrostDkgSessionRecord::load_dkg_result(db, session.session_id).await {
+            self.dkg_transports.lock().await.remove(&session.session_id);
+            return Ok(done);
+        }
+
+        let slot = {
+            let mut slots = self.dkg_transports.lock().await;
+            match slots.get(&session.session_id) {
+                Some(slot) => slot.clone(),
                 None => {
                     let iroh_secret = SecretKey::from_bytes(
                         &self.iroh_identity_key().secret_key().secret_bytes(),
                     );
-                    let t = Arc::new(
-                        IrohDkgTransport::new(session.session_id, iroh_secret, iroh_peers).await?,
-                    );
-                    transports.insert(session.session_id, t.clone());
-                    t
+                    let transport =
+                        IrohDkgTransport::new(session.session_id, iroh_secret, iroh_peers).await?;
+                    let slot = DkgSlot {
+                        transport: Arc::new(transport),
+                        running: Arc::new(Mutex::new(())),
+                    };
+                    slots.insert(session.session_id, slot.clone());
+                    slot
                 }
             }
         };
 
-        let result = session.run(db, transport).await;
+        let Some(_running) = slot.running.try_lock() else {
+            return Err(DkgError::Other(anyhow!(
+                "a DKG for this consortium is already running"
+            )));
+        };
 
-        // Keep the transport only if the caller can retry the same
-        // attempt. On success or a non-transient error, drop it.
+        let result = session.run(db, slot.transport.clone()).await;
+
+        // Keep the transport only if the caller can retry the same attempt.
         let keep = matches!(&result, Err(e) if e.is_transient());
         if !keep {
             self.dkg_transports.lock().await.remove(&session.session_id);
@@ -1035,6 +1061,28 @@ impl EscrowClientModule {
     /// Give up on a consortium attempt and close its transport.
     pub async fn abort_arbiter_consortium(&self, session_id: SessionId) {
         self.dkg_transports.lock().await.remove(&session_id);
+    }
+
+    /// Wipe an unfinished DKG attempt and drop its cached transport.
+    pub async fn reset_arbiter_consortium(&self, session_id: SessionId) -> anyhow::Result<()> {
+        let db = self.client_ctx.module_db();
+        let record = {
+            let mut dbtx = db.begin_transaction_nc().await;
+            dbtx.get_value(&FrostDkgSessionRecordkey(session_id))
+                .await
+                .ok_or_else(|| anyhow!("no consortium record found for {session_id:?}"))?
+        };
+
+        let mut slots = self.dkg_transports.lock().await;
+        if let Some(slot) = slots.get(&session_id) {
+            anyhow::ensure!(
+                slot.running.try_lock().is_some(),
+                "cannot reset while the DKG is running"
+            );
+        }
+        record.reset(db).await?;
+        slots.remove(&session_id);
+        Ok(())
     }
 
     pub async fn create_arbiter_consortium_with_custom_transport<T: DkgTransport>(
