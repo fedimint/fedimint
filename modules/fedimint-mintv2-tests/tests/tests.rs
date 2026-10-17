@@ -1,6 +1,7 @@
+use std::collections::BTreeMap;
 use std::pin::pin;
 
-use anyhow::ensure;
+use anyhow::{Context, ensure};
 use assert_matches::assert_matches;
 use async_stream::stream;
 use fedimint_client::error::OperationLookupError;
@@ -18,9 +19,9 @@ use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
 use fedimint_mintv2_client::{
-    ECash, FinalReceiveOperationState, MintClientInit, MintClientModule, MintOperationMeta,
-    ReceiveECashError, ReceivePaymentEvent, ReceivePaymentStatus, ReceivePaymentUpdateEvent,
-    SendECashError, SendPaymentEvent, SpendableNote,
+    DenominationPolicy, ECash, FinalReceiveOperationState, MintClientInit, MintClientModule,
+    MintOperationMeta, ReceiveECashError, ReceivePaymentEvent, ReceivePaymentStatus,
+    ReceivePaymentUpdateEvent, SendECashError, SendPaymentEvent, SpendableNote,
 };
 use fedimint_mintv2_common::{Denomination, KIND};
 use fedimint_mintv2_server::MintInit;
@@ -606,13 +607,13 @@ async fn receive_rejects_ecash_from_another_federation() -> anyhow::Result<()> {
     // checks the mint id before submitting anything to consensus.
     let foreign_ecash = ECash::new(FederationId::dummy(), ecash.notes());
 
-    assert_matches!(
+    assert!(matches!(
         client
             .get_first_module::<MintClientModule>()?
             .receive(foreign_ecash, Value::Null)
             .await,
         Err(ReceiveECashError::WrongFederation)
-    );
+    ));
 
     Ok(())
 }
@@ -706,3 +707,92 @@ async fn send_without_funds_reports_insufficient_balance() -> anyhow::Result<()>
 }
 
 mod db;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rebalance_wallet_restores_drained_denomination() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+
+    let client = fed
+        .join_client_with_db(MemDatabase::new().into(), root_secret(&SEND_SK))
+        .await;
+
+    issue_ecash(&client, Amount::from_sats(11_000)).await?;
+
+    let mint = client.get_first_module::<MintClientModule>()?;
+    let policy = DenominationPolicy::default();
+    let smallest = Denomination(9);
+
+    // Each rebalance transaction is capped, so keep rebalancing until no managed
+    // denomination is unhealthy.
+    let mut rounds = 0;
+    while mint.rebalance_wallet(&policy).await?.is_some() {
+        rounds += 1;
+        ensure!(rounds <= 10, "rebalancing did not converge after {rounds} rounds");
+    }
+
+    let counts = mint.get_count_by_denomination().await;
+    for denomination in policy.managed_denominations() {
+        ensure!(
+            counts.get(&denomination).copied().unwrap_or(0) >= policy.min_notes_per_denomination,
+            "managed denomination {denomination} is still unhealthy"
+        );
+    }
+
+    // Spend the smallest notes exactly, the way an offline send does. Every
+    // spend is served from notes already held, so no transaction is submitted.
+    // The last note leaves the denomination empty and must record a cause.
+    let mut sends = 0;
+    while counts_of(&mint, smallest).await > 0 {
+        mint.send(smallest.amount(), Value::Null, false).await?;
+
+        sends += 1;
+        ensure!(sends <= 100, "smallest denomination did not drain");
+    }
+
+    let causes = mint.pending_rebalance_causes().await;
+    ensure!(
+        causes.len() == 1,
+        "expected exactly one pending rebalance cause, got {}",
+        causes.len()
+    );
+    ensure!(
+        causes[0].spent_amount == smallest.amount(),
+        "the cause must record the note that was spent"
+    );
+    ensure!(
+        causes[0].denomination_deficit == BTreeMap::from([(smallest, policy.target_notes_per_denomination)]),
+        "the cause must record the notes needed to restore the target, got {:?}",
+        causes[0].denomination_deficit
+    );
+
+    let operation_id = mint
+        .rebalance_wallet(&policy)
+        .await?
+        .context("a drained denomination must trigger a rebalance")?;
+
+    ensure!(
+        counts_of(&mint, smallest).await >= policy.target_notes_per_denomination,
+        "the rebalance must restore the smallest denomination to its target"
+    );
+    ensure!(
+        mint.pending_rebalance_causes().await.is_empty(),
+        "a successful rebalance must clear the pending causes"
+    );
+    ensure!(
+        mint.rebalance_wallet(&policy).await?.is_none(),
+        "a healthy wallet must not rebalance again"
+    );
+
+    tracing::info!(?operation_id, "rebalanced drained denomination");
+
+    Ok(())
+}
+
+async fn counts_of(mint: &MintClientModule, denomination: Denomination) -> u64 {
+    mint.get_count_by_denomination()
+        .await
+        .get(&denomination)
+        .copied()
+        .unwrap_or(0)
+}

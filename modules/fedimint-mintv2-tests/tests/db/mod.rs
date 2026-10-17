@@ -11,7 +11,8 @@ use fedimint_core::secp256k1::{Keypair, SECP256K1};
 use fedimint_core::{OutPoint, TransactionId};
 use fedimint_logging::TracingSetup;
 use fedimint_mintv2_client::client_db::{
-    self, RecoveryState, RecoveryStateKey, SpendableNoteKey, SpendableNotePrefix,
+    self, PendingRebalanceCausePrefix, RecoveryState, RecoveryStateKey, SpendableNoteKey,
+    SpendableNotePrefix,
 };
 use fedimint_mintv2_client::issuance::NoteIssuanceRequest;
 use fedimint_mintv2_common::{MintCommonInit, RecoveryItem};
@@ -351,6 +352,21 @@ async fn test_client_db_migrations() -> anyhow::Result<()> {
                         ensure!(
                             state.nonces == BTreeSet::from([nonce_hash(2)]),
                             "the seen nonces must round-trip unchanged"
+                        );
+                    }
+                    // The snapshot predates rebalancing, so no send has left a
+                    // pending cause. The prefix must still scan cleanly.
+                    client_db::DbKeyPrefix::PendingRebalanceCause => {
+                        let causes = dbtx
+                            .find_by_prefix(&PendingRebalanceCausePrefix)
+                            .await
+                            .collect::<Vec<_>>()
+                            .await;
+
+                        ensure!(
+                            causes.is_empty(),
+                            "no pending rebalance causes were seeded, got {}",
+                            causes.len()
                         );
                     }
                 }

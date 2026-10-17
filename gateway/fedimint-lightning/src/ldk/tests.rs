@@ -4,13 +4,14 @@ use std::sync::Arc;
 use fedimint_core::util::SafeUrl;
 use ldk_node::NodeError;
 use ldk_node::payment::PaymentDirection;
+use lightning::events::PaymentFailureReason;
 use lightning::ln::channelmanager::PaymentId;
 use lockable::LockPool;
 use tokio::sync::{RwLock, oneshot};
 
 use super::{
     GatewayLdkClient, InboundRegistrationRefusal, LdkClientInitError, PendingPaymentWakeup,
-    check_inbound_registration, get_esplora_url, htlc_completion_error,
+    check_inbound_registration, get_esplora_url, htlc_completion_error, ldk_failed_payment_error,
 };
 use crate::LightningRpcError;
 
@@ -103,7 +104,7 @@ async fn wake_pending_payment_reports_waiter_state() {
 
     // No waiter registered yet.
     assert_eq!(
-        GatewayLdkClient::wake_pending_payment(&pending_payments, payment_id).await,
+        GatewayLdkClient::wake_pending_payment(&pending_payments, payment_id, None).await,
         PendingPaymentWakeup::NoWaiter
     );
 
@@ -111,18 +112,35 @@ async fn wake_pending_payment_reports_waiter_state() {
     let (sender, receiver) = oneshot::channel();
     pending_payments.write().await.insert(payment_id, sender);
     assert_eq!(
-        GatewayLdkClient::wake_pending_payment(&pending_payments, payment_id).await,
+        GatewayLdkClient::wake_pending_payment(&pending_payments, payment_id, None).await,
         PendingPaymentWakeup::Woken
     );
-    assert!(receiver.await.is_ok());
+    assert_eq!(receiver.await, Ok(None));
     assert!(pending_payments.read().await.is_empty());
+
+    // A failed payment's waiter is handed LDK's failure reason.
+    let (sender, receiver) = oneshot::channel();
+    pending_payments.write().await.insert(payment_id, sender);
+    assert_eq!(
+        GatewayLdkClient::wake_pending_payment(
+            &pending_payments,
+            payment_id,
+            Some(PaymentFailureReason::RouteNotFound),
+        )
+        .await,
+        PendingPaymentWakeup::Woken
+    );
+    assert_eq!(
+        receiver.await,
+        Ok(Some(PaymentFailureReason::RouteNotFound))
+    );
 
     // A waiter whose receiver was dropped is reported as such and removed.
     let (sender, receiver) = oneshot::channel();
     drop(receiver);
     pending_payments.write().await.insert(payment_id, sender);
     assert_eq!(
-        GatewayLdkClient::wake_pending_payment(&pending_payments, payment_id).await,
+        GatewayLdkClient::wake_pending_payment(&pending_payments, payment_id, None).await,
         PendingPaymentWakeup::ReceiverDropped
     );
     assert!(pending_payments.read().await.is_empty());
@@ -174,4 +192,31 @@ async fn registration_try_lock_is_refused_while_pay_holds_the_hash_lock() {
 
     drop(pay_guard);
     assert!(pool.try_lock(payment_id).is_some());
+}
+
+#[test]
+fn failed_payment_carries_ldks_reason_when_known() {
+    let error = ldk_failed_payment_error(Some(PaymentFailureReason::RetriesExhausted));
+
+    assert_eq!(
+        error.to_string(),
+        "Payment failed: LDK payment failed: RetriesExhausted"
+    );
+    let diagnostics = error
+        .payment_failure_diagnostics()
+        .expect("A known failure reason must be recorded");
+    assert_eq!(
+        diagnostics.payment_failure_reason.as_deref(),
+        Some("RetriesExhausted")
+    );
+    // `ldk-node` does not report individual attempts.
+    assert!(diagnostics.failed_attempts.is_empty());
+}
+
+#[test]
+fn failed_payment_without_reason_has_no_diagnostics() {
+    let error = ldk_failed_payment_error(None);
+
+    assert_eq!(error.to_string(), "Payment failed: LDK payment failed");
+    assert_eq!(error.payment_failure_diagnostics(), None);
 }
