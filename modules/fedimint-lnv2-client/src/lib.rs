@@ -389,6 +389,18 @@ impl ClientModule for LightningClientModule {
     }
 }
 
+/// Defines the intended operation for a gateway selection.
+/// This allows the client to filter gateways by specific capabilities.
+#[derive(Debug, Clone)]
+pub enum GatewaySelection {
+    /// Select a gateway to pay a specific invoice (optimizes for routing).
+    Send { invoice: Bolt11Invoice },
+    /// Select a gateway capable of receiving payments (`receive_enabled == true`).
+    Receive,
+    /// Select any available and responsive gateway.
+    Any,
+}
+
 impl LightningClientModule {
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -468,13 +480,10 @@ impl LightningClientModule {
         }
     }
 
-    /// Selects an available gateway by querying the federation's registered
-    /// gateways, checking if one of them match the invoice's payee public
-    /// key, then queries the gateway for `RoutingInfo` to determine if it is
-    /// online.
+    /// Selects an available gateway based on the requested capability.
     pub async fn select_gateway(
         &self,
-        invoice: Option<Bolt11Invoice>,
+        selection: GatewaySelection,
     ) -> Result<(SafeUrl, RoutingInfo), SelectGatewayError> {
         let gateways = self
             .module_api
@@ -486,8 +495,9 @@ impl LightningClientModule {
             return Err(SelectGatewayError::NoGatewaysAvailable);
         }
 
-        if let Some(invoice) = invoice
-            && let Some(gateway) = self
+        // 1. If the intent is to Send, try to find the specific gateway that created the invoice
+        if let GatewaySelection::Send { invoice } = &selection {
+            if let Some(gateway) = self
                 .client_ctx
                 .module_db()
                 .begin_transaction_nc()
@@ -495,18 +505,38 @@ impl LightningClientModule {
                 .get_value(&GatewayKey(invoice.recover_payee_pub_key()))
                 .await
                 .filter(|gateway| gateways.contains(gateway))
-            && let Ok(Some(routing_info)) = self.routing_info(&gateway).await
-        {
-            return Ok((gateway, routing_info));
-        }
-
-        for gateway in gateways {
-            if let Ok(Some(routing_info)) = self.routing_info(&gateway).await {
-                return Ok((gateway, routing_info));
+            {
+                if let Ok(Some(routing_info)) = self.routing_info(&gateway).await {
+                    return Ok((gateway, routing_info));
+                }
             }
         }
 
-        Err(SelectGatewayError::GatewaysUnresponsive)
+        let mut any_responded = false;
+
+        // 2. Otherwise, iterate and find the first gateway matching our capability requirements
+        for gateway in gateways {
+            if let Ok(Some(routing_info)) = self.routing_info(&gateway).await {
+                any_responded = true;
+
+                match &selection {
+                    GatewaySelection::Send { .. } | GatewaySelection::Any => {
+                        return Ok((gateway, routing_info));
+                    }
+                    GatewaySelection::Receive => {
+                        if routing_info.receive_enabled {
+                            return Ok((gateway, routing_info));
+                        }
+                    }
+                }
+            }
+        }
+
+        if any_responded {
+            Err(SelectGatewayError::NoGatewayAcceptsReceives)
+        } else {
+            Err(SelectGatewayError::GatewaysUnresponsive)
+        }
     }
 
     /// Sends a request to each peer for their registered gateway list and
@@ -678,7 +708,7 @@ impl LightningClientModule {
                     .ok_or(SendPaymentError::FederationNotSupported)?,
             )),
             None => self
-                .select_gateway(Some(invoice.clone()))
+                .select_gateway(GatewaySelection::Send { invoice: invoice.clone() })
                 .await
                 .map_err(SendPaymentError::SelectGateway),
         }
@@ -1047,43 +1077,9 @@ impl LightningClientModule {
                 Ok((gateway, routing_info))
             }
             None => self
-                .select_receive_gateway()
+                .select_gateway(GatewaySelection::Receive)
                 .await
                 .map_err(ReceiveError::SelectGateway),
-        }
-    }
-
-    /// Selects the first registered gateway that is online and currently
-    /// accepts incoming payments for this federation. A gateway that answers
-    /// but has turned receives off is skipped rather than handed an invoice
-    /// request it would refuse.
-    async fn select_receive_gateway(&self) -> Result<(SafeUrl, RoutingInfo), SelectGatewayError> {
-        let gateways = self
-            .module_api
-            .gateways()
-            .await
-            .map_err(|e| SelectGatewayError::FailedToRequestGateways(e.to_string()))?;
-
-        if gateways.is_empty() {
-            return Err(SelectGatewayError::NoGatewaysAvailable);
-        }
-
-        let mut any_responded = false;
-
-        for gateway in gateways {
-            if let Ok(Some(routing_info)) = self.routing_info(&gateway).await {
-                any_responded = true;
-
-                if routing_info.receive_enabled {
-                    return Ok((gateway, routing_info));
-                }
-            }
-        }
-
-        if any_responded {
-            Err(SelectGatewayError::NoGatewayAcceptsReceives)
-        } else {
-            Err(SelectGatewayError::GatewaysUnresponsive)
         }
     }
 
@@ -1311,7 +1307,7 @@ impl LightningClientModule {
                 .routing_info(&gateway)
                 .await?
                 .ok_or(SpendableAmountError::FederationNotSupported)?,
-            None => self.select_gateway(None).await?.1,
+            None => self.select_gateway(GatewaySelection::Any).await?.1,
         };
 
         // The default (Lightning-swap) send fee is the higher of the gateway's
