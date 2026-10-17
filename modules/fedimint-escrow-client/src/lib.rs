@@ -768,8 +768,14 @@ impl EscrowClientModule {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
+        let EscrowStatus::Disputed { resolve_by, .. } = contract.status else {
+            bail!(
+                "escrow is {}, a ruling needs a disputed escrow",
+                contract.status
+            );
+        };
         let now = fedimint_core::time::duration_since_epoch().as_secs();
-        anyhow::ensure!(now >= contract.timeout, "arbiter cannot act before timeout");
+        anyhow::ensure!(now <= resolve_by, "the resolution window has closed");
 
         let signing_key = [self.escrow_key, self.arbiter_fee_key]
             .into_iter()
@@ -927,19 +933,36 @@ impl EscrowClientModule {
 
     pub async fn trigger_fallback(&self, escrow_id: EscrowId) -> anyhow::Result<OperationId> {
         let operation_id = OperationId::new_random();
+
         let contract = self
             .get_contract(escrow_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
-        let is_valid_claimer = contract.is_party(&self.escrow_key.public_key());
-        anyhow::ensure!(is_valid_claimer, "Should be triggered by funder/reciepient");
+        anyhow::ensure!(
+            contract.is_party(&self.escrow_key.public_key()),
+            "Should be triggered by funder/recipient"
+        );
+        let EscrowStatus::Disputed { resolve_by, .. } = contract.status else {
+            bail!(
+                "escrow is {}, fallback needs a disputed escrow",
+                contract.status
+            );
+        };
+        let now = fedimint_core::time::duration_since_epoch().as_secs();
+        anyhow::ensure!(now > resolve_by, "the resolution window is still open");
 
         let claimer_pubkey = self.escrow_key.public_key();
-        let fallback = contract.default_fallback;
-        let resolution = Resolution::ResolveFallbackPolicy {
-            claimer_pubkey,
-            fallback,
+        let fallback = contract.effective_fallback();
+
+        let action = if contract.can_swap_arbiter() {
+            EscrowAction::ArbiterSwapped
+        } else {
+            match Outcome::from(&fallback) {
+                Outcome::Release => EscrowAction::Released,
+                Outcome::Refund => EscrowAction::Refunded,
+                Outcome::Split { .. } => EscrowAction::Split,
+            }
         };
 
         let input = ClientInput {
@@ -947,7 +970,10 @@ impl EscrowClientModule {
             keys: vec![self.escrow_key],
             input: EscrowInput {
                 escrow_id,
-                resolution,
+                resolution: Resolution::ResolveFallbackPolicy {
+                    claimer_pubkey,
+                    fallback: fallback.clone(),
+                },
             },
         };
 
@@ -962,7 +988,10 @@ impl EscrowClientModule {
                                 out_point,
                                 escrow_id,
                                 amount: Amount::ZERO,
-                                resolution,
+                                resolution: Resolution::ResolveFallbackPolicy {
+                                    claimer_pubkey,
+                                    fallback: fallback.clone(),
+                                },
                             },
                             state: EscrowInputSMState::Pending,
                         })
@@ -986,10 +1015,7 @@ impl EscrowClientModule {
             EscrowOperationMeta {
                 escrow_id,
                 amount: Amount::ZERO,
-                action: match fallback {
-                    FallbackPolicy::Refund => EscrowAction::Refunded,
-                    FallbackPolicy::Split { .. } => EscrowAction::Split,
-                },
+                action: action.clone(),
                 txid,
                 out_point_indices,
             }
@@ -1246,7 +1272,7 @@ impl EscrowClientModule {
                                 EscrowAction::Released => yield EscrowInputSMState::Released,
                                 EscrowAction::Refunded  => yield EscrowInputSMState::Refunded,
                                 EscrowAction::Split => yield EscrowInputSMState::Split,
-                                EscrowAction::ArbiterEngaged => yield EscrowInputSMState::Disputed,
+                                EscrowAction::ArbiterEngaged | EscrowAction::ArbiterSwapped => yield EscrowInputSMState::Disputed,
                                 _ => yield EscrowInputSMState::Failed {
                                         reason: "unexpected action in resolution stream".to_string()
                                 }

@@ -126,12 +126,17 @@ pub struct EscrowContract {
     pub default_fallback: FallbackPolicy,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Hash, Eq, PartialEq, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Serialize, Hash, Eq, PartialEq, Deserialize, Encodable, Decodable)]
 pub enum FallbackPolicy {
     Refund,
     Split {
         funder_split_bps: u16,
         recipient_split_bps: u16,
+    },
+    SwapArbiter {
+        arbiter_key: PublicKey,
+        arbiter_fee_key: Vec<PublicKey>,
+        arbiter_fee: Amount,
     },
 }
 
@@ -140,6 +145,7 @@ pub enum EscrowTransition {
     FunderRelease,
     ArbiterEngaged { resolve_by: u64 },
     ArbiterOutcome(Outcome),
+    SwapArbiter { resolve_by: u64 },
     Fallback,
 }
 
@@ -179,31 +185,88 @@ impl EscrowContract {
 
         Ok(contract)
     }
+
+    pub fn can_swap_arbiter(&self) -> bool {
+        matches!(self.status, EscrowStatus::Disputed { swapped: false, .. })
+            && matches!(self.default_fallback, FallbackPolicy::SwapArbiter { .. })
+    }
+
+    /// The arbiter key that will sign the resolution
+    pub fn current_arbiter_key(&self) -> &PublicKey {
+        match (&self.status, &self.default_fallback) {
+            (
+                EscrowStatus::Disputed { swapped: true, .. },
+                FallbackPolicy::SwapArbiter { arbiter_key, .. },
+            ) => arbiter_key,
+            _ => &self.arbiter_key,
+        }
+    }
+
+    /// The currrent arbiter fee keys that will used to submit tx and claim
+    /// fees.
+    pub fn current_fee_keys(&self) -> &[PublicKey] {
+        match (&self.status, &self.default_fallback) {
+            (
+                EscrowStatus::Disputed { swapped: true, .. },
+                FallbackPolicy::SwapArbiter {
+                    arbiter_fee_key, ..
+                },
+            ) => arbiter_fee_key,
+            _ => &self.arbiter_fee_key,
+        }
+    }
+
+    /// Gives current arbiter fee amount
+    pub fn current_arbiter_fee(&self) -> Amount {
+        match (&self.status, &self.default_fallback) {
+            (
+                EscrowStatus::Disputed { swapped: true, .. },
+                FallbackPolicy::SwapArbiter { arbiter_fee, .. },
+            ) => *arbiter_fee,
+            _ => self.arbiter_fee,
+        }
+    }
+
+    /// The fallback that will actually run on the next trigger.
+    pub fn effective_fallback(&self) -> FallbackPolicy {
+        match &self.default_fallback {
+            FallbackPolicy::SwapArbiter { .. } if !self.can_swap_arbiter() => {
+                FallbackPolicy::Refund
+            }
+            other => other.clone(),
+        }
+    }
+
     pub async fn transition(
         &mut self,
         transition: EscrowTransition,
     ) -> Result<(), EscrowInputError> {
         let new_status = match (&self.status, transition) {
-            // Funder can release an active contract.
             (EscrowStatus::Active, EscrowTransition::FunderRelease) => EscrowStatus::Released,
-
-            // Active -> Disputed transitions by arbiter engagement.
             (EscrowStatus::Active, EscrowTransition::ArbiterEngaged { resolve_by }) => {
-                EscrowStatus::Disputed { resolve_by }
+                EscrowStatus::Disputed {
+                    resolve_by,
+                    swapped: false,
+                }
             }
-
-            // Arbiter can only resolve an already-disputed contract.
+            (EscrowStatus::Disputed { .. }, EscrowTransition::SwapArbiter { resolve_by })
+                if self.can_swap_arbiter() =>
+            {
+                EscrowStatus::Disputed {
+                    resolve_by,
+                    swapped: true,
+                }
+            }
             (EscrowStatus::Disputed { .. }, EscrowTransition::ArbiterOutcome(outcome)) => {
                 EscrowStatus::from(outcome)
             }
-
-            (EscrowStatus::Disputed { .. }, EscrowTransition::Fallback) => {
-                EscrowStatus::from(Outcome::from(self.default_fallback))
+            (EscrowStatus::Disputed { .. }, EscrowTransition::Fallback)
+                if !self.can_swap_arbiter() =>
+            {
+                EscrowStatus::from(Outcome::from(&self.default_fallback))
             }
-
             _ => return Err(EscrowInputError::InvalidStateTransition),
         };
-
         self.status = new_status;
         Ok(())
     }
@@ -225,7 +288,19 @@ impl EscrowContract {
             || x_only_eq(&self.recipient_key, pubkey)
             || x_only_eq(&self.arbiter_key, pubkey)
             || self.arbiter_fee_key.iter().any(|k| x_only_eq(k, pubkey))
+            || match &self.default_fallback {
+                FallbackPolicy::SwapArbiter {
+                    arbiter_key,
+                    arbiter_fee_key,
+                    ..
+                } => {
+                    x_only_eq(arbiter_key, pubkey)
+                        || arbiter_fee_key.iter().any(|k| x_only_eq(k, pubkey))
+                }
+                _ => false,
+            }
     }
+
     pub fn engage_message(&self) -> EscrowMessage {
         EscrowMessage::ArbiterEngaged {
             escrow_id: self.escrow_id,
@@ -249,7 +324,7 @@ pub enum EscrowStatus {
     Active,
     Released,
     Refunded,
-    Disputed { resolve_by: u64 },
+    Disputed { resolve_by: u64, swapped: bool },
     Split,
 }
 
@@ -263,16 +338,16 @@ impl From<Outcome> for EscrowStatus {
     }
 }
 
-impl From<FallbackPolicy> for Outcome {
-    fn from(policy: FallbackPolicy) -> Self {
+impl From<&FallbackPolicy> for Outcome {
+    fn from(policy: &FallbackPolicy) -> Self {
         match policy {
-            FallbackPolicy::Refund => Outcome::Refund,
+            FallbackPolicy::Refund | FallbackPolicy::SwapArbiter { .. } => Outcome::Refund,
             FallbackPolicy::Split {
                 funder_split_bps,
                 recipient_split_bps,
             } => Outcome::Split {
-                funder_split_bps,
-                recipient_split_bps,
+                funder_split_bps: *funder_split_bps,
+                recipient_split_bps: *recipient_split_bps,
             },
         }
     }
@@ -304,12 +379,12 @@ impl Outcome {
 
 impl FallbackPolicy {
     pub fn is_valid(&self) -> bool {
-        match *self {
+        match self {
             FallbackPolicy::Split {
                 funder_split_bps,
                 recipient_split_bps,
-            } => validate_split_bps(funder_split_bps, recipient_split_bps),
-            FallbackPolicy::Refund => true,
+            } => validate_split_bps(*funder_split_bps, *recipient_split_bps),
+            _ => true,
         }
     }
 }
@@ -346,6 +421,31 @@ impl FromStr for FallbackPolicy {
         let lower = s.trim().to_ascii_lowercase();
         let policy = match lower.as_str() {
             "refund" => FallbackPolicy::Refund,
+            other if other.starts_with("swap:") => {
+                let rest = &other["swap:".len()..];
+                let mut parts = rest.splitn(3, ':');
+                let arbiter_key = PublicKey::from_str(
+                    parts
+                        .next()
+                        .ok_or_else(|| anyhow::anyhow!("missing arbiter key"))?,
+                )?;
+                let fee_msats: u64 = parts
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("missing arbiter fee"))?
+                    .parse()?;
+                let arbiter_fee_key = parts
+                    .next()
+                    .unwrap_or("")
+                    .split(',')
+                    .filter(|k| !k.is_empty())
+                    .map(PublicKey::from_str)
+                    .collect::<Result<Vec<_>, _>>()?;
+                FallbackPolicy::SwapArbiter {
+                    arbiter_key,
+                    arbiter_fee_key,
+                    arbiter_fee: Amount::from_msats(fee_msats),
+                }
+            }
             other => {
                 let rest = other.strip_prefix("split:").ok_or_else(|| {
                     anyhow::anyhow!("invalid fallback '{s}', expected refund or split:<funder_bps>:<recipient_bps>")
@@ -407,7 +507,7 @@ pub struct ClaimPool {
     pub claimer: Vec<(PublicKey, Amount)>, // Split case can have two claimers
 }
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub enum Resolution {
     FunderRelease {
         funder_signature: Signature,
@@ -759,6 +859,28 @@ pub fn validate_contract_fields(
     }
     if contract.arbiter_fee_key.len() > 32 {
         return Err(EscrowContractValidationError::InvalidInput);
+    }
+
+    if let FallbackPolicy::SwapArbiter {
+        arbiter_key,
+        arbiter_fee_key,
+        arbiter_fee,
+    } = &contract.default_fallback
+    {
+        if *arbiter_fee >= contract.amount {
+            return Err(EscrowContractValidationError::InvalidArbiterFee);
+        }
+        if *arbiter_fee > Amount::ZERO && arbiter_fee_key.is_empty() {
+            return Err(EscrowContractValidationError::MissingArbiterFeeKeys);
+        }
+        if arbiter_fee_key.len() > 32 {
+            return Err(EscrowContractValidationError::InvalidInput);
+        }
+        for key in std::iter::once(arbiter_key).chain(arbiter_fee_key.iter()) {
+            if !seen.insert(x_only(key)) {
+                return Err(EscrowContractValidationError::DuplicateKeys);
+            }
+        }
     }
     Ok(())
 }

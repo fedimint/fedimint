@@ -81,6 +81,9 @@ impl State for EscrowInputStateMachine {
                                     } => match fallback {
                                         FallbackPolicy::Refund => EscrowInputSMState::Refunded,
                                         FallbackPolicy::Split { .. } => EscrowInputSMState::Split,
+                                        FallbackPolicy::SwapArbiter { .. } => {
+                                            EscrowInputSMState::Disputed
+                                        }
                                     },
                                     Resolution::ClaimPayout { claimer_pubkey: _ } => {
                                         EscrowInputSMState::Claimed

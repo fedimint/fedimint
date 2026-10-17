@@ -452,7 +452,7 @@ fn calculate_claims(
     include_fee: bool,
 ) -> Result<Vec<(PublicKey, Amount)>, EscrowInputError> {
     let fee = if include_fee {
-        contract.arbiter_fee
+        contract.current_arbiter_fee()
     } else {
         Amount::ZERO
     };
@@ -486,7 +486,7 @@ fn calculate_claims(
     };
 
     if include_fee {
-        claims.extend(split_fee(&contract.arbiter_fee_key, fee));
+        claims.extend(split_fee(contract.current_fee_keys(), fee));
     }
     claims.retain(|(_, a)| *a != Amount::ZERO);
 
@@ -588,10 +588,10 @@ impl Escrow {
             return Err(EscrowInputError::InvalidStateTransition);
         }
 
+        let claims = calculate_claims(contract, &outcome, include_fee)?;
+
         self.transition_and_persist(dbtx, contract, transition)
             .await?;
-
-        let claims = calculate_claims(contract, &outcome, include_fee)?;
         dbtx.insert_entry(
             &ClaimPoolKey(contract.escrow_id),
             &ClaimPool {
@@ -664,7 +664,11 @@ impl Escrow {
         if !contract.contains_key(submitter_pubkey) {
             return Err(EscrowInputError::NotAParticipant);
         }
-        let EscrowStatus::Disputed { resolve_by } = contract.status else {
+        let EscrowStatus::Disputed {
+            resolve_by,
+            swapped: _,
+        } = contract.status
+        else {
             return Err(if contract.is_terminal() {
                 EscrowInputError::ContractAlreadyResolved
             } else {
@@ -679,7 +683,7 @@ impl Escrow {
 
         let resolution_message = contract.resolution_message(*outcome);
         let msg_bytes = compute_escrow_message(&resolution_message);
-        if !verify_signature(&contract.arbiter_key, msg_bytes, arbiter_signature) {
+        if !verify_signature(contract.current_arbiter_key(), msg_bytes, arbiter_signature) {
             return Err(EscrowInputError::InvalidSignature);
         }
 
@@ -711,7 +715,11 @@ impl Escrow {
         if !contract.is_party(claimer_pubkey) {
             return Err(EscrowInputError::NotAParticipant);
         }
-        let EscrowStatus::Disputed { resolve_by } = contract.status else {
+        let EscrowStatus::Disputed {
+            resolve_by,
+            swapped: _,
+        } = contract.status
+        else {
             return Err(EscrowInputError::ContractNotDisputed);
         };
 
@@ -720,7 +728,25 @@ impl Escrow {
             return Err(EscrowInputError::FallbackNotAvailable);
         }
 
-        let outcome = Outcome::from(contract.default_fallback);
+        if contract.can_swap_arbiter() {
+            let new_resolve_by = now.checked_add(contract.resolution_period).ok_or_else(|| {
+                EscrowInputError::InternalError("resolution period overflows".into())
+            })?;
+            self.transition_and_persist(
+                dbtx,
+                &mut contract,
+                EscrowTransition::SwapArbiter {
+                    resolve_by: new_resolve_by,
+                },
+            )
+            .await?;
+            return Ok(InputMeta {
+                amount: TransactionItemAmounts::ZERO,
+                pub_key: *claimer_pubkey,
+            });
+        }
+
+        let outcome = Outcome::from(&contract.default_fallback);
 
         self.finalize_resolution(
             dbtx,
