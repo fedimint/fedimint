@@ -51,13 +51,20 @@ impl<T> TieredMulti<T> {
     }
 
     /// Returns the total value of all notes in msat as `Amount`
+    ///
+    /// Saturates at `u64::MAX` msat, since tier amounts can come from
+    /// untrusted decoded data. Use [`Self::checked_total_amount`] to detect
+    /// overflow.
     pub fn total_amount(&self) -> Amount {
-        let milli_sat = self
-            .0
-            .iter()
-            .map(|(tier, notes)| tier.msats * (notes.len() as u64))
-            .sum();
-        Amount::from_msats(milli_sat)
+        self.checked_total_amount().unwrap_or(Amount::from_msats(u64::MAX))
+    }
+
+    /// Returns the total value of all notes in msat as `Amount`, or `None` if
+    /// it overflows `u64`
+    pub fn checked_total_amount(&self) -> Option<Amount> {
+        self.0.iter().try_fold(Amount::ZERO, |total, (tier, notes)| {
+            total.checked_add(tier.checked_mul(notes.len() as u64)?)
+        })
     }
 
     /// Returns the number of items in all vectors
