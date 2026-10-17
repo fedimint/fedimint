@@ -242,6 +242,11 @@ impl From<FederationError> for PayBolt11InvoiceError {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum CreateBolt11InvoiceError {
+    /// The caller's extra metadata could not be serialized into the operation
+    /// log.
+    #[error("The extra metadata could not be serialized")]
+    ExtraMeta(#[source] serde_json::Error),
+
     /// This client's internal-payment markers could not be derived, so the
     /// invoice cannot be built for an internal payment.
     #[error("The internal payment markers could not be derived")]
@@ -275,6 +280,11 @@ pub enum CreateBolt11InvoiceError {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum ClaimIncomingContractError {
+    /// The caller's extra metadata could not be serialized into the operation
+    /// log.
+    #[error("The extra metadata could not be serialized")]
+    ExtraMeta(#[source] serde_json::Error),
+
     /// The federation holds no funded contract under this id, so there is
     /// nothing to claim.
     #[error("No funded contract exists for {contract_id}")]
