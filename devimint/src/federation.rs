@@ -418,15 +418,19 @@ impl Federation {
 
                 let invite_code = poll_simple("awaiting-invite-code", || async {
                     let path = format!("{peer_data_dir}/{invite_code_filename_original}");
-                    tokio::fs::read_to_string(&path)
+                    let invite_code = tokio::fs::read_to_string(&path)
                         .await
-                        .with_context(|| format!("Awaiting invite code file: {path}"))
+                        .with_context(|| format!("Awaiting invite code file: {path}"))?;
+                    // The file can be observed after `create` but before its writer has
+                    // finished writing, so a parse failure here is retried like a missing
+                    // file rather than treated as a final error.
+                    InviteCode::from_str(&invite_code)
+                        .with_context(|| format!("Parsing invite code file: {path}"))
                 })
                 .await
                 .context("Awaiting invite code file")?;
 
-                download_from_invite_code(&connectors, &InviteCode::from_str(&invite_code)?)
-                    .await?;
+                download_from_invite_code(&connectors, &invite_code).await?;
             }
 
             // copy over invite-code file to client directory
