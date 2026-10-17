@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use std::collections::BTreeMap;
 use std::ffi;
 use std::str::FromStr;
@@ -220,150 +223,281 @@ pub enum ClientCmd {
     PeerAvailability,
 }
 
+/// Reissue legacy mint notes, optionally waiting for the operation stream.
+async fn reissue_notes(
+    client: &Client,
+    oob_notes: OOBNotes,
+    wait: bool,
+) -> anyhow::Result<serde_json::Value> {
+    warn!(
+        target: LOG_CLIENT,
+        "Command deprecated. Use `fedimint-cli module mint reissue` instead."
+    );
+    let amount = oob_notes.total_amount();
+
+    let mint = client.get_first_module::<MintClientModule>()?;
+
+    let operation_id = mint.reissue_external_notes(oob_notes, ()).await?;
+    if wait {
+        let mut updates = mint
+            .subscribe_reissue_external_notes(operation_id)
+            .await
+            .expect("just created operation can't already be deleted")
+            .into_stream();
+
+        while let Some(update) = updates.next().await {
+            if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
+                bail!("Reissue failed: {e}");
+            }
+
+            debug!(target: LOG_CLIENT, ?update, "Reissue external notes state update");
+        }
+    }
+
+    Ok(serde_json::to_value(amount).expect("Amount is serializable"))
+}
+
+/// Select and spend legacy notes, preserving overpay and cancellation policy.
+async fn spend_notes(
+    client: &Client,
+    amount: Amount,
+    allow_overpay: bool,
+    timeout: u64,
+    include_invite: bool,
+) -> anyhow::Result<serde_json::Value> {
+    warn!(
+        target: LOG_CLIENT,
+        "Command deprecated. Use `fedimint-cli module mint spend` instead."
+    );
+    warn!(
+        target: LOG_CLIENT,
+        "The client will try to double-spend these notes after the duration specified by the --timeout option to recover any unclaimed e-cash."
+    );
+
+    let mint_module = client.get_first_module::<MintClientModule>()?;
+    let timeout = Duration::from_secs(timeout);
+    let (operation, notes) = if allow_overpay {
+        let (operation, notes) = mint_module
+            .spend_notes_with_selector(
+                &SelectNotesWithAtleastAmount,
+                amount,
+                Some(timeout),
+                include_invite,
+                (),
+            )
+            .await?;
+
+        let overspend_amount = notes.total_amount().saturating_sub(amount);
+        if overspend_amount != Amount::ZERO {
+            warn!(
+                target: LOG_CLIENT,
+                "Selected notes {} worth more than requested",
+                overspend_amount
+            );
+        }
+
+        (operation, notes)
+    } else {
+        mint_module
+            .spend_notes_with_selector(
+                &SelectNotesWithExactAmount,
+                amount,
+                Some(timeout),
+                include_invite,
+                (),
+            )
+            .await?
+    };
+    info!(target: LOG_CLIENT, "Spend e-cash operation: {}", operation.fmt_short());
+
+    Ok(json!({
+        "notes": notes,
+    }))
+}
+
+/// Split legacy notes into individual notes grouped by denomination.
+fn split_notes(oob_notes: &OOBNotes) -> serde_json::Value {
+    warn!(
+        target: LOG_CLIENT,
+        "Command deprecated. Use `fedimint-cli module mint split` instead."
+    );
+    let federation = oob_notes.federation_id_prefix();
+    let notes = oob_notes
+        .notes()
+        .iter()
+        .map(|(amount, notes)| {
+            let notes = notes
+                .iter()
+                .map(|note| {
+                    OOBNotes::new(
+                        federation,
+                        TieredMulti::new(vec![(amount, vec![*note])].into_iter().collect()),
+                    )
+                })
+                .collect::<Vec<_>>();
+            (amount, notes)
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    json!({
+        "notes": notes,
+    })
+}
+
+/// Combine legacy notes only when all inputs belong to the same federation.
+fn combine_notes(oob_notes: &[OOBNotes]) -> anyhow::Result<serde_json::Value> {
+    warn!(
+        target: LOG_CLIENT,
+        "Command deprecated. Use `fedimint-cli module mint combine` instead."
+    );
+    let federation_id_prefix = match oob_notes
+        .iter()
+        .map(OOBNotes::federation_id_prefix)
+        .all_equal_value()
+    {
+        Ok(id) => id,
+        Err(None) => panic!("At least one e-cash notes string expected"),
+        Err(Some((a, b))) => {
+            bail!("Trying to combine e-cash from different federations: {a} and {b}");
+        }
+    };
+
+    let combined_notes = oob_notes
+        .iter()
+        .flat_map(|notes| notes.notes().iter_items().map(|(amt, note)| (amt, *note)))
+        .collect();
+
+    let combined_oob_notes = OOBNotes::new(federation_id_prefix, combined_notes);
+
+    Ok(json!({
+        "notes": combined_oob_notes,
+    }))
+}
+
+/// Create a legacy Lightning invoice through the selected gateway.
+async fn create_invoice(
+    client: &Client,
+    amount: Amount,
+    description: String,
+    expiry_time: Option<u64>,
+    gateway_id: Option<secp256k1::PublicKey>,
+    force_internal: bool,
+) -> anyhow::Result<serde_json::Value> {
+    warn!(
+        target: LOG_CLIENT,
+        "Command deprecated. Use `fedimint-cli module ln invoice` instead."
+    );
+    let lightning_module = client.get_first_module::<LightningClientModule>()?;
+    let ln_gateway = lightning_module
+        .get_gateway(gateway_id, force_internal)
+        .await?;
+
+    let lightning_module = client.get_first_module::<LightningClientModule>()?;
+    let desc = Description::new(description)?;
+    let (operation_id, invoice, _) = lightning_module
+        .create_bolt11_invoice(
+            amount,
+            Bolt11InvoiceDescription::Direct(desc),
+            expiry_time,
+            (),
+            ln_gateway,
+        )
+        .await?;
+    Ok(serde_json::to_value(LnInvoiceResponse {
+        operation_id,
+        invoice: invoice.to_string(),
+    })
+    .expect("LnInvoiceResponse is serializable"))
+}
+
+/// Wait for invoice receipt, preserving terminal stream outcomes.
+async fn await_invoice(
+    client: &ClientHandleArc,
+    operation_id: OperationId,
+) -> anyhow::Result<serde_json::Value> {
+    warn!(
+        target: LOG_CLIENT,
+        "Command deprecated. Use `fedimint-cli module ln await-invoice` instead."
+    );
+    let lightning_module = &client.get_first_module::<LightningClientModule>()?;
+    let mut updates = lightning_module
+        .subscribe_ln_receive(operation_id)
+        .await?
+        .into_stream();
+    while let Some(update) = updates.next().await {
+        match update {
+            LnReceiveState::Claimed => {
+                return get_note_summary(client).await;
+            }
+            LnReceiveState::Canceled { reason } => {
+                return Err(reason.into());
+            }
+            _ => {}
+        }
+
+        debug!(target: LOG_CLIENT, ?update, "Await invoice state update");
+    }
+
+    Err(anyhow::anyhow!(
+        "Unexpected end of update stream. Lightning receive failed"
+    ))
+}
+
+/// Pay a legacy Lightning invoice or LNURL and wait for its final outcome.
+async fn pay_invoice(
+    client: &Client,
+    payment_info: String,
+    amount: Option<Amount>,
+    lnurl_comment: Option<String>,
+    gateway_id: Option<secp256k1::PublicKey>,
+    force_internal: bool,
+) -> anyhow::Result<serde_json::Value> {
+    warn!(
+        target: LOG_CLIENT,
+        "Command deprecated. Use `fedimint-cli module ln pay` instead."
+    );
+    let bolt11 = fedimint_ln_client::get_invoice(&payment_info, amount, lnurl_comment).await?;
+    info!(target: LOG_CLIENT, "Paying invoice: {bolt11}");
+    let lightning_module = client.get_first_module::<LightningClientModule>()?;
+    let ln_gateway = lightning_module
+        .get_gateway(gateway_id, force_internal)
+        .await?;
+
+    let lightning_module = client.get_first_module::<LightningClientModule>()?;
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee,
+    } = lightning_module
+        .pay_bolt11_invoice(ln_gateway, bolt11, ())
+        .await?;
+    let operation_id = payment_type.operation_id();
+    info!(
+        target: LOG_CLIENT,
+        "Gateway fee: {fee}, payment operation id: {}",
+        operation_id.fmt_short()
+    );
+    let lnv1 = client.get_first_module::<LightningClientModule>()?;
+    let outcome = lnv1.await_outgoing_payment(operation_id).await?;
+    Ok(serde_json::to_value(outcome).expect("Cant fail"))
+}
+
+/// Dispatch client commands using the already-open client.
 pub async fn handle_command(
     command: ClientCmd,
     client: ClientHandleArc,
 ) -> anyhow::Result<serde_json::Value> {
     match command {
         ClientCmd::Info => get_note_summary(&client).await,
-        ClientCmd::Reissue { oob_notes, wait } => {
-            warn!(
-                target: LOG_CLIENT,
-                "Command deprecated. Use `fedimint-cli module mint reissue` instead."
-            );
-            let amount = oob_notes.total_amount();
-
-            let mint = client.get_first_module::<MintClientModule>()?;
-
-            let operation_id = mint.reissue_external_notes(oob_notes, ()).await?;
-            if wait {
-                let mut updates = mint
-                    .subscribe_reissue_external_notes(operation_id)
-                    .await
-                    .expect("just created operation can't already be deleted")
-                    .into_stream();
-
-                while let Some(update) = updates.next().await {
-                    if let fedimint_mint_client::ReissueExternalNotesState::Failed(e) = update {
-                        bail!("Reissue failed: {e}");
-                    }
-
-                    debug!(target: LOG_CLIENT, ?update, "Reissue external notes state update");
-                }
-            }
-
-            Ok(serde_json::to_value(amount).expect("Amount is serializable"))
-        }
+        ClientCmd::Reissue { oob_notes, wait } => reissue_notes(&client, oob_notes, wait).await,
         ClientCmd::Spend {
             amount,
             allow_overpay,
             timeout,
             include_invite,
-        } => {
-            warn!(
-                target: LOG_CLIENT,
-                "Command deprecated. Use `fedimint-cli module mint spend` instead."
-            );
-            warn!(
-                target: LOG_CLIENT,
-                "The client will try to double-spend these notes after the duration specified by the --timeout option to recover any unclaimed e-cash."
-            );
-
-            let mint_module = client.get_first_module::<MintClientModule>()?;
-            let timeout = Duration::from_secs(timeout);
-            let (operation, notes) = if allow_overpay {
-                let (operation, notes) = mint_module
-                    .spend_notes_with_selector(
-                        &SelectNotesWithAtleastAmount,
-                        amount,
-                        Some(timeout),
-                        include_invite,
-                        (),
-                    )
-                    .await?;
-
-                let overspend_amount = notes.total_amount().saturating_sub(amount);
-                if overspend_amount != Amount::ZERO {
-                    warn!(
-                        target: LOG_CLIENT,
-                        "Selected notes {} worth more than requested",
-                        overspend_amount
-                    );
-                }
-
-                (operation, notes)
-            } else {
-                mint_module
-                    .spend_notes_with_selector(
-                        &SelectNotesWithExactAmount,
-                        amount,
-                        Some(timeout),
-                        include_invite,
-                        (),
-                    )
-                    .await?
-            };
-            info!(target: LOG_CLIENT, "Spend e-cash operation: {}", operation.fmt_short());
-
-            Ok(json!({
-                "notes": notes,
-            }))
-        }
-        ClientCmd::Split { oob_notes } => {
-            warn!(
-                target: LOG_CLIENT,
-                "Command deprecated. Use `fedimint-cli module mint split` instead."
-            );
-            let federation = oob_notes.federation_id_prefix();
-            let notes = oob_notes
-                .notes()
-                .iter()
-                .map(|(amount, notes)| {
-                    let notes = notes
-                        .iter()
-                        .map(|note| {
-                            OOBNotes::new(
-                                federation,
-                                TieredMulti::new(vec![(amount, vec![*note])].into_iter().collect()),
-                            )
-                        })
-                        .collect::<Vec<_>>();
-                    (amount, notes)
-                })
-                .collect::<BTreeMap<_, _>>();
-
-            Ok(json!({
-                "notes": notes,
-            }))
-        }
-        ClientCmd::Combine { oob_notes } => {
-            warn!(
-                target: LOG_CLIENT,
-                "Command deprecated. Use `fedimint-cli module mint combine` instead."
-            );
-            let federation_id_prefix = match oob_notes
-                .iter()
-                .map(OOBNotes::federation_id_prefix)
-                .all_equal_value()
-            {
-                Ok(id) => id,
-                Err(None) => panic!("At least one e-cash notes string expected"),
-                Err(Some((a, b))) => {
-                    bail!("Trying to combine e-cash from different federations: {a} and {b}");
-                }
-            };
-
-            let combined_notes = oob_notes
-                .iter()
-                .flat_map(|notes| notes.notes().iter_items().map(|(amt, note)| (amt, *note)))
-                .collect();
-
-            let combined_oob_notes = OOBNotes::new(federation_id_prefix, combined_notes);
-
-            Ok(json!({
-                "notes": combined_oob_notes,
-            }))
-        }
+        } => spend_notes(&client, amount, allow_overpay, timeout, include_invite).await,
+        ClientCmd::Split { oob_notes } => Ok(split_notes(&oob_notes)),
+        ClientCmd::Combine { oob_notes } => combine_notes(&oob_notes),
         ClientCmd::LnInvoice {
             amount,
             description,
@@ -371,60 +505,17 @@ pub async fn handle_command(
             gateway_id,
             force_internal,
         } => {
-            warn!(
-                target: LOG_CLIENT,
-                "Command deprecated. Use `fedimint-cli module ln invoice` instead."
-            );
-            let lightning_module = client.get_first_module::<LightningClientModule>()?;
-            let ln_gateway = lightning_module
-                .get_gateway(gateway_id, force_internal)
-                .await?;
-
-            let lightning_module = client.get_first_module::<LightningClientModule>()?;
-            let desc = Description::new(description)?;
-            let (operation_id, invoice, _) = lightning_module
-                .create_bolt11_invoice(
-                    amount,
-                    Bolt11InvoiceDescription::Direct(desc),
-                    expiry_time,
-                    (),
-                    ln_gateway,
-                )
-                .await?;
-            Ok(serde_json::to_value(LnInvoiceResponse {
-                operation_id,
-                invoice: invoice.to_string(),
-            })
-            .expect("LnInvoiceResponse is serializable"))
+            create_invoice(
+                &client,
+                amount,
+                description,
+                expiry_time,
+                gateway_id,
+                force_internal,
+            )
+            .await
         }
-        ClientCmd::AwaitInvoice { operation_id } => {
-            warn!(
-                target: LOG_CLIENT,
-                "Command deprecated. Use `fedimint-cli module ln await-invoice` instead."
-            );
-            let lightning_module = &client.get_first_module::<LightningClientModule>()?;
-            let mut updates = lightning_module
-                .subscribe_ln_receive(operation_id)
-                .await?
-                .into_stream();
-            while let Some(update) = updates.next().await {
-                match update {
-                    LnReceiveState::Claimed => {
-                        return get_note_summary(&client).await;
-                    }
-                    LnReceiveState::Canceled { reason } => {
-                        return Err(reason.into());
-                    }
-                    _ => {}
-                }
-
-                debug!(target: LOG_CLIENT, ?update, "Await invoice state update");
-            }
-
-            Err(anyhow::anyhow!(
-                "Unexpected end of update stream. Lightning receive failed"
-            ))
-        }
+        ClientCmd::AwaitInvoice { operation_id } => await_invoice(&client, operation_id).await,
         ClientCmd::LnPay {
             payment_info,
             amount,
@@ -432,35 +523,15 @@ pub async fn handle_command(
             gateway_id,
             force_internal,
         } => {
-            warn!(
-                target: LOG_CLIENT,
-                "Command deprecated. Use `fedimint-cli module ln pay` instead."
-            );
-            let bolt11 =
-                fedimint_ln_client::get_invoice(&payment_info, amount, lnurl_comment).await?;
-            info!(target: LOG_CLIENT, "Paying invoice: {bolt11}");
-            let lightning_module = client.get_first_module::<LightningClientModule>()?;
-            let ln_gateway = lightning_module
-                .get_gateway(gateway_id, force_internal)
-                .await?;
-
-            let lightning_module = client.get_first_module::<LightningClientModule>()?;
-            let OutgoingLightningPayment {
-                payment_type,
-                contract_id: _,
-                fee,
-            } = lightning_module
-                .pay_bolt11_invoice(ln_gateway, bolt11, ())
-                .await?;
-            let operation_id = payment_type.operation_id();
-            info!(
-                target: LOG_CLIENT,
-                "Gateway fee: {fee}, payment operation id: {}",
-                operation_id.fmt_short()
-            );
-            let lnv1 = client.get_first_module::<LightningClientModule>()?;
-            let outcome = lnv1.await_outgoing_payment(operation_id).await?;
-            Ok(serde_json::to_value(outcome).expect("Cant fail"))
+            pay_invoice(
+                &client,
+                payment_info,
+                amount,
+                lnurl_comment,
+                gateway_id,
+                force_internal,
+            )
+            .await
         }
         ClientCmd::AwaitLnPay { operation_id } => {
             warn!(
@@ -575,62 +646,7 @@ pub async fn handle_command(
                 "operations": operations,
             }))
         }
-        ClientCmd::Withdraw { amount, address } => {
-            warn!(
-                target: LOG_CLIENT,
-                "Command deprecated. Use `fedimint-cli module wallet withdraw` instead."
-            );
-            let wallet_module = client.get_first_module::<WalletClientModule>()?;
-            let address = address.require_network(wallet_module.get_network())?;
-            let (amount, fees) = match amount {
-                // The on-chain fee is only part of the cost of withdrawing
-                // everything: funding the peg-out output also incurs the
-                // federation's per-note fees. The returned fees are quoted at
-                // the returned amount, so they must be used together.
-                BitcoinAmountOrAll::All => {
-                    let balance = client.get_balance_for_btc().await?;
-                    wallet_module
-                        .max_withdrawable_amount(&address, balance)
-                        .await?
-                }
-                BitcoinAmountOrAll::Amount(amount) => (
-                    amount,
-                    wallet_module.get_withdraw_fees(&address, amount).await?,
-                ),
-            };
-            let absolute_fees = fees.amount();
-
-            info!(
-                target: LOG_CLIENT,
-                "Attempting withdraw with fees: {fees:?}"
-            );
-
-            let operation_id = wallet_module.withdraw(&address, amount, fees, ()).await?;
-
-            let mut updates = wallet_module
-                .subscribe_withdraw_updates(operation_id)
-                .await?
-                .into_stream();
-
-            while let Some(update) = updates.next().await {
-                debug!(target: LOG_CLIENT, ?update, "Withdraw state update");
-
-                match update {
-                    WithdrawState::Succeeded(txid) => {
-                        return Ok(json!({
-                            "txid": txid.consensus_encode_to_hex(),
-                            "fees_sat": absolute_fees.to_sat(),
-                        }));
-                    }
-                    WithdrawState::Failed(e) => {
-                        bail!("Withdraw failed: {e}");
-                    }
-                    WithdrawState::Created => {}
-                }
-            }
-
-            unreachable!("Update stream ended without outcome");
-        }
+        ClientCmd::Withdraw { amount, address } => withdraw(&client, amount, address).await,
         ClientCmd::DiscoverVersion => {
             Ok(json!({ "versions": client.load_and_refresh_common_api_version().await? }))
         }
@@ -683,6 +699,60 @@ pub async fn handle_command(
         ClientCmd::PeerAvailability => Ok(serde_json::to_value(client.peer_availability().await)
             .expect("Peer availability is serializable")),
     }
+}
+
+/// Quote and execute a legacy withdrawal, keeping its amount and fees paired.
+async fn withdraw(
+    client: &Client,
+    amount: BitcoinAmountOrAll,
+    address: bitcoin::Address<NetworkUnchecked>,
+) -> anyhow::Result<serde_json::Value> {
+    warn!(
+        target: LOG_CLIENT,
+        "Command deprecated. Use `fedimint-cli module wallet withdraw` instead."
+    );
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
+    let address = address.require_network(wallet_module.get_network())?;
+    let (amount, fees) = match amount {
+        // The on-chain fee is only part of the cost of withdrawing
+        // everything: funding the peg-out output also incurs the
+        // federation's per-note fees. The returned fees are quoted at
+        // the returned amount, so they must be used together.
+        BitcoinAmountOrAll::All => {
+            let balance = client.get_balance_for_btc().await?;
+            wallet_module
+                .max_withdrawable_amount(&address, balance)
+                .await?
+        }
+        BitcoinAmountOrAll::Amount(amount) => (
+            amount,
+            wallet_module.get_withdraw_fees(&address, amount).await?,
+        ),
+    };
+    let absolute_fees = fees.amount();
+    info!(
+        target: LOG_CLIENT,
+        "Attempting withdraw with fees: {fees:?}"
+    );
+    let operation_id = wallet_module.withdraw(&address, amount, fees, ()).await?;
+    let mut updates = wallet_module
+        .subscribe_withdraw_updates(operation_id)
+        .await?
+        .into_stream();
+    while let Some(update) = updates.next().await {
+        debug!(target: LOG_CLIENT, ?update, "Withdraw state update");
+        match update {
+            WithdrawState::Succeeded(txid) => {
+                return Ok(json!({
+                    "txid": txid.consensus_encode_to_hex(),
+                    "fees_sat": absolute_fees.to_sat(),
+                }));
+            }
+            WithdrawState::Failed(e) => bail!("Withdraw failed: {e}"),
+            WithdrawState::Created => {}
+        }
+    }
+    unreachable!("Update stream ended without outcome");
 }
 
 async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json::Value> {
