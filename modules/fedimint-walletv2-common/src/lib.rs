@@ -30,7 +30,9 @@ pub mod endpoint_constants;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("walletv2");
 
-pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(1, 0);
+/// Version 1.1: Changed pending transaction cap from panic to rejection (graceful error handling)
+/// Requires consensus activation for mixed-version rollout compatibility.
+pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(1, 1);
 
 /// Number of confirmations required for a transaction to be considered as
 /// final by the federation. The block that mines the transaction does
@@ -327,6 +329,8 @@ pub enum WalletInputError {
     InsufficientTotalFee,
     #[error("Constructing the pegin transaction caused an arithmetic overflow")]
     ArithmeticOverflow,
+    #[error("Too many pending transactions. Please try again later.")]
+    PendingTxCapExceeded,
 }
 
 #[derive(Debug, Error, Encodable, Decodable, Hash, Clone, Eq, PartialEq)]
@@ -347,6 +351,16 @@ pub enum WalletOutputError {
     ArithmeticOverflow,
     #[error("Unknown script variant")]
     UnknownScriptVariant,
+    #[error("Too many pending transactions. Please try again later.")]
+    PendingTxCapExceeded,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable)]
+pub enum FeeError {
+    #[error("No consensus feerate available at the moment. Please try again later.")]
+    NoConsensusFeerateAvailable,
+    #[error("Pending transaction count ({0}) exceeds maximum (32)")]
+    PendingTxCapExceeded(usize),
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Encodable, Decodable, Serialize, Deserialize)]
