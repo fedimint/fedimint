@@ -20,7 +20,7 @@ use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{BitcoinHash, TransactionId, secp256k1, time};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::WalletInput;
-use fedimint_wallet_common::txoproof::PegInProof;
+use fedimint_wallet_common::txoproof::{PegInProof, PegInProofError};
 use futures::StreamExt as _;
 use secp256k1::Keypair;
 use tokio::sync::watch;
@@ -466,14 +466,29 @@ async fn claim_peg_in(
         txout_proof: TxOutProof,
         operation_id: OperationId,
         federation_knows_utxo: bool,
-    ) -> Option<OutPointRange> {
+    ) -> Result<Option<OutPointRange>, CheckPegInsError> {
+        // A proof the Bitcoin backend built for a different transaction fails
+        // here without anyone forging anything, and the backend is federation
+        // suggested by default. Reporting the error leaves the deposit
+        // unclaimed so the monitor retries it; returning `None` instead would
+        // record it as claimed for good, since the caller writes
+        // `ClaimedPegInKey` either way and a claimed entry is never rechecked.
         let pegin_proof = PegInProof::new(
             txout_proof,
             btc_transaction.clone(),
             out_idx,
             tweak_key.public_key(),
         )
-        .expect("TODO: handle API returning faulty proofs");
+        .inspect_err(|error| {
+            warn!(
+                target: LOG_CLIENT_MODULE_WALLET,
+                error = %error.fmt_compact(),
+                txid = %btc_transaction.compute_txid(),
+                %out_idx,
+                "Bitcoin backend returned a proof that does not cover this deposit; leaving it unclaimed so it is retried"
+            );
+        })
+        .map_err(CheckPegInsError::FaultyProof)?;
 
         let amount = pegin_proof.tx_output().value.into();
         let wallet_input = if federation_knows_utxo {
@@ -490,7 +505,7 @@ async fn claim_peg_in(
 
         if amount <= client_ctx.self_ref().cfg().fee_consensus.peg_in_abs {
             warn!(target: LOG_CLIENT_MODULE_WALLET, "We won't claim a deposit lower than the deposit fee");
-            return None;
+            return Ok(None);
         }
 
         let txid = btc_transaction.compute_txid();
@@ -517,7 +532,7 @@ async fn claim_peg_in(
             )
             .await;
 
-        Some(
+        Ok(Some(
             client_ctx
                 .claim_inputs(
                     dbtx,
@@ -526,7 +541,7 @@ async fn claim_peg_in(
                 )
                 .await
                 .expect("Cannot claim input, additional funding needed"),
-        )
+        ))
     }
 
     let tx_out_proof = &tx_out_proof;
@@ -548,7 +563,7 @@ async fn claim_peg_in(
                         operation_id,
                         federation_knows_utxo,
                     )
-                    .await;
+                    .await?;
 
                     let claimed_pegin_data = if let Some(change_range) = maybe_change_range {
                         ClaimedPegInData {
@@ -571,7 +586,7 @@ async fn claim_peg_in(
                     )
                     .await;
 
-                    Ok::<_, Infallible>(())
+                    Ok::<_, CheckPegInsError>(())
                 })
             },
             Some(100),
@@ -585,7 +600,7 @@ async fn claim_peg_in(
                 attempts,
                 source: last_error,
             },
-            AutocommitError::ClosureError { error, .. } => match error {},
+            AutocommitError::ClosureError { error, .. } => error,
         })?;
 
     Ok(())
@@ -622,6 +637,12 @@ enum CheckPegInsError {
     /// deposit's proof.
     #[error(transparent)]
     BitcoinRpc(#[from] BitcoinRpcError),
+
+    /// The Bitcoin backend answered with a proof that does not cover the
+    /// deposit it was asked about, so the deposit stays unclaimed and is
+    /// retried rather than recorded as claimed.
+    #[error("Bitcoin backend returned a proof that does not cover the deposit")]
+    FaultyProof(#[source] PegInProofError),
 
     /// The claim of a confirmed deposit could not be committed.
     #[error("Failed to commit after {attempts} attempts")]
