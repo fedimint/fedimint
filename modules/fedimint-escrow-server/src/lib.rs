@@ -13,19 +13,21 @@ use fedimint_core::module::{
 };
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::secp256k1::schnorr::Signature;
+use fedimint_core::time::duration_since_epoch;
 use fedimint_core::{
-    Amount, InPoint, OutPoint, PeerId, apply, async_trait_maybe_send, push_db_pair_items, secp256k1,
+    Amount, InPoint, NumPeers, OutPoint, PeerId, apply, async_trait_maybe_send, push_db_pair_items,
+    secp256k1,
 };
 use fedimint_escrow_common::config::{
     EscrowClientConfig, EscrowConfig, EscrowConfigConsensus, EscrowConfigPrivate,
 };
 use fedimint_escrow_common::{
-    ClaimPool, ContractHash, EscrowCommonInit, EscrowConsensusItem, EscrowContract, EscrowId,
-    EscrowInput, EscrowInputError, EscrowModuleTypes, EscrowOutput, EscrowOutputError,
-    EscrowOutputOutcome, EscrowStatus, EscrowTransition, GET_CLAIM_AMOUNT_ENDPOINT,
-    GET_CONTRACT_ENDPOINT, GetClaimAmount, GetContractParams, KIND, LIST_CONTRACT_BY_KEY_ENDPOINT,
-    ListContractParams, MODULE_CONSENSUS_VERSION, Outcome, Resolution, compute_contract_hash,
-    compute_escrow_message, validate_contract_fields, x_only_eq,
+    CONSENSUS_UNIX_TIME_ENDPOINT, ClaimPool, ContractHash, EscrowCommonInit, EscrowConsensusItem,
+    EscrowContract, EscrowId, EscrowInput, EscrowInputError, EscrowModuleTypes, EscrowOutput,
+    EscrowOutputError, EscrowOutputOutcome, EscrowStatus, EscrowTransition,
+    GET_CLAIM_AMOUNT_ENDPOINT, GET_CONTRACT_ENDPOINT, GetClaimAmount, GetContractParams, KIND,
+    LIST_CONTRACT_BY_KEY_ENDPOINT, ListContractParams, MODULE_CONSENSUS_VERSION, Outcome,
+    Resolution, compute_contract_hash, compute_escrow_message, validate_contract_fields, x_only_eq,
 };
 use fedimint_logging::LOG_MODULE_ESCROW;
 use fedimint_server_core::config::PeerHandleOps;
@@ -40,7 +42,7 @@ use tracing::{debug, info};
 mod db;
 use crate::db::{
     ClaimPoolKey, ClaimPoolPrefix, DbKeyPrefix, EscrowContractKey, EscrowContractPrefix,
-    EscrowOutputOutcomeKey, EscrowOutputOutcomePrefix,
+    EscrowOutputOutcomeKey, EscrowOutputOutcomePrefix, UnixTimeVoteKey, UnixTimeVotePrefix,
 };
 
 #[derive(Debug, Clone)]
@@ -82,6 +84,16 @@ impl ModuleInit for EscrowInit {
                         "Claim Pool"
                     );
                 }
+                DbKeyPrefix::UnixTimeVote => {
+                    push_db_pair_items!(
+                        dbtx,
+                        UnixTimeVotePrefix,
+                        UnixTimeVoteKey,
+                        u64,
+                        contracts,
+                        "Unix Time Votes"
+                    );
+                }
                 DbKeyPrefix::OutputOutcome => {
                     push_db_pair_items!(
                         dbtx,
@@ -113,6 +125,7 @@ impl ServerModuleInit for EscrowInit {
     async fn init(&self, args: &ServerModuleInitArgs<Self>) -> anyhow::Result<Self::Module> {
         Ok(Escrow {
             cfg: args.cfg().to_typed()?,
+            num_peers: args.num_peers(),
         })
     }
 
@@ -174,6 +187,7 @@ impl ServerModuleInit for EscrowInit {
 #[derive(Debug)]
 pub struct Escrow {
     pub cfg: EscrowConfig,
+    num_peers: NumPeers,
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -185,16 +199,32 @@ impl ServerModule for Escrow {
         &self,
         _dbtx: &mut DatabaseTransaction<'_>,
     ) -> Vec<EscrowConsensusItem> {
-        Vec::new()
+        // the local clock is only used here, for voting. 60s granularity so
+        // identical votes are deduplicated instead of stored every second
+        vec![EscrowConsensusItem::UnixTimeVote(
+            60 * (duration_since_epoch().as_secs() / 60),
+        )]
     }
 
     async fn process_consensus_item<'a, 'b>(
         &'a self,
-        _dbtx: &mut DatabaseTransaction<'b>,
-        _consensus_item: EscrowConsensusItem,
-        _peer_id: PeerId,
+        dbtx: &mut DatabaseTransaction<'b>,
+        item: EscrowConsensusItem,
+        peer: PeerId,
     ) -> anyhow::Result<()> {
-        anyhow::bail!("The escrow module does not use consensus items");
+        match item {
+            EscrowConsensusItem::UnixTimeVote(vote) => {
+                let current = dbtx
+                    .insert_entry(&UnixTimeVoteKey(peer), &vote)
+                    .await
+                    .unwrap_or(0);
+                anyhow::ensure!(current < vote, "Unix time vote is redundant");
+                Ok(())
+            }
+            EscrowConsensusItem::Default { variant, .. } => {
+                anyhow::bail!("unknown escrow consensus item variant {variant}")
+            }
+        }
     }
 
     // Contract Resolution
@@ -254,7 +284,7 @@ impl ServerModule for Escrow {
     ) -> Result<TransactionItemAmounts, EscrowOutputError> {
         let contract = &output.contract;
 
-        let now = fedimint_core::time::duration_since_epoch().as_secs();
+        let now = self.consensus_unix_time(dbtx).await;
         validate_contract_fields(contract, now).map_err(EscrowOutputError::InvalidInputs)?;
 
         let verified = verify_contract_hash(&contract.contract_hash.0, contract);
@@ -397,6 +427,15 @@ impl ServerModule for Escrow {
                     Ok(contracts)
                 }
             },
+            public_api_endpoint! {
+                CONSENSUS_UNIX_TIME_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |module: &Escrow, context, _params: ()| -> u64 {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(module.consensus_unix_time(&mut dbtx).await)
+                }
+            },
         ]
     }
 }
@@ -501,8 +540,20 @@ fn calculate_claims(
 }
 
 impl Escrow {
-    pub fn new(cfg: EscrowConfig) -> Self {
-        Self { cfg }
+    async fn consensus_unix_time(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {
+        let mut times: Vec<u64> = dbtx
+            .find_by_prefix(&UnixTimeVotePrefix)
+            .await
+            .map(|(_, t)| t)
+            .collect()
+            .await;
+        times.sort_unstable();
+        times.reverse();
+        // highest time that a threshold of guardians has reached
+        times
+            .get(self.num_peers.threshold() - 1)
+            .copied()
+            .unwrap_or(0)
     }
 
     async fn load_contract(
@@ -526,20 +577,12 @@ impl Escrow {
         contract: &mut EscrowContract,
         transition: EscrowTransition,
     ) -> Result<(), EscrowInputError> {
-        contract.transition(transition).await?;
+        contract.transition(transition)?;
 
         dbtx.insert_entry(&EscrowContractKey(contract.escrow_id), contract)
             .await;
 
         Ok(())
-    }
-
-    fn ensure_active(contract: &EscrowContract) -> Result<(), EscrowInputError> {
-        match contract.status {
-            EscrowStatus::Active => Ok(()),
-            EscrowStatus::Disputed { .. } => Err(EscrowInputError::ContractDisputed),
-            _ => Err(EscrowInputError::ContractAlreadyResolved),
-        }
     }
 
     async fn handle_funder_release(
@@ -549,7 +592,7 @@ impl Escrow {
         funder_signature: &Signature,
     ) -> Result<InputMeta, EscrowInputError> {
         let mut contract = self.load_contract(input.escrow_id, dbtx).await?;
-        Self::ensure_active(&contract)?;
+        contract.ensure_active()?;
 
         let resolution_message = contract.resolution_message(Outcome::Release);
         let msg_bytes = compute_escrow_message(&resolution_message);
@@ -612,9 +655,9 @@ impl Escrow {
         disputatant_signature: &Signature,
     ) -> Result<InputMeta, EscrowInputError> {
         let mut contract = self.load_contract(input.escrow_id, dbtx).await?;
-        Self::ensure_active(&contract)?;
+        contract.ensure_active()?;
 
-        let now = fedimint_core::time::duration_since_epoch().as_secs();
+        let now = self.consensus_unix_time(dbtx).await;
         if now < contract.timeout {
             return Err(EscrowInputError::TimeoutNotReached);
         }
@@ -676,7 +719,7 @@ impl Escrow {
             });
         };
 
-        let now = fedimint_core::time::duration_since_epoch().as_secs();
+        let now = self.consensus_unix_time(dbtx).await;
         if now > resolve_by {
             return Err(EscrowInputError::ResolutionDeadlinePassed);
         }
@@ -723,7 +766,7 @@ impl Escrow {
             return Err(EscrowInputError::ContractNotDisputed);
         };
 
-        let now = fedimint_core::time::duration_since_epoch().as_secs();
+        let now = self.consensus_unix_time(dbtx).await;
         if now <= resolve_by {
             return Err(EscrowInputError::FallbackNotAvailable);
         }

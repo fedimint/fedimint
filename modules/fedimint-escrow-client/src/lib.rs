@@ -501,8 +501,8 @@ impl EscrowClientModule {
         default_fallback: FallbackPolicy,
     ) -> Result<CreateContractResponse, anyhow::Error> {
         let funder_key = self.escrow_key.public_key();
-        let timeout_deadline =
-            fedimint_core::time::duration_since_epoch().as_secs() + timeout.as_secs();
+        let now = self.federation_unix_time().await?;
+        let timeout_deadline = now + timeout.as_secs();
         // resolution deadline will be calculated once the contract goes into disputed
         // state
         let resolution_period = resolution_period.as_secs();
@@ -536,7 +536,7 @@ impl EscrowClientModule {
             self.federation_id,
             resolution_period,
             default_fallback,
-            fedimint_core::time::duration_since_epoch().as_secs(),
+            now,
         )
         .await?;
 
@@ -689,6 +689,9 @@ impl EscrowClientModule {
             "Should be submitted by funder/reciepient"
         );
 
+        let now = self.federation_unix_time().await?;
+        anyhow::ensure!(now >= contract.timeout, "timeout not happened");
+
         let message = contract.engage_message();
         let disputant_signature = self.sign_message(message)?;
 
@@ -774,7 +777,7 @@ impl EscrowClientModule {
                 contract.status
             );
         };
-        let now = fedimint_core::time::duration_since_epoch().as_secs();
+        let now = self.federation_unix_time().await?;
         anyhow::ensure!(now <= resolve_by, "the resolution window has closed");
 
         let signing_key = [self.escrow_key, self.arbiter_fee_key]
@@ -949,7 +952,8 @@ impl EscrowClientModule {
                 contract.status
             );
         };
-        let now = fedimint_core::time::duration_since_epoch().as_secs();
+
+        let now = self.federation_unix_time().await?;
         anyhow::ensure!(now > resolve_by, "the resolution window is still open");
 
         let claimer_pubkey = self.escrow_key.public_key();
@@ -1190,6 +1194,10 @@ impl EscrowClientModule {
             }
         }
         Ok(all.into_values().collect())
+    }
+
+    async fn federation_unix_time(&self) -> anyhow::Result<u64> {
+        Ok(self.client_ctx.module_api().consensus_unix_time().await?)
     }
 
     pub async fn get_claim_pool(&self, escrow_id: EscrowId) -> anyhow::Result<Option<ClaimPool>> {

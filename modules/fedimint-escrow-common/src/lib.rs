@@ -23,6 +23,8 @@ pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVers
 /// Splits are expressed in basis points (parts per 10,000)
 pub const SPLIT_BPS_DENOMINATOR: u16 = 10_000;
 
+const MIN_PERIOD: u64 = 10 * 60;
+
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Encodable, Decodable)]
 pub struct EscrowId(pub [u8; 32]);
 
@@ -237,10 +239,7 @@ impl EscrowContract {
         }
     }
 
-    pub async fn transition(
-        &mut self,
-        transition: EscrowTransition,
-    ) -> Result<(), EscrowInputError> {
+    pub fn transition(&mut self, transition: EscrowTransition) -> Result<(), EscrowInputError> {
         let new_status = match (&self.status, transition) {
             (EscrowStatus::Active, EscrowTransition::FunderRelease) => EscrowStatus::Released,
             (EscrowStatus::Active, EscrowTransition::ArbiterEngaged { resolve_by }) => {
@@ -269,6 +268,14 @@ impl EscrowContract {
         };
         self.status = new_status;
         Ok(())
+    }
+
+    pub fn ensure_active(&self) -> Result<(), EscrowInputError> {
+        match self.status {
+            EscrowStatus::Active => Ok(()),
+            EscrowStatus::Disputed { .. } => Err(EscrowInputError::ContractDisputed),
+            _ => Err(EscrowInputError::ContractAlreadyResolved),
+        }
     }
 
     /// The two parties of the escrow, without the arbiter or fee keys.
@@ -548,8 +555,12 @@ pub enum EscrowMessage {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub enum EscrowConsensusItem {
+    UnixTimeVote(u64),
     #[encodable_default]
-    Default { variant: u64, bytes: Vec<u8> },
+    Default {
+        variant: u64,
+        bytes: Vec<u8>,
+    },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, thiserror::Error, Encodable, Decodable)]
@@ -686,13 +697,23 @@ impl std::fmt::Display for EscrowOutputOutcome {
 
 impl std::fmt::Display for EscrowConsensusItem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "EscrowConsensusItem")
+        match self {
+            &EscrowConsensusItem::UnixTimeVote(t) => {
+                write!(f, "LNv2 Unix Time {t}")
+            }
+            &EscrowConsensusItem::Default { variant, ref bytes } => write!(
+                f,
+                "LNv2 Unknown - variant: {variant}, bytes_len: {}",
+                bytes.len()
+            ),
+        }
     }
 }
 
 pub const GET_CONTRACT_ENDPOINT: &str = "get_contract";
 pub const GET_CLAIM_AMOUNT_ENDPOINT: &str = "get_claim_amount";
 pub const LIST_CONTRACT_BY_KEY_ENDPOINT: &str = "list_contract_by_key";
+pub const CONSENSUS_UNIX_TIME_ENDPOINT: &str = "consensus_unix_time";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encodable, Decodable)]
 pub struct GetContractParams {
@@ -881,6 +902,10 @@ pub fn validate_contract_fields(
                 return Err(EscrowContractValidationError::DuplicateKeys);
             }
         }
+    }
+
+    if contract.resolution_period < MIN_PERIOD {
+        return Err(EscrowContractValidationError::InvalidResolutionTimeout);
     }
     Ok(())
 }

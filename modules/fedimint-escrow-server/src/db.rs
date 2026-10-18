@@ -1,5 +1,5 @@
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{OutPoint, impl_db_lookup, impl_db_record};
+use fedimint_core::{OutPoint, PeerId, impl_db_lookup, impl_db_record};
 use fedimint_escrow_common::{ClaimPool, EscrowContract, EscrowId, EscrowOutputOutcome};
 use serde::Serialize;
 use strum_macros::EnumIter;
@@ -9,6 +9,7 @@ use strum_macros::EnumIter;
 pub enum DbKeyPrefix {
     EscrowContract = 0x01,
     ClaimPool = 0x02,
+    UnixTimeVote = 0x03,
     OutputOutcome = 0x04,
 }
 
@@ -39,6 +40,20 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = EscrowContractKey, query_prefix = EscrowContractPrefix);
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct UnixTimeVoteKey(pub PeerId);
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct UnixTimeVotePrefix;
+
+impl_db_record!(
+    key = UnixTimeVoteKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::UnixTimeVote
+);
+
+impl_db_lookup!(key = UnixTimeVoteKey, query_prefix = UnixTimeVotePrefix);
 
 #[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
 pub struct EscrowOutputOutcomeKey(pub OutPoint);

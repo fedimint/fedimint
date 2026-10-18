@@ -3,8 +3,9 @@ use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send};
 use fedimint_escrow_common::{
-    ClaimPool, EscrowContract, GET_CLAIM_AMOUNT_ENDPOINT, GET_CONTRACT_ENDPOINT, GetClaimAmount,
-    GetContractParams, LIST_CONTRACT_BY_KEY_ENDPOINT, ListContractParams,
+    CONSENSUS_UNIX_TIME_ENDPOINT, ClaimPool, EscrowContract, GET_CLAIM_AMOUNT_ENDPOINT,
+    GET_CONTRACT_ENDPOINT, GetClaimAmount, GetContractParams, LIST_CONTRACT_BY_KEY_ENDPOINT,
+    ListContractParams,
 };
 
 #[apply(async_trait_maybe_send!)]
@@ -21,6 +22,8 @@ pub trait EscrowFederationApi {
         &self,
         params: ListContractParams,
     ) -> FederationResult<Vec<EscrowContract>>;
+
+    async fn consensus_unix_time(&self) -> FederationResult<u64>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -35,6 +38,14 @@ where
         self.request_current_consensus(
             GET_CONTRACT_ENDPOINT.to_string(),
             ApiRequestErased::new(params),
+        )
+        .await
+    }
+
+    async fn consensus_unix_time(&self) -> FederationResult<u64> {
+        self.request_current_consensus(
+            CONSENSUS_UNIX_TIME_ENDPOINT.to_string(),
+            ApiRequestErased::new(()),
         )
         .await
     }
