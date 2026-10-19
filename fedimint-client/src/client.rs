@@ -684,7 +684,8 @@ impl Client {
     }
 }
 
-/// Accumulate the transaction input and output amounts (including fees) and check for overflow.
+/// Accumulate the transaction input and output amounts (including fees) and
+/// check for overflow.
 fn accumulate_transaction_balance<'a>(
     inputs: impl IntoIterator<Item = (&'a Amounts, Amounts)>,
     outputs: impl IntoIterator<Item = (&'a Amounts, Amounts)>,
