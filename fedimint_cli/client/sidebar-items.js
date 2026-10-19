@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["ClientCmd","ModuleSelector","ModuleStatus"],"fn":["get_note_summary","handle_command","time_to_iso8601"],"struct":["InfoResponse","ModuleInfo"]};
+window.SIDEBAR_ITEMS = {"enum":["ClientCmd","ModuleSelector","ModuleStatus"],"fn":["await_invoice","combine_notes","create_invoice","get_note_summary","handle_command","pay_invoice","reissue_notes","spend_notes","split_notes","time_to_iso8601","withdraw"],"struct":["InfoResponse","ModuleInfo"]};
