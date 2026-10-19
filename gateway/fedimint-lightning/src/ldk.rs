@@ -888,11 +888,7 @@ impl ILnRpcClient for GatewayLdkClient {
             parts_per_million,
         }: OpenChannelRequest,
     ) -> Result<OpenChannelResponse, LightningRpcError> {
-        let push_amount_msats_or = if push_amount_sats == 0 {
-            None
-        } else {
-            Some(push_amount_sats * 1000)
-        };
+        let push_amount_msats_or = channel_push_amount_msats(push_amount_sats)?;
 
         if fee_rate_sats_per_vbyte.is_some() {
             // LDK manages its own fee estimation for funding transactions; the
@@ -1447,6 +1443,20 @@ impl Ord for UserChannelId {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.0.0.cmp(&other.0.0)
     }
+}
+
+fn channel_push_amount_msats(push_amount_sats: u64) -> Result<Option<u64>, LightningRpcError> {
+    if push_amount_sats == 0 {
+        return Ok(None);
+    }
+
+    push_amount_sats.checked_mul(1000).map(Some).ok_or_else(|| {
+        LightningRpcError::FailedToOpenChannel {
+            failure_reason: format!(
+                "push_amount_sats {push_amount_sats} overflows u64 millisatoshis (LDK limit)"
+            ),
+        }
+    })
 }
 
 #[cfg(test)]

@@ -10,9 +10,30 @@ use tokio::sync::{RwLock, oneshot};
 
 use super::{
     GatewayLdkClient, InboundRegistrationRefusal, LdkClientInitError, PendingPaymentWakeup,
-    check_inbound_registration, get_esplora_url, htlc_completion_error,
+    channel_push_amount_msats, check_inbound_registration, get_esplora_url, htlc_completion_error,
 };
 use crate::LightningRpcError;
+
+#[test]
+fn channel_push_amount_conversions_preserve_ldk_values() {
+    assert_eq!(channel_push_amount_msats(0).unwrap(), None);
+    assert_eq!(channel_push_amount_msats(1).unwrap(), Some(1000));
+    let max_sats = u64::MAX / 1000;
+    assert_eq!(
+        channel_push_amount_msats(max_sats).unwrap(),
+        Some(max_sats * 1000)
+    );
+}
+
+#[test]
+fn channel_push_amount_conversions_reject_ldk_overflow() {
+    for sats in [u64::MAX / 1000 + 1, u64::MAX] {
+        assert!(matches!(
+            channel_push_amount_msats(sats),
+            Err(LightningRpcError::FailedToOpenChannel { .. })
+        ));
+    }
+}
 
 /// The gateway retries `FailedToCompleteHtlc` forever and records only
 /// `HtlcCompletionRejected`, so an `ldk-node` error that cannot change on
