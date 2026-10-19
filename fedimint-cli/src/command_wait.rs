@@ -44,7 +44,7 @@ impl FedimintCli {
     pub(super) async fn wait_with_networking(
         &self,
         cli: &Opts,
-        seconds: Option<f32>,
+        seconds: Option<Duration>,
     ) -> CliOutputResult {
         let client = self.client_open(cli).await?;
         // Trigger a network call so background work can make progress while waiting.
@@ -56,8 +56,8 @@ impl FedimintCli {
                     let _ = client.api().session_count().await;
                 }
             });
-        if let Some(secs) = seconds {
-            runtime::sleep(Duration::from_secs_f32(secs)).await;
+        if let Some(duration) = seconds {
+            runtime::sleep(duration).await;
         } else {
             pending::<()>().await;
         }
