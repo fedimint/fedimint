@@ -17,6 +17,7 @@ use fedimint_client::transaction::{
 use fedimint_client_module::module::OutPointRange;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, OperationId};
+use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::task::{TaskGroup, sleep_in_test, timeout};
@@ -27,7 +28,7 @@ use fedimint_core::{
 };
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
-use fedimint_eventlog::Event;
+use fedimint_eventlog::{Event, EventLogIdPrefixAll, UnorderedEventLogIdPrefixAll};
 use fedimint_gateway_common::{PaymentLogPayload, SetFeesPayload, SetPaymentPolicyPayload};
 use fedimint_gateway_server::{Gateway, GatewayState};
 use fedimint_gateway_ui::IAdminGateway;
@@ -77,7 +78,7 @@ use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::ln::{FakeLightningTest, MOCK_INVOICE_PREIMAGE};
 use fedimint_unknown_server::UnknownInit;
-use futures::Future;
+use futures::{Future, StreamExt};
 use itertools::Itertools;
 use lightning_invoice::{
     Bolt11Invoice, Bolt11InvoiceDescription, Currency, Description, InvoiceBuilder, PaymentSecret,
@@ -2059,6 +2060,7 @@ async fn lnv2_relay_persists_every_distinct_incoming_circuit() -> anyhow::Result
         Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
     );
     let receive_operation_id = OperationId::from_encodable(&contract);
+    let commitment = contract.commitment.clone();
     let completion_id = |circuit: IncomingCircuitKey| {
         OperationId::from_encodable(&(
             "gateway-lnv2-incoming-circuit",
@@ -2149,6 +2151,15 @@ async fn lnv2_relay_persists_every_distinct_incoming_circuit() -> anyhow::Result
                 .all(|state| matches!(state, GatewayClientStateMachinesV2::CircuitComplete(_)))
         );
     }
+
+    let events = incoming_start_events(&client).await;
+    assert_eq!(
+        events.len(),
+        1,
+        "race losers and replays must not log starts"
+    );
+    assert_eq!(events[0].incoming_contract_commitment, commitment);
+    assert_eq!(events[0].invoice_amount, Amount::from_msats(1_000_000));
 
     Ok(())
 }
@@ -2272,6 +2283,35 @@ fn decryptable_incoming_contract(client: &ClientHandleArc) -> anyhow::Result<Inc
     Ok(contract)
 }
 
+/// Read both queues in one snapshot: ordering moves an event between them
+/// asynchronously, but durable enqueue must already accompany the operation.
+async fn incoming_start_events(client: &ClientHandleArc) -> Vec<IncomingPaymentStarted> {
+    let module_id = client
+        .get_first_instance(&fedimint_lnv2_common::KIND)
+        .expect("lnv2 module not found");
+    let mut dbtx = client.db().begin_transaction_nc().await;
+    let mut entries = dbtx
+        .find_by_prefix(&EventLogIdPrefixAll)
+        .await
+        .map(|(_, entry)| entry)
+        .collect::<Vec<_>>()
+        .await;
+    entries.extend(
+        dbtx.find_by_prefix(&UnorderedEventLogIdPrefixAll)
+            .await
+            .map(|(_, entry)| entry.inner)
+            .collect::<Vec<_>>()
+            .await,
+    );
+    entries
+        .into_iter()
+        .filter(|entry| {
+            entry.kind == IncomingPaymentStarted::KIND && entry.module_id() == Some(module_id)
+        })
+        .map(|entry| entry.to_event().expect("incoming start event must decode"))
+        .collect()
+}
+
 /// When a wall-clock gate forbids a fresh dispatch and no swap operation
 /// exists, the relay must start nothing and say so -- and the refusal must
 /// leave no state behind, so the same swap can still be dispatched once the
@@ -2300,6 +2340,10 @@ async fn lnv2_relay_forbidden_fresh_swap_starts_nothing() -> anyhow::Result<()> 
         client.get_balance_for_btc().await?,
         balance_before,
         "a refused swap must not fund anything"
+    );
+    assert!(
+        incoming_start_events(&client).await.is_empty(),
+        "refusing fresh dispatch must not announce an operation"
     );
 
     assert_eq!(
@@ -2358,6 +2402,9 @@ async fn lnv2_relay_resumes_swap_when_fresh_is_forbidden() -> anyhow::Result<()>
         balance_after_first,
         "the incoming contract must only be funded once"
     );
+    let events = incoming_start_events(&client).await;
+    assert_eq!(events.len(), 1, "resuming must not log another start");
+    assert_eq!(events[0].invoice_amount, Amount::from_msats(900));
 
     Ok(())
 }
@@ -3456,14 +3503,61 @@ async fn lnv2_relay_direct_swap_without_funds_is_refused() -> anyhow::Result<()>
 
     let client = gateway.select_client(fed.id()).await?.into_value();
     let contract = decryptable_incoming_contract(&client)?;
+    let operation_id = OperationId::from_encodable(&contract);
+    let commitment = contract.commitment.clone();
 
     assert_matches!(
         client
             .get_first_module::<GatewayClientModuleV2>()?
-            .relay_direct_swap(contract, 900, true)
+            .relay_direct_swap(contract.clone(), 900, true)
             .await,
         Err(TransactionSubmitError::InsufficientFunds(_))
     );
+    assert!(
+        client
+            .operation_log()
+            .get_operation(operation_id)
+            .await
+            .is_none()
+    );
+    let module = client.get_first_module::<GatewayClientModuleV2>()?;
+    assert!(
+        module
+            .client_ctx
+            .get_own_operation_active_states(operation_id)
+            .await
+            .is_empty()
+    );
+    assert!(
+        module
+            .client_ctx
+            .get_own_operation_inactive_states(operation_id)
+            .await
+            .is_empty()
+    );
+    assert!(incoming_start_events(&client).await.is_empty());
+
+    // A failed finalization must roll back its writes and leave the same
+    // contract eligible for a later funded attempt.
+    send_msats_to_gateway(&gateway, fed.id(), 1_000_000_000).await;
+    assert_eq!(
+        client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .relay_direct_swap(contract, 900, true)
+            .await?,
+        Some(FinalReceiveState::Success([0; 32]))
+    );
+    assert!(
+        client
+            .operation_log()
+            .get_operation(operation_id)
+            .await
+            .is_some()
+    );
+    let events = incoming_start_events(&client).await;
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].incoming_contract_commitment, commitment);
+    assert_eq!(events[0].invoice_amount, Amount::from_msats(900));
 
     Ok(())
 }

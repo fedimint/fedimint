@@ -75,7 +75,7 @@ impl Event for OutgoingPaymentFailed {
 
 /// Event that is emitted when an incoming payment attempt has started. Includes
 /// both internal swaps and outside LN payments.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct IncomingPaymentStarted {
     /// The timestamp that the operation begins, including any metadata checks
     /// before the state machine has spawned.
