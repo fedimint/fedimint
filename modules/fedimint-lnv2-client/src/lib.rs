@@ -38,7 +38,7 @@ use fedimint_client_module::transaction::{
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{AutocommitError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     Amounts, ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
@@ -759,43 +759,63 @@ impl LightningClientModule {
 
         let transaction = TransactionBuilder::new().with_outputs(client_output);
 
+        let operation_meta_gen = move |change_outpoint_range| {
+            LightningOperationMeta::Send(SendOperationMeta {
+                change_outpoint_range,
+                gateway: gateway_api.clone(),
+                contract: contract.clone(),
+                invoice: LightningInvoice::Bolt11(invoice.clone()),
+                custom_meta: custom_meta.clone(),
+            })
+        };
+
+        // The operation and the event announcing it must survive a restart together.
         self.client_ctx
-            .finalize_and_submit_transaction(
-                operation_id,
-                LightningCommonInit::KIND.as_str(),
-                move |change_outpoint_range| {
-                    LightningOperationMeta::Send(SendOperationMeta {
-                        change_outpoint_range,
-                        gateway: gateway_api.clone(),
-                        contract: contract.clone(),
-                        invoice: LightningInvoice::Bolt11(invoice.clone()),
-                        custom_meta: custom_meta.clone(),
+            .module_db()
+            .autocommit(
+                |dbtx, _| {
+                    let operation_meta_gen = operation_meta_gen.clone();
+                    let transaction = transaction.clone();
+                    Box::pin(async move {
+                        self.client_ctx
+                            .finalize_and_submit_transaction_dbtx(
+                                dbtx,
+                                operation_id,
+                                LightningCommonInit::KIND.as_str(),
+                                operation_meta_gen,
+                                transaction,
+                            )
+                            .await?;
+
+                        self.client_ctx
+                            .log_event(
+                                dbtx,
+                                SendPaymentEvent {
+                                    operation_id,
+                                    amount: Amount::from_msats(amount),
+                                    fee: send_fee.fee(amount),
+                                },
+                            )
+                            .await;
+
+                        Ok::<_, TransactionSubmitError>(())
                     })
                 },
-                transaction,
+                Some(100),
             )
             .await
+            .map_err(|error| match error {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    TransactionSubmitError::Database(last_error)
+                }
+            })
             .map_err(|e| match e {
                 TransactionSubmitError::InsufficientFunds(e) => {
                     SendPaymentError::InsufficientFunds(e)
                 }
                 e => SendPaymentError::FailedToFundPayment(e.fmt_compact().to_string()),
             })?;
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                SendPaymentEvent {
-                    operation_id,
-                    amount: Amount::from_msats(amount),
-                    fee: send_fee.fee(amount),
-                },
-            )
-            .await;
-
-        dbtx.commit_tx().await;
 
         Ok(operation_id)
     }
