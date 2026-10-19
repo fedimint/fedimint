@@ -29,7 +29,7 @@ use fedimint_client_module::{
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::DatabaseTransaction;
+use fedimint_core::db::{AutocommitError, DatabaseTransaction};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
@@ -739,12 +739,14 @@ impl GatewayClientModuleV2 {
             let transaction = TransactionBuilder::new().with_outputs(client_output);
 
             let creation_result = self
-                .client_ctx
-                .finalize_and_submit_transaction(
+                .submit_incoming_with_event(
                     receive_operation_id,
-                    LightningCommonInit::KIND.as_str(),
-                    |_| GatewayOperationMetaV2::role(GatewayOperationRoleV2::Receive),
                     transaction,
+                    IncomingPaymentStarted {
+                        operation_start,
+                        incoming_contract_commitment: commitment,
+                        invoice_amount: Amount::from_msats(amount_msat),
+                    },
                 )
                 .await;
             if let Err(error) = creation_result {
@@ -752,19 +754,6 @@ impl GatewayClientModuleV2 {
                 if operation_creation_failed_permanently(true, operation_exists) {
                     return Err(error.into());
                 }
-            } else {
-                let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-                self.client_ctx
-                    .log_event(
-                        &mut dbtx,
-                        IncomingPaymentStarted {
-                            operation_start,
-                            incoming_contract_commitment: commitment,
-                            invoice_amount: Amount::from_msats(amount_msat),
-                        },
-                    )
-                    .await;
-                dbtx.commit_tx().await;
             }
         }
 
@@ -863,29 +852,59 @@ impl GatewayClientModuleV2 {
 
         let transaction = TransactionBuilder::new().with_outputs(client_output);
 
-        self.client_ctx
-            .finalize_and_submit_transaction(
-                operation_id,
-                LightningCommonInit::KIND.as_str(),
-                |_| GatewayOperationMetaV2::role(GatewayOperationRoleV2::Receive),
-                transaction,
-            )
-            .await?;
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                IncomingPaymentStarted {
-                    operation_start,
-                    incoming_contract_commitment: commitment,
-                    invoice_amount: Amount::from_msats(amount_msat),
-                },
-            )
-            .await;
-        dbtx.commit_tx().await;
+        self.submit_incoming_with_event(
+            operation_id,
+            transaction,
+            IncomingPaymentStarted {
+                operation_start,
+                incoming_contract_commitment: commitment,
+                invoice_amount: Amount::from_msats(amount_msat),
+            },
+        )
+        .await?;
 
         Ok(Some(self.await_receive(operation_id).await))
+    }
+
+    /// Persist the funding operation, its state machines, and its start event
+    /// together, so stopping after funding cannot leave an unannounced receive.
+    async fn submit_incoming_with_event(
+        &self,
+        operation_id: OperationId,
+        transaction: TransactionBuilder,
+        event: IncomingPaymentStarted,
+    ) -> Result<OutPointRange, TransactionSubmitError> {
+        self.client_ctx
+            .module_db()
+            .autocommit(
+                |dbtx, _| {
+                    let transaction = transaction.clone();
+                    let event = event.clone();
+                    Box::pin(async move {
+                        let range = self
+                            .client_ctx
+                            .finalize_and_submit_transaction_dbtx(
+                                dbtx,
+                                operation_id,
+                                LightningCommonInit::KIND.as_str(),
+                                |_| GatewayOperationMetaV2::role(GatewayOperationRoleV2::Receive),
+                                transaction,
+                            )
+                            .await?;
+
+                        self.client_ctx.log_event(dbtx, event).await;
+                        Ok::<_, TransactionSubmitError>(range)
+                    })
+                },
+                Some(100),
+            )
+            .await
+            .map_err(|error| match error {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    TransactionSubmitError::Database(last_error)
+                }
+            })
     }
 
     pub async fn await_receive(&self, operation_id: OperationId) -> FinalReceiveState {
