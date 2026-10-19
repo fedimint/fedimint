@@ -86,32 +86,33 @@ There are other Nix packages defined, but they are similar to the ones described
 * run some commands (arbitrary, but usually just `cargo xyz`)
 * (optionally) store the `./target` directly in the output of the Nix package
 
-### Cargo-crap baseline gate
+### Cargo-crap ceiling
 
-Fedimint CI includes a `cargo-crap` gate exposed as `.#ci.crap`. It compares the
-current workspace against `nix/cargo-crap-baseline.json` and fails when a
-function regresses above the CRAP-score threshold of 1000.
+Fedimint CI includes a `cargo-crap` gate exposed as `.#ci.crap`. It fails when
+any measured function exceeds the ceiling in `.cargo-crap.toml`, currently
+2862. Equality passes. Local runs and CI use the same configuration, without
+a committed per-function exception baseline.
 
 Fedimint intentionally does not use `cargo llvm-cov`/LCOV coverage for this
 gate. The end-to-end test suite is too heavy for a coverage-backed cargo-crap
 job, so the gate uses cargo-crap's pessimistic missing-coverage behavior.
-Existing high-CRAP functions are kept in the generated baseline while
-high-CRAP regressions are rejected.
+Without coverage, the score is cyclomatic complexity squared plus complexity.
+The ceiling was chosen from the fifth-highest function before refactoring all
+five highest functions, including that fifth function. This avoids baseline
+refreshes on ordinary edits. It permits complexity increases below the ceiling;
+lowering the ceiling further is separate work.
 
-When intentionally accepting CRAP-score regressions, generate a fresh baseline
-from Nix in the same change:
+Run the gate or generate a diagnostic ranking:
 
 ```bash
-nix build -L .#ci.crapBaseline
-cp result/cargo-crap-baseline.json nix/cargo-crap-baseline.json
 nix build -L .#ci.crap
+nix build -L .#ci.crapReport
+# Inspect result/cargo-crap-report.json; do not copy it into the repository.
 ```
 
-Use the full generated file when every changed entry belongs to that change.
-If it also contains unrelated drift, compare it with the committed baseline and
-copy only the generated records caused by the intentional change; do not type
-values by hand or accept unrelated records. Always run `.#ci.crap` after either
-kind of update.
+The report is diagnostic output only: the gate never reads it, and it cannot
+waive a violation. Refactor functions above the ceiling rather than adding
+exceptions or excluding them from analysis.
 
 ### Source file filtering
 
