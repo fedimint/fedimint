@@ -174,6 +174,25 @@ enum PaymentActionKind {
     Cancel,
 }
 
+fn channel_amounts_to_lnd(
+    channel_size_sats: u64,
+    push_amount_sats: u64,
+) -> Result<(i64, i64), LightningRpcError> {
+    let channel_size =
+        i64::try_from(channel_size_sats).map_err(|_| LightningRpcError::FailedToOpenChannel {
+            failure_reason: format!(
+                "channel_size_sats {channel_size_sats} does not fit in i64 (LND limit)"
+            ),
+        })?;
+    let push_amount =
+        i64::try_from(push_amount_sats).map_err(|_| LightningRpcError::FailedToOpenChannel {
+            failure_reason: format!(
+                "push_amount_sats {push_amount_sats} does not fit in i64 (LND limit)"
+            ),
+        })?;
+    Ok((channel_size, push_amount))
+}
+
 #[derive(Clone)]
 pub struct GatewayLndClient {
     /// LND client
@@ -1675,6 +1694,9 @@ impl ILnRpcClient for GatewayLndClient {
             parts_per_million,
         }: crate::OpenChannelRequest,
     ) -> Result<OpenChannelResponse, LightningRpcError> {
+        let (local_funding_amount, push_sat) =
+            channel_amounts_to_lnd(channel_size_sats, push_amount_sats)?;
+
         let mut client = self.connect().await?;
 
         self.connect_peer_if_needed(&mut client, pubkey, host)
@@ -1684,8 +1706,8 @@ impl ILnRpcClient for GatewayLndClient {
         // protobuf defaults so LND falls back to its own configuration.
         let mut open_request = OpenChannelRequest {
             node_pubkey: pubkey.serialize().to_vec(),
-            local_funding_amount: channel_size_sats.try_into().expect("u64 -> i64"),
-            push_sat: push_amount_sats.try_into().expect("u64 -> i64"),
+            local_funding_amount,
+            push_sat,
             ..Default::default()
         };
         if let Some(rate) = fee_rate_sats_per_vbyte {
