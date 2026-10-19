@@ -1,13 +1,13 @@
 use std::{ffi, iter};
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use fedimint_client_module::error::OperationLookupError;
 use fedimint_core::Amount;
 use fedimint_core::base32::{self, FEDIMINT_PREFIX, PrefixedDecodeError};
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::{MintClientModule, ReceiveECashError, SendECashError};
+use crate::{ECash, MintClientModule, ReceiveECashError, SendECashError, SpendableNote};
 
 #[derive(Parser, Serialize)]
 enum Opts {
@@ -23,6 +23,18 @@ enum Opts {
     },
     /// Receive the `ECash` by reissuing the notes and return the amount.
     Receive { ecash: String },
+    /// Developer and debugging commands.
+    Dev {
+        #[clap(subcommand)]
+        command: DevOpts,
+    },
+}
+
+#[derive(Subcommand, Serialize)]
+enum DevOpts {
+    /// Decode an `ECash` string into a JSON representation without receiving
+    /// it.
+    Decode { ecash: String },
 }
 
 pub(crate) async fn handle_cli_command(
@@ -52,6 +64,21 @@ pub(crate) async fn handle_cli_command(
                 .await?;
 
             Ok(json(state))
+        }
+        Opts::Dev {
+            command: DevOpts::Decode { ecash },
+        } => {
+            let ecash: ECash = base32::decode_prefixed(FEDIMINT_PREFIX, &ecash)?;
+            let notes = ecash.notes();
+
+            Ok(serde_json::json!({
+                "federation_id": ecash.mint(),
+                "unit": ecash.unit(),
+                "amount": ecash.amount(),
+                "note_count": notes.len(),
+                "notes": notes.iter().map(SpendableNote::note).collect::<Vec<_>>(),
+                "invite": ecash.federation_invite(),
+            }))
         }
     }
 }
