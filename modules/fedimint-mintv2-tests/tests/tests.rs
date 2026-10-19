@@ -29,6 +29,8 @@ use fedimint_testing::fixtures::Fixtures;
 use futures::StreamExt;
 use serde_json::Value;
 
+mod receive_atomicity;
+
 #[derive(Debug, PartialEq, Eq)]
 enum MintEvent {
     Send(SendPaymentEvent),
