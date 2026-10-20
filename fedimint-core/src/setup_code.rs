@@ -66,15 +66,23 @@ pub struct WalletDescriptorKindParseError(String);
 /// setup time.
 pub const MAX_WSH_FEDERATION_SIZE: u32 = 20;
 
+/// Largest federation a FROST wallet can be set up for.
+///
+/// BIP 445, the FROST signing protocol for BIP 340 signatures, bounds the
+/// number of signers at 128.
+pub const MAX_FROST_FEDERATION_SIZE: u32 = 128;
+
 impl WalletDescriptorKind {
     /// Largest federation this descriptor can be set up for, or `None` if
-    /// it doesn't bound the size. Only [`Self::Wsh`] is bounded — see
-    /// [`MAX_WSH_FEDERATION_SIZE`]; the taproot descriptors use a `multi_a`
-    /// script (`CHECKSIGADD`) or a single aggregated FROST key.
+    /// it doesn't bound the size. [`Self::Wsh`] is bound by the P2WSH
+    /// multisig key limit ([`MAX_WSH_FEDERATION_SIZE`]) and [`Self::Frost`]
+    /// by BIP 445 ([`MAX_FROST_FEDERATION_SIZE`]); [`Self::Tr`] uses a
+    /// `multi_a` script (`CHECKSIGADD`), which doesn't bound it.
     pub fn max_federation_size(self) -> Option<u32> {
         match self {
             Self::Wsh => Some(MAX_WSH_FEDERATION_SIZE),
-            Self::Tr | Self::Frost => None,
+            Self::Frost => Some(MAX_FROST_FEDERATION_SIZE),
+            Self::Tr => None,
         }
     }
 }
