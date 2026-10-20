@@ -8,10 +8,12 @@ use fedimint_core::net::Recipient;
 use fedimint_core::{NumPeers, PeerId};
 use fedimint_logging::LOG_NET_PEER_DKG;
 use fedimint_server_core::config::PeerHandleOps;
+use secp256k1::{PublicKey, SecretKey};
 use tracing::info;
 
 use super::dkg_g1::run_dkg_g1;
 use super::dkg_g2::run_dkg_g2;
+use super::dkg_secp::run_dkg_secp;
 use super::peer_handle::PeerHandle;
 
 #[async_trait]
@@ -36,6 +38,15 @@ impl PeerHandleOps for PeerHandle<'_> {
         );
 
         run_dkg_g2(self.num_peers, self.identity, self.connections).await
+    }
+
+    async fn run_dkg_secp(&self) -> anyhow::Result<(Vec<PublicKey>, SecretKey)> {
+        info!(
+            target: LOG_NET_PEER_DKG,
+            "Running distributed key generation for secp256k1..."
+        );
+
+        run_dkg_secp(self.num_peers, self.identity, self.connections).await
     }
 
     async fn exchange_bytes(&self, bytes: Vec<u8>) -> anyhow::Result<BTreeMap<PeerId, Vec<u8>>> {

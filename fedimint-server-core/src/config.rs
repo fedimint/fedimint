@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use bls12_381::{G1Affine, G1Projective, G2Affine, G2Projective, Scalar};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use fedimint_core::secp256k1::{PublicKey, SecretKey};
 use fedimint_core::{NumPeers, PeerId};
 use group::Curve;
 
@@ -50,6 +51,8 @@ pub trait PeerHandleOps {
     async fn run_dkg_g1(&self) -> anyhow::Result<(Vec<G1Projective>, Scalar)>;
 
     async fn run_dkg_g2(&self) -> anyhow::Result<(Vec<G2Projective>, Scalar)>;
+
+    async fn run_dkg_secp(&self) -> anyhow::Result<(Vec<PublicKey>, SecretKey)>;
 
     /// Exchanges a `DkgPeerMsg::Module(Vec<u8>)` with all peers. All peers are
     /// required to be online and submit a response for this to return
