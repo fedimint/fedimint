@@ -1266,16 +1266,19 @@ impl Wallet {
 
         let pending_txs = pending_txs_unordered(dbtx).await;
 
-        // This is a safety backstop, not a liveness bound a user could hit. The
-        // feerate floor below doubles with every pending transaction
-        // (`feerate_base << pending_txs.len()`), so each tx added to the stack at
-        // least doubles the fee the next one must pay to be accepted. By depth 32
-        // the floor is `feerate_base << 32` = 250 * 2^32 ~= 1.07e9 sat/vByte (~10.7
-        // BTC per vByte), and the fees required to drive the stack that deep run
-        // into tens of thousands of BTC even for the smallest federation, so it is
-        // bounded far below 32 by fee economics alone. The cap also keeps the
-        // `feerate_base << n` shift and the `stack_vbytes` accumulation that follow
-        // well within `u64`.
+        // A defensive backstop, not a liveness bound a user hits under the
+        // generated configuration. The feerate floor below is
+        // `feerate_base << pending_txs.len()`, which doubles with each pending
+        // transaction, and the feerate the next tx is charged is the max of that
+        // floor and the consensus feerate. With the default `feerate_base` (set
+        // below the 1 sat/vB vote floor) the floor only overtakes the consensus
+        // feerate past the first few pending txs; from there it doubles each step.
+        // By depth 32 the floor is `feerate_base << 32`, ~1.07e9 sat/vByte (~10.7
+        // BTC/vByte) for the default 250 sat/kvB, so under those parameters driving
+        // the stack to 33 costs tens of thousands of BTC in fees and it stays far
+        // below the cap. The cap also bounds the shift amount `pending_txs.len()`
+        // below u64's width, keeping `feerate_base << n` well-defined, and bounds
+        // the `stack_vbytes` fold the `expect` below relies on.
         assert!(pending_txs.len() <= 32);
 
         let feerate = self
