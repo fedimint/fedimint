@@ -1,0 +1,24 @@
+id: push-str-format
+snapshots:
+  ? |
+    for value in values { output.push_str(&format!("{value}")); }
+  : labels:
+    - source: output.push_str(&format!("{value}"))
+      style: primary
+      start: 22
+      end: 58
+    - source: for value in values { output.push_str(&format!("{value}")); }
+      style: secondary
+      start: 0
+      end: 61
+  ? |
+    for value in values { output.push_str(format!("{value}").as_str()); }
+  : labels:
+    - source: output.push_str(format!("{value}").as_str())
+      style: primary
+      start: 22
+      end: 66
+    - source: for value in values { output.push_str(format!("{value}").as_str()); }
+      style: secondary
+      start: 0
+      end: 69

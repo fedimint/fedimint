@@ -51,6 +51,7 @@ use crate::consensus::db::{
     SignedSessionOutcomeKey, SignedSessionOutcomePrefix,
 };
 use crate::consensus::debug::{DebugConsensusItem, DebugConsensusItemCompact};
+use crate::consensus::peer_availability::PeerActivity;
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
 use crate::metrics::{
     CONSENSUS_ITEM_PROCESSING_DURATION_SECONDS,
@@ -87,6 +88,7 @@ pub struct ConsensusEngine {
     pub data_dir: PathBuf,
     pub db_checkpoint_retention: u64,
     pub session_timeout: Duration,
+    pub peer_activity: Arc<std::sync::Mutex<PeerActivity>>,
 }
 
 impl ConsensusEngine {
@@ -313,6 +315,7 @@ impl ConsensusEngine {
                 ),
                 Network::new(
                     connections.clone(),
+                    self.peer_activity.clone(),
                     signed_outcomes_sender,
                     signatures_sender,
                     self.db.clone(),

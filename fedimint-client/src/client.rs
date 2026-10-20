@@ -53,6 +53,7 @@ use fedimint_core::module::{
     SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
+use fedimint_core::peer_availability::{MergedPeerAvailability, merge_peer_availability};
 use fedimint_core::runtime::sleep;
 use fedimint_core::task::{
     Elapsed, MaybeSend, MaybeSync, ShuttingDownError, TaskGroup, TaskHandle,
@@ -2396,6 +2397,28 @@ impl Client {
             .map(|(key, metadata)| (key.0, metadata))
             .collect()
             .await
+    }
+
+    /// Asks every guardian for its view of the others' availability and
+    /// combines the answers with [`merge_peer_availability`]. Guardians that do
+    /// not answer within a few seconds are left out.
+    pub async fn peer_availability(&self) -> MergedPeerAvailability {
+        let reports =
+            futures::future::join_all(self.api.all_peers().iter().map(|peer| async move {
+                let report =
+                    runtime::timeout(Duration::from_secs(10), self.api.peer_availability(*peer))
+                        .await;
+                (*peer, report)
+            }))
+            .await
+            .into_iter()
+            .filter_map(|(peer, report)| Some((peer, report.ok()?.ok()?)))
+            .collect();
+
+        merge_peer_availability(
+            &reports,
+            fedimint_core::NumPeersExt::to_num_peers(self.api.all_peers()),
+        )
     }
 
     /// Returns a list of guardian API URLs

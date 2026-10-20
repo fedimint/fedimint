@@ -43,8 +43,6 @@ let
   # rest randomized to avoid accidentally overwriting innocent bytes in the binary
   gitHashPlaceholderValue = "01234569abcdef7afa1d2683a099c7af48a523c1";
 
-  cargoCrapViolationThreshold = 1000;
-
   filterWorkspaceDepsBuildFilesRegex = [
     "Cargo\\.lock"
     "Cargo\\.toml"
@@ -573,22 +571,20 @@ in
       doInstallCargoArtifacts = false;
     };
 
-    # Regenerate nix/cargo-crap-baseline.json from this derivation in the same
-    # change that intentionally accepts CRAP-score regressions.
-    #
     # This intentionally does not use llvm-cov coverage data: Fedimint's e2e
     # tests are too heavy for a coverage-backed cargo-crap gate, so missing
     # coverage is handled pessimistically.
-    crapBaseline = craneLibCrap.mkCargoDerivation {
-      pname = "${commonArgs.pname}-cargo-crap-baseline";
+    # The generated report is diagnostic only, never an input or waiver for
+    # the absolute gate below. Both use the ceiling in .cargo-crap.toml.
+    crapReport = craneLibCrap.mkCargoDerivation {
+      pname = "${commonArgs.pname}-cargo-crap-report";
       cargoArtifacts = null;
       buildPhaseCargoCommand = ''
         mkdir -p $out
         ${cargoCrap}/bin/cargo-crap \
           --workspace \
-          --threshold ${toString cargoCrapViolationThreshold} \
           --format json \
-          --output $out/cargo-crap-baseline.json
+          --output $out/cargo-crap-report.json
       '';
       doInstallCargoArtifacts = false;
       nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargoCrap ];
@@ -602,11 +598,8 @@ in
         mkdir -p $out
         ${cargoCrap}/bin/cargo-crap \
           --workspace \
-          --baseline ${../nix/cargo-crap-baseline.json} \
-          --threshold ${toString cargoCrapViolationThreshold} \
-          --min ${toString cargoCrapViolationThreshold} \
           --format github \
-          --fail-regression
+          --fail-above
       '';
       doInstallCargoArtifacts = false;
       nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargoCrap ];
