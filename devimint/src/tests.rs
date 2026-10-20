@@ -47,7 +47,7 @@ use crate::gatewayd::GatewayClient;
 use crate::util::{LoadTestTool, ProcessManager, almost_equal, poll};
 use crate::version_constants::{
     VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA, VERSION_0_13_0_ALPHA,
-    ensure_expected_fedimintd_version,
+    VERSION_0_14_0_ALPHA, ensure_expected_fedimintd_version,
 };
 use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed};
 
@@ -1956,9 +1956,9 @@ async fn ln_pay(client: &Client, invoice: String, gw_id: String) -> anyhow::Resu
         .expect("Could not deserialize Lightning payment outcome");
     match outcome {
         LightningPaymentOutcome::Success { preimage } => {
-            // Clients from v0.10.0 until v0.13.0 cut the first and last hex digit off
-            // the preimage the gateway returns, so only newer clients can be checked
-            if crate::util::FedimintCli::version_or_default().await >= *VERSION_0_13_0_ALPHA {
+            // Clients before v0.14.0 cut the first and last hex digit off the preimage
+            // the gateway returns, so only newer clients can be checked
+            if crate::util::FedimintCli::version_or_default().await >= *VERSION_0_14_0_ALPHA {
                 let preimage_bytes = hex::decode(&preimage).context("Preimage is not hex")?;
                 anyhow::ensure!(
                     bitcoin::hashes::sha256::Hash::hash(&preimage_bytes) == payment_hash,
