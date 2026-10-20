@@ -3662,6 +3662,7 @@ dependencies = [
  "lightning-invoice",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -3826,6 +3827,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-derive-secret",
  "fedimint-eventlog",
+ "fedimint-gateway-common",
  "fedimint-gwv2-client",
  "fedimint-lightning",
  "fedimint-ln-client",
@@ -3854,6 +3856,7 @@ dependencies = [
  "fedimint-client-module",
  "fedimint-core",
  "fedimint-eventlog",
+ "fedimint-gateway-common",
  "fedimint-lightning",
  "fedimint-lnv2-common",
  "fedimint-logging",
