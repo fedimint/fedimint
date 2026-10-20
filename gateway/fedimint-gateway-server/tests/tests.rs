@@ -1457,6 +1457,57 @@ async fn test_gateway_enforces_fee_limits_without_lnv2() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The note summary used to look up only the legacy mint module, so the Notes
+/// tab failed with "No modules found of kind mint" for a federation running
+/// MintV2 alone.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_note_summary_for_mintv2_federation() -> anyhow::Result<()> {
+    let fixtures = Fixtures::new_primary(
+        fedimint_mintv2_client::MintClientInit,
+        fedimint_mintv2_server::MintInit,
+    )
+    .with_module(DummyClientInit, DummyInit)
+    // The gateway only joins federations with a lightning module.
+    .with_module(
+        fedimint_lnv2_client::LightningClientInit::default(),
+        fedimint_lnv2_server::LightningInit,
+    );
+
+    let fed = fixtures.new_fed_not_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+
+    let summary = gateway.handle_get_note_summary_msg(&fed.id()).await?;
+    assert!(
+        summary.is_empty(),
+        "Unfunded gateway has notes: {summary:?}"
+    );
+
+    // Fund the gateway by balancing a dummy input with MintV2 notes.
+    let client = gateway.select_client(fed.id()).await?.into_value();
+    let dummy_input = client
+        .get_first_module::<DummyClientModule>()?
+        .create_input(sats(11_000));
+    let operation_id = OperationId::new_random();
+    let outpoint_range = client
+        .finalize_and_submit_transaction(
+            operation_id,
+            "Issue e-cash via dummy module",
+            |_| (),
+            TransactionBuilder::new().with_inputs(dummy_input),
+        )
+        .await?;
+    client
+        .await_primary_bitcoin_module_outputs(operation_id, outpoint_range.into_iter().collect())
+        .await?;
+
+    let summary = gateway.handle_get_note_summary_msg(&fed.id()).await?;
+    assert!(!summary.is_empty(), "Funded gateway has no notes");
+    assert_eq!(summary.total_amount(), client.get_balance_for_btc().await?);
+
+    Ok(())
+}
+
 /// Asks the gateway for an LNv2 invoice paying an incoming contract keyed to
 /// its module key, the way an LNv2 client does.
 async fn create_lnv2_invoice(

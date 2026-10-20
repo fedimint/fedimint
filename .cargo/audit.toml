@@ -52,6 +52,16 @@ ignore = [
   # still pins quick-xml to ^0.39 and the advisory requires >=0.41.0.
   "RUSTSEC-2026-0194",
   "RUSTSEC-2026-0195",
+  # rustls 0.21.12 remains pinned through reqwest 0.11 in the ldk-node chain;
+  # neither advisory has a 0.21 backport. Keep rustls 0.23 at >=0.23.46:
+  # these ID-wide exceptions must not be used instead of updating that line.
+  # Session-value Debug leaks require a custom ClientSessionStore that logs
+  # session values. The reqwest 0.11 clients use rustls's built-in memory cache,
+  # not a custom session store, and do not format those values.
+  "RUSTSEC-2026-0346",
+  # The key-share prediction downgrade loses post-quantum confidentiality.
+  # rustls 0.21 supports only X25519/P-256/P-384, not hybrid/PQ key exchange.
+  "RUSTSEC-2026-0349",
 ]
 
 [output]
