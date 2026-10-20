@@ -4,6 +4,7 @@ use std::time::Duration;
 use anyhow::bail;
 use assert_matches::assert_matches;
 use bitcoin_hashes::{Hash, sha256};
+use fedimint_api_client::api::ServerError;
 use fedimint_client::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, TransactionBuilder, TxSubmissionStates,
     TxSubmissionStatesSM,
@@ -15,27 +16,31 @@ use fedimint_core::core::{IntoDynInstance, OperationId};
 use fedimint_core::module::{AmountUnit, Amounts, CommonModuleInit as _};
 use fedimint_core::util::backoff_util::aggressive_backoff_long;
 use fedimint_core::util::{BoxStream, NextOrPending, retry};
-use fedimint_core::{Amount, sats, secp256k1};
+use fedimint_core::{Amount, apply, async_trait_maybe_send, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::incoming::IncomingSmError;
+use fedimint_ln_client::pay::{GatewayPayError, PayInvoicePayload};
 use fedimint_ln_client::receive::{
     LightningReceiveError, LightningReceiveStateMachine, LightningReceiveStates,
     LightningReceiveSubmittedOffer,
 };
 use fedimint_ln_client::{
-    ClaimIncomingContractError, GatewaySelectionError, InternalPayState, LightningClientInit,
-    LightningClientModule, LightningClientStateMachines, LightningOperationMeta,
-    LightningOperationMetaVariant, LnPayState, LnReceiveState, LnSubscribeError,
-    MockGatewayConnection, OutgoingLightningPayment, PayBolt11InvoiceError, PayType, PaymentInfo,
-    PaymentInfoError, ReceivingKey, ReclaimLnReceiveError, SpendableAmountError,
-    create_incoming_contract_output,
+    ClaimIncomingContractError, GatewayConnection, GatewaySelectionError, InternalPayState,
+    LightningClientInit, LightningClientModule, LightningClientStateMachines,
+    LightningOperationMeta, LightningOperationMetaVariant, LnPayState, LnReceiveState,
+    LnSubscribeError, MockGatewayConnection, OutgoingLightningPayment, PayBolt11InvoiceError,
+    PayType, PaymentInfo, PaymentInfoError, ReceivingKey, ReclaimLnReceiveError,
+    SpendableAmountError, create_incoming_contract_output,
 };
 use fedimint_ln_common::contracts::incoming::IncomingContractOffer;
 use fedimint_ln_common::contracts::{EncryptedPreimage, PreimageKey};
-use fedimint_ln_common::{LightningCommonInit, LightningOutput, MODULE_CONSENSUS_VERSION};
+use fedimint_ln_common::{
+    LightningCommonInit, LightningGateway, LightningOutput, MODULE_CONSENSUS_VERSION,
+};
 use fedimint_ln_server::LightningInit;
+use fedimint_logging::LOG_TEST;
 use fedimint_testing::Gateway;
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
@@ -46,6 +51,7 @@ use lightning_invoice::{
 };
 use rand::rngs::OsRng;
 use secp256k1::Keypair;
+use tracing::warn;
 
 pub async fn ln_operation(
     client: &ClientHandleArc,
@@ -414,6 +420,90 @@ async fn cannot_pay_same_external_invoice_twice() -> anyhow::Result<()> {
 
     drop(gw);
 
+    Ok(())
+}
+
+/// A gateway that claims to have paid every invoice, answering with a preimage
+/// that does not hash to the invoice's payment hash.
+#[derive(Debug)]
+struct WrongPreimageGatewayConnection;
+
+#[apply(async_trait_maybe_send!)]
+impl GatewayConnection for WrongPreimageGatewayConnection {
+    async fn verify_gateway_availability(
+        &self,
+        _gateway: &LightningGateway,
+    ) -> Result<(), ServerError> {
+        Ok(())
+    }
+
+    async fn pay_invoice(
+        &self,
+        _gateway: LightningGateway,
+        _payload: PayInvoicePayload,
+    ) -> Result<String, GatewayPayError> {
+        Ok("00".repeat(32))
+    }
+}
+
+/// The client only believes a gateway paid an invoice if the preimage it
+/// returns hashes to the invoice's payment hash. Otherwise the payment stays
+/// funded and the client refunds itself once the contract times out.
+#[tokio::test(flavor = "multi_thread")]
+async fn gateway_preimage_not_matching_invoice_is_refunded() -> anyhow::Result<()> {
+    if Fixtures::is_real_test() {
+        warn!(
+            target: LOG_TEST,
+            "Skipping test as mining so many blocks is too slow in real bitcoind setup"
+        );
+        return Ok(());
+    }
+
+    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit).with_module(
+        LightningClientInit {
+            gateway_conn: Some(Arc::new(WrongPreimageGatewayConnection)),
+        },
+        LightningInit,
+    );
+    let fed = fixtures.new_fed_degraded().await;
+    let gw = gateway(&fixtures, &fed).await;
+    let client = fed.new_client().await;
+    client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
+        .await;
+
+    let invoice = FakeLightningTest::new().invoice(Amount::from_sats(100), None)?;
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id: _,
+        fee: _,
+    } = pay_invoice(&client, invoice, Some(gw.http_gateway_id().await)).await?;
+    let PayType::Lightning(operation_id) = payment_type else {
+        panic!("Expected lightning payment!");
+    };
+    let mut sub = client
+        .get_first_module::<LightningClientModule>()?
+        .subscribe_ln_pay(operation_id)
+        .await?
+        .into_stream();
+
+    assert_eq!(sub.ok().await?, LnPayState::Created);
+    let LnPayState::Funded { block_height } = sub.ok().await? else {
+        panic!("Expected the outgoing contract to be funded");
+    };
+
+    let blocks_to_timelock =
+        u64::from(block_height).saturating_sub(fixtures.bitcoin().get_block_count().await);
+    fixtures
+        .bitcoin()
+        .mine_blocks(blocks_to_timelock + 12)
+        .await;
+
+    assert_matches!(sub.ok().await?, LnPayState::WaitingForRefund { .. });
+    assert_matches!(sub.ok().await?, LnPayState::Refunded { .. });
+
+    drop(gw);
     Ok(())
 }
 

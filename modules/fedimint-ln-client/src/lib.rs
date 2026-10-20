@@ -2867,7 +2867,9 @@ impl GatewayConnection for MockGatewayConnection {
         _gateway: LightningGateway,
         _payload: PayInvoicePayload,
     ) -> Result<String, GatewayPayError> {
-        // Just return a fake preimage to indicate success
-        Ok("00000000".to_string())
+        // The preimage of every invoice created by `FakeLightningTest`
+        // (`fedimint_testing::ln::MOCK_INVOICE_PREIMAGE`), so the client
+        // accepts the payment as made
+        Ok("01".repeat(32))
     }
 }
