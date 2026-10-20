@@ -1457,6 +1457,57 @@ async fn test_gateway_enforces_fee_limits_without_lnv2() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The note summary used to look up only the legacy mint module, so the Notes
+/// tab failed with "No modules found of kind mint" for a federation running
+/// MintV2 alone.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_note_summary_for_mintv2_federation() -> anyhow::Result<()> {
+    let fixtures = Fixtures::new_primary(
+        fedimint_mintv2_client::MintClientInit,
+        fedimint_mintv2_server::MintInit,
+    )
+    .with_module(DummyClientInit, DummyInit)
+    // The gateway only joins federations with a lightning module.
+    .with_module(
+        fedimint_lnv2_client::LightningClientInit::default(),
+        fedimint_lnv2_server::LightningInit,
+    );
+
+    let fed = fixtures.new_fed_not_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+
+    let summary = gateway.handle_get_note_summary_msg(&fed.id()).await?;
+    assert!(
+        summary.is_empty(),
+        "Unfunded gateway has notes: {summary:?}"
+    );
+
+    // Fund the gateway by balancing a dummy input with MintV2 notes.
+    let client = gateway.select_client(fed.id()).await?.into_value();
+    let dummy_input = client
+        .get_first_module::<DummyClientModule>()?
+        .create_input(sats(11_000));
+    let operation_id = OperationId::new_random();
+    let outpoint_range = client
+        .finalize_and_submit_transaction(
+            operation_id,
+            "Issue e-cash via dummy module",
+            |_| (),
+            TransactionBuilder::new().with_inputs(dummy_input),
+        )
+        .await?;
+    client
+        .await_primary_bitcoin_module_outputs(operation_id, outpoint_range.into_iter().collect())
+        .await?;
+
+    let summary = gateway.handle_get_note_summary_msg(&fed.id()).await?;
+    assert!(!summary.is_empty(), "Funded gateway has no notes");
+    assert_eq!(summary.total_amount(), client.get_balance_for_btc().await?);
+
+    Ok(())
+}
+
 /// Asks the gateway for an LNv2 invoice paying an incoming contract keyed to
 /// its module key, the way an LNv2 client does.
 async fn create_lnv2_invoice(
@@ -3417,9 +3468,8 @@ async fn lnv2_relay_direct_swap_without_funds_is_refused() -> anyhow::Result<()>
     Ok(())
 }
 
-/// One preimage settles every contract for an invoice, on either protocol, so
-/// the gateway must pay out for a payment hash at most once: a second contract
-/// for it is refused before anything is paid.
+/// One preimage settles contracts on either protocol, so cancellation must
+/// retain the hash claim that prevents another payout.
 #[tokio::test(flavor = "multi_thread")]
 async fn lnv2_payout_refuses_lnv1_payment_of_same_hash() -> anyhow::Result<()> {
     let gateway_conn = Arc::new(CapturingGatewayConnection::default());
@@ -3431,10 +3481,24 @@ async fn lnv2_payout_refuses_lnv1_payment_of_same_hash() -> anyhow::Result<()> {
 
     let payload =
         captured_lnv2_send_payload(&gateway, &gateway_conn, &fed, invoice.clone()).await?;
-    gateway
-        .send_payment_v2(payload)
+    let preimage = gateway
+        .send_payment_v2(payload.clone())
         .await?
         .expect("the gateway pays the invoice over LNv2");
+    let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+    let gateway_balance = retry(
+        "waiting for the original LNv2 contract claim",
+        backoff_util::aggressive_backoff(),
+        || async {
+            let balance = gateway_client.get_balance_for_btc().await?;
+            anyhow::ensure!(
+                balance > Amount::ZERO,
+                "original claim is not spendable yet"
+            );
+            Ok(balance)
+        },
+    )
+    .await?;
 
     let user_client = fed.new_client().await;
     user_client
@@ -3460,22 +3524,35 @@ async fn lnv2_payout_refuses_lnv1_payment_of_same_hash() -> anyhow::Result<()> {
     assert_eq!(pay_sub.ok().await?, LnPayState::Created);
     assert_matches!(pay_sub.ok().await?, LnPayState::Funded { .. });
 
-    let result = gateway
-        .select_client(fed.id())
-        .await?
-        .into_value()
-        .get_first_module::<GatewayClientModule>()?
+    let gateway_module = gateway_client.get_first_module::<GatewayClientModule>()?;
+    let operation = gateway_module
         .gateway_pay_bolt11_invoice(PayInvoicePayload {
             federation_id: fed.id(),
             contract_id,
             payment_data: get_payment_data(lightning_gateway, invoice),
             preimage_auth: Hash::hash(&[0; 32]),
         })
-        .await;
+        .await?;
+    let mut gateway_pay_sub = gateway_module
+        .gateway_subscribe_ln_pay(operation)
+        .await?
+        .into_stream();
+    assert_eq!(gateway_pay_sub.ok().await?, GatewayExtPayStates::Created);
     assert_matches!(
-        result,
-        Err(GatewayPayInvoiceError::PaymentHashAlreadyClaimed),
-        "the LNv1 payment is refused as a duplicate"
+        gateway_pay_sub.ok().await?,
+        GatewayExtPayStates::Canceled {
+            error: OutgoingPaymentError {
+                error_type: OutgoingPaymentErrorType::PaymentHashAlreadyClaimed,
+                ..
+            }
+        },
+        "the refused LNv1 contract is cancelled without another payout"
+    );
+    assert_eq!(gateway_client.get_balance_for_btc().await?, gateway_balance);
+    assert_eq!(
+        gateway.send_payment_v2(payload).await?,
+        Ok(preimage),
+        "the original LNv2 operation remains available"
     );
 
     Ok(())
