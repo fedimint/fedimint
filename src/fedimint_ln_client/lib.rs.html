@@ -2833,43 +2833,44 @@
 <a href=#2833 id=2833 data-nosnippet>2833</a>        gateway: LightningGateway,
 <a href=#2834 id=2834 data-nosnippet>2834</a>        payload: PayInvoicePayload,
 <a href=#2835 id=2835 data-nosnippet>2835</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;String, GatewayPayError&gt; {
-<a href=#2836 id=2836 data-nosnippet>2836</a>        <span class="kw">let </span>preimage: String = <span class="self">self
-<a href=#2837 id=2837 data-nosnippet>2837</a>            </span>.api
-<a href=#2838 id=2838 data-nosnippet>2838</a>            .request(
-<a href=#2839 id=2839 data-nosnippet>2839</a>                <span class="kw-2">&amp;</span>gateway.api,
-<a href=#2840 id=2840 data-nosnippet>2840</a>                Method::POST,
-<a href=#2841 id=2841 data-nosnippet>2841</a>                PAY_INVOICE_ENDPOINT,
-<a href=#2842 id=2842 data-nosnippet>2842</a>                <span class="prelude-val">Some</span>(payload),
-<a href=#2843 id=2843 data-nosnippet>2843</a>            )
-<a href=#2844 id=2844 data-nosnippet>2844</a>            .<span class="kw">await
-<a href=#2845 id=2845 data-nosnippet>2845</a>            </span>.map_err(|e| GatewayPayError::GatewayInternalError {
-<a href=#2846 id=2846 data-nosnippet>2846</a>                error_code: <span class="prelude-val">None</span>,
-<a href=#2847 id=2847 data-nosnippet>2847</a>                error_message: e.to_string(),
-<a href=#2848 id=2848 data-nosnippet>2848</a>            })<span class="question-mark">?</span>;
-<a href=#2849 id=2849 data-nosnippet>2849</a>        <span class="kw">let </span>length = preimage.len();
-<a href=#2850 id=2850 data-nosnippet>2850</a>        <span class="prelude-val">Ok</span>(preimage[<span class="number">1</span>..length - <span class="number">1</span>].to_string())
-<a href=#2851 id=2851 data-nosnippet>2851</a>    }
-<a href=#2852 id=2852 data-nosnippet>2852</a>}
-<a href=#2853 id=2853 data-nosnippet>2853</a>
-<a href=#2854 id=2854 data-nosnippet>2854</a><span class="attr">#[derive(Debug)]
-<a href=#2855 id=2855 data-nosnippet>2855</a></span><span class="kw">pub struct </span>MockGatewayConnection;
-<a href=#2856 id=2856 data-nosnippet>2856</a>
-<a href=#2857 id=2857 data-nosnippet>2857</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
-<a href=#2858 id=2858 data-nosnippet>2858</a></span><span class="kw">impl </span>GatewayConnection <span class="kw">for </span>MockGatewayConnection {
-<a href=#2859 id=2859 data-nosnippet>2859</a>    <span class="kw">async fn </span>verify_gateway_availability(
-<a href=#2860 id=2860 data-nosnippet>2860</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2861 id=2861 data-nosnippet>2861</a>        _gateway: <span class="kw-2">&amp;</span>LightningGateway,
-<a href=#2862 id=2862 data-nosnippet>2862</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ServerError&gt; {
-<a href=#2863 id=2863 data-nosnippet>2863</a>        <span class="prelude-val">Ok</span>(())
-<a href=#2864 id=2864 data-nosnippet>2864</a>    }
-<a href=#2865 id=2865 data-nosnippet>2865</a>
-<a href=#2866 id=2866 data-nosnippet>2866</a>    <span class="kw">async fn </span>pay_invoice(
-<a href=#2867 id=2867 data-nosnippet>2867</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2868 id=2868 data-nosnippet>2868</a>        _gateway: LightningGateway,
-<a href=#2869 id=2869 data-nosnippet>2869</a>        _payload: PayInvoicePayload,
-<a href=#2870 id=2870 data-nosnippet>2870</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;String, GatewayPayError&gt; {
-<a href=#2871 id=2871 data-nosnippet>2871</a>        <span class="comment">// Just return a fake preimage to indicate success
-<a href=#2872 id=2872 data-nosnippet>2872</a>        </span><span class="prelude-val">Ok</span>(<span class="string">"00000000"</span>.to_string())
-<a href=#2873 id=2873 data-nosnippet>2873</a>    }
-<a href=#2874 id=2874 data-nosnippet>2874</a>}
+<a href=#2836 id=2836 data-nosnippet>2836</a>        <span class="comment">// `GatewayApi::request` already deserializes the JSON response, so the
+<a href=#2837 id=2837 data-nosnippet>2837</a>        // hex preimage arrives without surrounding quotes.
+<a href=#2838 id=2838 data-nosnippet>2838</a>        </span><span class="self">self</span>.api
+<a href=#2839 id=2839 data-nosnippet>2839</a>            .request(
+<a href=#2840 id=2840 data-nosnippet>2840</a>                <span class="kw-2">&amp;</span>gateway.api,
+<a href=#2841 id=2841 data-nosnippet>2841</a>                Method::POST,
+<a href=#2842 id=2842 data-nosnippet>2842</a>                PAY_INVOICE_ENDPOINT,
+<a href=#2843 id=2843 data-nosnippet>2843</a>                <span class="prelude-val">Some</span>(payload),
+<a href=#2844 id=2844 data-nosnippet>2844</a>            )
+<a href=#2845 id=2845 data-nosnippet>2845</a>            .<span class="kw">await
+<a href=#2846 id=2846 data-nosnippet>2846</a>            </span>.map_err(|e| GatewayPayError::GatewayInternalError {
+<a href=#2847 id=2847 data-nosnippet>2847</a>                error_code: <span class="prelude-val">None</span>,
+<a href=#2848 id=2848 data-nosnippet>2848</a>                error_message: e.to_string(),
+<a href=#2849 id=2849 data-nosnippet>2849</a>            })
+<a href=#2850 id=2850 data-nosnippet>2850</a>    }
+<a href=#2851 id=2851 data-nosnippet>2851</a>}
+<a href=#2852 id=2852 data-nosnippet>2852</a>
+<a href=#2853 id=2853 data-nosnippet>2853</a><span class="attr">#[derive(Debug)]
+<a href=#2854 id=2854 data-nosnippet>2854</a></span><span class="kw">pub struct </span>MockGatewayConnection;
+<a href=#2855 id=2855 data-nosnippet>2855</a>
+<a href=#2856 id=2856 data-nosnippet>2856</a><span class="attr">#[apply(<span class="macro">async_trait_maybe_send!</span>)]
+<a href=#2857 id=2857 data-nosnippet>2857</a></span><span class="kw">impl </span>GatewayConnection <span class="kw">for </span>MockGatewayConnection {
+<a href=#2858 id=2858 data-nosnippet>2858</a>    <span class="kw">async fn </span>verify_gateway_availability(
+<a href=#2859 id=2859 data-nosnippet>2859</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2860 id=2860 data-nosnippet>2860</a>        _gateway: <span class="kw-2">&amp;</span>LightningGateway,
+<a href=#2861 id=2861 data-nosnippet>2861</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), ServerError&gt; {
+<a href=#2862 id=2862 data-nosnippet>2862</a>        <span class="prelude-val">Ok</span>(())
+<a href=#2863 id=2863 data-nosnippet>2863</a>    }
+<a href=#2864 id=2864 data-nosnippet>2864</a>
+<a href=#2865 id=2865 data-nosnippet>2865</a>    <span class="kw">async fn </span>pay_invoice(
+<a href=#2866 id=2866 data-nosnippet>2866</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2867 id=2867 data-nosnippet>2867</a>        _gateway: LightningGateway,
+<a href=#2868 id=2868 data-nosnippet>2868</a>        _payload: PayInvoicePayload,
+<a href=#2869 id=2869 data-nosnippet>2869</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;String, GatewayPayError&gt; {
+<a href=#2870 id=2870 data-nosnippet>2870</a>        <span class="comment">// The preimage of every invoice created by `FakeLightningTest`
+<a href=#2871 id=2871 data-nosnippet>2871</a>        // (`fedimint_testing::ln::MOCK_INVOICE_PREIMAGE`), so the client
+<a href=#2872 id=2872 data-nosnippet>2872</a>        // accepts the payment as made
+<a href=#2873 id=2873 data-nosnippet>2873</a>        </span><span class="prelude-val">Ok</span>(<span class="string">"01"</span>.repeat(<span class="number">32</span>))
+<a href=#2874 id=2874 data-nosnippet>2874</a>    }
+<a href=#2875 id=2875 data-nosnippet>2875</a>}
 </code></pre></div></section></main></body></html>
