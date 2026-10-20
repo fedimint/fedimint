@@ -10,7 +10,7 @@ Fedi calls this feature "multispend". That word does not appear in Fedimint and 
 
 Proposed module kind: `multisig`. Crates `fedimint-multisig-{common,server,client}`, plus `fedimint-multisig-tests`.
 
-The one objection is that Fedimint's on-chain wallet is itself a federation multisig, so prose has to distinguish "the federation's multisig" from "a multisig account". No identifier collides, there is no `multisig` module kind today, and the alternative is coining a word nobody recognizes. `vault` is the fallback if the overload proves confusing in review; `escrow` is too narrow, since the module has no arbiter role.
+The one objection is that Fedimint's on-chain wallet is itself a federation multisig, so prose has to distinguish "the federation's multisig" from "a multisig account". No identifier collides, there is no `multisig` module kind today, and the alternative is coining a word nobody recognizes. `vault` is the fallback if the overload proves confusing in review. `escrow` is too narrow, since the module has no arbiter role.
 
 ## What exists today, and why it is the wrong substrate
 
@@ -42,7 +42,9 @@ That removes a creation operation and an entire class of "account not found" sta
 
 **Fund.** A module output credits an account. Value comes from anywhere in the transaction, usually ecash notes. Anyone can fund any account.
 
-**Transfer.** A module input moves value from one account to another inside the module. It carries the amount, the destination account, a sequence number, the owner signatures, and, on first spend, the policy. The module debits and credits in `process_input`, so the input reports zero value and the transaction needs no matching output.
+**Transfer.** A module input moves value from one account to another inside the module. It carries the amount, the destination account, a sequence number, the owner signatures, a submitter key, and, on first spend, the policy. The module debits and credits in `process_input`, so the input reports zero value and the transaction needs no matching output.
+
+The submitter key is there because core demands one. Every input reports exactly one public key and the transaction carries one signature for it, so the input names whoever is submitting and that person signs the transaction hash as usual. It carries no authority. The owner signatures are what authorize the spend, and they are checked against the policy, so it does not matter whether the submitter is an owner or a stranger.
 
 **Withdraw.** A module input releases value from a single-owner account into the transaction, where it becomes ecash, a Lightning contract or a peg-out like any other input. Authorised by the ordinary transaction signature, with the account key as the input's public key.
 
@@ -80,7 +82,9 @@ No price feed, no cycles, no time dependence.
 
 ### Fees
 
-Inputs and outputs report fees from module config, defaulting to zero, settable by guardians like other per-item fees. Depositing or withdrawing also pays the mint's own note fees, because notes are reissued. Group-internal transfers move no notes and pay only whatever this module charges.
+Funding and withdrawal report fees from module config the ordinary way, defaulting to zero and settable by guardians. Both also pay the mint's own note fees, because notes are reissued.
+
+Transfers cannot work that way. A transfer input carries no value, and a transaction balances only when its inputs cover its outputs plus fees, so a fee declared the ordinary way would have to be paid by a second input, which means the submitter attaches ecash to move someone else's money. V1 should instead deduct the transfer fee from the source account inside `process_input`, which keeps a transfer a single input with no notes attached. Where a deducted fee goes is then the module's decision and needs settling in review.
 
 Application-level fees stay an application concern.
 
@@ -106,7 +110,15 @@ Decide v1 without it. Design the SDK API so it can be swapped in underneath with
 
 **Mutable membership.** Adding or removing an owner changes the policy, which changes the account id. V1 should say so and require a transfer to a new account. Anything else needs a policy-update operation with its own threshold rules.
 
-**Account id scheme.** Hash of policy and salt, as above, or explicit creation with a federation-assigned id. The hash version is better on privacy and smaller; confirm it does not break the client's ability to enumerate its own accounts after restore.
+**Account id scheme.** Hash of policy and salt, as above, or explicit creation with a federation-assigned id. The hash version is better on privacy and smaller. Confirm it does not break the client's ability to enumerate its own accounts after restore.
+
+## What lives where
+
+The authorization hash is consensus-critical and lives in the common crate with the rest of the wire types.
+
+The proposal and approval blobs are not consensus types, but they are interop types: a Fedi bridge client and an SDK client in the same group have to parse each other's. So they belong in `fedimint-multisig-client`, and the SDK re-exports them rather than defining its own.
+
+That is the split. Consensus types, signature verification and the interop blob format go to Fedimint. Facade, operations, error mapping, bindings and examples go to the SDK.
 
 ## SDK layer
 
@@ -115,7 +127,7 @@ The SDK gets a facade, following the shape the others already have.
 ```rust
 federation.multisig() -> Option<Multisig>
 
-// Local. Derives the account id from the policy; touches no network.
+// Local. Derives the account id from the policy and touches no network.
 multisig.account(policy: &Policy) -> Account
 
 // What consensus holds: balance, sequence number, whether the policy is revealed.
