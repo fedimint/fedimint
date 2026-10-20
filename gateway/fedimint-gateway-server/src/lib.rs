@@ -3180,6 +3180,16 @@ impl IAdminGateway for Gateway {
             quoted_fees,
         } = payload;
 
+        // Deserialized amounts can bypass BitcoinAmountOrAll::from_str.
+        // Reject them before converting to millisatoshis or querying either wallet.
+        if let BitcoinAmountOrAll::Amount(amount) = amount
+            && amount > bitcoin::Amount::MAX_MONEY
+        {
+            return Err(AdminGatewayError::WithdrawError {
+                failure_reason: "Withdrawal amount exceeds maximum Bitcoin supply".to_string(),
+            });
+        }
+
         let address_network = get_network_for_address(&address);
         let gateway_network = self.network;
         let Ok(address) = address.require_network(gateway_network) else {
