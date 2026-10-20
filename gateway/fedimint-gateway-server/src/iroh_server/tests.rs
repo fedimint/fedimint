@@ -1,8 +1,31 @@
 use anyhow::anyhow;
+use axum::Json;
 use bitcoin::hashes::{Hash as _, sha256};
+use fedimint_core::module::GATEWAY_ERROR_RESPONSE_VERSION;
 use reqwest::StatusCode;
 
 use super::{parse_verify_route, run_handler};
+use crate::error::{GatewayError, PublicGatewayError};
+
+#[tokio::test]
+async fn federation_unreachable_handler_returns_sanitized_error() {
+    let (status, body) = run_handler("/pay_invoice", async {
+        Err::<(StatusCode, Json<serde_json::Value>), _>(
+            GatewayError::Public(PublicGatewayError::FederationUnreachable).into(),
+        )
+    })
+    .await;
+
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        body.0,
+        serde_json::json!({
+            "version": GATEWAY_ERROR_RESPONSE_VERSION,
+            "error": "federation_unreachable"
+        })
+    );
+    assert!(!body.0.to_string().contains("sensitive-debug-sentinel"));
+}
 
 #[tokio::test]
 async fn panicking_handler_returns_an_error_instead_of_unwinding() {
