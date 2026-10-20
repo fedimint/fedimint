@@ -22,11 +22,19 @@ A sats-native module has none of those problems, because none of them are about 
 
 Approvals today ride Matrix, which makes a chat transport load-bearing for correctness. A module can verify k-of-n signatures directly, so Matrix drops back to what it is good at: notifications and presence.
 
+## Target federations
+
+The module targets federations running the second generation of the core modules, `mintv2`, `walletv2` and `lnv2`. It is not built to sit alongside a first-generation mint, wallet or lightning module.
+
+Fedimint has no generation field. The split lives in the SDK, as a table of module kinds, and the newer federations are already second-generation with no older wallet or mint to accommodate.
+
 ## Units
 
 No fiat, no peg, no oracle. That is what keeps the module small, and it is the whole argument for building it.
 
-Not BTC-only in its types. Core already carries multi-unit amounts, the dummy module's input and output already name an `AmountUnit`, mintv2 config carries one, and the client already routes by unit. The module should be unit-generic in its types for the same reason dummy is, and no code path should assume bitcoin. In practice v1 ships, tests and documents bitcoin.
+Not bitcoin-only in its types. Core already carries multi-unit amounts, the dummy module's input and output already name an `AmountUnit`, and the client already routes by unit. What makes that more than decoration is `mintv2`, whose config carries a unit, so a federation can hold something other than bitcoin and the module has a counterparty for a non-bitcoin balance. A first-generation mint is bitcoin-only, and against one the genericity would be dead code.
+
+So the types stay unit-generic and no code path assumes bitcoin. The first release ships, tests and documents bitcoin.
 
 ## Design
 
@@ -62,7 +70,7 @@ What is left is for the signatures to cover an explicit authorization message ca
 
 Hence the split. If a k-of-n account could release value into a transaction, the submitter would choose the outputs alone, and one member could take the whole amount against a signature the others gave for something else. Transfer to a member's own account, then let that member withdraw, and every step is checked by the module.
 
-A later version could let the authorization name a submitter, collapsing the two steps into one for a group that is happy to delegate. Not needed for v1.
+A later version could let the authorization name a submitter, collapsing the two steps into one for a group that is happy to delegate. Not needed for the first release.
 
 ### Authorisation message
 
@@ -82,9 +90,9 @@ No price feed, no cycles, no time dependence.
 
 ### Fees
 
-Funding and withdrawal report fees from module config the ordinary way, defaulting to zero and settable by guardians. Both also pay the mint's own note fees, because notes are reissued.
+Funding and withdrawal report fees from module config the ordinary way, defaulting to zero and settable by guardians. `mintv2`'s shape is the one to copy, a fixed base per input and output plus a relative rate in parts per million with a cap. Both also pay the mint's own note fees, because notes are reissued.
 
-Transfers cannot work that way. A transfer input carries no value, and a transaction balances only when its inputs cover its outputs plus fees, so a fee declared the ordinary way would have to be paid by a second input, which means the submitter attaches ecash to move someone else's money. V1 should instead deduct the transfer fee from the source account inside `process_input`, which keeps a transfer a single input with no notes attached. Where a deducted fee goes is then the module's decision and needs settling in review.
+Transfers cannot work that way. A transfer input carries no value, and a transaction balances only when its inputs cover its outputs plus fees, so a fee declared the ordinary way would have to be paid by a second input, which means the submitter attaches ecash to move someone else's money. The first release should instead deduct the transfer fee from the source account inside `process_input`, which keeps a transfer a single input with no notes attached. Where a deducted fee goes is then the module's decision and needs settling in review.
 
 Application-level fees stay an application concern.
 
@@ -102,13 +110,13 @@ This is not a regression against the stability pool, which has the same property
 
 ## Open decisions
 
-**Where approvals are collected.** V1 keeps signature collection off the federation: the client produces a proposal blob and a signature blob, and the application moves them over whatever transport it has. That is the smallest thing that can be upstreamed, and it has no pending state, no expiry, no garbage collection and no denial-of-service surface.
+**Where approvals are collected.** The first release keeps signature collection off the federation: the client produces a proposal blob and a signature blob, and the application moves them over whatever transport it has. That is the smallest thing that can be upstreamed, and it has no pending state, no expiry, no garbage collection and no denial-of-service surface.
 
-The alternative is worth a second consensus version, not a v1 argument: let members submit proposals and signatures to a module endpoint, have guardians carry them into consensus, and execute at threshold. That removes the transport problem entirely, which is the single biggest thing standing between this module and an SDK that is pleasant to use. It also adds client-submitted state to consensus, which is exactly the part upstream will push back on, so it should arrive with limits already designed: members only, a cap on open proposals per account, and expiry.
+The alternative is worth a second consensus version, and is not a reason to hold the first: let members submit proposals and signatures to a module endpoint, have guardians carry them into consensus, and execute at threshold. That removes the transport problem entirely, which is the single biggest thing standing between this module and an SDK that is pleasant to use. It also adds client-submitted state to consensus, which is exactly the part upstream will push back on, so it should arrive with limits already designed: members only, a cap on open proposals per account, and expiry.
 
-Decide v1 without it. Design the SDK API so it can be swapped in underneath without changing the surface.
+Decide the first release without it. Design the SDK API so it can be swapped in underneath without changing the surface.
 
-**Mutable membership.** Adding or removing an owner changes the policy, which changes the account id. V1 should say so and require a transfer to a new account. Anything else needs a policy-update operation with its own threshold rules.
+**Mutable membership.** Adding or removing an owner changes the policy, which changes the account id. The first release should say so and require a transfer to a new account. Anything else needs a policy-update operation with its own threshold rules.
 
 **Account id scheme.** Hash of policy and salt, as above, or explicit creation with a federation-assigned id. The hash version is better on privacy and smaller. Confirm it does not break the client's ability to enumerate its own accounts after restore.
 
@@ -144,7 +152,7 @@ multisig.withdraw(&account, amount) -> Result<Operation<MultisigWithdrawState>>
 
 The rest is the usual wiring: a `Capabilities` flag so `multisig()` returns `None` on federations without the module, an entry in the module init registry, operation kinds and states, and uniffi exports so Kotlin, Swift and JavaScript get it for free.
 
-The module declares no generation, like `meta`, so the v1/v2 generation check ignores it.
+`multisig` joins the SDK's generation table at generation two. The facade is then absent on a first-generation federation, and a configuration mixing the two stays refused the way it already is.
 
 ## Sequencing
 
@@ -166,8 +174,8 @@ What a release gates is publishing, not development. crates.io takes no git depe
 
 Upstream may not want another module in tree. If so, the work still stands, but it runs in a fork of `fedimintd` and only on federations that deploy that fork, which is a materially worse distribution story and should be understood before phase 2 rather than after.
 
-The transport gap is the thing most likely to make the SDK API feel thin. An application still has to move proposals and signatures between members, and the SDK cannot do that for it in v1.
+The transport gap is the thing most likely to make the SDK API feel thin. An application still has to move proposals and signatures between members, and the SDK cannot do that for it at first.
 
 Guardian-visible balances and membership may be unacceptable for some deployments. There is no cheap fix inside this design.
 
-The module only helps federations that run it, so applications need the no-module path to stay good: the facade returns `None`, and an application that needs group accounts everywhere still needs its own fallback.
+The module only helps federations that run it, and now only second-generation ones, so the no-module path has to stay good. The facade returns `None`, and an application that needs group accounts everywhere still needs its own fallback.
