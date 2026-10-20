@@ -4031,7 +4031,9 @@ version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
+ "async-trait",
  "bitcoin_hashes",
+ "fedimint-api-client",
  "fedimint-client",
  "fedimint-client-module",
  "fedimint-core",
