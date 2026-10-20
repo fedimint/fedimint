@@ -148,15 +148,17 @@ The module declares no generation, like `meta`, so the v1/v2 generation check ig
 
 ## Sequencing
 
-The SDK pins Fedimint at one exact version and CI fails when the pin drifts from the flake input. SDK work cannot start against an unreleased module without moving both pins to a pre-release. That is the hard boundary between phases 3 and 4.
+The SDK requires every Fedimint crate at one exact version from crates.io, and CI checks that version against the release tag the flake builds devimint from. Development against an unreleased module moves both to a git revision instead, which preserves the property the check exists for: the client and the federation it is tested against come from one tree. Fedimint's crates require each other exactly, so that means all of them, and `pins-agree` asserts the `= "=<version>"` form, so it needs a revision branch or a skip while this work is in flight.
+
+What a release gates is publishing, not development. crates.io takes no git dependencies, so the SDK crate and the packages generated from it ship only once a Fedimint release carries the module.
 
 **1. Agree the shape upstream.** Open a design issue on fedimint/fedimint covering the account model, the authorization message, the two-tier spend rule and the units question. dpc has already said a multisig-like module handling any unit is reasonable, so this starts from agreement rather than from a cold pitch. Settle naming here too.
 
 **2. Build the module.** Three crates on the dummy module's skeleton, plus a tests crate. Server: accounts, policy reveal, signature verification, sequence numbers, fees, db migrations. Client: account derivation, proposal and approval types, state machines for deposit, transfer and withdraw, backup of policies. Wire into `fedimintd`, the CLI and devimint. Integration tests for the group lifecycle, and for the attacks: wrong policy preimage, replayed sequence number, k-1 signatures, duplicate signer, k-of-n attempting to release into a transaction.
 
-**3. Release.** Lands in a Fedimint release. Guardians must opt in, since a module only exists on federations that deploy it, and a module that is not compiled into `fedimintd` needs a fork to run at all. Worth confirming early whether Fedi's own federations can take a release carrying it.
+**3. Release.** Lands in a Fedimint release, which is what unblocks publishing the SDK. Guardians must opt in, since a module only exists on federations that deploy it, and a module that is not compiled into `fedimintd` needs a fork to run at all. Worth confirming early whether Fedi's own federations can take a release carrying it.
 
-**4. SDK.** Bump the Fedimint pin and the flake input together, then facade, capabilities, operations, bindings, examples and the generated SDK surface.
+**4. SDK.** Starts as soon as phase 2 has a branch to build against, pinned to a revision rather than a tag. Facade, capabilities, operations, bindings, examples and the generated SDK surface. Moving the pin to the release version is the last step, not the first.
 
 **5. Fedi migration.** Out of scope here. The app's SPv2-based implementation keeps working, and moving groups onto the module is its own project with its own migration story.
 
