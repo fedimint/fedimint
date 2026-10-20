@@ -147,7 +147,7 @@ fn ensure_federation_size_supported(
             federation_size <= max,
             "Federation size {federation_size} exceeds the maximum of {max} for the \
              {descriptor_kind:?} wallet descriptor; set {FM_WALLETV2_DESCRIPTOR_ENV} to a \
-             taproot descriptor or choose a smaller federation"
+             descriptor that supports larger federations or choose a smaller federation"
         );
     }
 

@@ -8,7 +8,9 @@ use fedimint_core::base32::{self, FEDIMINT_PREFIX};
 use fedimint_core::core::ModuleKind;
 use fedimint_core::db::IRawDatabaseExt;
 use fedimint_core::db::mem_impl::MemDatabase;
-use fedimint_core::setup_code::{MAX_WSH_FEDERATION_SIZE, PeerSetupCode, WalletDescriptorKind};
+use fedimint_core::setup_code::{
+    MAX_FROST_FEDERATION_SIZE, MAX_WSH_FEDERATION_SIZE, PeerSetupCode, WalletDescriptorKind,
+};
 use fedimint_server_core::setup_ui::ISetupApi;
 use tokio::sync::mpsc::{self, Receiver};
 
@@ -391,5 +393,45 @@ async fn follower_accepts_leader_code_above_wsh_limit_with_taproot_descriptor() 
         .await,
     )
     .await
-    .expect("taproot descriptors don't bound the federation size");
+    .expect("FROST allows more guardians than P2WSH");
+}
+
+#[tokio::test]
+async fn follower_rejects_leader_code_above_frost_limit() {
+    let api = setup_api(Network::Regtest);
+    setup_code(&api, "local").await;
+
+    let err = api
+        .add_peer_setup_code(
+            leader_code(
+                Some(WalletDescriptorKind::Frost),
+                Some(BTreeSet::from([ModuleKind::from_static_str("mint")])),
+                MAX_FROST_FEDERATION_SIZE + 1,
+            )
+            .await,
+        )
+        .await
+        .expect_err("BIP 445 bounds the number of FROST signers");
+
+    assert!(
+        err.to_string().contains("for the Frost wallet descriptor"),
+        "unexpected error: {err:#}"
+    );
+}
+
+#[tokio::test]
+async fn follower_accepts_leader_code_above_frost_limit_with_tr_descriptor() {
+    let api = setup_api(Network::Regtest);
+    setup_code(&api, "local").await;
+
+    api.add_peer_setup_code(
+        leader_code(
+            Some(WalletDescriptorKind::Tr),
+            Some(BTreeSet::from([ModuleKind::from_static_str("mint")])),
+            MAX_FROST_FEDERATION_SIZE + 1,
+        )
+        .await,
+    )
+    .await
+    .expect("multi_a doesn't bound the federation size");
 }
