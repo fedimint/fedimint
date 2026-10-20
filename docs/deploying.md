@@ -62,7 +62,7 @@ federations. It is currently recommend to use an existing Lightning Gateway, but
 
 See [here](../docs/gateway.md) for more information about the Lightning Gateway.
 
-[^wallet-descriptor]: Optional: the leader, the guardian who sets the federation name, can set `FM_WALLETV2_DESCRIPTOR` before starting fedimintd to choose how the walletv2 module holds the federation's on-chain funds: `wsh` (the default, a P2WSH multisig), `tr` (a Taproot k-of-n multisig) or `frost` (a Taproot FROST threshold key). Leaving it unset uses `wsh`. Only the leader's value is used; the variable has no effect on the other guardians. An invalid value makes setup fail rather than fall back to the default. `wsh`, and the legacy `wallet` module whichever descriptor is chosen, support at most 20 guardians. The descriptor is fixed when DKG runs, and existing federations are not migrated to a different one.
+[^wallet-descriptor]: Optional: the leader, the guardian who sets the federation name, can set `FM_WALLETV2_DESCRIPTOR` before starting fedimintd to choose how the walletv2 module holds the federation's on-chain funds: `wsh` (the default, a P2WSH multisig), `tr` (a Taproot k-of-n multisig) or `frost` (a Taproot FROST threshold key). Leaving it unset uses `wsh`. Only the leader's value is used; the variable has no effect on the other guardians. An invalid value makes setup fail rather than fall back to the default. `wsh`, and the legacy `wallet` module whichever descriptor is chosen, support at most 20 guardians, and `frost` at most 128. The descriptor is fixed when DKG runs, and existing federations are not migrated to a different one.
 
 ## Self-hosted solutions
 
