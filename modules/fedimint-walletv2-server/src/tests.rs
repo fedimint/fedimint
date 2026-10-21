@@ -1,7 +1,6 @@
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::PeerId;
 use fedimint_walletv2_common::config::WalletDescriptor;
-use fedimint_walletv2_common::taproot::frost::FrostPublicKeyPackage;
 use secp256k1::{Parity, Scalar, SecretKey};
 
 use crate::taproot::frost::trusted_setup;
@@ -26,13 +25,13 @@ fn secret_keys() -> Vec<SecretKey> {
 
 fn descriptors() -> Vec<WalletDescriptor> {
     let peers: Vec<PeerId> = (0..4).map(PeerId::from).collect();
-    let (_, pubkey_package) = trusted_setup(&peers).expect("Trusted setup succeeds");
+    let (polynomial, _) = trusted_setup(&peers);
 
     vec![
         WalletDescriptor::Wsh,
         WalletDescriptor::Tr,
         WalletDescriptor::SinglePeer(secret_keys()[0].x_only_public_key(secp256k1::SECP256K1).0),
-        WalletDescriptor::Frost(FrostPublicKeyPackage(pubkey_package)),
+        WalletDescriptor::Frost(polynomial),
     ]
 }
 

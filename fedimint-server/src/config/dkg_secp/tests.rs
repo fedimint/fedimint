@@ -1,9 +1,10 @@
 use std::collections::{BTreeMap, VecDeque};
 
 use fedimint_core::{NumPeers, PeerId};
+use fedimint_server_core::config::eval_poly_secp;
 use secp256k1::SECP256K1;
 
-use super::{DkgSecp, DkgStepSecp, eval_poly};
+use super::{DkgSecp, DkgStepSecp};
 
 #[test_log::test]
 fn test_dkg_secp() {
@@ -54,7 +55,7 @@ fn test_dkg_secp() {
     for (peer, (polynomial, sks)) in keys {
         assert_eq!(polynomial.len(), 5);
         assert_eq!(
-            eval_poly(&polynomial, &peer).unwrap(),
+            eval_poly_secp(&polynomial, &peer).unwrap(),
             sks.public_key(SECP256K1)
         );
     }
