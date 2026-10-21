@@ -13,10 +13,10 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{NumPeersExt, PeerId};
 use fedimint_logging::LOG_MODULE_WALLETV2;
-use fedimint_server_core::config::{PeerHandleOps, PeerHandleOpsExt};
+use fedimint_server_core::config::scalar_secp;
 use fedimint_walletv2_common::config::WalletDescriptor;
 use fedimint_walletv2_common::taproot::frost::{
-    FrostFinalizationStat, FrostSignatureShares, FrostSigningCommitments,
+    FrostFinalizationStat, FrostPolynomial, FrostSignatureShares, FrostSigningCommitments,
 };
 use fedimint_walletv2_common::{WalletConsensusItem, impl_frost_encodable};
 use frost_secp256k1_tr as frost;
@@ -30,7 +30,7 @@ use rand::SeedableRng;
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
 use rand_chacha::ChaCha8Rng;
-use secp256k1::{PublicKey, Scalar};
+use secp256k1::{PublicKey, Scalar, SecretKey};
 
 use crate::db::{
     FrostAdvanceVoteAttemptPrefix, FrostAdvanceVoteKey, FrostAdvanceVoteTxidPrefix,
@@ -152,19 +152,6 @@ fn frost_test_forced_signer() -> Option<PeerId> {
 
     *FORCED
 }
-
-#[derive(Debug, Clone)]
-struct FrostPolynomial(frost::keys::dkg::round1::Package);
-
-impl_frost_encodable!(FrostPolynomial, frost::keys::dkg::round1::Package);
-
-#[derive(Debug, Clone)]
-struct FrostSecretSharePackage(frost_secp256k1_tr::keys::dkg::round2::Package);
-
-impl_frost_encodable!(
-    FrostSecretSharePackage,
-    frost_secp256k1_tr::keys::dkg::round2::Package
-);
 
 #[derive(Debug, Clone)]
 pub struct FrostSigningNonces(pub frost::round1::SigningNonces);
@@ -511,14 +498,7 @@ impl Wallet {
         }
         let nonces = nonces.into_iter().collect::<anyhow::Result<Vec<_>>>()?;
 
-        // Invariant: `Wallet::new` fails fast at startup if a FROST federation
-        // is missing its key package, and this path is FROST-only.
-        let key_package = self
-            .cfg
-            .private
-            .frost_key_package
-            .as_ref()
-            .expect("FROST federation must have a frost_key_package");
+        let key_package = &zf_key_package();
 
         let mut signature_shares = Vec::with_capacity(signing_packages.len());
         for ((signing_package, nonce), utxo) in signing_packages
@@ -608,16 +588,8 @@ impl Wallet {
         // Inline 1:1 replacement: keep our local nonce buffer at
         // `frost_nonce_buffer_target()` invariantly. Local-only state, no
         // consensus implications.
-        // Invariant: `Wallet::new` fails fast at startup if a FROST federation
-        // is missing its key package, and this path is FROST-only.
-        let key_package = self
-            .cfg
-            .private
-            .frost_key_package
-            .as_ref()
-            .expect("FROST federation must have a frost_key_package");
         let (new_nonce, new_commitment) =
-            frost_secp256k1_tr::round1::commit(key_package.signing_share(), &mut OsRng);
+            frost_secp256k1_tr::round1::commit(zf_key_package().signing_share(), &mut OsRng);
         dbtx.insert_new_entry(
             &FrostSigningNoncesKey(FrostSigningCommitments(new_commitment)),
             &FrostSigningNonces(new_nonce),
@@ -941,12 +913,12 @@ impl Wallet {
         Ok(())
     }
 
-    /// This federation's FROST public key package, carried by
-    /// [`WalletDescriptor::Frost`]. Errors on any other descriptor, which
-    /// callers already rule out via [`Self::ensure_frost_federation`].
+    /// This federation's FROST public key package. Errors on any descriptor
+    /// other than [`WalletDescriptor::Frost`], which callers already rule out
+    /// via [`Self::ensure_frost_federation`].
     fn frost_pubkey_package(&self) -> anyhow::Result<&PublicKeyPackage> {
         match &self.cfg.consensus.descriptor {
-            WalletDescriptor::Frost(pubkey_package) => Ok(&pubkey_package.0),
+            WalletDescriptor::Frost(_) => todo!("FROST signing moves to bip445"),
             _ => Err(anyhow!("Not a FROST federation")),
         }
     }
@@ -1545,11 +1517,7 @@ impl Wallet {
 /// build a `SigningPackage` for us when needed. Each nonce is consumed
 /// once (`consume_our_nonce` removes it after use) — FROST nonces must
 /// never be reused, or the long-lived signing share is leaked.
-pub(crate) fn spawn_initial_nonce_backfill(
-    db: Database,
-    task_group: &TaskGroup,
-    key_package: KeyPackage,
-) {
+pub(crate) fn spawn_initial_nonce_backfill(db: Database, task_group: &TaskGroup) {
     task_group.spawn_cancellable("frost initial nonce backfill", async move {
         let mut dbtx = db.begin_transaction().await;
         let count = dbtx
@@ -1559,7 +1527,7 @@ pub(crate) fn spawn_initial_nonce_backfill(
             .await;
         for _ in 0..frost_nonce_buffer_target().saturating_sub(count) {
             let (nonce, commitment) =
-                frost_secp256k1_tr::round1::commit(key_package.signing_share(), &mut OsRng);
+                frost_secp256k1_tr::round1::commit(zf_key_package().signing_share(), &mut OsRng);
 
             dbtx.insert_new_entry(
                 &FrostSigningNoncesKey(FrostSigningCommitments(commitment)),
@@ -1657,120 +1625,57 @@ async fn pick_signing_session(
     None
 }
 
-/// Generate FROST key material centrally via a trusted dealer for
-/// `peers`. Used by `trusted_dealer_gen` (the test / scripted path
-/// that doesn't run a real DKG). Produces:
-/// - One `KeyPackage` per peer, keyed by `PeerId`. Each peer receives only
-///   their own package.
-/// - The `PublicKeyPackage` (aggregate VK + per-peer verifying shares), stored
-///   as `WalletDescriptor::Frost` on every peer: the internal key is derived
-///   from it and shares are verified against it.
-///
-/// Threshold is `peers.threshold()` (BFT majority). The dealer holds
-/// every share momentarily and so must be trusted; real federations
-/// should use [`dkg`] instead. Skipped entirely when `peers.len() ==
-/// 1` (caller collapses to `WalletDescriptor::SinglePeer`).
-pub(crate) fn trusted_setup(
-    peers: &[PeerId],
-) -> anyhow::Result<(BTreeMap<PeerId, KeyPackage>, PublicKeyPackage)> {
-    let threshold = peers.to_num_peers().threshold() as u16;
-    let total_peers = peers.len() as u16;
-    let (shares, pubkey_package) = frost::keys::generate_with_dealer(
-        total_peers,
-        threshold,
-        frost::keys::IdentifierList::Default,
-        OsRng,
-    )?;
-    let key_packages = peers
-        .iter()
-        .map(|peer| {
-            let identifier = peer_id_to_identifier(*peer);
-            let share = shares
-                .get(&identifier)
-                .cloned()
-                .expect("No share for identifier");
-            let key_package =
-                frost::keys::KeyPackage::try_from(share).expect("Could not convert share");
-            (*peer, key_package)
-        })
-        .collect();
-    Ok((key_packages, pubkey_package))
+/// Our FROST key package for the signing path, which still runs on the ZF
+/// library until it moves to bip445.
+fn zf_key_package() -> KeyPackage {
+    todo!("FROST signing moves to bip445")
 }
 
-/// Run a 3-round FROST distributed key generation across `peers` and
-/// return our local share of the result. Unlike [`trusted_setup`], no
-/// single party ever sees every secret share — each peer's signing
-/// key is assembled locally from contributions exchanged over the
-/// `PeerHandleOps` channel.
+/// Generate FROST key material centrally via a trusted dealer for
+/// `peers`. Used by `trusted_dealer_gen` (the test / scripted path
+/// that doesn't run a real DKG). Produces the commitment to a random
+/// polynomial of degree `threshold - 1`, stored as `WalletDescriptor::Frost`
+/// on every peer, and every peer's secret share, its evaluation at the peer's
+/// evaluation point. Each peer receives only its own share.
 ///
-/// Returns:
-/// - Our `KeyPackage` (private — only this peer's signing share + the aggregate
-///   VK).
-/// - The `PublicKeyPackage`, stored as `WalletDescriptor::Frost` (replicated):
-///   the internal key is derived from it and shares are verified against it.
-///   All honest peers compute the same value.
-///
-/// Round structure:
-/// 1. `part1` — generate our polynomial commitment + secret; broadcast the
-///    commitment to all peers via `exchange_encodable`.
-/// 2. `part2` — using everyone's commitments, build per-peer shares; send each
-///    peer their share privately.
-/// 3. `part3` — combine our received shares with our retained secret to produce
-///    our final `KeyPackage` and the aggregate `PublicKeyPackage`.
-///
-/// Skipped entirely when `peers.num_peers().total() == 1` (caller
-/// collapses to `WalletDescriptor::SinglePeer`). Failures of any
-/// `part*` propagate as `Err` and abort federation setup.
-pub(crate) async fn dkg(
-    peers: &(dyn PeerHandleOps + Send + Sync),
-) -> anyhow::Result<(KeyPackage, PublicKeyPackage)> {
-    let our_identifier = peer_id_to_identifier(peers.identity());
-    let threshold = peers.num_peers().threshold() as u16;
-    let total_peers = peers.num_peers().total() as u16;
-    let (round1_secret_package, round1_package) =
-        frost::keys::dkg::part1(our_identifier, total_peers, threshold, OsRng)?;
+/// The dealer holds every share momentarily and so must be trusted; real
+/// federations run the secp256k1 DKG instead. Skipped entirely when
+/// `peers.len() == 1` (caller collapses to `WalletDescriptor::SinglePeer`).
+pub(crate) fn trusted_setup(peers: &[PeerId]) -> (FrostPolynomial, BTreeMap<PeerId, SecretKey>) {
+    let coefficients = (0..peers.to_num_peers().threshold())
+        .map(|_| SecretKey::new(&mut OsRng))
+        .collect::<Vec<SecretKey>>();
 
-    let round1_packages = peers
-        .exchange_encodable(FrostPolynomial(round1_package))
-        .await?
-        .into_iter()
-        .filter(|(peer_id, _)| *peer_id != peers.identity())
-        .map(|(peer_id, poly)| (peer_id_to_identifier(peer_id), poly.0))
-        .collect::<BTreeMap<_, _>>();
+    let polynomial = FrostPolynomial(
+        coefficients
+            .iter()
+            .map(|coefficient| coefficient.public_key(secp256k1::SECP256K1))
+            .collect(),
+    );
 
-    let (round2_secret_package, round2_packages) =
-        frost::keys::dkg::part2(round1_secret_package, &round1_packages)?;
+    let shares = peers
+        .iter()
+        .map(|peer| {
+            let x = scalar_secp(peer);
 
-    // Round 2 packages are per-recipient secret shares — sending them
-    // via the broadcast `exchange_encodable` would let any peer
-    // interpolate everyone's polynomial and recover the aggregate
-    // signing key. Use the directed primitive so each share goes only
-    // to its intended recipient.
-    let our_round2_packages = peers
-        .num_peers()
-        .peer_ids()
-        .filter(|peer_id| *peer_id != peers.identity())
-        .map(|peer_id| {
-            let identifier = peer_id_to_identifier(peer_id);
-            let package = round2_packages
-                .get(&identifier)
-                .expect("No round2 package for identifier")
-                .clone();
-            (peer_id, FrostSecretSharePackage(package))
+            let share = coefficients
+                .iter()
+                .copied()
+                .rev()
+                .reduce(|accumulator, coefficient| {
+                    accumulator
+                        .mul_tweak(&x)
+                        .expect("The evaluation point is nonzero")
+                        .add_tweak(&Scalar::from(coefficient))
+                        .expect("A random polynomial evaluates to zero with negligible probability")
+                })
+                .expect("The polynomial has at least one coefficient");
+
+            (*peer, share)
         })
-        .collect::<BTreeMap<_, _>>();
+        .collect();
 
-    let round2_packages = peers
-        .exchange_directed_encodable(our_round2_packages)
-        .await?
-        .into_iter()
-        .map(|(sender, package)| (peer_id_to_identifier(sender), package.0))
-        .collect::<BTreeMap<_, _>>();
-
-    let (key_package, pubkey_package) =
-        frost::keys::dkg::part3(&round2_secret_package, &round1_packages, &round2_packages)?;
-
-    Ok((key_package, pubkey_package))
+    (polynomial, shares)
 }
 
 /// Homomorphically add `tweak·G` to a compressed-serialized secp256k1 point

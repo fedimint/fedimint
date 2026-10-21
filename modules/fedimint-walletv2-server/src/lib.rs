@@ -65,7 +65,7 @@ use fedimint_core::{
 };
 use fedimint_logging::LOG_MODULE_WALLETV2;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
-use fedimint_server_core::config::{PeerHandleOps, PeerHandleOpsExt};
+use fedimint_server_core::config::{PeerHandleOps, PeerHandleOpsExt, eval_poly_secp};
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::{
     ConfigGenModuleArgs, EnvVarDoc, ServerModule, ServerModuleInit, ServerModuleInitArgs,
@@ -81,7 +81,7 @@ use fedimint_walletv2_common::endpoint_constants::{
     TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 };
 use fedimint_walletv2_common::taproot::frost::{
-    FrostFinalizationStat, FrostPublicKeyPackage, FrostSignatureShares,
+    FrostFinalizationStat, FrostPolynomial, FrostSignatureShares,
 };
 use fedimint_walletv2_common::taproot::{descriptor_tr, tweak_xonly_public_key};
 /// Re-exported for existing callers; the constants live in the common crate so
@@ -463,40 +463,34 @@ impl ServerModuleInit for WalletInit {
             .map(|(peer, sk)| (*peer, sk.public_key(secp256k1::SECP256K1)))
             .collect::<BTreeMap<PeerId, PublicKey>>();
 
-        // FROST is only run when (a) the leader picked Frost AND (b)
-        // there's more than one peer. With a single peer, Frost (and Tr)
-        // collapse to a plain key-path schnorr signature — see
-        // `WalletDescriptor::SinglePeer`.
-        let needs_frost =
-            matches!(args.descriptor_kind, WalletDescriptorKind::Frost) && peers.len() > 1;
-        let (frost_key_packages, frost_pubkey_package) = if needs_frost {
-            let (key_packages, pubkey_package) =
-                taproot::frost::trusted_setup(peers).expect("Could not execute trusted setup");
-            (
-                Some(key_packages),
-                Some(FrostPublicKeyPackage(pubkey_package)),
-            )
-        } else {
-            (None, None)
+        // With a single peer, Frost (and Tr) collapse to a plain key-path
+        // schnorr signature — see `WalletDescriptor::SinglePeer`.
+        let (descriptor, mut frost_secret_shares) = match (
+            args.descriptor_kind,
+            WalletDescriptor::single_peer(&bitcoin_pks),
+        ) {
+            (WalletDescriptorKind::Wsh, _) => (WalletDescriptor::Wsh, BTreeMap::new()),
+            (_, Some(single_peer)) => (single_peer, BTreeMap::new()),
+            (WalletDescriptorKind::Tr, None) => (WalletDescriptor::Tr, BTreeMap::new()),
+            (WalletDescriptorKind::Frost, None) => {
+                let (polynomial, shares) = taproot::frost::trusted_setup(peers);
+                (WalletDescriptor::Frost(polynomial), shares)
+            }
         };
 
         bitcoin_sks
             .into_iter()
             .map(|(peer, bitcoin_sk)| {
-                let frost_key_package = frost_key_packages
-                    .as_ref()
-                    .and_then(|kps| kps.get(&peer).cloned());
                 let config = WalletConfig {
                     private: WalletConfigPrivate {
                         bitcoin_sk,
-                        frost_key_package,
+                        frost_secret_share: frost_secret_shares.remove(&peer),
                     },
                     consensus: WalletConfigConsensus::new(
                         bitcoin_pks.clone(),
                         fee_consensus.clone(),
                         args.network,
-                        args.descriptor_kind,
-                        frost_pubkey_package.clone(),
+                        descriptor.clone(),
                     ),
                 };
 
@@ -520,41 +514,43 @@ impl ServerModuleInit for WalletInit {
             .into_iter()
             .collect();
 
-        // FROST is only run when (a) the leader picked Frost AND (b)
-        // there's more than one peer. With a single peer, Frost (and Tr)
-        // collapse to a plain key-path schnorr signature — see
-        // `WalletDescriptor::SinglePeer`.
-        let needs_frost = matches!(args.descriptor_kind, WalletDescriptorKind::Frost)
-            && peers.num_peers().total() > 1;
-        let (frost_key_package, frost_pubkey_package) = if needs_frost {
-            let (key_package, pubkey_package) = taproot::frost::dkg(peers).await?;
-            (
-                Some(key_package),
-                Some(FrostPublicKeyPackage(pubkey_package)),
-            )
-        } else {
-            (None, None)
+        // With a single peer, Frost (and Tr) collapse to a plain key-path
+        // schnorr signature — see `WalletDescriptor::SinglePeer` — so the
+        // FROST DKG only runs for larger federations.
+        let (descriptor, frost_secret_share) = match (
+            args.descriptor_kind,
+            WalletDescriptor::single_peer(&bitcoin_pks),
+        ) {
+            (WalletDescriptorKind::Wsh, _) => (WalletDescriptor::Wsh, None),
+            (_, Some(single_peer)) => (single_peer, None),
+            (WalletDescriptorKind::Tr, None) => (WalletDescriptor::Tr, None),
+            (WalletDescriptorKind::Frost, None) => {
+                let (polynomial, share) = peers.run_dkg_secp().await?;
+                (
+                    WalletDescriptor::Frost(FrostPolynomial(polynomial)),
+                    Some(share),
+                )
+            }
         };
 
         let config = WalletConfig {
             private: WalletConfigPrivate {
                 bitcoin_sk,
-                frost_key_package,
+                frost_secret_share,
             },
             consensus: WalletConfigConsensus::new(
                 bitcoin_pks,
                 fee_consensus,
                 args.network,
-                args.descriptor_kind,
-                frost_pubkey_package,
+                descriptor,
             ),
         };
 
-        if let WalletDescriptor::Frost(pubkey_package) = &config.consensus.descriptor {
+        if let WalletDescriptor::Frost(polynomial) = &config.consensus.descriptor {
             let descriptor = descriptor_tr(
                 &config.consensus.bitcoin_pks,
                 &sha256::Hash::all_zeros(),
-                pubkey_package.internal_key(),
+                polynomial.internal_key(),
             );
             tracing::info!(
                 target: LOG_MODULE_WALLETV2,
@@ -1199,17 +1195,29 @@ impl Wallet {
             task_group,
         );
 
-        if let WalletDescriptor::Frost(_) = cfg.consensus.descriptor {
-            // The private key package is `#[serde(default)]` — validate here
-            // so a truncated or hand-edited config fails at startup instead
-            // of at the first signing round. The public key package needs no
-            // check: it lives in the descriptor itself.
-            let key_package = cfg
+        if let WalletDescriptor::Frost(polynomial) = &cfg.consensus.descriptor {
+            // The secret share is `#[serde(default)]` — validate the key
+            // material here so a truncated, hand-edited or mismatched config
+            // fails at startup instead of at the first signing round.
+            let secret_share = cfg
                 .private
-                .frost_key_package
-                .clone()
-                .expect("Frost key not generated");
-            spawn_initial_nonce_backfill(db.clone(), task_group, key_package);
+                .frost_secret_share
+                .expect("Frost secret share not generated");
+
+            assert_eq!(
+                polynomial.0.len(),
+                cfg.consensus.bitcoin_pks.to_num_peers().threshold(),
+                "FROST polynomial must have one coefficient per threshold signer"
+            );
+
+            assert_eq!(
+                secret_share.public_key(secp256k1::SECP256K1),
+                eval_poly_secp(&polynomial.0, &our_peer_id)
+                    .expect("FROST polynomial evaluates at our peer id"),
+                "FROST secret share does not match our public key share"
+            );
+
+            spawn_initial_nonce_backfill(db.clone(), task_group);
         }
 
         Wallet {
