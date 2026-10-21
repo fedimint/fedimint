@@ -11,7 +11,6 @@ use super::FinalReceiveState;
 use super::events::CompleteLightningPaymentSucceeded;
 use crate::GatewayClientContextV2;
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that completes the incoming payment by contacting the
 /// lightning node when the incoming contract has been funded and the preimage
 /// is available.

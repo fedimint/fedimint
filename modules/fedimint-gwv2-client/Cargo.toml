@@ -11,16 +11,11 @@ version = { workspace = true }
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
-[package.metadata.cargo-udeps.ignore]
-# cargo udeps can't detect that one
-normal = ["aquamarine"]
-
 [lib]
 name = "fedimint_gwv2_client"
 path = "src/lib.rs"
 
 [dependencies]
-aquamarine = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }

@@ -97,7 +97,6 @@ pub enum Cancelled {
     DuplicatePayment,
 }
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that handles the relay of an incoming Lightning payment.
 ///
 /// ```mermaid

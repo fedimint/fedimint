@@ -29,7 +29,6 @@ path = "tests/tests.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-aquamarine = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true, features = ["json"] }

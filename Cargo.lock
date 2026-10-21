@@ -260,20 +260,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
-name = "aquamarine"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21cc1548309245035eb18aa7f0967da6bc65587005170c56e6ef2788a4cf3f4e"
-dependencies = [
- "include_dir",
- "itertools 0.10.5",
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "syn 2.0.104",
-]
-
-[[package]]
 name = "arc-swap"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3226,7 +3212,6 @@ dependencies = [
 name = "fedimint-client-module"
 version = "0.14.0-alpha"
 dependencies = [
- "aquamarine",
  "assert_matches",
  "async-stream",
  "async-trait",
@@ -3670,7 +3655,6 @@ name = "fedimint-gateway-server"
 version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine",
  "assert_matches",
  "async-stream",
  "async-trait",
@@ -3815,7 +3799,6 @@ dependencies = [
 name = "fedimint-gw-client"
 version = "0.14.0-alpha"
 dependencies = [
- "aquamarine",
  "async-stream",
  "async-trait",
  "bitcoin",
@@ -3846,7 +3829,6 @@ dependencies = [
 name = "fedimint-gwv2-client"
 version = "0.14.0-alpha"
 dependencies = [
- "aquamarine",
  "async-stream",
  "async-trait",
  "bitcoin",
@@ -3947,7 +3929,6 @@ dependencies = [
 name = "fedimint-ln-client"
 version = "0.14.0-alpha"
 dependencies = [
- "aquamarine",
  "assert_matches",
  "async-stream",
  "async-trait",
@@ -4072,7 +4053,6 @@ dependencies = [
 name = "fedimint-lnv2-client"
 version = "0.14.0-alpha"
 dependencies = [
- "aquamarine",
  "async-stream",
  "async-trait",
  "bitcoin",
@@ -4307,7 +4287,6 @@ dependencies = [
 name = "fedimint-mint-client"
 version = "0.14.0-alpha"
 dependencies = [
- "aquamarine",
  "assert_matches",
  "async-stream",
  "async-trait",
@@ -4423,7 +4402,6 @@ dependencies = [
 name = "fedimint-mintv2-client"
 version = "0.14.0-alpha"
 dependencies = [
- "aquamarine",
  "async-channel",
  "async-stream",
  "async-trait",
@@ -4965,7 +4943,6 @@ version = "0.14.0-alpha"
 name = "fedimint-wallet-client"
 version = "0.14.0-alpha"
 dependencies = [
- "aquamarine",
  "assert_matches",
  "async-stream",
  "async-trait",
@@ -6478,25 +6455,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.104",
-]
-
-[[package]]
-name = "include_dir"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "923d117408f1e49d914f1a379a309cffe4f18c05cf4e3d12e613a15fc81bd0dd"
-dependencies = [
- "include_dir_macros",
-]
-
-[[package]]
-name = "include_dir_macros"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cab85a7ed0bd5f0e76d93846e0147172bed2e2d3f859bcc33a8d9699cad1a75"
-dependencies = [
- "proc-macro2",
- "quote",
 ]
 
 [[package]]
@@ -9621,30 +9579,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edce586971a4dfaa28950c6f18ed55e0406c1ab88bbce2c6f6293a7aaba73d35"
 dependencies = [
  "toml_edit",
-]
-
-[[package]]
-name = "proc-macro-error"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c"
-dependencies = [
- "proc-macro-error-attr",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
- "version_check",
-]
-
-[[package]]
-name = "proc-macro-error-attr"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1be40180e52ecc98ad80b184934baf3d0d29f979574e439af5a55274b35f869"
-dependencies = [
- "proc-macro2",
- "quote",
- "version_check",
 ]
 
 [[package]]
