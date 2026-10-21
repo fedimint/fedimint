@@ -115,3 +115,6 @@ impl FrostTweak {
         SecretKeyShare(self.tap.secret(self.utxo.secret(share)))
     }
 }
+
+#[cfg(test)]
+mod tests;
