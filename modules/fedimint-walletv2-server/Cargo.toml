@@ -20,13 +20,12 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
 erased-serde = { workspace = true }
+fedimint-bip445 = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-logging = { workspace = true }
 fedimint-metrics = { workspace = true }
 fedimint-server-core = { workspace = true }
 fedimint-walletv2-common = { workspace = true }
-frost-core = { workspace = true }
-frost-secp256k1-tr = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 miniscript = { workspace = true }

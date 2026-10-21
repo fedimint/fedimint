@@ -1,5 +1,5 @@
 //! Determinism tests for `pick_signing_session`, plus the
-//! `dump_database` redaction contract for `FrostSigningNonces`. Each
+//! `dump_database` redaction contract for `FrostNonceSeed`. Each
 //! test asserts a specific invariant over synthetic DB state. Built on
 //! `MemDatabase` so they run as cheap unit tests.
 use std::collections::{BTreeMap, BTreeSet};
@@ -10,39 +10,19 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt};
 use fedimint_core::{PeerId, hex};
 use fedimint_walletv2_common::taproot::frost::FrostSigningCommitments;
-use frost_secp256k1_tr::keys::{IdentifierList, KeyPackage, SigningShare};
-use frost_secp256k1_tr::round1;
-use rand::rngs::OsRng;
 
-use super::{FrostSigningNonces, REDACTED_NONCE, pick_signing_session};
+use super::{FrostNonceSeed, REDACTED_NONCE, pick_signing_session};
 use crate::db::{FrostSigningCommitmentsKey, FrostSigningNoncesKey};
 
 const N: usize = 7;
 const THRESHOLD: usize = 5;
 
-/// Generates a one-off `SigningShare` we can repeatedly call
-/// `commit()` on to mint distinct synthetic commitments.
-fn signing_share_for_tests() -> SigningShare {
-    let (shares, _pubkey_package) =
-        frost_secp256k1_tr::keys::generate_with_dealer(7, 5, IdentifierList::Default, OsRng)
-            .expect("trusted dealer key gen");
-    let any_share = shares.into_values().next().expect("at least one share");
-    let key_package = KeyPackage::try_from(any_share).expect("share -> key_package");
-    *key_package.signing_share()
-}
-
-/// Mints `count` distinct commitments. Values are real
-/// `round1::commit` outputs but their content doesn't matter for
-/// `pick_signing_session` — only uniqueness within the per-peer
-/// prefix scan.
+/// Mints `count` distinct commitments. Values are real public nonces
+/// but their content doesn't matter for `pick_signing_session` — only
+/// uniqueness within the per-peer prefix scan.
 fn mint_commitments(count: usize) -> Vec<FrostSigningCommitments> {
-    let signing_share = signing_share_for_tests();
-    let mut rng = rand::rngs::OsRng;
     (0..count)
-        .map(|_| {
-            let (_nonces, commitments) = round1::commit(&signing_share, &mut rng);
-            FrostSigningCommitments(commitments)
-        })
+        .map(|_| FrostSigningCommitments(bip445::generate_nonce().1))
         .collect()
 }
 
@@ -294,14 +274,6 @@ async fn nonce_loss_suspect_is_reselected_in_later_attempts() {
     }
 }
 
-/// Regression for the dump-redaction contract: the serde output of a
-/// `FrostSigningNonces` value — what `dump_database` emits for the
-/// `FrostSigningNonce` prefix — must never contain the secret hiding /
-/// binding nonces in any form. A dump captured before a nonce is
-/// consumed, plus the signature share later broadcast with it, would
-/// otherwise reveal this guardian's long-lived signing share. Goes
-/// through a real DB round-trip so the value serialized is the decoded
-/// at-rest one, exactly as in the dump.
 /// Runs `pick_signing_session` with the test-only `forced_signer` hook.
 async fn run_pick_forced(
     db: &Database,
@@ -366,21 +338,24 @@ async fn forced_signer_without_commitments_is_skipped() {
     );
 }
 
+/// Regression for the dump-redaction contract: the serde output of a
+/// `FrostNonceSeed` value — what `dump_database` emits for the
+/// `FrostSigningNonce` prefix — must never contain the seed the secret
+/// nonce is derived from. A dump captured before a nonce is consumed,
+/// plus the signature share later broadcast with it, would otherwise
+/// reveal this guardian's long-lived signing share. Goes through a real
+/// DB round-trip so the value serialized is the decoded at-rest one,
+/// exactly as in the dump.
 #[tokio::test]
-async fn signing_nonces_dump_never_contains_secret_nonces() {
-    let signing_share = signing_share_for_tests();
-    let (nonces, commitments) = round1::commit(&signing_share, &mut OsRng);
+async fn nonce_seed_dump_never_contains_the_seed() {
+    let (seed, commitment) = FrostNonceSeed::generate();
 
-    let hiding_hex = hex::encode(nonces.hiding().serialize());
-    let binding_hex = hex::encode(nonces.binding().serialize());
-    let full_hex = hex::encode(nonces.serialize().expect("nonces serialize"));
-    let commitments_hex = hex::encode(commitments.serialize().expect("commitments serialize"));
+    let seed_hex = hex::encode(seed.0);
 
     let db = MemDatabase::new().into_database();
-    let key = FrostSigningNoncesKey(FrostSigningCommitments(commitments));
+    let key = FrostSigningNoncesKey(commitment);
     let mut dbtx = db.begin_transaction().await;
-    dbtx.insert_new_entry(&key, &FrostSigningNonces(nonces))
-        .await;
+    dbtx.insert_new_entry(&key, &seed).await;
     dbtx.commit_tx().await;
 
     let value = db
@@ -388,34 +363,22 @@ async fn signing_nonces_dump_never_contains_secret_nonces() {
         .await
         .get_value(&key)
         .await
-        .expect("nonce was just stored");
+        .expect("nonce seed was just stored");
 
-    let json = serde_json::to_string(&value).expect("serialize nonces");
-    assert!(!json.contains(&hiding_hex), "hiding nonce leaked: {json}");
-    assert!(!json.contains(&binding_hex), "binding nonce leaked: {json}");
-    assert!(
-        !json.contains(&full_hex),
-        "serialized nonces leaked: {json}"
-    );
+    assert_eq!(value.0, seed.0, "nonce seed must survive the DB round-trip");
+
+    let json = serde_json::to_string(&value).expect("serialize nonce seed");
+    assert!(!json.contains(&seed_hex), "nonce seed leaked: {json}");
     assert!(
         json.contains(REDACTED_NONCE),
         "missing redaction marker: {json}"
     );
-    assert!(
-        json.contains(&commitments_hex),
-        "public commitment should survive redaction: {json}"
-    );
 
-    // `Debug` delegates to frost-core's redacting impl; pin that too so a
-    // dependency upgrade can't silently start printing secrets.
     let debug = format!("{value:?}");
+    assert!(!debug.contains(&seed_hex), "nonce seed in Debug: {debug}");
     assert!(
-        !debug.contains(&hiding_hex),
-        "hiding nonce in Debug: {debug}"
-    );
-    assert!(
-        !debug.contains(&binding_hex),
-        "binding nonce in Debug: {debug}"
+        debug.contains(REDACTED_NONCE),
+        "missing redaction marker in Debug: {debug}"
     );
 }
 
