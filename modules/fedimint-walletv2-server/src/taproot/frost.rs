@@ -1,36 +1,39 @@
+mod tweak;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{LazyLock, Mutex};
 use std::time::SystemTime;
 
 use anyhow::{anyhow, ensure};
+use bip445::{
+    PublicNonce, SecretNonce, aggregate_signature_shares, derive_nonce, derive_public_nonce,
+    sign_share, verify, verify_signature_share,
+};
 use bitcoin::Txid;
 use bitcoin::hashes::{Hash, sha256};
 use bitcoin::sighash::{Prevouts, SighashCache};
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
-use fedimint_core::encoding::Encodable;
+use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{NumPeersExt, PeerId};
 use fedimint_logging::LOG_MODULE_WALLETV2;
 use fedimint_server_core::config::scalar_secp;
+use fedimint_walletv2_common::WalletConsensusItem;
 use fedimint_walletv2_common::config::WalletDescriptor;
+use fedimint_walletv2_common::taproot::descriptor_tr;
 use fedimint_walletv2_common::taproot::frost::{
     FrostFinalizationStat, FrostPolynomial, FrostSignatureShares, FrostSigningCommitments,
 };
-use fedimint_walletv2_common::{WalletConsensusItem, impl_frost_encodable};
-use frost_secp256k1_tr as frost;
-use frost_secp256k1_tr::keys::{
-    EvenY, KeyPackage, PublicKeyPackage, SigningShare, Tweak, VerifyingShare,
-};
-use frost_secp256k1_tr::round2::SignatureShare;
-use frost_secp256k1_tr::{Identifier, SigningPackage, VerifyingKey};
 use futures::StreamExt;
-use rand::SeedableRng;
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
+use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use secp256k1::{PublicKey, Scalar, SecretKey};
+use secp256k1::{Scalar, SecretKey};
+use serde::Serialize;
+use tweak::FrostTweak;
 
 use crate::db::{
     FrostAdvanceVoteAttemptPrefix, FrostAdvanceVoteKey, FrostAdvanceVoteTxidPrefix,
@@ -153,59 +156,68 @@ fn frost_test_forced_signer() -> Option<PeerId> {
     *FORCED
 }
 
-#[derive(Debug, Clone)]
-pub struct FrostSigningNonces(pub frost::round1::SigningNonces);
+/// The random seed of one of our secret nonces, stored in place of the nonce
+/// itself since bip445 deliberately keeps `SecretNonce` unserializable. The
+/// nonce is derived from the seed only when it is consumed, and the seed is
+/// deleted in the same transaction.
+#[derive(Clone, Encodable, Decodable)]
+pub struct FrostNonceSeed(pub [u8; 32]);
 
-impl_frost_encodable!(
-    FrostSigningNonces,
-    frost_secp256k1_tr::round1::SigningNonces
-);
+impl FrostNonceSeed {
+    /// A fresh random seed and the public nonce of the secret nonce it
+    /// derives.
+    pub(crate) fn generate() -> (Self, FrostSigningCommitments) {
+        let mut seed = [0; 32];
 
-/// Placeholder emitted in place of each secret nonce by the `Serialize` impl
-/// of [`FrostSigningNonces`].
-const REDACTED_NONCE: &str = "<redacted>";
+        OsRng.fill_bytes(&mut seed);
 
-/// Diagnostic (`dump_database`) serialization only — the DB encoding goes
-/// through `impl_frost_encodable!` and is unaffected.
-///
-/// The hiding and binding nonces are this guardian's per-signature secrets:
-/// a dump captured while a nonce is still buffered, combined with the
-/// signature share later broadcast with it, reveals the guardian's
-/// long-lived FROST signing share. So this impl deliberately never emits
-/// them and only carries the public commitment (the same value the DB key
-/// holds), mirroring the redacting `Debug` impl of `SigningNonces` in
-/// `frost-core`.
-impl serde::Serialize for FrostSigningNonces {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        use serde::ser::SerializeStruct as _;
+        let public_nonce = derive_public_nonce(&derive_nonce(&seed));
 
-        let commitments = self
-            .0
-            .commitments()
-            .serialize()
-            .map_err(serde::ser::Error::custom)?;
-
-        let mut state = serializer.serialize_struct("FrostSigningNonces", 3)?;
-        state.serialize_field("hiding", REDACTED_NONCE)?;
-        state.serialize_field("binding", REDACTED_NONCE)?;
-        state.serialize_field("commitments", &fedimint_core::hex::encode(commitments))?;
-        state.end()
+        (Self(seed), FrostSigningCommitments(public_nonce))
     }
 }
 
-/// `Encodable`/`Decodable` wrapper for `SigningPackage`. Cached in the DB at
-/// `FrostSigningPackagesKey(txid)` so that any peer (including non-session
-/// peers) can verify and aggregate `FrostSignatureShare` consensus items
-/// without the package being re-sent over the wire by every signer.
-#[derive(Debug, Clone)]
-pub struct FrostSigningPackage(pub SigningPackage);
+/// Placeholder emitted in place of the seed by the `Debug` and `Serialize`
+/// impls of [`FrostNonceSeed`].
+const REDACTED_NONCE: &str = "<redacted>";
 
-impl_frost_encodable!(FrostSigningPackage, SigningPackage);
+/// A dump captured while a nonce seed is still buffered, combined with the
+/// signature share later broadcast with its nonce, reveals the guardian's
+/// long-lived FROST key share, so the seed is never printed. The public
+/// nonce is the DB key.
+impl std::fmt::Debug for FrostNonceSeed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("FrostNonceSeed")
+            .field(&REDACTED_NONCE)
+            .finish()
+    }
+}
 
-impl serde::Serialize for FrostSigningPackage {
+/// Diagnostic (`dump_database`) serialization only, redacted like `Debug`.
+impl Serialize for FrostNonceSeed {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let bytes = self.0.serialize().map_err(serde::ser::Error::custom)?;
-        serializer.serialize_str(&fedimint_core::hex::encode(bytes))
+        serializer.serialize_str(REDACTED_NONCE)
+    }
+}
+
+/// The signing session of one input: the message and the public nonce of
+/// every signer. Cached in the DB at `FrostSigningPackagesKey(txid)` so that
+/// any peer (including non-session peers) can verify and aggregate
+/// `FrostSignatureShare` consensus items without the package being re-sent
+/// over the wire by every signer.
+#[derive(Debug, Clone, Encodable, Decodable, Serialize)]
+pub struct FrostSigningPackage {
+    pub message: [u8; 32],
+    pub nonces: BTreeMap<PeerId, PublicNonce>,
+}
+
+impl FrostSigningPackage {
+    /// The signers' public nonces keyed by their bip445 identity.
+    fn signer_nonces(&self) -> BTreeMap<u64, PublicNonce> {
+        self.nonces
+            .iter()
+            .map(|(peer, nonce)| (signer_id(*peer), *nonce))
+            .collect()
     }
 }
 
@@ -410,17 +422,13 @@ impl Wallet {
             // Can't fail after `pick_signing_session`, which only selects
             // peers holding one commitment per input — and if it somehow
             // did, it would fail identically on every guardian.
-            let commitments_map = self
+            let nonces = self
                 .consume_session_commitments(dbtx, &signing_session)
                 .await?;
-            let signing_package_commitments: BTreeMap<Identifier, _> = commitments_map
-                .iter()
-                .map(|(id, commitment)| (*id, commitment.0))
-                .collect();
-            signing_packages.push(FrostSigningPackage(SigningPackage::new(
-                signing_package_commitments,
-                message,
-            )));
+            signing_packages.push(FrostSigningPackage {
+                message: *message,
+                nonces,
+            });
         }
 
         dbtx.insert_new_entry(
@@ -494,11 +502,17 @@ impl Wallet {
     ) -> anyhow::Result<FrostSignatureShares> {
         let mut nonces = Vec::with_capacity(signing_packages.len());
         for signing_package in signing_packages {
-            nonces.push(self.consume_our_nonce(dbtx, &signing_package.0).await);
+            nonces.push(self.consume_our_nonce(dbtx, signing_package).await);
         }
         let nonces = nonces.into_iter().collect::<anyhow::Result<Vec<_>>>()?;
 
-        let key_package = &zf_key_package();
+        let polynomial = self.frost_polynomial()?;
+
+        let secret_share = self
+            .cfg
+            .private
+            .frost_secret_share
+            .expect("The FROST secret share is checked at startup");
 
         let mut signature_shares = Vec::with_capacity(signing_packages.len());
         for ((signing_package, nonce), utxo) in signing_packages
@@ -506,15 +520,16 @@ impl Wallet {
             .zip(nonces)
             .zip(&unsigned_tx.spent_tx_outs)
         {
-            let tweaked_key_package = apply_utxo_tweak_to_key_package(key_package, &utxo.tweak);
-            // Single-leaf TapTree: merkle root = leaf hash.
-            let merkle_root = self.tap_leaf_hash(&utxo.tweak).to_byte_array();
-            signature_shares.push(frost::round2::sign_with_tweak(
-                &signing_package.0,
-                &nonce,
-                &tweaked_key_package,
-                Some(&merkle_root),
-            )?);
+            let tweak = self.frost_tweak(polynomial, &utxo.tweak);
+
+            signature_shares.push(sign_share(
+                signing_package.message,
+                &tweak.secret_share(secret_share),
+                nonce,
+                &signing_package.signer_nonces(),
+                signer_id(self.our_peer_id),
+                tweak.aggregate(),
+            ));
         }
 
         tracing::info!(
@@ -534,7 +549,7 @@ impl Wallet {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         signing_session: &[PeerId],
-    ) -> anyhow::Result<BTreeMap<Identifier, FrostSigningCommitments>> {
+    ) -> anyhow::Result<BTreeMap<PeerId, PublicNonce>> {
         let mut commitments_map = BTreeMap::new();
         for peer_id in signing_session {
             let commitment = dbtx
@@ -543,10 +558,7 @@ impl Wallet {
                 .next()
                 .await
                 .ok_or_else(|| anyhow!("No FROST commitments available for peer {peer_id}"))?;
-            commitments_map.insert(
-                peer_id_to_identifier(*peer_id),
-                commitment.0.frost_commitments.clone(),
-            );
+            commitments_map.insert(*peer_id, commitment.0.frost_commitments.0);
             dbtx.remove_entry(&commitment.0).await;
             // Remember it for good: the pool entry is gone and its owner's
             // nonce is spent, so a delayed retransmit of this commitment
@@ -563,38 +575,42 @@ impl Wallet {
         Ok(commitments_map)
     }
 
-    /// Take our `SigningNonces` for our commitment in `signing_package` out
-    /// of the local buffer and mint a replacement. Only signing-session
+    /// Take the seed of our nonce in `signing_package` out of the local buffer,
+    /// derive the nonce from it and mint a replacement. Only signing-session
     /// peers should call this — for non-session peers we're not in the
     /// package.
     pub(crate) async fn consume_our_nonce(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        signing_package: &SigningPackage,
-    ) -> anyhow::Result<frost::round1::SigningNonces> {
-        let our_commitment = signing_package
-            .signing_commitment(&peer_id_to_identifier(self.our_peer_id))
+        signing_package: &FrostSigningPackage,
+    ) -> anyhow::Result<SecretNonce> {
+        let our_commitment = *signing_package
+            .nonces
+            .get(&self.our_peer_id)
             .ok_or_else(|| anyhow!("Our peer is not in the signing session"))?;
-        let nonce = dbtx
+
+        let seed = dbtx
             .remove_entry(&FrostSigningNoncesKey(FrostSigningCommitments(
                 our_commitment,
             )))
             .await
             .ok_or_else(|| {
                 anyhow!("FROST nonce for our own commitment is missing — DB inconsistency")
-            })?
-            .0;
+            })?;
+
+        let nonce = derive_nonce(&seed.0);
+
+        ensure!(
+            derive_public_nonce(&nonce) == our_commitment,
+            "FROST nonce seed does not derive its commitment — DB inconsistency"
+        );
 
         // Inline 1:1 replacement: keep our local nonce buffer at
         // `frost_nonce_buffer_target()` invariantly. Local-only state, no
         // consensus implications.
-        let (new_nonce, new_commitment) =
-            frost_secp256k1_tr::round1::commit(zf_key_package().signing_share(), &mut OsRng);
-        dbtx.insert_new_entry(
-            &FrostSigningNoncesKey(FrostSigningCommitments(new_commitment)),
-            &FrostSigningNonces(new_nonce),
-        )
-        .await;
+        let (new_seed, new_commitment) = FrostNonceSeed::generate();
+        dbtx.insert_new_entry(&FrostSigningNoncesKey(new_commitment), &new_seed)
+            .await;
 
         Ok(nonce)
     }
@@ -913,14 +929,26 @@ impl Wallet {
         Ok(())
     }
 
-    /// This federation's FROST public key package. Errors on any descriptor
-    /// other than [`WalletDescriptor::Frost`], which callers already rule out
-    /// via [`Self::ensure_frost_federation`].
-    fn frost_pubkey_package(&self) -> anyhow::Result<&PublicKeyPackage> {
+    /// This federation's FROST polynomial. Errors on any descriptor other
+    /// than [`WalletDescriptor::Frost`], which callers already rule out via
+    /// [`Self::ensure_frost_federation`].
+    fn frost_polynomial(&self) -> anyhow::Result<&FrostPolynomial> {
         match &self.cfg.consensus.descriptor {
-            WalletDescriptor::Frost(_) => todo!("FROST signing moves to bip445"),
+            WalletDescriptor::Frost(polynomial) => Ok(polynomial),
             _ => Err(anyhow!("Not a FROST federation")),
         }
+    }
+
+    /// The tweak of the FROST key for the UTXO with tweak `utxo_tweak`, taken
+    /// from the same descriptor its address is derived from.
+    fn frost_tweak(&self, polynomial: &FrostPolynomial, utxo_tweak: &sha256::Hash) -> FrostTweak {
+        let tr = descriptor_tr(
+            &self.cfg.consensus.bitcoin_pks,
+            utxo_tweak,
+            polynomial.internal_key(),
+        );
+
+        FrostTweak::new(polynomial.aggregate_key(), utxo_tweak, &tr)
     }
 
     /// Handle a `WalletConsensusItem::FrostSigningCommitments` from `peer`:
@@ -1011,7 +1039,7 @@ impl Wallet {
 
     /// Handle a `WalletConsensusItem::FrostSignatureShare` from `peer`:
     /// verify each per-input share against the stored signing packages
-    /// and the FROST `pubkey_package`, store under
+    /// and the peer's tweaked public key share, store under
     /// `FrostSignatureShareKey`, and — once the per-attempt share count
     /// hits `threshold` — aggregate into the final tap-key signatures,
     /// attach the witnesses, move the tx to `UnconfirmedTxKey`, broadcast
@@ -1066,7 +1094,11 @@ impl Wallet {
         // or buggy peer here (where we can reject just their consensus
         // item) instead of at aggregation time, where one bad share
         // would otherwise blow up the whole session.
-        let pubkey_package_base = self.frost_pubkey_package()?.clone();
+        let polynomial = self.frost_polynomial()?;
+        let public_share = *self
+            .frost_public_shares
+            .get(&peer)
+            .expect("Signing session peers are guardians");
         ensure!(
             signature_shares.signature_shares.len() == unsigned_tx.tx.input.len(),
             "Wrong number of FROST signature shares from peer {peer}",
@@ -1087,16 +1119,20 @@ impl Wallet {
         );
 
         for (input_index, share) in signature_shares.signature_shares.iter().enumerate() {
-            let utxo = &unsigned_tx.spent_tx_outs[input_index];
-            let merkle_root = self.tap_leaf_hash(&utxo.tweak).to_byte_array();
-            verify_signature_share(
-                &pubkey_package_base,
-                &utxo.tweak,
-                &merkle_root,
-                peer,
-                &signing_packages[input_index].0,
-                share,
-            )?;
+            let tweak = self.frost_tweak(polynomial, &unsigned_tx.spent_tx_outs[input_index].tweak);
+            let signing_package = &signing_packages[input_index];
+
+            ensure!(
+                verify_signature_share(
+                    signing_package.message,
+                    signer_id(peer),
+                    &tweak.public_share(public_share),
+                    share,
+                    &signing_package.signer_nonces(),
+                    tweak.aggregate(),
+                ),
+                "FROST signature share from peer {peer} for input {input_index} is invalid"
+            );
         }
 
         // Reject duplicate broadcasts symmetrically across all
@@ -1137,33 +1173,29 @@ impl Wallet {
             .await;
         let threshold = self.cfg.consensus.bitcoin_pks.to_num_peers().threshold();
         if shares.len() == threshold {
-            let pubkey_package = self.frost_pubkey_package()?.clone();
-
             let mut final_sigs = Vec::with_capacity(unsigned_tx.tx.input.len());
             for (input_index, signing_package) in signing_packages.iter().enumerate() {
-                let utxo = &unsigned_tx.spent_tx_outs[input_index];
-                let signing_package = &signing_package.0;
+                let tweak =
+                    self.frost_tweak(polynomial, &unsigned_tx.spent_tx_outs[input_index].tweak);
 
                 let shares_for_input = shares
                     .iter()
-                    .map(|(k, v)| {
-                        (
-                            peer_id_to_identifier(k.peer_id),
-                            v.signature_shares[input_index],
-                        )
-                    })
+                    .map(|(k, v)| (signer_id(k.peer_id), v.signature_shares[input_index]))
                     .collect::<BTreeMap<_, _>>();
 
-                let pubkey_package =
-                    apply_utxo_tweak_to_pubkey_package(&pubkey_package, &utxo.tweak);
-                let merkle_root = self.tap_leaf_hash(&utxo.tweak).to_byte_array();
-
-                let final_sig = frost_secp256k1_tr::aggregate_with_tweak(
-                    signing_package,
+                let final_sig = aggregate_signature_shares(
+                    signing_package.message,
+                    &signing_package.signer_nonces(),
                     &shares_for_input,
-                    &pubkey_package,
-                    Some(&merkle_root),
-                )?;
+                    tweak.aggregate(),
+                );
+
+                // Every share was verified against the session before it was
+                // stored, so their aggregate is a valid signature.
+                assert!(
+                    verify(signing_package.message, &final_sig, tweak.aggregate()),
+                    "The aggregate of verified FROST signature shares must verify"
+                );
 
                 tracing::info!(
                     target: LOG_MODULE_WALLETV2,
@@ -1181,10 +1213,7 @@ impl Wallet {
             let mut unsigned = unsigned_tx;
             attach_key_path_witnesses(
                 &mut unsigned,
-                final_sigs.iter().map(|sig| {
-                    sig.serialize()
-                        .expect("FROST signature serializes to 64-byte BIP-340 form")
-                }),
+                final_sigs.iter().map(|sig| sig.serialize().to_vec()),
             );
 
             // Capture this guardian's local finalization-latency stat before
@@ -1526,27 +1555,20 @@ pub(crate) fn spawn_initial_nonce_backfill(db: Database, task_group: &TaskGroup)
             .count()
             .await;
         for _ in 0..frost_nonce_buffer_target().saturating_sub(count) {
-            let (nonce, commitment) =
-                frost_secp256k1_tr::round1::commit(zf_key_package().signing_share(), &mut OsRng);
+            let (seed, commitment) = FrostNonceSeed::generate();
 
-            dbtx.insert_new_entry(
-                &FrostSigningNoncesKey(FrostSigningCommitments(commitment)),
-                &FrostSigningNonces(nonce),
-            )
-            .await;
+            dbtx.insert_new_entry(&FrostSigningNoncesKey(commitment), &seed)
+                .await;
         }
         dbtx.commit_tx().await;
     });
 }
 
-/// Convert a `PeerId` into a FROST `Identifier`.
-///
-/// FROST identifiers must be non-zero, so we offset by 1. `PeerId` wraps a
-/// `u16`, so the cast is lossless; the offset only overflows at `PeerId`
-/// `u16::MAX`, which config gen never assigns (ids are `0..n`).
-fn peer_id_to_identifier(peer_id: PeerId) -> Identifier {
-    Identifier::try_from(peer_id.to_usize() as u16 + 1)
-        .expect("Could not convert PeerId to Identifier")
+/// The bip445 identity of a peer. bip445 evaluates the key polynomial at
+/// `identity + 1`, the same point as [`scalar_secp`], so it is the peer id
+/// itself.
+fn signer_id(peer: PeerId) -> u64 {
+    peer.to_usize() as u64
 }
 
 /// Deterministically pick a `threshold`-sized signing session for `(txid,
@@ -1625,12 +1647,6 @@ async fn pick_signing_session(
     None
 }
 
-/// Our FROST key package for the signing path, which still runs on the ZF
-/// library until it moves to bip445.
-fn zf_key_package() -> KeyPackage {
-    todo!("FROST signing moves to bip445")
-}
-
 /// Generate FROST key material centrally via a trusted dealer for
 /// `peers`. Used by `trusted_dealer_gen` (the test / scripted path
 /// that doesn't run a real DKG). Produces the commitment to a random
@@ -1676,131 +1692,6 @@ pub(crate) fn trusted_setup(peers: &[PeerId]) -> (FrostPolynomial, BTreeMap<Peer
         .collect();
 
     (polynomial, shares)
-}
-
-/// Homomorphically add `tweak·G` to a compressed-serialized secp256k1 point
-/// and return the tweaked point's compressed serialization. Common step of
-/// the per-UTXO tweak applied to FROST verifying keys and shares below.
-///
-/// Invariants: `bytes` is always a FROST-serialized group element, and the sum
-/// is only the identity if `tweak == -dlog(point)` — i.e. the secret is known.
-fn add_tweak_to_point(bytes: &[u8], tweak: &Scalar) -> [u8; 33] {
-    PublicKey::from_slice(bytes)
-        .expect("FROST element is a valid secp256k1 point")
-        .add_exp_tweak(secp256k1::SECP256K1, tweak)
-        .expect("Tweaked point is non-identity")
-        .serialize()
-}
-
-/// `Q_i`' = `Q_i` + `t·G`
-fn tweak_verifying_share(verifying_share: &VerifyingShare, tweak: &Scalar) -> VerifyingShare {
-    let bytes = verifying_share
-        .serialize()
-        .expect("FROST verifying share serializes");
-    VerifyingShare::deserialize(&add_tweak_to_point(&bytes, tweak))
-        .expect("Tweaked bytes are a valid verifying share")
-}
-
-/// `Q`' = `Q` + `t·G`
-fn tweak_verifying_key(verifying_key: &VerifyingKey, tweak: &Scalar) -> VerifyingKey {
-    let bytes = verifying_key
-        .serialize()
-        .expect("FROST verifying key serializes");
-    VerifyingKey::deserialize(&add_tweak_to_point(&bytes, tweak))
-        .expect("Tweaked bytes are a valid verifying key")
-}
-
-/// Apply the per-UTXO additive tweak to a FROST `KeyPackage` homomorphically:
-///   `s_i`' = `s_i` + `t`,   `Q_i`' = `Q_i` + `t·G`,   `Q`' = `Q` + `t·G`
-///
-/// The descriptor's internal key for a UTXO is
-/// `tweak_xonly_public_key(internal_key, tweak)`, which assumes Even-Y
-/// interpretation of the original internal key — so we normalize
-/// to Even-Y before adding the tweak. The BIP-341 tap tweak is applied
-/// separately by `round2::sign_with_tweak`.
-fn apply_utxo_tweak_to_key_package(key_package: &KeyPackage, tweak: &sha256::Hash) -> KeyPackage {
-    let key_package = key_package.clone().into_even_y(None);
-
-    // See `tweak_xonly_public_key` for why the hash-to-scalar load is an
-    // invariant. `add_tweak` likewise only fails if the sum is zero.
-    let tweak_scalar =
-        Scalar::from_be_bytes(tweak.to_byte_array()).expect("Hash is within field order");
-
-    let sk = secp256k1::SecretKey::from_slice(&key_package.signing_share().serialize())
-        .expect("FROST signing share is a valid secret key");
-    let tweaked_sk = sk
-        .add_tweak(&tweak_scalar)
-        .expect("Tweaked signing share is non-zero");
-    let tweaked_signing_share = SigningShare::deserialize(&tweaked_sk.secret_bytes())
-        .expect("Bytes are a valid signing share");
-
-    KeyPackage::new(
-        *key_package.identifier(),
-        tweaked_signing_share,
-        tweak_verifying_share(key_package.verifying_share(), &tweak_scalar),
-        tweak_verifying_key(key_package.verifying_key(), &tweak_scalar),
-        *key_package.min_signers(),
-    )
-}
-
-/// Apply the per-UTXO additive tweak to a FROST `PublicKeyPackage`
-/// homomorphically:   `Q`' = `Q` + `t·G`,   `Q_i`' = `Q_i` + `t·G`
-///
-/// Mirrors `apply_utxo_tweak_to_key_package` on the public side. The BIP-341
-/// tap tweak is applied separately by `aggregate_with_tweak`.
-fn apply_utxo_tweak_to_pubkey_package(
-    pubkey_package: &PublicKeyPackage,
-    tweak: &sha256::Hash,
-) -> PublicKeyPackage {
-    let pubkey_package = pubkey_package.clone().into_even_y(None);
-
-    // See `tweak_xonly_public_key` for why this load is an invariant.
-    let tweak_scalar =
-        Scalar::from_be_bytes(tweak.to_byte_array()).expect("Hash is within field order");
-
-    let tweaked_verifying_shares = pubkey_package
-        .verifying_shares()
-        .iter()
-        .map(|(id, vs)| (*id, tweak_verifying_share(vs, &tweak_scalar)))
-        .collect();
-
-    PublicKeyPackage::new(
-        tweaked_verifying_shares,
-        tweak_verifying_key(pubkey_package.verifying_key(), &tweak_scalar),
-        pubkey_package.min_signers(),
-    )
-}
-
-/// Verify a single peer's signature share against the FROST `pubkey_package`,
-/// applying both the per-UTXO additive tweak and the BIP-341 tap tweak so the
-/// verifying-share / verifying-key match what the signer used in
-/// `sign_with_tweak`. Returns an error if the share doesn't verify (e.g., a
-/// malicious or buggy peer).
-fn verify_signature_share(
-    pubkey_package: &PublicKeyPackage,
-    utxo_tweak: &sha256::Hash,
-    merkle_root: &[u8],
-    peer_id: PeerId,
-    signing_package: &SigningPackage,
-    signature_share: &SignatureShare,
-) -> anyhow::Result<()> {
-    let pubkey_package = apply_utxo_tweak_to_pubkey_package(pubkey_package, utxo_tweak);
-    let pubkey_package = pubkey_package.tweak(Some(merkle_root));
-
-    let identifier = peer_id_to_identifier(peer_id);
-    let verifying_share = pubkey_package
-        .verifying_shares()
-        .get(&identifier)
-        .ok_or_else(|| anyhow::anyhow!("No FROST verifying share for peer {peer_id}"))?;
-
-    frost_core::verify_signature_share(
-        identifier,
-        verifying_share,
-        signature_share,
-        signing_package,
-        pubkey_package.verifying_key(),
-    )
-    .map_err(|e| anyhow::anyhow!("FROST signature share from peer {peer_id} is invalid: {e}"))
 }
 
 #[cfg(test)]

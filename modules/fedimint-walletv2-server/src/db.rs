@@ -10,7 +10,7 @@ use secp256k1::schnorr;
 use serde::Serialize;
 use strum_macros::EnumIter;
 
-use crate::taproot::frost::{FrostSigningNonces, FrostSigningPackage};
+use crate::taproot::frost::{FrostNonceSeed, FrostSigningPackage};
 use crate::{FederationTx, FederationWallet};
 
 #[repr(u8)]
@@ -271,14 +271,14 @@ impl_db_lookup!(
 );
 
 #[derive(Debug, Clone, Encodable, Decodable)]
-pub struct FrostSigningNoncesKey(pub FrostSigningCommitments); // indexed by the nonce commitment
+pub struct FrostSigningNoncesKey(pub FrostSigningCommitments); // indexed by the public nonce
 
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct FrostSigningNoncesPrefix;
 
 impl_db_record!(
     key = FrostSigningNoncesKey,
-    value = FrostSigningNonces,
+    value = FrostNonceSeed,
     db_prefix = DbKeyPrefix::FrostSigningNonce
 );
 
