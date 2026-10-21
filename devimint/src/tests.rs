@@ -8,6 +8,7 @@ use std::{env, ffi};
 
 use anyhow::{Context, Result, anyhow, bail};
 use bitcoin::Txid;
+use bitcoin::hashes::Hash as _;
 use clap::Subcommand;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -42,7 +43,7 @@ use crate::federation::Client;
 use crate::util::{LoadTestTool, ProcessManager, almost_equal, poll};
 use crate::version_constants::{
     VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA, VERSION_0_13_0_ALPHA,
-    ensure_expected_fedimintd_version,
+    VERSION_0_14_0_ALPHA, ensure_expected_fedimintd_version,
 };
 use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed};
 
@@ -1875,13 +1876,25 @@ pub async fn do_try_create_and_pay_invoice(
 }
 
 async fn ln_pay(client: &Client, invoice: String, gw_id: String) -> anyhow::Result<String> {
+    let payment_hash = *Bolt11Invoice::from_str(&invoice)?.payment_hash();
     let value = cmd!(client, "ln-pay", invoice, "--gateway-id", gw_id,)
         .out_json()
         .await?;
     let outcome = serde_json::from_value::<LightningPaymentOutcome>(value)
         .expect("Could not deserialize Lightning payment outcome");
     match outcome {
-        LightningPaymentOutcome::Success { preimage } => Ok(preimage),
+        LightningPaymentOutcome::Success { preimage } => {
+            // Clients before v0.14.0 cut the first and last hex digit off the preimage
+            // the gateway returns, so only newer clients can be checked
+            if crate::util::FedimintCli::version_or_default().await >= *VERSION_0_14_0_ALPHA {
+                let preimage_bytes = hex::decode(&preimage).context("Preimage is not hex")?;
+                anyhow::ensure!(
+                    bitcoin::hashes::sha256::Hash::hash(&preimage_bytes) == payment_hash,
+                    "Preimage {preimage} does not match the invoice's payment hash {payment_hash}"
+                );
+            }
+            Ok(preimage)
+        }
         LightningPaymentOutcome::Failure { error_message } => {
             Err(anyhow!("Failed to pay lightning invoice: {error_message}"))
         }
