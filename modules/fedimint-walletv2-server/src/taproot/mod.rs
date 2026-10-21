@@ -23,21 +23,12 @@ impl Wallet {
     }
 
     /// The `TapLeafHash` of the single `multi_a` script leaf for the
-    /// UTXO identified by `tweak`. Both the `Tr` and `Frost`
-    /// descriptors build a Tr with this same script tree (only the
-    /// internal key differs: NUMS for `Tr`, the FROST aggregated key
-    /// for `Frost`), so the leaf hash is well-defined for both.
+    /// UTXO identified by `tweak` in the `Tr` descriptor.
     ///
-    /// Used by:
-    /// - `multisig::{sign,verify,finalize}_tx_schnorr` for the `Tr`
-    ///   script-spend sighash and the satisfier map.
-    /// - The `Frost` aggregation paths in `frost.rs` and `lib.rs` as the
-    ///   BIP-341 merkle root passed to `frost::round2::sign_with_tweak` and to
-    ///   FROST verification — because the key-path output key commits to the
-    ///   script tree even when we sign via key-path.
-    ///
-    /// Not used for `Wsh` (no Taproot) or `SinglePeer` (key-path only,
-    /// no script tree, merkle root is `None`).
+    /// Used by `multisig::{sign,verify,finalize}_tx_schnorr` for the `Tr`
+    /// script-spend sighash and the satisfier map. The `Frost` key path
+    /// takes its tap tweak from the descriptor's spend info instead (see
+    /// `frost::tweak`).
     pub(crate) fn tap_leaf_hash(&self, tweak: &sha256::Hash) -> TapLeafHash {
         let tr = descriptor_tr(&self.cfg.consensus.bitcoin_pks, tweak, nums_point());
         let (_, ms) = tr

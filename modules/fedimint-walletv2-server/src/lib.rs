@@ -115,7 +115,7 @@ use crate::metrics::{
     WALLET_PEGIN_SATS, WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
 };
 use crate::taproot::frost::{
-    FrostRuntime, FrostSigningNonces, FrostSigningPackage, spawn_initial_nonce_backfill,
+    FrostNonceSeed, FrostRuntime, FrostSigningPackage, spawn_initial_nonce_backfill,
 };
 
 /// Maximum number of blocks the consensus block count can advance in a single
@@ -312,14 +312,13 @@ impl ModuleInit for WalletInit {
                     );
                 }
                 DbKeyPrefix::FrostSigningNonce => {
-                    // The value's `Serialize` impl redacts the secret
-                    // hiding / binding nonces and only emits the public
-                    // commitment — see `FrostSigningNonces`.
+                    // The value's `Serialize` impl redacts the nonce seed;
+                    // the key is the public nonce — see `FrostNonceSeed`.
                     push_db_pair_items!(
                         dbtx,
                         FrostSigningNoncesPrefix,
                         FrostSigningNoncesKey,
-                        FrostSigningNonces,
+                        FrostNonceSeed,
                         wallet,
                         "FROST Signing Nonces"
                     );
@@ -1174,6 +1173,10 @@ pub struct Wallet {
     /// restart.
     pending_outputs: watch::Receiver<PendingOutputs>,
     frost: FrostRuntime,
+    /// Every guardian's FROST public key share, evaluated from the polynomial
+    /// once at startup. Empty unless the descriptor is
+    /// [`WalletDescriptor::Frost`].
+    frost_public_shares: BTreeMap<PeerId, PublicKey>,
 }
 
 impl Wallet {
@@ -1195,6 +1198,8 @@ impl Wallet {
             task_group,
         );
 
+        let mut frost_public_shares = BTreeMap::new();
+
         if let WalletDescriptor::Frost(polynomial) = &cfg.consensus.descriptor {
             // The secret share is `#[serde(default)]` — validate the key
             // material here so a truncated, hand-edited or mismatched config
@@ -1210,10 +1215,21 @@ impl Wallet {
                 "FROST polynomial must have one coefficient per threshold signer"
             );
 
+            frost_public_shares = cfg
+                .consensus
+                .bitcoin_pks
+                .keys()
+                .map(|peer| {
+                    let share = eval_poly_secp(&polynomial.0, peer)
+                        .expect("FROST polynomial evaluates at every peer id");
+
+                    (*peer, share)
+                })
+                .collect();
+
             assert_eq!(
                 secret_share.public_key(secp256k1::SECP256K1),
-                eval_poly_secp(&polynomial.0, &our_peer_id)
-                    .expect("FROST polynomial evaluates at our peer id"),
+                frost_public_shares[&our_peer_id],
                 "FROST secret share does not match our public key share"
             );
 
@@ -1227,6 +1243,7 @@ impl Wallet {
             db: db.clone(),
             pending_outputs,
             frost: FrostRuntime::default(),
+            frost_public_shares,
         }
     }
 
