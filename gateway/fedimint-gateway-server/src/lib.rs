@@ -102,6 +102,7 @@ use fedimint_gwv2_client::{
     EXPIRATION_DELTA_MINIMUM_V2, FinalReceiveState, GatewayClientModuleV2, GatewayClientV2Error,
     IGatewayClientV2,
 };
+use fedimint_lightning::ldk::MnemonicSource;
 use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
     CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse,
@@ -198,8 +199,8 @@ const LDK_NODE_DB_FOLDER: &str = "ldk_node";
 pub enum GatewayState {
     NotConfigured {
         // Broadcast channel to alert gateway background threads that the mnemonic has been
-        // created/set.
-        mnemonic_sender: tokio::sync::broadcast::Sender<()>,
+        // created/set, and how it was obtained.
+        mnemonic_sender: tokio::sync::broadcast::Sender<MnemonicSource>,
     },
     Disconnected,
     Syncing,
@@ -318,6 +319,7 @@ impl Gateway {
             client_builder,
             gateway_state,
             chain_source,
+            MnemonicSource::Existing,
         )
         .await
     }
@@ -409,6 +411,11 @@ pub struct Gateway {
     /// Serializes payment policy changes against the funding of the payments
     /// those policies admit.
     payment_policy_lock: Arc<RwLock<()>>,
+
+    /// How the mnemonic was obtained at startup. When the gateway starts
+    /// unconfigured, the source of the mnemonic set later arrives through the
+    /// `mnemonic_sender` channel instead.
+    mnemonic_source: MnemonicSource,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -672,7 +679,7 @@ impl Gateway {
     /// Default function for creating a gateway with the `Mint`, `Wallet`, and
     /// `Gateway` modules.
     pub async fn new_with_default_modules(
-        mnemonic_sender: tokio::sync::broadcast::Sender<()>,
+        mnemonic_sender: tokio::sync::broadcast::Sender<MnemonicSource>,
     ) -> anyhow::Result<Gateway> {
         let opts = GatewayOpts::parse();
         let gateway_parameters = opts.to_gateway_parameters()?;
@@ -749,32 +756,42 @@ impl Gateway {
         let client_builder =
             GatewayClientBuilder::new(opts.data_dir.clone(), registry, opts.db_backend).await?;
 
-        let gateway_state = if Self::load_mnemonic(&gateway_db).await.is_some() {
-            GatewayState::Disconnected
+        let (gateway_state, mnemonic_source) = if Self::load_mnemonic(&gateway_db).await.is_some() {
+            (GatewayState::Disconnected, MnemonicSource::Existing)
         } else {
             // Generate a mnemonic or use one from an environment variable if `skip_setup`
             // is true
             if gateway_parameters.skip_setup {
-                let mnemonic = if let Ok(words) = std::env::var(FM_GATEWAY_MNEMONIC_ENV) {
+                let (mnemonic, mnemonic_source) = if let Ok(words) =
+                    std::env::var(FM_GATEWAY_MNEMONIC_ENV)
+                {
                     info!(target: LOG_GATEWAY, "Using provided mnemonic from environment variable");
-                    Mnemonic::parse_in_normalized(Language::English, words.as_str()).map_err(
-                        |e| {
+                    let mnemonic = Mnemonic::parse_in_normalized(Language::English, words.as_str())
+                        .map_err(|e| {
                             AdminGatewayError::MnemonicError(anyhow!(format!(
                                 "Seed phrase provided in environment was invalid {e:?}"
                             )))
-                        },
-                    )?
+                        })?;
+                    (mnemonic, MnemonicSource::Existing)
                 } else {
                     debug!(target: LOG_GATEWAY, "Generating mnemonic and writing entropy to client storage");
-                    Bip39RootSecretStrategy::<12>::random(&mut OsRng)
+                    (
+                        Bip39RootSecretStrategy::<12>::random(&mut OsRng),
+                        MnemonicSource::Generated,
+                    )
                 };
 
                 Client::store_encodable_client_secret(&gateway_db, mnemonic.to_entropy())
                     .await
                     .map_err(|err| AdminGatewayError::MnemonicError(err.into()))?;
-                GatewayState::Disconnected
+                (GatewayState::Disconnected, mnemonic_source)
             } else {
-                GatewayState::NotConfigured { mnemonic_sender }
+                // The mnemonic's source arrives through `mnemonic_sender` once
+                // it is set
+                (
+                    GatewayState::NotConfigured { mnemonic_sender },
+                    MnemonicSource::Existing,
+                )
             }
         };
 
@@ -791,6 +808,7 @@ impl Gateway {
             client_builder,
             gateway_state,
             chain_source,
+            mnemonic_source,
         )
         .await
     }
@@ -804,6 +822,7 @@ impl Gateway {
         client_builder: GatewayClientBuilder,
         gateway_state: GatewayState,
         chain_source: ChainSource,
+        mnemonic_source: MnemonicSource,
     ) -> anyhow::Result<Gateway> {
         let num_route_hints = gateway_parameters.num_route_hints;
         let network = gateway_parameters.network;
@@ -858,6 +877,7 @@ impl Gateway {
             )),
             lnv2_hold_invoice_lock_pool: Arc::new(lockable::LockPool::new()),
             payment_policy_lock: Arc::new(RwLock::new(())),
+            mnemonic_source,
         })
     }
 
@@ -906,7 +926,7 @@ impl Gateway {
     pub async fn run(
         self,
         runtime: Arc<tokio::runtime::Runtime>,
-        mnemonic_receiver: tokio::sync::broadcast::Receiver<()>,
+        mnemonic_receiver: tokio::sync::broadcast::Receiver<MnemonicSource>,
     ) -> anyhow::Result<TaskShutdownToken> {
         install_crypto_provider().await;
         self.register_clients_timer();
@@ -1022,7 +1042,7 @@ impl Gateway {
     fn start_gateway(
         &self,
         runtime: Arc<tokio::runtime::Runtime>,
-        mut mnemonic_receiver: tokio::sync::broadcast::Receiver<()>,
+        mut mnemonic_receiver: tokio::sync::broadcast::Receiver<MnemonicSource>,
     ) {
         const PAYMENT_STREAM_RETRY_SECONDS: u64 = 60;
 
@@ -1031,6 +1051,7 @@ impl Gateway {
         self.task_group.spawn(
             "Subscribe to intercepted lightning payments in stream",
             |handle| async move {
+                let mut mnemonic_source = self_copy.mnemonic_source;
                 // Repeatedly attempt to establish a connection to the lightning node and create a payment stream, re-trying if the connection is broken.
                 loop {
                     if handle.is_shutting_down() {
@@ -1048,15 +1069,18 @@ impl Gateway {
                             "You might need to provide it from the UI or refer to documentation w.r.t how to initialize it."
                         );
 
-                        let _ = mnemonic_receiver.recv().await;
+                        if let Ok(source) = mnemonic_receiver.recv().await {
+                            mnemonic_source = source;
+                        }
                         info!(
                             target: LOG_GATEWAY,
+                            ?mnemonic_source,
                             "Received mnemonic, attempting to start lightning receive loop"
                         );
                     }
 
                     let payment_stream_task_group = tg.make_subgroup();
-                    let lnrpc_route = self_copy.create_lightning_client(runtime.clone()).await;
+                    let lnrpc_route = self_copy.create_lightning_client(runtime.clone(), mnemonic_source).await;
 
                     debug!(target: LOG_GATEWAY, "Establishing lightning payment stream...");
                     let (stream, ln_client) = match lnrpc_route.route_htlcs(&payment_stream_task_group).await
@@ -2315,6 +2339,7 @@ impl Gateway {
     async fn create_lightning_client(
         &self,
         runtime: Arc<tokio::runtime::Runtime>,
+        mnemonic_source: MnemonicSource,
     ) -> Box<dyn ILnRpcClient> {
         match self.lightning_mode.clone() {
             LightningMode::Lnd {
@@ -2369,6 +2394,7 @@ impl Gateway {
                         lightning_port,
                         alias.clone(),
                         mnemonic.clone(),
+                        mnemonic_source,
                         runtime.clone(),
                     )
                     .map(Box::new)
@@ -3465,16 +3491,21 @@ impl IAdminGateway for Gateway {
             )));
         };
 
-        let mnemonic = if let Some(words) = payload.words {
+        let (mnemonic, mnemonic_source) = if let Some(words) = payload.words {
             info!(target: LOG_GATEWAY, "Using user provided mnemonic");
-            Mnemonic::parse_in_normalized(Language::English, words.as_str()).map_err(|e| {
-                AdminGatewayError::MnemonicError(anyhow!(format!(
-                    "Seed phrase provided in environment was invalid {e:?}"
-                )))
-            })?
+            let mnemonic = Mnemonic::parse_in_normalized(Language::English, words.as_str())
+                .map_err(|e| {
+                    AdminGatewayError::MnemonicError(anyhow!(format!(
+                        "Seed phrase provided in environment was invalid {e:?}"
+                    )))
+                })?;
+            (mnemonic, MnemonicSource::Existing)
         } else {
             debug!(target: LOG_GATEWAY, "Generating mnemonic and writing entropy to client storage");
-            Bip39RootSecretStrategy::<12>::random(&mut OsRng)
+            (
+                Bip39RootSecretStrategy::<12>::random(&mut OsRng),
+                MnemonicSource::Generated,
+            )
         };
 
         Client::store_encodable_client_secret(&self.gateway_db, mnemonic.to_entropy())
@@ -3485,7 +3516,7 @@ impl IAdminGateway for Gateway {
         drop(state_guard);
 
         // Alert the gateway background threads that the mnemonic has been set
-        let _ = mnemonic_sender.send(());
+        let _ = mnemonic_sender.send(mnemonic_source);
 
         Ok(())
     }
