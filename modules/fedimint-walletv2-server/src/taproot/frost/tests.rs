@@ -418,3 +418,20 @@ async fn signing_nonces_dump_never_contains_secret_nonces() {
         "binding nonce in Debug: {debug}"
     );
 }
+
+#[test]
+fn trusted_setup_shares_match_the_polynomial() {
+    let peers = peers(N);
+    let (polynomial, shares) = super::trusted_setup(&peers);
+
+    assert_eq!(polynomial.0.len(), THRESHOLD);
+    assert_eq!(shares.keys().copied().collect::<Vec<_>>(), peers);
+
+    for (peer, share) in shares {
+        assert_eq!(
+            share.public_key(secp256k1::SECP256K1),
+            fedimint_server_core::config::eval_poly_secp(&polynomial.0, &peer)
+                .expect("The polynomial evaluates"),
+        );
+    }
+}

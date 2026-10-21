@@ -7,6 +7,7 @@ use fedimint_core::config::{DkgMessageSecp, P2PMessage};
 use fedimint_core::encoding::Encodable as _;
 use fedimint_core::net::{DynP2PConnections, Recipient};
 use fedimint_core::{NumPeers, PeerId};
+use fedimint_server_core::config::{eval_poly_secp, scalar_secp};
 use rand::rngs::OsRng;
 use secp256k1::{PublicKey, SECP256K1, Scalar, SecretKey};
 use tracing::trace;
@@ -94,7 +95,7 @@ impl DkgSecp {
                     let mut messages = vec![];
 
                     for peer in self.num_peers.peer_ids() {
-                        let share = eval_poly_scalar(&self.polynomial, &scalar(&peer));
+                        let share = eval_poly_scalar(&self.polynomial, &scalar_secp(&peer));
 
                         if peer == self.identity {
                             self.sk_shares.insert(self.identity, share);
@@ -111,7 +112,7 @@ impl DkgSecp {
                     format!("DKG secp: polynomial commitment not found for peer {peer}.")
                 })?;
 
-                let checksum = eval_poly(polynomial, &self.identity)?;
+                let checksum = eval_poly_secp(polynomial, &self.identity)?;
 
                 ensure!(
                     share.public_key(SECP256K1) == checksum,
@@ -201,15 +202,6 @@ pub async fn run_dkg_secp(
     }
 }
 
-// Offset by 1, since evaluating a poly at 0 reveals the secret
-fn scalar(peer: &PeerId) -> Scalar {
-    let mut bytes = [0; 32];
-
-    bytes[24..].copy_from_slice(&(peer.to_usize() as u64 + 1).to_be_bytes());
-
-    Scalar::from_be_bytes(bytes).expect("A u64 is smaller than the curve order")
-}
-
 fn key_scalar(key: &SecretKey) -> Scalar {
     Scalar::from_be_bytes(key.secret_bytes()).expect("A secret key is a valid scalar")
 }
@@ -227,27 +219,6 @@ fn eval_poly_scalar(coefficients: &[SecretKey], x: &Scalar) -> SecretKey {
                 .expect("An intermediate value of our random polynomial is zero with negligible probability")
         })
         .expect("We have at least one coefficient")
-}
-
-/// Evaluates a public polynomial at the peer's evaluation point. Fails if an
-/// intermediate value is the point at infinity, which is negligible for
-/// commitments to random polynomials.
-pub fn eval_poly(coefficients: &[PublicKey], peer: &PeerId) -> anyhow::Result<PublicKey> {
-    let mut coefficients = coefficients.iter().copied().rev();
-
-    let mut accumulator = coefficients
-        .next()
-        .context("The polynomial commitment is empty")?;
-
-    for coefficient in coefficients {
-        accumulator = accumulator
-            .mul_tweak(SECP256K1, &scalar(peer))
-            .expect("The evaluation point is nonzero")
-            .combine(&coefficient)
-            .context("The evaluation hit the point at infinity")?;
-    }
-
-    Ok(accumulator)
 }
 
 enum DkgStepSecp {
