@@ -14,7 +14,7 @@ e-cash notes or other operational difficulties there are funds left in the feder
 ```
 Tool to recover the on-chain wallet of a Fedimint federation
 
-Usage: recoverytool [OPTIONS] --password <PASSWORD> <--cfg <CONFIG>|--descriptor <DESCRIPTOR>> <COMMAND>
+Usage: recoverytool [OPTIONS] <--cfg <CONFIG>|--descriptor <DESCRIPTOR>> <COMMAND>
 
 Commands:
   direct  Derive the wallet descriptor using a single tweak
@@ -25,7 +25,8 @@ Commands:
 Options:
       --cfg <CONFIG>             Directory containing server config files
       --descriptor <DESCRIPTOR>  Wallet descriptor, can be used instead of --cfg
-      --key <KEY>                Wallet secret key, can be used instead of config together with --descriptor
+      --key <KEY>                Wallet secret key (prefer --key-file)
+      --key-file <KEY_FILE>      Read wallet secret key from a file, or '-' for stdin
       --network <NETWORK>        Network to operate on, has to be specified if --cfg isn't present [default: bitcoin]
   -h, --help                     Print help
 ```
@@ -35,8 +36,16 @@ to derive wallet descriptors.
 
 The secret key and wallet descriptor can be supplied in two ways:
   1. **Config**: By specifying the `--cfg` flag the tool will read the key and descriptor directly from the config files
-  2. **Direct argument**: Otherwise the `--key` and `--descriptor` flags have to be provided. Optionally the `--network`
+  2. **Key file**: Otherwise provide `--key-file` and `--descriptor`. The legacy `--key`
+argument is still accepted, but discouraged because process arguments can expose secrets.
+Optionally the `--network`
 flag can be provided to specify the network in this case since it cannot be determined from the config.
+
+Key files must contain a UTF-8 secret key of at most 1 MiB. One trailing newline
+(LF or CRLF) is removed; other whitespace is preserved. Use `--key-file -` to read
+from stdin. Restrict file permissions to the operator and do not enable shell tracing.
+The config form reads the existing config files directly; there is no `--password`
+option.
 
 The tweaks making up the wallet can be provided in three ways, these correspond to the commands listed in the help
 above:
@@ -59,7 +68,7 @@ The output of `recoverytool` consists of an array of wallet descriptors with opt
 include n-1 public keys and 1 private key (belonging to the guardian running the script):
 
 ```
-$ recoverytool --cfg fedimintd-1 --password pass1 utxos --db fedimintd-1/database/ | jq
+$ recoverytool --cfg fedimintd-1 utxos --db fedimintd-1/database/ | jq
 [
   {
     "outpoint": "c76d51c9c6dc6b8e462c37b3fa376e7c2055f04f16a8fffc2ab66c5bf0deff55:1",
@@ -77,24 +86,15 @@ $ recoverytool --cfg fedimintd-1 --password pass1 utxos --db fedimintd-1/databas
 To import it into bitcoin core use the following `jq` command to transform the tool's output into a valid input format
 for [`bitcoin-cli importdescriptors`](https://bitcoincore.org/en/doc/24.0.0/rpc/wallet/importdescriptors/):
 
+Pipe the compact, single-line JSON directly into `bitcoin-cli -stdin`. Bitcoin
+Core reads one additional RPC argument per input line, so `jq -c` is required.
+This keeps descriptors containing private keys out of process arguments.
+
 ```bash
-$ WALLETS="$(recoverytool --cfg fedimintd-1 --password pass1 utxos --db fedimintd-1/database/ | jq '. | map({"desc": .descriptor, "timestamp":0})')"
-[
-  {
-    "desc": "wsh(sortedmulti(3,0280bf3115766b7e1cb23f2f57caf4de5a9171d3985934f2895cc568b384b52319,cSRM825vXJwf8iXcngedon8nQsPC9VMB18wSiG1Fgw6Y1Kzi16ta,021123625d9b21822e1178fc0d2b3f737d0397584cfac821df3250e49c3127cab5,03865705be62a71a3776cca1169908099ad6d138a0c0ed4aeeaf2c8e64616f4085))#h2zg3uhw",
-    "timestamp": 0
-  },
-  {
-    "desc": "wsh(sortedmulti(3,025fbaf8b94d101215d608ae6485b5746142933c261dc5616190f3a331eeaf5f3a,cTgHDPq43RFCy5i9jr2XwMQQNEJ1Y2cYHxhyvXj2wLpF8pi2LxUj,02e25f08feee064cb4bbbb3b33c7e0ddf4d06ed261201f40532c4f5d2152072ecf,03b215967b608d4309fec126a42d49950f6049406b439d4f743cb368362a0cfce0))#v6s5xpsa",
-    "timestamp": 0
-  }
-]
-```
-
-And run `importdescriptors` in `bitcoin-cli`:
-
-```
-$ bitcoin-cli importdescriptors "$WALLETS"
+$ set -o pipefail
+$ recoverytool --cfg fedimintd-1 utxos --db fedimintd-1/database/ \
+    | jq -c 'map({"desc": .descriptor, "timestamp": 0})' \
+    | bitcoin-cli -stdin importdescriptors
 [                                                                                                                                       
   {                                                                                                                                                                                                                                                                             
     "success": true,                                                                                                                                                                                                                                                            
