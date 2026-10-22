@@ -6,6 +6,8 @@ use futures::StreamExt;
 
 use super::{RocksDb, RocksDbReadOnly, next_prefix};
 
+mod no_previous;
+
 fn open_temp_db(temp_path: &str) -> Database {
     let path = tempfile::Builder::new()
         .prefix(temp_path)
