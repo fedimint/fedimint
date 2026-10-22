@@ -83,7 +83,7 @@ pub struct ConsensusEngine {
     /// Notified whenever consensus accepts an item.
     pub accepted_item_sender: watch::Sender<()>,
     /// Notified whenever consensus completes a session.
-    pub completed_session_sender: watch::Sender<()>,
+    pub completed_session_sender: watch::Sender<super::session_cache::CompletedSession>,
     pub task_group: TaskGroup,
     pub data_dir: PathBuf,
     pub db_checkpoint_retention: u64,
@@ -801,11 +801,15 @@ impl ConsensusEngine {
             panic!("We tried to overwrite a signed session outcome");
         }
 
+        super::session_cache::publish_on_commit(
+            &mut dbtx,
+            self.completed_session_sender.clone(),
+            session_index,
+            &signed_session_outcome,
+        );
         dbtx.commit_tx_result()
             .await
             .expect("This is the only place where we write to this key");
-
-        self.completed_session_sender.send_replace(());
     }
 
     /// Returns the full path where the database checkpoints are stored.
