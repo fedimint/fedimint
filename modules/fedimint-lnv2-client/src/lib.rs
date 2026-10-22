@@ -140,7 +140,6 @@ pub struct LnurlReceiveOperationMeta {
     pub custom_meta: Value,
 }
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// The state of an operation sending a payment over lightning.
 ///
 /// ```mermaid
@@ -188,7 +187,6 @@ pub enum FinalSendOperationState {
 
 pub type SendResult = Result<OperationId, SendPaymentError>;
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// The state of an operation receiving a payment over lightning.
 ///
 /// ```mermaid

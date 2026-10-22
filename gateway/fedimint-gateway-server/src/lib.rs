@@ -181,7 +181,6 @@ const DB_FILE: &str = "gatewayd.db";
 /// running in LDK mode.
 const LDK_NODE_DB_FOLDER: &str = "ldk_node";
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// ```mermaid
 /// graph LR
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5

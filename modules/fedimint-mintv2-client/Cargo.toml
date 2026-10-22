@@ -11,10 +11,6 @@ version = { workspace = true }
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
-[package.metadata.cargo-udeps.ignore]
-# cargo udeps can't detect that one
-normal = ["aquamarine"]
-
 [features]
 cli = ["dep:clap"]
 default = []
@@ -28,7 +24,6 @@ harness = false
 name = "recovery"
 
 [dependencies]
-aquamarine = { workspace = true }
 async-channel = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }

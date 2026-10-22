@@ -12,8 +12,6 @@
 ignore = [
   # `rsa` Marvin timing sidechannel; no fix available upstream
   "RUSTSEC-2023-0071",
-  # `proc-macro-error` unmaintained; transitive
-  "RUSTSEC-2024-0370",
   # `instant` unmaintained; transitive
   "RUSTSEC-2024-0384",
   # `derivative` unmaintained; transitive
