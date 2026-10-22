@@ -9,6 +9,7 @@ use super::{
 use crate::module::registry::ModuleDecoderRegistry;
 use crate::runtime::spawn;
 
+mod no_previous;
 mod wait_key;
 
 async fn waiter(db: &Database, key: TestKey) -> tokio::task::JoinHandle<TestVal> {
