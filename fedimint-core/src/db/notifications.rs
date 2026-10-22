@@ -1,40 +1,41 @@
 use std::collections::hash_map::DefaultHasher;
+use std::collections::{BTreeMap, BTreeSet};
+use std::future::Future;
 use std::hash::{Hash, Hasher};
+use std::sync::{Arc, Mutex};
 
-use bitvec::vec::BitVec;
 use tokio::sync::Notify;
-use tokio::sync::futures::Notified;
 
-/// Number of buckets used for `Notifications`.
-const NOTIFY_BUCKETS: usize = 32;
-
-/// The state of Notification.
+/// Exact-key notifications, retaining only keys with active registrations.
 ///
-/// This stores `NOTIFY_BUCKETS` number of `Notifies`.
-/// Each key is assigned a bucket based on its hash value.
-/// This will cause some false positives.
-#[derive(Debug)]
+/// A tree releases its nodes as registrations disappear, unlike a hash table
+/// whose capacity can retain a historical high-water mark.
+#[derive(Debug, Default)]
 pub struct Notifications {
-    buckets: Vec<Notify>,
+    keys: Mutex<BTreeMap<Vec<u8>, Entry>>,
 }
 
-impl Default for Notifications {
-    fn default() -> Self {
-        Self {
-            buckets: (0..NOTIFY_BUCKETS).map(|_| Notify::new()).collect(),
+#[derive(Debug)]
+struct Entry {
+    notify: Arc<Notify>,
+    registrations: usize,
+}
+
+/// Keeps the entry alive even when the returned future has not been polled.
+struct Registration<'a> {
+    notifications: &'a Notifications,
+    key: Vec<u8>,
+}
+
+impl Drop for Registration<'_> {
+    fn drop(&mut self) {
+        let mut keys = self.notifications.keys.lock().expect("lock poisoned");
+        let entry = keys.get_mut(&self.key).expect("registration owns an entry");
+        entry.registrations -= 1;
+        if entry.registrations == 0 {
+            keys.remove(&self.key);
         }
     }
-}
-
-fn slot_index_for_hash(hash_value: u64) -> usize {
-    (hash_value % (NOTIFY_BUCKETS as u64)) as usize
-}
-
-fn slot_index_for_key<K: Hash>(key: K) -> usize {
-    let mut hasher = DefaultHasher::new();
-    key.hash(&mut hasher);
-    let hash_value = hasher.finish();
-    slot_index_for_hash(hash_value)
 }
 
 impl Notifications {
@@ -42,48 +43,94 @@ impl Notifications {
         Self::default()
     }
 
-    /// This registers for notification when called.
+    /// Register synchronously, then wait for the next update when awaited.
     ///
-    /// Then waits for the notification when .awaited.
-    ///
-    /// NOTE: This may some false positives.
-    pub fn register<K>(&'_ self, key: K) -> Notified<'_>
-    where
-        K: Hash,
-    {
-        self.buckets[slot_index_for_key(key)].notified()
+    /// `notified_owned` observes `notify_waiters` from its creation, even
+    /// before its first poll. Create it under the registry lock so a
+    /// notification cannot slip between finding the entry and arming the
+    /// wait. The caller must register before taking its database snapshot.
+    pub fn register(&self, key: &[u8]) -> impl Future<Output = ()> + Send + use<'_> {
+        let mut keys = self.keys.lock().expect("lock poisoned");
+        let entry = keys.entry(key.to_vec()).or_insert_with(|| Entry {
+            notify: Arc::new(Notify::new()),
+            registrations: 0,
+        });
+        entry.registrations += 1;
+        let notified = entry.notify.clone().notified_owned();
+        let registration = Registration {
+            notifications: self,
+            key: key.to_vec(),
+        };
+        drop(keys);
+
+        async move {
+            notified.await;
+            drop(registration);
+        }
     }
 
-    /// Notify a key.
-    ///
-    /// All the waiters for this keys will be notified.
-    pub fn notify<K>(&self, key: K)
-    where
-        K: Hash,
-    {
-        self.buckets[slot_index_for_key(key)].notify_waiters();
+    /// Notify all registrations for exactly this key.
+    pub fn notify(&self, key: &[u8]) {
+        let notify = self
+            .keys
+            .lock()
+            .expect("lock poisoned")
+            .get(key)
+            .map(|entry| entry.notify.clone());
+        // Waking a task may execute its waker inline. Do not hold the registry
+        // lock while waking, since cancellation/registration also takes it.
+        if let Some(notify) = notify {
+            notify.notify_waiters();
+        }
     }
 
-    /// Notifies the waiters about the notifications recorded in `NotifyQueue`.
+    /// Deliver notifications only after the database transaction commits.
     pub fn submit_queue(&self, queue: &NotifyQueue) {
-        for bucket in queue.buckets.iter_ones() {
-            self.buckets[bucket].notify_waiters();
+        if let Some(buckets) = queue.buckets {
+            let notifies: Vec<_> = self
+                .keys
+                .lock()
+                .expect("lock poisoned")
+                .iter()
+                .filter(|(key, _)| buckets & bucket_mask(key) != 0)
+                .map(|(_, entry)| entry.notify.clone())
+                .collect();
+            for notify in notifies {
+                notify.notify_waiters();
+            }
+        } else {
+            for key in &queue.keys {
+                self.notify(key);
+            }
         }
     }
 }
 
-/// Save notifications to be sent after transaction is complete.
-#[derive(Debug)]
+/// Bound exact-key bookkeeping for large write batches and unusually large
+/// keys.
+/// Keep small commits (including single-key signed session outcomes) precise,
+/// without allocating a key per write in bulk transactions.
+const MAX_EXACT_KEYS: usize = 8;
+const MAX_EXACT_KEY_BYTES: usize = 512;
+
+fn bucket_mask(key: &[u8]) -> u32 {
+    let mut hasher = DefaultHasher::new();
+    key.hash(&mut hasher);
+    1 << (hasher.finish() % 32)
+}
+
+/// Keys changed by a transaction, deduplicated until commit.
+///
+/// Keep keys, not the current subscriptions: a waiter can register after a
+/// write is queued but before it commits, and must observe that commit too.
+/// Large batches fall back to the former 32-bucket notification scheme,
+/// bounding queue memory at the cost of false-positive wakes for those
+/// transactions.
+#[derive(Debug, Default)]
 pub struct NotifyQueue {
-    buckets: BitVec,
-}
-
-impl Default for NotifyQueue {
-    fn default() -> Self {
-        Self {
-            buckets: BitVec::repeat(false, NOTIFY_BUCKETS),
-        }
-    }
+    keys: BTreeSet<Vec<u8>>,
+    key_bytes: usize,
+    buckets: Option<u32>,
 }
 
 impl NotifyQueue {
@@ -91,11 +138,26 @@ impl NotifyQueue {
         Self::default()
     }
 
-    pub fn add<K>(&mut self, key: &K)
-    where
-        K: Hash + ?Sized,
-    {
-        self.buckets.set(slot_index_for_key(key), true);
+    pub fn add(&mut self, key: &[u8]) {
+        if let Some(buckets) = &mut self.buckets {
+            *buckets |= bucket_mask(key);
+            return;
+        }
+        if self.keys.contains(key) {
+            return;
+        }
+        if self.keys.len() == MAX_EXACT_KEYS || key.len() > MAX_EXACT_KEY_BYTES - self.key_bytes {
+            self.buckets = Some(
+                self.keys
+                    .iter()
+                    .fold(bucket_mask(key), |mask, key| mask | bucket_mask(key)),
+            );
+            self.keys.clear();
+            self.key_bytes = 0;
+            return;
+        }
+        self.key_bytes += key.len();
+        self.keys.insert(key.to_vec());
     }
 }
 
