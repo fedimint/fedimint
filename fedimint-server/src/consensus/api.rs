@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::future::pending;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result, ensure};
@@ -49,9 +50,7 @@ use fedimint_core::net::api_announcement::{
 use fedimint_core::net::auth::GuardianAuthToken;
 use fedimint_core::peer_availability::PeerAvailability;
 use fedimint_core::secp256k1::{PublicKey, SECP256K1};
-use fedimint_core::session_outcome::{
-    ConsensusItem, SessionOutcome, SessionStatus, SessionStatusV2, SignedSessionOutcome,
-};
+use fedimint_core::session_outcome::{ConsensusItem, SessionStatus, SessionStatusV2};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
@@ -75,6 +74,7 @@ use crate::consensus::db::{
     AcceptedItemPrefix, AcceptedTransactionKey, PeerAvailabilityKey, SignedSessionOutcomeKey,
 };
 use crate::consensus::engine::get_finished_session_count_static;
+use crate::consensus::session_cache::OutcomeFormat;
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 use crate::net::api::HasApiContext;
@@ -171,7 +171,7 @@ pub struct ConsensusApi {
     /// Notified whenever consensus accepts an item.
     pub accepted_item_receiver: watch::Receiver<()>,
     /// Notified whenever consensus completes a session.
-    pub completed_session_receiver: watch::Receiver<()>,
+    pub completed_session_receiver: watch::Receiver<super::session_cache::CompletedSession>,
     pub p2p_status_receivers: P2PStatusReceivers,
     pub ci_status_receivers: BTreeMap<PeerId, Receiver<Option<u64>>>,
     pub bitcoin_rpc_connection: ServerBitcoinRpcMonitor,
@@ -378,15 +378,25 @@ impl ConsensusApi {
         Ok(outcomes)
     }
 
-    pub async fn session_count(&self) -> u64 {
-        get_finished_session_count_static(&mut self.db.begin_transaction_nc().await).await
+    pub fn session_count(&self) -> u64 {
+        self.completed_session_receiver
+            .borrow()
+            .as_ref()
+            .map_or(0, |latest| latest.index + 1)
     }
 
-    pub async fn await_signed_session_outcome(&self, index: u64) -> SignedSessionOutcome {
-        self.db
-            .wait_key_check(&SignedSessionOutcomeKey(index), std::convert::identity)
-            .await
-            .0
+    async fn await_session_outcome(
+        &self,
+        index: u64,
+        format: OutcomeFormat,
+    ) -> Arc<serde_json::Value> {
+        super::session_cache::await_outcome(
+            &self.db,
+            &self.completed_session_receiver,
+            index,
+            format,
+        )
+        .await
     }
 
     pub async fn session_status(&self, session_index: u64) -> SessionStatusV2 {
@@ -409,8 +419,8 @@ impl ConsensusApi {
         }
     }
 
-    pub async fn get_federation_status(&self) -> ApiResult<LegacyFederationStatus> {
-        let session_count = self.session_count().await;
+    pub fn get_federation_status(&self) -> ApiResult<LegacyFederationStatus> {
+        let session_count = self.session_count();
         let scheduled_shutdown = self.shutdown_receiver.borrow().to_owned();
 
         let status_by_peer = self
@@ -868,7 +878,7 @@ impl IDashboardApi for ConsensusApi {
     }
 
     async fn session_count(&self) -> u64 {
-        self.session_count().await
+        self.session_count()
     }
 
     async fn get_session_status(&self, session_idx: u64) -> SessionStatusV2 {
@@ -1031,7 +1041,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |fedimint: &ConsensusApi, _context, _v: ()| -> StatusResponse {
                 Ok(StatusResponse {
                     server: ServerStatusLegacy::ConsensusRunning,
-                    federation: Some(fedimint.get_federation_status().await?)
+                    federation: Some(fedimint.get_federation_status()?)
                 })}
         },
         public_api_endpoint! {
@@ -1076,21 +1086,21 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             SESSION_COUNT_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> u64 {
-                Ok(fedimint.session_count().await)
+                Ok(fedimint.session_count())
             }
         },
         public_api_endpoint! {
             AWAIT_SESSION_OUTCOME_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SessionOutcome> {
-                Ok((&fedimint.await_signed_session_outcome(index).await.session_outcome).into())
+            async |fedimint: &ConsensusApi, _context, index: u64| -> Arc<serde_json::Value> {
+                Ok(fedimint.await_session_outcome(index, OutcomeFormat::Unsigned).await)
             }
         },
         public_api_endpoint! {
             AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SignedSessionOutcome> {
-                Ok((&fedimint.await_signed_session_outcome(index).await).into())
+            async |fedimint: &ConsensusApi, _context, index: u64| -> Arc<serde_json::Value> {
+                Ok(fedimint.await_session_outcome(index, OutcomeFormat::Signed).await)
             }
         },
         public_api_endpoint! {
