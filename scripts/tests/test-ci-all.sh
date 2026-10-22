@@ -81,6 +81,13 @@ function gw_config_test_lnd() {
 }
 export -f gw_config_test_lnd
 
+function gw_refused_payment_refund_test() {
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" env FM_DISABLE_BASE_FEES=1 ./scripts/tests/gateway-module-test.sh refused-payment-refund-test
+  fi
+}
+export -f gw_refused_payment_refund_test
+
 function gw_restore_test() {
   fm-run-test "${FUNCNAME[0]}" ./scripts/tests/gateway-module-test.sh backup-restore-test
 }
@@ -489,6 +496,7 @@ tests_to_run_in_parallel+=(
   "ln_reconnect_test"
   "gw_reboot_test"
   "gw_config_test_lnd"
+  "gw_refused_payment_refund_test"
   "gw_restore_test"
   "gw_liquidity_test"
   "gw_liquidity_test_walletv2"
