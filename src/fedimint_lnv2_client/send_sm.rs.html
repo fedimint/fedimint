@@ -74,274 +74,273 @@
 <a href=#74 id=74 data-nosnippet>74</a>        .<span class="kw">await</span>;
 <a href=#75 id=75 data-nosnippet>75</a>}
 <a href=#76 id=76 data-nosnippet>76</a>
-<a href=#77 id=77 data-nosnippet>77</a><span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
-<a href=#78 id=78 data-nosnippet>78</a></span><span class="doccomment">/// State machine that requests the lightning gateway to pay an invoice on
-<a href=#79 id=79 data-nosnippet>79</a>/// behalf of a federation client.
-<a href=#80 id=80 data-nosnippet>80</a>///
-<a href=#81 id=81 data-nosnippet>81</a>/// ```mermaid
-<a href=#82 id=82 data-nosnippet>82</a>/// graph LR
-<a href=#83 id=83 data-nosnippet>83</a>/// classDef virtual fill:#fff,stroke-dasharray: 5 5
-<a href=#84 id=84 data-nosnippet>84</a>///
-<a href=#85 id=85 data-nosnippet>85</a>///     Funding -- funding tx is rejected --&gt; Rejected
-<a href=#86 id=86 data-nosnippet>86</a>///     Funding -- funding tx is accepted --&gt; Funded
-<a href=#87 id=87 data-nosnippet>87</a>///     Funded -- post invoice returns preimage  --&gt; Success
-<a href=#88 id=88 data-nosnippet>88</a>///     Funded -- post invoice returns forfeit tx --&gt; Refunding
-<a href=#89 id=89 data-nosnippet>89</a>///     Funded -- await_preimage returns preimage --&gt; Success
-<a href=#90 id=90 data-nosnippet>90</a>///     Funded -- await_preimage expires --&gt; Refunding
-<a href=#91 id=91 data-nosnippet>91</a>/// ```
-<a href=#92 id=92 data-nosnippet>92</a></span><span class="kw">impl </span>State <span class="kw">for </span>SendStateMachine {
-<a href=#93 id=93 data-nosnippet>93</a>    <span class="kw">type </span>ModuleContext = LightningClientContext;
-<a href=#94 id=94 data-nosnippet>94</a>
-<a href=#95 id=95 data-nosnippet>95</a>    <span class="kw">fn </span>transitions(
-<a href=#96 id=96 data-nosnippet>96</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#97 id=97 data-nosnippet>97</a>        context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
-<a href=#98 id=98 data-nosnippet>98</a>        global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
-<a href=#99 id=99 data-nosnippet>99</a>    ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
-<a href=#100 id=100 data-nosnippet>100</a>        <span class="kw">let </span>c_pay = context.clone();
-<a href=#101 id=101 data-nosnippet>101</a>        <span class="kw">let </span>gc_pay = global_context.clone();
-<a href=#102 id=102 data-nosnippet>102</a>        <span class="kw">let </span>c_preimage = context.clone();
-<a href=#103 id=103 data-nosnippet>103</a>        <span class="kw">let </span>gc_preimage = global_context.clone();
-<a href=#104 id=104 data-nosnippet>104</a>
-<a href=#105 id=105 data-nosnippet>105</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
-<a href=#106 id=106 data-nosnippet>106</a>            SendSMState::Funding =&gt; {
-<a href=#107 id=107 data-nosnippet>107</a>                <span class="macro">vec!</span>[StateTransition::new(
-<a href=#108 id=108 data-nosnippet>108</a>                    <span class="self">Self</span>::await_funding(global_context.clone(), <span class="self">self</span>.common.outpoint.txid),
-<a href=#109 id=109 data-nosnippet>109</a>                    <span class="kw">move </span>|<span class="kw">_</span>, error, old_state| {
-<a href=#110 id=110 data-nosnippet>110</a>                        Box::pin(<span class="kw">async move </span>{ <span class="self">Self</span>::transition_funding(error, <span class="kw-2">&amp;</span>old_state) })
-<a href=#111 id=111 data-nosnippet>111</a>                    },
-<a href=#112 id=112 data-nosnippet>112</a>                )]
-<a href=#113 id=113 data-nosnippet>113</a>            }
-<a href=#114 id=114 data-nosnippet>114</a>            SendSMState::Funded =&gt; {
-<a href=#115 id=115 data-nosnippet>115</a>                <span class="macro">vec!</span>[
-<a href=#116 id=116 data-nosnippet>116</a>                    StateTransition::new(
-<a href=#117 id=117 data-nosnippet>117</a>                        <span class="self">Self</span>::gateway_send_payment(
-<a href=#118 id=118 data-nosnippet>118</a>                            <span class="self">self</span>.common.gateway_api.clone().unwrap(),
-<a href=#119 id=119 data-nosnippet>119</a>                            context.federation_id,
-<a href=#120 id=120 data-nosnippet>120</a>                            <span class="self">self</span>.common.outpoint,
-<a href=#121 id=121 data-nosnippet>121</a>                            <span class="self">self</span>.common.contract.clone(),
-<a href=#122 id=122 data-nosnippet>122</a>                            <span class="self">self</span>.common.invoice.clone().unwrap(),
-<a href=#123 id=123 data-nosnippet>123</a>                            <span class="self">self</span>.common.refund_keypair,
-<a href=#124 id=124 data-nosnippet>124</a>                            context.clone(),
-<a href=#125 id=125 data-nosnippet>125</a>                        ),
-<a href=#126 id=126 data-nosnippet>126</a>                        <span class="kw">move </span>|dbtx, response, old_state| {
-<a href=#127 id=127 data-nosnippet>127</a>                            Box::pin(<span class="self">Self</span>::transition_gateway_send_payment(
-<a href=#128 id=128 data-nosnippet>128</a>                                c_pay.clone(),
-<a href=#129 id=129 data-nosnippet>129</a>                                gc_pay.clone(),
-<a href=#130 id=130 data-nosnippet>130</a>                                dbtx,
-<a href=#131 id=131 data-nosnippet>131</a>                                response,
-<a href=#132 id=132 data-nosnippet>132</a>                                old_state,
-<a href=#133 id=133 data-nosnippet>133</a>                            ))
-<a href=#134 id=134 data-nosnippet>134</a>                        },
-<a href=#135 id=135 data-nosnippet>135</a>                    ),
-<a href=#136 id=136 data-nosnippet>136</a>                    StateTransition::new(
-<a href=#137 id=137 data-nosnippet>137</a>                        <span class="self">Self</span>::await_preimage(
-<a href=#138 id=138 data-nosnippet>138</a>                            <span class="self">self</span>.common.outpoint,
-<a href=#139 id=139 data-nosnippet>139</a>                            <span class="self">self</span>.common.contract.clone(),
-<a href=#140 id=140 data-nosnippet>140</a>                            gc_preimage.clone(),
-<a href=#141 id=141 data-nosnippet>141</a>                        ),
-<a href=#142 id=142 data-nosnippet>142</a>                        <span class="kw">move </span>|dbtx, preimage, old_state| {
-<a href=#143 id=143 data-nosnippet>143</a>                            Box::pin(<span class="self">Self</span>::transition_preimage(
-<a href=#144 id=144 data-nosnippet>144</a>                                c_preimage.clone(),
-<a href=#145 id=145 data-nosnippet>145</a>                                dbtx,
-<a href=#146 id=146 data-nosnippet>146</a>                                gc_preimage.clone(),
-<a href=#147 id=147 data-nosnippet>147</a>                                old_state,
-<a href=#148 id=148 data-nosnippet>148</a>                                preimage,
-<a href=#149 id=149 data-nosnippet>149</a>                            ))
-<a href=#150 id=150 data-nosnippet>150</a>                        },
-<a href=#151 id=151 data-nosnippet>151</a>                    ),
-<a href=#152 id=152 data-nosnippet>152</a>                ]
-<a href=#153 id=153 data-nosnippet>153</a>            }
-<a href=#154 id=154 data-nosnippet>154</a>            SendSMState::Refunding(..) | SendSMState::Success(..) | SendSMState::Rejected(..) =&gt; {
-<a href=#155 id=155 data-nosnippet>155</a>                <span class="macro">vec!</span>[]
-<a href=#156 id=156 data-nosnippet>156</a>            }
-<a href=#157 id=157 data-nosnippet>157</a>        }
-<a href=#158 id=158 data-nosnippet>158</a>    }
-<a href=#159 id=159 data-nosnippet>159</a>
-<a href=#160 id=160 data-nosnippet>160</a>    <span class="kw">fn </span>operation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OperationId {
-<a href=#161 id=161 data-nosnippet>161</a>        <span class="self">self</span>.common.operation_id
-<a href=#162 id=162 data-nosnippet>162</a>    }
-<a href=#163 id=163 data-nosnippet>163</a>}
-<a href=#164 id=164 data-nosnippet>164</a>
-<a href=#165 id=165 data-nosnippet>165</a><span class="kw">impl </span>SendStateMachine {
-<a href=#166 id=166 data-nosnippet>166</a>    <span class="kw">async fn </span>await_funding(
-<a href=#167 id=167 data-nosnippet>167</a>        global_context: DynGlobalClientContext,
-<a href=#168 id=168 data-nosnippet>168</a>        txid: TransactionId,
-<a href=#169 id=169 data-nosnippet>169</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
-<a href=#170 id=170 data-nosnippet>170</a>        global_context.await_tx_accepted(txid).<span class="kw">await
-<a href=#171 id=171 data-nosnippet>171</a>    </span>}
-<a href=#172 id=172 data-nosnippet>172</a>
-<a href=#173 id=173 data-nosnippet>173</a>    <span class="kw">fn </span>transition_funding(
-<a href=#174 id=174 data-nosnippet>174</a>        result: <span class="prelude-ty">Result</span>&lt;(), String&gt;,
-<a href=#175 id=175 data-nosnippet>175</a>        old_state: <span class="kw-2">&amp;</span>SendStateMachine,
-<a href=#176 id=176 data-nosnippet>176</a>    ) -&gt; SendStateMachine {
-<a href=#177 id=177 data-nosnippet>177</a>        <span class="kw">match </span>result {
-<a href=#178 id=178 data-nosnippet>178</a>            <span class="prelude-val">Ok</span>(()) =&gt; old_state.update(SendSMState::Funded),
-<a href=#179 id=179 data-nosnippet>179</a>            <span class="prelude-val">Err</span>(error) =&gt; old_state.update(SendSMState::Rejected(error)),
-<a href=#180 id=180 data-nosnippet>180</a>        }
-<a href=#181 id=181 data-nosnippet>181</a>    }
-<a href=#182 id=182 data-nosnippet>182</a>
-<a href=#183 id=183 data-nosnippet>183</a>    <span class="attr">#[instrument(target = LOG_CLIENT_MODULE_LNV2, skip(refund_keypair, context))]
-<a href=#184 id=184 data-nosnippet>184</a>    </span><span class="kw">async fn </span>gateway_send_payment(
-<a href=#185 id=185 data-nosnippet>185</a>        gateway_api: SafeUrl,
-<a href=#186 id=186 data-nosnippet>186</a>        federation_id: FederationId,
-<a href=#187 id=187 data-nosnippet>187</a>        outpoint: OutPoint,
-<a href=#188 id=188 data-nosnippet>188</a>        contract: OutgoingContract,
-<a href=#189 id=189 data-nosnippet>189</a>        invoice: LightningInvoice,
-<a href=#190 id=190 data-nosnippet>190</a>        refund_keypair: Keypair,
-<a href=#191 id=191 data-nosnippet>191</a>        context: LightningClientContext,
-<a href=#192 id=192 data-nosnippet>192</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt; {
-<a href=#193 id=193 data-nosnippet>193</a>        util::retry(<span class="string">"gateway-send-payment"</span>, api_networking_backoff(), || <span class="kw">async </span>{
-<a href=#194 id=194 data-nosnippet>194</a>            <span class="kw">let </span>payment_result = context
-<a href=#195 id=195 data-nosnippet>195</a>                .gateway_conn
-<a href=#196 id=196 data-nosnippet>196</a>                .send_payment(
-<a href=#197 id=197 data-nosnippet>197</a>                    gateway_api.clone(),
-<a href=#198 id=198 data-nosnippet>198</a>                    federation_id,
-<a href=#199 id=199 data-nosnippet>199</a>                    outpoint,
-<a href=#200 id=200 data-nosnippet>200</a>                    contract.clone(),
-<a href=#201 id=201 data-nosnippet>201</a>                    invoice.clone(),
-<a href=#202 id=202 data-nosnippet>202</a>                    refund_keypair.sign_schnorr(secp256k1::Message::from_digest(
-<a href=#203 id=203 data-nosnippet>203</a>                        <span class="kw-2">*</span>invoice.consensus_hash::&lt;sha256::Hash&gt;().as_ref(),
-<a href=#204 id=204 data-nosnippet>204</a>                    )),
-<a href=#205 id=205 data-nosnippet>205</a>                )
-<a href=#206 id=206 data-nosnippet>206</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#207 id=207 data-nosnippet>207</a>
-<a href=#208 id=208 data-nosnippet>208</a>            <span class="kw">if </span>!contract.verify_gateway_response(<span class="kw-2">&amp;</span>payment_result) {
-<a href=#209 id=209 data-nosnippet>209</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentAttemptError::InvalidResponse(payment_result));
-<a href=#210 id=210 data-nosnippet>210</a>            }
-<a href=#211 id=211 data-nosnippet>211</a>
-<a href=#212 id=212 data-nosnippet>212</a>            <span class="prelude-val">Ok</span>(payment_result)
-<a href=#213 id=213 data-nosnippet>213</a>        })
-<a href=#214 id=214 data-nosnippet>214</a>        .<span class="kw">await
-<a href=#215 id=215 data-nosnippet>215</a>        </span>.expect(<span class="string">"Number of retries has no limit"</span>)
-<a href=#216 id=216 data-nosnippet>216</a>    }
-<a href=#217 id=217 data-nosnippet>217</a>
-<a href=#218 id=218 data-nosnippet>218</a>    <span class="kw">async fn </span>transition_gateway_send_payment(
-<a href=#219 id=219 data-nosnippet>219</a>        context: LightningClientContext,
-<a href=#220 id=220 data-nosnippet>220</a>        global_context: DynGlobalClientContext,
-<a href=#221 id=221 data-nosnippet>221</a>        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-<a href=#222 id=222 data-nosnippet>222</a>        gateway_response: <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;,
-<a href=#223 id=223 data-nosnippet>223</a>        old_state: SendStateMachine,
-<a href=#224 id=224 data-nosnippet>224</a>    ) -&gt; SendStateMachine {
-<a href=#225 id=225 data-nosnippet>225</a>        <span class="kw">match </span>gateway_response {
-<a href=#226 id=226 data-nosnippet>226</a>            <span class="prelude-val">Ok</span>(preimage) =&gt; {
-<a href=#227 id=227 data-nosnippet>227</a>                send_update_event(
-<a href=#228 id=228 data-nosnippet>228</a>                    context,
-<a href=#229 id=229 data-nosnippet>229</a>                    dbtx,
-<a href=#230 id=230 data-nosnippet>230</a>                    old_state.common.operation_id,
-<a href=#231 id=231 data-nosnippet>231</a>                    SendPaymentStatus::Success(preimage),
-<a href=#232 id=232 data-nosnippet>232</a>                )
-<a href=#233 id=233 data-nosnippet>233</a>                .<span class="kw">await</span>;
-<a href=#234 id=234 data-nosnippet>234</a>
-<a href=#235 id=235 data-nosnippet>235</a>                old_state.update(SendSMState::Success(preimage))
-<a href=#236 id=236 data-nosnippet>236</a>            }
-<a href=#237 id=237 data-nosnippet>237</a>            <span class="prelude-val">Err</span>(signature) =&gt; {
-<a href=#238 id=238 data-nosnippet>238</a>                <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
-<a href=#239 id=239 data-nosnippet>239</a>                    input: LightningInput::V0(LightningInputV0::Outgoing(
-<a href=#240 id=240 data-nosnippet>240</a>                        old_state.common.outpoint,
-<a href=#241 id=241 data-nosnippet>241</a>                        OutgoingWitness::Cancel(signature),
-<a href=#242 id=242 data-nosnippet>242</a>                    )),
-<a href=#243 id=243 data-nosnippet>243</a>                    amounts: Amounts::new_bitcoin(old_state.common.contract.amount),
-<a href=#244 id=244 data-nosnippet>244</a>                    keys: <span class="macro">vec!</span>[old_state.common.refund_keypair],
-<a href=#245 id=245 data-nosnippet>245</a>                };
-<a href=#246 id=246 data-nosnippet>246</a>
-<a href=#247 id=247 data-nosnippet>247</a>                <span class="kw">let </span>change_range = global_context
-<a href=#248 id=248 data-nosnippet>248</a>                    .claim_inputs(
-<a href=#249 id=249 data-nosnippet>249</a>                        dbtx,
-<a href=#250 id=250 data-nosnippet>250</a>                        <span class="comment">// The input of the refund tx is managed by this state machine
-<a href=#251 id=251 data-nosnippet>251</a>                        </span>ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input]),
-<a href=#252 id=252 data-nosnippet>252</a>                    )
-<a href=#253 id=253 data-nosnippet>253</a>                    .<span class="kw">await
-<a href=#254 id=254 data-nosnippet>254</a>                    </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>);
-<a href=#255 id=255 data-nosnippet>255</a>
-<a href=#256 id=256 data-nosnippet>256</a>                send_update_event(
-<a href=#257 id=257 data-nosnippet>257</a>                    context,
-<a href=#258 id=258 data-nosnippet>258</a>                    dbtx,
-<a href=#259 id=259 data-nosnippet>259</a>                    old_state.common.operation_id,
-<a href=#260 id=260 data-nosnippet>260</a>                    SendPaymentStatus::Refunded,
-<a href=#261 id=261 data-nosnippet>261</a>                )
-<a href=#262 id=262 data-nosnippet>262</a>                .<span class="kw">await</span>;
-<a href=#263 id=263 data-nosnippet>263</a>
-<a href=#264 id=264 data-nosnippet>264</a>                old_state.update(SendSMState::Refunding(change_range.into_iter().collect()))
-<a href=#265 id=265 data-nosnippet>265</a>            }
-<a href=#266 id=266 data-nosnippet>266</a>        }
-<a href=#267 id=267 data-nosnippet>267</a>    }
-<a href=#268 id=268 data-nosnippet>268</a>
-<a href=#269 id=269 data-nosnippet>269</a>    <span class="attr">#[instrument(target = LOG_CLIENT_MODULE_LNV2, skip(global_context))]
-<a href=#270 id=270 data-nosnippet>270</a>    </span><span class="kw">async fn </span>await_preimage(
-<a href=#271 id=271 data-nosnippet>271</a>        outpoint: OutPoint,
-<a href=#272 id=272 data-nosnippet>272</a>        contract: OutgoingContract,
-<a href=#273 id=273 data-nosnippet>273</a>        global_context: DynGlobalClientContext,
-<a href=#274 id=274 data-nosnippet>274</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;[u8; <span class="number">32</span>]&gt; {
-<a href=#275 id=275 data-nosnippet>275</a>        <span class="kw">let </span>preimage = global_context
-<a href=#276 id=276 data-nosnippet>276</a>            .module_api()
-<a href=#277 id=277 data-nosnippet>277</a>            .await_preimage(outpoint, contract.expiration)
-<a href=#278 id=278 data-nosnippet>278</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#279 id=279 data-nosnippet>279</a>
-<a href=#280 id=280 data-nosnippet>280</a>        <span class="kw">if </span>contract.verify_preimage(<span class="kw-2">&amp;</span>preimage) {
-<a href=#281 id=281 data-nosnippet>281</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(preimage);
-<a href=#282 id=282 data-nosnippet>282</a>        }
-<a href=#283 id=283 data-nosnippet>283</a>
-<a href=#284 id=284 data-nosnippet>284</a>        <span class="macro">crit!</span>(target: LOG_CLIENT_MODULE_LNV2, <span class="string">"Federation returned invalid preimage {:?}"</span>, preimage);
-<a href=#285 id=285 data-nosnippet>285</a>
-<a href=#286 id=286 data-nosnippet>286</a>        pending().<span class="kw">await
-<a href=#287 id=287 data-nosnippet>287</a>    </span>}
-<a href=#288 id=288 data-nosnippet>288</a>
-<a href=#289 id=289 data-nosnippet>289</a>    <span class="kw">async fn </span>transition_preimage(
-<a href=#290 id=290 data-nosnippet>290</a>        context: LightningClientContext,
-<a href=#291 id=291 data-nosnippet>291</a>        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
-<a href=#292 id=292 data-nosnippet>292</a>        global_context: DynGlobalClientContext,
-<a href=#293 id=293 data-nosnippet>293</a>        old_state: SendStateMachine,
-<a href=#294 id=294 data-nosnippet>294</a>        preimage: <span class="prelude-ty">Option</span>&lt;[u8; <span class="number">32</span>]&gt;,
-<a href=#295 id=295 data-nosnippet>295</a>    ) -&gt; SendStateMachine {
-<a href=#296 id=296 data-nosnippet>296</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(preimage) = preimage {
-<a href=#297 id=297 data-nosnippet>297</a>            send_update_event(
-<a href=#298 id=298 data-nosnippet>298</a>                context,
-<a href=#299 id=299 data-nosnippet>299</a>                dbtx,
-<a href=#300 id=300 data-nosnippet>300</a>                old_state.common.operation_id,
-<a href=#301 id=301 data-nosnippet>301</a>                SendPaymentStatus::Success(preimage),
-<a href=#302 id=302 data-nosnippet>302</a>            )
-<a href=#303 id=303 data-nosnippet>303</a>            .<span class="kw">await</span>;
-<a href=#304 id=304 data-nosnippet>304</a>
-<a href=#305 id=305 data-nosnippet>305</a>            <span class="kw">return </span>old_state.update(SendSMState::Success(preimage));
-<a href=#306 id=306 data-nosnippet>306</a>        }
-<a href=#307 id=307 data-nosnippet>307</a>
-<a href=#308 id=308 data-nosnippet>308</a>        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
-<a href=#309 id=309 data-nosnippet>309</a>            input: LightningInput::V0(LightningInputV0::Outgoing(
-<a href=#310 id=310 data-nosnippet>310</a>                old_state.common.outpoint,
-<a href=#311 id=311 data-nosnippet>311</a>                OutgoingWitness::Refund,
-<a href=#312 id=312 data-nosnippet>312</a>            )),
-<a href=#313 id=313 data-nosnippet>313</a>            amounts: Amounts::new_bitcoin(old_state.common.contract.amount),
-<a href=#314 id=314 data-nosnippet>314</a>            keys: <span class="macro">vec!</span>[old_state.common.refund_keypair],
-<a href=#315 id=315 data-nosnippet>315</a>        };
-<a href=#316 id=316 data-nosnippet>316</a>
-<a href=#317 id=317 data-nosnippet>317</a>        <span class="kw">let </span>change_range = global_context
-<a href=#318 id=318 data-nosnippet>318</a>            .claim_inputs(dbtx, ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input]))
-<a href=#319 id=319 data-nosnippet>319</a>            .<span class="kw">await
-<a href=#320 id=320 data-nosnippet>320</a>            </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>);
-<a href=#321 id=321 data-nosnippet>321</a>
-<a href=#322 id=322 data-nosnippet>322</a>        send_update_event(
-<a href=#323 id=323 data-nosnippet>323</a>            context,
-<a href=#324 id=324 data-nosnippet>324</a>            dbtx,
-<a href=#325 id=325 data-nosnippet>325</a>            old_state.common.operation_id,
-<a href=#326 id=326 data-nosnippet>326</a>            SendPaymentStatus::Refunded,
-<a href=#327 id=327 data-nosnippet>327</a>        )
-<a href=#328 id=328 data-nosnippet>328</a>        .<span class="kw">await</span>;
-<a href=#329 id=329 data-nosnippet>329</a>
-<a href=#330 id=330 data-nosnippet>330</a>        old_state.update(SendSMState::Refunding(change_range.into_iter().collect()))
-<a href=#331 id=331 data-nosnippet>331</a>    }
-<a href=#332 id=332 data-nosnippet>332</a>}
-<a href=#333 id=333 data-nosnippet>333</a>
-<a href=#334 id=334 data-nosnippet>334</a><span class="doccomment">/// Why one attempt to have the gateway pay the invoice failed, so that it is
-<a href=#335 id=335 data-nosnippet>335</a>/// made again.
-<a href=#336 id=336 data-nosnippet>336</a></span><span class="attr">#[derive(Debug, thiserror::Error)]
-<a href=#337 id=337 data-nosnippet>337</a></span><span class="kw">enum </span>SendPaymentAttemptError {
-<a href=#338 id=338 data-nosnippet>338</a>    <span class="doccomment">/// The gateway could not be reached, or answered with an error.
-<a href=#339 id=339 data-nosnippet>339</a>    </span><span class="attr">#[error(transparent)]
-<a href=#340 id=340 data-nosnippet>340</a>    </span>Gateway(<span class="attr">#[from] </span>ServerError),
-<a href=#341 id=341 data-nosnippet>341</a>
-<a href=#342 id=342 data-nosnippet>342</a>    <span class="doccomment">/// The gateway's answer neither proves the payment nor cancels the
-<a href=#343 id=343 data-nosnippet>343</a>    /// contract.
-<a href=#344 id=344 data-nosnippet>344</a>    </span><span class="attr">#[error(<span class="string">"Invalid gateway response: {0:?}"</span>)]
-<a href=#345 id=345 data-nosnippet>345</a>    </span>InvalidResponse(<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;),
-<a href=#346 id=346 data-nosnippet>346</a>}
+<a href=#77 id=77 data-nosnippet>77</a><span class="doccomment">/// State machine that requests the lightning gateway to pay an invoice on
+<a href=#78 id=78 data-nosnippet>78</a>/// behalf of a federation client.
+<a href=#79 id=79 data-nosnippet>79</a>///
+<a href=#80 id=80 data-nosnippet>80</a>/// ```mermaid
+<a href=#81 id=81 data-nosnippet>81</a>/// graph LR
+<a href=#82 id=82 data-nosnippet>82</a>/// classDef virtual fill:#fff,stroke-dasharray: 5 5
+<a href=#83 id=83 data-nosnippet>83</a>///
+<a href=#84 id=84 data-nosnippet>84</a>///     Funding -- funding tx is rejected --&gt; Rejected
+<a href=#85 id=85 data-nosnippet>85</a>///     Funding -- funding tx is accepted --&gt; Funded
+<a href=#86 id=86 data-nosnippet>86</a>///     Funded -- post invoice returns preimage  --&gt; Success
+<a href=#87 id=87 data-nosnippet>87</a>///     Funded -- post invoice returns forfeit tx --&gt; Refunding
+<a href=#88 id=88 data-nosnippet>88</a>///     Funded -- await_preimage returns preimage --&gt; Success
+<a href=#89 id=89 data-nosnippet>89</a>///     Funded -- await_preimage expires --&gt; Refunding
+<a href=#90 id=90 data-nosnippet>90</a>/// ```
+<a href=#91 id=91 data-nosnippet>91</a></span><span class="kw">impl </span>State <span class="kw">for </span>SendStateMachine {
+<a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">type </span>ModuleContext = LightningClientContext;
+<a href=#93 id=93 data-nosnippet>93</a>
+<a href=#94 id=94 data-nosnippet>94</a>    <span class="kw">fn </span>transitions(
+<a href=#95 id=95 data-nosnippet>95</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#96 id=96 data-nosnippet>96</a>        context: <span class="kw-2">&amp;</span><span class="self">Self</span>::ModuleContext,
+<a href=#97 id=97 data-nosnippet>97</a>        global_context: <span class="kw-2">&amp;</span>DynGlobalClientContext,
+<a href=#98 id=98 data-nosnippet>98</a>    ) -&gt; Vec&lt;StateTransition&lt;<span class="self">Self</span>&gt;&gt; {
+<a href=#99 id=99 data-nosnippet>99</a>        <span class="kw">let </span>c_pay = context.clone();
+<a href=#100 id=100 data-nosnippet>100</a>        <span class="kw">let </span>gc_pay = global_context.clone();
+<a href=#101 id=101 data-nosnippet>101</a>        <span class="kw">let </span>c_preimage = context.clone();
+<a href=#102 id=102 data-nosnippet>102</a>        <span class="kw">let </span>gc_preimage = global_context.clone();
+<a href=#103 id=103 data-nosnippet>103</a>
+<a href=#104 id=104 data-nosnippet>104</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.state {
+<a href=#105 id=105 data-nosnippet>105</a>            SendSMState::Funding =&gt; {
+<a href=#106 id=106 data-nosnippet>106</a>                <span class="macro">vec!</span>[StateTransition::new(
+<a href=#107 id=107 data-nosnippet>107</a>                    <span class="self">Self</span>::await_funding(global_context.clone(), <span class="self">self</span>.common.outpoint.txid),
+<a href=#108 id=108 data-nosnippet>108</a>                    <span class="kw">move </span>|<span class="kw">_</span>, error, old_state| {
+<a href=#109 id=109 data-nosnippet>109</a>                        Box::pin(<span class="kw">async move </span>{ <span class="self">Self</span>::transition_funding(error, <span class="kw-2">&amp;</span>old_state) })
+<a href=#110 id=110 data-nosnippet>110</a>                    },
+<a href=#111 id=111 data-nosnippet>111</a>                )]
+<a href=#112 id=112 data-nosnippet>112</a>            }
+<a href=#113 id=113 data-nosnippet>113</a>            SendSMState::Funded =&gt; {
+<a href=#114 id=114 data-nosnippet>114</a>                <span class="macro">vec!</span>[
+<a href=#115 id=115 data-nosnippet>115</a>                    StateTransition::new(
+<a href=#116 id=116 data-nosnippet>116</a>                        <span class="self">Self</span>::gateway_send_payment(
+<a href=#117 id=117 data-nosnippet>117</a>                            <span class="self">self</span>.common.gateway_api.clone().unwrap(),
+<a href=#118 id=118 data-nosnippet>118</a>                            context.federation_id,
+<a href=#119 id=119 data-nosnippet>119</a>                            <span class="self">self</span>.common.outpoint,
+<a href=#120 id=120 data-nosnippet>120</a>                            <span class="self">self</span>.common.contract.clone(),
+<a href=#121 id=121 data-nosnippet>121</a>                            <span class="self">self</span>.common.invoice.clone().unwrap(),
+<a href=#122 id=122 data-nosnippet>122</a>                            <span class="self">self</span>.common.refund_keypair,
+<a href=#123 id=123 data-nosnippet>123</a>                            context.clone(),
+<a href=#124 id=124 data-nosnippet>124</a>                        ),
+<a href=#125 id=125 data-nosnippet>125</a>                        <span class="kw">move </span>|dbtx, response, old_state| {
+<a href=#126 id=126 data-nosnippet>126</a>                            Box::pin(<span class="self">Self</span>::transition_gateway_send_payment(
+<a href=#127 id=127 data-nosnippet>127</a>                                c_pay.clone(),
+<a href=#128 id=128 data-nosnippet>128</a>                                gc_pay.clone(),
+<a href=#129 id=129 data-nosnippet>129</a>                                dbtx,
+<a href=#130 id=130 data-nosnippet>130</a>                                response,
+<a href=#131 id=131 data-nosnippet>131</a>                                old_state,
+<a href=#132 id=132 data-nosnippet>132</a>                            ))
+<a href=#133 id=133 data-nosnippet>133</a>                        },
+<a href=#134 id=134 data-nosnippet>134</a>                    ),
+<a href=#135 id=135 data-nosnippet>135</a>                    StateTransition::new(
+<a href=#136 id=136 data-nosnippet>136</a>                        <span class="self">Self</span>::await_preimage(
+<a href=#137 id=137 data-nosnippet>137</a>                            <span class="self">self</span>.common.outpoint,
+<a href=#138 id=138 data-nosnippet>138</a>                            <span class="self">self</span>.common.contract.clone(),
+<a href=#139 id=139 data-nosnippet>139</a>                            gc_preimage.clone(),
+<a href=#140 id=140 data-nosnippet>140</a>                        ),
+<a href=#141 id=141 data-nosnippet>141</a>                        <span class="kw">move </span>|dbtx, preimage, old_state| {
+<a href=#142 id=142 data-nosnippet>142</a>                            Box::pin(<span class="self">Self</span>::transition_preimage(
+<a href=#143 id=143 data-nosnippet>143</a>                                c_preimage.clone(),
+<a href=#144 id=144 data-nosnippet>144</a>                                dbtx,
+<a href=#145 id=145 data-nosnippet>145</a>                                gc_preimage.clone(),
+<a href=#146 id=146 data-nosnippet>146</a>                                old_state,
+<a href=#147 id=147 data-nosnippet>147</a>                                preimage,
+<a href=#148 id=148 data-nosnippet>148</a>                            ))
+<a href=#149 id=149 data-nosnippet>149</a>                        },
+<a href=#150 id=150 data-nosnippet>150</a>                    ),
+<a href=#151 id=151 data-nosnippet>151</a>                ]
+<a href=#152 id=152 data-nosnippet>152</a>            }
+<a href=#153 id=153 data-nosnippet>153</a>            SendSMState::Refunding(..) | SendSMState::Success(..) | SendSMState::Rejected(..) =&gt; {
+<a href=#154 id=154 data-nosnippet>154</a>                <span class="macro">vec!</span>[]
+<a href=#155 id=155 data-nosnippet>155</a>            }
+<a href=#156 id=156 data-nosnippet>156</a>        }
+<a href=#157 id=157 data-nosnippet>157</a>    }
+<a href=#158 id=158 data-nosnippet>158</a>
+<a href=#159 id=159 data-nosnippet>159</a>    <span class="kw">fn </span>operation_id(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; OperationId {
+<a href=#160 id=160 data-nosnippet>160</a>        <span class="self">self</span>.common.operation_id
+<a href=#161 id=161 data-nosnippet>161</a>    }
+<a href=#162 id=162 data-nosnippet>162</a>}
+<a href=#163 id=163 data-nosnippet>163</a>
+<a href=#164 id=164 data-nosnippet>164</a><span class="kw">impl </span>SendStateMachine {
+<a href=#165 id=165 data-nosnippet>165</a>    <span class="kw">async fn </span>await_funding(
+<a href=#166 id=166 data-nosnippet>166</a>        global_context: DynGlobalClientContext,
+<a href=#167 id=167 data-nosnippet>167</a>        txid: TransactionId,
+<a href=#168 id=168 data-nosnippet>168</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(), String&gt; {
+<a href=#169 id=169 data-nosnippet>169</a>        global_context.await_tx_accepted(txid).<span class="kw">await
+<a href=#170 id=170 data-nosnippet>170</a>    </span>}
+<a href=#171 id=171 data-nosnippet>171</a>
+<a href=#172 id=172 data-nosnippet>172</a>    <span class="kw">fn </span>transition_funding(
+<a href=#173 id=173 data-nosnippet>173</a>        result: <span class="prelude-ty">Result</span>&lt;(), String&gt;,
+<a href=#174 id=174 data-nosnippet>174</a>        old_state: <span class="kw-2">&amp;</span>SendStateMachine,
+<a href=#175 id=175 data-nosnippet>175</a>    ) -&gt; SendStateMachine {
+<a href=#176 id=176 data-nosnippet>176</a>        <span class="kw">match </span>result {
+<a href=#177 id=177 data-nosnippet>177</a>            <span class="prelude-val">Ok</span>(()) =&gt; old_state.update(SendSMState::Funded),
+<a href=#178 id=178 data-nosnippet>178</a>            <span class="prelude-val">Err</span>(error) =&gt; old_state.update(SendSMState::Rejected(error)),
+<a href=#179 id=179 data-nosnippet>179</a>        }
+<a href=#180 id=180 data-nosnippet>180</a>    }
+<a href=#181 id=181 data-nosnippet>181</a>
+<a href=#182 id=182 data-nosnippet>182</a>    <span class="attr">#[instrument(target = LOG_CLIENT_MODULE_LNV2, skip(refund_keypair, context))]
+<a href=#183 id=183 data-nosnippet>183</a>    </span><span class="kw">async fn </span>gateway_send_payment(
+<a href=#184 id=184 data-nosnippet>184</a>        gateway_api: SafeUrl,
+<a href=#185 id=185 data-nosnippet>185</a>        federation_id: FederationId,
+<a href=#186 id=186 data-nosnippet>186</a>        outpoint: OutPoint,
+<a href=#187 id=187 data-nosnippet>187</a>        contract: OutgoingContract,
+<a href=#188 id=188 data-nosnippet>188</a>        invoice: LightningInvoice,
+<a href=#189 id=189 data-nosnippet>189</a>        refund_keypair: Keypair,
+<a href=#190 id=190 data-nosnippet>190</a>        context: LightningClientContext,
+<a href=#191 id=191 data-nosnippet>191</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt; {
+<a href=#192 id=192 data-nosnippet>192</a>        util::retry(<span class="string">"gateway-send-payment"</span>, api_networking_backoff(), || <span class="kw">async </span>{
+<a href=#193 id=193 data-nosnippet>193</a>            <span class="kw">let </span>payment_result = context
+<a href=#194 id=194 data-nosnippet>194</a>                .gateway_conn
+<a href=#195 id=195 data-nosnippet>195</a>                .send_payment(
+<a href=#196 id=196 data-nosnippet>196</a>                    gateway_api.clone(),
+<a href=#197 id=197 data-nosnippet>197</a>                    federation_id,
+<a href=#198 id=198 data-nosnippet>198</a>                    outpoint,
+<a href=#199 id=199 data-nosnippet>199</a>                    contract.clone(),
+<a href=#200 id=200 data-nosnippet>200</a>                    invoice.clone(),
+<a href=#201 id=201 data-nosnippet>201</a>                    refund_keypair.sign_schnorr(secp256k1::Message::from_digest(
+<a href=#202 id=202 data-nosnippet>202</a>                        <span class="kw-2">*</span>invoice.consensus_hash::&lt;sha256::Hash&gt;().as_ref(),
+<a href=#203 id=203 data-nosnippet>203</a>                    )),
+<a href=#204 id=204 data-nosnippet>204</a>                )
+<a href=#205 id=205 data-nosnippet>205</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#206 id=206 data-nosnippet>206</a>
+<a href=#207 id=207 data-nosnippet>207</a>            <span class="kw">if </span>!contract.verify_gateway_response(<span class="kw-2">&amp;</span>payment_result) {
+<a href=#208 id=208 data-nosnippet>208</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(SendPaymentAttemptError::InvalidResponse(payment_result));
+<a href=#209 id=209 data-nosnippet>209</a>            }
+<a href=#210 id=210 data-nosnippet>210</a>
+<a href=#211 id=211 data-nosnippet>211</a>            <span class="prelude-val">Ok</span>(payment_result)
+<a href=#212 id=212 data-nosnippet>212</a>        })
+<a href=#213 id=213 data-nosnippet>213</a>        .<span class="kw">await
+<a href=#214 id=214 data-nosnippet>214</a>        </span>.expect(<span class="string">"Number of retries has no limit"</span>)
+<a href=#215 id=215 data-nosnippet>215</a>    }
+<a href=#216 id=216 data-nosnippet>216</a>
+<a href=#217 id=217 data-nosnippet>217</a>    <span class="kw">async fn </span>transition_gateway_send_payment(
+<a href=#218 id=218 data-nosnippet>218</a>        context: LightningClientContext,
+<a href=#219 id=219 data-nosnippet>219</a>        global_context: DynGlobalClientContext,
+<a href=#220 id=220 data-nosnippet>220</a>        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
+<a href=#221 id=221 data-nosnippet>221</a>        gateway_response: <span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;,
+<a href=#222 id=222 data-nosnippet>222</a>        old_state: SendStateMachine,
+<a href=#223 id=223 data-nosnippet>223</a>    ) -&gt; SendStateMachine {
+<a href=#224 id=224 data-nosnippet>224</a>        <span class="kw">match </span>gateway_response {
+<a href=#225 id=225 data-nosnippet>225</a>            <span class="prelude-val">Ok</span>(preimage) =&gt; {
+<a href=#226 id=226 data-nosnippet>226</a>                send_update_event(
+<a href=#227 id=227 data-nosnippet>227</a>                    context,
+<a href=#228 id=228 data-nosnippet>228</a>                    dbtx,
+<a href=#229 id=229 data-nosnippet>229</a>                    old_state.common.operation_id,
+<a href=#230 id=230 data-nosnippet>230</a>                    SendPaymentStatus::Success(preimage),
+<a href=#231 id=231 data-nosnippet>231</a>                )
+<a href=#232 id=232 data-nosnippet>232</a>                .<span class="kw">await</span>;
+<a href=#233 id=233 data-nosnippet>233</a>
+<a href=#234 id=234 data-nosnippet>234</a>                old_state.update(SendSMState::Success(preimage))
+<a href=#235 id=235 data-nosnippet>235</a>            }
+<a href=#236 id=236 data-nosnippet>236</a>            <span class="prelude-val">Err</span>(signature) =&gt; {
+<a href=#237 id=237 data-nosnippet>237</a>                <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
+<a href=#238 id=238 data-nosnippet>238</a>                    input: LightningInput::V0(LightningInputV0::Outgoing(
+<a href=#239 id=239 data-nosnippet>239</a>                        old_state.common.outpoint,
+<a href=#240 id=240 data-nosnippet>240</a>                        OutgoingWitness::Cancel(signature),
+<a href=#241 id=241 data-nosnippet>241</a>                    )),
+<a href=#242 id=242 data-nosnippet>242</a>                    amounts: Amounts::new_bitcoin(old_state.common.contract.amount),
+<a href=#243 id=243 data-nosnippet>243</a>                    keys: <span class="macro">vec!</span>[old_state.common.refund_keypair],
+<a href=#244 id=244 data-nosnippet>244</a>                };
+<a href=#245 id=245 data-nosnippet>245</a>
+<a href=#246 id=246 data-nosnippet>246</a>                <span class="kw">let </span>change_range = global_context
+<a href=#247 id=247 data-nosnippet>247</a>                    .claim_inputs(
+<a href=#248 id=248 data-nosnippet>248</a>                        dbtx,
+<a href=#249 id=249 data-nosnippet>249</a>                        <span class="comment">// The input of the refund tx is managed by this state machine
+<a href=#250 id=250 data-nosnippet>250</a>                        </span>ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input]),
+<a href=#251 id=251 data-nosnippet>251</a>                    )
+<a href=#252 id=252 data-nosnippet>252</a>                    .<span class="kw">await
+<a href=#253 id=253 data-nosnippet>253</a>                    </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>);
+<a href=#254 id=254 data-nosnippet>254</a>
+<a href=#255 id=255 data-nosnippet>255</a>                send_update_event(
+<a href=#256 id=256 data-nosnippet>256</a>                    context,
+<a href=#257 id=257 data-nosnippet>257</a>                    dbtx,
+<a href=#258 id=258 data-nosnippet>258</a>                    old_state.common.operation_id,
+<a href=#259 id=259 data-nosnippet>259</a>                    SendPaymentStatus::Refunded,
+<a href=#260 id=260 data-nosnippet>260</a>                )
+<a href=#261 id=261 data-nosnippet>261</a>                .<span class="kw">await</span>;
+<a href=#262 id=262 data-nosnippet>262</a>
+<a href=#263 id=263 data-nosnippet>263</a>                old_state.update(SendSMState::Refunding(change_range.into_iter().collect()))
+<a href=#264 id=264 data-nosnippet>264</a>            }
+<a href=#265 id=265 data-nosnippet>265</a>        }
+<a href=#266 id=266 data-nosnippet>266</a>    }
+<a href=#267 id=267 data-nosnippet>267</a>
+<a href=#268 id=268 data-nosnippet>268</a>    <span class="attr">#[instrument(target = LOG_CLIENT_MODULE_LNV2, skip(global_context))]
+<a href=#269 id=269 data-nosnippet>269</a>    </span><span class="kw">async fn </span>await_preimage(
+<a href=#270 id=270 data-nosnippet>270</a>        outpoint: OutPoint,
+<a href=#271 id=271 data-nosnippet>271</a>        contract: OutgoingContract,
+<a href=#272 id=272 data-nosnippet>272</a>        global_context: DynGlobalClientContext,
+<a href=#273 id=273 data-nosnippet>273</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;[u8; <span class="number">32</span>]&gt; {
+<a href=#274 id=274 data-nosnippet>274</a>        <span class="kw">let </span>preimage = global_context
+<a href=#275 id=275 data-nosnippet>275</a>            .module_api()
+<a href=#276 id=276 data-nosnippet>276</a>            .await_preimage(outpoint, contract.expiration)
+<a href=#277 id=277 data-nosnippet>277</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#278 id=278 data-nosnippet>278</a>
+<a href=#279 id=279 data-nosnippet>279</a>        <span class="kw">if </span>contract.verify_preimage(<span class="kw-2">&amp;</span>preimage) {
+<a href=#280 id=280 data-nosnippet>280</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(preimage);
+<a href=#281 id=281 data-nosnippet>281</a>        }
+<a href=#282 id=282 data-nosnippet>282</a>
+<a href=#283 id=283 data-nosnippet>283</a>        <span class="macro">crit!</span>(target: LOG_CLIENT_MODULE_LNV2, <span class="string">"Federation returned invalid preimage {:?}"</span>, preimage);
+<a href=#284 id=284 data-nosnippet>284</a>
+<a href=#285 id=285 data-nosnippet>285</a>        pending().<span class="kw">await
+<a href=#286 id=286 data-nosnippet>286</a>    </span>}
+<a href=#287 id=287 data-nosnippet>287</a>
+<a href=#288 id=288 data-nosnippet>288</a>    <span class="kw">async fn </span>transition_preimage(
+<a href=#289 id=289 data-nosnippet>289</a>        context: LightningClientContext,
+<a href=#290 id=290 data-nosnippet>290</a>        dbtx: <span class="kw-2">&amp;mut </span>ClientSMDatabaseTransaction&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt;,
+<a href=#291 id=291 data-nosnippet>291</a>        global_context: DynGlobalClientContext,
+<a href=#292 id=292 data-nosnippet>292</a>        old_state: SendStateMachine,
+<a href=#293 id=293 data-nosnippet>293</a>        preimage: <span class="prelude-ty">Option</span>&lt;[u8; <span class="number">32</span>]&gt;,
+<a href=#294 id=294 data-nosnippet>294</a>    ) -&gt; SendStateMachine {
+<a href=#295 id=295 data-nosnippet>295</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(preimage) = preimage {
+<a href=#296 id=296 data-nosnippet>296</a>            send_update_event(
+<a href=#297 id=297 data-nosnippet>297</a>                context,
+<a href=#298 id=298 data-nosnippet>298</a>                dbtx,
+<a href=#299 id=299 data-nosnippet>299</a>                old_state.common.operation_id,
+<a href=#300 id=300 data-nosnippet>300</a>                SendPaymentStatus::Success(preimage),
+<a href=#301 id=301 data-nosnippet>301</a>            )
+<a href=#302 id=302 data-nosnippet>302</a>            .<span class="kw">await</span>;
+<a href=#303 id=303 data-nosnippet>303</a>
+<a href=#304 id=304 data-nosnippet>304</a>            <span class="kw">return </span>old_state.update(SendSMState::Success(preimage));
+<a href=#305 id=305 data-nosnippet>305</a>        }
+<a href=#306 id=306 data-nosnippet>306</a>
+<a href=#307 id=307 data-nosnippet>307</a>        <span class="kw">let </span>client_input = ClientInput::&lt;LightningInput&gt; {
+<a href=#308 id=308 data-nosnippet>308</a>            input: LightningInput::V0(LightningInputV0::Outgoing(
+<a href=#309 id=309 data-nosnippet>309</a>                old_state.common.outpoint,
+<a href=#310 id=310 data-nosnippet>310</a>                OutgoingWitness::Refund,
+<a href=#311 id=311 data-nosnippet>311</a>            )),
+<a href=#312 id=312 data-nosnippet>312</a>            amounts: Amounts::new_bitcoin(old_state.common.contract.amount),
+<a href=#313 id=313 data-nosnippet>313</a>            keys: <span class="macro">vec!</span>[old_state.common.refund_keypair],
+<a href=#314 id=314 data-nosnippet>314</a>        };
+<a href=#315 id=315 data-nosnippet>315</a>
+<a href=#316 id=316 data-nosnippet>316</a>        <span class="kw">let </span>change_range = global_context
+<a href=#317 id=317 data-nosnippet>317</a>            .claim_inputs(dbtx, ClientInputBundle::new_no_sm(<span class="macro">vec!</span>[client_input]))
+<a href=#318 id=318 data-nosnippet>318</a>            .<span class="kw">await
+<a href=#319 id=319 data-nosnippet>319</a>            </span>.expect(<span class="string">"Cannot claim input, additional funding needed"</span>);
+<a href=#320 id=320 data-nosnippet>320</a>
+<a href=#321 id=321 data-nosnippet>321</a>        send_update_event(
+<a href=#322 id=322 data-nosnippet>322</a>            context,
+<a href=#323 id=323 data-nosnippet>323</a>            dbtx,
+<a href=#324 id=324 data-nosnippet>324</a>            old_state.common.operation_id,
+<a href=#325 id=325 data-nosnippet>325</a>            SendPaymentStatus::Refunded,
+<a href=#326 id=326 data-nosnippet>326</a>        )
+<a href=#327 id=327 data-nosnippet>327</a>        .<span class="kw">await</span>;
+<a href=#328 id=328 data-nosnippet>328</a>
+<a href=#329 id=329 data-nosnippet>329</a>        old_state.update(SendSMState::Refunding(change_range.into_iter().collect()))
+<a href=#330 id=330 data-nosnippet>330</a>    }
+<a href=#331 id=331 data-nosnippet>331</a>}
+<a href=#332 id=332 data-nosnippet>332</a>
+<a href=#333 id=333 data-nosnippet>333</a><span class="doccomment">/// Why one attempt to have the gateway pay the invoice failed, so that it is
+<a href=#334 id=334 data-nosnippet>334</a>/// made again.
+<a href=#335 id=335 data-nosnippet>335</a></span><span class="attr">#[derive(Debug, thiserror::Error)]
+<a href=#336 id=336 data-nosnippet>336</a></span><span class="kw">enum </span>SendPaymentAttemptError {
+<a href=#337 id=337 data-nosnippet>337</a>    <span class="doccomment">/// The gateway could not be reached, or answered with an error.
+<a href=#338 id=338 data-nosnippet>338</a>    </span><span class="attr">#[error(transparent)]
+<a href=#339 id=339 data-nosnippet>339</a>    </span>Gateway(<span class="attr">#[from] </span>ServerError),
+<a href=#340 id=340 data-nosnippet>340</a>
+<a href=#341 id=341 data-nosnippet>341</a>    <span class="doccomment">/// The gateway's answer neither proves the payment nor cancels the
+<a href=#342 id=342 data-nosnippet>342</a>    /// contract.
+<a href=#343 id=343 data-nosnippet>343</a>    </span><span class="attr">#[error(<span class="string">"Invalid gateway response: {0:?}"</span>)]
+<a href=#344 id=344 data-nosnippet>344</a>    </span>InvalidResponse(<span class="prelude-ty">Result</span>&lt;[u8; <span class="number">32</span>], Signature&gt;),
+<a href=#345 id=345 data-nosnippet>345</a>}
 </code></pre></div></section></main></body></html>

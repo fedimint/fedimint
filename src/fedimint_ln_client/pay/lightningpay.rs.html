@@ -6,41 +6,40 @@
 <a href=#6 id=6 data-nosnippet>6</a>    LightningPayRefundable,
 <a href=#7 id=7 data-nosnippet>7</a>};
 <a href=#8 id=8 data-nosnippet>8</a>
-<a href=#9 id=9 data-nosnippet>9</a><span class="attr">#[cfg_attr(doc, aquamarine::aquamarine)]
-<a href=#10 id=10 data-nosnippet>10</a></span><span class="doccomment">/// State machine that requests the lightning gateway to pay an invoice on
-<a href=#11 id=11 data-nosnippet>11</a>/// behalf of a federation client.
-<a href=#12 id=12 data-nosnippet>12</a>///
-<a href=#13 id=13 data-nosnippet>13</a>/// ```mermaid
-<a href=#14 id=14 data-nosnippet>14</a>/// graph LR
-<a href=#15 id=15 data-nosnippet>15</a>/// classDef virtual fill:#fff,stroke-dasharray: 5 5
-<a href=#16 id=16 data-nosnippet>16</a>///
-<a href=#17 id=17 data-nosnippet>17</a>///  CreatedOutgoingLnContract -- await transaction failed --&gt; Canceled
-<a href=#18 id=18 data-nosnippet>18</a>///  CreatedOutgoingLnContract -- await transaction acceptance --&gt; Funded
-<a href=#19 id=19 data-nosnippet>19</a>///  Funded -- await gateway payment success  --&gt; Success
-<a href=#20 id=20 data-nosnippet>20</a>///  Funded -- await gateway cancel payment --&gt; Refund
-<a href=#21 id=21 data-nosnippet>21</a>///  Funded -- await payment timeout --&gt; Refund
-<a href=#22 id=22 data-nosnippet>22</a>///  Funded -- unrecoverable payment error --&gt; Failure
-<a href=#23 id=23 data-nosnippet>23</a>///  Refundable -- gateway issued refunded --&gt; Refund
-<a href=#24 id=24 data-nosnippet>24</a>///  Refundable -- transaction timeout --&gt; Refund
-<a href=#25 id=25 data-nosnippet>25</a>/// ```
-<a href=#26 id=26 data-nosnippet>26</a></span><span class="attr">#[allow(clippy::large_enum_variant)]
-<a href=#27 id=27 data-nosnippet>27</a>#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
-<a href=#28 id=28 data-nosnippet>28</a></span><span class="kw">pub enum </span>LightningPayStates {
-<a href=#29 id=29 data-nosnippet>29</a>    CreatedOutgoingLnContract(LightningPayCreatedOutgoingLnContract),
-<a href=#30 id=30 data-nosnippet>30</a>    FundingRejected,
-<a href=#31 id=31 data-nosnippet>31</a>    Funded(LightningPayFunded),
-<a href=#32 id=32 data-nosnippet>32</a>    Success(String),
-<a href=#33 id=33 data-nosnippet>33</a>    <span class="attr">#[deprecated(
-<a href=#34 id=34 data-nosnippet>34</a>        since = <span class="string">"0.4.0"</span>,
-<a href=#35 id=35 data-nosnippet>35</a>        note = <span class="string">"Pay State Machine skips over this state and will retry payments until cancellation or timeout"
-<a href=#36 id=36 data-nosnippet>36</a>    </span>)]
-<a href=#37 id=37 data-nosnippet>37</a>    </span>Refundable(LightningPayRefundable),
-<a href=#38 id=38 data-nosnippet>38</a>    Refund(LightningPayRefund),
-<a href=#39 id=39 data-nosnippet>39</a>    <span class="attr">#[deprecated(
-<a href=#40 id=40 data-nosnippet>40</a>        since = <span class="string">"0.4.0"</span>,
-<a href=#41 id=41 data-nosnippet>41</a>        note = <span class="string">"Pay State Machine does not need to wait for the refund tx to be accepted"
-<a href=#42 id=42 data-nosnippet>42</a>    </span>)]
-<a href=#43 id=43 data-nosnippet>43</a>    </span>Refunded(Vec&lt;OutPoint&gt;),
-<a href=#44 id=44 data-nosnippet>44</a>    Failure(String),
-<a href=#45 id=45 data-nosnippet>45</a>}
+<a href=#9 id=9 data-nosnippet>9</a><span class="doccomment">/// State machine that requests the lightning gateway to pay an invoice on
+<a href=#10 id=10 data-nosnippet>10</a>/// behalf of a federation client.
+<a href=#11 id=11 data-nosnippet>11</a>///
+<a href=#12 id=12 data-nosnippet>12</a>/// ```mermaid
+<a href=#13 id=13 data-nosnippet>13</a>/// graph LR
+<a href=#14 id=14 data-nosnippet>14</a>/// classDef virtual fill:#fff,stroke-dasharray: 5 5
+<a href=#15 id=15 data-nosnippet>15</a>///
+<a href=#16 id=16 data-nosnippet>16</a>///  CreatedOutgoingLnContract -- await transaction failed --&gt; Canceled
+<a href=#17 id=17 data-nosnippet>17</a>///  CreatedOutgoingLnContract -- await transaction acceptance --&gt; Funded
+<a href=#18 id=18 data-nosnippet>18</a>///  Funded -- await gateway payment success  --&gt; Success
+<a href=#19 id=19 data-nosnippet>19</a>///  Funded -- await gateway cancel payment --&gt; Refund
+<a href=#20 id=20 data-nosnippet>20</a>///  Funded -- await payment timeout --&gt; Refund
+<a href=#21 id=21 data-nosnippet>21</a>///  Funded -- unrecoverable payment error --&gt; Failure
+<a href=#22 id=22 data-nosnippet>22</a>///  Refundable -- gateway issued refunded --&gt; Refund
+<a href=#23 id=23 data-nosnippet>23</a>///  Refundable -- transaction timeout --&gt; Refund
+<a href=#24 id=24 data-nosnippet>24</a>/// ```
+<a href=#25 id=25 data-nosnippet>25</a></span><span class="attr">#[allow(clippy::large_enum_variant)]
+<a href=#26 id=26 data-nosnippet>26</a>#[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
+<a href=#27 id=27 data-nosnippet>27</a></span><span class="kw">pub enum </span>LightningPayStates {
+<a href=#28 id=28 data-nosnippet>28</a>    CreatedOutgoingLnContract(LightningPayCreatedOutgoingLnContract),
+<a href=#29 id=29 data-nosnippet>29</a>    FundingRejected,
+<a href=#30 id=30 data-nosnippet>30</a>    Funded(LightningPayFunded),
+<a href=#31 id=31 data-nosnippet>31</a>    Success(String),
+<a href=#32 id=32 data-nosnippet>32</a>    <span class="attr">#[deprecated(
+<a href=#33 id=33 data-nosnippet>33</a>        since = <span class="string">"0.4.0"</span>,
+<a href=#34 id=34 data-nosnippet>34</a>        note = <span class="string">"Pay State Machine skips over this state and will retry payments until cancellation or timeout"
+<a href=#35 id=35 data-nosnippet>35</a>    </span>)]
+<a href=#36 id=36 data-nosnippet>36</a>    </span>Refundable(LightningPayRefundable),
+<a href=#37 id=37 data-nosnippet>37</a>    Refund(LightningPayRefund),
+<a href=#38 id=38 data-nosnippet>38</a>    <span class="attr">#[deprecated(
+<a href=#39 id=39 data-nosnippet>39</a>        since = <span class="string">"0.4.0"</span>,
+<a href=#40 id=40 data-nosnippet>40</a>        note = <span class="string">"Pay State Machine does not need to wait for the refund tx to be accepted"
+<a href=#41 id=41 data-nosnippet>41</a>    </span>)]
+<a href=#42 id=42 data-nosnippet>42</a>    </span>Refunded(Vec&lt;OutPoint&gt;),
+<a href=#43 id=43 data-nosnippet>43</a>    Failure(String),
+<a href=#44 id=44 data-nosnippet>44</a>}
 </code></pre></div></section></main></body></html>
