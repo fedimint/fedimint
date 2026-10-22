@@ -9,12 +9,19 @@
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::large_futures)]
 
+mod api_request;
 mod cli;
 mod client;
+mod command_encoding;
+mod command_wait;
 mod db;
 pub mod envs;
+mod event_output;
 mod utils;
 mod visualize;
+
+#[cfg(test)]
+mod command_tests;
 
 use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
@@ -29,10 +36,10 @@ use std::time::Duration;
 use std::{fs, result};
 
 use anyhow::{Context, format_err};
+use api_request::ApiRequest;
 use clap::{CommandFactory, Parser};
 use cli::{
-    AdminCmd, Command, DatabaseBackend, DecodeType, DevCmd, EncodeType, OOBNotesJson, Opts,
-    SetupAdminArgs, SetupAdminCmd, VisualizeCmd,
+    AdminCmd, Command, DatabaseBackend, DevCmd, Opts, SetupAdminArgs, SetupAdminCmd, VisualizeCmd,
 };
 use envs::SALT_FILE;
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
@@ -46,27 +53,25 @@ use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_client::secret::RootSecretStrategy;
 use fedimint_client::{AdminCreds, Client, ClientBuilder, ClientHandleArc, RootSecret};
 use fedimint_connectors::{Connectivity, ConnectorRegistry};
-use fedimint_core::base32::FEDIMINT_PREFIX;
-use fedimint_core::config::{FederationId, FederationIdPrefix};
+use fedimint_core::config::FederationId;
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{Database, DatabaseValue, IDatabaseTransactionOpsCoreTyped as _};
+use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ApiAuth, ApiRequestErased};
 use fedimint_core::setup_code::PeerSetupCode;
 use fedimint_core::transaction::Transaction;
-use fedimint_core::util::{SafeUrl, backoff_util, handle_version_hash_command, retry};
-use fedimint_core::{PeerId, base32, fedimint_build_code_version_env, runtime};
+use fedimint_core::util::{SafeUrl, handle_version_hash_command};
+use fedimint_core::{PeerId, fedimint_build_code_version_env, runtime};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_eventlog::EventLogTrimableId;
 use fedimint_ln_client::LightningClientInit;
 use fedimint_logging::{LOG_CLIENT, TracingSetup};
 use fedimint_meta_client::{MetaClientInit, MetaModuleMetaSourceWithFallback};
-use fedimint_mint_client::{MintClientInit, MintClientModule, OOBNotes};
-use fedimint_wallet_client::api::WalletFederationApi;
-use fedimint_wallet_client::{WalletClientInit, WalletClientModule};
-use futures::future::{join_all, pending};
+use fedimint_mint_client::{MintClientInit, MintClientModule};
+use fedimint_wallet_client::WalletClientInit;
+use futures::future::join_all;
 use itertools::Itertools;
 use rand::thread_rng;
 use serde::{Deserialize, Serialize};
@@ -1163,108 +1168,150 @@ impl FedimintCli {
                         .map_err_cli()?,
                 ))
             }
-            Command::Admin(AdminCmd::Auth {
+            Command::Admin(command) => self.handle_admin_command(cli, command).await,
+            Command::Dev(command) => self.handle_dev_command(cli, command).await,
+            Command::Completion { shell } => {
+                let bin_path = PathBuf::from(
+                    std::env::args_os()
+                        .next()
+                        .expect("Binary name is always provided if we get this far"),
+                );
+                let bin_name = bin_path
+                    .file_name()
+                    .expect("path has file name")
+                    .to_string_lossy();
+                clap_complete::generate(
+                    shell,
+                    &mut Opts::command(),
+                    bin_name.as_ref(),
+                    &mut std::io::stdout(),
+                );
+                // HACK: prints true to stdout which is fine for shells
+                Ok(CliOutput::Raw(serde_json::Value::Bool(true)))
+            }
+        }
+    }
+
+    /// Verify a guardian's credentials before storing them in the client
+    /// database.
+    async fn handle_admin_auth(
+        &self,
+        cli: &Opts,
+        peer_id: u16,
+        password: String,
+        no_verify: bool,
+        force: bool,
+    ) -> CliOutputResult {
+        let db = cli.load_database().await?;
+        let peer_id = PeerId::from(peer_id);
+        let auth = ApiAuth::new(password);
+
+        // Check if credentials already exist
+        if !force {
+            let existing = load_admin_creds(&db).await;
+            if existing.is_some() {
+                return Err(CliError {
+                    error: "Admin credentials already stored. Use --force to overwrite."
+                        .to_string(),
+                });
+            }
+        }
+
+        // Load client config to get peer endpoints
+        let config = Client::get_config_from_db(&db)
+            .await
+            .ok_or_cli_msg("Client not initialized. Please join a federation first.")?;
+
+        // Get the endpoint for the specified peer
+        let peer_url = config
+            .global
+            .api_endpoints
+            .get(&peer_id)
+            .ok_or_else(|| CliError {
+                error: format!(
+                    "Peer ID {} not found in federation. Valid peer IDs are: {:?}",
+                    peer_id,
+                    config.global.api_endpoints.keys().collect::<Vec<_>>()
+                ),
+            })?;
+
+        // Interactive verification unless --no-verify is set
+        if !no_verify {
+            // Check if stdin is a terminal for interactive prompts
+            if !std::io::stdin().is_terminal() {
+                return Err(CliError {
+                    error: "Interactive verification requires a terminal. Use --no-verify to skip."
+                        .to_string(),
+                });
+            }
+
+            eprintln!("Guardian endpoint for peer {}: {}", peer_id, peer_url.url);
+            eprint!("Does this look correct? (y/N): ");
+            std::io::stderr().flush().map_err_cli()?;
+
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input).map_err_cli()?;
+            let input = input.trim().to_lowercase();
+
+            if input != "y" && input != "yes" {
+                return Err(CliError {
+                    error: "Endpoint verification cancelled by user.".to_string(),
+                });
+            }
+        }
+
+        // Verify credentials by making an authenticated API call
+        eprintln!("Verifying credentials...");
+        let admin_api = DynGlobalApi::new_admin(
+            cli.make_endpoints().await.map_err_cli()?,
+            peer_id,
+            peer_url.url.clone(),
+            db.begin_transaction_nc()
+                .await
+                .get_value(&ApiSecretKey)
+                .await
+                .as_deref(),
+        );
+
+        // Use the `auth` endpoint to verify credentials
+        admin_api.auth(auth.clone()).await.map_err(|e| CliError {
+            error: format!(
+                "Failed to verify credentials: {e}. Please check your peer ID and password."
+            ),
+        })?;
+
+        // Store the credentials in the database
+        store_admin_creds(
+            &db,
+            &StoredAdminCreds {
+                peer_id,
+                auth: auth.as_str().to_string(),
+            },
+        )
+        .await;
+
+        eprintln!("Admin credentials verified and saved successfully.");
+        Ok(CliOutput::Raw(json!({
+            "peer_id": peer_id,
+            "endpoint": peer_url.url.to_string(),
+            "status": "saved"
+        })))
+    }
+
+    /// Dispatch guardian administration without opening a client for setup or
+    /// auth.
+    async fn handle_admin_command(&mut self, cli: Opts, command: AdminCmd) -> CliOutputResult {
+        match command {
+            AdminCmd::Auth {
                 peer_id,
                 password,
                 no_verify,
                 force,
-            }) => {
-                let db = cli.load_database().await?;
-                let peer_id = PeerId::from(peer_id);
-                let auth = ApiAuth::new(password);
-
-                // Check if credentials already exist
-                if !force {
-                    let existing = load_admin_creds(&db).await;
-                    if existing.is_some() {
-                        return Err(CliError {
-                            error: "Admin credentials already stored. Use --force to overwrite."
-                                .to_string(),
-                        });
-                    }
-                }
-
-                // Load client config to get peer endpoints
-                let config = Client::get_config_from_db(&db)
+            } => {
+                self.handle_admin_auth(&cli, peer_id, password, no_verify, force)
                     .await
-                    .ok_or_cli_msg("Client not initialized. Please join a federation first.")?;
-
-                // Get the endpoint for the specified peer
-                let peer_url =
-                    config
-                        .global
-                        .api_endpoints
-                        .get(&peer_id)
-                        .ok_or_else(|| CliError {
-                            error: format!(
-                                "Peer ID {} not found in federation. Valid peer IDs are: {:?}",
-                                peer_id,
-                                config.global.api_endpoints.keys().collect::<Vec<_>>()
-                            ),
-                        })?;
-
-                // Interactive verification unless --no-verify is set
-                if !no_verify {
-                    // Check if stdin is a terminal for interactive prompts
-                    if !std::io::stdin().is_terminal() {
-                        return Err(CliError {
-                            error: "Interactive verification requires a terminal. Use --no-verify to skip.".to_string(),
-                        });
-                    }
-
-                    eprintln!("Guardian endpoint for peer {}: {}", peer_id, peer_url.url);
-                    eprint!("Does this look correct? (y/N): ");
-                    std::io::stderr().flush().map_err_cli()?;
-
-                    let mut input = String::new();
-                    std::io::stdin().read_line(&mut input).map_err_cli()?;
-                    let input = input.trim().to_lowercase();
-
-                    if input != "y" && input != "yes" {
-                        return Err(CliError {
-                            error: "Endpoint verification cancelled by user.".to_string(),
-                        });
-                    }
-                }
-
-                // Verify credentials by making an authenticated API call
-                eprintln!("Verifying credentials...");
-                let admin_api = DynGlobalApi::new_admin(
-                    cli.make_endpoints().await.map_err_cli()?,
-                    peer_id,
-                    peer_url.url.clone(),
-                    db.begin_transaction_nc()
-                        .await
-                        .get_value(&ApiSecretKey)
-                        .await
-                        .as_deref(),
-                );
-
-                // Use the `auth` endpoint to verify credentials
-                admin_api.auth(auth.clone()).await.map_err(|e| CliError {
-                    error: format!(
-                        "Failed to verify credentials: {e}. Please check your peer ID and password."
-                    ),
-                })?;
-
-                // Store the credentials in the database
-                store_admin_creds(
-                    &db,
-                    &StoredAdminCreds {
-                        peer_id,
-                        auth: auth.as_str().to_string(),
-                    },
-                )
-                .await;
-
-                eprintln!("Admin credentials verified and saved successfully.");
-                Ok(CliOutput::Raw(json!({
-                    "peer_id": peer_id,
-                    "endpoint": peer_url.url.to_string(),
-                    "status": "saved"
-                })))
             }
-            Command::Admin(AdminCmd::Audit) => {
+            AdminCmd::Audit => {
                 let client = self.client_open(&cli).await?;
 
                 let audit = cli
@@ -1279,7 +1326,7 @@ impl FedimintCli {
                     serde_json::to_value(audit).map_err_cli_msg("invalid response")?,
                 ))
             }
-            Command::Admin(AdminCmd::Status) => {
+            AdminCmd::Status => {
                 let client = self.client_open(&cli).await?;
 
                 let status = cli
@@ -1295,7 +1342,7 @@ impl FedimintCli {
                     serde_json::to_value(status).map_err_cli_msg("invalid response")?,
                 ))
             }
-            Command::Admin(AdminCmd::GuardianConfigBackup) => {
+            AdminCmd::GuardianConfigBackup => {
                 let client = self.client_open(&cli).await?;
 
                 let guardian_config_backup = cli
@@ -1311,15 +1358,15 @@ impl FedimintCli {
                         .map_err_cli_msg("invalid response")?,
                 ))
             }
-            Command::Admin(AdminCmd::Setup(dkg_args)) => self
+            AdminCmd::Setup(dkg_args) => self
                 .handle_admin_setup_command(cli, dkg_args)
                 .await
                 .map(CliOutput::Raw)
                 .map_err_cli_msg("Config Gen Error"),
-            Command::Admin(AdminCmd::SignApiAnnouncement {
+            AdminCmd::SignApiAnnouncement {
                 api_url,
                 override_url,
-            }) => {
+            } => {
                 let client = self.client_open(&cli).await?;
 
                 if !["ws", "wss"].contains(&api_url.scheme()) {
@@ -1346,7 +1393,7 @@ impl FedimintCli {
                     serde_json::to_value(announcement).map_err_cli_msg("invalid response")?,
                 ))
             }
-            Command::Admin(AdminCmd::SignGuardianMetadata { api_urls, pkarr_id }) => {
+            AdminCmd::SignGuardianMetadata { api_urls, pkarr_id } => {
                 let client = self.client_open(&cli).await?;
 
                 let metadata = fedimint_core::net::guardian_metadata::GuardianMetadata::new(
@@ -1368,7 +1415,7 @@ impl FedimintCli {
                     serde_json::to_value(signed_metadata).map_err_cli_msg("invalid response")?,
                 ))
             }
-            Command::Admin(AdminCmd::Shutdown { session_idx }) => {
+            AdminCmd::Shutdown { session_idx } => {
                 let client = self.client_open(&cli).await?;
 
                 cli.admin_client(
@@ -1381,7 +1428,7 @@ impl FedimintCli {
 
                 Ok(CliOutput::Raw(json!(null)))
             }
-            Command::Admin(AdminCmd::BackupStatistics) => {
+            AdminCmd::BackupStatistics => {
                 let client = self.client_open(&cli).await?;
 
                 let backup_statistics = cli
@@ -1397,62 +1444,146 @@ impl FedimintCli {
                     serde_json::to_value(backup_statistics).expect("Can be encoded"),
                 ))
             }
-            Command::Dev(DevCmd::Api {
+        }
+    }
+
+    /// Submit a raw API request, preserving authenticated and federation-wide
+    /// routing.
+    async fn handle_api_request(&mut self, cli: &Opts, request: ApiRequest) -> CliOutputResult {
+        let ApiRequest {
+            method,
+            params,
+            peer_id,
+            auth,
+            module,
+        } = request;
+        //Parse params to JSON.
+        //If fails, convert to JSON string.
+        let params = serde_json::from_str::<Value>(&params).unwrap_or_else(|err| {
+            debug!(
+                target: LOG_CLIENT,
+                "Failed to serialize params:{}. Converting it to JSON string",
+                err
+            );
+
+            serde_json::Value::String(params)
+        });
+
+        let mut params = ApiRequestErased::new(params);
+        if let Some(auth) = auth {
+            params = params.with_auth(ApiAuth::new(auth));
+        }
+        let client = self.client_open(cli).await?;
+
+        let api = client.api_clone();
+
+        let module_api = match module {
+            Some(selector) => Some(api.with_module(selector.resolve(&client).map_err_cli()?)),
+            None => None,
+        };
+
+        let response: Value = match (peer_id, module_api) {
+            (Some(peer_id), Some(module_api)) => module_api
+                .request_raw(peer_id.into(), &method, &params)
+                .await
+                .map_err_cli()?,
+            (Some(peer_id), None) => api
+                .request_raw(peer_id.into(), &method, &params)
+                .await
+                .map_err_cli()?,
+            (None, Some(module_api)) => module_api
+                .request_current_consensus(method, params)
+                .await
+                .map_err_cli()?,
+            (None, None) => api
+                .request_current_consensus(method, params)
+                .await
+                .map_err_cli()?,
+        };
+
+        Ok(CliOutput::UntypedApiOutput { value: response })
+    }
+
+    /// Submit a transaction using the client's module decoders for both
+    /// directions.
+    async fn submit_transaction(&self, cli: &Opts, transaction: &str) -> CliOutputResult {
+        let client = self.client_open(cli).await?;
+        let tx = Transaction::consensus_decode_hex(transaction, client.decoders()).map_err_cli()?;
+        let tx_outcome = client
+            .api()
+            .submit_transaction(tx)
+            .await
+            .try_into_inner(client.decoders())
+            .map_err_cli()?;
+        Ok(CliOutput::Raw(
+            serde_json::to_value(tx_outcome.0.map_err_cli()?).expect("Can be encoded"),
+        ))
+    }
+
+    /// Render one requested client visualization.
+    async fn handle_visualize(&self, cli: &Opts, visualize_type: VisualizeCmd) -> CliOutputResult {
+        let client = self.client_open(cli).await?;
+        match visualize_type {
+            VisualizeCmd::Notes { limit } => {
+                visualize::cmd_notes(&client, limit).await?;
+            }
+            VisualizeCmd::Transactions {
+                operation_id,
+                limit,
+            } => {
+                visualize::cmd_transactions(&client, operation_id, limit).await?;
+            }
+            VisualizeCmd::Operations {
+                operation_id,
+                limit,
+            } => {
+                visualize::cmd_operations(&client, operation_id, limit).await?;
+            }
+        }
+        Ok(CliOutput::Raw(json!({})))
+    }
+
+    /// Fetch metadata using the module source and legacy fallback.
+    async fn fetch_meta_fields(&self, cli: &Opts) -> CliOutputResult {
+        let client = self.client_open(cli).await?;
+        let source = MetaModuleMetaSourceWithFallback::<LegacyMetaSource>::default();
+        let meta_fields = source
+            .fetch(
+                &client.config().await,
+                &client.api_clone(),
+                FetchKind::Initial,
+                None,
+            )
+            .await
+            .map_err_cli()?;
+        Ok(CliOutput::Raw(
+            serde_json::to_value(meta_fields).expect("Can be encoded"),
+        ))
+    }
+
+    /// Dispatch developer commands, opening the client only where required.
+    async fn handle_dev_command(&mut self, cli: Opts, command: DevCmd) -> CliOutputResult {
+        match command {
+            DevCmd::Api {
                 method,
                 params,
                 peer_id,
                 password: auth,
                 module,
-            }) => {
-                //Parse params to JSON.
-                //If fails, convert to JSON string.
-                let params = serde_json::from_str::<Value>(&params).unwrap_or_else(|err| {
-                    debug!(
-                        target: LOG_CLIENT,
-                        "Failed to serialize params:{}. Converting it to JSON string",
-                        err
-                    );
-
-                    serde_json::Value::String(params)
-                });
-
-                let mut params = ApiRequestErased::new(params);
-                if let Some(auth) = auth {
-                    params = params.with_auth(ApiAuth::new(auth));
-                }
-                let client = self.client_open(&cli).await?;
-
-                let api = client.api_clone();
-
-                let module_api = match module {
-                    Some(selector) => {
-                        Some(api.with_module(selector.resolve(&client).map_err_cli()?))
-                    }
-                    None => None,
-                };
-
-                let response: Value = match (peer_id, module_api) {
-                    (Some(peer_id), Some(module_api)) => module_api
-                        .request_raw(peer_id.into(), &method, &params)
-                        .await
-                        .map_err_cli()?,
-                    (Some(peer_id), None) => api
-                        .request_raw(peer_id.into(), &method, &params)
-                        .await
-                        .map_err_cli()?,
-                    (None, Some(module_api)) => module_api
-                        .request_current_consensus(method, params)
-                        .await
-                        .map_err_cli()?,
-                    (None, None) => api
-                        .request_current_consensus(method, params)
-                        .await
-                        .map_err_cli()?,
-                };
-
-                Ok(CliOutput::UntypedApiOutput { value: response })
+            } => {
+                self.handle_api_request(
+                    &cli,
+                    ApiRequest {
+                        method,
+                        params,
+                        peer_id,
+                        auth,
+                        module,
+                    },
+                )
+                .await
             }
-            Command::Dev(DevCmd::AdvanceNoteIdx { count, amount }) => {
+            DevCmd::AdvanceNoteIdx { count, amount } => {
                 let client = self.client_open(&cli).await?;
 
                 let mint = client
@@ -1465,143 +1596,40 @@ impl FedimintCli {
 
                 Ok(CliOutput::Raw(serde_json::Value::Null))
             }
-            Command::Dev(DevCmd::ApiAnnouncements) => {
+            DevCmd::ApiAnnouncements => {
                 let client = self.client_open(&cli).await?;
                 let announcements = client.get_peer_url_announcements().await;
                 Ok(CliOutput::Raw(
                     serde_json::to_value(announcements).expect("Can be encoded"),
                 ))
             }
-            Command::Dev(DevCmd::GuardianMetadata) => {
+            DevCmd::GuardianMetadata => {
                 let client = self.client_open(&cli).await?;
                 let metadata = client.get_guardian_metadata().await;
                 Ok(CliOutput::Raw(
                     serde_json::to_value(metadata).expect("Can be encoded"),
                 ))
             }
-            Command::Dev(DevCmd::WaitBlockCount { count: target }) => retry(
-                "wait_block_count",
-                backoff_util::custom_backoff(
-                    Duration::from_millis(100),
-                    Duration::from_secs(5),
-                    None,
-                ),
-                || async {
-                    let client = self.client_open(&cli).await?;
-                    let wallet = client.get_first_module::<WalletClientModule>()?;
-                    let count = client
-                        .api()
-                        .with_module(wallet.id)
-                        .fetch_consensus_block_count()
-                        .await?;
-                    if count >= target {
-                        Ok(CliOutput::WaitBlockCount { reached: count })
-                    } else {
-                        info!(target: LOG_CLIENT, current=count, target, "Block count not reached");
-                        Err(format_err!("target not reached"))
-                    }
-                },
-            )
-            .await
-            .map_err_cli(),
+            DevCmd::WaitBlockCount { count: target } => self.wait_block_count(&cli, target).await,
 
-            Command::Dev(DevCmd::WaitComplete) => {
+            DevCmd::WaitComplete => {
                 let client = self.client_open(&cli).await?;
                 client.wait_for_all_active_state_machines().await;
                 Ok(CliOutput::Raw(serde_json::Value::Null))
             }
-            Command::Dev(DevCmd::Wait { seconds }) => {
-                let client = self.client_open(&cli).await?;
-                // Since most callers are `wait`ing for something to happen,
-                // let's trigger a network call, so any background threads
-                // waiting for it starts doing their job.
-                client
-                    .task_group()
-                    .spawn_cancellable("fedimint-cli dev wait: init networking", {
-                        let client = client.clone();
-                        async move {
-                            let _ = client.api().session_count().await;
-                        }
-                    });
-
-                if let Some(secs) = seconds {
-                    runtime::sleep(Duration::from_secs_f32(secs)).await;
-                } else {
-                    pending::<()>().await;
-                }
-                Ok(CliOutput::Raw(serde_json::Value::Null))
-            }
-            Command::Dev(DevCmd::Decode { decode_type }) => match decode_type {
-                DecodeType::InviteCode { invite_code } => Ok(CliOutput::DecodeInviteCode {
-                    url: invite_code.url(),
-                    federation_id: invite_code.federation_id(),
-                }),
-                DecodeType::Notes { notes, file } => {
-                    let notes = if let Some(notes) = notes {
-                        notes
-                    } else if let Some(file) = file {
-                        let notes_str =
-                            fs::read_to_string(file).map_err_cli_msg("failed to read file")?;
-                        OOBNotes::from_str(&notes_str).map_err_cli_msg("failed to decode notes")?
-                    } else {
-                        unreachable!("Clap enforces either notes or file being set");
-                    };
-
-                    let notes_json = notes
-                        .notes_json()
-                        .map_err_cli_msg("failed to decode notes")?;
-                    Ok(CliOutput::Raw(notes_json))
-                }
-                DecodeType::Transaction { hex_string } => {
-                    let bytes: Vec<u8> = hex::FromHex::from_hex(&hex_string)
-                        .map_err_cli_msg("failed to decode transaction")?;
-
-                    let client = self.client_open(&cli).await?;
-                    let tx = fedimint_core::transaction::Transaction::from_bytes(
-                        &bytes,
-                        client.decoders(),
-                    )
-                    .map_err_cli_msg("failed to decode transaction")?;
-
-                    Ok(CliOutput::DecodeTransaction {
-                        transaction: (format!("{tx:?}")),
-                    })
-                }
-                DecodeType::SetupCode { setup_code } => {
-                    let setup_code = base32::decode_prefixed(FEDIMINT_PREFIX, &setup_code)
-                        .map_err_cli_msg("failed to decode setup code")?;
-
-                    Ok(CliOutput::SetupCode { setup_code })
-                }
-            },
-            Command::Dev(DevCmd::Encode { encode_type }) => match encode_type {
-                EncodeType::InviteCode {
-                    url,
-                    federation_id,
-                    peer,
-                    api_secret,
-                } => Ok(CliOutput::InviteCode {
-                    invite_code: InviteCode::new(url, peer, federation_id, api_secret),
-                }),
-                EncodeType::Notes { notes_json } => {
-                    let notes = serde_json::from_str::<OOBNotesJson>(&notes_json)
-                        .map_err_cli_msg("invalid JSON for notes")?;
-                    let prefix =
-                        FederationIdPrefix::from_str(&notes.federation_id_prefix).map_err_cli()?;
-                    let notes = OOBNotes::new(prefix, notes.notes);
-                    Ok(CliOutput::Raw(notes.to_string().into()))
-                }
-            },
-            Command::Dev(DevCmd::SessionCount) => {
+            DevCmd::Wait { seconds } => self.wait_with_networking(&cli, seconds).await,
+            DevCmd::Decode { decode_type } => self.handle_decode(&cli, decode_type).await,
+            DevCmd::Encode { encode_type } => command_encoding::handle_encode(encode_type),
+            DevCmd::SessionCount => {
                 let client = self.client_open(&cli).await?;
                 let count = client.api().session_count().await?;
                 Ok(CliOutput::EpochCount { count })
             }
-            Command::Dev(DevCmd::QueryFederationIps {
+            DevCmd::QueryFederationIps {
                 invite_code,
                 path_timeout_seconds,
                 require_direct,
-            }) => {
+            } => {
                 let report = self
                     .federation_ip_query(
                         &cli,
@@ -1614,52 +1642,26 @@ impl FedimintCli {
                     serde_json::to_value(report).expect("privacy report is serializable"),
                 ))
             }
-            Command::Dev(DevCmd::Config) => {
+            DevCmd::Config => {
                 let client = self.client_open(&cli).await?;
                 let config = client.get_config_json().await;
                 Ok(CliOutput::Raw(
                     serde_json::to_value(config).expect("Client config is serializable"),
                 ))
             }
-            Command::Dev(DevCmd::ConfigDecrypt {
+            DevCmd::ConfigDecrypt {
                 in_file,
                 out_file,
                 salt_file,
                 password,
-            }) => {
-                let salt_file = salt_file.unwrap_or_else(|| salt_from_file_path(&in_file));
-                let salt = fs::read_to_string(salt_file).map_err_cli()?;
-                let key = get_encryption_key(&password, &salt).map_err_cli()?;
-                let decrypted_bytes = encrypted_read(&key, in_file).map_err_cli()?;
-
-                let mut out_file_handle = fs::File::options()
-                    .create_new(true)
-                    .write(true)
-                    .open(out_file)
-                    .expect("Could not create output cfg file");
-                out_file_handle.write_all(&decrypted_bytes).map_err_cli()?;
-                Ok(CliOutput::ConfigDecrypt)
-            }
-            Command::Dev(DevCmd::ConfigEncrypt {
+            } => decrypt_config(in_file, out_file, salt_file, &password),
+            DevCmd::ConfigEncrypt {
                 in_file,
                 out_file,
                 salt_file,
                 password,
-            }) => {
-                let mut in_file_handle =
-                    fs::File::open(in_file).expect("Could not create output cfg file");
-                let mut plaintext_bytes = vec![];
-                in_file_handle
-                    .read_to_end(&mut plaintext_bytes)
-                    .expect("Could not read input cfg file");
-
-                let salt_file = salt_file.unwrap_or_else(|| salt_from_file_path(&out_file));
-                let salt = fs::read_to_string(salt_file).map_err_cli()?;
-                let key = get_encryption_key(&password, &salt).map_err_cli()?;
-                encrypted_write(plaintext_bytes, &key, out_file).map_err_cli()?;
-                Ok(CliOutput::ConfigEncrypt)
-            }
-            Command::Dev(DevCmd::ListOperationStates { operation_id }) => {
+            } => encrypt_config(in_file, out_file, salt_file, &password),
+            DevCmd::ListOperationStates { operation_id } => {
                 #[derive(Serialize)]
                 struct ReactorLogState {
                     active: bool,
@@ -1704,25 +1706,8 @@ impl FedimintCli {
                     "states": all_states
                 })))
             }
-            Command::Dev(DevCmd::MetaFields) => {
-                let client = self.client_open(&cli).await?;
-                let source = MetaModuleMetaSourceWithFallback::<LegacyMetaSource>::default();
-
-                let meta_fields = source
-                    .fetch(
-                        &client.config().await,
-                        &client.api_clone(),
-                        FetchKind::Initial,
-                        None,
-                    )
-                    .await
-                    .map_err_cli()?;
-
-                Ok(CliOutput::Raw(
-                    serde_json::to_value(meta_fields).expect("Can be encoded"),
-                ))
-            }
-            Command::Dev(DevCmd::PeerVersion { peer_id }) => {
+            DevCmd::MetaFields => self.fetch_meta_fields(&cli).await,
+            DevCmd::PeerVersion { peer_id } => {
                 let client = self.client_open(&cli).await?;
                 let version = client
                     .api()
@@ -1732,35 +1717,21 @@ impl FedimintCli {
 
                 Ok(CliOutput::Raw(json!({ "version": version })))
             }
-            Command::Dev(DevCmd::ShowEventLog { pos, limit }) => {
+            DevCmd::ShowEventLog { pos, limit } => {
                 let client = self.client_open(&cli).await?;
 
                 let events: Vec<_> = client
                     .get_event_log(pos, limit)
                     .await
                     .into_iter()
-                    .map(|v| {
-                        let id = v.id();
-                        let v = v.as_raw();
-                        let module_id = v.module.as_ref().map(|m| m.id);
-                        let module_kind = v.module.as_ref().map(|m| m.kind.clone());
-                        serde_json::json!({
-                            "id": id,
-                            "kind": v.kind,
-                            "module_kind": module_kind,
-                            "module_id": module_id,
-                            "ts": v.ts_usecs,
-                            "payload": serde_json::from_slice::<serde_json::Value>(&v.payload)
-                                .unwrap_or_else(|_| serde_json::Value::String(hex::encode(&v.payload))),
-                        })
-                    })
+                    .map(|v| event_output::event_to_json(v.id(), v.as_raw()))
                     .collect();
 
                 Ok(CliOutput::Raw(
                     serde_json::to_value(events).expect("Can be encoded"),
                 ))
             }
-            Command::Dev(DevCmd::ShowEventLogTrimable { pos, limit }) => {
+            DevCmd::ShowEventLogTrimable { pos, limit } => {
                 let client = self.client_open(&cli).await?;
 
                 let events: Vec<_> = client
@@ -1770,28 +1741,14 @@ impl FedimintCli {
                     )
                     .await
                     .into_iter()
-                    .map(|v| {
-                        let id = v.id();
-                        let v = v.as_raw();
-                        let module_id = v.module.as_ref().map(|m| m.id);
-                        let module_kind = v.module.as_ref().map(|m| m.kind.clone());
-                        serde_json::json!({
-                            "id": id,
-                            "kind": v.kind,
-                            "module_kind": module_kind,
-                            "module_id": module_id,
-                            "ts": v.ts_usecs,
-                            "payload": serde_json::from_slice::<serde_json::Value>(&v.payload)
-                                .unwrap_or_else(|_| serde_json::Value::String(hex::encode(&v.payload))),
-                        })
-                    })
+                    .map(|v| event_output::event_to_json(v.id(), v.as_raw()))
                     .collect();
 
                 Ok(CliOutput::Raw(
                     serde_json::to_value(events).expect("Can be encoded"),
                 ))
             }
-            Command::Dev(DevCmd::NextEventLogId) => {
+            DevCmd::NextEventLogId => {
                 let client = self.client_open(&cli).await?;
 
                 let id = client.get_next_event_log_id().await;
@@ -1800,22 +1757,10 @@ impl FedimintCli {
                     serde_json::to_value(id).expect("Can be encoded"),
                 ))
             }
-            Command::Dev(DevCmd::SubmitTransaction { transaction }) => {
-                let client = self.client_open(&cli).await?;
-                let tx = Transaction::consensus_decode_hex(&transaction, client.decoders())
-                    .map_err_cli()?;
-                let tx_outcome = client
-                    .api()
-                    .submit_transaction(tx)
-                    .await
-                    .try_into_inner(client.decoders())
-                    .map_err_cli()?;
-
-                Ok(CliOutput::Raw(
-                    serde_json::to_value(tx_outcome.0.map_err_cli()?).expect("Can be encoded"),
-                ))
+            DevCmd::SubmitTransaction { transaction } => {
+                self.submit_transaction(&cli, &transaction).await
             }
-            Command::Dev(DevCmd::TestEventLogHandling) => {
+            DevCmd::TestEventLogHandling => {
                 let client = self.client_open(&cli).await?;
 
                 client
@@ -1835,10 +1780,10 @@ impl FedimintCli {
                     "handle_events exits only if client shuts down, which we don't do here"
                 )
             }
-            Command::Dev(DevCmd::Panic) => {
+            DevCmd::Panic => {
                 panic!("This panic is intentional for testing backtrace handling");
             }
-            Command::Dev(DevCmd::ChainId) => {
+            DevCmd::ChainId => {
                 let client = self.client_open(&cli).await?;
                 let chain_id = client
                     .db()
@@ -1852,51 +1797,13 @@ impl FedimintCli {
                     "chain_id": chain_id.to_string()
                 })))
             }
-            Command::Dev(DevCmd::Visualize { visualize_type }) => {
-                let client = self.client_open(&cli).await?;
-
-                match visualize_type {
-                    VisualizeCmd::Notes { limit } => {
-                        visualize::cmd_notes(&client, limit).await?;
-                    }
-                    VisualizeCmd::Transactions {
-                        operation_id,
-                        limit,
-                    } => {
-                        visualize::cmd_transactions(&client, operation_id, limit).await?;
-                    }
-                    VisualizeCmd::Operations {
-                        operation_id,
-                        limit,
-                    } => {
-                        visualize::cmd_operations(&client, operation_id, limit).await?;
-                    }
-                }
-                Ok(CliOutput::Raw(json!({})))
+            DevCmd::Visualize { visualize_type } => {
+                self.handle_visualize(&cli, visualize_type).await
             }
-            Command::Dev(DevCmd::RefreshApiVersions) => {
+            DevCmd::RefreshApiVersions => {
                 let client = self.client_open(&cli).await?;
                 let versions = client.refresh_api_versions().await.map_err_cli()?;
                 Ok(CliOutput::Raw(json!({ "versions": versions })))
-            }
-            Command::Completion { shell } => {
-                let bin_path = PathBuf::from(
-                    std::env::args_os()
-                        .next()
-                        .expect("Binary name is always provided if we get this far"),
-                );
-                let bin_name = bin_path
-                    .file_name()
-                    .expect("path has file name")
-                    .to_string_lossy();
-                clap_complete::generate(
-                    shell,
-                    &mut Opts::command(),
-                    bin_name.as_ref(),
-                    &mut std::io::stdout(),
-                );
-                // HACK: prints true to stdout which is fine for shells
-                Ok(CliOutput::Raw(serde_json::Value::Bool(true)))
             }
         }
     }
@@ -1979,6 +1886,45 @@ async fn print_welcome_message(client: &Client) {
     {
         eprintln!("{welcome_message}");
     }
+}
+
+/// Decrypt a configuration without overwriting an existing output file.
+fn decrypt_config(
+    in_file: PathBuf,
+    out_file: PathBuf,
+    salt_file: Option<PathBuf>,
+    password: &str,
+) -> CliOutputResult {
+    let salt_file = salt_file.unwrap_or_else(|| salt_from_file_path(&in_file));
+    let salt = fs::read_to_string(salt_file).map_err_cli()?;
+    let key = get_encryption_key(password, &salt).map_err_cli()?;
+    let decrypted_bytes = encrypted_read(&key, in_file).map_err_cli()?;
+    let mut out_file_handle = fs::File::options()
+        .create_new(true)
+        .write(true)
+        .open(out_file)
+        .expect("Could not create output cfg file");
+    out_file_handle.write_all(&decrypted_bytes).map_err_cli()?;
+    Ok(CliOutput::ConfigDecrypt)
+}
+
+/// Encrypt a configuration using the salt next to the output unless overridden.
+fn encrypt_config(
+    in_file: PathBuf,
+    out_file: PathBuf,
+    salt_file: Option<PathBuf>,
+    password: &str,
+) -> CliOutputResult {
+    let mut in_file_handle = fs::File::open(in_file).expect("Could not create output cfg file");
+    let mut plaintext_bytes = vec![];
+    in_file_handle
+        .read_to_end(&mut plaintext_bytes)
+        .expect("Could not read input cfg file");
+    let salt_file = salt_file.unwrap_or_else(|| salt_from_file_path(&out_file));
+    let salt = fs::read_to_string(salt_file).map_err_cli()?;
+    let key = get_encryption_key(password, &salt).map_err_cli()?;
+    encrypted_write(plaintext_bytes, &key, out_file).map_err_cli()?;
+    Ok(CliOutput::ConfigEncrypt)
 }
 
 fn salt_from_file_path(file_path: &Path) -> PathBuf {

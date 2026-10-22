@@ -711,6 +711,19 @@ impl GatewayClientModuleV2 {
             }
             self.ensure_federation_responsive(payment_hash).await?;
 
+            // Only a fresh receive funds an incoming contract, so only it is
+            // subject to the operator's receive policy. `AddCompletion` joins a
+            // receive operation that already exists, and dropping it would
+            // strand a contract the gateway has already funded. The guard is
+            // held until the funding write below has happened.
+            let _policy_guard = self
+                .gateway
+                .begin_fresh_receive(&self.federation_id)
+                .await
+                .ok_or(RelayIncomingHtlcError::ReceiveDisabled {
+                    federation_id: self.federation_id,
+                })?;
+
             let refund_keypair = self.keypair;
             let client_output = ClientOutput::<LightningOutput> {
                 output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
@@ -813,14 +826,15 @@ impl GatewayClientModuleV2 {
     ///
     /// # Errors
     ///
-    /// Fails with a [`TransactionSubmitError`] if the funding transaction of a
-    /// fresh swap could not be submitted.
+    /// Fails with [`RelayDirectSwapError::ReceiveDisabled`] if the operator
+    /// has disabled receives, and [`RelayDirectSwapError::Transaction`] if
+    /// the funding transaction of a fresh swap could not be submitted.
     pub async fn relay_direct_swap(
         &self,
         contract: IncomingContract,
         amount_msat: u64,
         allow_fresh_dispatch: bool,
-    ) -> Result<Option<FinalReceiveState>, TransactionSubmitError> {
+    ) -> Result<Option<FinalReceiveState>, RelayDirectSwapError> {
         let operation_start = now();
 
         let operation_id = OperationId::from_encodable(&contract);
@@ -832,6 +846,18 @@ impl GatewayClientModuleV2 {
         if !allow_fresh_dispatch {
             return Ok(None);
         }
+
+        // A swap funds an incoming contract in this federation, so it is
+        // admitted only while receives are on. That happens below the resume
+        // path: a swap already funded must still be joined, or the gateway
+        // forfeits the payer's contract after having paid the recipient.
+        let policy_guard = self
+            .gateway
+            .begin_fresh_receive(&self.federation_id)
+            .await
+            .ok_or(RelayDirectSwapError::ReceiveDisabled {
+                federation_id: self.federation_id,
+            })?;
 
         let refund_keypair = self.keypair;
 
@@ -871,6 +897,10 @@ impl GatewayClientModuleV2 {
                 transaction,
             )
             .await?;
+
+        // The operation exists, so the policy may change again: what follows
+        // waits for the swap to finish and must not block an operator.
+        drop(policy_guard);
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
         self.client_ctx
@@ -1037,6 +1067,14 @@ pub enum RelayIncomingHtlcError {
         timeout_secs: u64,
     },
 
+    /// The operator has disabled receives for this federation, so no fresh
+    /// incoming contract is funded.
+    #[error("Receiving payments is disabled for federation {federation_id}")]
+    ReceiveDisabled {
+        /// The federation the payment was refused for.
+        federation_id: FederationId,
+    },
+
     /// The HTLC's claim deadline is too close to fund a fresh incoming
     /// contract and still settle the HTLC in time.
     #[error("HTLC claim deadline is only {blocks_to_claim_deadline} blocks away")]
@@ -1047,6 +1085,23 @@ pub enum RelayIncomingHtlcError {
 
     /// The funding transaction or the completion operation could not be
     /// started.
+    #[error("The incoming contract could not be funded")]
+    Transaction(#[from] TransactionSubmitError),
+}
+
+/// A failure to fund the incoming contract of a direct swap.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum RelayDirectSwapError {
+    /// The operator has disabled receives for this federation, so no fresh
+    /// swap is funded.
+    #[error("Receiving payments is disabled for federation {federation_id}")]
+    ReceiveDisabled {
+        /// The federation the swap was refused for.
+        federation_id: FederationId,
+    },
+
+    /// The funding transaction could not be submitted.
     #[error("The incoming contract could not be funded")]
     Transaction(#[from] TransactionSubmitError),
 }
@@ -1115,6 +1170,19 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
     /// must absorb transient node failures and only answer once the node's
     /// payment store could actually be consulted.
     async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool;
+
+    /// Admits a fresh incoming payment for the clients of `federation_id` when
+    /// the operator's receive policy allows one, or answers `None` when
+    /// receives are disabled.
+    ///
+    /// The returned guard must be held until the funding operation exists, so
+    /// a payment admitted here always funds and none is admitted once
+    /// disabling has returned. Work already funded must finish regardless, or
+    /// the gateway abandons a contract it has paid for.
+    async fn begin_fresh_receive(
+        &self,
+        federation_id: &FederationId,
+    ) -> Option<fedimint_gateway_common::PaymentPolicyGuard>;
 
     /// Computes the minimum contract amount necessary for making an outgoing
     /// payment.

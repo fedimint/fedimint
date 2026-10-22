@@ -143,6 +143,10 @@ pub enum TransactionSubmitError {
     /// The primary module holds too little balance to fund the transaction.
     #[error("Insufficient funds")]
     InsufficientFunds(#[from] InsufficientBalanceError),
+
+    /// Calculating the transaction balance or fees overflowed.
+    #[error("Transaction amounts or fees overflowed")]
+    AmountOverflow,
 }
 
 impl TransactionSubmitError {

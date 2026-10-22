@@ -260,20 +260,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
-name = "aquamarine"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21cc1548309245035eb18aa7f0967da6bc65587005170c56e6ef2788a4cf3f4e"
-dependencies = [
- "include_dir",
- "itertools 0.10.5",
- "proc-macro-error",
- "proc-macro2",
- "quote",
- "syn 2.0.104",
-]
-
-[[package]]
 name = "arc-swap"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1137,7 +1123,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b65c2e1ab98050c93cc9ada070d5070e014329c65196d03f6f8f1f75c2666f37"
 dependencies = [
  "base64 0.22.1",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "rustls-webpki 0.103.15",
  "serde",
  "serde_json",
@@ -2474,7 +2460,7 @@ dependencies = [
 
 [[package]]
 name = "devimint"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -2781,7 +2767,7 @@ dependencies = [
  "byteorder",
  "libc",
  "log",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "serde",
  "serde_json",
  "webpki-roots 0.25.4",
@@ -2798,7 +2784,7 @@ dependencies = [
  "byteorder",
  "libc",
  "log",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "serde",
  "serde_json",
  "webpki-roots 0.25.4",
@@ -3054,7 +3040,7 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
 name = "fedimint-aead"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "argon2",
  "assert_matches",
@@ -3087,7 +3073,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-api-client"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "assert_matches",
  "async-channel",
@@ -3112,7 +3098,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-bip39"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "bip39",
  "fedimint-client",
@@ -3123,7 +3109,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-bitcoind"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "async-trait",
  "bitcoin",
@@ -3139,14 +3125,14 @@ dependencies = [
 
 [[package]]
 name = "fedimint-build"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "fedimint-cli"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3182,6 +3168,7 @@ dependencies = [
  "rusty_alloc-api",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
  "tikv-jemallocator",
  "time",
@@ -3191,7 +3178,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-client"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "assert_matches",
  "async-stream",
@@ -3224,9 +3211,8 @@ dependencies = [
 
 [[package]]
 name = "fedimint-client-module"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
- "aquamarine",
  "assert_matches",
  "async-stream",
  "async-trait",
@@ -3255,7 +3241,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-client-rpc"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -3284,7 +3270,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-client-wasm"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "async-trait",
  "console_error_panic_hook",
@@ -3302,13 +3288,13 @@ dependencies = [
 
 [[package]]
 name = "fedimint-connectors"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "arti-client",
  "async-trait",
  "aws-lc-sys 0.41.0",
  "base64 0.23.1",
- "curve25519-dalek 5.0.0",
+ "curve25519-dalek 4.1.3",
  "fedimint-core",
  "fedimint-logging",
  "fedimint-metrics",
@@ -3336,7 +3322,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-core"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "assert_matches",
  "async-channel",
@@ -3403,7 +3389,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-cursed-redb"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "async-trait",
  "fedimint-core",
@@ -3423,7 +3409,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-db-locked"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "async-trait",
  "fedimint-core",
@@ -3435,7 +3421,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dbtool"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3471,7 +3457,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-derive"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "itertools 0.14.0",
  "proc-macro2",
@@ -3481,7 +3467,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-derive-secret"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "bitcoin_hashes",
  "bls12_381",
@@ -3492,11 +3478,11 @@ dependencies = [
 
 [[package]]
 name = "fedimint-docs"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 
 [[package]]
 name = "fedimint-dummy-client"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "async-trait",
  "erased-serde",
@@ -3517,7 +3503,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dummy-common"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "fedimint-core",
  "serde",
@@ -3526,7 +3512,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-dummy-server"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3542,7 +3528,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-empty-client"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "async-trait",
  "erased-serde",
@@ -3558,7 +3544,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-empty-common"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "fedimint-core",
  "serde",
@@ -3567,7 +3553,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-empty-server"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3583,7 +3569,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-eventlog"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "async-trait",
  "fedimint-core",
@@ -3601,7 +3587,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-fountain"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "assert_matches",
  "bitcoin_hashes",
@@ -3612,7 +3598,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-fuzz"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "fedimint-core",
  "fedimint-ln-common",
@@ -3625,7 +3611,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-gateway-client"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "bcrypt",
  "bitcoin",
@@ -3649,7 +3635,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-gateway-common"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "bitcoin",
  "clap",
@@ -3662,14 +3648,14 @@ dependencies = [
  "lightning-invoice",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
 name = "fedimint-gateway-server"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
- "aquamarine",
  "assert_matches",
  "async-stream",
  "async-trait",
@@ -3711,6 +3697,7 @@ dependencies = [
  "fedimint-metrics",
  "fedimint-mint-client",
  "fedimint-mintv2-client",
+ "fedimint-mintv2-server",
  "fedimint-rocksdb",
  "fedimint-testing",
  "fedimint-testing-core",
@@ -3750,7 +3737,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-gateway-server-db"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin",
@@ -3779,7 +3766,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-gateway-ui"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "async-trait",
  "axum 0.8.9",
@@ -3811,9 +3798,8 @@ dependencies = [
 
 [[package]]
 name = "fedimint-gw-client"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
- "aquamarine",
  "async-stream",
  "async-trait",
  "bitcoin",
@@ -3825,6 +3811,7 @@ dependencies = [
  "fedimint-core",
  "fedimint-derive-secret",
  "fedimint-eventlog",
+ "fedimint-gateway-common",
  "fedimint-gwv2-client",
  "fedimint-lightning",
  "fedimint-ln-client",
@@ -3841,9 +3828,8 @@ dependencies = [
 
 [[package]]
 name = "fedimint-gwv2-client"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
- "aquamarine",
  "async-stream",
  "async-trait",
  "bitcoin",
@@ -3853,6 +3839,7 @@ dependencies = [
  "fedimint-client-module",
  "fedimint-core",
  "fedimint-eventlog",
+ "fedimint-gateway-common",
  "fedimint-lightning",
  "fedimint-lnv2-common",
  "fedimint-logging",
@@ -3867,7 +3854,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-hkdf"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "bitcoin_hashes",
 ]
@@ -3915,7 +3902,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-lightning"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "async-trait",
  "bitcoin",
@@ -3941,9 +3928,8 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-client"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
- "aquamarine",
  "assert_matches",
  "async-stream",
  "async-trait",
@@ -3974,7 +3960,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-common"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "async-trait",
  "bitcoin",
@@ -3997,7 +3983,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-server"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -4023,11 +4009,13 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ln-tests"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
+ "async-trait",
  "bitcoin_hashes",
+ "fedimint-api-client",
  "fedimint-client",
  "fedimint-client-module",
  "fedimint-core",
@@ -4052,7 +4040,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-lnurl"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "bech32",
  "bitcoin",
@@ -4068,9 +4056,8 @@ dependencies = [
 
 [[package]]
 name = "fedimint-lnv2-client"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
- "aquamarine",
  "async-stream",
  "async-trait",
  "bitcoin",
@@ -4100,7 +4087,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-lnv2-common"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "async-trait",
  "bitcoin",
@@ -4119,7 +4106,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-lnv2-server"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4143,7 +4130,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-lnv2-tests"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -4184,7 +4171,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-load-test-tool"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "clap",
@@ -4212,7 +4199,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-logging"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "console-subscriber",
  "opentelemetry",
@@ -4225,7 +4212,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-meta-client"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "async-trait",
  "clap",
@@ -4246,7 +4233,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-meta-common"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "fedimint-core",
  "fedimint-logging",
@@ -4259,7 +4246,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-meta-server"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4278,7 +4265,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-meta-tests"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "clap",
@@ -4292,7 +4279,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-metrics"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "axum 0.8.9",
  "fedimint-core",
@@ -4303,9 +4290,8 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-client"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
- "aquamarine",
  "assert_matches",
  "async-stream",
  "async-trait",
@@ -4344,7 +4330,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-common"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "bitcoin_hashes",
  "fedimint-core",
@@ -4356,7 +4342,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-server"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -4383,7 +4369,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mint-tests"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -4419,9 +4405,8 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mintv2-client"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
- "aquamarine",
  "async-channel",
  "async-stream",
  "async-trait",
@@ -4457,7 +4442,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mintv2-common"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "bitcoin_hashes",
  "fedimint-core",
@@ -4469,7 +4454,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mintv2-server"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4494,7 +4479,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-mintv2-tests"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -4529,7 +4514,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-portalloc"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "dirs",
@@ -4543,7 +4528,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-recoverytool"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin",
@@ -4566,7 +4551,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-recurringd"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -4598,7 +4583,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-recurringd-tests"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "devimint",
@@ -4612,7 +4597,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-recurringdv2"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -4633,7 +4618,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-rocksdb"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "async-trait",
  "bon",
@@ -4650,7 +4635,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-server"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -4708,7 +4693,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-server-bitcoin-rpc"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4725,7 +4710,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-server-core"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4743,7 +4728,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-server-tests"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin",
@@ -4764,7 +4749,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-server-ui"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4791,7 +4776,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-tbs"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "bls12_381",
  "criterion 0.5.1",
@@ -4806,7 +4791,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-testing"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -4846,7 +4831,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-testing-core"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin",
@@ -4897,7 +4882,7 @@ dependencies = [
  "hyper-rustls 0.27.7",
  "hyper-util",
  "prost 0.13.5",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "rustls-pemfile",
  "tokio",
  "tokio-stream",
@@ -4907,7 +4892,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-tpe"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "bitcoin_hashes",
  "bls12_381",
@@ -4921,7 +4906,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-ui-common"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "axum 0.8.9",
  "axum-extra",
@@ -4934,7 +4919,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-unknown-common"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "fedimint-core",
  "serde",
@@ -4943,7 +4928,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-unknown-server"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4957,13 +4942,12 @@ dependencies = [
 
 [[package]]
 name = "fedimint-util-error"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 
 [[package]]
 name = "fedimint-wallet-client"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
- "aquamarine",
  "assert_matches",
  "async-stream",
  "async-trait",
@@ -4991,7 +4975,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-common"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "bitcoin",
  "fedimint-core",
@@ -5006,7 +4990,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-server"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5033,7 +5017,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wallet-tests"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -5066,7 +5050,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-walletv2-client"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -5093,7 +5077,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-walletv2-common"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "bitcoin",
  "fedimint-core",
@@ -5105,7 +5089,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-walletv2-server"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5123,12 +5107,13 @@ dependencies = [
  "serde",
  "strum 0.27.1",
  "strum_macros 0.28.0",
+ "tokio",
  "tracing",
 ]
 
 [[package]]
 name = "fedimint-walletv2-tests"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -5160,7 +5145,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-wasm-tests"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "fedimint-client",
@@ -5181,7 +5166,7 @@ dependencies = [
 
 [[package]]
 name = "fedimintd"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "bitcoin",
@@ -5218,7 +5203,7 @@ dependencies = [
 
 [[package]]
 name = "fedimintd-envs"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 
 [[package]]
 name = "ff"
@@ -5486,7 +5471,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f2f12607f92c69b12ed746fabf9ca4f5c482cba46679c1a75b874ed7c26adb"
 dependencies = [
  "futures-io",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "rustls-pki-types",
 ]
 
@@ -5531,16 +5516,19 @@ dependencies = [
 
 [[package]]
 name = "gateway-tests"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "clap",
  "devimint",
  "fedimint-core",
  "fedimint-gateway-common",
+ "fedimint-ln-client",
+ "fedimint-ln-common",
  "fedimint-logging",
  "fedimint-testing-core",
  "itertools 0.14.0",
+ "lightning-invoice",
  "serde_json",
  "tokio",
  "tracing",
@@ -6171,7 +6159,7 @@ dependencies = [
  "http 1.3.1",
  "hyper 1.11.1",
  "hyper-util",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls 0.26.6",
@@ -6475,25 +6463,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "include_dir"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "923d117408f1e49d914f1a379a309cffe4f18c05cf4e3d12e613a15fc81bd0dd"
-dependencies = [
- "include_dir_macros",
-]
-
-[[package]]
-name = "include_dir_macros"
-version = "0.7.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cab85a7ed0bd5f0e76d93846e0147172bed2e2d3f859bcc33a8d9699cad1a75"
-dependencies = [
- "proc-macro2",
- "quote",
-]
-
-[[package]]
 name = "indexmap"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6645,7 +6614,7 @@ dependencies = [
  "rcgen",
  "reqwest 0.12.28",
  "ring",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "rustls-webpki 0.102.8",
  "serde",
  "smallvec",
@@ -6702,7 +6671,7 @@ dependencies = [
  "rand 0.10.1",
  "reqwest 0.13.1",
  "rustc-hash",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "rustls-pki-types",
  "serde",
  "smallvec",
@@ -6767,7 +6736,7 @@ dependencies = [
  "n0-future 0.3.2",
  "portable-atomic",
  "rand 0.10.1",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "simple-dns 0.12.0",
  "strum 0.28.0",
  "tokio",
@@ -6857,7 +6826,7 @@ dependencies = [
  "iroh-quinn-udp",
  "pin-project-lite",
  "rustc-hash",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "socket2 0.5.10",
  "thiserror 2.0.21",
  "tokio",
@@ -6876,7 +6845,7 @@ dependencies = [
  "rand 0.8.5",
  "ring",
  "rustc-hash",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "rustls-pki-types",
  "slab",
  "thiserror 2.0.21",
@@ -6928,7 +6897,7 @@ dependencies = [
  "postcard",
  "rand 0.8.5",
  "reqwest 0.12.28",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "rustls-webpki 0.102.8",
  "serde",
  "sha1",
@@ -6975,7 +6944,7 @@ dependencies = [
  "postcard",
  "rand 0.10.1",
  "reqwest 0.13.1",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "rustls-pki-types",
  "serde",
  "serde_bytes",
@@ -7234,7 +7203,7 @@ dependencies = [
  "http 1.3.1",
  "jsonrpsee-core",
  "pin-project",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "rustls-pki-types",
  "soketto",
  "thiserror 1.0.69",
@@ -7980,7 +7949,7 @@ dependencies = [
  "rand 0.10.1",
  "reqwest 0.13.1",
  "rustc-hash",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "simple-dns 0.12.0",
  "system-configuration 0.8.0",
  "tokio",
@@ -8433,7 +8402,7 @@ dependencies = [
  "noq-udp",
  "pin-project-lite",
  "rustc-hash",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "socket2 0.6.1",
  "thiserror 2.0.21",
  "tokio",
@@ -8459,7 +8428,7 @@ dependencies = [
  "rand_pcg",
  "ring",
  "rustc-hash",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "rustls-pki-types",
  "slab",
  "sorted-index-buffer",
@@ -9618,30 +9587,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proc-macro-error"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c"
-dependencies = [
- "proc-macro-error-attr",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
- "version_check",
-]
-
-[[package]]
-name = "proc-macro-error-attr"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1be40180e52ecc98ad80b184934baf3d0d29f979574e439af5a55274b35f869"
-dependencies = [
- "proc-macro2",
- "quote",
- "version_check",
-]
-
-[[package]]
 name = "proc-macro-error-attr2"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9876,7 +9821,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustc-hash",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "socket2 0.5.10",
  "thiserror 2.0.21",
  "tokio",
@@ -9886,17 +9831,18 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.15"
+version = "0.11.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fcb935c5bec503c2f0e306bdd3e58bb9029dcb14fa8d9ac76e3a5256ac0763e"
+checksum = "0e750cca55fe4f0439a15d0bb529da9651e79993e8e72c61a899a36d462befbe"
 dependencies = [
  "bytes",
- "getrandom 0.3.3",
+ "getrandom 0.4.2",
  "lru-slab",
- "rand 0.9.4",
+ "rand 0.10.1",
+ "rand_pcg",
  "ring",
  "rustc-hash",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "rustls-pki-types",
  "slab",
  "thiserror 2.0.21",
@@ -10263,7 +10209,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "quinn",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -10303,7 +10249,7 @@ dependencies = [
  "log",
  "percent-encoding",
  "pin-project-lite",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "rustls-pki-types",
  "rustls-platform-verifier",
  "sync_wrapper 1.0.2",
@@ -10481,9 +10427,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.45"
+version = "0.23.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
+checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "aws-lc-rs",
  "log",
@@ -10537,7 +10483,7 @@ dependencies = [
  "jni 0.21.1",
  "log",
  "once_cell",
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "rustls-native-certs",
  "rustls-platform-verifier-android",
  "rustls-webpki 0.103.15",
@@ -11886,7 +11832,7 @@ version = "0.26.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9cc2678c2cdd569ef8215e2afd7954ada2ae20b4fdd2c5fe6139a3b02d105db"
 dependencies = [
- "rustls 0.23.45",
+ "rustls 0.23.46",
  "tokio",
 ]
 

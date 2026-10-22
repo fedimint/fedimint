@@ -59,7 +59,7 @@ use fedimint_ln_client::{
 };
 use fedimint_ln_common::config::LightningClientConfig;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
-use fedimint_ln_common::contracts::{ContractId, Preimage};
+use fedimint_ln_common::contracts::{ContractId, FundedContract, Preimage};
 use fedimint_ln_common::route_hints::RouteHint;
 use fedimint_ln_common::{
     GatewayRegistrationAuth, KIND, LNV1_INCOMING_HTLC_ADVERTISED_EXPIRY_DELTA,
@@ -78,8 +78,8 @@ use tracing::{debug, error, info, warn};
 
 use self::complete::GatewayCompleteStateMachine;
 use self::pay::{
-    GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
-    OutgoingPaymentError,
+    GatewayPayCancelContract, GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine,
+    GatewayPayStates, OutgoingPaymentError,
 };
 pub use crate::error::{
     GatewayClientV1Error, GatewayPayInvoiceError, HandleDirectSwapError, HandleInterceptedHtlcError,
@@ -649,6 +649,24 @@ impl GatewayClientModule {
             ClientOutputBundle::new(vec![output], vec![client_output_sm]),
         ));
         let operation_meta_gen = |_: OutPointRange| GatewayMeta::Receive;
+
+        // The receive policy admits a fresh payment only here, below the replay
+        // checks above: a circuit this gateway already funded must still be
+        // settled, or the gateway is out of pocket for a contract it paid for.
+        // The guard is held across the funding write, so a payment cannot slip
+        // in after disabling has returned.
+        let federation_id = self
+            .client_ctx
+            .get_config()
+            .await
+            .global
+            .calculate_federation_id();
+        let _policy_guard = self
+            .lightning_manager
+            .begin_fresh_receive(federation_id)
+            .await
+            .ok_or(HandleInterceptedHtlcError::ReceiveDisabled { federation_id })?;
+
         self.client_ctx
             .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
             .await?;
@@ -734,6 +752,22 @@ impl GatewayClientModule {
                 derived: op_id_from_funding,
             });
         }
+
+        // A swap is how funds from another federation enter this one through
+        // the gateway, so it is admitted only while receives are on, and the
+        // guard holds that admission across the funding transaction below. A
+        // swap already funded resumes above regardless.
+        let federation_id = self
+            .client_ctx
+            .get_config()
+            .await
+            .global
+            .calculate_federation_id();
+        let _policy_guard = self
+            .lightning_manager
+            .begin_fresh_receive(federation_id)
+            .await
+            .ok_or(HandleDirectSwapError::ReceiveDisabled { federation_id })?;
 
         self.client_ctx
             .module_db()
@@ -894,13 +928,19 @@ impl GatewayClientModule {
 
     /// Pay lightning invoice on behalf of federation user
     ///
+    /// A funded contract whose invoice hash belongs to another operation is
+    /// cancelled without attempting a payment. The hash claim is retained.
+    ///
     /// # Errors
     ///
     /// Fails with [`GatewayPayInvoiceError::MissingInvoiceAmount`] if the
     /// invoice has no amount, [`GatewayPayInvoiceError::PrunedInvoiceRejected`]
     /// if the gateway cannot pay a pruned invoice,
     /// [`GatewayPayInvoiceError::PaymentHashAlreadyClaimed`] if another
-    /// operation already claimed the invoice's payment hash,
+    /// operation already claimed the invoice's payment hash and this request
+    /// has no matching funded contract to refund,
+    /// [`GatewayPayInvoiceError::ContractLookup`] if the contract cannot be
+    /// fetched for a refund,
     /// [`GatewayPayInvoiceError::Unauthorized`] if a payment of this contract
     /// is already under way and the request does not carry the
     /// authentication it was started with,
@@ -932,7 +972,7 @@ impl GatewayClientModule {
         // across LNv1, LNv2 and all federations; see the LNv2 `send_payment`.
         // The claim is taken before the operation is created, and a retry of the
         // same contract finds its own claim.
-        if !self
+        let initial_state = if self
             .lightning_manager
             .claim_payment_image(
                 &fedimint_lnv2_common::contracts::PaymentImage::Hash(
@@ -942,8 +982,33 @@ impl GatewayClientModule {
             )
             .await
         {
-            return Err(GatewayPayInvoiceError::PaymentHashAlreadyClaimed);
-        }
+            GatewayPayStates::PayInvoice(GatewayPayInvoice {
+                pay_invoice_payload: payload.clone(),
+            })
+        } else {
+            let account = self
+                .module_api
+                .fetch_contract(payload.contract_id)
+                .await
+                .map_err(GatewayPayInvoiceError::ContractLookup)?
+                .ok_or(GatewayPayInvoiceError::PaymentHashAlreadyClaimed)?;
+            let FundedContract::Outgoing(contract) = account.contract else {
+                return Err(GatewayPayInvoiceError::PaymentHashAlreadyClaimed);
+            };
+
+            if account.amount == Amount::ZERO
+                || contract.gateway_key != self.redeem_key.public_key()
+                || contract.hash != payload.payment_data.payment_hash()
+            {
+                return Err(GatewayPayInvoiceError::PaymentHashAlreadyClaimed);
+            }
+            GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract::for_claimed_hash(
+                OutgoingContractAccount {
+                    amount: account.amount,
+                    contract,
+                },
+            )))
+        };
 
         self.client_ctx.module_db()
             .autocommit(
@@ -997,9 +1062,7 @@ impl GatewayClientModule {
                         let state_machines =
                             vec![GatewayClientStateMachines::Pay(GatewayPayStateMachine {
                                 common: GatewayPayCommon { operation_id },
-                                state: GatewayPayStates::PayInvoice(GatewayPayInvoice {
-                                    pay_invoice_payload: payload.clone(),
-                                }),
+                                state: initial_state.clone(),
                             })];
 
                         let dyn_states = state_machines
@@ -1330,6 +1393,19 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
 
     /// Retrieves the federation's routing fees from the federation's config.
     async fn get_routing_fees(&self, federation_id: FederationId) -> Option<RoutingFees>;
+
+    /// Admits a fresh incoming payment for the clients of `federation_id` when
+    /// the operator's receive policy allows one, or answers `None` when
+    /// receives are disabled.
+    ///
+    /// The returned guard must be held until the funding operation exists.
+    /// That is what makes disabling atomic: a policy change waits for the
+    /// guards outstanding when it runs, so a payment admitted here always
+    /// funds, and none is admitted once the change has returned.
+    async fn begin_fresh_receive(
+        &self,
+        federation_id: FederationId,
+    ) -> Option<fedimint_gateway_common::PaymentPolicyGuard>;
 
     /// Retrieve a client given a federation ID, used for swapping ecash between
     /// federations.

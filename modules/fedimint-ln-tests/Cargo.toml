@@ -13,7 +13,9 @@ path = "tests/tests.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 bitcoin_hashes = { workspace = true }
+fedimint-api-client = { workspace = true }
 fedimint-client = { workspace = true }
 fedimint-client-module = { workspace = true }
 fedimint-core = { workspace = true }

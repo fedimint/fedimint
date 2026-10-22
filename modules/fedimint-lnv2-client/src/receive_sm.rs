@@ -52,7 +52,6 @@ pub enum ReceiveSMState {
     Uneconomical,
 }
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that waits on the receipt of a Lightning payment.
 ///
 /// ```mermaid

@@ -32,7 +32,6 @@ use crate::{GatewayClientModule, SwapParameters};
 
 const TIMELOCK_DELTA: u64 = 10;
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that executes the Lightning payment on behalf of
 /// the fedimint user that requested an invoice to be paid.
 ///
@@ -186,6 +185,8 @@ pub enum OutgoingPaymentErrorType {
     InvalidFederationConfiguration,
     #[error("Invalid invoice preimage")]
     InvalidInvoicePreimage,
+    #[error("A payment for this payment hash was already accepted")]
+    PaymentHashAlreadyClaimed,
 }
 
 #[derive(
@@ -1025,6 +1026,17 @@ pub struct GatewayPayCancelContract {
 }
 
 impl GatewayPayCancelContract {
+    pub(super) fn for_claimed_hash(contract: OutgoingContractAccount) -> Self {
+        Self {
+            error: OutgoingPaymentError {
+                error_type: OutgoingPaymentErrorType::PaymentHashAlreadyClaimed,
+                contract_id: contract.contract.contract_id(),
+                contract: Some(contract.clone()),
+            },
+            contract,
+        }
+    }
+
     fn transitions(
         &self,
         global_context: DynGlobalClientContext,

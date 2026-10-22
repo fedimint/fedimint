@@ -98,37 +98,6 @@ pub enum Cancelled {
     DuplicatePayment,
 }
 
-/// Why sending a payment failed.
-///
-/// Only `cancelled` is persisted in the state machine. The Lightning node's
-/// diagnostics on where the payment failed are only recorded in the
-/// [`OutgoingPaymentFailed`] event, so [`Cancelled`] keeps its encoding.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct SendPaymentError {
-    pub(crate) cancelled: Cancelled,
-    pub(crate) diagnostics: Option<PaymentFailureDiagnostics>,
-}
-
-impl SendPaymentError {
-    /// The failure of paying the invoice over the Lightning network.
-    pub(crate) fn from_lightning_error(error: LightningRpcError) -> Self {
-        Self {
-            diagnostics: error.payment_failure_diagnostics().cloned(),
-            cancelled: Cancelled::LightningRpcError(error.to_string()),
-        }
-    }
-}
-
-impl From<Cancelled> for SendPaymentError {
-    fn from(cancelled: Cancelled) -> Self {
-        Self {
-            cancelled,
-            diagnostics: None,
-        }
-    }
-}
-
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that handles the relay of an incoming Lightning payment.
 ///
 /// ```mermaid

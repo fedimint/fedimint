@@ -8,10 +8,6 @@ readme = { workspace = true }
 repository = { workspace = true }
 version = { workspace = true }
 
-[package.metadata.cargo-udeps.ignore]
-# cargo udeps can't detect that one
-normal = ["aquamarine"]
-
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
@@ -24,7 +20,6 @@ name = "fedimint_ln_client"
 path = "src/lib.rs"
 
 [dependencies]
-aquamarine = { workspace = true }
 assert_matches = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }

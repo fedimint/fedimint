@@ -3,7 +3,9 @@
 //! The error types of this module's public operations live here; the payment
 //! errors its state machines persist stay in [`crate::pay`].
 
+use fedimint_api_client::api::FederationError;
 use fedimint_client_module::{AddStateMachinesError, TransactionSubmitError};
+use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::db::{AutocommitError, DatabaseError};
 use fedimint_lightning::LightningRpcError;
@@ -25,6 +27,14 @@ pub enum HandleInterceptedHtlcError {
     /// the HTLC's expiry is checked against.
     #[error("The Lightning node's block height could not be read")]
     BlockHeight(#[source] LightningRpcError),
+
+    /// The operator has disabled receives for this federation, so no fresh
+    /// incoming contract is funded.
+    #[error("Receiving payments is disabled for federation {federation_id}")]
+    ReceiveDisabled {
+        /// The federation the payment was refused for.
+        federation_id: FederationId,
+    },
 
     /// The HTLC expires too soon for the gateway to settle it safely.
     #[error("The HTLC expires too soon to be settled safely")]
@@ -68,6 +78,14 @@ pub enum HandleInterceptedHtlcError {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum HandleDirectSwapError {
+    /// The operator has disabled receives for this federation, so no fresh
+    /// incoming contract is funded.
+    #[error("Receiving payments is disabled for federation {federation_id}")]
+    ReceiveDisabled {
+        /// The federation the payment was refused for.
+        federation_id: FederationId,
+    },
+
     /// The federation's offer for this payment could not be turned into an
     /// incoming contract: it did not arrive in time, violates the fee
     /// policy, does not match the swap, already has a funded contract, or
@@ -124,10 +142,14 @@ pub enum GatewayPayInvoiceError {
     #[error("The gateway cannot pay the pruned invoice")]
     PrunedInvoiceRejected(#[source] GatewayClientV1Error),
 
-    /// Another operation already claimed the invoice's payment hash, so this
-    /// gateway will never pay it out for this contract.
+    /// Another operation already claimed the invoice's payment hash, and this
+    /// request has no matching funded contract this gateway can refund.
     #[error("A payment for this payment hash was already accepted")]
     PaymentHashAlreadyClaimed,
+
+    /// The federation could not return the contract to refund.
+    #[error("Failed to fetch outgoing contract for refund")]
+    ContractLookup(#[source] FederationError),
 
     /// A payment of this contract is already under way, and the request does
     /// not carry the authentication it was started with.
