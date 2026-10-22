@@ -11,10 +11,6 @@ version = { workspace = true }
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
-[package.metadata.cargo-udeps.ignore]
-# cargo udeps can't detect that one
-normal = ["aquamarine"]
-
 [features]
 cli = ["dep:clap"]
 default = []
@@ -29,7 +25,6 @@ name = "notes"
 path = "benches/notes.rs"
 
 [dependencies]
-aquamarine = { workspace = true }
 assert_matches = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }

@@ -82,12 +82,12 @@ use fedimint_gateway_common::{
     GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningInfo,
     LightningMode, ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse,
     OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
-    PaymentLogPayload, PaymentLogResponse, PaymentPolicy, PaymentStats, PaymentSummaryPayload,
-    PaymentSummaryResponse, PeginFromOnchainPayload, ReceiveEcashPayload, ReceiveEcashResponse,
-    RegisteredProtocol, SendOnchainRequest, SetChannelFeesRequest, SetFeesPayload,
-    SetMnemonicPayload, SetPaymentPolicyPayload, SpendEcashPayload, SpendEcashResponse,
-    V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse,
-    WithdrawResponse, WithdrawToOnchainPayload,
+    PaymentLogPayload, PaymentLogResponse, PaymentPolicy, PaymentPolicyGuard, PaymentStats,
+    PaymentSummaryPayload, PaymentSummaryResponse, PeginFromOnchainPayload, ReceiveEcashPayload,
+    ReceiveEcashResponse, RegisteredProtocol, SendOnchainRequest, SetChannelFeesRequest,
+    SetFeesPayload, SetMnemonicPayload, SetPaymentPolicyPayload, SpendEcashPayload,
+    SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload,
+    WithdrawPreviewResponse, WithdrawResponse, WithdrawToOnchainPayload,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 pub use fedimint_gateway_ui::IAdminGateway;
@@ -181,7 +181,6 @@ const DB_FILE: &str = "gatewayd.db";
 /// running in LDK mode.
 const LDK_NODE_DB_FOLDER: &str = "ldk_node";
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// ```mermaid
 /// graph LR
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5
@@ -400,6 +399,15 @@ pub struct Gateway {
 
     /// Rate limiter for the public invoice creation endpoint.
     invoice_rate_limiter: Arc<TokenBucketRateLimiter>,
+
+    /// Locks the payment hash of each HOLD invoice whose delivery is being
+    /// handled, so that a duplicate delivery is dropped; see
+    /// [`Self::handle_lightning_payment`].
+    lnv2_hold_invoice_lock_pool: Arc<lockable::LockPool<sha256::Hash>>,
+
+    /// Serializes payment policy changes against the funding of the payments
+    /// those policies admit.
+    payment_policy_lock: Arc<RwLock<()>>,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -420,6 +428,33 @@ struct WithdrawDetails {
     amount: Amount,
     mint_fees: Option<Amount>,
     peg_out_fees: PegOutFees,
+    flat_peg_out_fee: bool,
+}
+
+/// Waits for the ecash change of a successful withdrawal to be issued.
+///
+/// A withdrawal is reported successful once its transaction is accepted, but
+/// the primary module issues the change from funding it asynchronously. Until
+/// then the change is missing from the balance, so callers that read the
+/// balance right after a withdrawal would see it understated by the change.
+/// The withdrawal itself has already succeeded, so a failure here is only
+/// logged.
+async fn await_withdraw_change(
+    client: &ClientHandleArc,
+    operation_id: OperationId,
+    change: Vec<fedimint_core::OutPoint>,
+) {
+    if let Err(err) = client
+        .await_primary_bitcoin_module_outputs(operation_id, change)
+        .await
+    {
+        warn!(
+            target: LOG_GATEWAY,
+            err = %err.fmt_compact(),
+            ?operation_id,
+            "Failed to await withdrawal change outputs"
+        );
+    }
 }
 
 /// Executes a withdrawal using the walletv2 module
@@ -428,13 +463,33 @@ async fn withdraw_v2(
     wallet_module: &fedimint_walletv2_client::WalletClientModule,
     address: &Address,
     amount: BitcoinAmountOrAll,
+    quoted_fee: Option<bitcoin::Amount>,
 ) -> AdminResult<WithdrawResponse> {
-    let fee = wallet_module
-        .send_fee()
-        .await
-        .map_err(|e| AdminGatewayError::WithdrawError {
-            failure_reason: e.fmt_compact().to_string(),
-        })?;
+    let current_fee =
+        wallet_module
+            .send_fee()
+            .await
+            .map_err(|e| AdminGatewayError::WithdrawError {
+                failure_reason: e.fmt_compact().to_string(),
+            })?;
+
+    // The federation rejects any send whose fee is below its current send fee,
+    // so a quote that has gone stale would only produce a doomed transaction.
+    // Sending with the quoted fee otherwise keeps the operator paying exactly
+    // what they confirmed in the preview.
+    let fee = match quoted_fee {
+        Some(quoted_fee) if quoted_fee < current_fee => {
+            return Err(AdminGatewayError::WithdrawError {
+                failure_reason: format!(
+                    "The on-chain fee increased from {} to {} sats since the preview, please preview the withdrawal again",
+                    quoted_fee.to_sat(),
+                    current_fee.to_sat()
+                ),
+            });
+        }
+        Some(quoted_fee) => quoted_fee,
+        None => current_fee,
+    };
 
     let withdraw_amount = match amount {
         BitcoinAmountOrAll::All => {
@@ -485,6 +540,19 @@ async fn withdraw_v2(
 
     match result {
         fedimint_walletv2_client::FinalSendOperationState::Success(txid) => {
+            if let Some(Ok(fedimint_walletv2_client::WalletOperationMeta::Send(meta))) = client
+                .operation_log()
+                .get_operation(operation_id)
+                .await
+                .map(|operation| operation.try_meta())
+            {
+                await_withdraw_change(
+                    client,
+                    operation_id,
+                    meta.change_outpoint_range.into_iter().collect(),
+                )
+                .await;
+            }
             info!(target: LOG_GATEWAY, amount = %withdraw_amount, address = %address, "Sent funds via walletv2");
             Ok(WithdrawResponse { txid, fees })
         }
@@ -539,6 +607,7 @@ async fn calculate_max_withdrawable(
             amount: Amount::from_sats(max_withdrawable.to_sat()),
             mint_fees: Some(federation_fees),
             peg_out_fees: PegOutFees::from_amount(fee),
+            flat_peg_out_fee: true,
         });
     }
 
@@ -567,6 +636,7 @@ async fn calculate_max_withdrawable(
         amount: Amount::from_sats(max_withdrawable.to_sat()),
         mint_fees: Some(federation_fees),
         peg_out_fees,
+        flat_peg_out_fee: false,
     })
 }
 
@@ -785,6 +855,8 @@ impl Gateway {
                 gateway_parameters.invoice_rate_limit_burst,
                 gateway_parameters.invoice_rate_limit_per_second,
             )),
+            lnv2_hold_invoice_lock_pool: Arc::new(lockable::LockPool::new()),
+            payment_policy_lock: Arc::new(RwLock::new(())),
         })
     }
 
@@ -1182,7 +1254,8 @@ impl Gateway {
     /// a known federation but no LNv1 or LNv2 offer matched, cancels (fails
     /// back) the HTLC so the sender can retry rather than treating the
     /// gateway as a dead route. Otherwise (real-channel forwards), resumes
-    /// the HTLC so LND can route it as a normal forward.
+    /// the HTLC so LND can route it as a normal forward. A duplicate delivery
+    /// of a HOLD invoice that is still being handled is dropped.
     ///
     /// Returns the outcome label for metrics tracking.
     pub async fn handle_lightning_payment(
@@ -1195,6 +1268,33 @@ impl Gateway {
             lightning_payment = %PrettyInterceptPaymentRequest(&payment_request),
             "Intercepting lightning payment",
         );
+
+        // A payment without an incoming circuit is held by a HOLD invoice, which
+        // the node can deliver more than once. Only one delivery is handled at a
+        // time, from here through settling or cancelling the invoice. A
+        // duplicate is dropped rather than made to wait: whatever the first
+        // delivery decides resolves the whole invoice, and a duplicate handled
+        // afterwards could fund an invoice the first has just cancelled. LND,
+        // for one, replays every accepted invoice when the gateway resubscribes
+        // after a reconnect. Forwards are not deduplicated: each has
+        // its own circuit, and a replay after a reconnect may be the only
+        // delivery still able to resolve it.
+        let _hold_invoice_guard = if payment_request.incoming_circuit().is_none() {
+            let Some(guard) = self
+                .lnv2_hold_invoice_lock_pool
+                .try_lock(payment_request.payment_hash)
+            else {
+                info!(
+                    target: LOG_GATEWAY,
+                    payment_hash = %payment_request.payment_hash,
+                    "Dropping duplicate delivery of a HOLD invoice that is already being handled",
+                );
+                return "duplicate";
+            };
+            Some(guard)
+        } else {
+            None
+        };
 
         let lnv2_start = fedimint_core::time::now();
         let lnv2_result = self
@@ -1269,16 +1369,7 @@ impl Gateway {
             None => false,
         };
 
-        // An LNv2 payment carries no federation scid, so a registered contract
-        // whose federation has receives turned off is only recognisable by the
-        // error the LNv2 attempt returned. It is cancelled explicitly rather
-        // than left to the forward branch, whose meaning for a HOLD invoice is
-        // up to the lightning backend.
-        let receive_disabled = [&lnv2_result, &lnv1_result]
-            .into_iter()
-            .any(|result| matches!(result, Err(PublicGatewayError::ReceiveDisabled { .. })));
-
-        if is_federation_scid || receive_disabled {
+        if is_federation_scid {
             // The HTLC targeted a federation we serve but we couldn't claim
             // it (no LNv1 offer / no LNv2 contract / receives turned off /
             // underfunded gateway / federation timeout / etc.). Surface the
@@ -1292,7 +1383,6 @@ impl Gateway {
                 amount_msat = payment_request.amount_msat,
                 incoming_chan_id = payment_request.incoming_chan_id,
                 htlc_id = payment_request.htlc_id,
-                receive_disabled,
                 lnv2_err = ?lnv2_result.as_ref().err(),
                 lnv1_err = ?lnv1_result.as_ref().err(),
                 "Lightning payment for a served federation could not be accepted: cancelling HTLC",
@@ -1399,16 +1489,6 @@ impl Gateway {
         else {
             return Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment("Incoming payment has a last hop short channel id that does not map to a known federation".to_string())));
         };
-
-        // LNv1 clients cannot be told that receives are off, so their invoices
-        // still route here. Refusing before any federation interaction fails
-        // the HTLC back to the sender without spending anything.
-        let federation_id = client.borrow().with_sync(|client| client.federation_id());
-        if !self.receive_enabled(federation_id).await {
-            return Err(PublicGatewayError::ReceiveDisabled {
-                federation_id_prefix: federation_id.to_prefix(),
-            });
-        }
 
         // Both LND's `incoming_expiry` and LDK's `claim_deadline` are absolute
         // Bitcoin heights. LDK does not currently produce LNv1 forwards (it has
@@ -2692,6 +2772,11 @@ impl IAdminGateway for Gateway {
             receive_enabled,
         }: SetPaymentPolicyPayload,
     ) -> AdminResult<()> {
+        // Taken before the policy is read anywhere else: every payment admitted
+        // under the old policy funds before this returns, and none is admitted
+        // afterwards.
+        let _policy_change = self.payment_policy_lock.write().await;
+
         let mut dbtx = self.gateway_db.begin_transaction().await;
         let mut fed_configs = if let Some(fed_id) = federation_id {
             dbtx.load_federation_configs()
@@ -3100,7 +3185,10 @@ impl IAdminGateway for Gateway {
             .value()
             .get_first_module::<fedimint_walletv2_client::WalletClientModule>()
         {
-            return withdraw_v2(client.value(), &wallet_module, &address, amount).await;
+            // The UI round-trips the walletv2 flat fee through
+            // `PegOutFees::from_amount`, so `amount()` recovers it exactly.
+            let quoted_fee = quoted_fees.map(|fees| fees.amount());
+            return withdraw_v2(client.value(), &wallet_module, &address, amount, quoted_fee).await;
         }
 
         let wallet_module = client
@@ -3194,6 +3282,16 @@ impl IAdminGateway for Gateway {
         &self,
         payload: WithdrawPreviewPayload,
     ) -> AdminResult<WithdrawPreviewResponse> {
+        // Deserialized amounts can bypass BitcoinAmountOrAll::from_str.
+        // Reject them before converting to millisatoshis or querying either wallet.
+        if let BitcoinAmountOrAll::Amount(amount) = payload.amount
+            && amount > bitcoin::Amount::MAX_MONEY
+        {
+            return Err(AdminGatewayError::WithdrawError {
+                failure_reason: "Withdrawal amount exceeds maximum Bitcoin supply".to_string(),
+            });
+        }
+
         let gateway_network = self.network;
         let address_checked = payload
             .address
@@ -3209,6 +3307,7 @@ impl IAdminGateway for Gateway {
             amount,
             mint_fees,
             peg_out_fees,
+            flat_peg_out_fee,
         } = match payload.amount {
             BitcoinAmountOrAll::All => {
                 calculate_max_withdrawable(client.value(), &address_checked).await?
@@ -3222,6 +3321,7 @@ impl IAdminGateway for Gateway {
                             .get_withdraw_fees(&address_checked, btc_amount)
                             .await
                             .map_err(|e| AdminGatewayError::Unexpected(e.into()))?,
+                        flat_peg_out_fee: false,
                     }
                 } else if let Ok(wallet_module) = client
                     .value()
@@ -3232,10 +3332,26 @@ impl IAdminGateway for Gateway {
                             failure_reason: e.fmt_compact().to_string(),
                         }
                     })?;
+                    // The wallet output carries the payment plus the on-chain
+                    // fee; funding it costs the federation fees quoted here.
+                    let output_amount = btc_amount.checked_add(fee).ok_or_else(|| {
+                        AdminGatewayError::WithdrawError {
+                            failure_reason: "Withdrawal amount overflow".to_string(),
+                        }
+                    })?;
+                    let federation_fees = wallet_module
+                        .send_fee_quote(output_amount)
+                        .await
+                        .map_err(|e| AdminGatewayError::WithdrawError {
+                            failure_reason: e.fmt_compact().to_string(),
+                        })?
+                        .total()
+                        .get_bitcoin();
                     WithdrawDetails {
                         amount: btc_amount.into(),
-                        mint_fees: None,
+                        mint_fees: Some(federation_fees),
                         peg_out_fees: PegOutFees::from_amount(fee),
+                        flat_peg_out_fee: true,
                     }
                 } else {
                     return Err(AdminGatewayError::Unexpected(anyhow!(
@@ -3256,6 +3372,7 @@ impl IAdminGateway for Gateway {
             peg_out_fees,
             total_cost,
             mint_fees,
+            flat_peg_out_fee,
         })
     }
 
@@ -3480,6 +3597,19 @@ impl Gateway {
             .load_federation_config(federation_id)
             .await
             .is_none_or(|config| config.receive_enabled())
+    }
+
+    /// Admits a fresh incoming payment when the receive policy allows it,
+    /// returning a guard that holds off a policy change until the caller has
+    /// funded the payment.
+    async fn admit_fresh_receive(&self, federation_id: FederationId) -> Option<PaymentPolicyGuard> {
+        // The policy is read under the guard, so it cannot change between this
+        // read and the funding the caller performs while holding it.
+        let guard = self.payment_policy_lock.clone().read_owned().await;
+
+        self.receive_enabled(federation_id)
+            .await
+            .then(|| PaymentPolicyGuard::new(guard))
     }
 
     /// Returns payment information that LNv2 clients can use to instruct this
@@ -3802,18 +3932,6 @@ impl Gateway {
             ));
         }
 
-        // Turning receives off covers invoices issued before the switch was
-        // flipped: every incoming contract of the federation is refused, whether
-        // it would be funded from an HTLC or from a direct swap.
-        if !self
-            .receive_enabled(registered_incoming_contract.federation_id)
-            .await
-        {
-            return Err(PublicGatewayError::ReceiveDisabled {
-                federation_id_prefix: registered_incoming_contract.federation_id.to_prefix(),
-            });
-        }
-
         let client = self
             .select_client(registered_incoming_contract.federation_id)
             .await?
@@ -3946,6 +4064,13 @@ impl IGatewayClientV2 for Gateway {
 
     async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool {
         self.await_outbound_payment_exists(payment_hash).await
+    }
+
+    async fn begin_fresh_receive(
+        &self,
+        federation_id: &FederationId,
+    ) -> Option<PaymentPolicyGuard> {
+        self.admit_fresh_receive(*federation_id).await
     }
 
     async fn min_contract_amount(
@@ -4131,6 +4256,10 @@ impl IGatewayClientV1 for Gateway {
         }
 
         Ok(())
+    }
+
+    async fn begin_fresh_receive(&self, federation_id: FederationId) -> Option<PaymentPolicyGuard> {
+        self.admit_fresh_receive(federation_id).await
     }
 
     async fn get_routing_fees(&self, federation_id: FederationId) -> Option<RoutingFees> {

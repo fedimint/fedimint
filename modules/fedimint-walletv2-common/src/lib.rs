@@ -32,6 +32,22 @@ pub const KIND: ModuleKind = ModuleKind::from_static_str("walletv2");
 
 pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(1, 0);
 
+/// Number of confirmations required for a transaction to be considered as
+/// final by the federation. The block that mines the transaction does
+/// not count towards the number of confirmations.
+pub const CONFIRMATION_FINALITY_DELAY: u64 = 6;
+
+/// How many blocks a peer's block count vote trails its bitcoin backend: the
+/// finality delay, plus one block of slack. Processing a new consensus block
+/// count waits for the local backend to report the consensus count plus the
+/// finality delay, and without the slack that is exactly the block the voter
+/// saw, so a backend a little behind, or a backend status that is stale (it is
+/// polled once a minute), stalled item processing on every new block.
+///
+/// Lives here rather than in the server so that the client can tell how deep a
+/// peg-in has to be before the federation claims it.
+pub const BLOCK_COUNT_VOTE_DELAY: u64 = CONFIRMATION_FINALITY_DELAY + 1;
+
 /// Returns a sleep duration of 1 second in test environments or 60 seconds in
 /// production. Used for polling intervals where faster feedback is needed
 /// during testing.
@@ -103,6 +119,94 @@ pub struct OutputInfo {
     pub value: bitcoin::Amount,
     pub spent: bool,
     pub outpoint: Option<bitcoin::OutPoint>,
+}
+
+/// An output passing the probabilistic receive filter that a guardian can see,
+/// but which is not yet deep enough to have entered the federation's consensus
+/// output log.
+///
+/// This is advisory, non-consensus data: it is derived from a single guardian's
+/// local view of the chain and its mempool, and may be revoked by a reorg, an
+/// eviction or a replacement. It exists purely so a client can show a peg-in's
+/// progress instead of nothing at all while it waits out the module's
+/// confirmation finality delay.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PendingOutput {
+    pub script: ScriptBuf,
+    pub outpoint: bitcoin::OutPoint,
+    pub value: bitcoin::Amount,
+    /// Height of the block that mined this output, or `None` while it is only
+    /// in the guardian's mempool.
+    ///
+    /// A mempool output is the weakest signal the federation offers: it is not
+    /// mined, not final, and can vanish entirely. Only guardians whose bitcoin
+    /// backend can enumerate a mempool report these at all.
+    pub height: Option<u64>,
+}
+
+/// A guardian's local, advisory view of the receive outputs it can see but the
+/// federation has not recorded yet, together with the block count that view was
+/// derived from.
+///
+/// Two kinds of output land here: candidates sitting in the guardian's mempool,
+/// and the receive outputs of the handful of blocks below its local chain tip.
+/// That block window is measured against the guardian's own tip rather than the
+/// consensus block count, so an output keeps being reported for a while *after*
+/// it becomes final - deliberately, so that a progress display does not blank
+/// out in the gap between finality and the claim landing. Presence here
+/// therefore does not mean a deposit is still unclaimed.
+///
+/// The block count is returned alongside the outputs so that a client computes
+/// confirmations against a single consistent view rather than mixing a height
+/// from one guardian with a chain tip from another.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PendingOutputs {
+    /// The responding guardian's local block count, or `0` if its bitcoin
+    /// backend is unavailable.
+    ///
+    /// A mined output's confirmations are `block_count - height`, which counts
+    /// the block that mined it as the first confirmation. Note this is offset
+    /// by one from [`BLOCK_COUNT_VOTE_DELAY`], which does not count the mining
+    /// block, so a peg-in becomes claimable at `BLOCK_COUNT_VOTE_DELAY + 1`
+    /// confirmations.
+    pub block_count: u64,
+    pub outputs: Vec<PendingOutput>,
+    /// How much of its mempool this guardian inspected for these outputs.
+    ///
+    /// Distinguishes "no unmined peg-ins" from "this guardian could not look",
+    /// which an esplora-backed guardian never can. Without it a client could
+    /// not tell an empty mempool from a blind guardian.
+    pub mempool_visibility: MempoolVisibility,
+}
+
+/// How much of a mempool was inspected for unmined peg-ins.
+///
+/// Ordered from least to most visibility, so the best of several views is
+/// their maximum.
+#[derive(
+    Clone, Copy, Debug, Default, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize,
+)]
+pub enum MempoolVisibility {
+    /// Nothing unmined is reported, either because the backend cannot
+    /// enumerate a mempool (as esplora never can), because the mempool scan is
+    /// turned off, or because listing the mempool failed.
+    #[default]
+    Unavailable,
+    /// The mempool was listed, but not all of its transactions were
+    /// inspected: either fetching some of them failed, or the scan ran out of
+    /// its time budget and is still working through them. The latter is
+    /// normal on a healthy backend while a large mempool is first scanned.
+    ///
+    /// Every unmined output reported is real, but the set may be short of
+    /// transactions the guardian has but has not inspected yet.
+    Partial,
+    /// Every transaction in the guardian's mempool was inspected, so a deposit
+    /// that is not reported had not reached this mempool when it was scanned.
+    ///
+    /// This describes one guardian's local snapshot, not the network: a
+    /// payment that is not reported may still have been broadcast and not
+    /// have propagated to this node yet.
+    Complete,
 }
 
 #[derive(Debug)]

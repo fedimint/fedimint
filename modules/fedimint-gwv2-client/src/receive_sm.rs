@@ -97,7 +97,6 @@ pub enum DecryptionOutcome {
     Decrypted(AggregateDecryptionKey, Option<[u8; 32]>),
 }
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that handles the relay of an incoming Lightning payment.
 ///
 /// ```mermaid

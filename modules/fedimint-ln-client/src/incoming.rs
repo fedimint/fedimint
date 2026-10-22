@@ -31,7 +31,6 @@ use tracing::{debug, info, warn};
 use crate::api::LnFederationApi;
 use crate::{LightningClientContext, PayType, set_payment_result};
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that executes a transaction between two users
 /// within a federation. This creates and funds an incoming contract
 /// based on an existing offer within the federation.

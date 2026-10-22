@@ -32,7 +32,6 @@ use crate::{GatewayClientModule, SwapParameters};
 
 const TIMELOCK_DELTA: u64 = 10;
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that executes the Lightning payment on behalf of
 /// the fedimint user that requested an invoice to be paid.
 ///
