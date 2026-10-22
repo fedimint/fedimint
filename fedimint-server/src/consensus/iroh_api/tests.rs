@@ -15,6 +15,7 @@ use super::{
     VersionedIrohConnection, acquire_iroh_api_permit, metric_method, record_request_metrics,
     run_handler,
 };
+use crate::net::api::API_ENDPOINT_TIMEOUT;
 
 const TEST_ALPN: &[u8] = b"fedimint-iroh-api-adapter-test";
 
@@ -236,6 +237,98 @@ async fn panicking_handler_returns_an_error_instead_of_unwinding() {
     .expect_err("a panicking module handler is reported as a server error");
 
     assert_eq!(error.code, 500);
+}
+
+#[tokio::test(start_paused = true)]
+async fn handler_results_before_deadline_are_preserved() {
+    for module_id in [None, Some(3)] {
+        let response = run_handler(module_id, "test_endpoint", async {
+            fedimint_core::runtime::sleep(API_ENDPOINT_TIMEOUT / 2).await;
+            Ok(serde_json::json!({"answer": 42}))
+        })
+        .await
+        .expect("a handler that completes within the budget succeeds");
+        assert_eq!(response, serde_json::json!({"answer": 42}));
+
+        let error = run_handler(module_id, "test_endpoint", async {
+            Err(ApiError::unauthorized())
+        })
+        .await
+        .expect_err("endpoint errors are not replaced by a timeout");
+        assert_eq!(error.code, 401);
+        assert_eq!(error.message, "Invalid authorization");
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn handler_deadline_returns_timeout_and_drops_pending_work() {
+    for module_id in [None, Some(3)] {
+        let limit = Arc::new(Semaphore::new(1));
+        let permit = limit.clone().acquire_owned().await.unwrap();
+        let (dropped_tx, mut dropped_rx) = tokio::sync::oneshot::channel::<()>();
+        let handler = async move {
+            // Model resources owned by a parked endpoint, independently of its
+            // transport's response-writing lifetime.
+            let _permit = permit;
+            let _dropped = dropped_tx;
+            pending().await
+        };
+        let mut response = Box::pin(run_handler(module_id, "test_endpoint", handler));
+
+        assert!(poll!(response.as_mut()).is_pending());
+        tokio::time::advance(
+            API_ENDPOINT_TIMEOUT
+                .checked_sub(Duration::from_millis(1))
+                .expect("the endpoint deadline exceeds one millisecond"),
+        )
+        .await;
+        assert!(poll!(response.as_mut()).is_pending());
+        assert_eq!(limit.available_permits(), 0);
+        assert!(matches!(
+            dropped_rx.try_recv(),
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty)
+        ));
+
+        tokio::time::advance(Duration::from_millis(1)).await;
+        let std::task::Poll::Ready(response) = poll!(response.as_mut()) else {
+            panic!("the handler must stop when its request budget expires");
+        };
+        let error = response.expect_err("the handler budget is exhausted");
+        assert_eq!(error.code, -32000);
+        assert_eq!(error.message, "Request timeout");
+        assert_eq!(
+            serde_json::to_value(&error).unwrap(),
+            serde_json::json!({"code": -32000, "message": "Request timeout"})
+        );
+        assert_eq!(limit.available_permits(), 1);
+        assert!(matches!(
+            dropped_rx.try_recv(),
+            Err(tokio::sync::oneshot::error::TryRecvError::Closed)
+        ));
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn dropping_handler_wrapper_before_deadline_drops_pending_work() {
+    let limit = Arc::new(Semaphore::new(1));
+    let permit = limit.clone().acquire_owned().await.unwrap();
+    let (dropped_tx, mut dropped_rx) = tokio::sync::oneshot::channel::<()>();
+    let handler = async move {
+        let _permit = permit;
+        let _dropped = dropped_tx;
+        pending().await
+    };
+    let mut response = Box::pin(run_handler(None, "test_endpoint", handler));
+
+    assert!(poll!(response.as_mut()).is_pending());
+    assert_eq!(limit.available_permits(), 0);
+    drop(response);
+
+    assert_eq!(limit.available_permits(), 1);
+    assert!(matches!(
+        dropped_rx.try_recv(),
+        Err(tokio::sync::oneshot::error::TryRecvError::Closed)
+    ));
 }
 
 #[tokio::test]
