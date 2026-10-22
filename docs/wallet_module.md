@@ -1,4 +1,7 @@
 # Wallet Module
+
+> This describes the legacy `wallet` module, not `walletv2`. It does not cover walletv2's Taproot and FROST descriptors (see `FM_WALLETV2_DESCRIPTOR` in [Setting up Federations](deploying.md#step-by-step-ceremony)).
+
 The wallet module allows users to peg-in or peg-out from the fed using on-chain bitcoin transactions.
 
 ### Pegging In - User Client
