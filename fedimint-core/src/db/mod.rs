@@ -103,6 +103,7 @@
 //! | Prevented           | Prevented      | Prevented   |
 
 use std::any;
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt::{self, Debug};
@@ -1536,7 +1537,10 @@ pub struct NonCommittable;
 /// `Cap` is a session type
 pub struct DatabaseTransaction<'tx, Cap = NonCommittable> {
     tx: Box<dyn IDatabaseTransaction + 'tx>,
-    decoders: ModuleDecoderRegistry,
+    // Owning transactions keep their decoder context; references borrow it for
+    // the same lifetime as the underlying transaction instead of cloning the
+    // registry's outer map. Decoder metadata is immutable through this handle.
+    decoders: Cow<'tx, ModuleDecoderRegistry>,
     commit_tracker: MaybeRef<'tx, CommitTracker>,
     on_commit_hooks: MaybeRef<'tx, Vec<Box<maybe_add_send!(dyn FnOnce())>>>,
     capability: marker::PhantomData<Cap>,
@@ -1673,7 +1677,7 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
     where
         's: 'a,
     {
-        let decoders = self.decoders.clone();
+        let decoders = Cow::Borrowed(&*self.decoders);
 
         DatabaseTransaction {
             tx: Box::new(&mut self.tx),
@@ -1701,7 +1705,7 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
                 global_dbtx_access_token: None,
                 prefix,
             }),
-            decoders: self.decoders.clone(),
+            decoders: Cow::Borrowed(&*self.decoders),
             commit_tracker: match self.commit_tracker {
                 MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
                 MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
@@ -1730,7 +1734,7 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
                     global_dbtx_access_token: Some(global_dbtx_access_token),
                     prefix,
                 }),
-                decoders: self.decoders.clone(),
+                decoders: Cow::Borrowed(&*self.decoders),
                 commit_tracker: match self.commit_tracker {
                     MaybeRef::Owned(ref mut o) => MaybeRef::Borrowed(o),
                     MaybeRef::Borrowed(ref mut b) => MaybeRef::Borrowed(b),
@@ -1793,7 +1797,7 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
     where
         'tx: 'a,
     {
-        let decoders = self.decoders.clone();
+        let decoders = Cow::Borrowed(&*self.decoders);
 
         DatabaseTransaction {
             tx: Box::new(self.tx.global_dbtx(access_token)),
@@ -1835,7 +1839,7 @@ impl<'tx> DatabaseTransaction<'tx, Committable> {
     pub fn new(dbtx: Box<dyn IDatabaseTransaction + 'tx>, decoders: ModuleDecoderRegistry) -> Self {
         Self {
             tx: dbtx,
-            decoders,
+            decoders: Cow::Owned(decoders),
             commit_tracker: MaybeRef::Owned(CommitTracker {
                 is_committed: false,
                 has_writes: false,

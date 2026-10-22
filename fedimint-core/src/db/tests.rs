@@ -9,6 +9,7 @@ use super::{
 use crate::module::registry::ModuleDecoderRegistry;
 use crate::runtime::spawn;
 
+mod decoder_borrow;
 mod owned_buffers;
 mod wait_key;
 
