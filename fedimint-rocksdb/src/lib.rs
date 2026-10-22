@@ -337,6 +337,22 @@ impl IRawDatabase for RocksDbReadOnly {
 
 #[async_trait]
 impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
+    async fn raw_insert_bytes_no_previous(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<()> {
+        fedimint_core::runtime::block_in_place(|| {
+            self.0.put(key, value).map_err(DatabaseError::backend)
+        })
+    }
+
+    async fn raw_remove_entry_no_previous(&mut self, key: &[u8]) -> DatabaseResult<()> {
+        fedimint_core::runtime::block_in_place(|| {
+            self.0.delete(key).map_err(DatabaseError::backend)
+        })
+    }
+
     async fn raw_insert_bytes(
         &mut self,
         key: &[u8],
