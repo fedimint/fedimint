@@ -778,7 +778,10 @@ impl<Inner> PrefixDatabaseTransaction<Inner> {
     }
 
     fn adapt_prefix_stream(stream: PrefixStream<'_>, prefix_len: usize) -> PrefixStream<'_> {
-        Box::pin(stream.map(move |(k, v)| (k[prefix_len..].to_owned(), v)))
+        Box::pin(stream.map(move |(mut k, v)| {
+            k.drain(..prefix_len);
+            (k, v)
+        }))
     }
 }
 
