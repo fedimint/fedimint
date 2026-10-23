@@ -532,6 +532,9 @@ where
     poll(name, || async { f().await.map_err(ControlFlow::Continue) }).await
 }
 
+#[cfg(test)]
+mod tests;
+
 // used to add `cmd` method.
 pub trait ToCmdExt {
     fn cmd(self) -> Command;
