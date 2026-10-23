@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["OutcomeFormat"],"fn":["await_outcome","load","publish_on_commit"],"struct":["CachedSessionOutcome"],"type":["CompletedSession"]};
