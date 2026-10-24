@@ -1,5 +1,6 @@
 use fedimint_core::PeerId;
 use fedimint_core::config::FederationId;
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::AmountUnit;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -118,4 +119,54 @@ fn legacy_ecash_without_unit_is_bitcoin() {
     assert_eq!(decoded.unit(), AmountUnit::BITCOIN);
     assert_eq!(decoded.mint(), Some(mint));
     assert_eq!(decoded.amount(), Denomination(10).amount());
+}
+
+#[test]
+fn module_instance_id_survives_encoding() {
+    let mint = FederationId::dummy();
+    let module_id: ModuleInstanceId = 5;
+
+    let ecash = ECash::new(mint, vec![dummy_note()])
+        .with_unit(AmountUnit::BITCOIN)
+        .with_module_instance_id(module_id);
+
+    assert_eq!(ecash.module_instance_id(), Some(module_id));
+
+    let decoded: ECash = decode(&ecash.consensus_encode_to_vec());
+    assert_eq!(decoded.module_instance_id(), Some(module_id));
+    assert_eq!(decoded.mint(), Some(mint));
+    assert_eq!(decoded.amount(), Denomination(10).amount());
+}
+
+#[test]
+fn legacy_ecash_without_module_instance_id_returns_none() {
+    let mint = FederationId::dummy();
+    let notes = vec![dummy_note()];
+    let ecash = ECash::new(mint, notes);
+
+    assert_eq!(ecash.module_instance_id(), None);
+
+    let decoded: ECash = decode(&ecash.consensus_encode_to_vec());
+    assert_eq!(decoded.module_instance_id(), None);
+}
+
+#[test]
+fn module_instance_id_preserved_through_legacy_client() {
+    let module_id: ModuleInstanceId = 3;
+    let ecash =
+        ECash::new(FederationId::dummy(), vec![dummy_note()]).with_module_instance_id(module_id);
+    let encoded = ecash.consensus_encode_to_vec();
+
+    let legacy: LegacyECash = decode(&encoded);
+
+    let Some(LegacyECashField::Default { variant, bytes: _ }) = legacy.0.last() else {
+        panic!("module instance id should decode as unknown variant on legacy client");
+    };
+    // ModuleInstanceId variant should be after Unit (5)
+    assert_eq!(*variant, 5);
+
+    let reencoded = legacy.consensus_encode_to_vec();
+    assert_eq!(reencoded, encoded);
+    let decoded: ECash = decode(&reencoded);
+    assert_eq!(decoded.module_instance_id(), Some(module_id));
 }
