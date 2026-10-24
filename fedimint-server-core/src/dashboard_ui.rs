@@ -9,6 +9,7 @@ use fedimint_core::core::ModuleKind;
 use fedimint_core::module::ApiAuth;
 use fedimint_core::module::audit::AuditSummary;
 use fedimint_core::net::auth::GuardianAuthToken;
+use fedimint_core::peer_availability::PeerAvailability;
 use fedimint_core::session_outcome::SessionStatusV2;
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Feerate, PeerId};
@@ -67,6 +68,9 @@ pub trait IDashboardApi {
     /// Returns a map of peer ID to connection status (None = disconnected)
     async fn p2p_connection_status(&self) -> BTreeMap<PeerId, Option<P2PConnectionStatus>>;
 
+    /// This guardian's persisted observations, not a federation-wide estimate.
+    async fn peer_availability(&self) -> Option<DashboardPeerAvailability>;
+
     /// Get the federation invite code to share with users
     async fn federation_invite_code(&self) -> String;
 
@@ -102,6 +106,15 @@ pub trait IDashboardApi {
     {
         Arc::new(self)
     }
+}
+
+/// One persisted local observation, including its freshness timestamp.
+#[derive(Debug, Clone)]
+pub struct DashboardPeerAvailability {
+    /// Unix timestamp of the last persistence pass.
+    pub updated_at_secs: u64,
+    /// This guardian's report; the guardian does not measure itself.
+    pub report: PeerAvailability,
 }
 
 /// Extension trait for IDashboardApi providing type-safe module access
