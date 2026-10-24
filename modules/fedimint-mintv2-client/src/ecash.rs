@@ -1,4 +1,5 @@
 use fedimint_core::config::FederationId;
+use fedimint_core::core::ModuleInstanceId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::AmountUnit;
@@ -29,6 +30,11 @@ enum ECashField {
     /// yet, it's ok that clients predating this variant skip it via the
     /// default field and thus can't distinguish units.
     Unit(AmountUnit),
+    /// The module instance id of the Mint v2 module that issued this ecash.
+    /// When present, this allows clients with multiple Mint v2 instances to
+    /// route received ecash to the correct instance. Absence indicates the
+    /// ecash should use the default/first instance (backward compatibility).
+    ModuleInstanceId(ModuleInstanceId),
     #[encodable_default]
     Default {
         variant: u64,
@@ -142,6 +148,25 @@ impl ECash {
             ECashField::ApiSecret(api_secret) => Some(api_secret.clone()),
             _ => None,
         })
+    }
+
+    /// The module instance id of the Mint v2 module that issued this ecash.
+    /// When present, newer clients can route received ecash to the correct
+    /// module instance in a federation with multiple Mint v2 instances.
+    /// Absence (legacy ecash) should fall back to the default instance.
+    pub fn module_instance_id(&self) -> Option<ModuleInstanceId> {
+        self.0.iter().find_map(|field| match field {
+            ECashField::ModuleInstanceId(id) => Some(*id),
+            _ => None,
+        })
+    }
+
+    /// Attaches the module instance id that issued this ecash. Used to ensure
+    /// correct routing when a federation has multiple Mint v2 instances.
+    #[must_use]
+    pub fn with_module_instance_id(mut self, id: ModuleInstanceId) -> Self {
+        self.0.push(ECashField::ModuleInstanceId(id));
+        self
     }
 }
 
