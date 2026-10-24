@@ -7,6 +7,7 @@ use fedimint_eventlog::{
     Event, EventKind, EventPersistence, PersistedLogEntry, StructuredPaymentEvents,
     filter_events_by_kind, join_events,
 };
+use fedimint_lightning::PaymentFailureDiagnostics;
 use fedimint_lnv2_common::contracts::{Commitment, OutgoingContract, PaymentImage};
 use serde::{Deserialize, Serialize};
 use serde_millis;
@@ -65,6 +66,12 @@ pub struct OutgoingPaymentFailed {
 
     /// The reason the outgoing payment was cancelled.
     pub error: Cancelled,
+
+    /// What the gateway's Lightning node reported about where and why the
+    /// payment failed, if it failed on the Lightning network and the node
+    /// reported anything. Absent from events logged before it was recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lightning_failure_diagnostics: Option<PaymentFailureDiagnostics>,
 }
 
 impl Event for OutgoingPaymentFailed {
