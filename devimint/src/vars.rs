@@ -205,7 +205,7 @@ declare_vars! {
         FM_PORT_RECURRINGDV2: u16 = port_alloc(1)?; env: "FM_PORT_RECURRINGDV2";
 
         FM_FEDERATION_BASE_PORT: u16 = federation_base_ports; env: "FM_FEDERATION_BASE_PORT";
-        fedimintd_overrides: FederationsNetOverrides = FederationsNetOverrides::new(FM_FEDERATION_BASE_PORT, num_feds, NumPeers::from(fed_size)); env: "NOT_USED_FOR_ANYTHING";
+        fedimintd_overrides: FederationsNetOverrides = FederationsNetOverrides::new(FM_FEDERATION_BASE_PORT, num_feds, NumPeers::new(fed_size).ok_or_else(|| anyhow::anyhow!("a federation must have at least one guardian"))?); env: "NOT_USED_FOR_ANYTHING";
         gw_base_port: u16 = match gateway_base_port {
             Some(b) => b,
             None => port_alloc(3)?,

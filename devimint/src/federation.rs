@@ -372,7 +372,8 @@ impl Federation {
         fed_index: usize,
         federation_name: String,
     ) -> Result<Self> {
-        let num_peers = NumPeers::from(process_mgr.globals.FM_FED_SIZE);
+        let num_peers = NumPeers::new(process_mgr.globals.FM_FED_SIZE)
+            .ok_or_else(|| anyhow::anyhow!("a federation must have at least one guardian"))?;
         let mut members = BTreeMap::new();
         let mut peer_to_env_vars_map = BTreeMap::new();
 
