@@ -86,6 +86,44 @@ The **LND backend** connects to an existing [Lightning Network Daemon (LND)](htt
 
 ## Deployment Options
 
+### Interim TLS mitigation for the LDK backend
+
+Deployments using `fedimint-ldk-node 0.6.1` retain a legacy HTTPS Esplora
+client for Lightning transaction synchronization. Updating Fedimint's modern
+TLS dependencies alone does **not** replace that client's older certificate
+verifier. See [the eMudhra mitigation tracker](https://github.com/fedimint/fedimint/issues/9381)
+for affected dependency paths and the status of the complete fix.
+
+Until a release fixing that legacy path is available and deployed, operators
+can avoid it by using the existing **Bitcoin Core chain source**, while keeping
+the **LDK Lightning backend**:
+
+1. Use a synchronized Bitcoin Core node you operate on the gateway's Bitcoin
+   network. Keep RPC on a trusted local connection; for a remote node, protect
+   the connection with an operator-managed authenticated, encrypted tunnel.
+   Do not expose Bitcoin Core RPC to the public Internet.
+2. Set `FM_BITCOIND_URL` to its RPC endpoint, including the port. Set
+   `FM_BITCOIND_USERNAME` and `FM_BITCOIND_PASSWORD` through your deployment's
+   credential handling, not in the URL. In Docker, `localhost` refers to the
+   gateway container, so use an endpoint reachable over your trusted deployment
+   network.
+3. Unset `FM_ESPLORA_URL` in the gateway's configuration. For the Compose setup
+   below, comment out the Esplora variable and configure the three Bitcoind
+   variables instead. Do not change the command from `gatewayd ldk`.
+4. Apply the configuration and restart or recreate the gateway service while
+   preserving its existing data directory, data volume, mnemonic, and Bitcoin
+   network. This is a chain-source change, not a new Lightning node or a
+   recovery procedure.
+5. Check the `Starting LDK Node` log's `chain_source` field for
+   `Bitcoind source with URL:` and confirm the gateway resumes normal operation
+   and synchronization.
+
+This is an **interim avoidance measure**, not a repair of the legacy TLS
+dependency or a claim that the dependency audit is clean. It does not remove
+the need to deploy the modern TLS updates and, when available, the legacy
+transport fix. Do not substitute public plaintext Esplora or disabled
+certificate verification.
+
 <details>
 <summary><strong>Docker</strong></summary>
 
@@ -139,6 +177,9 @@ The Docker Compose file includes commented configuration options for different s
 **Bitcoin Backend:**
 - The default configuration uses **Esplora** (mempool.space) - no additional setup required
 - To use your own **Bitcoin Core** node, comment out `FM_ESPLORA_URL` and uncomment the Bitcoind variables (`FM_BITCOIND_URL`, `FM_BITCOIND_USERNAME`, `FM_BITCOIND_PASSWORD`)
+
+LDK deployments with the legacy HTTPS client should follow the
+[interim TLS mitigation](#interim-tls-mitigation-for-the-ldk-backend) above.
 
 See the comments in [`docker/gatewayd/docker-compose.yaml`](../docker/gatewayd/docker-compose.yaml) for all available options.
 
