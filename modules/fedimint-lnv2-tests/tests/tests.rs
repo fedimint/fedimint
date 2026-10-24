@@ -1,3 +1,4 @@
+mod atomicity;
 mod mock;
 
 use std::pin::pin;
