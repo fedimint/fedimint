@@ -6,8 +6,9 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 
 use super::{
-    Database, DatabaseError, SupportsSafeDepositKey, TweakIdx, store_supports_safe_deposit,
-    supports_safe_deposit_verified,
+    Database, DatabaseError, NextPegInTweakIndexKey, OperationId, PegInTweakIndexData,
+    RecoveryFinalizedKey, SupportsSafeDepositKey, TweakIdx, recovery_already_finalized,
+    store_recovered_peg_in_indexes, store_supports_safe_deposit, supports_safe_deposit_verified,
 };
 use crate::backup::{
     RECOVER_NUM_IDX_ADD_TO_LAST_USED, RecoverScanOutcome, recover_scan_idxes_for_activity,
@@ -184,4 +185,38 @@ async fn store_supports_safe_deposit_tolerates_a_lost_race() {
     store_supports_safe_deposit(racing_dbtx).await;
 
     assert!(supports_safe_deposit_verified(&db).await);
+}
+
+fn recovered_entry(tweak_idx: u8) -> (TweakIdx, PegInTweakIndexData) {
+    (
+        TweakIdx(u64::from(tweak_idx)),
+        PegInTweakIndexData {
+            operation_id: OperationId([tweak_idx; 32]),
+            creation_time: fedimint_core::time::now(),
+            last_check_time: None,
+            next_check_time: Some(fedimint_core::time::now()),
+            claimed: vec![],
+        },
+    )
+}
+
+/// The client records a module's recovery as done only after `recover()`
+/// returns, so a crash in between reruns recovery with the previous run's keys
+/// already written. That rerun used to hit `insert_new_entry` on an existing
+/// key and panic, on that open and every one after.
+#[tokio::test]
+async fn recovery_rerun_after_an_interrupted_finalize_writes_nothing() {
+    let db = Database::new(MemDatabase::new(), ModuleDecoderRegistry::default());
+    let entries = vec![recovered_entry(0), recovered_entry(1)];
+
+    assert!(store_recovered_peg_in_indexes(&db, entries.clone(), TweakIdx(2)).await);
+    assert!(!store_recovered_peg_in_indexes(&db, entries, TweakIdx(2)).await);
+
+    let mut dbtx = db.begin_transaction_nc().await;
+    assert_eq!(
+        dbtx.get_value(&NextPegInTweakIndexKey).await,
+        Some(TweakIdx(2))
+    );
+    assert_eq!(dbtx.get_value(&RecoveryFinalizedKey).await, Some(true));
+    assert!(recovery_already_finalized(&db).await);
 }
