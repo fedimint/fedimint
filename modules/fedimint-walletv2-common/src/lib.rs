@@ -21,16 +21,19 @@ use fedimint_core::{
 };
 use miniscript::descriptor::Wsh;
 use secp256k1::ecdsa::Signature;
-use secp256k1::{PublicKey, Scalar, XOnlyPublicKey};
+use secp256k1::{PublicKey, Scalar, XOnlyPublicKey, schnorr};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::taproot::frost::{FrostSignatureShares, FrostSigningCommitments};
+
 pub mod config;
 pub mod endpoint_constants;
+pub mod taproot;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("walletv2");
 
-pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(1, 0);
+pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(1, 1);
 
 /// Number of confirmations required for a transaction to be considered as
 /// final by the federation. The block that mines the transaction does
@@ -242,6 +245,10 @@ pub enum WalletConsensusItem {
     BlockCount(u64),
     Feerate(Option<u64>),
     Signatures(Txid, Vec<Signature>),
+    SchnorrSignatures(Txid, Vec<schnorr::Signature>),
+    FrostSigningCommitments(Box<FrostSigningCommitments>),
+    FrostSignatureShare(Txid, u32, FrostSignatureShares),
+    FrostAdvanceVote(Txid, u32),
     #[encodable_default]
     Default {
         variant: u64,
@@ -260,6 +267,18 @@ impl std::fmt::Display for WalletConsensusItem {
             }
             WalletConsensusItem::Signatures(..) => {
                 write!(f, "Wallet Signatures")
+            }
+            WalletConsensusItem::SchnorrSignatures(..) => {
+                write!(f, "Wallet Schnorr Signatures")
+            }
+            WalletConsensusItem::FrostSigningCommitments(..) => {
+                write!(f, "Frost Signing Commitments")
+            }
+            WalletConsensusItem::FrostSignatureShare(..) => {
+                write!(f, "Frost Signature Shares")
+            }
+            WalletConsensusItem::FrostAdvanceVote(txid, attempt) => {
+                write!(f, "Frost Advance Vote ({txid}, attempt {attempt})")
             }
             WalletConsensusItem::Default { variant, .. } => {
                 write!(f, "Unknown Wallet CI variant={variant}")
