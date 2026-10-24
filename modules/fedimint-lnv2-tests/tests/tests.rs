@@ -598,6 +598,21 @@ async fn claiming_outgoing_contract_triggers_success() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Selecting a receive gateway picks the online gateway that accepts receives.
+#[tokio::test(flavor = "multi_thread")]
+async fn select_receive_gateway_picks_receive_enabled_gateway() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+
+    let (gateway, routing_info) = lightning.select_receive_gateway().await?;
+    assert_eq!(gateway, mock::gateway());
+    assert!(routing_info.receive_enabled);
+
+    Ok(())
+}
+
 /// A gateway that has turned receives off for the federation says so in its
 /// routing info. The client refuses to request an invoice from it, while it
 /// can still send through it.
@@ -643,6 +658,11 @@ async fn receive_refuses_a_gateway_with_receives_turned_off() -> anyhow::Result<
         Some(ReceiveWithTermsError::Receive(
             ReceiveError::ReceiveDisabled
         ))
+    );
+
+    assert_eq!(
+        lightning.select_receive_gateway().await.err(),
+        Some(SelectGatewayError::NoGatewayAcceptsReceives)
     );
 
     // Sending is unaffected by the receive policy.
