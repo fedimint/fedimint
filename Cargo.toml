@@ -254,7 +254,6 @@ hkdf = { package = "fedimint-hkdf", path = "./crypto/hkdf", version = "=0.14.0-a
 honggfuzz = { version = "=0.5.60", default-features = false } # needs to be pinned to the same version `cargo-fuzz` binary uses
 hyper = "1.9"
 imbl = "7.0.2"
-impl-tools = "0.10.3"
 iroh = { version = "=0.35.0", default-features = false }
 iroh-base = { version = "=0.35.0", default-features = false }
 iroh-mainline-address-lookup = "0.4.0"
