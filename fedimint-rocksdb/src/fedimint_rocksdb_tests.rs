@@ -6,6 +6,8 @@ use futures::StreamExt;
 
 use super::{RocksDb, RocksDbReadOnly, next_prefix};
 
+mod no_previous;
+
 #[tokio::test(flavor = "multi_thread")]
 async fn owned_iterator_bytes() {
     use fedimint_core::db::{IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction};

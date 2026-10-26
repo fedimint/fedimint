@@ -745,13 +745,15 @@ impl ServerModule for Mint {
             .collect::<Vec<_>>()
             .await;
 
+        // The stream above has decoded every previous value before any removal.
+        // Do not reread/decode them; both total keys are also removed here.
         for key in remove_audit_keys {
-            dbtx.remove_entry(&key).await;
+            dbtx.remove_entry_no_previous(&key).await;
         }
 
-        dbtx.insert_entry(&MintAuditItemKey::IssuanceTotal, &issuances)
+        dbtx.insert_entry_no_previous(&MintAuditItemKey::IssuanceTotal, &issuances)
             .await;
-        dbtx.insert_entry(&MintAuditItemKey::RedemptionTotal, &redemptions)
+        dbtx.insert_entry_no_previous(&MintAuditItemKey::RedemptionTotal, &redemptions)
             .await;
 
         audit

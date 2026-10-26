@@ -824,6 +824,20 @@ impl<Inner> IDatabaseTransactionOpsCore for PrefixDatabaseTransaction<Inner>
 where
     Inner: IDatabaseTransactionOpsCore,
 {
+    async fn raw_insert_bytes_no_previous(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<()> {
+        let key = self.get_full_key(key);
+        self.inner.raw_insert_bytes_no_previous(&key, value).await
+    }
+
+    async fn raw_remove_entry_no_previous(&mut self, key: &[u8]) -> DatabaseResult<()> {
+        let key = self.get_full_key(key);
+        self.inner.raw_remove_entry_no_previous(&key).await
+    }
+
     async fn raw_insert_bytes(
         &mut self,
         key: &[u8],
@@ -899,8 +913,24 @@ pub trait IDatabaseTransactionOpsCore: MaybeSend {
     /// Get key value
     async fn raw_get_bytes(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>>;
 
+    /// Insert without returning the previous bytes. Backends may avoid reading
+    /// them, but must retain the same write-conflict tracking.
+    async fn raw_insert_bytes_no_previous(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<()> {
+        self.raw_insert_bytes(key, value).await.map(|_| ())
+    }
+
     /// Remove entry by `key`
     async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>>;
+
+    /// Remove without returning the previous bytes. Backends may avoid reading
+    /// them, but must retain the same write-conflict tracking.
+    async fn raw_remove_entry_no_previous(&mut self, key: &[u8]) -> DatabaseResult<()> {
+        self.raw_remove_entry(key).await.map(|_| ())
+    }
 
     /// Returns an stream of key-value pairs with keys that start with
     /// `key_prefix`, sorted by key.
@@ -926,6 +956,18 @@ impl<T> IDatabaseTransactionOpsCore for Box<T>
 where
     T: IDatabaseTransactionOpsCore + ?Sized,
 {
+    async fn raw_insert_bytes_no_previous(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<()> {
+        (**self).raw_insert_bytes_no_previous(key, value).await
+    }
+
+    async fn raw_remove_entry_no_previous(&mut self, key: &[u8]) -> DatabaseResult<()> {
+        (**self).raw_remove_entry_no_previous(key).await
+    }
+
     async fn raw_insert_bytes(
         &mut self,
         key: &[u8],
@@ -969,6 +1011,18 @@ impl<T> IDatabaseTransactionOpsCore for &mut T
 where
     T: IDatabaseTransactionOpsCore + ?Sized,
 {
+    async fn raw_insert_bytes_no_previous(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<()> {
+        (**self).raw_insert_bytes_no_previous(key, value).await
+    }
+
+    async fn raw_remove_entry_no_previous(&mut self, key: &[u8]) -> DatabaseResult<()> {
+        (**self).raw_remove_entry_no_previous(key).await
+    }
+
     async fn raw_insert_bytes(
         &mut self,
         key: &[u8],
@@ -1034,6 +1088,15 @@ pub trait IDatabaseTransactionOpsCoreTyped<'a> {
         K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
         K::Value: MaybeSend + MaybeSync;
 
+    /// Overwrite without returning or decoding the previous value.
+    ///
+    /// Unlike [`Self::insert_entry`], this does not validate existing bytes.
+    /// Do not use it when the previous value or its validity is a guard.
+    async fn insert_entry_no_previous<K>(&mut self, key: &K, value: &K::Value)
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync;
+
     async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value)
     where
         K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
@@ -1089,6 +1152,15 @@ pub trait IDatabaseTransactionOpsCoreTyped<'a> {
     where
         K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync;
 
+    /// Remove without returning or decoding the previous value.
+    ///
+    /// Unlike [`Self::remove_entry`], this does not validate existing bytes.
+    /// Do not use it when existence or validity of the previous value is a
+    /// guard.
+    async fn remove_entry_no_previous<K>(&mut self, key: &K)
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync;
+
     async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP)
     where
         KP: DatabaseLookup + MaybeSend + MaybeSync;
@@ -1127,6 +1199,16 @@ where
             .map(|value_bytes| {
                 decode_value_expect::<K::Value>(&value_bytes, self.decoders(), &key_bytes)
             })
+    }
+
+    async fn insert_entry_no_previous<K>(&mut self, key: &K, value: &K::Value)
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+        K::Value: MaybeSend + MaybeSync,
+    {
+        self.raw_insert_bytes_no_previous(&key.to_bytes(), &value.to_bytes())
+            .await
+            .expect("Unrecoverable error occurred while inserting entry into the database");
     }
 
     async fn insert_new_entry<K>(&mut self, key: &K, value: &K::Value)
@@ -1240,6 +1322,15 @@ where
                 decode_value_expect::<K::Value>(&value_bytes, self.decoders(), &key_bytes)
             })
     }
+    async fn remove_entry_no_previous<K>(&mut self, key: &K)
+    where
+        K: DatabaseKey + DatabaseRecord + MaybeSend + MaybeSync,
+    {
+        self.raw_remove_entry_no_previous(&key.to_bytes())
+            .await
+            .expect("Unrecoverable error occurred while removing entry from the database");
+    }
+
     async fn remove_by_prefix<KP>(&mut self, key_prefix: &KP)
     where
         KP: DatabaseLookup + MaybeSend + MaybeSync,
@@ -1364,6 +1455,28 @@ where
 
 #[apply(async_trait_maybe_send!)]
 impl<Tx: IRawDatabaseTransaction> IDatabaseTransactionOpsCore for BaseDatabaseTransaction<Tx> {
+    async fn raw_insert_bytes_no_previous(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<()> {
+        self.add_notification_key(key)?;
+        self.raw
+            .as_mut()
+            .ok_or(DatabaseError::TransactionConsumed)?
+            .raw_insert_bytes_no_previous(key, value)
+            .await
+    }
+
+    async fn raw_remove_entry_no_previous(&mut self, key: &[u8]) -> DatabaseResult<()> {
+        self.add_notification_key(key)?;
+        self.raw
+            .as_mut()
+            .ok_or(DatabaseError::TransactionConsumed)?
+            .raw_remove_entry_no_previous(key)
+            .await
+    }
+
     async fn raw_insert_bytes(
         &mut self,
         key: &[u8],
@@ -1877,6 +1990,19 @@ impl<Cap> IDatabaseTransactionOpsCore for DatabaseTransaction<'_, Cap>
 where
     Cap: Send,
 {
+    async fn raw_insert_bytes_no_previous(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<()> {
+        self.commit_tracker.has_writes = true;
+        self.tx.raw_insert_bytes_no_previous(key, value).await
+    }
+
+    async fn raw_remove_entry_no_previous(&mut self, key: &[u8]) -> DatabaseResult<()> {
+        self.tx.raw_remove_entry_no_previous(key).await
+    }
+
     async fn raw_insert_bytes(
         &mut self,
         key: &[u8],
