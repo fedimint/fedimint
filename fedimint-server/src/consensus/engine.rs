@@ -439,7 +439,7 @@ impl ConsensusEngine {
                                     if let Ok(()) = self.process_consensus_item(
                                         session_index,
                                         item_index,
-                                        item.clone(),
+                                        item,
                                         ordered_unit.creator
                                     ).await {
                                         item_index += 1;
@@ -1009,7 +1009,7 @@ impl ConsensusEngine {
         }
 
         if let Err(err) = self
-            .process_consensus_item_with_db_transaction(&mut dbtx.to_ref_nc(), item.clone(), peer)
+            .process_consensus_item_with_db_transaction(&mut dbtx.to_ref_nc(), item, peer)
             .await
         {
             // Rejected items are very common, so only trace level
@@ -1096,7 +1096,7 @@ impl ConsensusEngine {
     async fn process_consensus_item_with_db_transaction(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
-        consensus_item: ConsensusItem,
+        consensus_item: &ConsensusItem,
         peer_id: PeerId,
     ) -> anyhow::Result<()> {
         // We rely on decoding rejecting any unknown module instance ids to avoid
@@ -1111,7 +1111,7 @@ impl ConsensusEngine {
 
                 self.modules
                     .get_expect(instance_id)
-                    .process_consensus_item(module_dbtx, &module_item, peer_id)
+                    .process_consensus_item(module_dbtx, module_item, peer_id)
                     .await
             }
             ConsensusItem::Transaction(transaction) => {
@@ -1138,7 +1138,7 @@ impl ConsensusEngine {
                 process_transaction_with_dbtx(
                     self.modules.clone(),
                     dbtx,
-                    &transaction,
+                    transaction,
                     self.cfg.consensus.version,
                     TxProcessingMode::Consensus,
                 )
