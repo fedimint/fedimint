@@ -73,15 +73,17 @@ use crate::metrics::APP_START_TS;
 /// Time we will wait before forcefully shutting down tasks
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Exit code of a fedimintd that stopped because a shutdown requested through
-/// `shutdown_after_current_session` took effect at a session boundary: its
-/// last session completed and no later session began, so it signed no units
-/// of an unfinished session.
+/// Exit code of a fedimintd whose consensus stopped because a shutdown
+/// requested through `shutdown_after_current_session` took effect at a
+/// session boundary: its last session completed and it started no later
+/// session, so it signed no units of an unfinished session.
 ///
-/// Only that path exits with this code. Every other exit, including a
-/// shutdown scheduled for a given session through `shutdown`, a session
-/// timeout, a failed main task, a panic, a signal, or a failed task shutdown,
-/// exits with a different code or by signal.
+/// The code depends only on why consensus stopped. Tasks that are still
+/// running when the task group's join times out end with the process; none
+/// of them can start a session. Every other stop, including a shutdown
+/// scheduled for a given session through `shutdown`, a session timeout, a
+/// failed main task, a panic of the main task, or a signal, exits with a
+/// different code or by signal.
 pub const SESSION_BOUNDARY_EXIT_CODE: i32 = 3;
 
 #[derive(Parser)]
@@ -563,8 +565,7 @@ pub async fn run(
 
     debug!(target: LOG_CORE, "Terminating main task");
 
-    let joined = root_task_group.join_all(Some(SHUTDOWN_TIMEOUT)).await;
-    if let Err(err) = &joined {
+    if let Err(err) = root_task_group.join_all(Some(SHUTDOWN_TIMEOUT)).await {
         error!(target: LOG_CORE, err = %err.fmt_compact(), "Error while shutting down task group");
     }
 
@@ -574,7 +575,7 @@ pub async fn run(
 
     drop(timing_total_runtime);
 
-    if joined.is_ok() && stopped_at_session_boundary.load(Ordering::SeqCst) {
+    if stopped_at_session_boundary.load(Ordering::SeqCst) {
         std::process::exit(SESSION_BOUNDARY_EXIT_CODE);
     }
     std::process::exit(-1);
