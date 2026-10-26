@@ -33,9 +33,10 @@ use fedimint_core::endpoint_constants::{
     GUARDIAN_METADATA_ENDPOINT, INVITE_CODE_ENDPOINT, P2P_CONNECTION_STATUS_ENDPOINT,
     PEER_AVAILABILITY_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
     SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT,
-    SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT,
-    SIGN_GUARDIAN_METADATA_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_GUARDIAN_METADATA_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    SETUP_STATUS_ENDPOINT, SHUTDOWN_AFTER_CURRENT_SESSION_ENDPOINT, SHUTDOWN_ENDPOINT,
+    SIGN_API_ANNOUNCEMENT_ENDPOINT, SIGN_GUARDIAN_METADATA_ENDPOINT, STATUS_ENDPOINT,
+    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_GUARDIAN_METADATA_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -73,7 +74,9 @@ use crate::config::{ServerConfig, legacy_consensus_config_hash};
 use crate::consensus::db::{
     AcceptedItemPrefix, AcceptedTransactionKey, PeerAvailabilityKey, SignedSessionOutcomeKey,
 };
-use crate::consensus::engine::get_finished_session_count_static;
+use crate::consensus::engine::{
+    ScheduledShutdown, ShutdownRequest, get_finished_session_count_static,
+};
 use crate::consensus::session_cache::OutcomeFormat;
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
@@ -165,8 +168,8 @@ pub struct ConsensusApi {
     pub force_api_secret: Option<String>,
     /// For sending API events to consensus such as transactions
     pub submission_sender: async_channel::Sender<ConsensusItem>,
-    pub shutdown_receiver: Receiver<Option<u64>>,
-    pub shutdown_sender: Sender<Option<u64>>,
+    pub shutdown_receiver: Receiver<Option<ScheduledShutdown>>,
+    pub shutdown_sender: Sender<Option<ScheduledShutdown>>,
     pub ord_latency_receiver: watch::Receiver<Option<Duration>>,
     /// Notified whenever consensus accepts an item.
     pub accepted_item_receiver: watch::Receiver<()>,
@@ -421,7 +424,10 @@ impl ConsensusApi {
 
     pub fn get_federation_status(&self) -> ApiResult<LegacyFederationStatus> {
         let session_count = self.session_count();
-        let scheduled_shutdown = self.shutdown_receiver.borrow().to_owned();
+        let scheduled_shutdown = self
+            .shutdown_receiver
+            .borrow()
+            .map(|scheduled| scheduled.session);
 
         let status_by_peer = self
             .p2p_status_receivers
@@ -462,7 +468,27 @@ impl ConsensusApi {
     }
 
     fn shutdown(&self, index: Option<u64>) {
-        self.shutdown_sender.send_replace(index);
+        self.shutdown_sender
+            .send_replace(index.map(|session| ScheduledShutdown {
+                session,
+                request: ShutdownRequest::AtSession,
+            }));
+    }
+
+    /// Schedules a shutdown for the session that is running now. The
+    /// consensus loop shuts down at the first session boundary at or after
+    /// the scheduled session, so a session that completes while this request
+    /// is handled defers the shutdown to the end of the next one instead of
+    /// cancelling it. Repeating the request never moves a shutdown that is
+    /// already due by then to a later session.
+    ///
+    /// Unlike `shutdown`, the resulting stop is reported as
+    /// [`ShutdownRequest::AfterCurrentSession`], so the process running the
+    /// server can tell it apart from a shutdown scheduled for a given session.
+    fn shutdown_after_current_session(&self) {
+        let current_session = self.session_count();
+        self.shutdown_sender
+            .send_if_modified(|scheduled| schedule_shutdown_after(scheduled, current_session));
     }
 
     async fn get_federation_audit(&self) -> ApiResult<AuditSummary> {
@@ -1126,6 +1152,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             }
         },
         admin_api_endpoint! {
+            SHUTDOWN_AFTER_CURRENT_SESSION_ENDPOINT,
+            ApiVersion::new(0, 10),
+            async |fedimint: &ConsensusApi, context, _v: ()| -> () {
+                fedimint.shutdown_after_current_session();
+                Ok(())
+            }
+        },
+        admin_api_endpoint! {
             AUDIT_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, context, _v: ()| -> AuditSummary {
@@ -1272,6 +1306,27 @@ pub(crate) async fn backup_statistics_static(
     }
 
     backup_stats
+}
+
+/// Schedules a shutdown after `current_session`, keeping the session of a
+/// shutdown that is already due by then. Returns whether the schedule changed.
+fn schedule_shutdown_after(
+    scheduled: &mut Option<ScheduledShutdown>,
+    current_session: u64,
+) -> bool {
+    let session = scheduled
+        .map(|scheduled| scheduled.session)
+        .filter(|session| *session <= current_session)
+        .unwrap_or(current_session);
+    let after_current_session = Some(ScheduledShutdown {
+        session,
+        request: ShutdownRequest::AfterCurrentSession,
+    });
+    if *scheduled == after_current_session {
+        return false;
+    }
+    *scheduled = after_current_session;
+    true
 }
 
 #[cfg(test)]

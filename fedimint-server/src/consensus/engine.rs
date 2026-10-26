@@ -69,6 +69,35 @@ const DB_CHECKPOINTS_DIR: &str = "db_checkpoints";
 /// than a couple of these means something is wrong beyond a stale snapshot.
 const MAX_ITEM_PROCESSING_ATTEMPTS: usize = 10;
 
+/// How an admin scheduled a shutdown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShutdownRequest {
+    /// `shutdown` for a given session.
+    AtSession,
+    /// `shutdown_after_current_session`.
+    AfterCurrentSession,
+}
+
+/// A shutdown scheduled through the admin API.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScheduledShutdown {
+    /// Consensus shuts down at the first session boundary at or after the
+    /// completion of this session.
+    pub session: u64,
+    pub request: ShutdownRequest,
+}
+
+/// Why the consensus loop returned without an error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConsensusStop {
+    /// The task group is shutting down; the current session may be
+    /// unfinished.
+    TaskShutdown,
+    /// A scheduled shutdown took effect after its session completed, so this
+    /// guardian holds no units of an unfinished session.
+    ScheduledShutdown(ShutdownRequest),
+}
+
 /// Runs the main server consensus loop
 pub struct ConsensusEngine {
     pub modules: ServerModuleRegistry,
@@ -76,7 +105,7 @@ pub struct ConsensusEngine {
     pub federation_api: DynGlobalApi,
     pub cfg: ServerConfig,
     pub submission_receiver: Receiver<ConsensusItem>,
-    pub shutdown_receiver: watch::Receiver<Option<u64>>,
+    pub shutdown_receiver: watch::Receiver<Option<ScheduledShutdown>>,
     pub connections: DynP2PConnections<P2PMessage>,
     pub ci_status_senders: BTreeMap<PeerId, watch::Sender<Option<u64>>>,
     pub ord_latency_sender: watch::Sender<Option<Duration>>,
@@ -101,7 +130,7 @@ impl ConsensusEngine {
     }
 
     #[instrument(target = LOG_CONSENSUS, name = "run", skip_all, fields(id=%self.cfg.local.identity))]
-    pub async fn run(self) -> anyhow::Result<()> {
+    pub async fn run(self) -> anyhow::Result<ConsensusStop> {
         if self.num_peers().total() == 1 {
             self.run_single_guardian(self.task_group.make_handle())
                 .await
@@ -110,7 +139,10 @@ impl ConsensusEngine {
         }
     }
 
-    pub async fn run_single_guardian(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
+    pub async fn run_single_guardian(
+        &self,
+        task_handle: TaskHandle,
+    ) -> anyhow::Result<ConsensusStop> {
         assert_eq!(self.num_peers(), NumPeers::from(1));
 
         self.initialize_checkpoint_directory(self.get_finished_session_count().await)?;
@@ -160,17 +192,18 @@ impl ConsensusEngine {
 
             info!(target: LOG_CONSENSUS, "Session {session_index} completed");
 
-            if Some(session_index) == self.shutdown_receiver.borrow().to_owned() {
-                break;
+            let due = due_shutdown(*self.shutdown_receiver.borrow(), session_index);
+            if let Some(request) = due {
+                return Ok(ConsensusStop::ScheduledShutdown(request));
             }
         }
 
         info!(target: LOG_CONSENSUS, "Consensus task shut down");
 
-        Ok(())
+        Ok(ConsensusStop::TaskShutdown)
     }
 
-    pub async fn run_consensus(&self, task_handle: TaskHandle) -> anyhow::Result<()> {
+    pub async fn run_consensus(&self, task_handle: TaskHandle) -> anyhow::Result<ConsensusStop> {
         // We need four peers to run the atomic broadcast
         assert!(self.num_peers().total() >= 4);
 
@@ -203,23 +236,24 @@ impl ConsensusEngine {
             .context("Consensus session timed out, exiting...")?;
 
             if session.is_none() {
-                return Ok(());
+                return Ok(ConsensusStop::TaskShutdown);
             }
 
             info!(target: LOG_CONSENSUS, ?session_index, "Completed consensus session");
 
-            if Some(session_index) == self.shutdown_receiver.borrow().to_owned() {
+            let due = due_shutdown(*self.shutdown_receiver.borrow(), session_index);
+            if let Some(request) = due {
                 info!(target: LOG_CONSENSUS, "Initiating shutdown, waiting for peers to complete the session...");
 
                 sleep(Duration::from_mins(1)).await;
 
-                break;
+                return Ok(ConsensusStop::ScheduledShutdown(request));
             }
         }
 
         info!(target: LOG_CONSENSUS, "Consensus task shut down");
 
-        Ok(())
+        Ok(ConsensusStop::TaskShutdown)
     }
 
     pub async fn run_session(
@@ -1210,6 +1244,19 @@ impl ConsensusEngine {
     }
 }
 
+/// The request of a shutdown that takes effect now that `completed_session`
+/// has completed: at the first session boundary at or after the scheduled
+/// session, so a schedule that arrives after its session completed still
+/// stops at the next boundary rather than never.
+fn due_shutdown(
+    scheduled: Option<ScheduledShutdown>,
+    completed_session: u64,
+) -> Option<ShutdownRequest> {
+    scheduled
+        .filter(|scheduled| scheduled.session <= completed_session)
+        .map(|scheduled| scheduled.request)
+}
+
 pub async fn get_finished_session_count_static(dbtx: &mut DatabaseTransaction<'_>) -> u64 {
     dbtx.find_by_prefix_sorted_descending(&SignedSessionOutcomePrefix)
         .await
@@ -1217,3 +1264,6 @@ pub async fn get_finished_session_count_static(dbtx: &mut DatabaseTransaction<'_
         .await
         .map_or(0, |entry| (entry.0.0) + 1)
 }
+
+#[cfg(test)]
+mod tests;
