@@ -46,6 +46,18 @@ You can create a Fedimint in two ways:
 2. **Set Passwords:**
 	Each guardian sets two environment variables before starting fedimintd: `FM_PASSWORD_UI` (gates the admin UI login form) and `FM_PASSWORD_API` (gates admin RPCs on the public WS/iroh API). They can be the same value. Either is optional: unset `FM_PASSWORD_UI` serves the UI without a login form (only safe when `FM_BIND_UI` stays on a trusted interface — the default `127.0.0.1`), and unset `FM_PASSWORD_API` makes admin RPCs return 401 unconditionally. `FM_PASSWORD_UI` falls back to a `password.private` file in the data dir for backwards compatibility; `FM_PASSWORD_API` never does, since the public API is always network-reachable and must be enabled explicitly.
 3. **Generate Setup Code:**
+	Prefer `--password-ui-file /path/to/ui-secret` and `--password-api-file /path/to/api-secret`
+	to supplying passwords in process arguments. Unset the corresponding `FM_PASSWORD_UI`
+	or `FM_PASSWORD_API` when using a file: supplying both sources is an error.
+	`--force-api-secrets-file` accepts the same comma-separated list as
+	`FM_FORCE_API_SECRETS`, and `--bitcoind-password-file` is an alias for the existing
+	`--bitcoind-url-password-file`. Direct secret flags remain supported but are discouraged.
+	Secret files must be UTF-8, at most 1 MiB, and readable only by the operator.
+	One trailing LF or CRLF is removed; other whitespace is preserved, except that
+	the existing bitcoind password-file option continues trimming surrounding whitespace.
+	Daemon secret files do not accept `-` (stdin). Explicit file read errors stop startup;
+	they do not fall back to another password source.
+
 	After logging in with the password, a unique setup code is generated for each guardian.
 4. **Exchange Setup Codes:**
 	All guardians must share their setup codes with each other (every guardian needs every other guardian’s code).
