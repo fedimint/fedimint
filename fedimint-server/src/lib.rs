@@ -33,6 +33,7 @@ use bitcoin::hashes::hex::FromHex as _;
 use config::ServerConfig;
 use config::io::read_server_config;
 pub use connection_limits::ConnectionLimits;
+pub use consensus::engine::{ConsensusStop, ShutdownRequest};
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
@@ -125,7 +126,7 @@ pub async fn run(
     session_timeout: Duration,
     p2p_max_connection_age: Option<Duration>,
     iroh_api_limits: ConnectionLimits,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<ConsensusStop> {
     run_with_iroh_p2p_relays(
         data_dir,
         auth_ui,
@@ -170,7 +171,7 @@ pub async fn run_with_iroh_p2p_relays(
     p2p_max_connection_age: Option<Duration>,
     iroh_api_limits: ConnectionLimits,
     iroh_p2p_relays: Vec<SafeUrl>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<ConsensusStop> {
     run_with_iroh_p2p_relays_and_next_api(
         data_dir,
         auth_ui,
@@ -217,7 +218,7 @@ pub async fn run_with_iroh_p2p_relays_and_next_api(
     iroh_api_limits: ConnectionLimits,
     iroh_p2p_relays: Vec<SafeUrl>,
     iroh_next_api_settings: Option<IrohNextApiSettings>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<ConsensusStop> {
     let (cfg, connections, p2p_status_receivers) = match get_config(&data_dir)? {
         Some(cfg) => {
             let connector = if cfg.consensus.iroh_endpoints.is_empty() {
@@ -295,7 +296,7 @@ pub async fn run_with_iroh_p2p_relays_and_next_api(
 
     let connectors = ConnectorRegistry::build_from_server_defaults().bind().await;
 
-    Box::pin(consensus::run(
+    let stop = Box::pin(consensus::run(
         connectors,
         auth_ui,
         auth_api,
@@ -326,7 +327,7 @@ pub async fn run_with_iroh_p2p_relays_and_next_api(
 
     task_group.shutdown();
 
-    Ok(())
+    Ok(stop)
 }
 
 async fn update_server_info_version_dbtx(

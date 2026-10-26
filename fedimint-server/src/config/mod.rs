@@ -316,8 +316,11 @@ impl ServerConfig {
     pub fn supported_api_versions() -> SupportedCoreApiVersions {
         SupportedCoreApiVersions {
             core_consensus: CORE_CONSENSUS_VERSION,
-            api: MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 9 }])
-                .expect("not version conflicts"),
+            api: MultiApiVersion::try_from_iter([ApiVersion {
+                major: 0,
+                minor: 10,
+            }])
+            .expect("not version conflicts"),
         }
     }
     /// Creates a new config from the results of a trusted or distributed key
