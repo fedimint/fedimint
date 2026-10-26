@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["DB_CHECKPOINTS_DIR","MAX_ITEM_PROCESSING_ATTEMPTS"],"fn":["get_finished_session_count_static"],"struct":["ConsensusEngine"]};
+window.SIDEBAR_ITEMS = {"constant":["DB_CHECKPOINTS_DIR","MAX_ITEM_PROCESSING_ATTEMPTS"],"enum":["ConsensusStop","ShutdownRequest"],"fn":["due_shutdown","get_finished_session_count_static"],"struct":["ConsensusEngine","ScheduledShutdown"]};

@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["SHUTDOWN_TIMEOUT"],"fn":["default_modules","run"],"mod":["metrics"],"struct":["ServerOpts"]};
+window.SIDEBAR_ITEMS = {"constant":["SESSION_BOUNDARY_EXIT_CODE","SHUTDOWN_TIMEOUT"],"fn":["default_modules","run"],"mod":["metrics"],"struct":["ServerOpts"]};
