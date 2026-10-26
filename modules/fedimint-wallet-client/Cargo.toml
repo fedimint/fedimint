@@ -44,5 +44,8 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 
+[dev-dependencies]
+fedimint-connectors = { workspace = true }
+
 [lints]
 workspace = true
