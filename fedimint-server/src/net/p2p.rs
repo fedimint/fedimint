@@ -280,6 +280,11 @@ const METADATA_REFRESH_INTERVAL: Duration = Duration::from_secs(10);
 /// in #9121.
 const RECEIVE_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Upper bound for sending a single message. P2P messages are small compared
+/// to what a live connection moves in this time, so a send that takes longer
+/// means the peer no longer reads the connection.
+const SEND_TIMEOUT: Duration = Duration::from_mins(1);
+
 /// Why the send half of the connection stopped.
 enum SendHalt<M> {
     /// The state machine is shutting down.
@@ -430,9 +435,9 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
     /// Drains the outgoing queue onto the connection. Replacement connections
     /// and the max-age deadline are observed here, between sends, so they can
     /// never cancel the non-cancel-safe `send` and silently drop a message
-    /// that the DKG would not resend. Only a failure of the connection itself
-    /// can still lose the message in flight; the networking layer is
-    /// unreliable by design.
+    /// that the DKG would not resend. Only a failure of the connection itself,
+    /// including a send exceeding [`SEND_TIMEOUT`], can still lose the message
+    /// in flight; the networking layer is unreliable by design.
     async fn send_loop(
         connection: &DynP2PConnection<M>,
         outgoing_receiver: &Receiver<M>,
@@ -465,8 +470,19 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
                 .with_label_values(&[our_id_str, peer_id_str, "outgoing"])
                 .inc();
 
-            if let Err(e) = connection.send(message).await {
-                return SendHalt::Failed(e);
+            // A peer that stops reading this connection, for example because
+            // it moved to a newer connection to us, parks the send for good
+            // while keepalives hold the connection open. Bound it, so the link
+            // is re-established instead of looking connected while every
+            // further message is dropped.
+            match timeout(SEND_TIMEOUT, connection.send(message)).await {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => return SendHalt::Failed(e),
+                Err(_) => {
+                    return SendHalt::Failed(anyhow!(
+                        "Sending a message did not complete within {SEND_TIMEOUT:?}"
+                    ));
+                }
             }
         }
     }
