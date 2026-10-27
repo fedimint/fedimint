@@ -21,12 +21,15 @@ use fedimint_core::{
 };
 use miniscript::descriptor::Wsh;
 use secp256k1::ecdsa::Signature;
-use secp256k1::{PublicKey, Scalar, XOnlyPublicKey};
+use secp256k1::{PublicKey, Scalar, SecretKey, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub mod config;
 pub mod endpoint_constants;
+
+#[cfg(test)]
+mod tests;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("walletv2");
 
@@ -60,10 +63,27 @@ pub fn sleep_duration() -> Duration {
 }
 
 pub fn descriptor(pks: &BTreeMap<PeerId, PublicKey>, tweak: &sha256::Hash) -> Wsh<PublicKey> {
+    let scalar = Scalar::from_be_bytes(tweak.to_byte_array()).expect("Hash is within field order");
+    // Every guardian key is tweaked by the same point t*G. Compute it once
+    // instead of repeating the scalar multiplication for each guardian on every
+    // candidate in the client's probabilistic address search.
+    // Zero is a valid additive tweak, but cannot be represented as a public key.
+    let tweak_pk = (scalar != Scalar::ZERO).then(|| {
+        PublicKey::from_secret_key(
+            secp256k1::SECP256K1,
+            &SecretKey::from_slice(&tweak.to_byte_array()).expect("Nonzero scalar is a valid key"),
+        )
+    });
+
     Wsh::new_sortedmulti(
         pks.to_num_peers().threshold(),
         pks.values()
-            .map(|pk| tweak_public_key(pk, tweak))
+            .map(|pk| {
+                tweak_pk.map_or(*pk, |tweak_pk| {
+                    pk.combine(&tweak_pk)
+                        .expect("Failed to tweak bitcoin public key")
+                })
+            })
             .collect::<Vec<PublicKey>>(),
     )
     .expect("Failed to construct Descriptor")
