@@ -33,6 +33,7 @@ use fedimint_gateway_common::{
     WITHDRAW_TO_ONCHAIN_ENDPOINT, WithdrawPayload, WithdrawToOnchainPayload,
 };
 use fedimint_gateway_ui::IAdminGateway;
+use fedimint_lightning::ldk::MnemonicSource;
 use fedimint_ln_common::gateway_endpoint_constants::{
     GET_GATEWAY_ID_ENDPOINT, PAY_INVOICE_ENDPOINT,
 };
@@ -83,7 +84,7 @@ const LIQUIDITY_MANAGER_ROUTES: [&str; 22] = [
 /// Creates the webserver's routes and spawns the webserver in a separate task.
 pub async fn run_webserver(
     gateway: Arc<Gateway>,
-    mut mnemonic_receiver: tokio::sync::broadcast::Receiver<()>,
+    mut mnemonic_receiver: tokio::sync::broadcast::Receiver<MnemonicSource>,
 ) -> anyhow::Result<()> {
     let task_group = gateway.task_group.clone();
     let mut handlers = Handlers::new();
