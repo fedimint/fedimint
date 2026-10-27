@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["BitcoindClient"]};
+window.SIDEBAR_ITEMS = {"fn":["ensure_wallet_loaded"],"struct":["BitcoindClient"]};
