@@ -1,7 +1,9 @@
+#[cfg(test)]
+mod tests;
+
 use bitcoin::{Address, ScriptBuf, Txid};
 use bitcoincore_rpc::json::ImportDescriptors;
-use bitcoincore_rpc::jsonrpc::error::Error as JsonRpcError;
-use bitcoincore_rpc::{Auth, Error as RpcError, RpcApi};
+use bitcoincore_rpc::{Auth, RpcApi};
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::block_in_place;
@@ -12,6 +14,30 @@ use fedimint_logging::LOG_BITCOIND_CORE;
 use tracing::{debug, warn};
 
 use crate::{BitcoinRpcError, BlockchainInfo, IBitcoindRpc};
+
+fn ensure_wallet_loaded<E>(
+    wallet_name: &str,
+    list_loaded_wallets: impl FnOnce() -> Result<Vec<String>, E>,
+    list_wallet_dir: impl FnOnce() -> Result<Vec<String>, E>,
+    load_wallet: impl FnOnce() -> Result<(), E>,
+    create_wallet: impl FnOnce() -> Result<(), E>,
+) -> Result<(), E> {
+    if list_loaded_wallets()?
+        .iter()
+        .any(|loaded_wallet| loaded_wallet == wallet_name)
+    {
+        return Ok(());
+    }
+
+    if list_wallet_dir()?
+        .iter()
+        .any(|wallet| wallet == wallet_name)
+    {
+        load_wallet()
+    } else {
+        create_wallet()
+    }
+}
 
 #[derive(Debug)]
 pub struct BitcoindClient {
@@ -48,7 +74,7 @@ impl BitcoindClient {
                 url: default_url_str.clone(),
                 source: Box::new(source),
             })?;
-        Self::create_watch_only_wallet(&default_client, wallet_name)?;
+        Self::load_or_create_watch_only_wallet(&default_client, wallet_name)?;
 
         let wallet_url_str = format!("{url_str}/wallet/{wallet_name}");
         let client = ::bitcoincore_rpc::Client::new(&wallet_url_str, auth).map_err(|source| {
@@ -60,22 +86,24 @@ impl BitcoindClient {
         Ok(Self { client, network })
     }
 
-    fn create_watch_only_wallet(
+    fn load_or_create_watch_only_wallet(
         client: &::bitcoincore_rpc::Client,
         wallet_name: &str,
     ) -> Result<(), BitcoinRpcError> {
-        let create_wallet = block_in_place(|| {
-            client.create_wallet(wallet_name, Some(true), Some(true), None, None)
-        });
-
-        match create_wallet {
-            Ok(_) => Ok(()),
-            Err(RpcError::JsonRpc(JsonRpcError::Rpc(rpc_err))) if rpc_err.code == -4 => {
-                // Wallet already exists → treat as success
-                Ok(())
-            }
-            Err(e) => Err(BitcoinRpcError::Backend(Box::new(e))),
-        }
+        block_in_place(|| {
+            ensure_wallet_loaded(
+                wallet_name,
+                || client.list_wallets(),
+                || client.list_wallet_dir(),
+                || client.load_wallet(wallet_name).map(drop),
+                || {
+                    client
+                        .create_wallet(wallet_name, Some(true), Some(true), None, None)
+                        .map(drop)
+                },
+            )
+        })
+        .map_err(|error| BitcoinRpcError::Backend(Box::new(error)))
     }
 }
 
