@@ -12,6 +12,7 @@ use fedimint_mint_client::{OOBNotes, SpendableNote};
 use serde::{Deserialize, Serialize};
 
 use crate::client::{ClientCmd, ModuleSelector};
+use crate::consensus::ItemTypeFilter;
 #[cfg(feature = "tor")]
 use crate::envs::FM_USE_TOR_ENV;
 use crate::envs::{
@@ -414,6 +415,93 @@ Examples:
         #[clap(subcommand)]
         visualize_type: VisualizeCmd,
     },
+    /// Inspect the federation's consensus history (read-only)
+    Consensus {
+        #[clap(subcommand)]
+        consensus_cmd: ConsensusCmd,
+    },
+}
+
+#[derive(Debug, Clone, Subcommand)]
+pub(crate) enum ConsensusCmd {
+    /// Print accepted consensus items one per line, following new sessions as
+    /// they are signed
+    #[command(after_long_help = r#"
+Each item line shows `<session>.<item>`, the proposing peer, the item type and
+a summary:
+
+  tx  <txid>  <input kinds> → <output kinds>   (`kind×N` for N items of a kind)
+  ci  <module kind>  <variant>  <summary>      (module consensus item)
+
+Modules the client has no decoder for are shown by kind (from the config) or
+as `unknown#<instance id>`. After each session's items a session line with
+item counts is printed. It shows when the session was signed if that happened
+while following, otherwise the approximate time guardians voted for (`~`).
+
+Hidden unless `--all` is given, as they make up most of every session:
+periodic guardian votes (`BlockCount`, `BlockCountVote`, `Feerate`,
+`UnixTimeVote`), `ModuleConsensusVersion` votes, unknown (`Default`) module
+item variants and unknown core consensus items.
+
+Filters can be combined, all of them have to match. Repeated `--module`,
+`--input` or `--output` flags match if any of their values matches. Module
+filters accept a module kind (e.g. `lnv2`) or a module instance id.
+
+Examples:
+
+  fedimint-cli dev consensus follow
+  fedimint-cli dev consensus follow --from 31000 --to 31010 --only tx
+  fedimint-cli dev consensus follow --pending --module lnv2
+  fedimint-cli dev consensus follow --output walletv2 --json
+"#)]
+    Follow(ConsensusFollowArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+#[allow(clippy::struct_excessive_bools)]
+pub(crate) struct ConsensusFollowArgs {
+    /// First session index to print [default: the last 3 signed sessions]
+    #[arg(long)]
+    pub from: Option<u64>,
+    /// Last session index to print (inclusive); waits for it to be signed if
+    /// necessary and exits afterwards
+    #[arg(long)]
+    pub to: Option<u64>,
+    /// Exit after printing the already signed sessions instead of following
+    /// new ones
+    #[arg(long, conflicts_with = "to")]
+    pub no_follow: bool,
+    /// Also print items of the session in progress as soon as one guardian
+    /// accepted them, before the session is signed (polls a single guardian,
+    /// rotating on errors)
+    #[arg(long)]
+    pub pending: bool,
+    /// Only print one type of item
+    #[arg(long, value_enum)]
+    pub only: Option<ItemTypeFilter>,
+    /// Only print module consensus items of this module and transactions
+    /// touching it (repeatable)
+    #[arg(long = "module", value_name = "KIND")]
+    pub modules: Vec<String>,
+    /// Only print transactions with at least one input of this module
+    /// (repeatable)
+    #[arg(long = "input", value_name = "KIND")]
+    pub inputs: Vec<String>,
+    /// Only print transactions with at least one output of this module
+    /// (repeatable)
+    #[arg(long = "output", value_name = "KIND")]
+    pub outputs: Vec<String>,
+    /// Also print items hidden by default (periodic votes, consensus version
+    /// votes, unknown variants)
+    #[arg(long)]
+    pub all: bool,
+    /// Print one JSON object per line instead of human readable lines
+    #[arg(long)]
+    pub json: bool,
+    /// Disable colors (also disabled if stdout is not a terminal or NO_COLOR
+    /// is set)
+    #[arg(long)]
+    pub no_color: bool,
 }
 
 #[derive(Debug, Clone, Subcommand)]
