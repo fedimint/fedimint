@@ -149,9 +149,15 @@ pub struct WithdrawPreviewResponse {
     pub address: String,
     pub peg_out_fees: PegOutFees,
     pub total_cost: Amount,
-    /// Estimated mint fees when withdrawing all. None for partial withdrawals.
+    /// Estimated federation fees (wallet output fee, mint input and change
+    /// fees, dust) on top of `peg_out_fees`. Always set when withdrawing all,
+    /// and for partial withdrawals on walletv2 federations.
     #[serde(default)]
     pub mint_fees: Option<Amount>,
+    /// True when `peg_out_fees` is a flat on-chain fee (walletv2) built via
+    /// `PegOutFees::from_amount`, so its fee rate and weight are not real.
+    #[serde(default)]
+    pub flat_peg_out_fee: bool,
 }
 
 /// Deprecated, unused, doesn't do anything

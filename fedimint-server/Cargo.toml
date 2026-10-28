@@ -74,6 +74,7 @@ z32 = { workspace = true }
 
 [dev-dependencies]
 test-log = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
 
 [build-dependencies]
 fedimint-build = { workspace = true }
