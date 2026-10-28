@@ -11,6 +11,13 @@ slow-timeout = { period = "30s", terminate-after = 4 }
 [profile.ci]
 slow-timeout = { period = "30s", terminate-after = 3 }
 
+# This integration test waits for a real 60-second slot, its 10-second
+# persistence tick, and an offline API query, in addition to fixture startup
+# (including contention for the port allocator). Leave scheduling headroom.
+[[profile.ci.overrides]]
+filter = 'package(fedimint-ln-tests) & test(=peer_availability_reports_the_offline_peer)'
+slow-timeout = { period = "30s", terminate-after = 6 }
+
 # ccov seems MUCH slower, especially in Nix sandbox
 # possibly due to writing to a shared tracing file(?)
 [profile.nix-ccov]

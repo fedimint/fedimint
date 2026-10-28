@@ -1542,22 +1542,33 @@ async fn peer_availability_reports_the_offline_peer() -> anyhow::Result<()> {
     let client = fed.new_client().await;
     let offline = PeerId::from(3);
 
-    // Right after startup the guardians' coverage differs by whole slots,
-    // which can exclude a report; wait until every peer has a merged value
-    let merged = retry(
-        "availability of every peer",
-        aggressive_backoff_long(),
+    // Availability needs a closed, real-time 60-second consensus slot and the
+    // next 10-second persistence tick. Poll only the online guardians while
+    // waiting: each merged query also waits for the offline peer and can return
+    // healthy reports sampled before the slot was persisted.
+    retry(
+        "availability reports from online guardians",
+        std::iter::repeat_n(Duration::from_millis(200), 450),
         || async {
-            let merged = client.peer_availability().await;
-            if merged.windows.first().is_none_or(|week| week.len() < 4) {
-                bail!("not every peer has enough usable reports yet: {merged:?}");
+            for peer in fed.online_peer_ids() {
+                let report = client.api().peer_availability(peer).await?;
+                if report
+                    .windows
+                    .first()
+                    .is_none_or(|week| week.coverage_bps == 0 || week.peers.len() < 4)
+                {
+                    bail!("guardian {peer} has no usable weekly report yet: {report:?}");
+                }
             }
-            Ok(merged)
+            Ok(())
         },
     )
     .await?;
 
+    // Exercise the real merged API, including its handling of the offline peer.
+    let merged = client.peer_availability().await;
     let week = &merged.windows[0];
+    assert_eq!(week.len(), 4, "{merged:?}");
     assert_eq!(week[&offline], 0, "{merged:?}");
     assert!(!merged.last_seen_secs.contains_key(&offline), "{merged:?}");
     for peer in fed.online_peer_ids() {
