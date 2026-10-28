@@ -357,58 +357,69 @@
 <a href=#357 id=357 data-nosnippet>357</a>            FetchKind::Background =&gt; backoff_util::background_backoff(),
 <a href=#358 id=358 data-nosnippet>358</a>        };
 <a href=#359 id=359 data-nosnippet>359</a>
-<a href=#360 id=360 data-nosnippet>360</a>        <span class="kw">let </span>maybe_meta_module_meta = get_meta_module_value(client_config, api, backoff)
-<a href=#361 id=361 data-nosnippet>361</a>            .<span class="kw">await
-<a href=#362 id=362 data-nosnippet>362</a>            </span>.map(|meta| {
-<a href=#363 id=363 data-nosnippet>363</a>                Result::&lt;<span class="kw">_</span>, MetaFetchError&gt;::Ok(MetaValues {
-<a href=#364 id=364 data-nosnippet>364</a>                    values: serde_json::from_slice(meta.value.as_slice())<span class="question-mark">?</span>,
-<a href=#365 id=365 data-nosnippet>365</a>                    revision: meta.revision,
-<a href=#366 id=366 data-nosnippet>366</a>                })
-<a href=#367 id=367 data-nosnippet>367</a>            })
-<a href=#368 id=368 data-nosnippet>368</a>            .transpose()<span class="question-mark">?</span>;
-<a href=#369 id=369 data-nosnippet>369</a>
-<a href=#370 id=370 data-nosnippet>370</a>        <span class="comment">// If we couldn't fetch valid meta values from the meta module for any reason,
-<a href=#371 id=371 data-nosnippet>371</a>        // fall back to the legacy meta source
-<a href=#372 id=372 data-nosnippet>372</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(maybe_meta_module_meta) = maybe_meta_module_meta {
-<a href=#373 id=373 data-nosnippet>373</a>            <span class="prelude-val">Ok</span>(maybe_meta_module_meta)
-<a href=#374 id=374 data-nosnippet>374</a>        } <span class="kw">else </span>{
-<a href=#375 id=375 data-nosnippet>375</a>            <span class="self">self</span>.legacy
-<a href=#376 id=376 data-nosnippet>376</a>                .fetch(client_config, api, fetch_kind, last_revision)
-<a href=#377 id=377 data-nosnippet>377</a>                .<span class="kw">await
-<a href=#378 id=378 data-nosnippet>378</a>        </span>}
-<a href=#379 id=379 data-nosnippet>379</a>    }
-<a href=#380 id=380 data-nosnippet>380</a>}
-<a href=#381 id=381 data-nosnippet>381</a>
-<a href=#382 id=382 data-nosnippet>382</a><span class="kw">async fn </span>get_meta_module_value(
-<a href=#383 id=383 data-nosnippet>383</a>    client_config: <span class="kw-2">&amp;</span>ClientConfig,
-<a href=#384 id=384 data-nosnippet>384</a>    api: <span class="kw-2">&amp;</span>DynGlobalApi,
-<a href=#385 id=385 data-nosnippet>385</a>    backoff: FibonacciBackoff,
-<a href=#386 id=386 data-nosnippet>386</a>) -&gt; <span class="prelude-ty">Option</span>&lt;MetaConsensusValue&gt; {
-<a href=#387 id=387 data-nosnippet>387</a>    <span class="kw">match </span>client_config.get_first_module_by_kind_cfg(KIND) {
-<a href=#388 id=388 data-nosnippet>388</a>        <span class="prelude-val">Ok</span>((instance_id, <span class="kw">_</span>)) =&gt; {
-<a href=#389 id=389 data-nosnippet>389</a>            <span class="kw">let </span>meta_api = api.with_module(instance_id);
-<a href=#390 id=390 data-nosnippet>390</a>
-<a href=#391 id=391 data-nosnippet>391</a>            <span class="kw">let </span>overrides_res = retry(<span class="string">"fetch_meta_values"</span>, backoff, || <span class="kw">async </span>{
-<a href=#392 id=392 data-nosnippet>392</a>                meta_api.get_consensus(DEFAULT_META_KEY).<span class="kw">await
-<a href=#393 id=393 data-nosnippet>393</a>            </span>})
-<a href=#394 id=394 data-nosnippet>394</a>            .<span class="kw">await</span>;
-<a href=#395 id=395 data-nosnippet>395</a>
-<a href=#396 id=396 data-nosnippet>396</a>            <span class="kw">match </span>overrides_res {
-<a href=#397 id=397 data-nosnippet>397</a>                <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(consensus)) =&gt; <span class="prelude-val">Some</span>(consensus),
-<a href=#398 id=398 data-nosnippet>398</a>                <span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) =&gt; {
-<a href=#399 id=399 data-nosnippet>399</a>                    <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_META, <span class="string">"Meta module returned no consensus value"</span>);
-<a href=#400 id=400 data-nosnippet>400</a>                    <span class="prelude-val">None
-<a href=#401 id=401 data-nosnippet>401</a>                </span>}
-<a href=#402 id=402 data-nosnippet>402</a>                <span class="prelude-val">Err</span>(e) =&gt; {
-<a href=#403 id=403 data-nosnippet>403</a>                    <span class="macro">warn!</span>(target: LOG_CLIENT_MODULE_META, <span class="string">"Failed to fetch meta module consensus value: {}"</span>, e);
-<a href=#404 id=404 data-nosnippet>404</a>                    <span class="prelude-val">None
-<a href=#405 id=405 data-nosnippet>405</a>                </span>}
-<a href=#406 id=406 data-nosnippet>406</a>            }
-<a href=#407 id=407 data-nosnippet>407</a>        }
-<a href=#408 id=408 data-nosnippet>408</a>        <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
-<a href=#409 id=409 data-nosnippet>409</a>    }
-<a href=#410 id=410 data-nosnippet>410</a>}
-<a href=#411 id=411 data-nosnippet>411</a>
-<a href=#412 id=412 data-nosnippet>412</a><span class="attr">#[cfg(test)]
-<a href=#413 id=413 data-nosnippet>413</a></span><span class="kw">mod </span>tests;
+<a href=#360 id=360 data-nosnippet>360</a>        <span class="kw">match </span>meta_module_source(
+<a href=#361 id=361 data-nosnippet>361</a>            get_meta_module_value(client_config, api, backoff).<span class="kw">await</span>,
+<a href=#362 id=362 data-nosnippet>362</a>            last_revision,
+<a href=#363 id=363 data-nosnippet>363</a>        ) {
+<a href=#364 id=364 data-nosnippet>364</a>            MetaModuleSource::Consensus(meta) =&gt; <span class="prelude-val">Ok</span>(MetaValues {
+<a href=#365 id=365 data-nosnippet>365</a>                values: serde_json::from_slice(meta.value.as_slice())<span class="question-mark">?</span>,
+<a href=#366 id=366 data-nosnippet>366</a>                revision: meta.revision,
+<a href=#367 id=367 data-nosnippet>367</a>            }),
+<a href=#368 id=368 data-nosnippet>368</a>            MetaModuleSource::Legacy =&gt; {
+<a href=#369 id=369 data-nosnippet>369</a>                <span class="self">self</span>.legacy
+<a href=#370 id=370 data-nosnippet>370</a>                    .fetch(client_config, api, fetch_kind, last_revision)
+<a href=#371 id=371 data-nosnippet>371</a>                    .<span class="kw">await
+<a href=#372 id=372 data-nosnippet>372</a>            </span>}
+<a href=#373 id=373 data-nosnippet>373</a>            MetaModuleSource::KeepStored(error) =&gt; <span class="prelude-val">Err</span>(MetaFetchError::Custom(Box::new(error))),
+<a href=#374 id=374 data-nosnippet>374</a>        }
+<a href=#375 id=375 data-nosnippet>375</a>    }
+<a href=#376 id=376 data-nosnippet>376</a>}
+<a href=#377 id=377 data-nosnippet>377</a>
+<a href=#378 id=378 data-nosnippet>378</a><span class="doccomment">/// Where [`MetaModuleMetaSourceWithFallback`] takes the meta values from.
+<a href=#379 id=379 data-nosnippet>379</a></span><span class="attr">#[derive(Debug)]
+<a href=#380 id=380 data-nosnippet>380</a></span><span class="kw">enum </span>MetaModuleSource {
+<a href=#381 id=381 data-nosnippet>381</a>    <span class="doccomment">/// The meta module's consensus value.
+<a href=#382 id=382 data-nosnippet>382</a>    </span>Consensus(MetaConsensusValue),
+<a href=#383 id=383 data-nosnippet>383</a>    <span class="doccomment">/// The legacy source: the federation has no meta module or no value in
+<a href=#384 id=384 data-nosnippet>384</a>    /// it, or the module could not be reached and nothing is stored yet.
+<a href=#385 id=385 data-nosnippet>385</a>    </span>Legacy,
+<a href=#386 id=386 data-nosnippet>386</a>    <span class="doccomment">/// The module could not be reached. Keep the stored values: the legacy
+<a href=#387 id=387 data-nosnippet>387</a>    /// values would replace the federation's current meta with stale config
+<a href=#388 id=388 data-nosnippet>388</a>    /// values until the next successful fetch.
+<a href=#389 id=389 data-nosnippet>389</a>    </span>KeepStored(FederationError),
+<a href=#390 id=390 data-nosnippet>390</a>}
+<a href=#391 id=391 data-nosnippet>391</a>
+<a href=#392 id=392 data-nosnippet>392</a><span class="doccomment">/// `None` when the federation has no meta module.
+<a href=#393 id=393 data-nosnippet>393</a></span><span class="kw">type </span>MetaModuleValue = <span class="prelude-ty">Option</span>&lt;<span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;MetaConsensusValue&gt;, FederationError&gt;&gt;;
+<a href=#394 id=394 data-nosnippet>394</a>
+<a href=#395 id=395 data-nosnippet>395</a><span class="kw">fn </span>meta_module_source(value: MetaModuleValue, last_revision: <span class="prelude-ty">Option</span>&lt;u64&gt;) -&gt; MetaModuleSource {
+<a href=#396 id=396 data-nosnippet>396</a>    <span class="kw">match </span>value {
+<a href=#397 id=397 data-nosnippet>397</a>        <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(consensus))) =&gt; MetaModuleSource::Consensus(consensus),
+<a href=#398 id=398 data-nosnippet>398</a>        <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(error)) <span class="kw">if </span>last_revision.is_some() =&gt; MetaModuleSource::KeepStored(error),
+<a href=#399 id=399 data-nosnippet>399</a>        <span class="prelude-val">None </span>| <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) | <span class="prelude-val">Err</span>(<span class="kw">_</span>)) =&gt; MetaModuleSource::Legacy,
+<a href=#400 id=400 data-nosnippet>400</a>    }
+<a href=#401 id=401 data-nosnippet>401</a>}
+<a href=#402 id=402 data-nosnippet>402</a>
+<a href=#403 id=403 data-nosnippet>403</a><span class="kw">async fn </span>get_meta_module_value(
+<a href=#404 id=404 data-nosnippet>404</a>    client_config: <span class="kw-2">&amp;</span>ClientConfig,
+<a href=#405 id=405 data-nosnippet>405</a>    api: <span class="kw-2">&amp;</span>DynGlobalApi,
+<a href=#406 id=406 data-nosnippet>406</a>    backoff: FibonacciBackoff,
+<a href=#407 id=407 data-nosnippet>407</a>) -&gt; MetaModuleValue {
+<a href=#408 id=408 data-nosnippet>408</a>    <span class="kw">let </span>(instance_id, <span class="kw">_</span>) = client_config.get_first_module_by_kind_cfg(KIND).ok()<span class="question-mark">?</span>;
+<a href=#409 id=409 data-nosnippet>409</a>    <span class="kw">let </span>meta_api = api.with_module(instance_id);
+<a href=#410 id=410 data-nosnippet>410</a>    <span class="kw">let </span>consensus = retry(<span class="string">"fetch_meta_values"</span>, backoff, || <span class="kw">async </span>{
+<a href=#411 id=411 data-nosnippet>411</a>        meta_api.get_consensus(DEFAULT_META_KEY).<span class="kw">await
+<a href=#412 id=412 data-nosnippet>412</a>    </span>})
+<a href=#413 id=413 data-nosnippet>413</a>    .<span class="kw">await
+<a href=#414 id=414 data-nosnippet>414</a>    </span>.inspect_err(|e| {
+<a href=#415 id=415 data-nosnippet>415</a>        <span class="macro">warn!</span>(target: LOG_CLIENT_MODULE_META, <span class="string">"Failed to fetch meta module consensus value: {}"</span>, e);
+<a href=#416 id=416 data-nosnippet>416</a>    });
+<a href=#417 id=417 data-nosnippet>417</a>    <span class="kw">if let </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>) = consensus {
+<a href=#418 id=418 data-nosnippet>418</a>        <span class="macro">debug!</span>(target: LOG_CLIENT_MODULE_META, <span class="string">"Meta module returned no consensus value"</span>);
+<a href=#419 id=419 data-nosnippet>419</a>    }
+<a href=#420 id=420 data-nosnippet>420</a>    <span class="prelude-val">Some</span>(consensus)
+<a href=#421 id=421 data-nosnippet>421</a>}
+<a href=#422 id=422 data-nosnippet>422</a>
+<a href=#423 id=423 data-nosnippet>423</a><span class="attr">#[cfg(test)]
+<a href=#424 id=424 data-nosnippet>424</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
