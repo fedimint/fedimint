@@ -2502,6 +2502,7 @@ dependencies = [
  "hex",
  "iroh-base 0.35.0",
  "itertools 0.14.0",
+ "jsonrpsee",
  "nix",
  "rand 0.8.5",
  "reqwest 0.12.28",

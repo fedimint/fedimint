@@ -7,8 +7,8 @@ use std::time::Duration;
 use std::{env, fs};
 
 use anyhow::{Context, Result, bail};
-use fedimint_api_client::api::DynGlobalApi;
-use fedimint_api_client::download_from_invite_code;
+use fedimint_api_client::api::{ClientConfigDownloadError, DynGlobalApi};
+use fedimint_api_client::try_download_client_config;
 use fedimint_client_module::module::ClientModule;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::admin_client::SetupStatus;
@@ -67,6 +67,34 @@ where
             .with_context(|| format!("peer {peer_id} is not online"))?;
     }
     Ok(())
+}
+
+async fn await_client_config(connectors: &ConnectorRegistry, invite: &InviteCode) -> Result<()> {
+    let api = DynGlobalApi::new(
+        connectors.clone(),
+        invite.peers(),
+        invite.api_secret().as_deref(),
+    );
+    // The invite file is written before module initialization and the consensus
+    // API starts. Fixture readiness must not depend on the short, finite retry
+    // policy used by client-config downloads in tests.
+    poll("awaiting client config API", || async {
+        match try_download_client_config(
+            connectors,
+            &api,
+            invite.federation_id(),
+            invite.api_secret(),
+        )
+        .await
+        {
+            Ok(_) => Ok(()),
+            Err(err @ ClientConfigDownloadError::Federation(_)) => {
+                Err(ControlFlow::Continue(err.into()))
+            }
+            Err(err) => Err(ControlFlow::Break(err.into())),
+        }
+    })
+    .await
 }
 
 #[derive(Clone)]
@@ -440,8 +468,7 @@ impl Federation {
                 .await
                 .context("Awaiting invite code file")?;
 
-                download_from_invite_code(&connectors, &InviteCode::from_str(&invite_code)?)
-                    .await?;
+                await_client_config(&connectors, &InviteCode::from_str(&invite_code)?).await?;
             }
 
             // copy over invite-code file to client directory
@@ -1588,3 +1615,6 @@ pub async fn run_cli_dkg_v2(endpoints: BTreeMap<PeerId, String>) -> Result<()> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod client_config_tests;
