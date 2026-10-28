@@ -1138,6 +1138,45 @@ pub trait ClientModule: Debug + MaybeSend + MaybeSync + 'static {
         })
     }
 
+    /// Quote the inputs and change needed to balance these amounts.
+    /// Implementations may avoid creating cryptographic outputs, but must use
+    /// the same funding selection and change denominations as finalization.
+    async fn quote_final_inputs_and_outputs(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        unit: AmountUnit,
+        input_amount: Amount,
+        output_amount: Amount,
+    ) -> Result<FeeQuoteRequest, ClientModuleError> {
+        let (inputs, outputs) = self
+            .create_final_inputs_and_outputs(dbtx, operation_id, unit, input_amount, output_amount)
+            .await?;
+        let mut quote = FeeQuoteRequest {
+            input_amount: Amounts::ZERO,
+            output_amount: Amounts::ZERO,
+            input_fee: Amounts::ZERO,
+            output_fee: Amounts::ZERO,
+        };
+        for input in inputs.inputs() {
+            quote.input_amount.checked_add_mut(&input.amounts);
+            quote.input_fee.checked_add_mut(
+                &self
+                    .input_fee(&input.amounts, &input.input)
+                    .expect("Primary module must know its own change input fees"),
+            );
+        }
+        for output in outputs.outputs() {
+            quote.output_amount.checked_add_mut(&output.amounts);
+            quote.output_fee.checked_add_mut(
+                &self
+                    .output_fee(&output.amounts, &output.output)
+                    .expect("Primary module must know its own change output fees"),
+            );
+        }
+        Ok(quote)
+    }
+
     /// Waits for the funds from an output created by
     /// [`Self::create_final_inputs_and_outputs`] to become available. This
     /// function returning typically implies a change in the output of
@@ -1291,6 +1330,16 @@ pub trait IClientModule: Debug {
         output_amount: Amount,
     ) -> Result<(ClientInputBundle, ClientOutputBundle), ClientModuleError>;
 
+    async fn quote_final_inputs_and_outputs(
+        &self,
+        module_instance: ModuleInstanceId,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        unit: AmountUnit,
+        input_amount: Amount,
+        output_amount: Amount,
+    ) -> Result<FeeQuoteRequest, ClientModuleError>;
+
     async fn await_primary_module_output(
         &self,
         operation_id: OperationId,
@@ -1407,6 +1456,26 @@ where
         let outputs = outputs.into_dyn(module_instance);
 
         Ok((inputs, outputs))
+    }
+
+    async fn quote_final_inputs_and_outputs(
+        &self,
+        module_instance: ModuleInstanceId,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        unit: AmountUnit,
+        input_amount: Amount,
+        output_amount: Amount,
+    ) -> Result<FeeQuoteRequest, ClientModuleError> {
+        <T as ClientModule>::quote_final_inputs_and_outputs(
+            self,
+            &mut dbtx.to_ref_with_prefix_module_id(module_instance).0,
+            operation_id,
+            unit,
+            input_amount,
+            output_amount,
+        )
+        .await
     }
 
     async fn await_primary_module_output(
