@@ -351,16 +351,22 @@ jobs:
         container:
           - name: fedimintd
             image: fedimint/fedimintd
+            package: fedimint-pkgs
           - name: fedimint-cli
             image: fedimint/fedimint-cli
+            package: fedimint-pkgs
           - name: gatewayd
             image: fedimint/gatewayd
+            package: gateway-pkgs
           - name: gateway-cli
             image: fedimint/gateway-cli
+            package: gateway-pkgs
           - name: fedimint-recurringd
             image: fedimint/fedimint-recurringd
+            package: fedimint-recurringd-pkgs
           - name: fedimint-recurringdv2
             image: fedimint/fedimint-recurringdv2
+            package: fedimint-recurringdv2-pkgs
           - name: devtools
             image: fedimint/devtools
     runs-on: ${{ matrix.platform.runs-on }}
@@ -396,6 +402,20 @@ jobs:
             nix build -L .#container.${{ matrix.container.name }} --system ${{ matrix.platform.arch }}
           fi
           echo "container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
+
+      - name: Check production binary runtime closure
+        if: matrix.container.package != '' && (github.event_name != 'pull_request' || matrix.platform.run_in_pr)
+        shell: bash
+        run: |
+          # Query the binary output, not its derivation/build inputs or the image tarball.
+          closure=$(nix path-info --recursive .#${{ matrix.container.package }} --system ${{ matrix.platform.arch }})
+          # Full compiler outputs are forbidden; GCC/libgcc and glibc runtime libraries are not.
+          if grep -E '^/nix/store/[a-z0-9]{32}-(rust(c|-(mixed|minimal|default|stable|nightly|toolchain|std|src))(-.*)?|cargo(-.*)?|(gcc|clang|llvm|binutils)(-wrapper|-unwrapped)?-[0-9]+(\.[0-9]+)*|glibc-.*-dev|vendor-(cargo-deps|registry)(-.*)?)$' <<< "$closure"; then
+            echo "::error::Build-only dependencies in ${{ matrix.container.package }} runtime closure"
+            exit 1
+          else
+            test "$?" -eq 1
+          fi
 
       - name: Login to Docker Hub
         if: (github.ref_type == 'tag' || startsWith(github.ref, 'refs/heads/releases/')) && (github.event_name != 'pull_request' || matrix.platform.run_in_pr)
