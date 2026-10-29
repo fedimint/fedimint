@@ -1,4 +1,4 @@
-use super::{Amount, FromStr};
+use super::{Amount, FromStr, ParseAmountError};
 
 #[test]
 fn amount_multiplication_by_scalar() {
@@ -60,4 +60,20 @@ fn test_amount_parsing() {
         Amount::from_sats(12_345_600_000),
         Amount::from_str("123.456btc").unwrap()
     );
+}
+
+#[test]
+fn amount_parsing_rejects_values_above_max_money() {
+    assert_eq!(
+        Amount::from_bitcoins(21_000_000),
+        Amount::from_str("21000000btc").unwrap()
+    );
+    assert!(matches!(
+        Amount::from_str("21000001btc"),
+        Err(ParseAmountError::TooLarge)
+    ));
+    assert!(matches!(
+        Amount::from_str("2100000000000001sat"),
+        Err(ParseAmountError::TooLarge)
+    ));
 }
