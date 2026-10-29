@@ -4641,6 +4641,7 @@ dependencies = [
  "fedimint-api-client",
  "fedimint-bitcoind",
  "fedimint-client-module",
+ "fedimint-connectors",
  "fedimint-core",
  "fedimint-derive-secret",
  "fedimint-eventlog",
