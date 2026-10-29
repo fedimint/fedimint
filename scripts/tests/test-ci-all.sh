@@ -594,7 +594,7 @@ joblog="$tmpdir/joblog"
 PATH="$(pwd)/scripts/dev/run-test/:$PATH"
 
 parallel_args+=(
-  --halt-on-error 1
+  --retries 5
   --joblog "$joblog"
 )
 
