@@ -12,7 +12,7 @@
   <a href="https://github.com/fedimint/fedimint/actions/workflows/ci-nix.yml">
       <img src="https://github.com/fedimint/fedimint/actions/workflows/ci-nix.yml/badge.svg" alt="GitHub Actions CI Build Status">
   </a>
-  <a href="https://chat.fedimint.org"><img alt="Developer Discord Chat" src="https://img.shields.io/discord/990354215060795454?label=dev%20chat"></a>
+  <a href="https://discord.gg/cEVEmqCgWG"><img alt="Developer Discord Chat" src="https://img.shields.io/discord/990354215060795454?label=dev%20chat"></a>
   <a href="https://github.com/fedimint/fedimint/discussions">
     <img src="https://img.shields.io/badge/community-discussion-blue" alt="GitHub Discussion">
   </a>

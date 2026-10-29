@@ -58,7 +58,7 @@ You can create a Fedimint in two ways:
 In addition, a practical federation requires a Lightning Gateway
 to join the federation, and someone needs to set it up and
 run, though one gateway can join and server multiple
-federations. It is currently recommend to use an existing Lightning Gateway, but you can run your own. [Reach out on Discord for more information](https://chat.fedimint.org).
+federations. It is currently recommend to use an existing Lightning Gateway, but you can run your own. [Reach out on Discord for more information](https://discord.gg/cEVEmqCgWG).
 
 See [here](../docs/gateway.md) for more information about the Lightning Gateway.
 
@@ -80,4 +80,4 @@ and solutions for variety of cases.
 ## Help and support
 
 For help please try [Fedimint Github Discussions](https://github.com/fedimint/fedimint/discussions)
-or `#mint-ops` channel on [Fedimint's Discord server](https://chat.fedimint.org/).
+or `#mint-ops` channel on [Fedimint's Discord server](https://discord.gg/cEVEmqCgWG).

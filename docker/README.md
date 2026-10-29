@@ -25,7 +25,7 @@ it down, due to amount of time required to keep them up to date. See content
 of this directory in the past releases for more info.
 
 For help please try [Fedimint Github Discussions](https://github.com/fedimint/fedimint/discussions)
-or `#mint-ops` channel on [Fedimint's Discord server](https://chat.fedimint.org/).
+or `#mint-ops` channel on [Fedimint's Discord server](https://discord.gg/cEVEmqCgWG).
 
 ## System Requirements
 ### 3-of-4 Federation with remote Bitcoin backend

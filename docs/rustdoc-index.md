@@ -12,7 +12,7 @@ If you are looking for higher level documentation and help, please check:
 
 * [Fedimint website](https://fedimint.org/)
 * [Fedimint github](https://github.com/fedimint/fedimint)
-* [Fedimint chat](https://chat.fedimint.org/)
+* [Fedimint chat](https://discord.gg/cEVEmqCgWG)
 
 ## State
 

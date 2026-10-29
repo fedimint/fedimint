@@ -743,5 +743,5 @@ Without ecash in that federation, you have nothing to give the recipient, so you
 
 - [Fedimint Documentation](https://fedimint.org)
 - [GitHub Discussions](https://github.com/fedimint/fedimint/discussions) - Community support
-- [Discord Server](https://chat.fedimint.org/) - `#mint-ops` channel for operators
+- [Discord Server](https://discord.gg/cEVEmqCgWG) - `#mint-ops` channel for operators
 - [Lightning Module Documentation](./lightning_module_v2.md) - Technical details on Lightning integration
