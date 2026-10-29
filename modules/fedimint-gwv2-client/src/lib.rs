@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{anyhow, ensure};
 use async_trait::async_trait;
@@ -32,9 +33,10 @@ use fedimint_core::module::{
     Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
 use fedimint_core::secp256k1::Keypair;
+use fedimint_core::task::timeout;
 use fedimint_core::time::now;
-use fedimint_core::util::Spanned;
-use fedimint_core::{Amount, PeerId, apply, async_trait_maybe_send, secp256k1};
+use fedimint_core::util::{FmtCompact, Spanned, backoff_util, retry};
+use fedimint_core::{Amount, OutPoint, PeerId, apply, async_trait_maybe_send, secp256k1};
 use fedimint_lightning::{InterceptPaymentResponse, LightningRpcError};
 use fedimint_lnv2_common::config::LightningClientConfig;
 use fedimint_lnv2_common::contracts::{IncomingContract, PaymentImage};
@@ -58,6 +60,15 @@ use crate::complete_sm::{
 };
 use crate::receive_sm::ReceiveSMCommon;
 use crate::send_sm::SendSMCommon;
+
+/// Bound on the federation liveness probe that gates funding a fresh incoming
+/// contract. A healthy federation answers well within this; the bound only
+/// decides how quickly an unreachable one fails the HTLC back.
+const FEDERATION_LIVENESS_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Minimum number of blocks between the current height and an incoming HTLC's
+/// claim deadline for the gateway to fund its incoming contract.
+const LNV2_CLAIM_DEADLINE_MARGIN: u32 = 2;
 
 /// LNv2 CLTV Delta in blocks
 pub const EXPIRATION_DELTA_MINIMUM_V2: u64 = 144;
@@ -411,6 +422,16 @@ impl GatewayClientModuleV2 {
             "Invalid auth signature for the invoice data"
         );
 
+        // A send accepted while the lightning node is unreachable would sit
+        // waiting for it, and nothing about the payment is known until then.
+        // Refusing up front keeps the sender free to use another gateway. Only
+        // new sends are refused: joining an existing operation above resumes
+        // one already started.
+        ensure!(
+            self.gateway.is_lightning_connected().await,
+            "The gateway is not connected to its lightning node"
+        );
+
         // We need to check that the contract has been confirmed by the federation
         // before we start the state machine to prevent DOS attacks.
         let (contract_id, expiration) = self
@@ -486,6 +507,29 @@ impl GatewayClientModuleV2 {
         Ok(self.subscribe_send(operation_id).await)
     }
 
+    /// Returns the timelock budget, in blocks, that the outgoing contract at
+    /// `outpoint` leaves for a payment dispatched now, retrying until the
+    /// federation answers. A contract the federation no longer knows leaves
+    /// no budget.
+    async fn await_outgoing_contract_max_delay(&self, outpoint: OutPoint) -> u64 {
+        let expiration = retry(
+            "outgoing contract expiration",
+            backoff_util::background_backoff(),
+            || async {
+                self.module_api
+                    .outgoing_contract_expiration(outpoint)
+                    .await
+                    .map_err(|err| anyhow!(err.fmt_compact().to_string()))
+            },
+        )
+        .await
+        .expect("Retries until the federation answers");
+
+        expiration.map_or(0, |(_, expiration)| {
+            expiration.saturating_sub(EXPIRATION_DELTA_MINIMUM_V2)
+        })
+    }
+
     pub async fn subscribe_send(&self, operation_id: OperationId) -> Result<[u8; 32], Signature> {
         let mut stream = self.notifier.subscribe(operation_id).await;
 
@@ -546,6 +590,43 @@ impl GatewayClientModuleV2 {
         legacy_completion_in_states(&active, &inactive, circuit)
     }
 
+    /// Refuses to fund a fresh incoming contract unless a threshold of
+    /// guardians is answering. LNv1 gets this check implicitly by fetching the
+    /// offer from the federation first; LNv2 reads the contract from the
+    /// gateway's own database, so it has to probe explicitly.
+    async fn ensure_federation_responsive(&self, payment_hash: sha256::Hash) -> anyhow::Result<()> {
+        match timeout(
+            FEDERATION_LIVENESS_TIMEOUT,
+            self.module_api.consensus_block_count(),
+        )
+        .await
+        {
+            Ok(Ok(_consensus_block_count)) => Ok(()),
+            Ok(Err(err)) => {
+                warn!(
+                    %payment_hash,
+                    err = %err.fmt_compact(),
+                    "Federation liveness probe failed, refusing to fund incoming contract"
+                );
+                Err(anyhow!(
+                    "federation liveness probe failed: {}",
+                    err.fmt_compact()
+                ))
+            }
+            Err(_elapsed) => {
+                warn!(
+                    %payment_hash,
+                    timeout_secs = FEDERATION_LIVENESS_TIMEOUT.as_secs(),
+                    "Federation liveness probe timed out, refusing to fund incoming contract"
+                );
+                Err(anyhow!(
+                    "federation did not answer the liveness probe within {}s",
+                    FEDERATION_LIVENESS_TIMEOUT.as_secs()
+                ))
+            }
+        }
+    }
+
     pub async fn relay_incoming_htlc(
         &self,
         payment_hash: sha256::Hash,
@@ -553,6 +634,7 @@ impl GatewayClientModuleV2 {
         htlc_id: u64,
         contract: IncomingContract,
         amount_msat: u64,
+        blocks_to_claim_deadline: u32,
     ) -> anyhow::Result<()> {
         let operation_start = now();
         let receive_operation_id = OperationId::from_encodable(&contract);
@@ -576,6 +658,19 @@ impl GatewayClientModuleV2 {
 
         let commitment = contract.commitment.clone();
         if plan == IncomingRelayPlan::CreateReceiveAndCompletion {
+            // Only gate fresh funding: the other plans resume an already
+            // funded contract and must not be cancelled.
+            //
+            // Funding is irreversible, and the gateway is only reimbursed by
+            // settling the HTLC before its claim deadline, so do not fund an
+            // HTLC that is about to expire. The margin is small because LDK's
+            // default invoices leave only 3 blocks before the claim deadline.
+            ensure!(
+                blocks_to_claim_deadline >= LNV2_CLAIM_DEADLINE_MARGIN,
+                "HTLC claim deadline is only {blocks_to_claim_deadline} blocks away"
+            );
+            self.ensure_federation_responsive(payment_hash).await?;
+
             let refund_keypair = self.keypair;
             let client_output = ClientOutput::<LightningOutput> {
                 output: LightningOutput::V0(LightningOutputV0::Incoming(contract.clone())),
@@ -910,6 +1005,14 @@ pub trait IGatewayClientV2: Debug + Send + Sync {
         invoice: &Bolt11Invoice,
         allow_fresh_dispatch: bool,
     ) -> anyhow::Result<Option<FinalReceiveState>>;
+
+    /// Returns whether the gateway currently holds a connection to its
+    /// lightning node. Only suitable for refusing new work: the answer is
+    /// local, so it must not decide the fate of a payment already started.
+    async fn is_lightning_connected(&self) -> bool;
+
+    /// Waits until the gateway holds a connection to its lightning node.
+    async fn await_lightning_connected(&self);
 }
 
 #[cfg(test)]

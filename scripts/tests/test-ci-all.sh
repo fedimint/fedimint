@@ -152,6 +152,11 @@ function lnv2_module_payments() {
 }
 export -f lnv2_module_payments
 
+function lnv2_module_federation_outage() {
+  fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/lnv2-module-test.sh federation-outage
+}
+export -f lnv2_module_federation_outage
+
 function lnv2_mintv2_walletv2_lightning_payments() {
   # v2 modules are not supported by older versions, so we skip for backwards-compatibility tests
   if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
@@ -426,6 +431,7 @@ tests_to_run_in_parallel+=(
   "gw_liquidity_test_mintv2"
   "lnv2_module_gateway_registration"
   "lnv2_module_payments"
+  "lnv2_module_federation_outage"
   "lnv2_mintv2_walletv2_lightning_payments"
   "lnv2_module_lnurl_pay"
   "lnv1_lnv2_swap"
