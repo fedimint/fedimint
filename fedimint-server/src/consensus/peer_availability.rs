@@ -43,8 +43,8 @@ impl AvailabilityTiming {
     fn for_test_env(test_env: bool) -> Self {
         if test_env {
             Self {
-                slot_secs: 5,
-                persist_interval: Duration::from_secs(1),
+                slot_secs: 10,
+                persist_interval: Duration::from_secs(10),
             }
         } else {
             Self {
@@ -56,7 +56,7 @@ impl AvailabilityTiming {
 }
 
 /// Folds the [`PeerActivity`] into the persisted [`PeerAvailabilityState`]
-/// every 10 minutes, or every second in tests. A restart loses at most one
+/// every 10 minutes, or every 10 seconds in tests. A restart loses at most one
 /// interval of activity.
 pub async fn persist_peer_availability(db: Database, peer_activity: Arc<Mutex<PeerActivity>>) {
     let interval = AvailabilityTiming::for_test_env(is_running_in_test_env()).persist_interval;

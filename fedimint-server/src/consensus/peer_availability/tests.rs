@@ -26,8 +26,8 @@ fn production_and_test_timings() {
     assert_eq!(production.persist_interval.as_secs(), 600);
 
     let test = AvailabilityTiming::for_test_env(true);
-    assert_eq!(test.slot_secs, 5);
-    assert_eq!(test.persist_interval.as_secs(), 1);
+    assert_eq!(test.slot_secs, 10);
+    assert_eq!(test.persist_interval.as_secs(), 10);
 }
 
 fn counts_slots_with_timing(timing: AvailabilityTiming) {

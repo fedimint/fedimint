@@ -1542,7 +1542,7 @@ async fn peer_availability_reports_the_offline_peer() -> anyhow::Result<()> {
     let client = fed.new_client().await;
     let offline = PeerId::from(3);
 
-    // Tests use 5-second observation slots and 1-second persistence ticks, but
+    // Tests use 10-second observation slots and 10-second persistence ticks, but
     // positive weekly coverage still needs over 30 seconds of observed activity.
     // Poll only the online guardians while waiting: each merged query also waits
     // for the offline peer and can return reports sampled before persistence.
