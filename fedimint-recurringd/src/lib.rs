@@ -61,6 +61,12 @@ struct CachedGateway {
     vetted: bool,
 }
 
+/// Smallest amount, in msat, advertised and accepted for LNURL-pay invoices
+pub const MIN_SENDABLE_MSAT: u64 = 1;
+
+/// Largest amount, in msat, advertised and accepted for LNURL-pay invoices
+pub const MAX_SENDABLE_MSAT: u64 = 100_000_000_000;
+
 impl RecurringInvoiceServer {
     pub async fn new(
         connectors: ConnectorRegistry,
@@ -258,8 +264,8 @@ impl RecurringInvoiceServer {
                 .base_url
                 .join_path(&format!("lnv1/paycodes/{payment_code_id}/invoice"))
                 .to_string(),
-            max_sendable: 100000000000,
-            min_sendable: 1,
+            max_sendable: MAX_SENDABLE_MSAT,
+            min_sendable: MIN_SENDABLE_MSAT,
             tag: pay_request_tag(),
             metadata: meta,
         })
