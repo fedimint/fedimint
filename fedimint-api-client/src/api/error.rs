@@ -94,7 +94,7 @@ impl FederationError {
         }
     }
 
-    pub(crate) fn peer_errors(
+    pub fn peer_errors(
         method: impl Into<String>,
         params: impl Serialize,
         peer_errors: BTreeMap<PeerId, ServerError>,

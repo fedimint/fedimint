@@ -4038,6 +4038,7 @@ dependencies = [
  "erased-serde",
  "fedimint-api-client",
  "fedimint-client-module",
+ "fedimint-connectors",
  "fedimint-core",
  "fedimint-derive-secret",
  "fedimint-eventlog",
