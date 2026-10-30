@@ -2713,6 +2713,17 @@ impl IAdminGateway for Gateway {
             dbtx.load_federation_configs().await
         };
 
+        // Silently succeeding on an unknown federation would let a mistyped id
+        // pass for fees that were never changed.
+        if let Some(fed_id) = federation_id
+            && fed_configs.is_empty()
+        {
+            return Err(FederationNotConnected {
+                federation_id_prefix: fed_id.to_prefix(),
+            }
+            .into());
+        }
+
         let federation_manager = self.federation_manager.read().await;
 
         for (federation_id, config) in &mut fed_configs {

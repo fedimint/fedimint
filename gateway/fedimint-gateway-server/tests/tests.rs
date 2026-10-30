@@ -1767,6 +1767,32 @@ async fn test_gateway_payment_policy_disables_lnv1_receives() -> anyhow::Result<
     .await
 }
 
+/// A mistyped federation id must not pass for fees that were changed.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_set_fees_requires_a_connected_federation() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, _, _, _| async move {
+        let error = gateway
+            .handle_set_fees_msg(SetFeesPayload {
+                federation_id: Some(FederationId::dummy()),
+                lightning_base: Some(Amount::from_sats(1)),
+                lightning_parts_per_million: None,
+                transaction_base: None,
+                transaction_parts_per_million: None,
+            })
+            .await
+            .expect_err("The fees of an unknown federation were changed");
+        assert!(
+            error
+                .to_string()
+                .contains("No federation available for prefix"),
+            "Expected the unknown federation to be rejected, got: {error}"
+        );
+
+        Ok(())
+    })
+    .await
+}
+
 /// A mistyped federation id must not pass for a switch that was flipped, and
 /// no federation id at all applies the policy to every connected federation.
 #[tokio::test(flavor = "multi_thread")]
