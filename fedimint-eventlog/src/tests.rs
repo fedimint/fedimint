@@ -401,3 +401,63 @@ async fn full_scan_deadline_is_not_postponed_by_notifications() {
         "The full scan due at t=60s must order the late event without another notification"
     );
 }
+
+/// `Trimable` events must land in the trimable log only, and `Persistent`
+/// events in both logs. `Transient` events are not written to either.
+#[test_log::test(tokio::test)]
+async fn ordering_task_persists_events_by_persistence() {
+    let tg = TaskGroup::new();
+    let (db, mut log_event_added_rx, log_ordering_wakeup_tx) = spawn_ordering_task(&tg);
+
+    let mut dbtx = db.begin_transaction().await;
+    for (kind, persistence) in [
+        ("transient", crate::EventPersistence::Transient),
+        ("trimable", crate::EventPersistence::Trimable),
+        ("persistent", crate::EventPersistence::Persistent),
+    ] {
+        dbtx.log_event_raw(
+            log_ordering_wakeup_tx.clone(),
+            EventKind::from(kind.to_string()),
+            None,
+            None,
+            vec![],
+            persistence,
+        )
+        .await;
+    }
+    dbtx.commit_tx().await;
+
+    // All three are committed together, so once the persistent event is ordered
+    // the others have been processed too.
+    while ordered_kinds(&db).await.is_empty() {
+        log_event_added_rx
+            .changed()
+            .await
+            .expect("ordering task is running");
+    }
+
+    let trimable_kinds: Vec<EventKind> = db
+        .begin_transaction_nc()
+        .await
+        .get_event_log_trimable(None, 100)
+        .await
+        .into_iter()
+        .map(|entry| entry.inner.kind)
+        .collect();
+
+    assert_eq!(
+        ordered_kinds(&db).await,
+        vec![EventKind::from("persistent".to_string())]
+    );
+    assert_eq!(
+        trimable_kinds,
+        vec![
+            EventKind::from("trimable".to_string()),
+            EventKind::from("persistent".to_string()),
+        ]
+    );
+
+    tg.shutdown_join_all(None)
+        .await
+        .expect("ordering task shuts down cleanly");
+}
