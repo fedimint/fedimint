@@ -13,6 +13,8 @@ use std::env;
 use std::fmt::Write as _;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -35,11 +37,11 @@ use fedimint_logging::{LOG_CORE, LOG_SERVER, TracingSetup};
 use fedimint_meta_server::MetaInit;
 use fedimint_mint_server::MintInit;
 use fedimint_rocksdb::RocksDb;
-use fedimint_server::IrohNextApiSettings;
 use fedimint_server::config::ConfigGenSettings;
 use fedimint_server::config::io::{DB_FILE, PLAINTEXT_PASSWORD};
 use fedimint_server::core::ServerModuleInitRegistry;
 use fedimint_server::net::api::ApiSecrets;
+use fedimint_server::{ConsensusStop, IrohNextApiSettings, ShutdownRequest};
 use fedimint_server_bitcoin_rpc::BitcoindClientWithFallback;
 use fedimint_server_bitcoin_rpc::bitcoind::BitcoindClient;
 use fedimint_server_bitcoin_rpc::esplora::EsploraClient;
@@ -70,6 +72,19 @@ use crate::metrics::APP_START_TS;
 
 /// Time we will wait before forcefully shutting down tasks
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Exit code of a fedimintd whose consensus stopped because a shutdown
+/// requested through `shutdown_after_current_session` took effect at a
+/// session boundary: its last session completed and it started no later
+/// session, so it signed no units of an unfinished session.
+///
+/// The code depends only on why consensus stopped. Tasks that are still
+/// running when the task group's join times out end with the process; none
+/// of them can start a session. Every other stop, including a shutdown
+/// scheduled for a given session through `shutdown`, a session timeout, a
+/// failed main task, a panic of the main task, or a signal, exits with a
+/// different code or by signal.
+pub const SESSION_BOUNDARY_EXIT_CODE: i32 = 3;
 
 #[derive(Parser)]
 #[command(version)]
@@ -503,8 +518,10 @@ pub async fn run(
 
     let task_group = root_task_group.clone();
     let code_version_hash = code_version_hash.to_string();
+    let stopped_at_session_boundary = Arc::new(AtomicBool::new(false));
+    let main_stopped_at_session_boundary = stopped_at_session_boundary.clone();
     root_task_group.spawn_cancellable("main", async move {
-        fedimint_server::run_with_iroh_p2p_relays_and_next_api(
+        let stop = fedimint_server::run_with_iroh_p2p_relays_and_next_api(
             server_opts.data_dir,
             auth_ui,
             auth_api,
@@ -532,6 +549,9 @@ pub async fn run(
         )
         .await
         .unwrap_or_else(|err| panic!("Main task returned error: {}", err.fmt_compact()));
+        if stop == ConsensusStop::ScheduledShutdown(ShutdownRequest::AfterCurrentSession) {
+            main_stopped_at_session_boundary.store(true, Ordering::SeqCst);
+        }
     });
 
     let shutdown_future = root_task_group
@@ -555,6 +575,9 @@ pub async fn run(
 
     drop(timing_total_runtime);
 
+    if stopped_at_session_boundary.load(Ordering::SeqCst) {
+        std::process::exit(SESSION_BOUNDARY_EXIT_CODE);
+    }
     std::process::exit(-1);
 }
 

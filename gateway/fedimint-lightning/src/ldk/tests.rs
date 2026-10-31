@@ -10,8 +10,8 @@ use lockable::LockPool;
 use tokio::sync::{RwLock, oneshot};
 
 use super::{
-    GatewayLdkClient, InboundRegistrationRefusal, LdkClientInitError, PendingPaymentWakeup,
-    check_inbound_registration, get_esplora_url, htlc_completion_error, ldk_failed_payment_error,
+    GatewayLdkClient, InboundRegistrationRefusal, LdkClientInitError, MnemonicSource,
+    PendingPaymentWakeup, check_inbound_registration, get_esplora_url, htlc_completion_error,
 };
 use crate::LightningRpcError;
 
@@ -91,6 +91,7 @@ fn a_non_utf8_data_dir_is_rejected_before_the_node_is_built() {
         0,
         String::new(),
         Mnemonic::from_entropy(&[0; 16]).expect("16 bytes of entropy form a mnemonic"),
+        MnemonicSource::Generated,
         runtime,
     );
 

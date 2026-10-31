@@ -19,6 +19,7 @@ pub const AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT: &str = "await_signed_session_ou
 pub const SESSION_STATUS_ENDPOINT: &str = "session_status";
 pub const SESSION_STATUS_V2_ENDPOINT: &str = "signed_session_status";
 pub const SHUTDOWN_ENDPOINT: &str = "shutdown";
+pub const SHUTDOWN_AFTER_CURRENT_SESSION_ENDPOINT: &str = "shutdown_after_current_session";
 pub const RECOVER_ENDPOINT: &str = "recover";
 pub const SETUP_STATUS_ENDPOINT: &str = "setup_status";
 pub const CONSENSUS_ORD_LATENCY_ENDPOINT: &str = "consensus_ord_latency";

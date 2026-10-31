@@ -5,6 +5,7 @@ pub mod debug;
 pub mod engine;
 mod iroh_api;
 pub mod peer_availability;
+mod session_cache;
 pub mod transaction;
 
 use std::collections::BTreeMap;
@@ -44,7 +45,7 @@ use tracing::{debug, info, warn};
 use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::connection_limits::ConnectionLimits;
 use crate::consensus::api::ConsensusApi;
-use crate::consensus::engine::ConsensusEngine;
+use crate::consensus::engine::{ConsensusEngine, ConsensusStop};
 use crate::consensus::iroh_api::{IrohApiState, run_iroh_api, run_iroh_api_next};
 use crate::db::verify_server_db_integrity_dbtx;
 use crate::net::api::ApiSecrets;
@@ -236,7 +237,7 @@ pub async fn run(
     session_timeout: Duration,
     iroh_api_limits: ConnectionLimits,
     iroh_next_api_settings: Option<&IrohNextApiSettings>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<ConsensusStop> {
     cfg.validate_config(&cfg.local.identity, &module_init_registry)?;
 
     let iroh_next_api_settings =
@@ -341,7 +342,8 @@ pub async fn run(
     let (shutdown_sender, shutdown_receiver) = watch::channel(None);
     let (ord_latency_sender, ord_latency_receiver) = watch::channel(None);
     let (accepted_item_sender, accepted_item_receiver) = watch::channel(());
-    let (completed_session_sender, completed_session_receiver) = watch::channel(());
+    let (completed_session_sender, completed_session_receiver) =
+        watch::channel(session_cache::load(&db).await);
 
     let mut ci_status_senders = BTreeMap::new();
     let mut ci_status_receivers = BTreeMap::new();
@@ -493,7 +495,7 @@ pub async fn run(
 
     // FIXME: (@leonardo) How should this be handled ?
     // Using the `Connector::default()` for now!
-    ConsensusEngine {
+    let stop = ConsensusEngine {
         db,
         federation_api: DynGlobalApi::new(
             connectors,
@@ -524,7 +526,7 @@ pub async fn run(
 
     api_handler.stopped().await;
 
-    Ok(())
+    Ok(stop)
 }
 
 async fn start_consensus_api(

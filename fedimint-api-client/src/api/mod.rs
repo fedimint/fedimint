@@ -594,6 +594,10 @@ pub trait IGlobalFederationApi: IRawFederationApi {
 
     async fn shutdown(&self, session: Option<u64>, auth: ApiAuth) -> FederationResult<()>;
 
+    /// Ask the guardian to shut down once the session it is running
+    /// completes, without starting another one.
+    async fn shutdown_after_current_session(&self, auth: ApiAuth) -> FederationResult<()>;
+
     /// Returns the fedimintd version a peer is running
     async fn fedimintd_version(&self, peer_id: PeerId) -> ServerResult<String>;
 
