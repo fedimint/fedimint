@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::time::Duration;
 
 use clap::builder::BoolishValueParser;
 use clap::{Args, Parser, Subcommand};
@@ -19,6 +20,10 @@ use crate::envs::{
     FM_IROH_ENABLE_DHT_ENV, FM_OUR_ID_ENV, FM_PASSWORD_API_ENV,
 };
 use crate::utils::parse_peer_id;
+
+fn parse_wait_duration(seconds: &str) -> anyhow::Result<Duration> {
+    Ok(Duration::try_from_secs_f32(seconds.parse()?)?)
+}
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub(crate) enum DatabaseBackend {
@@ -285,8 +290,9 @@ Examples:
 
     /// Just start the `Client` and wait
     Wait {
-        /// Limit the wait time
-        seconds: Option<f32>,
+        /// Limit the wait time in seconds
+        #[arg(value_parser = parse_wait_duration)]
+        seconds: Option<Duration>,
     },
 
     /// Wait for all state machines to complete
