@@ -2610,32 +2610,54 @@ pub async fn test_client_config_change_detection(
     info!(target: LOG_DEVIMINT, "Wait for peers to get back up");
     fed.await_all_peers().await?;
 
-    // Use fedimint-cli dev wait to let the client read the new config in background
+    // The client refreshes its config only once, in the background, each time
+    // it is opened, and stores a changed config as pending. The pending config
+    // becomes the current one the next time the client is opened. Right after
+    // a restart the guardians may not answer in time, so a single fixed wait
+    // is flaky. Keep the client open for a while and re-check until the new
+    // config is visible.
     info!(target: LOG_DEVIMINT, "Waiting for client to fetch updated configuration...");
-    cmd!(client, "dev", "wait", "3")
-        .run()
-        .await
-        .context("Failed to wait for client config update")?;
+    let initial_module_count = initial_config["modules"]
+        .as_object()
+        .context("Initial client config has no modules object")?
+        .len();
+    let updated_config = poll("Waiting for client to switch to the updated config", || async {
+        cmd!(client, "dev", "wait", "3")
+            .run()
+            .await
+            .context("Failed to wait for client config update")
+            .map_err(ControlFlow::Break)?;
+
+        let config = cmd!(client, "config")
+            .out_json()
+            .await
+            .context("Failed to get updated client config")
+            .map_err(ControlFlow::Break)?;
+
+        let module_count = config["modules"]
+            .as_object()
+            .context("Updated client config has no modules object")
+            .map_err(ControlFlow::Break)?
+            .len();
+
+        if module_count <= initial_module_count {
+            return Err(ControlFlow::Continue(anyhow!(
+                "Client config not updated yet. Initial modules: {initial_module_count}, current: {module_count}"
+            )));
+        }
+
+        Ok(config)
+    })
+    .await?;
 
     // Test that client switched to the new config
     info!(target: LOG_DEVIMINT, "Testing client detection of configuration changes...");
-    let updated_config = cmd!(client, "config")
-        .out_json()
-        .await
-        .context("Failed to get updated client config")?;
 
     info!(target: LOG_DEVIMINT, "Updated config modules: {:?}", updated_config["modules"].as_object().unwrap().keys().collect::<Vec<_>>());
 
     // Verify that the configuration has changed (new meta module should be present)
     let initial_modules = initial_config["modules"].as_object().unwrap();
     let updated_modules = updated_config["modules"].as_object().unwrap();
-
-    anyhow::ensure!(
-        updated_modules.len() > initial_modules.len(),
-        "Expected more modules in updated config. Initial: {}, Updated: {}",
-        initial_modules.len(),
-        updated_modules.len()
-    );
 
     // Check if a new meta module was added
     let new_meta_module = updated_modules.iter().find(|(module_id, module_config)| {
