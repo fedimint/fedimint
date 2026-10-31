@@ -665,43 +665,41 @@
 <a href=#665 id=665 data-nosnippet>665</a>        <span class="kw">let </span>last_used_nonce_idx = <span class="self">self
 <a href=#666 id=666 data-nosnippet>666</a>            </span>.last_used_nonce_idx
 <a href=#667 id=667 data-nosnippet>667</a>            .get(<span class="kw-2">&amp;</span>amount)
-<a href=#668 id=668 data-nosnippet>668</a>            .copied()
-<a href=#669 id=669 data-nosnippet>669</a>            .unwrap_or(idx);
-<a href=#670 id=670 data-nosnippet>670</a>
-<a href=#671 id=671 data-nosnippet>671</a>        <span class="self">self</span>.last_used_nonce_idx
-<a href=#672 id=672 data-nosnippet>672</a>            .insert(amount, max(last_used_nonce_idx, idx));
-<a href=#673 id=673 data-nosnippet>673</a>
-<a href=#674 id=674 data-nosnippet>674</a>        <span class="kw">let </span>next_pending_note_idx = <span class="self">self
-<a href=#675 id=675 data-nosnippet>675</a>            </span>.next_pending_note_idx
-<a href=#676 id=676 data-nosnippet>676</a>            .get(<span class="kw-2">&amp;</span>amount)
-<a href=#677 id=677 data-nosnippet>677</a>            .copied()
-<a href=#678 id=678 data-nosnippet>678</a>            .unwrap_or_default();
-<a href=#679 id=679 data-nosnippet>679</a>
-<a href=#680 id=680 data-nosnippet>680</a>        <span class="kw">let </span>missing = last_used_nonce_idx
-<a href=#681 id=681 data-nosnippet>681</a>            .add(GAP_LIMIT)
-<a href=#682 id=682 data-nosnippet>682</a>            .saturating_sub(next_pending_note_idx);
-<a href=#683 id=683 data-nosnippet>683</a>
-<a href=#684 id=684 data-nosnippet>684</a>        <span class="kw">if </span>missing &gt; <span class="number">0 </span>{
-<a href=#685 id=685 data-nosnippet>685</a>            <span class="self">self</span>.add_pending_nonces(amount, missing, secret);
-<a href=#686 id=686 data-nosnippet>686</a>        }
-<a href=#687 id=687 data-nosnippet>687</a>    }
-<a href=#688 id=688 data-nosnippet>688</a>
-<a href=#689 id=689 data-nosnippet>689</a>    <span class="kw">pub fn </span>finalize(<span class="self">self</span>) -&gt; RecoveryStateV2Finalized {
-<a href=#690 id=690 data-nosnippet>690</a>        RecoveryStateV2Finalized {
-<a href=#691 id=691 data-nosnippet>691</a>            pending_notes: <span class="self">self</span>.pending_outputs.into_values().collect(),
-<a href=#692 id=692 data-nosnippet>692</a>            next_note_idx: <span class="self">self
-<a href=#693 id=693 data-nosnippet>693</a>                </span>.last_used_nonce_idx
-<a href=#694 id=694 data-nosnippet>694</a>                .into_iter()
-<a href=#695 id=695 data-nosnippet>695</a>                .map(|(amount, idx)| (amount, NoteIndex(idx + <span class="number">1</span>)))
-<a href=#696 id=696 data-nosnippet>696</a>                .collect(),
-<a href=#697 id=697 data-nosnippet>697</a>        }
-<a href=#698 id=698 data-nosnippet>698</a>    }
-<a href=#699 id=699 data-nosnippet>699</a>}
-<a href=#700 id=700 data-nosnippet>700</a>
-<a href=#701 id=701 data-nosnippet>701</a><span class="kw">pub struct </span>RecoveryStateV2Finalized {
-<a href=#702 id=702 data-nosnippet>702</a>    <span class="doccomment">/// Pending notes that need state machines to collect signatures
-<a href=#703 id=703 data-nosnippet>703</a>    </span><span class="kw">pub </span>pending_notes: Vec&lt;(Amount, NoteIssuanceRequest)&gt;,
-<a href=#704 id=704 data-nosnippet>704</a>    <span class="doccomment">/// Next note index per amount tier (for restoring `NextECashNoteIndexKey`)
-<a href=#705 id=705 data-nosnippet>705</a>    </span><span class="kw">pub </span>next_note_idx: BTreeMap&lt;Amount, NoteIndex&gt;,
-<a href=#706 id=706 data-nosnippet>706</a>}
+<a href=#668 id=668 data-nosnippet>668</a>            .map_or(idx, |<span class="kw-2">&amp;</span>last| max(last, idx));
+<a href=#669 id=669 data-nosnippet>669</a>
+<a href=#670 id=670 data-nosnippet>670</a>        <span class="self">self</span>.last_used_nonce_idx.insert(amount, last_used_nonce_idx);
+<a href=#671 id=671 data-nosnippet>671</a>
+<a href=#672 id=672 data-nosnippet>672</a>        <span class="kw">let </span>next_pending_note_idx = <span class="self">self
+<a href=#673 id=673 data-nosnippet>673</a>            </span>.next_pending_note_idx
+<a href=#674 id=674 data-nosnippet>674</a>            .get(<span class="kw-2">&amp;</span>amount)
+<a href=#675 id=675 data-nosnippet>675</a>            .copied()
+<a href=#676 id=676 data-nosnippet>676</a>            .unwrap_or_default();
+<a href=#677 id=677 data-nosnippet>677</a>
+<a href=#678 id=678 data-nosnippet>678</a>        <span class="kw">let </span>missing = last_used_nonce_idx
+<a href=#679 id=679 data-nosnippet>679</a>            .add(GAP_LIMIT)
+<a href=#680 id=680 data-nosnippet>680</a>            .saturating_sub(next_pending_note_idx);
+<a href=#681 id=681 data-nosnippet>681</a>
+<a href=#682 id=682 data-nosnippet>682</a>        <span class="kw">if </span>missing &gt; <span class="number">0 </span>{
+<a href=#683 id=683 data-nosnippet>683</a>            <span class="self">self</span>.add_pending_nonces(amount, missing, secret);
+<a href=#684 id=684 data-nosnippet>684</a>        }
+<a href=#685 id=685 data-nosnippet>685</a>    }
+<a href=#686 id=686 data-nosnippet>686</a>
+<a href=#687 id=687 data-nosnippet>687</a>    <span class="kw">pub fn </span>finalize(<span class="self">self</span>) -&gt; RecoveryStateV2Finalized {
+<a href=#688 id=688 data-nosnippet>688</a>        RecoveryStateV2Finalized {
+<a href=#689 id=689 data-nosnippet>689</a>            pending_notes: <span class="self">self</span>.pending_outputs.into_values().collect(),
+<a href=#690 id=690 data-nosnippet>690</a>            next_note_idx: <span class="self">self
+<a href=#691 id=691 data-nosnippet>691</a>                </span>.last_used_nonce_idx
+<a href=#692 id=692 data-nosnippet>692</a>                .into_iter()
+<a href=#693 id=693 data-nosnippet>693</a>                .map(|(amount, idx)| (amount, NoteIndex(idx + <span class="number">1</span>)))
+<a href=#694 id=694 data-nosnippet>694</a>                .collect(),
+<a href=#695 id=695 data-nosnippet>695</a>        }
+<a href=#696 id=696 data-nosnippet>696</a>    }
+<a href=#697 id=697 data-nosnippet>697</a>}
+<a href=#698 id=698 data-nosnippet>698</a>
+<a href=#699 id=699 data-nosnippet>699</a><span class="kw">pub struct </span>RecoveryStateV2Finalized {
+<a href=#700 id=700 data-nosnippet>700</a>    <span class="doccomment">/// Pending notes that need state machines to collect signatures
+<a href=#701 id=701 data-nosnippet>701</a>    </span><span class="kw">pub </span>pending_notes: Vec&lt;(Amount, NoteIssuanceRequest)&gt;,
+<a href=#702 id=702 data-nosnippet>702</a>    <span class="doccomment">/// Next note index per amount tier (for restoring `NextECashNoteIndexKey`)
+<a href=#703 id=703 data-nosnippet>703</a>    </span><span class="kw">pub </span>next_note_idx: BTreeMap&lt;Amount, NoteIndex&gt;,
+<a href=#704 id=704 data-nosnippet>704</a>}
 </code></pre></div></section></main></body></html>
