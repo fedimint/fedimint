@@ -23,7 +23,10 @@ use fedimint_ln_client::recurring::api::{
 use fedimint_ln_client::recurring::{PaymentCodeId, PaymentCodeRootKey};
 use fedimint_lnurl::{LnurlResponse, PayResponse};
 use fedimint_logging::TracingSetup;
-use fedimint_recurringd::{LNURLPayInvoice, PaymentCodeInvoice, RecurringInvoiceServer};
+use fedimint_recurringd::{
+    LNURLPayInvoice, MAX_SENDABLE_MSAT, MIN_SENDABLE_MSAT, PaymentCodeInvoice,
+    RecurringInvoiceServer,
+};
 use fedimint_rocksdb::RocksDb;
 use lightning_invoice::Bolt11Invoice;
 use serde_json::json;
@@ -222,6 +225,12 @@ async fn lnurl_pay_invoice(
     Path(payment_code_id): Path<PaymentCodeId>,
     Query(params): Query<GetInvoiceParams>,
 ) -> Json<LnurlResponse<LNURLPayInvoice>> {
+    // LUD-06: the service must reject amounts outside the range it advertised
+    // in its pay response, before allocating an invoice index for them.
+    if let Err(reason) = check_lnurl_amount(params.amount) {
+        return Json(LnurlResponse::error(reason));
+    }
+
     Json(
         match app_state
             .recurring_invoice_server
@@ -240,6 +249,16 @@ async fn lnurl_pay_invoice(
             }
         },
     )
+}
+
+fn check_lnurl_amount(amount: Amount) -> Result<(), String> {
+    if (MIN_SENDABLE_MSAT..=MAX_SENDABLE_MSAT).contains(&amount.msats) {
+        Ok(())
+    } else {
+        Err(format!(
+            "Amount must be between {MIN_SENDABLE_MSAT} and {MAX_SENDABLE_MSAT} msat"
+        ))
+    }
 }
 
 async fn await_invoice(
