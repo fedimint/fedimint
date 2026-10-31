@@ -450,3 +450,37 @@ fn a_share_from_a_peer_we_have_no_key_for_names_the_peer() {
 
     assert_matches!(err, VerifyBlindShareError::UnknownPeer { peer: p } if p == peer);
 }
+
+#[test]
+fn a_share_with_an_unknown_outcome_version_is_rejected_without_panicking() {
+    use std::collections::BTreeMap;
+
+    use bls12_381::G1Affine;
+    use fedimint_api_client::api::SerdeOutputOutcome;
+    use fedimint_core::core::DynOutputOutcome;
+    use fedimint_core::module::CommonModuleInit;
+    use fedimint_mint_common::{MintCommonInit, MintOutputOutcome};
+    use tbs::BlindedMessage;
+
+    use crate::error::VerifyBlindShareError;
+    use crate::output::verify_blind_share;
+
+    let decoder = MintCommonInit::decoder();
+    let outcome = MintOutputOutcome::Default {
+        variant: 1,
+        bytes: vec![],
+    };
+    let serde_outcome = SerdeOutputOutcome::from(&DynOutputOutcome::from_typed(0, outcome));
+
+    let err = verify_blind_share(
+        PeerId::from(0),
+        &serde_outcome,
+        Amount::from_sats(1),
+        BlindedMessage(G1Affine::identity()),
+        &decoder,
+        &BTreeMap::new(),
+    )
+    .expect_err("a guardian may answer with any outcome version");
+
+    assert_matches!(err, VerifyBlindShareError::UnknownOutcomeVariant(e) if e.variant == 1);
+}

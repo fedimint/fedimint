@@ -865,8 +865,6 @@ impl MintOutputStatesCreatedMulti {
     }
 }
 
-/// # Panics
-/// If the given `outcome` is not a [`MintOutputOutcome::V0`] outcome.
 pub fn verify_blind_share(
     peer: PeerId,
     outcome: &SerdeOutputOutcome,
@@ -877,10 +875,7 @@ pub fn verify_blind_share(
 ) -> Result<BlindedSignatureShare, VerifyBlindShareError> {
     let outcome = deserialize_outcome::<MintOutputOutcome>(outcome, decoder)?;
 
-    let blinded_signature_share = outcome
-        .ensure_v0_ref()
-        .expect("We only process output outcome versions created by ourselves")
-        .0;
+    let blinded_signature_share = outcome.ensure_v0_ref()?.0;
 
     let amount_key = peer_tbs_pks
         .get(&peer)
