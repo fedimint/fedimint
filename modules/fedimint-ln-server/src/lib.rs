@@ -1316,7 +1316,7 @@ impl Lightning {
                     break;
                 }
 
-                sleep(next_poll_delay(all_peers_supported_version.is_some())).await;
+                sleep(next_poll_delay!(all_peers_supported_version.is_some())).await;
             }
         });
         receiver

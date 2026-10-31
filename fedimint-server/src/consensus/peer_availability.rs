@@ -39,7 +39,7 @@ const SLOT_SECS: u64 = 60;
 /// every 10 minutes, or every 10 seconds in tests. A restart loses at most one
 /// interval of activity.
 pub async fn persist_peer_availability(db: Database, peer_activity: Arc<Mutex<PeerActivity>>) {
-    let interval = if is_running_in_test_env() {
+    let interval = if is_running_in_test_env!() {
         Duration::from_secs(10)
     } else {
         Duration::from_secs(600)

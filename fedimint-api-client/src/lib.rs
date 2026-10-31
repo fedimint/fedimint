@@ -28,7 +28,7 @@ pub mod query;
 /// Retry config downloads without making test fixtures wait through production
 /// backoffs. Only delays change: both policies allow fourteen retries.
 fn client_config_download_backoff() -> backoff_util::FibonacciBackoff {
-    if is_running_in_test_env() {
+    if is_running_in_test_env!() {
         backoff_util::custom_backoff(
             std::time::Duration::from_millis(20),
             std::time::Duration::from_millis(100),
