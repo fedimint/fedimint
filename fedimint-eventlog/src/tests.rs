@@ -21,9 +21,9 @@ use super::{
     DBTransactionEventLogExt as _, EventHandlerError, EventKind, EventLogEntry, EventLogId,
     EventLogTrimableId, EventLogTrimableIdPrefixAll, TRIMABLE_EVENTLOG_MIN_ID_AGE,
     TRIMABLE_EVENTLOG_MIN_TS_AGE, UnordedEventLogId, UnorderedEventLogEntry, handle_events,
-    run_event_log_ordering_task, trim_trimable_log,
+    handle_trimable_events, run_event_log_ordering_task, trim_trimable_log,
 };
-use crate::{EventLogNonTrimableTracker, EventLogTrackerError};
+use crate::{EventLogNonTrimableTracker, EventLogTrackerError, EventLogTrimableTracker};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
 pub struct TestEventLogIdKey;
@@ -300,6 +300,84 @@ async fn test_trim_trimable_log() {
         assert_eq!(remaining_ids[0], expected_start_id);
         assert_eq!(remaining_ids.len(), expected_remaining);
     }
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Encodable, Decodable)]
+pub struct TestEventLogTrimableIdKey;
+
+impl_db_record!(
+    key = TestEventLogTrimableIdKey,
+    value = EventLogTrimableId,
+    db_prefix = 0x01,
+);
+
+struct TestEventLogTrimableTracker;
+
+#[apply(async_trait_maybe_send!)]
+impl EventLogTrimableTracker for TestEventLogTrimableTracker {
+    async fn store(
+        &mut self,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
+        pos: EventLogTrimableId,
+    ) -> Result<(), EventLogTrackerError> {
+        dbtx.insert_entry(&TestEventLogTrimableIdKey, &pos).await;
+        Ok(())
+    }
+
+    async fn load(
+        &mut self,
+        dbtx: &mut DatabaseTransaction<NonCommittable>,
+    ) -> Result<Option<EventLogTrimableId>, EventLogTrackerError> {
+        Ok(dbtx.get_value(&TestEventLogTrimableIdKey).await)
+    }
+}
+
+/// A tracker starting at the beginning of the trimable log must not wait
+/// forever for entries that were already trimmed, but continue at the oldest
+/// entry still in the log.
+#[test_log::test(tokio::test)]
+async fn handle_trimable_events_skips_trimmed_entries() {
+    let db = MemDatabase::new().into_database();
+
+    // Ids 0..5 look trimmed: only 5..10 are in the log.
+    {
+        let mut dbtx = db.begin_transaction().await;
+        for i in 5..10u64 {
+            dbtx.insert_entry(
+                &EventLogTrimableId::from(i),
+                &EventLogEntry {
+                    kind: EventKind::from(format!("{i}")),
+                    module: None,
+                    ts_usecs: i,
+                    payload: vec![],
+                },
+            )
+            .await;
+        }
+        dbtx.commit_tx().await;
+    }
+
+    // Keep the sender alive, so a stalled handler waits instead of returning.
+    let (_log_event_added_tx, log_event_added_rx) = watch::channel(());
+
+    let res = fedimint_core::runtime::timeout(
+        Duration::from_secs(10),
+        handle_trimable_events(
+            db.clone(),
+            Box::new(TestEventLogTrimableTracker),
+            log_event_added_rx,
+            |_dbtx, event| {
+                Box::pin(async move {
+                    assert_eq!(event.kind, EventKind::from("5"));
+                    Err::<(), _>(WrapUp)
+                })
+            },
+        ),
+    )
+    .await
+    .expect("handling trimable events must not stall on trimmed entries");
+
+    assert!(matches!(res, Err(EventHandlerError::Handler(WrapUp))));
 }
 
 /// Logs a persistent event without a module and commits it, which wakes up the
