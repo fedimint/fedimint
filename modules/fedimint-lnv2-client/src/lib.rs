@@ -1055,7 +1055,7 @@ impl LightningClientModule {
     /// accepts incoming payments for this federation. A gateway that answers
     /// but has turned receives off is skipped rather than handed an invoice
     /// request it would refuse.
-    async fn select_receive_gateway(&self) -> Result<(SafeUrl, RoutingInfo), SelectGatewayError> {
+    pub async fn select_receive_gateway(&self) -> Result<(SafeUrl, RoutingInfo), SelectGatewayError> {
         let gateways = self
             .module_api
             .gateways()
