@@ -86,6 +86,14 @@ pub struct IncomingPaymentStarted {
     pub operation_id: OperationId,
 }
 
+impl IncomingPaymentStarted {
+    /// The fee the gateway keeps: the HTLC amount it received minus the amount
+    /// it locked in the incoming contract.
+    pub fn fee(&self) -> Option<Amount> {
+        self.invoice_amount.checked_sub(self.contract_amount)
+    }
+}
+
 impl Event for IncomingPaymentStarted {
     const MODULE: Option<ModuleKind> = Some(fedimint_ln_common::KIND);
     const KIND: EventKind = EventKind::from_static("incoming-payment-started");
@@ -222,8 +230,7 @@ pub fn compute_lnv1_stats(
             |start_event, success_event, latency| {
                 if start_event.payment_hash == success_event.payment_hash {
                     start_event
-                        .contract_amount
-                        .checked_sub(start_event.invoice_amount)
+                        .fee()
                         .map(|fee| (latency.as_millis() as u64, fee))
                 } else {
                     None
@@ -250,3 +257,6 @@ pub fn compute_lnv1_stats(
     let incoming = StructuredPaymentEvents::new(&incoming_success_stats, incoming_failure_stats);
     (outgoing, incoming)
 }
+
+#[cfg(test)]
+mod tests;
