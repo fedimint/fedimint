@@ -35,7 +35,8 @@ use rand::rngs::OsRng;
 use tokio::sync::watch;
 
 use crate::db::{
-    ConsensusVersionVoteKey, ContractKey, LightningAuditItemKey, LightningGatewayKey, OfferKey,
+    BlockCountVoteKey, ConsensusVersionVoteKey, ContractKey, LightningAuditItemKey,
+    LightningGatewayKey, OfferKey,
 };
 use crate::{Lightning, LightningInit, create_gateway_registration_message};
 
@@ -1566,4 +1567,31 @@ async fn unchanged_registration_may_be_refreshed_with_a_stale_nonce() {
         stored_api(&server, &mut dbtx.to_ref_nc(), gateway_id).await,
         "https://gw/v1"
     );
+}
+
+#[test_log::test(tokio::test)]
+async fn await_block_height_sees_votes_committed_while_waiting() {
+    let task_group = TaskGroup::new();
+    let (server_cfg, _) = build_configs();
+    let server = mock_server(&server_cfg[0], &task_group);
+    let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+
+    let wait = server.wait_block_height(10, &db);
+    let vote = async {
+        // Let the wait take its first look before any votes exist.
+        fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
+
+        let mut dbtx = db.begin_transaction().await;
+        for peer in 0..MINTS {
+            dbtx.insert_entry(&BlockCountVoteKey(PeerId::from(peer)), &11)
+                .await;
+        }
+        dbtx.commit_tx().await;
+    };
+
+    fedimint_core::runtime::timeout(Duration::from_secs(10), async {
+        tokio::join!(wait, vote);
+    })
+    .await
+    .expect("the wait ends once the federation agrees on a higher block count");
 }
