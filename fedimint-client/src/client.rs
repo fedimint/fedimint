@@ -893,9 +893,10 @@ impl Client {
     /// anything.
     ///
     /// This is the read-only twin of `Self::finalize_transaction`: it runs
-    /// the exact same primary-module balancing
-    /// (`create_final_inputs_and_outputs`, including funding selection /
-    /// consolidation / rebalancing) against a non-committable transaction
+    /// primary-module balancing through `quote_final_inputs_and_outputs`,
+    /// using the same funding selection, consolidation, and rebalancing as
+    /// finalization without requiring cryptographic change outputs.
+    /// It uses a non-committable transaction
     /// that is dropped rather than committed, so the client's funds are
     /// read but left untouched. The quote is point-in-time: it depends on
     /// the current inventory and can move as funds change.
@@ -956,8 +957,8 @@ impl Client {
                 return Err(TransactionSubmitError::NoPrimaryModule { unit: *unit });
             };
 
-            let (change_input, change_output) = module
-                .create_final_inputs_and_outputs(
+            let change = module
+                .quote_final_inputs_and_outputs(
                     module_id,
                     &mut dbtx.to_ref_nc(),
                     operation_id,
@@ -967,28 +968,10 @@ impl Client {
                 )
                 .await?;
 
-            // Fold the change into the totals. These are a disjoint set of items
-            // from the explicit ones (the primary module only sees the scalar
-            // amounts to balance, never the explicit items), so this is not
-            // double-counting. Iterate the bundles the way `finalize_transaction`
-            // would, looking each fee up via the module that owns the item.
-            for input in change_input.inputs() {
-                let module = self.get_module(input.input.module_instance_id());
-                let fee = module
-                    .input_fee(&input.amounts, &input.input)
-                    .expect("Primary module must know its own change input fees");
-                gross_input.checked_add_mut(&input.amounts);
-                input_fees.checked_add_mut(&fee);
-            }
-
-            for output in change_output.outputs() {
-                let module = self.get_module(output.output.module_instance_id());
-                let fee = module
-                    .output_fee(&output.amounts, &output.output)
-                    .expect("Primary module must know its own change output fees");
-                gross_output.checked_add_mut(&output.amounts);
-                output_fees.checked_add_mut(&fee);
-            }
+            gross_input.checked_add_mut(&change.input_amount);
+            gross_output.checked_add_mut(&change.output_amount);
+            input_fees.checked_add_mut(&change.input_fee);
+            output_fees.checked_add_mut(&change.output_fee);
         }
 
         // Mark the dropped dbtx as intentionally uncommitted so the commit
