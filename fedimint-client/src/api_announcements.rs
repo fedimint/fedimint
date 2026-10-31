@@ -54,7 +54,7 @@ pub(crate) async fn run_api_announcement_refresh_task(client_inner: Arc<Client>)
             1,
             api,
             &guardian_pub_keys,
-            if is_running_in_test_env() {
+            if is_running_in_test_env!() {
                 Duration::from_millis(1)
             } else {
                 Duration::from_secs(30)
@@ -63,7 +63,7 @@ pub(crate) async fn run_api_announcement_refresh_task(client_inner: Arc<Client>)
         .await;
         store_api_announcements_updates_from_peers(client_inner.db(), &results).await;
 
-        let duration = if is_running_in_test_env() {
+        let duration = if is_running_in_test_env!() {
             Duration::from_secs(1)
         } else {
             // Check once an hour if there are new announcements
