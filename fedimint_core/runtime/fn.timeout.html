@@ -6,7 +6,7 @@
 <p>If the future completes before the duration has elapsed, then the completed
 value is returned. Otherwise, an error is returned and the future is
 canceled.</p>
-<p>Note that the timeout is checked before polling the future, so if the future
+<p>Note that the future is polled before the timeout is checked, so if the future
 does not yield during execution then it is possible for the future to complete
 and exceed the timeout <em>without</em> returning an error.</p>
 <p>This function returns a future whose return type is <a href="https://doc.rust-lang.org/nightly/core/result/enum.Result.html" title="enum core::result::Result"><code>Result</code></a><code>&lt;T,</code><a href="struct.Elapsed.html" title="struct fedimint_core::runtime::Elapsed"><code>Elapsed</code></a><code>&gt;</code>, where <code>T</code> is the

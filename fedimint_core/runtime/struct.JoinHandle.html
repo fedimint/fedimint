@@ -15,9 +15,9 @@ functions.</p>
 before task completion is observed via <code>JoinHandle</code> <code>await</code>,
 <a href="struct.JoinHandle.html#method.is_finished" title="method fedimint_core::runtime::JoinHandle::is_finished"><code>JoinHandle::is_finished</code></a> or [<code>AbortHandle::is_finished</code>].</p>
 <h2 id="cancel-safety"><a class="doc-anchor" href="#cancel-safety">§</a>Cancel safety</h2>
-<p>The <code>&amp;mut JoinHandle&lt;T&gt;</code> type is cancel safe. If it is used as the event
-in a <code>tokio::select!</code> statement and some other branch completes first,
-then it is guaranteed that the output of the task is not lost.</p>
+<p>Awaiting a <code>&amp;mut JoinHandle&lt;T&gt;</code> is cancel safe. If it is used as a
+branch in <code>tokio::select!</code> and another branch completes first, then it
+is guaranteed that the output of the task is not lost.</p>
 <p>If a <code>JoinHandle</code> is dropped, then the task continues running in the
 background and its return value is lost.</p>
 <h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>

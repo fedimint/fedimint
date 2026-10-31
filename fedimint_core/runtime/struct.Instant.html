@@ -46,8 +46,7 @@ zero duration if that instant is later than this one.</p>
 sleep(Duration::new(<span class="number">1</span>, <span class="number">0</span>)).<span class="kw">await</span>;
 <span class="kw">let </span>new_now = Instant::now();
 <span class="macro">println!</span>(<span class="string">"{:?}"</span>, new_now.saturating_duration_since(now));
-<span class="macro">println!</span>(<span class="string">"{:?}"</span>, now.saturating_duration_since(new_now)); <span class="comment">// 0ns
-</span>}</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.elapsed" class="method"><h4 class="code-header">pub fn <a href="#method.elapsed" class="fn">elapsed</a>(&amp;self) -&gt; <a class="struct" href="struct.Duration.html" title="struct fedimint_core::runtime::Duration">Duration</a></h4></section></summary><div class="docblock"><p>Returns the amount of time elapsed since this instant was created,
+<span class="macro">println!</span>(<span class="string">"{:?}"</span>, now.saturating_duration_since(new_now)); <span class="comment">// 0ns</span></code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.elapsed" class="method"><h4 class="code-header">pub fn <a href="#method.elapsed" class="fn">elapsed</a>(&amp;self) -&gt; <a class="struct" href="struct.Duration.html" title="struct fedimint_core::runtime::Duration">Duration</a></h4></section></summary><div class="docblock"><p>Returns the amount of time elapsed since this instant was created,
 or zero duration if this instant is in the future.</p>
 <h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>tokio::time::{Duration, Instant, sleep};
