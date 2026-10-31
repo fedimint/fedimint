@@ -1589,7 +1589,9 @@ async fn await_block_height_sees_votes_committed_while_waiting() {
         dbtx.commit_tx().await;
     };
 
-    fedimint_core::runtime::timeout(Duration::from_secs(2), async {
+    // Long enough for one regular five-second poll, so the test does not
+    // depend on the runner setting a test environment signal.
+    fedimint_core::runtime::timeout(Duration::from_secs(10), async {
         tokio::join!(wait, vote);
     })
     .await
