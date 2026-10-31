@@ -318,7 +318,9 @@ impl Client {
                 Ok((address.as_str().unwrap().to_string(), String::new()))
             }
         } else {
-            let deposit = cmd!(self, "deposit-address").out_json().await?;
+            let deposit = cmd!(self, "module", "wallet", "new-deposit-address")
+                .out_json()
+                .await?;
             Ok((
                 deposit["address"].as_str().unwrap().to_string(),
                 deposit["operation_id"].as_str().unwrap().to_string(),
@@ -327,7 +329,16 @@ impl Client {
     }
 
     pub async fn await_deposit(&self, operation_id: &str) -> Result<()> {
-        cmd!(self, "await-deposit", operation_id).run().await
+        cmd!(
+            self,
+            "module",
+            "wallet",
+            "await-deposit",
+            "--operation-id",
+            operation_id
+        )
+        .run()
+        .await
     }
 
     pub fn cmd(&self) -> Command {
