@@ -133,3 +133,32 @@ fn from_str_reports_corrupt_prefixed_base32() {
     assert!(matches!(err, InviteCodeParseError::Base32(_)), "{err:?}");
     assert_eq!(err.fmt_compact().to_string(), err.to_string());
 }
+
+#[test]
+fn invite_code_too_long_for_bech32_round_trips() {
+    let federation_id = FederationId(
+        bitcoin::hashes::sha256::Hash::from_str(
+            "bea7ff4116f2b1d324c7b5d699cce4ac7408cee41db2c88027e21b76fff3b9f4",
+        )
+        .expect("valid hash"),
+    );
+    let invite = InviteCode::new(
+        "wss://fedimintd.mplsfed.foo/".parse().expect("valid url"),
+        PeerId::new(0),
+        federation_id,
+        Some("a".repeat(1000)),
+    );
+
+    let encoded = invite.to_string();
+    assert!(
+        encoded.starts_with(FEDIMINT_PREFIX),
+        "falls back to the prefixed base 32 form: {encoded}"
+    );
+    assert_eq!(InviteCode::from_str(&encoded).expect("parses back"), invite);
+
+    let json = serde_json::to_string(&invite).expect("serializes");
+    assert_eq!(
+        serde_json::from_str::<InviteCode>(&json).expect("deserializes"),
+        invite
+    );
+}
