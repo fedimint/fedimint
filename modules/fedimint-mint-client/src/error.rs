@@ -12,6 +12,7 @@ use fedimint_core::config::FederationIdPrefix;
 use fedimint_core::db::DatabaseError;
 use fedimint_core::encoding::DecodeError;
 use fedimint_core::{Amount, PeerId};
+use fedimint_mint_common::UnknownMintOutputOutcomeVariantError;
 use thiserror::Error;
 
 pub use crate::{InsufficientBalanceError, ReissueExternalNotesError};
@@ -263,6 +264,11 @@ pub enum VerifyBlindShareError {
     /// The guardian's answer is not a decodable output outcome.
     #[error("The output outcome could not be read")]
     Outcome(#[source] Box<OutputOutcomeError>),
+
+    /// The guardian answered with an outcome version this client does not
+    /// know.
+    #[error("The output outcome has an unknown version")]
+    UnknownOutcomeVariant(#[from] UnknownMintOutputOutcomeVariantError),
 
     /// The share came from a peer this client holds no key for.
     #[error("No public key share is known for peer {peer}")]
