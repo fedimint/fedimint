@@ -387,6 +387,10 @@ jobs:
       - uses: ./.github/actions/pin-nix-flake-inputs
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
 
+      - name: Test container debug-reference cleanup
+        if: (github.event_name != 'pull_request' || matrix.platform.run_in_pr) && matrix.container.name == 'fedimintd'
+        run: nix build -L --no-link .#checks.${{ matrix.platform.arch }}.container-debug-references
+
       - name: Build ${{ matrix.container.name }} container for ${{ matrix.platform.arch }}
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
         run: |
