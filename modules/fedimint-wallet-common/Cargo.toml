@@ -19,7 +19,6 @@ path = "src/lib.rs"
 bitcoin = { workspace = true }
 fedimint-core = { workspace = true }
 hex = { workspace = true }
-impl-tools = { workspace = true }
 miniscript = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
 thiserror = { workspace = true }

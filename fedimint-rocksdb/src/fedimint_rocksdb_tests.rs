@@ -6,6 +6,110 @@ use futures::StreamExt;
 
 use super::{RocksDb, RocksDbReadOnly, next_prefix};
 
+mod no_previous;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn owned_iterator_bytes() {
+    use fedimint_core::db::{IDatabaseTransactionOpsCore, IRawDatabase, IRawDatabaseTransaction};
+
+    async fn check(tx: &mut impl IDatabaseTransactionOpsCore, rows: &[(Vec<u8>, Vec<u8>)]) {
+        assert_eq!(
+            tx.raw_find_by_prefix(&[])
+                .await
+                .unwrap()
+                .collect::<Vec<_>>()
+                .await,
+            rows
+        );
+        for prefix in [&[0][..], &[0, 255][..], &[255][..]] {
+            let expected: Vec<_> = rows
+                .iter()
+                .filter(|(key, _)| key.starts_with(prefix))
+                .cloned()
+                .collect();
+            assert_eq!(
+                tx.raw_find_by_prefix(prefix)
+                    .await
+                    .unwrap()
+                    .collect::<Vec<_>>()
+                    .await,
+                expected
+            );
+            assert_eq!(
+                tx.raw_find_by_prefix_sorted_descending(prefix)
+                    .await
+                    .unwrap()
+                    .collect::<Vec<_>>()
+                    .await,
+                expected.into_iter().rev().collect::<Vec<_>>()
+            );
+        }
+        assert_eq!(
+            tx.raw_find_by_prefix_sorted_descending(&[])
+                .await
+                .unwrap()
+                .collect::<Vec<_>>()
+                .await,
+            rows.iter().rev().cloned().collect::<Vec<_>>()
+        );
+        assert_eq!(
+            tx.raw_find_by_range(&[0][..]..&[255][..])
+                .await
+                .unwrap()
+                .collect::<Vec<_>>()
+                .await,
+            rows.iter()
+                .filter(|(key, _)| key.as_slice() < [255].as_slice())
+                .cloned()
+                .collect::<Vec<_>>()
+        );
+    }
+
+    let path = tempfile::tempdir().unwrap();
+    let db = RocksDb::build(path.path()).open_blocking().unwrap();
+    let rows = vec![
+        (vec![0], vec![]),
+        (vec![0, 0], vec![0, 255, 0]),
+        (vec![0, 255], vec![42; 64 * 1024]),
+        ([vec![0, 255], vec![7; 64 * 1024]].concat(), vec![0]),
+        (vec![1], vec![255]),
+        (vec![255], vec![0, 255]),
+    ];
+    let mut tx = db.begin_transaction().await;
+    for (key, value) in &rows {
+        tx.raw_insert_bytes(key, value).await.unwrap();
+    }
+    check(&mut tx, &rows).await;
+    tx.commit_tx().await.unwrap();
+    let mut tx = db.begin_transaction().await;
+    check(&mut tx, &rows).await;
+    tx.raw_remove_by_prefix(&[0, 255]).await.unwrap();
+    let remaining: Vec<_> = rows
+        .iter()
+        .filter(|(key, _)| !key.starts_with(&[0, 255]))
+        .cloned()
+        .collect();
+    check(&mut tx, &remaining).await;
+    // Roll back the deletion so the read-only backend sees the original rows.
+    drop(tx);
+    drop(db);
+    let db = RocksDbReadOnly::open_read_only(path.path()).await.unwrap();
+    check(&mut db.begin_transaction().await, &rows).await;
+}
+
+#[test]
+fn boxed_bytes_into_vec_reuses_allocation() {
+    for bytes in [vec![], vec![0, 255, 0], vec![42; 64 * 1024]] {
+        let boxed = bytes.clone().into_boxed_slice();
+        let ptr = boxed.as_ptr();
+        let len = boxed.len();
+        let owned = boxed.into_vec();
+        assert_eq!(owned, bytes);
+        assert_eq!(owned.as_ptr(), ptr);
+        assert_eq!(owned.capacity(), len);
+    }
+}
+
 fn open_temp_db(temp_path: &str) -> Database {
     let path = tempfile::Builder::new()
         .prefix(temp_path)

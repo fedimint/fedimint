@@ -25,7 +25,7 @@ use crate::metrics::{
     IROH_API_CONNECTION_DURATION_SECONDS, IROH_API_CONNECTION_IDLE_TIMEOUT_TOTAL,
     IROH_API_CONNECTIONS_ACTIVE, IROH_API_REQUEST_DURATION_SECONDS, IROH_API_REQUEST_RESPONSE_CODE,
 };
-use crate::net::api::HasApiContext;
+use crate::net::api::{HasApiContext, with_api_endpoint_timeout};
 
 /// How long an Iroh API connection may stay idle before the server closes it.
 const IROH_API_CONNECTION_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
@@ -426,13 +426,10 @@ async fn await_response(api: &IrohApiState, request: IrohApiRequest) -> Result<V
                 .get(&method)
                 .ok_or_else(|| ApiError::not_found(method.clone()))?;
 
-            let (state, context) = api.consensus.context(&request.request, None).await;
-
-            run_handler(
-                None,
-                &method,
-                (endpoint.handler)(state, context, request.request),
-            )
+            run_handler(None, &method, async {
+                let (state, context) = api.consensus.context(&request.request, None).await;
+                (endpoint.handler)(state, context, request.request).await
+            })
             .await
         }
         ApiMethod::Module(module_id, method) => {
@@ -443,23 +440,20 @@ async fn await_response(api: &IrohApiState, request: IrohApiRequest) -> Result<V
                 .get(&method)
                 .ok_or_else(|| ApiError::not_found(method.clone()))?;
 
-            let (state, context) = api
-                .consensus
-                .context(&request.request, Some(module_id))
-                .await;
-
-            run_handler(
-                Some(module_id),
-                &method,
-                (endpoint.handler)(state, context, request.request),
-            )
+            run_handler(Some(module_id), &method, async {
+                let (state, context) = api
+                    .consensus
+                    .context(&request.request, Some(module_id))
+                    .await;
+                (endpoint.handler)(state, context, request.request).await
+            })
             .await
         }
     }
 }
 
-/// Runs an API endpoint handler, turning a panic into an error response for the
-/// caller that triggered it.
+/// Runs an API endpoint with the same deadline as WebSocket requests, turning a
+/// timeout or panic into an error response for the caller that triggered it.
 ///
 /// Iroh API requests run on the root task group, so an escaping panic would
 /// trip the task group's panic guard and shut the whole guardian down. The
@@ -473,7 +467,7 @@ async fn run_handler(
     // could end up with an inconsistent state. In practice most API functions are
     // only reading and the few that do write anything are atomic. Lastly, this is
     // only the last line of defense.
-    AssertUnwindSafe(handler)
+    AssertUnwindSafe(with_api_endpoint_timeout(handler))
         .catch_unwind()
         .await
         .unwrap_or_else(|_| {

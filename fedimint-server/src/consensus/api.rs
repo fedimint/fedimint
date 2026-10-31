@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::future::pending;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result, ensure};
@@ -32,9 +33,10 @@ use fedimint_core::endpoint_constants::{
     GUARDIAN_METADATA_ENDPOINT, INVITE_CODE_ENDPOINT, P2P_CONNECTION_STATUS_ENDPOINT,
     PEER_AVAILABILITY_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
     SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT,
-    SETUP_STATUS_ENDPOINT, SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT,
-    SIGN_GUARDIAN_METADATA_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_GUARDIAN_METADATA_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
+    SETUP_STATUS_ENDPOINT, SHUTDOWN_AFTER_CURRENT_SESSION_ENDPOINT, SHUTDOWN_ENDPOINT,
+    SIGN_API_ANNOUNCEMENT_ENDPOINT, SIGN_GUARDIAN_METADATA_ENDPOINT, STATUS_ENDPOINT,
+    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_GUARDIAN_METADATA_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::{Audit, AuditSummary};
@@ -49,9 +51,7 @@ use fedimint_core::net::api_announcement::{
 use fedimint_core::net::auth::GuardianAuthToken;
 use fedimint_core::peer_availability::PeerAvailability;
 use fedimint_core::secp256k1::{PublicKey, SECP256K1};
-use fedimint_core::session_outcome::{
-    ConsensusItem, SessionOutcome, SessionStatus, SessionStatusV2, SignedSessionOutcome,
-};
+use fedimint_core::session_outcome::{ConsensusItem, SessionStatus, SessionStatusV2};
 use fedimint_core::task::TaskGroup;
 use fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
@@ -74,7 +74,10 @@ use crate::config::{ServerConfig, legacy_consensus_config_hash};
 use crate::consensus::db::{
     AcceptedItemPrefix, AcceptedTransactionKey, PeerAvailabilityKey, SignedSessionOutcomeKey,
 };
-use crate::consensus::engine::get_finished_session_count_static;
+use crate::consensus::engine::{
+    ScheduledShutdown, ShutdownRequest, get_finished_session_count_static,
+};
+use crate::consensus::session_cache::OutcomeFormat;
 use crate::consensus::transaction::{TxProcessingMode, process_transaction_with_dbtx};
 use crate::metrics::{BACKUP_WRITE_SIZE_BYTES, STORED_BACKUPS_COUNT};
 use crate::net::api::HasApiContext;
@@ -165,13 +168,13 @@ pub struct ConsensusApi {
     pub force_api_secret: Option<String>,
     /// For sending API events to consensus such as transactions
     pub submission_sender: async_channel::Sender<ConsensusItem>,
-    pub shutdown_receiver: Receiver<Option<u64>>,
-    pub shutdown_sender: Sender<Option<u64>>,
+    pub shutdown_receiver: Receiver<Option<ScheduledShutdown>>,
+    pub shutdown_sender: Sender<Option<ScheduledShutdown>>,
     pub ord_latency_receiver: watch::Receiver<Option<Duration>>,
     /// Notified whenever consensus accepts an item.
     pub accepted_item_receiver: watch::Receiver<()>,
     /// Notified whenever consensus completes a session.
-    pub completed_session_receiver: watch::Receiver<()>,
+    pub completed_session_receiver: watch::Receiver<super::session_cache::CompletedSession>,
     pub p2p_status_receivers: P2PStatusReceivers,
     pub ci_status_receivers: BTreeMap<PeerId, Receiver<Option<u64>>>,
     pub bitcoin_rpc_connection: ServerBitcoinRpcMonitor,
@@ -378,15 +381,25 @@ impl ConsensusApi {
         Ok(outcomes)
     }
 
-    pub async fn session_count(&self) -> u64 {
-        get_finished_session_count_static(&mut self.db.begin_transaction_nc().await).await
+    pub fn session_count(&self) -> u64 {
+        self.completed_session_receiver
+            .borrow()
+            .as_ref()
+            .map_or(0, |latest| latest.index + 1)
     }
 
-    pub async fn await_signed_session_outcome(&self, index: u64) -> SignedSessionOutcome {
-        self.db
-            .wait_key_check(&SignedSessionOutcomeKey(index), std::convert::identity)
-            .await
-            .0
+    async fn await_session_outcome(
+        &self,
+        index: u64,
+        format: OutcomeFormat,
+    ) -> Arc<serde_json::Value> {
+        super::session_cache::await_outcome(
+            &self.db,
+            &self.completed_session_receiver,
+            index,
+            format,
+        )
+        .await
     }
 
     pub async fn session_status(&self, session_index: u64) -> SessionStatusV2 {
@@ -409,9 +422,12 @@ impl ConsensusApi {
         }
     }
 
-    pub async fn get_federation_status(&self) -> ApiResult<LegacyFederationStatus> {
-        let session_count = self.session_count().await;
-        let scheduled_shutdown = self.shutdown_receiver.borrow().to_owned();
+    pub fn get_federation_status(&self) -> ApiResult<LegacyFederationStatus> {
+        let session_count = self.session_count();
+        let scheduled_shutdown = self
+            .shutdown_receiver
+            .borrow()
+            .map(|scheduled| scheduled.session);
 
         let status_by_peer = self
             .p2p_status_receivers
@@ -452,7 +468,27 @@ impl ConsensusApi {
     }
 
     fn shutdown(&self, index: Option<u64>) {
-        self.shutdown_sender.send_replace(index);
+        self.shutdown_sender
+            .send_replace(index.map(|session| ScheduledShutdown {
+                session,
+                request: ShutdownRequest::AtSession,
+            }));
+    }
+
+    /// Schedules a shutdown for the session that is running now. The
+    /// consensus loop shuts down at the first session boundary at or after
+    /// the scheduled session, so a session that completes while this request
+    /// is handled defers the shutdown to the end of the next one instead of
+    /// cancelling it. Repeating the request never moves a shutdown that is
+    /// already due by then to a later session.
+    ///
+    /// Unlike `shutdown`, the resulting stop is reported as
+    /// [`ShutdownRequest::AfterCurrentSession`], so the process running the
+    /// server can tell it apart from a shutdown scheduled for a given session.
+    fn shutdown_after_current_session(&self) {
+        let current_session = self.session_count();
+        self.shutdown_sender
+            .send_if_modified(|scheduled| schedule_shutdown_after(scheduled, current_session));
     }
 
     async fn get_federation_audit(&self) -> ApiResult<AuditSummary> {
@@ -868,7 +904,7 @@ impl IDashboardApi for ConsensusApi {
     }
 
     async fn session_count(&self) -> u64 {
-        self.session_count().await
+        self.session_count()
     }
 
     async fn get_session_status(&self, session_idx: u64) -> SessionStatusV2 {
@@ -1031,7 +1067,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             async |fedimint: &ConsensusApi, _context, _v: ()| -> StatusResponse {
                 Ok(StatusResponse {
                     server: ServerStatusLegacy::ConsensusRunning,
-                    federation: Some(fedimint.get_federation_status().await?)
+                    federation: Some(fedimint.get_federation_status()?)
                 })}
         },
         public_api_endpoint! {
@@ -1076,21 +1112,21 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             SESSION_COUNT_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, _v: ()| -> u64 {
-                Ok(fedimint.session_count().await)
+                Ok(fedimint.session_count())
             }
         },
         public_api_endpoint! {
             AWAIT_SESSION_OUTCOME_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SessionOutcome> {
-                Ok((&fedimint.await_signed_session_outcome(index).await.session_outcome).into())
+            async |fedimint: &ConsensusApi, _context, index: u64| -> Arc<serde_json::Value> {
+                Ok(fedimint.await_session_outcome(index, OutcomeFormat::Unsigned).await)
             }
         },
         public_api_endpoint! {
             AWAIT_SIGNED_SESSION_OUTCOME_ENDPOINT,
             ApiVersion::new(0, 0),
-            async |fedimint: &ConsensusApi, _context, index: u64| -> SerdeModuleEncoding<SignedSessionOutcome> {
-                Ok((&fedimint.await_signed_session_outcome(index).await).into())
+            async |fedimint: &ConsensusApi, _context, index: u64| -> Arc<serde_json::Value> {
+                Ok(fedimint.await_session_outcome(index, OutcomeFormat::Signed).await)
             }
         },
         public_api_endpoint! {
@@ -1112,6 +1148,14 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             ApiVersion::new(0, 3),
             async |fedimint: &ConsensusApi, context, index: Option<u64>| -> () {
                 fedimint.shutdown(index);
+                Ok(())
+            }
+        },
+        admin_api_endpoint! {
+            SHUTDOWN_AFTER_CURRENT_SESSION_ENDPOINT,
+            ApiVersion::new(0, 10),
+            async |fedimint: &ConsensusApi, context, _v: ()| -> () {
+                fedimint.shutdown_after_current_session();
                 Ok(())
             }
         },
@@ -1262,6 +1306,27 @@ pub(crate) async fn backup_statistics_static(
     }
 
     backup_stats
+}
+
+/// Schedules a shutdown after `current_session`, keeping the session of a
+/// shutdown that is already due by then. Returns whether the schedule changed.
+fn schedule_shutdown_after(
+    scheduled: &mut Option<ScheduledShutdown>,
+    current_session: u64,
+) -> bool {
+    let session = scheduled
+        .map(|scheduled| scheduled.session)
+        .filter(|session| *session <= current_session)
+        .unwrap_or(current_session);
+    let after_current_session = Some(ScheduledShutdown {
+        session,
+        request: ShutdownRequest::AfterCurrentSession,
+    });
+    if *scheduled == after_current_session {
+        return false;
+    }
+    *scheduled = after_current_session;
+    true
 }
 
 #[cfg(test)]
