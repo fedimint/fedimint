@@ -457,7 +457,7 @@ impl ISetupApi for SetupApi {
         let local_params = state
             .local_params
             .clone()
-            .expect("The endpoint is authenticated.");
+            .context("Local parameters have not been set")?;
 
         ensure!(
             info != local_params.setup_code(),
@@ -542,7 +542,7 @@ impl ISetupApi for SetupApi {
         let local_params = state
             .local_params
             .clone()
-            .expect("The endpoint is authenticated.");
+            .context("Local parameters have not been set")?;
 
         let our_setup_code = local_params.setup_code();
 

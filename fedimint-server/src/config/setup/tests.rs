@@ -295,3 +295,36 @@ async fn rejects_different_fedimint_vendor_during_dkg() {
         );
     }
 }
+
+#[tokio::test]
+async fn rejects_peer_setup_code_before_local_parameters() {
+    let api = setup_api(Network::Regtest);
+    let peer_api = setup_api(Network::Regtest);
+
+    let peer_code = setup_code(&peer_api, "peer").await;
+
+    let err = api
+        .add_peer_setup_code(peer_code)
+        .await
+        .expect_err("adding a peer before setting local parameters should be rejected");
+
+    assert!(
+        err.to_string()
+            .contains("Local parameters have not been set")
+    );
+}
+
+#[tokio::test]
+async fn rejects_dkg_before_local_parameters() {
+    let api = setup_api(Network::Regtest);
+
+    let err = api
+        .start_dkg()
+        .await
+        .expect_err("DKG before setting local parameters should be rejected");
+
+    assert!(
+        err.to_string()
+            .contains("Local parameters have not been set")
+    );
+}
