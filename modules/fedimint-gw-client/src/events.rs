@@ -4,6 +4,7 @@ use fedimint_eventlog::{
     Event, EventKind, EventPersistence, PersistedLogEntry, StructuredPaymentEvents,
     filter_events_by_kind, join_events,
 };
+use fedimint_lightning::PaymentFailureDiagnostics;
 use fedimint_ln_common::contracts::ContractId;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use serde::{Deserialize, Serialize};
@@ -59,6 +60,12 @@ pub struct OutgoingPaymentFailed {
 
     /// The reason the outgoing payment failed.
     pub error: OutgoingPaymentError,
+
+    /// What the gateway's Lightning node reported about where and why the
+    /// payment failed, if it failed on the Lightning network and the node
+    /// reported anything. Absent from events logged before it was recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lightning_failure_diagnostics: Option<PaymentFailureDiagnostics>,
 }
 
 impl Event for OutgoingPaymentFailed {
