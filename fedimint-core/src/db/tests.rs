@@ -246,3 +246,54 @@ fn db_migration_error_other_keeps_its_source() {
     );
     assert!(std::error::Error::source(&err).is_some());
 }
+
+#[tokio::test]
+async fn test_dbtx_has_writes_tracking() {
+    let db = MemDatabase::new().into_database();
+    let key1 = TestKey(1);
+    let key2 = TestKey(2);
+    let key3 = TestKey(3);
+    let val = TestVal(10);
+
+    // Initial read transaction has no writes
+    let mut tx = db.begin_transaction().await;
+    assert!(!tx.has_writes());
+    assert_eq!(tx.get_value(&key1).await, None);
+    assert!(!tx.has_writes());
+    tx.commit_tx().await;
+
+    // insert_entry marks has_writes
+    let mut tx = db.begin_transaction().await;
+    assert!(!tx.has_writes());
+    tx.insert_entry(&key1, &val).await;
+    assert!(tx.has_writes());
+    tx.commit_tx().await;
+
+    // insert_entry_no_previous marks has_writes
+    let mut tx = db.begin_transaction().await;
+    assert!(!tx.has_writes());
+    tx.insert_entry_no_previous(&key2, &val).await;
+    assert!(tx.has_writes());
+    tx.commit_tx().await;
+
+    // remove_entry marks has_writes
+    let mut tx = db.begin_transaction().await;
+    assert!(!tx.has_writes());
+    tx.remove_entry(&key1).await;
+    assert!(tx.has_writes());
+    tx.commit_tx().await;
+
+    // remove_entry_no_previous marks has_writes
+    let mut tx = db.begin_transaction().await;
+    assert!(!tx.has_writes());
+    tx.remove_entry_no_previous(&key2).await;
+    assert!(tx.has_writes());
+    tx.commit_tx().await;
+
+    // remove_by_prefix marks has_writes
+    let mut tx = db.begin_transaction().await;
+    assert!(!tx.has_writes());
+    tx.remove_by_prefix(&key3).await;
+    assert!(tx.has_writes());
+    tx.commit_tx().await;
+}
