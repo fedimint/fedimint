@@ -8,6 +8,11 @@
 //! (`coverage_bps`) and the fraction of that time each peer took part. A
 //! single report is one guardian's opinion; clients combine the reports with
 //! [`merge_peer_availability`].
+//!
+//! After a peer reset, `peer_coverage_bps` replaces shared coverage for that
+//! peer. Clients must support this field to interpret reset observations
+//! correctly. Older clients still read reports, but treat fresh scores as
+//! backed by the shared observation history. Upgrade clients when using resets.
 
 use std::collections::BTreeMap;
 
@@ -18,6 +23,15 @@ use crate::{NumPeers, PeerId};
 /// Time constants of the availability windows in seconds: one week and 30
 /// days. Recent outages show in `last_seen_secs` instead.
 pub const PEER_AVAILABILITY_WINDOWS_SECS: [u64; 2] = [604_800, 2_592_000];
+
+/// MG supplies an increasing revision for each peer so retries and delayed
+/// requests cannot clear fresh observations. Revisions at or below the saved
+/// one are ignored, including after a restart.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResetPeerAvailabilityRequest {
+    pub peer_id: PeerId,
+    pub revision: u64,
+}
 
 /// One guardian's view of its peers' availability.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -46,9 +60,22 @@ pub struct WindowAvailability {
     pub window_secs: u64,
     /// Share of the window this guardian observed itself, in basis points
     pub coverage_bps: u16,
+    /// Observed coverage since each peer's reset. Missing entries use the
+    /// shared coverage, including reports from older guardians.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub peer_coverage_bps: BTreeMap<PeerId, u16>,
     /// Share of the observed time each peer took part in consensus, in basis
     /// points
     pub peers: BTreeMap<PeerId, u16>,
+}
+
+impl WindowAvailability {
+    fn coverage(&self, peer: PeerId) -> u16 {
+        self.peer_coverage_bps
+            .get(&peer)
+            .copied()
+            .unwrap_or(self.coverage_bps)
+    }
 }
 
 /// Combines the reports of several guardians into one view.
@@ -96,7 +123,7 @@ pub fn merge_peer_availability(
             let windows: Vec<(PeerId, &WindowAvailability)> = reports
                 .iter()
                 .filter_map(|(reporter, report)| Some((*reporter, report.windows.get(window)?)))
-                .filter(|(_, window)| window.window_secs == *window_secs && 0 < window.coverage_bps)
+                .filter(|(_, window)| window.window_secs == *window_secs)
                 .collect();
 
             num_peers
@@ -104,7 +131,8 @@ pub fn merge_peer_availability(
                 .filter_map(|peer| {
                     let mut coverages = windows
                         .iter()
-                        .map(|(reporter, window)| (*reporter, u64::from(window.coverage_bps)));
+                        .filter(|(_, window)| 0 < window.coverage(peer))
+                        .map(|(reporter, window)| (*reporter, u64::from(window.coverage(peer))));
                     let min_coverage = others(peer, &mut coverages)
                         .iter()
                         .rev()
@@ -112,7 +140,7 @@ pub fn merge_peer_availability(
                         .div_ceil(2);
                     let mut values = windows
                         .iter()
-                        .filter(|(_, window)| min_coverage <= u64::from(window.coverage_bps))
+                        .filter(|(_, window)| min_coverage <= u64::from(window.coverage(peer)))
                         .filter_map(|(reporter, window)| {
                             Some((*reporter, u64::from(*window.peers.get(&peer)?)))
                         });

@@ -31,11 +31,11 @@ use fedimint_core::endpoint_constants::{
     CLIENT_CONFIG_ENDPOINT, CLIENT_CONFIG_JSON_ENDPOINT, CONSENSUS_ORD_LATENCY_ENDPOINT,
     FEDERATION_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT,
     GUARDIAN_METADATA_ENDPOINT, INVITE_CODE_ENDPOINT, P2P_CONNECTION_STATUS_ENDPOINT,
-    PEER_AVAILABILITY_ENDPOINT, RECOVER_ENDPOINT, SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT,
-    SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT,
-    SETUP_STATUS_ENDPOINT, SHUTDOWN_AFTER_CURRENT_SESSION_ENDPOINT, SHUTDOWN_ENDPOINT,
-    SIGN_API_ANNOUNCEMENT_ENDPOINT, SIGN_GUARDIAN_METADATA_ENDPOINT, STATUS_ENDPOINT,
-    SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_GUARDIAN_METADATA_ENDPOINT,
+    PEER_AVAILABILITY_ENDPOINT, RECOVER_ENDPOINT, RESET_PEER_AVAILABILITY_ENDPOINT,
+    SERVER_CONFIG_CONSENSUS_HASH_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
+    SESSION_STATUS_V2_ENDPOINT, SETUP_STATUS_ENDPOINT, SHUTDOWN_AFTER_CURRENT_SESSION_ENDPOINT,
+    SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, SIGN_GUARDIAN_METADATA_ENDPOINT,
+    STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_GUARDIAN_METADATA_ENDPOINT,
     SUBMIT_TRANSACTION_ENDPOINT, VERSION_ENDPOINT,
 };
 use fedimint_core::invite_code::InviteCode;
@@ -49,7 +49,7 @@ use fedimint_core::net::api_announcement::{
     ApiAnnouncement, SignedApiAnnouncement, SignedApiAnnouncementSubmission,
 };
 use fedimint_core::net::auth::GuardianAuthToken;
-use fedimint_core::peer_availability::PeerAvailability;
+use fedimint_core::peer_availability::{PeerAvailability, ResetPeerAvailabilityRequest};
 use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::session_outcome::{ConsensusItem, SessionStatus, SessionStatusV2};
 use fedimint_core::task::TaskGroup;
@@ -71,9 +71,7 @@ use tracing::{debug, info, warn};
 
 use crate::config::io::{CONSENSUS_CONFIG, JSON_EXT, LOCAL_CONFIG, PRIVATE_CONFIG};
 use crate::config::{ServerConfig, legacy_consensus_config_hash};
-use crate::consensus::db::{
-    AcceptedItemPrefix, AcceptedTransactionKey, PeerAvailabilityKey, SignedSessionOutcomeKey,
-};
+use crate::consensus::db::{AcceptedItemPrefix, AcceptedTransactionKey, SignedSessionOutcomeKey};
 use crate::consensus::engine::{
     ScheduledShutdown, ShutdownRequest, get_finished_session_count_static,
 };
@@ -161,6 +159,7 @@ pub struct ConsensusApi {
     pub cfg: ServerConfig,
     /// Database for serving the API
     pub db: Database,
+    pub availability: Arc<super::peer_availability::AvailabilityTracker>,
     /// Modules registered with the federation
     pub modules: ServerModuleRegistry,
     /// Cached client config
@@ -1098,14 +1097,20 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             PEER_AVAILABILITY_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _c, _v: ()| -> PeerAvailability {
-                Ok(fedimint
-                    .db
-                    .begin_transaction_nc()
-                    .await
-                    .get_value(&PeerAvailabilityKey)
-                    .await
-                    .unwrap_or_default()
-                    .report(fedimint_core::time::duration_since_epoch().as_secs()))
+                Ok(super::peer_availability::report(&fedimint.db, fedimint_core::time::duration_since_epoch().as_secs()).await)
+            }
+        },
+        admin_api_endpoint! {
+            RESET_PEER_AVAILABILITY_ENDPOINT,
+            ApiVersion::new(0, 11),
+            async |fedimint: &ConsensusApi, context, request: ResetPeerAvailabilityRequest| -> bool {
+                if !fedimint.cfg.consensus.broadcast_public_keys.contains_key(&request.peer_id) {
+                    return Err(ApiError::bad_request("Unknown peer".to_owned()));
+                }
+                Ok(fedimint.availability.reset(
+                    &fedimint.db, request.peer_id, request.revision,
+                    fedimint_core::time::duration_since_epoch().as_secs(),
+                ).await?)
             }
         },
         public_api_endpoint! {
