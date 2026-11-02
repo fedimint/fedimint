@@ -315,9 +315,8 @@ let
         )
       ];
 
-    # we carefully optimize our debug symbols on cargo level,
-    # and in case of errors and panics, would like to see the
-    # line numbers etc.
+    # Cargo controls debuginfo stripping. Keep function symbols for backtraces
+    # instead of letting Nix strip them as well.
     dontStrip = true;
 
     postFixup = ''
