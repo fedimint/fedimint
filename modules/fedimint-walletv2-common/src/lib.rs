@@ -105,6 +105,55 @@ pub struct OutputInfo {
     pub outpoint: Option<bitcoin::OutPoint>,
 }
 
+/// Most potential receives a guardian returns from its pending scan. The
+/// receive filter passes only ~1/65536 of P2WSH scripts, so honest traffic
+/// stays far below this; the cap bounds what ground scripts can make a
+/// guardian serve.
+pub const MAX_PENDING_RECEIVES: usize = 1000;
+
+/// A guardian's own view of potential receives its bitcoin backend has mined
+/// but the federation has not reached consensus on yet. Unlike [`OutputInfo`]
+/// this is not consensus state: each guardian answers from its own backend.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PendingReceives {
+    /// The guardian's consensus block count when it scanned.
+    pub consensus_block_count: u64,
+    /// The block count of the guardian's bitcoin backend when it scanned.
+    pub block_count: u64,
+    /// How many blocks a guardian's block count vote trails its backend.
+    pub vote_delay: u64,
+    /// Potential receives in blocks from `consensus_block_count` up to
+    /// `block_count`, oldest first, at most [`MAX_PENDING_RECEIVES`].
+    pub receives: Vec<PendingReceive>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct PendingReceive {
+    pub outpoint: bitcoin::OutPoint,
+    pub script: ScriptBuf,
+    pub value: bitcoin::Amount,
+    pub height: u64,
+}
+
+impl PendingReceives {
+    /// Confirmations an output needs before the federation scans it and its
+    /// owner can claim it. The block that mines it counts as the first.
+    pub fn confirmations_required(&self) -> u64 {
+        self.vote_delay + 1
+    }
+
+    /// Confirmations of an output mined at `height`, as far as the federation
+    /// is concerned, capped at [`Self::confirmations_required`]. The
+    /// consensus block count never decreases, so after a reorg the backend's
+    /// block count is what bounds it.
+    pub fn confirmations(&self, height: u64) -> u64 {
+        (self.consensus_block_count + self.vote_delay)
+            .saturating_sub(height)
+            .min(self.block_count.saturating_sub(height))
+            .min(self.confirmations_required())
+    }
+}
+
 #[derive(Debug)]
 pub struct WalletCommonInit;
 
@@ -369,4 +418,56 @@ fn test_standard_script_unknown_witness_version() {
         .expect("Wrong network");
 
     assert!(StandardScript::from_address(&address).is_none());
+}
+
+#[cfg(test)]
+fn pending_receives(
+    consensus_block_count: u64,
+    block_count: u64,
+    vote_delay: u64,
+) -> PendingReceives {
+    PendingReceives {
+        consensus_block_count,
+        block_count,
+        vote_delay,
+        receives: vec![],
+    }
+}
+
+#[test]
+fn pending_receive_reaches_required_confirmations_exactly_when_claimable() {
+    // The federation scans height `h` once the consensus block count exceeds
+    // it, and the owner claims it right after.
+    let claimable = |consensus_block_count: u64, height: u64| consensus_block_count > height;
+
+    let height = 100;
+
+    for vote_delay in [6, 7] {
+        for block_count in height + 1..height + 20 {
+            let consensus_block_count = block_count - vote_delay;
+
+            let scan = pending_receives(consensus_block_count, block_count, vote_delay);
+
+            assert_eq!(
+                scan.confirmations(height) == scan.confirmations_required(),
+                claimable(consensus_block_count, height),
+                "vote delay {vote_delay}, block count {block_count}"
+            );
+            assert_eq!(scan.confirmations_required(), vote_delay + 1);
+        }
+    }
+}
+
+#[test]
+fn pending_receive_counts_the_lagging_consensus() {
+    // The backend mined 5 blocks on top of the deposit but consensus trails
+    // the vote delay by two more blocks.
+    assert_eq!(pending_receives(96, 105, 7).confirmations(100), 3);
+}
+
+#[test]
+fn pending_receive_count_drops_with_a_reorg() {
+    // The consensus block count never decreases, so after a reorg the backend
+    // bounds the count.
+    assert_eq!(pending_receives(100, 102, 7).confirmations(100), 2);
 }

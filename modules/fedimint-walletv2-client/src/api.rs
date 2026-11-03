@@ -4,16 +4,16 @@ use fedimint_api_client::api::{
     FederationApiExt, FederationError, FederationGeneralError, FederationResult,
     IModuleFederationApi,
 };
-use fedimint_api_client::query::ThresholdAgreement;
+use fedimint_api_client::query::{FilterMapThreshold, ThresholdAgreement};
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send};
 use fedimint_walletv2_common::endpoint_constants::{
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
-    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT,
-    SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
+    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_RECEIVES_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT,
+    RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 };
-use fedimint_walletv2_common::{FederationWallet, OutputInfo, TxInfo};
+use fedimint_walletv2_common::{FederationWallet, OutputInfo, PendingReceives, TxInfo};
 
 /// Renders each peer's fee answer so a divergence error names the odd one out.
 fn describe_fee_quotes(quotes: &BTreeMap<PeerId, Option<bitcoin::Amount>>) -> String {
@@ -50,6 +50,11 @@ pub trait WalletFederationApi {
     ) -> FederationResult<Vec<OutputInfo>>;
 
     async fn tx_id(&self, outpoint: OutPoint) -> Option<bitcoin::Txid>;
+
+    /// Each of a threshold of guardians' own pending receive scan. `None` for
+    /// a guardian that has not completed a scan yet.
+    async fn pending_receives(&self)
+    -> FederationResult<BTreeMap<PeerId, Option<PendingReceives>>>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -182,6 +187,22 @@ where
         self.request_current_consensus_retry(
             TRANSACTION_ID_ENDPOINT.to_string(),
             ApiRequestErased::new(outpoint),
+        )
+        .await
+    }
+
+    async fn pending_receives(
+        &self,
+    ) -> FederationResult<BTreeMap<PeerId, Option<PendingReceives>>> {
+        // Not consensus state: every guardian answers from its own bitcoin
+        // backend, so the answers are collected rather than agreed on.
+        self.request_with_strategy(
+            FilterMapThreshold::new(
+                |_peer, response| async move { Ok(response) },
+                self.all_peers().to_num_peers(),
+            ),
+            PENDING_RECEIVES_ENDPOINT.to_string(),
+            ApiRequestErased::new(()),
         )
         .await
     }

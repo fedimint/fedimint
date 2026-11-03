@@ -23,7 +23,7 @@ use fedimint_walletv2_client::events::{
     SendPaymentUpdateEvent,
 };
 use fedimint_walletv2_client::{
-    FinalSendOperationState, SendError, WalletClientInit, WalletClientModule,
+    FinalSendOperationState, PendingDeposit, SendError, WalletClientInit, WalletClientModule,
 };
 use fedimint_walletv2_common::KIND;
 use fedimint_walletv2_server::{BLOCK_COUNT_VOTE_DELAY, CONFIRMATION_FINALITY_DELAY, WalletInit};
@@ -355,6 +355,77 @@ async fn awaiting_an_unknown_send_operation_reports_not_found() -> anyhow::Resul
             .await,
         Err(OperationLookupError::NotFound(_))
     );
+
+    Ok(())
+}
+
+/// Waits until the client's only pending deposit has `confirmations`, or
+/// until it has none.
+async fn await_pending_deposit(
+    client: &ClientHandleArc,
+    confirmations: Option<u64>,
+) -> anyhow::Result<Option<PendingDeposit>> {
+    loop {
+        let deposits = client
+            .get_first_module::<WalletClientModule>()?
+            .pending_deposits()
+            .await?;
+
+        assert!(deposits.len() <= 1, "{deposits:?}");
+
+        let deposit = deposits.into_iter().next();
+
+        if deposit.as_ref().map(|deposit| deposit.confirmations) == confirmations {
+            return Ok(deposit);
+        }
+
+        sleep_in_test(
+            format!("Waiting for a pending deposit with {confirmations:?} confirmations"),
+            Duration::from_secs(1),
+        )
+        .await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn pending_deposit_counts_confirmations_until_claimable() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+
+    let fed = fixtures.new_fed_not_degraded().await;
+
+    let client = fed.new_client().await;
+
+    let bitcoin = fixtures.bitcoin();
+
+    initialize_consensus(&client, &bitcoin).await?;
+
+    let address = client
+        .get_first_module::<WalletClientModule>()?
+        .receive()
+        .await;
+
+    let value = Amount::from_sat(1_000_000);
+
+    bitcoin.send_and_mine_block(&address, value).await;
+
+    // The block that mines the deposit is its first confirmation. The
+    // federation scans it once a block count vote delay more blocks follow,
+    // which is when the client can claim it.
+    for confirmations in 1..=BLOCK_COUNT_VOTE_DELAY {
+        let deposit = await_pending_deposit(&client, Some(confirmations))
+            .await?
+            .expect("deposit is pending");
+
+        assert_eq!(deposit.address, address);
+        assert_eq!(deposit.value, value);
+        assert_eq!(deposit.confirmations_required, BLOCK_COUNT_VOTE_DELAY + 1);
+
+        bitcoin.mine_blocks(1).await;
+    }
+
+    await_pending_deposit(&client, None).await?;
+
+    await_federation_total_value(&client, value).await?;
 
     Ok(())
 }

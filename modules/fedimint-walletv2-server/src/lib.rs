@@ -14,6 +14,7 @@ pub mod db;
 mod metrics;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::{Arc, RwLock};
 
 use anyhow::{Context, anyhow, bail, ensure};
 use bitcoin::absolute::LockTime;
@@ -21,11 +22,11 @@ use bitcoin::hashes::{Hash, sha256};
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::sighash::{EcdsaSighashType, SighashCache};
 use bitcoin::transaction::Version;
-use bitcoin::{Amount, Network, Sequence, Transaction, TxIn, TxOut, Txid};
+use bitcoin::{Amount, BlockHash, Network, Sequence, Transaction, TxIn, TxOut, Txid};
 use common::config::WalletConfigConsensus;
 use common::{
-    OutputInfo, WalletCommonInit, WalletConsensusItem, WalletInput, WalletModuleTypes,
-    WalletOutput, WalletOutputOutcome,
+    MAX_PENDING_RECEIVES, OutputInfo, PendingReceive, PendingReceives, WalletCommonInit,
+    WalletConsensusItem, WalletInput, WalletModuleTypes, WalletOutput, WalletOutputOutcome,
 };
 use db::{
     DbKeyPrefix, FederationWalletKey, FederationWalletPrefix, Output, OutputKey, OutputPrefix,
@@ -54,7 +55,8 @@ use fedimint_core::task::TaskGroup;
 use fedimint_core::task::sleep;
 use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{
-    InPoint, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send, push_db_pair_items, util,
+    InPoint, NumPeers, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send,
+    push_db_pair_items, util,
 };
 use fedimint_logging::LOG_MODULE_WALLETV2;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
@@ -69,8 +71,8 @@ use fedimint_walletv2_common::config::{
 };
 use fedimint_walletv2_common::endpoint_constants::{
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
-    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT,
-    SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
+    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_RECEIVES_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT,
+    RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 };
 use fedimint_walletv2_common::{
     FederationWallet, MODULE_CONSENSUS_VERSION, TxInfo, WalletInputError, WalletOutputError,
@@ -114,6 +116,12 @@ const MAX_BLOCK_COUNT_INCREMENT: u64 = 5;
 /// Devimint tests can mine many regtest blocks at once, so use a larger cap in
 /// test environments to avoid waiting on several consensus sessions.
 const TEST_MAX_BLOCK_COUNT_INCREMENT: u64 = 100;
+
+/// Most blocks above the consensus block count that the pending receive scan
+/// covers. The gap is normally [`BLOCK_COUNT_VOTE_DELAY`] plus a little
+/// consensus lag; the cap bounds the work per new tip when consensus stalls.
+/// The oldest blocks are kept, as their receives become claimable first.
+const MAX_PENDING_SCAN_BLOCKS: u64 = 4 * BLOCK_COUNT_VOTE_DELAY;
 
 /// Minimum fee rate vote of 1 sat/vB to ensure we never propose a fee rate
 /// below what Bitcoin Core will relay.
@@ -904,6 +912,13 @@ impl ServerModule for Wallet {
                 }
             },
             public_api_endpoint! {
+                PENDING_RECEIVES_ENDPOINT,
+                ApiVersion::new(0, 2),
+                async |module: &Wallet, _context, _params: ()| -> Option<PendingReceives> {
+                    Ok(module.pending_receives())
+                }
+            },
+            public_api_endpoint! {
                 TRANSACTION_CHAIN_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, _params: ()| -> Vec<TxInfo> {
@@ -916,7 +931,7 @@ impl ServerModule for Wallet {
     }
 
     fn supported_api_versions(&self) -> MultiApiVersion {
-        MultiApiVersion::try_from_iter([ApiVersion::new(0, 1)])
+        MultiApiVersion::try_from_iter([ApiVersion::new(0, 2)])
             .expect("walletv2 declares one API version per major version")
     }
 }
@@ -926,6 +941,9 @@ pub struct Wallet {
     cfg: WalletConfig,
     db: Database,
     btc_rpc: ServerBitcoinRpcMonitor,
+    /// Latest result of the pending receive scan, so serving it never touches
+    /// the bitcoin backend.
+    pending_receives: Arc<RwLock<Option<PendingReceives>>>,
 }
 
 impl Wallet {
@@ -937,11 +955,32 @@ impl Wallet {
     ) -> Wallet {
         Self::spawn_broadcast_unconfirmed_txs_task(btc_rpc.clone(), db.clone(), task_group);
 
+        let pending_receives = Arc::new(RwLock::new(None));
+
+        PendingReceiveScanner {
+            btc_rpc: btc_rpc.clone(),
+            db: db.clone(),
+            num_peers: cfg.consensus.bitcoin_pks.to_num_peers(),
+            pks_hash: cfg.consensus.bitcoin_pks.consensus_hash(),
+            last_scan: None,
+            blocks: BTreeMap::new(),
+            result: pending_receives.clone(),
+        }
+        .spawn(task_group);
+
         Wallet {
             cfg,
             btc_rpc,
             db: db.clone(),
+            pending_receives,
         }
+    }
+
+    fn pending_receives(&self) -> Option<PendingReceives> {
+        self.pending_receives
+            .read()
+            .expect("pending receives lock is never poisoned")
+            .clone()
     }
 
     fn spawn_broadcast_unconfirmed_txs_task(
@@ -1180,28 +1219,7 @@ impl Wallet {
     }
 
     pub async fn consensus_block_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {
-        let num_peers = self.cfg.consensus.bitcoin_pks.to_num_peers();
-
-        let mut counts = dbtx
-            .find_by_prefix(&BlockCountVotePrefix)
-            .await
-            .map(|entry| entry.1)
-            .collect::<Vec<u64>>()
-            .await;
-
-        assert!(counts.len() <= num_peers.total());
-
-        counts.sort_unstable();
-
-        counts.reverse();
-
-        assert!(counts.last() <= counts.first());
-
-        // The block count we select guarantees that any threshold of correct peers can
-        // increase the consensus block count and any consensus block count has been
-        // confirmed by a threshold of peers.
-
-        counts.get(num_peers.threshold() - 1).copied().unwrap_or(0)
+        consensus_block_count(dbtx, self.cfg.consensus.bitcoin_pks.to_num_peers()).await
     }
 
     pub async fn consensus_feerate(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<u64> {
@@ -1545,4 +1563,146 @@ fn calculate_pegout_metrics(
         WALLET_PEGOUT_SATS.observe(amount.sats_f64());
         WALLET_PEGOUT_FEES_SATS.observe(fee.sats_f64());
     });
+}
+
+async fn consensus_block_count(dbtx: &mut DatabaseTransaction<'_>, num_peers: NumPeers) -> u64 {
+    let mut counts = dbtx
+        .find_by_prefix(&BlockCountVotePrefix)
+        .await
+        .map(|entry| entry.1)
+        .collect::<Vec<u64>>()
+        .await;
+
+    assert!(counts.len() <= num_peers.total());
+
+    counts.sort_unstable();
+
+    counts.reverse();
+
+    assert!(counts.last() <= counts.first());
+
+    // The block count we select guarantees that any threshold of correct peers can
+    // increase the consensus block count and any consensus block count has been
+    // confirmed by a threshold of peers.
+
+    counts.get(num_peers.threshold() - 1).copied().unwrap_or(0)
+}
+
+/// Scans the blocks a guardian's bitcoin backend has mined above the consensus
+/// block count for potential receives. It fetches each block once and rescans
+/// only when the tip or the consensus block count moves, so serving the result
+/// costs nothing.
+struct PendingReceiveScanner {
+    btc_rpc: ServerBitcoinRpcMonitor,
+    db: Database,
+    num_peers: NumPeers,
+    pks_hash: sha256::Hash,
+    /// Consensus block count and tip of the last completed scan.
+    last_scan: Option<(u64, BlockHash)>,
+    /// Potential receives per scanned height, with the hash of the block they
+    /// came from so a reorged block is fetched again.
+    blocks: BTreeMap<u64, (BlockHash, Vec<PendingReceive>)>,
+    result: Arc<RwLock<Option<PendingReceives>>>,
+}
+
+impl PendingReceiveScanner {
+    fn spawn(mut self, task_group: &TaskGroup) {
+        task_group.spawn_cancellable("scan_pending_receives", async move {
+            loop {
+                if let Err(err) = self.scan().await {
+                    debug!(
+                        target: LOG_MODULE_WALLETV2,
+                        err = %err.fmt_compact(),
+                        "Error scanning for pending receives"
+                    );
+                }
+
+                sleep(common::sleep_duration()).await;
+            }
+        });
+    }
+
+    async fn scan(&mut self) -> anyhow::Result<()> {
+        let Some(status) = self.btc_rpc.status() else {
+            return Ok(());
+        };
+
+        let consensus_block_count =
+            consensus_block_count(&mut self.db.begin_transaction_nc().await, self.num_peers).await;
+
+        let Some(tip_height) = status.block_count.checked_sub(1) else {
+            return Ok(());
+        };
+
+        let tip = self.btc_rpc.get_block_hash(tip_height).await?;
+
+        if self.last_scan == Some((consensus_block_count, tip)) {
+            return Ok(());
+        }
+
+        let heights = consensus_block_count
+            ..status
+                .block_count
+                .min(consensus_block_count + MAX_PENDING_SCAN_BLOCKS);
+
+        self.blocks.retain(|height, _| heights.contains(height));
+
+        for height in heights {
+            let hash = self.btc_rpc.get_block_hash(height).await?;
+
+            if self
+                .blocks
+                .get(&height)
+                .is_some_and(|(scanned, _)| *scanned == hash)
+            {
+                continue;
+            }
+
+            let block = self.btc_rpc.get_block(&hash).await?;
+
+            let receives = block
+                .txdata
+                .iter()
+                .flat_map(|tx| {
+                    let txid = tx.compute_txid();
+
+                    tx.output
+                        .iter()
+                        .zip(0..)
+                        .filter(|(tx_out, _)| {
+                            is_potential_receive(&tx_out.script_pubkey, &self.pks_hash)
+                        })
+                        .map(move |(tx_out, vout)| PendingReceive {
+                            outpoint: bitcoin::OutPoint { txid, vout },
+                            script: tx_out.script_pubkey.clone(),
+                            value: tx_out.value,
+                            height,
+                        })
+                })
+                .collect();
+
+            self.blocks.insert(height, (hash, receives));
+        }
+
+        let receives = self
+            .blocks
+            .values()
+            .flat_map(|(_, receives)| receives.iter().cloned())
+            .take(MAX_PENDING_RECEIVES)
+            .collect();
+
+        *self
+            .result
+            .write()
+            .expect("pending receives lock is never poisoned") = Some(PendingReceives {
+            consensus_block_count,
+            block_count: status.block_count,
+            vote_delay: BLOCK_COUNT_VOTE_DELAY,
+            receives,
+        });
+
+        self.last_scan = Some((consensus_block_count, tip));
+
+        Ok(())
+    }
 }

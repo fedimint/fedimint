@@ -72,6 +72,17 @@ const SLICE_SIZE: u64 = 1000;
 /// Number of event log entries to read per batch.
 const EVENT_LOG_PAGE_SIZE: u64 = 1000;
 
+/// A deposit to one of this client's addresses that the federation will let it
+/// claim once `confirmations` reaches `confirmations_required`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingDeposit {
+    pub outpoint: bitcoin::OutPoint,
+    pub address: Address,
+    pub value: bitcoin::Amount,
+    pub confirmations: u64,
+    pub confirmations_required: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum WalletOperationMeta {
     Send(SendMeta),
@@ -254,6 +265,66 @@ impl WalletClientModule {
     /// Fetch the current consensus feerate.
     pub async fn feerate(&self) -> FederationResult<Option<u64>> {
         self.module_api.consensus_feerate().await
+    }
+
+    /// Deposits to this client's addresses that guardians' bitcoin backends
+    /// have mined but the federation has not reached consensus on, so they
+    /// cannot be claimed yet. Each guardian scans its own backend; this asks a
+    /// threshold of them and lists a deposit only if all of them see it, with
+    /// the lowest confirmation count among them.
+    pub async fn pending_deposits(&self) -> FederationResult<Vec<PendingDeposit>> {
+        let scans = self.module_api.pending_receives().await?;
+
+        let addresses: BTreeMap<ScriptBuf, Address> = self
+            .db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&ValidAddressIndexPrefix)
+            .await
+            .map(|entry| {
+                let address = self.derive_address(entry.0.0);
+                (address.script_pubkey(), address)
+            })
+            .collect()
+            .await;
+
+        let mut deposits: BTreeMap<bitcoin::OutPoint, (PendingDeposit, usize)> = BTreeMap::new();
+
+        for scan in scans.values().flatten() {
+            for receive in &scan.receives {
+                let Some(address) = addresses.get(&receive.script) else {
+                    continue;
+                };
+
+                let confirmations = scan.confirmations(receive.height);
+                let confirmations_required = scan.confirmations_required();
+
+                deposits
+                    .entry(receive.outpoint)
+                    .and_modify(|(deposit, seen)| {
+                        deposit.confirmations = deposit.confirmations.min(confirmations);
+                        deposit.confirmations_required =
+                            deposit.confirmations_required.max(confirmations_required);
+                        *seen += 1;
+                    })
+                    .or_insert((
+                        PendingDeposit {
+                            outpoint: receive.outpoint,
+                            address: address.clone(),
+                            value: receive.value,
+                            confirmations,
+                            confirmations_required,
+                        },
+                        1,
+                    ));
+            }
+        }
+
+        Ok(deposits
+            .into_values()
+            .filter(|(_, seen)| *seen == scans.len())
+            .map(|(deposit, _)| deposit)
+            .collect())
     }
 
     /// Fetch information on the chain of pending bitcoin transactions.
