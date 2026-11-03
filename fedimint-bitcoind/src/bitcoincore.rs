@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests;
 
+use std::collections::BTreeSet;
+
 use bitcoin::{Address, ScriptBuf, Txid};
 use bitcoincore_rpc::json::ImportDescriptors;
 use bitcoincore_rpc::{Auth, RpcApi};
@@ -37,6 +39,56 @@ fn ensure_wallet_loaded<E>(
     } else {
         create_wallet()
     }
+}
+
+/// Page size for `listtransactions`, which returns only 10 entries by default.
+const LIST_TRANSACTIONS_PAGE_SIZE: usize = 100;
+
+/// The most transactions a script history may have, as for the Esplora backend.
+const MAX_SCRIPT_HISTORY: usize = 1000;
+
+/// Collects the transactions of a script's `listtransactions` label, oldest
+/// first, by paging through all of its entries.
+///
+/// `list_page(count, skip)` must return the txids of the `count` entries before
+/// the `skip` most recent ones, oldest first, as `listtransactions` does. It
+/// lists one entry per output and category, so a transaction can appear more
+/// than once, but each is returned only once.
+fn collect_script_history_txids(
+    mut list_page: impl FnMut(usize, usize) -> Result<Vec<Txid>, BitcoinRpcError>,
+) -> Result<Vec<Txid>, BitcoinRpcError> {
+    let mut pages = vec![];
+    let mut skip = 0;
+
+    loop {
+        let page = list_page(LIST_TRANSACTIONS_PAGE_SIZE, skip)?;
+        let is_last_page = page.len() < LIST_TRANSACTIONS_PAGE_SIZE;
+
+        skip += page.len();
+        pages.push(page);
+
+        if is_last_page {
+            break;
+        }
+    }
+
+    let mut seen = BTreeSet::new();
+    let mut txids = vec![];
+
+    // Pages are listed from the most recent one backwards
+    for txid in pages.into_iter().rev().flatten() {
+        if seen.insert(txid) {
+            txids.push(txid);
+        }
+
+        if txids.len() >= MAX_SCRIPT_HISTORY {
+            return Err(BitcoinRpcError::ScriptHistoryTooLong {
+                max: MAX_SCRIPT_HISTORY,
+            });
+        }
+    }
+
+    Ok(txids)
 }
 
 #[derive(Debug)]
@@ -177,14 +229,17 @@ impl IBitcoindRpc for BitcoindClient {
         let address = Address::from_script(script, self.network)
             .map_err(|err| BitcoinRpcError::NonStandardScript(Box::new(err)))?
             .to_string();
+        let txids = collect_script_history_txids(|count, skip| {
+            block_in_place(|| {
+                self.client
+                    .list_transactions(Some(&address), Some(count), Some(skip), Some(true))
+            })
+            .map(|list| list.into_iter().map(|tx| tx.info.txid).collect())
+            .map_err(|err| BitcoinRpcError::Backend(Box::new(err)))
+        })?;
         let mut results = vec![];
-        let list = block_in_place(|| {
-            self.client
-                .list_transactions(Some(&address), None, None, Some(true))
-        })
-        .map_err(|err| BitcoinRpcError::Backend(Box::new(err)))?;
-        for tx in list {
-            let tx = block_in_place(|| self.client.get_transaction(&tx.info.txid, Some(true)))
+        for txid in txids {
+            let tx = block_in_place(|| self.client.get_transaction(&txid, Some(true)))
                 .map_err(|err| BitcoinRpcError::Backend(Box::new(err)))?;
             let raw_tx = tx
                 .transaction()
