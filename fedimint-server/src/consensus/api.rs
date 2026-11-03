@@ -1103,12 +1103,12 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
         admin_api_endpoint! {
             RESET_PEER_AVAILABILITY_ENDPOINT,
             ApiVersion::new(0, 11),
-            async |fedimint: &ConsensusApi, context, request: ResetPeerAvailabilityRequest| -> bool {
+            async |fedimint: &ConsensusApi, context, request: ResetPeerAvailabilityRequest| -> () {
                 if !fedimint.cfg.consensus.broadcast_public_keys.contains_key(&request.peer_id) {
                     return Err(ApiError::bad_request("Unknown peer".to_owned()));
                 }
                 Ok(fedimint.availability.reset(
-                    &fedimint.db, request.peer_id, request.revision,
+                    &fedimint.db, request.peer_id,
                     fedimint_core::time::duration_since_epoch().as_secs(),
                 ).await?)
             }

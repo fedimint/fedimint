@@ -683,7 +683,7 @@ where
         &self,
         request: fedimint_core::peer_availability::ResetPeerAvailabilityRequest,
         auth: ApiAuth,
-    ) -> FederationResult<bool> {
+    ) -> FederationResult<()> {
         self.request_admin(
             fedimint_core::endpoint_constants::RESET_PEER_AVAILABILITY_ENDPOINT,
             ApiRequestErased::new(request),

@@ -604,13 +604,13 @@ pub trait IGlobalFederationApi: IRawFederationApi {
     /// Returns one guardian's view of the other guardians' availability
     async fn peer_availability(&self, peer_id: PeerId) -> ServerResult<PeerAvailability>;
 
-    /// Reset one peer's observations on the admin guardian. Returns whether
-    /// the revision was new and the reset was applied.
+    /// Reset one peer's observations on the admin guardian. Every call clears
+    /// them again.
     async fn reset_peer_availability(
         &self,
         request: fedimint_core::peer_availability::ResetPeerAvailabilityRequest,
         auth: ApiAuth,
-    ) -> FederationResult<bool>;
+    ) -> FederationResult<()>;
 
     /// Fetch the backup statistics from the federation (admin endpoint)
     async fn backup_statistics(&self, auth: ApiAuth) -> FederationResult<BackupStatistics>;

@@ -24,13 +24,11 @@ use crate::{NumPeers, PeerId};
 /// days. Recent outages show in `last_seen_secs` instead.
 pub const PEER_AVAILABILITY_WINDOWS_SECS: [u64; 2] = [604_800, 2_592_000];
 
-/// MG supplies an increasing revision for each peer so retries and delayed
-/// requests cannot clear fresh observations. Revisions at or below the saved
-/// one are ignored, including after a restart.
+/// Admin request to clear one peer's observations on this guardian and start
+/// fresh ones. Every request clears again, including a repeated one.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResetPeerAvailabilityRequest {
     pub peer_id: PeerId,
-    pub revision: u64,
 }
 
 /// One guardian's view of its peers' availability.

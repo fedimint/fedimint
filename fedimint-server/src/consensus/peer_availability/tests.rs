@@ -173,13 +173,13 @@ async fn reset_survives_writes_and_restart_and_only_uses_fresh_samples() {
     // Force a writer to queue before a reset, then release them together.
     let guard = tracker.writes.lock().await;
     let write = tracker.persist(&db, DAY + 60);
-    let reset = tracker.reset(&db, peer(1), 7, DAY + 60);
+    let reset = tracker.reset(&db, peer(1), DAY + 60);
     tokio::pin!(write, reset);
     assert!(futures::poll!(&mut write).is_pending());
     assert!(futures::poll!(&mut reset).is_pending());
     drop(guard);
-    let ((), applied) = tokio::join!(write, reset);
-    assert!(applied.unwrap());
+    let ((), reset) = tokio::join!(write, reset);
+    reset.unwrap();
     // This write closes the partially observed slot from before the reset.
     tracker.persist(&db, DAY + 120).await;
     let empty = report(&db, DAY + 120).await;
@@ -191,17 +191,9 @@ async fn reset_survives_writes_and_restart_and_only_uses_fresh_samples() {
         assert_eq!(window.peers[&peer(2)], 10_000);
     }
 
-    // A new tracker models restart; duplicate and stale requests touch nothing.
+    // A new tracker models restart: the reset persists.
     let tracker = AvailabilityTracker::new(peer(0), NumPeers::from(4));
-    for revision in [7, 6] {
-        assert!(
-            !tracker
-                .reset(&db, peer(1), revision, DAY + 120)
-                .await
-                .unwrap()
-        );
-        assert_eq!(report(&db, DAY + 120).await, empty);
-    }
+    assert_eq!(report(&db, DAY + 120).await, empty);
     for slot in 2..12 {
         let now = DAY + slot * SLOT_SECS;
         let mut activity = tracker.activity.lock().unwrap();
@@ -211,7 +203,6 @@ async fn reset_survives_writes_and_restart_and_only_uses_fresh_samples() {
             activity.heard(peer(1), now);
         }
     }
-    assert!(!tracker.reset(&db, peer(1), 7, DAY + 720).await.unwrap());
     tracker.persist(&db, DAY + 720).await;
     let fresh = report(&db, DAY + 720).await;
     assert_eq!(fresh.last_seen_secs[&peer(1)], DAY + 360);
@@ -222,7 +213,7 @@ async fn reset_survives_writes_and_restart_and_only_uses_fresh_samples() {
     }
     // Resetting ourselves also clears only that peer, including synthetic
     // last-seen.
-    assert!(tracker.reset(&db, peer(0), 0, DAY + 720).await.unwrap());
+    tracker.reset(&db, peer(0), DAY + 720).await.unwrap();
     tracker.persist(&db, DAY + 720).await;
     let own_reset = report(&db, DAY + 720).await;
     assert!(!own_reset.last_seen_secs.contains_key(&peer(0)));
@@ -231,4 +222,17 @@ async fn reset_survives_writes_and_restart_and_only_uses_fresh_samples() {
         fresh.last_seen_secs[&peer(1)]
     );
     assert_eq!(own_reset.windows[0].peers[&peer(1)], 5_000);
+    // A later reset clears the fresh observations again and keeps other peers.
+    tracker.reset(&db, peer(1), DAY + 720).await.unwrap();
+    let again = report(&db, DAY + 720).await;
+    assert!(!again.last_seen_secs.contains_key(&peer(1)));
+    assert_eq!(
+        again.last_seen_secs[&peer(2)],
+        own_reset.last_seen_secs[&peer(2)]
+    );
+    for (window, before) in again.windows.iter().zip(&own_reset.windows) {
+        assert!(!window.peers.contains_key(&peer(1)));
+        assert_eq!(window.peer_coverage_bps[&peer(1)], 0);
+        assert_eq!(window.peers[&peer(2)], before.peers[&peer(2)]);
+    }
 }

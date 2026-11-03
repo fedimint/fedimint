@@ -132,8 +132,6 @@ pub(crate) enum AdminCmd {
     /// Start fresh availability observations for a peer on this guardian
     ResetPeerAvailability {
         peer_id: PeerId,
-        /// Increasing revision supplied by the caller; old revisions do nothing
-        revision: u64,
     },
 
     /// Show an audit across all modules

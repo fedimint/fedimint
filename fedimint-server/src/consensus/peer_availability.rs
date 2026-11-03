@@ -77,7 +77,7 @@ impl AvailabilityTracker {
             .get_value(&PeerAvailabilityResetsKey)
             .await
             .unwrap_or_default();
-        for (peer, reset) in &mut resets {
+        for (peer, fresh_state) in &mut resets {
             let fresh = ObservedActivity {
                 observed_secs: activity
                     .peer_observed_secs
@@ -96,7 +96,7 @@ impl AvailabilityTracker {
                     .unwrap_or_default(),
                 ..Default::default()
             };
-            reset.state.update(now_secs, &fresh);
+            fresh_state.update(now_secs, &fresh);
         }
         let mut state = dbtx
             .get_value(&PeerAvailabilityKey)
@@ -108,15 +108,14 @@ impl AvailabilityTracker {
         dbtx.commit_tx().await;
     }
 
-    /// Returns false for duplicate or older revisions, without touching
-    /// samples.
+    /// Clears `peer`'s observations and starts fresh ones, also when it was
+    /// reset before.
     pub async fn reset(
         &self,
         db: &Database,
         peer: PeerId,
-        revision: u64,
         now_secs: u64,
-    ) -> fedimint_core::db::DatabaseResult<bool> {
+    ) -> fedimint_core::db::DatabaseResult<()> {
         let _guard = self.writes.lock().await;
         db.autocommit(
             |dbtx, _| {
@@ -126,12 +125,6 @@ impl AvailabilityTracker {
                         .get_value(&PeerAvailabilityResetsKey)
                         .await
                         .unwrap_or_default();
-                    if resets
-                        .get(&peer)
-                        .is_some_and(|reset| revision <= reset.revision)
-                    {
-                        return Ok(false);
-                    }
                     let mut state = dbtx
                         .get_value(&PeerAvailabilityKey)
                         .await
@@ -140,13 +133,7 @@ impl AvailabilityTracker {
                     for window in &mut state.availability {
                         window.remove(&peer);
                     }
-                    resets.insert(
-                        peer,
-                        AvailabilityReset {
-                            revision,
-                            state: PeerAvailabilityState::default(),
-                        },
-                    );
+                    resets.insert(peer, PeerAvailabilityState::default());
                     dbtx.insert_entry(&PeerAvailabilityKey, &state).await;
                     dbtx.insert_entry(&PeerAvailabilityResetsKey, &resets).await;
                     // Keep samples until the reset commits. The writer stays
@@ -154,7 +141,7 @@ impl AvailabilityTracker {
                     dbtx.on_commit(move || {
                         activity.lock().expect("poisoned").reset(peer, now_secs);
                     });
-                    Ok(true)
+                    Ok(())
                 })
             },
             None,
@@ -164,12 +151,6 @@ impl AvailabilityTracker {
     }
 }
 
-#[derive(Debug, Clone, Encodable, Decodable)]
-pub struct AvailabilityReset {
-    revision: u64,
-    state: PeerAvailabilityState,
-}
-
 pub async fn report(db: &Database, now_secs: u64) -> PeerAvailability {
     let mut dbtx = db.begin_transaction_nc().await;
     let mut report = dbtx
@@ -177,12 +158,12 @@ pub async fn report(db: &Database, now_secs: u64) -> PeerAvailability {
         .await
         .unwrap_or_default()
         .report(now_secs);
-    for (peer, reset) in dbtx
+    for (peer, fresh_state) in dbtx
         .get_value(&PeerAvailabilityResetsKey)
         .await
         .unwrap_or_default()
     {
-        let fresh = reset.state.report(now_secs);
+        let fresh = fresh_state.report(now_secs);
         report.last_seen_secs.extend(fresh.last_seen_secs);
         for (i, window) in report.windows.iter_mut().enumerate() {
             let coverage = fresh.windows.get(i).map_or(0, |w| w.coverage_bps);
