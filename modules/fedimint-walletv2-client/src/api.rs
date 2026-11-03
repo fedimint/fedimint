@@ -238,7 +238,16 @@ fn merge_pending_outputs(responses: Vec<PendingOutputs>, threshold: usize) -> Pe
     // Falling back to the highest reported tip keeps progress working on a
     // federation where fewer than a threshold of guardians are upgraded far
     // enough to serve this endpoint at all.
-    let mut counts: Vec<u64> = responses.iter().map(|r| r.block_count).collect();
+    //
+    // A guardian whose bitcoin backend is unavailable reports a block count of
+    // `0`. That is not a tip it has reached, so it must not count as one: a
+    // single blind guardian would otherwise drag the merged tip, and with it
+    // every deposit's confirmations, down to zero.
+    let mut counts: Vec<u64> = responses
+        .iter()
+        .map(|r| r.block_count)
+        .filter(|block_count| *block_count != 0)
+        .collect();
 
     counts.sort_unstable();
     counts.reverse();
