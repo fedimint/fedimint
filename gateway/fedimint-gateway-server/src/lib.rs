@@ -23,6 +23,7 @@ mod federation_manager;
 mod federation_status;
 mod iroh_server;
 mod metrics;
+mod payment_log;
 mod rate_limit;
 mod registration_health;
 pub mod rpc_server;
@@ -73,7 +74,7 @@ use fedimint_core::{
     Amount, BitcoinAmountOrAll, PeerId, TieredCounts, crit, fedimint_build_code_version_env,
     get_network_for_address,
 };
-use fedimint_eventlog::{DBTransactionEventLogExt, EventLogId, StructuredPaymentEvents};
+use fedimint_eventlog::{DBTransactionEventLogExt, StructuredPaymentEvents};
 use fedimint_gateway_common::{
     BackupPayload, ChainSource, CloseChannelsWithPeerRequest, CloseChannelsWithPeerResponse,
     ConnectFedPayload, ConnectPeerRequest, ConnectorType, CreateInvoiceForOperatorPayload,
@@ -3458,29 +3459,14 @@ impl IAdminGateway for Gateway {
             dbtx.get_next_event_log_id().await
         };
 
-        let mut start_position = end_position.saturating_sub(BATCH_SIZE);
-
-        let mut payment_log = Vec::new();
-
-        while payment_log.len() < pagination_size {
-            let batch = client.get_event_log(Some(start_position), BATCH_SIZE).await;
-            let mut filtered_batch = batch
-                .into_iter()
-                .filter(|e| e.id() <= end_position && event_kinds.contains(&e.as_raw().kind))
-                .collect::<Vec<_>>();
-            filtered_batch.reverse();
-            payment_log.extend(filtered_batch);
-
-            // Compute the start position for the next batch query
-            start_position = start_position.saturating_sub(BATCH_SIZE);
-
-            if start_position == EventLogId::LOG_START {
-                break;
-            }
-        }
-
-        // Truncate the payment log to the expected pagination size
-        payment_log.truncate(pagination_size);
+        let payment_log = payment_log::collect_backwards(
+            end_position,
+            pagination_size,
+            BATCH_SIZE,
+            |start, count| client.get_event_log(Some(start), count),
+            |entry| event_kinds.contains(&entry.as_raw().kind),
+        )
+        .await;
 
         Ok(PaymentLogResponse(payment_log))
     }
