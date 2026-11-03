@@ -58,6 +58,29 @@ fn verify_ldk_esplora_url() {
 }
 
 #[test]
+fn an_esplora_url_with_a_port_keeps_its_path() {
+    for (url, expected) in [
+        ("http://127.0.0.1:3003/", "http://127.0.0.1:3003"),
+        ("http://127.0.0.1:3006/api/", "http://127.0.0.1:3006/api"),
+        (
+            "http://umbrel.local:3006/api",
+            "http://umbrel.local:3006/api",
+        ),
+        (
+            "https://esplora.example.com:8443/testnet/api/",
+            "https://esplora.example.com:8443/testnet/api",
+        ),
+    ] {
+        let url = SafeUrl::parse(url).expect("Cannot parse URL");
+
+        assert_eq!(
+            get_esplora_url(url).expect("Could not get esplora URL"),
+            expected
+        );
+    }
+}
+
+#[test]
 fn an_esplora_url_without_a_host_is_rejected() {
     let url = SafeUrl::parse("unix:/run/esplora.sock").expect("Cannot parse URL");
 
