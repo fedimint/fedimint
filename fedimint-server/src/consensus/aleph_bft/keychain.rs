@@ -127,7 +127,10 @@ impl aleph_bft::MultiKeychain for Keychain {
     }
 
     fn is_complete(&self, msg: &[u8], partial: &Self::PartialMultisignature) -> bool {
-        if partial.iter().count() < self.pks.to_num_peers().threshold() {
+        let Ok(num_peers) = self.pks.try_num_peers() else {
+            return false;
+        };
+        if partial.iter().count() < num_peers.threshold() {
             return false;
         }
 
