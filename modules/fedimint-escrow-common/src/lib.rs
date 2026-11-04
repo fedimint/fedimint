@@ -16,6 +16,7 @@ use crate::config::EscrowClientConfig;
 
 pub mod config;
 pub mod endpoint_constants;
+pub mod rules;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("escrow");
 
@@ -515,6 +516,17 @@ pub struct ClaimPool {
     pub claimer: Vec<(PublicKey, Amount)>, // Split case can have two claimers
 }
 
+impl ClaimPool {
+    /// Removes and returns the entry for `claimer`, comparing x-only keys.
+    pub fn take_claim(&mut self, claimer: &PublicKey) -> Option<(PublicKey, Amount)> {
+        let idx = self
+            .claimer
+            .iter()
+            .position(|(k, _)| x_only_eq(k, claimer))?;
+        Some(self.claimer.remove(idx))
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub enum Resolution {
     FunderRelease {
@@ -700,11 +712,11 @@ impl std::fmt::Display for EscrowConsensusItem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             &EscrowConsensusItem::UnixTimeVote(t) => {
-                write!(f, "LNv2 Unix Time {t}")
+                write!(f, "Escrow Unix Time {t}")
             }
             &EscrowConsensusItem::Default { variant, ref bytes } => write!(
                 f,
-                "LNv2 Unknown - variant: {variant}, bytes_len: {}",
+                "Escrow Unknown - variant: {variant}, bytes_len: {}",
                 bytes.len()
             ),
         }

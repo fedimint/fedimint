@@ -33,10 +33,11 @@ use fedimint_escrow_common::config::EscrowClientConfig;
 use fedimint_escrow_common::endpoint_constants::{
     GetClaimAmount, GetContractParams, ListContractParams,
 };
+use fedimint_escrow_common::rules::check_resolution;
 use fedimint_escrow_common::{
     ClaimPool, ContractHash, EscrowCommonInit, EscrowContract, EscrowId, EscrowInput,
-    EscrowMessage, EscrowModuleTypes, EscrowOutput, EscrowStatus, FallbackPolicy, KIND, Outcome,
-    Resolution, compute_contract_hash, compute_escrow_message, x_only_eq,
+    EscrowMessage, EscrowModuleTypes, EscrowOutput, FallbackPolicy, KIND, Outcome, Resolution,
+    compute_contract_hash, compute_escrow_message, x_only_eq,
 };
 use frost_secp256k1_tr::Identifier;
 use futures::lock::Mutex;
@@ -616,12 +617,17 @@ impl EscrowClientModule {
             "only the recipient can submit the release"
         );
 
+        let now = self.federation_unix_time().await?;
+
+        let resolution = Resolution::FunderRelease { funder_signature };
+        check_resolution(&contract, &resolution, now)?;
+
         let input = ClientInput {
             amounts: Amounts::new_bitcoin(contract.amount),
             keys: vec![self.escrow_key],
             input: EscrowInput {
                 escrow_id,
-                resolution: Resolution::FunderRelease { funder_signature },
+                resolution: resolution.clone(),
             },
         };
 
@@ -636,7 +642,7 @@ impl EscrowClientModule {
                                 out_point,
                                 escrow_id,
                                 amount: contract.amount,
-                                resolution: Resolution::FunderRelease { funder_signature },
+                                resolution: resolution.clone(),
                             },
                             state: EscrowInputSMState::Pending,
                         })
@@ -680,35 +686,27 @@ impl EscrowClientModule {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
-        let is_valid_disputant = contract.is_party(&self.escrow_key.public_key());
-
-        anyhow::ensure!(
-            contract.status == EscrowStatus::Active,
-            "contract is not in active state"
-        );
-        anyhow::ensure!(
-            is_valid_disputant,
-            "Should be submitted by funder/reciepient"
-        );
-
         let now = self.federation_unix_time().await?;
-        anyhow::ensure!(now >= contract.timeout, "timeout not happened");
 
         let message = contract.engage_message();
         let disputant_signature = self.sign_message(message)?;
+
+        let disputant_pubkey = self.escrow_key.public_key();
+
+        let resolution = Resolution::ArbiterEngaged {
+            disputant_pubkey,
+            disputant_signature,
+        };
+        check_resolution(&contract, &resolution, now)?;
 
         let input = ClientInput {
             amounts: Amounts::ZERO,
             keys: vec![self.escrow_key],
             input: EscrowInput {
                 escrow_id,
-                resolution: Resolution::ArbiterEngaged {
-                    disputant_pubkey: self.escrow_key.public_key(),
-                    disputant_signature,
-                },
+                resolution: resolution.clone(),
             },
         };
-        let disputant_pubkey = self.escrow_key.public_key();
 
         let input_sm = ClientInputSM {
             state_machines: Arc::new(move |out_point_range: OutPointRange| {
@@ -721,10 +719,7 @@ impl EscrowClientModule {
                                 out_point,
                                 escrow_id,
                                 amount: Amount::ZERO,
-                                resolution: Resolution::ArbiterEngaged {
-                                    disputant_pubkey,
-                                    disputant_signature,
-                                },
+                                resolution: resolution.clone(),
                             },
                             state: EscrowInputSMState::Pending,
                         })
@@ -773,14 +768,7 @@ impl EscrowClientModule {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
-        let EscrowStatus::Disputed { resolve_by, .. } = contract.status else {
-            bail!(
-                "escrow is {}, a ruling needs a disputed escrow",
-                contract.status
-            );
-        };
         let now = self.federation_unix_time().await?;
-        anyhow::ensure!(now <= resolve_by, "the resolution window has closed");
 
         let signing_key = [self.escrow_key, self.arbiter_fee_key]
             .into_iter()
@@ -789,16 +777,19 @@ impl EscrowClientModule {
 
         let submitter_pubkey = signing_key.public_key();
 
+        let resolution = Resolution::ArbiterOutcome {
+            arbiter_signature,
+            outcome,
+            submitter_pubkey,
+        };
+        check_resolution(&contract, &resolution, now)?;
+
         let input = ClientInput {
             amounts: Amounts::ZERO,
             keys: vec![signing_key],
             input: EscrowInput {
                 escrow_id,
-                resolution: Resolution::ArbiterOutcome {
-                    arbiter_signature,
-                    outcome,
-                    submitter_pubkey,
-                },
+                resolution: resolution.clone(),
             },
         };
 
@@ -813,11 +804,7 @@ impl EscrowClientModule {
                                 out_point,
                                 escrow_id,
                                 amount: Amount::ZERO,
-                                resolution: Resolution::ArbiterOutcome {
-                                    arbiter_signature,
-                                    outcome,
-                                    submitter_pubkey,
-                                },
+                                resolution: resolution.clone(),
                             },
                             state: EscrowInputSMState::Pending,
                         })
@@ -944,22 +931,16 @@ impl EscrowClientModule {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
-        anyhow::ensure!(
-            contract.is_party(&self.escrow_key.public_key()),
-            "Should be triggered by funder/recipient"
-        );
-        let EscrowStatus::Disputed { resolve_by, .. } = contract.status else {
-            bail!(
-                "escrow is {}, fallback needs a disputed escrow",
-                contract.status
-            );
-        };
-
         let now = self.federation_unix_time().await?;
-        anyhow::ensure!(now > resolve_by, "the resolution window is still open");
 
         let claimer_pubkey = self.escrow_key.public_key();
         let fallback = contract.effective_fallback();
+
+        let resolution = Resolution::ResolveFallbackPolicy {
+            claimer_pubkey,
+            fallback: fallback.clone(),
+        };
+        check_resolution(&contract, &resolution, now)?;
 
         let action = if contract.can_swap_arbiter() {
             EscrowAction::ArbiterSwapped
@@ -976,10 +957,7 @@ impl EscrowClientModule {
             keys: vec![self.escrow_key],
             input: EscrowInput {
                 escrow_id,
-                resolution: Resolution::ResolveFallbackPolicy {
-                    claimer_pubkey,
-                    fallback: fallback.clone(),
-                },
+                resolution: resolution.clone(),
             },
         };
 
@@ -994,10 +972,7 @@ impl EscrowClientModule {
                                 out_point,
                                 escrow_id,
                                 amount: Amount::ZERO,
-                                resolution: Resolution::ResolveFallbackPolicy {
-                                    claimer_pubkey,
-                                    fallback: fallback.clone(),
-                                },
+                                resolution: resolution.clone(),
                             },
                             state: EscrowInputSMState::Pending,
                         })
