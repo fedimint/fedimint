@@ -275,7 +275,7 @@ impl ConnectorRegistryBuilder {
 
         // Disable iroh-next endpoint preference in test/devimint environments
         // where iroh-next server endpoints are not running.
-        if is_running_in_test_env() {
+        if is_running_in_test_env!() {
             self.iroh_next = false;
         }
 

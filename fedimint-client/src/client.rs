@@ -2887,7 +2887,7 @@ impl Client {
         let mut dbtx = db_no_decoders.begin_transaction().await;
         apply_migrations_core_client_dbtx(&mut dbtx.to_ref_nc(), "fedimint-client".to_string())
             .await?;
-        if is_running_in_test_env() {
+        if is_running_in_test_env!() {
             verify_client_db_integrity_dbtx(&mut dbtx.to_ref_nc()).await;
         }
         dbtx.commit_tx_result().await?;

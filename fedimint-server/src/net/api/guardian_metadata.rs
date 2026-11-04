@@ -159,7 +159,7 @@ pub fn start_guardian_metadata_service(
 
             let auto_announcement_delay = if success {
                 Duration::from_secs(SUCCESS_RETRY_SECONDS)
-            } else if is_running_in_test_env() {
+            } else if is_running_in_test_env!() {
                 Duration::from_secs(3)
             } else {
                 Duration::from_secs(FAILURE_RETRY_SECONDS)

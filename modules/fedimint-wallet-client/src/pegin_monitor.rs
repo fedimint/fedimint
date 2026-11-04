@@ -99,7 +99,7 @@ pub(crate) async fn run_peg_in_monitor(
     pegin_claimed_sender: watch::Sender<()>,
     mut wakeup_receiver: watch::Receiver<()>,
 ) {
-    let min_sleep: Duration = if is_running_in_test_env() {
+    let min_sleep: Duration = if is_running_in_test_env!() {
         Duration::from_millis(100)
     } else {
         Duration::from_secs(30)
@@ -296,7 +296,7 @@ impl CheckOutcome {
         match self {
             // Check again in time proportional to the expected block confirmation time
             CheckOutcome::Pending { num_blocks_needed } => {
-                if is_running_in_test_env() {
+                if is_running_in_test_env!() {
                     // In tests, we basically mine all blocks right away
                     Some(Duration::from_millis(1))
                 } else {
@@ -321,7 +321,7 @@ impl CheckOutcome {
         // on it yet, check again in time proportional to the age of the
         // address.
         if outcomes.is_empty() {
-            if is_running_in_test_env() {
+            if is_running_in_test_env!() {
                 // When testing we usually send deposits right away, so check more aggressively.
                 return Some(Duration::from_millis(100));
             }
