@@ -13,8 +13,15 @@ path = "src/lib.rs"
 
 [dependencies]
 bech32 = { workspace = true }
+bitcoin_hashes = { workspace = true }
+hex = { workspace = true }
 lightning-invoice = { workspace = true, features = ["serde"] }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+bitcoin = { workspace = true }
+serde_json.workspace = true

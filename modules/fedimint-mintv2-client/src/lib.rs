@@ -18,6 +18,7 @@ mod events;
 mod input;
 pub mod issuance;
 mod output;
+mod rebalance;
 mod receive;
 #[cfg(test)]
 mod tests;
@@ -77,8 +78,12 @@ use tbs::AggregatePublicKey;
 use thiserror::Error;
 
 use crate::api::MintV2ModuleApi;
-use crate::client_db::SpendableNoteKey;
+use crate::client_db::{
+    PendingRebalanceCause, PendingRebalanceCauseKey, PendingRebalanceCausePrefix,
+    SpendableNoteKey,
+};
 pub use crate::ecash::ECash;
+pub use crate::rebalance::{DenominationPolicy, InvalidDenominationPolicy};
 use crate::input::{InputSMCommon, InputSMState, InputStateMachine};
 use crate::issuance::NoteIssuanceRequest;
 use crate::output::{MintOutputStateMachine, OutputSMCommon, OutputSMState};
@@ -813,6 +818,7 @@ impl MintClientModule {
                         operation_id,
                         txid: range.txid(),
                         spendable_notes: notes.clone(),
+                        refund_txid: None,
                     },
                     state: InputSMState::Pending,
                 })];
@@ -1060,6 +1066,29 @@ impl MintClientModule {
             return Ok(None);
         };
 
+        let operation_id = OperationId::new_random();
+
+        // Recorded before the notes are removed, so the counts still include them.
+        let denomination_deficit = Self::denomination_deficit_after_spend(
+            dbtx,
+            &notes,
+            &DenominationPolicy::default(),
+        )
+        .await;
+
+        if !denomination_deficit.is_empty() {
+            dbtx.insert_new_entry(
+                &PendingRebalanceCauseKey(operation_id),
+                &PendingRebalanceCause {
+                    operation_id,
+                    spent_amount: notes.iter().map(SpendableNote::amount).sum(),
+                    denomination_deficit,
+                    created_at: unix_timestamp_secs(),
+                },
+            )
+            .await;
+        }
+
         for spendable_note in &notes {
             self.remove_spendable_note(dbtx, spendable_note).await;
         }
@@ -1072,7 +1101,6 @@ impl MintClientModule {
         }
         .with_unit(self.cfg.amount_unit);
         let amount = ecash.amount();
-        let operation_id = OperationId::new_random();
 
         self.client_ctx
             .add_operation_log_entry_dbtx(
@@ -1259,36 +1287,191 @@ impl MintClientModule {
             .is_some()
     }
 
-    /// Greedily selects spendable notes (largest-first) summing to *exactly*
-    /// `remaining_amount`, or `None` if the inventory can't make exact change.
-    /// Reads the DB but does not modify it. Single source of truth for the free
+    /// Selects spendable notes summing to *exactly* `remaining_amount`, or
+    /// `None` if the inventory can't make exact change. Reads the DB but does
+    /// not modify it. Single source of truth for the free
     /// (hand-out-existing-notes) selection shared by [`Self::send_ecash_dbtx`]
     /// and [`Self::can_make_exact_change`].
+    ///
+    /// A selection that keeps every denomination at its policy minimum is
+    /// preferred. Only when no such selection exists does this spend below the
+    /// minimum, so the wallet keeps the small denominations offline sends need.
     async fn select_exact_change(
         dbtx: &mut DatabaseTransaction<'_>,
-        mut remaining_amount: Amount,
+        remaining_amount: Amount,
     ) -> Option<Vec<SpendableNote>> {
-        let mut stream = dbtx
+        let notes = dbtx
             .find_by_prefix_sorted_descending(&SpendableNotePrefix)
             .await
-            .map(|entry| entry.0.0);
+            .map(|entry| entry.0.0)
+            .collect::<Vec<SpendableNote>>()
+            .await;
 
-        let mut notes = vec![];
+        let reserve = DenominationPolicy::default().min_notes_per_denomination;
 
-        while let Some(spendable_note) = stream.next().await {
-            remaining_amount = match remaining_amount.checked_sub(spendable_note.amount()) {
-                Some(amount) => amount,
-                None => continue,
-            };
+        rebalance::greedy_exact_change(&notes, remaining_amount, reserve)
+            .or_else(|| rebalance::greedy_exact_change(&notes, remaining_amount, 0))
+    }
+
+    /// Denominations a spend of `spent` would leave below the policy minimum,
+    /// mapped to the number of notes a rebalance needs to restore each one to
+    /// its target. Empty when the spend keeps every denomination healthy.
+    async fn denomination_deficit_after_spend(
+        dbtx: &mut DatabaseTransaction<'_>,
+        spent: &[SpendableNote],
+        policy: &DenominationPolicy,
+    ) -> BTreeMap<Denomination, u64> {
+        let mut spent_counts: BTreeMap<Denomination, u64> = BTreeMap::new();
 
             notes.push(spendable_note.decode_own());
 
-            if remaining_amount == Amount::ZERO {
-                break;
+            let remaining = held.saturating_sub(spent_count);
+
+            if policy.manages(denomination) && !policy.is_healthy(remaining) {
+                deficit.insert(
+                    denomination,
+                    policy.target_notes_per_denomination - remaining,
+                );
             }
         }
 
-        (remaining_amount == Amount::ZERO).then_some(notes)
+        deficit
+    }
+
+    /// Sends that left a denomination below its policy minimum and have not
+    /// been followed by a successful [`Self::rebalance_wallet`].
+    ///
+    /// This is local bookkeeping: it never reaches the federation, and a
+    /// wallet can use it to explain why a rebalance is pending.
+    pub async fn pending_rebalance_causes(&self) -> Vec<PendingRebalanceCause> {
+        let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+
+        dbtx.find_by_prefix(&PendingRebalanceCausePrefix)
+            .await
+            .map(|(_, cause)| cause)
+            .collect::<Vec<PendingRebalanceCause>>()
+            .await
+    }
+
+    /// Restores denominations that fell below `policy`'s minimum by reissuing
+    /// notes, and returns the rebalance operation, or `None` if there is
+    /// nothing to do.
+    ///
+    /// This is deterministic: it neither sleeps nor randomizes. Deciding when
+    /// to call it, such as after the client comes back online, is the
+    /// caller's job. It returns `None` without contacting the federation when
+    /// every denomination is healthy.
+    ///
+    /// On success it clears the [`Self::pending_rebalance_causes`] markers.
+    /// The rebalance only waits for the federation to accept its transaction.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RebalanceWalletError::Offline`] if the federation cannot be
+    /// reached, and [`RebalanceWalletError::InsufficientBalance`] if the
+    /// rebalance cannot be funded.
+    pub async fn rebalance_wallet(
+        &self,
+        policy: &DenominationPolicy,
+    ) -> Result<Option<OperationId>, RebalanceWalletError> {
+        let (counts, spendable_value) = {
+            let mut dbtx = self.client_ctx.module_db().begin_transaction_nc().await;
+            let counts = self.get_count_by_denomination_dbtx(&mut dbtx).await;
+
+            let spendable_value: Amount = counts
+                .iter()
+                .map(|(denomination, count)| {
+                    let note_value = denomination
+                        .amount()
+                        .checked_sub(self.cfg.fee_consensus.fee(denomination.amount()))
+                        .expect("All our notes are economical");
+
+                    note_value.mul_u64(*count)
+                })
+                .sum();
+
+            (counts, spendable_value)
+        };
+
+        let Some(plan) = rebalance::plan_rebalance(
+            &counts,
+            spendable_value,
+            &self.cfg.fee_consensus,
+            policy,
+        ) else {
+            let all_managed_healthy = policy
+                .managed_denominations()
+                .all(|d| policy.is_healthy(counts.get(&d).copied().unwrap_or(0)));
+
+            if all_managed_healthy {
+                self.clear_pending_rebalance_causes().await;
+            }
+
+            return Ok(None);
+        };
+
+        self.client_ctx
+            .global_api()
+            .session_count()
+            .await
+            .map_err(|_| RebalanceWalletError::Offline)?;
+
+        let operation_id = OperationId::new_random();
+        let amount: Amount = plan.outputs.iter().map(|d| d.amount()).sum();
+
+        let output = self
+            .create_output_bundle(operation_id, plan.outputs)
+            .await;
+        let output = self.client_ctx.make_client_outputs(output);
+
+        let range = self
+            .client_ctx
+            .finalize_and_submit_transaction(
+                operation_id,
+                MintCommonInit::KIND.as_str(),
+                move |change_outpoint_range| MintOperationMeta::Reissue {
+                    change_outpoint_range,
+                    amount,
+                    custom_meta: Value::Null,
+                },
+                TransactionBuilder::new().with_outputs(output),
+            )
+            .await
+            .map_err(|error| match error {
+                TransactionSubmitError::InsufficientFunds(_) => {
+                    RebalanceWalletError::InsufficientBalance
+                }
+                other => RebalanceWalletError::Failed(other),
+            })?;
+
+        for outpoint in range {
+            self.await_output_sm_success(operation_id, outpoint)
+                .await
+                .map_err(|_| RebalanceWalletError::Failure)?;
+        }
+
+        self.clear_pending_rebalance_causes().await;
+
+        Ok(Some(operation_id))
+    }
+
+    async fn clear_pending_rebalance_causes(&self) {
+        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
+
+        let keys = dbtx
+            .find_by_prefix(&PendingRebalanceCausePrefix)
+            .await
+            .map(|(key, _)| key)
+            .collect::<Vec<PendingRebalanceCauseKey>>()
+            .await;
+
+        for key in keys {
+            dbtx.remove_entry(&key)
+                .await
+                .expect("Must delete existing pending rebalance cause");
+        }
+
+        dbtx.commit_tx().await;
     }
 
     /// Await the final state of the receive operation.
@@ -1457,6 +1640,26 @@ pub enum SendECashError {
     Failed(#[source] TransactionSubmitError),
 }
 
+/// A failure to rebalance the wallet's denominations.
+#[derive(Error, Debug)]
+#[non_exhaustive]
+pub enum RebalanceWalletError {
+    /// The rebalance reissues notes through the federation, which the client
+    /// cannot reach.
+    #[error("We need to reissue notes but the client is offline")]
+    Offline,
+    /// The client's balance cannot fund the rebalance.
+    #[error("The clients balance is insufficient")]
+    InsufficientBalance,
+    /// The rebalance was accepted but its notes could not be issued.
+    #[error("The rebalance could not issue its notes")]
+    Failure,
+    /// The rebalance transaction could not be submitted for a reason unrelated
+    /// to funding.
+    #[error("The rebalance transaction could not be submitted")]
+    Failed(#[source] TransactionSubmitError),
+}
+
 /// A failure to receive e-cash by reissuing it.
 #[derive(Error, Debug)]
 #[non_exhaustive]
@@ -1556,6 +1759,14 @@ impl State for MintClientStateMachines {
             MintClientStateMachines::Receive(receive_state) => receive_state.operation_id(),
         }
     }
+}
+
+/// Seconds since the Unix epoch, for records that only need coarse ordering.
+fn unix_timestamp_secs() -> u64 {
+    fedimint_core::time::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 fn round_to_multiple(amount: Amount, min_denomiation: Amount) -> Amount {

@@ -1,6 +1,7 @@
 pub mod ldk;
 pub mod lnd;
 pub mod metrics;
+pub mod payment_failure;
 
 use std::fmt::Debug;
 use std::str::FromStr;
@@ -29,6 +30,7 @@ use fedimint_metrics::HistogramExt as _;
 use futures::future::BoxFuture;
 use futures::stream::BoxStream;
 use lightning_invoice::Bolt11Invoice;
+pub use payment_failure::PaymentFailureDiagnostics;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{info, trace, warn};
@@ -91,6 +93,27 @@ pub enum LightningRpcError {
     // persisted in gateway client state machines: only append new variants.
     #[error("HTLC completion cannot reach the requested outcome: {failure_reason}")]
     HtlcCompletionRejected { failure_reason: String },
+    /// A payment the Lightning network definitively failed, along with what
+    /// the backend reported about where and why. It displays exactly like
+    /// [`LightningRpcError::FailedPayment`]: the diagnostics name nodes and
+    /// channels on the gateway's routes, so they are kept out of messages and
+    /// only recorded in the gateway's event log.
+    #[error("Payment failed: {failure_reason}")]
+    FailedPaymentWithDiagnostics {
+        failure_reason: String,
+        diagnostics: PaymentFailureDiagnostics,
+    },
+}
+
+impl LightningRpcError {
+    /// Returns what the Lightning backend reported about where and why a
+    /// payment failed, if this error carries it.
+    pub fn payment_failure_diagnostics(&self) -> Option<&PaymentFailureDiagnostics> {
+        match self {
+            Self::FailedPaymentWithDiagnostics { diagnostics, .. } => Some(diagnostics),
+            _ => None,
+        }
+    }
 }
 
 /// Represents an active connection to the lightning node.
