@@ -21,12 +21,14 @@ use fedimint_core::{
 use fedimint_escrow_common::config::{
     EscrowClientConfig, EscrowConfig, EscrowConfigConsensus, EscrowConfigPrivate,
 };
+use fedimint_escrow_common::endpoint_constants::{
+    CONSENSUS_UNIX_TIME_ENDPOINT, GET_CLAIM_AMOUNT_ENDPOINT, GET_CONTRACT_ENDPOINT, GetClaimAmount,
+    GetContractParams, LIST_CONTRACT_BY_KEY_ENDPOINT, ListContractParams,
+};
 use fedimint_escrow_common::{
-    CONSENSUS_UNIX_TIME_ENDPOINT, ClaimPool, ContractHash, EscrowCommonInit, EscrowConsensusItem,
-    EscrowContract, EscrowId, EscrowInput, EscrowInputError, EscrowModuleTypes, EscrowOutput,
-    EscrowOutputError, EscrowOutputOutcome, EscrowStatus, EscrowTransition,
-    GET_CLAIM_AMOUNT_ENDPOINT, GET_CONTRACT_ENDPOINT, GetClaimAmount, GetContractParams, KIND,
-    LIST_CONTRACT_BY_KEY_ENDPOINT, ListContractParams, MODULE_CONSENSUS_VERSION, Outcome,
+    ClaimPool, ContractHash, EscrowCommonInit, EscrowConsensusItem, EscrowContract, EscrowId,
+    EscrowInput, EscrowInputError, EscrowModuleTypes, EscrowOutput, EscrowOutputError,
+    EscrowOutputOutcome, EscrowStatus, EscrowTransition, KIND, MODULE_CONSENSUS_VERSION, Outcome,
     Resolution, compute_contract_hash, compute_escrow_message, validate_contract_fields, x_only_eq,
 };
 use fedimint_logging::LOG_MODULE_ESCROW;

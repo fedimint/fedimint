@@ -30,11 +30,13 @@ use fedimint_core::util::BoxStream;
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send, push_db_pair_items};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_escrow_common::config::EscrowClientConfig;
+use fedimint_escrow_common::endpoint_constants::{
+    GetClaimAmount, GetContractParams, ListContractParams,
+};
 use fedimint_escrow_common::{
     ClaimPool, ContractHash, EscrowCommonInit, EscrowContract, EscrowId, EscrowInput,
-    EscrowMessage, EscrowModuleTypes, EscrowOutput, EscrowStatus, FallbackPolicy, GetClaimAmount,
-    GetContractParams, KIND, ListContractParams, Outcome, Resolution, compute_contract_hash,
-    compute_escrow_message, x_only_eq,
+    EscrowMessage, EscrowModuleTypes, EscrowOutput, EscrowStatus, FallbackPolicy, KIND, Outcome,
+    Resolution, compute_contract_hash, compute_escrow_message, x_only_eq,
 };
 use frost_secp256k1_tr::Identifier;
 use futures::lock::Mutex;

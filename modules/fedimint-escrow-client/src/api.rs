@@ -2,11 +2,11 @@ use fedimint_api_client::api::{FederationApiExt, FederationResult, IModuleFedera
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{apply, async_trait_maybe_send};
-use fedimint_escrow_common::{
-    CONSENSUS_UNIX_TIME_ENDPOINT, ClaimPool, EscrowContract, GET_CLAIM_AMOUNT_ENDPOINT,
-    GET_CONTRACT_ENDPOINT, GetClaimAmount, GetContractParams, LIST_CONTRACT_BY_KEY_ENDPOINT,
-    ListContractParams,
+use fedimint_escrow_common::endpoint_constants::{
+    CONSENSUS_UNIX_TIME_ENDPOINT, GET_CLAIM_AMOUNT_ENDPOINT, GET_CONTRACT_ENDPOINT, GetClaimAmount,
+    GetContractParams, LIST_CONTRACT_BY_KEY_ENDPOINT, ListContractParams,
 };
+use fedimint_escrow_common::{ClaimPool, EscrowContract};
 
 #[apply(async_trait_maybe_send!)]
 pub trait EscrowFederationApi {
