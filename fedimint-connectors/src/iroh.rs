@@ -89,6 +89,7 @@ use tracing::{debug, trace, warn};
 
 use super::{DynGuaridianConnection, IGuardianConnection, ServerError, ServerResult};
 use crate::error::ConnectorError;
+use crate::metrics::IROH_STACK_DIALS_TOTAL;
 use crate::{Connectivity, DynGatewayConnection, IConnection, IGatewayConnection, IrohPeerInfo};
 
 #[derive(Clone)]
@@ -342,6 +343,16 @@ impl crate::Connector for IrohConnector {
             return self
                 .make_new_connection_next(&self.next, node_id, connection_override)
                 .await
+                .inspect(|_| {
+                    IROH_STACK_DIALS_TOTAL
+                        .with_label_values(&["next", "won"])
+                        .inc();
+                })
+                .inspect_err(|_| {
+                    IROH_STACK_DIALS_TOTAL
+                        .with_label_values(&["next", "error"])
+                        .inc();
+                })
                 .map(super::IGuardianConnection::into_dyn);
         }
 
@@ -378,8 +389,16 @@ impl crate::Connector for IrohConnector {
         // Loop until first success, or running out of connections.
         while let Some((result, iroh_stack)) = futures.next().await {
             match result {
-                Ok(connection) => return Ok(connection),
+                Ok(connection) => {
+                    IROH_STACK_DIALS_TOTAL
+                        .with_label_values(&[iroh_stack, "won"])
+                        .inc();
+                    return Ok(connection);
+                }
                 Err(err) => {
+                    IROH_STACK_DIALS_TOTAL
+                        .with_label_values(&[iroh_stack, "error"])
+                        .inc();
                     warn!(
                         target: LOG_NET_IROH,
                         err = %err.fmt_compact(),
