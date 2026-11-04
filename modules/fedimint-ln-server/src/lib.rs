@@ -16,10 +16,14 @@ use fedimint_core::config::{
     TypedServerModuleConsensusConfig,
 };
 use fedimint_core::core::ModuleInstanceId;
-use fedimint_core::db::{DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    Database, DatabaseTransaction, DatabaseValue, IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::encoding::btc::NetworkLegacyEncodingWrapper;
-use fedimint_core::envs::{FM_ENABLE_MODULE_LNV1_ENV, is_env_var_set_opt, next_poll_delay};
+use fedimint_core::envs::{
+    FM_ENABLE_MODULE_LNV1_ENV, is_env_var_set_opt, is_running_in_test_env, next_poll_delay,
+};
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiEndpointContext, ApiError, ApiRequestErased, ApiVersion,
@@ -1080,9 +1084,7 @@ impl ServerModule for Lightning {
                 AWAIT_BLOCK_HEIGHT_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Lightning, context, block_height: u64| -> () {
-                    let db = context.db();
-                    let mut dbtx = db.begin_transaction_nc().await;
-                    module.wait_block_height(block_height, &mut dbtx).await;
+                    module.wait_block_height(block_height, &context.db()).await;
                     Ok(())
                 }
             },
@@ -1212,9 +1214,23 @@ impl Lightning {
         counts[peer_count / 2]
     }
 
-    async fn wait_block_height(&self, block_height: u64, dbtx: &mut DatabaseTransaction<'_>) {
-        while block_height >= self.consensus_block_count(dbtx).await {
-            sleep(Duration::from_secs(5)).await;
+    /// Waits until the consensus block count is above `block_height`.
+    ///
+    /// Each check opens a new transaction: a transaction reads from a fixed
+    /// snapshot, so reusing one would never see new block count votes.
+    async fn wait_block_height(&self, block_height: u64, db: &Database) {
+        let poll_interval = if is_running_in_test_env() {
+            Duration::from_millis(100)
+        } else {
+            Duration::from_secs(5)
+        };
+
+        while block_height
+            >= self
+                .consensus_block_count(&mut db.begin_transaction_nc().await)
+                .await
+        {
+            sleep(poll_interval).await;
         }
     }
 
