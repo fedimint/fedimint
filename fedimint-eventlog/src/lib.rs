@@ -31,7 +31,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{broadcast, watch};
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 /// DB prefixes hardcoded for use of the event log
 /// `fedimint-eventlog` was extracted from `fedimint-client` to help
@@ -974,8 +974,12 @@ where
     }
 }
 
-/// Like [`handle_events`], for the trimable part of the log: entries are handed
-/// to `call_fn` and the tracker's position drives when they can be trimmed.
+/// Like [`handle_events`], for the trimable part of the log.
+///
+/// Trimming does not take the tracker's position into account: entries old
+/// enough are removed even if they were never handed to `call_fn`. When the
+/// tracked position has been trimmed away, handling resumes at the oldest
+/// entry still in the log and the trimmed ones are skipped.
 pub async fn handle_trimable_events<F, R, E>(
     db: Database,
     mut tracker: DynEventLogTrimableTracker,
@@ -1012,6 +1016,28 @@ where
                 dbtx.commit_tx().await;
             }
             _ => {
+                // The ordering task writes trimable ids in order and in a single
+                // transaction, so a missing `next_key` with a newer entry present
+                // means `next_key` was trimmed. It will never be written again,
+                // so continue at the oldest entry still in the log.
+                let next_existing_key = dbtx
+                    .find_by_range(next_key..EventLogTrimableId::from(u64::MAX))
+                    .await
+                    .next()
+                    .await
+                    .map(|(key, _entry)| key);
+
+                if let Some(next_existing_key) = next_existing_key {
+                    warn!(
+                        target: LOG_CLIENT_EVENT_LOG,
+                        ?next_key,
+                        ?next_existing_key,
+                        "Skipping trimable events that were trimmed before being handled"
+                    );
+                    next_key = next_existing_key;
+                    continue;
+                }
+
                 if log_event_added.changed().await.is_err() {
                     break Ok(());
                 }
