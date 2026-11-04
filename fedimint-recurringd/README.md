@@ -21,15 +21,23 @@ For more details see the [sequence diagram](#sequence-diagram) below.
 ## Command line options
 
 ```text
-Usage: fedimint-recurringd [OPTIONS] --api-address <API_ADDRESS> --bearer-token <BEARER_TOKEN> --data-dir <DATA_DIR>
+Usage: fedimint-recurringd [OPTIONS] --api-address <API_ADDRESS> --data-dir <DATA_DIR>
 
 Options:
       --bind-address <BIND_ADDRESS>  [env: FM_RECURRING_BIND_ADDRESS=] [default: 127.0.0.1:8176]
       --api-address <API_ADDRESS>    [env: FM_RECURRING_API_ADDRESS=]
       --bearer-token <BEARER_TOKEN>  [env: FM_RECURRING_API_BEARER_TOKEN=]
+      --bearer-token-file <PATH>     Read bearer token from a file (not stdin)
       --data-dir <DATA_DIR>          [env: FM_RECURRING_DATA_DIR=]
   -h, --help                         Print help
 ```
+
+Provide exactly one bearer-token source. Prefer `--bearer-token-file` to keep
+the token out of process arguments, and unset `FM_RECURRING_API_BEARER_TOKEN`
+when using it. The legacy argument and environment variable remain supported.
+Files must be UTF-8, at most 1 MiB, with permissions restricted to the operator.
+One trailing LF or CRLF is removed; other whitespace is preserved.
+An empty token is rejected. The daemon does not accept `-` (stdin).
 
 ## Adding Federations
 
