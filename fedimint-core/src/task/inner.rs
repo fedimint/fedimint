@@ -66,7 +66,17 @@ impl TaskGroupInner {
 
     #[inline]
     pub fn add_subgroup(&self, tg: TaskGroup) {
-        self.subgroups.lock().expect("locking failed").push(tg);
+        self.subgroups
+            .lock()
+            .expect("locking failed")
+            .push(tg.clone());
+
+        // A subgroup added after `shutdown` would otherwise never be signalled.
+        // Checking after the push leaves no gap: `shutdown` sets the flag before
+        // it reads `subgroups`, so it either sees this subgroup or we see the flag.
+        if self.is_shutting_down() {
+            tg.inner.shutdown();
+        }
     }
 
     #[inline]
