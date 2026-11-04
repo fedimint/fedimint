@@ -1,0 +1,75 @@
+name: Sync fedimint-priv to release tag
+
+# Moves fedimint-priv's `master` to the newest release tag so private
+# development starts from the latest released code. Backport releases (tags
+# lower than an existing one) are skipped. Private work must live on feature
+# branches in fedimint-priv: commits on its `master` are discarded here.
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Serialize runs so two tags pushed together cannot race on `master`.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    if: github.repository == 'fedimint/fedimint'
+    name: Push tag and reset master in fedimint-priv
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # full history: a shallow clone cannot push to a remote lacking its ancestors
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check tag is the latest release
+        id: latest
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # the `-` suffix sorts pre-releases (v0.12.0-rc.0) below their release (v0.12.0)
+          latest="$(git -c versionsort.suffix=- tag --list 'v*' --sort=-v:refname | head -n1)"
+          if [ "$TAG" = "$latest" ]; then
+            echo "is_latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Skipping sync: $TAG is not the latest release ($latest)"
+            echo "is_latest=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push to fedimint-priv
+        if: steps.latest.outputs.is_latest == 'true'
+        env:
+          # write deploy key registered on fedimint/fedimint-priv only
+          DEPLOY_KEY: ${{ secrets.FEDIMINT_PRIV_DEPLOY_KEY }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          key_dir="$(mktemp -d)"
+          trap 'rm -rf "$key_dir"' EXIT
+          printf '%s\n' "$DEPLOY_KEY" > "$key_dir/id"
+          chmod 600 "$key_dir/id"
+          # https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
+          echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "$key_dir/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $key_dir/id -o IdentitiesOnly=yes -o UserKnownHostsFile=$key_dir/known_hosts -o StrictHostKeyChecking=yes"
+
+          remote='git@github.com:fedimint/fedimint-priv.git'
+          commit="$(git rev-parse "refs/tags/$TAG^{commit}")"
+          # lease on the master we observe now, so a concurrent push to it fails the job instead of being lost
+          current_master="$(git ls-remote "$remote" refs/heads/master | cut -f1)"
+
+          echo "Resetting fedimint-priv master from ${current_master:-<none>} to $TAG ($commit)"
+          git push --atomic \
+            "--force-with-lease=refs/heads/master:$current_master" \
+            "$remote" \
+            "refs/tags/$TAG:refs/tags/$TAG" \
+            "$commit:refs/heads/master"
