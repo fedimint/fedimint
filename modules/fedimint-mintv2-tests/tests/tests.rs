@@ -686,6 +686,35 @@ async fn receive_rejects_notes_below_the_base_fee() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn receive_rejects_notes_of_unissued_denominations() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+
+    // The federation issues denominations 0 through 41. 42 is the first it
+    // does not issue, and 64 is the first whose amount overflows a u64.
+    for denomination in [Denomination(42), Denomination(64), Denomination(u8::MAX)] {
+        let note = SpendableNote {
+            denomination,
+            keypair: Keypair::from_seckey_slice(SECP256K1, &[1u8; 32])?,
+            signature: tbs::Signature(bls12_381::G1Affine::generator()),
+        };
+
+        let ecash = ECash::new(client.federation_id(), vec![note]);
+
+        assert_matches!(
+            client
+                .get_first_module::<MintClientModule>()?
+                .receive(ecash, Value::Null)
+                .await,
+            Err(ReceiveECashError::InvalidDenomination)
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn send_without_funds_reports_insufficient_balance() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_not_degraded().await;

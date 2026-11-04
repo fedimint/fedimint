@@ -1115,6 +1115,17 @@ impl MintClientModule {
             return Err(ReceiveECashError::WrongFederation);
         }
 
+        // The federation rejects such notes anyway, but the client would first
+        // mint change for their face value, and `Denomination::amount` overflows
+        // for denominations of 64 and above.
+        if ecash
+            .notes()
+            .iter()
+            .any(|note| !self.cfg.tbs_agg_pks.contains_key(&note.denomination))
+        {
+            return Err(ReceiveECashError::InvalidDenomination);
+        }
+
         if ecash
             .notes()
             .iter()
@@ -1468,6 +1479,10 @@ pub enum ReceiveECashError {
     /// One of the notes is worth no more than the fee to reissue it.
     #[error("ECash contains an uneconomical denomination")]
     UneconomicalDenomination,
+
+    /// One of the notes has a denomination the federation does not issue.
+    #[error("ECash contains a denomination the federation does not issue")]
+    InvalidDenomination,
 
     /// The client cannot cover the fee the reissue costs.
     #[error("Receiving ecash requires additional funds")]
