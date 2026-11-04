@@ -637,7 +637,7 @@ impl LightningClientModule {
             .amount_milli_satoshis()
             .ok_or(SendPaymentError::InvoiceMissingAmount)?;
 
-        if invoice.is_expired() {
+        if invoice.would_expire(duration_since_epoch()) {
             return Err(SendPaymentError::InvoiceExpired);
         }
 
