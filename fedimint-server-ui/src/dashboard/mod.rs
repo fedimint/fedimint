@@ -1,4 +1,5 @@
 pub mod audit;
+pub(crate) mod availability;
 pub mod bitcoin;
 pub(crate) mod consensus_explorer;
 pub mod general;
@@ -147,6 +148,12 @@ async fn dashboard_view(
 
         div class="row gy-4 mt-2" {
             div class="col-12" {
+                (availability::loading())
+            }
+        }
+
+        div class="row gy-4 mt-2" {
+            div class="col-12" {
                 (bitcoin::render(bitcoin_rpc_url, &bitcoin_rpc_status))
             }
         }
@@ -230,6 +237,7 @@ pub fn router(api: DynDashboardApi) -> Router {
         .route(EXPLORER_IDX_ROUTE, get(consensus_explorer_view))
         .route(DOWNLOAD_BACKUP_ROUTE, get(download_backup))
         .route(METRICS_ROUTE, get(metrics_handler))
+        .route(availability::ROUTE, get(availability::view))
         .route(
             CONNECTIVITY_CHECK_ROUTE,
             get(connectivity_check_handler::<DynDashboardApi>),
