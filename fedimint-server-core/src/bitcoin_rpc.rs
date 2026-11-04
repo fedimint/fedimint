@@ -21,6 +21,9 @@ const MAINNET_CHAIN_ID_STR: &str =
 // <https://blockstream.info/testnet/api/block-height/1>
 const TESTNET_CHAIN_ID_STR: &str =
     "00000000b873e79784647a6c82962c70d228557d24a747ea4d1b8bbe878e1206";
+// <https://mempool.space/testnet4/api/block-height/1>
+const TESTNET4_CHAIN_ID_STR: &str =
+    "0000000012982b6d5f621229286b880e909984df669c2afabb102ce311b13f28";
 // <https://mempool.space/signet/api/block-height/1>
 const SIGNET_4_CHAIN_ID_STR: &str =
     "00000086d6b2636cb2a392d45edc4ec544a10024d30141c9adf4bfd9de533b53";
@@ -36,6 +39,7 @@ pub fn network_from_chain_id(chain_id: ChainId) -> Network {
     match chain_id.to_string().as_str() {
         MAINNET_CHAIN_ID_STR => Network::Bitcoin,
         TESTNET_CHAIN_ID_STR => Network::Testnet,
+        TESTNET4_CHAIN_ID_STR => Network::Testnet4,
         SIGNET_4_CHAIN_ID_STR => Network::Signet,
         MUTINYNET_CHAIN_ID_STR => Network::Signet,
         _ => {
@@ -326,3 +330,6 @@ pub trait IServerBitcoinRpc: Debug + Send + Sync + 'static {
         Arc::new(self)
     }
 }
+
+#[cfg(test)]
+mod tests;
