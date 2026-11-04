@@ -424,7 +424,7 @@ impl<R: std::io::Read> bitcoin_io::BufRead for BufBitcoinReader<'_, R> {
     #[inline]
     fn consume(&mut self, amount: usize) {
         debug_assert!(false, "rust-bitcoin doesn't actually use this");
-        if amount >= 1 {
+        if 1 <= amount {
             debug_assert_eq!(amount, 1, "Can only consume one byte");
             debug_assert!(!self.is_consumed, "Cannot consume more than had been read");
             self.is_consumed = true;

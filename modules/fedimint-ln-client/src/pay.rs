@@ -332,7 +332,7 @@ impl LightningPayFunded {
             let elapsed = fedimint_core::time::now()
                 .duration_since(start)
                 .unwrap_or_default();
-            if elapsed > TIMEOUT_DURATION {
+            if TIMEOUT_DURATION < elapsed {
                 std::future::pending::<()>().await;
             }
 

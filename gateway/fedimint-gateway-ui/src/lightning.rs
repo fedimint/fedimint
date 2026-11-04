@@ -1827,7 +1827,7 @@ where
 
     // Generate BOLT11 if amount is provided
     if let Some(amount_msats) = payload.amount_msats {
-        if amount_msats > 0 {
+        if 0 < amount_msats {
             let bolt11_payload = CreateInvoiceForOperatorPayload {
                 amount_msats,
                 expiry_secs: None,
@@ -1855,7 +1855,7 @@ where
     if !is_lnd {
         let bolt12_payload = CreateOfferPayload {
             amount: payload.amount_msats.and_then(|a| {
-                if a > 0 {
+                if 0 < a {
                     Some(fedimint_core::Amount::from_msats(a))
                 } else {
                     None

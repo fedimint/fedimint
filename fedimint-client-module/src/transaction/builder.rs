@@ -536,7 +536,7 @@ where
     let hi_bound = max_amount.msats.min(balance.msats);
     let lo_bound = min_amount.msats;
 
-    if lo_bound > hi_bound {
+    if hi_bound < lo_bound {
         return Ok(None);
     }
 
@@ -645,7 +645,7 @@ where
 {
     let funded_amount = gross_up(amount);
 
-    if funded_amount > balance {
+    if balance < funded_amount {
         return Ok(false);
     }
 
