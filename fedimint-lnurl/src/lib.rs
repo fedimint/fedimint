@@ -1,4 +1,5 @@
-use bech32::{Bech32, Hrp};
+use bech32::primitives::decode::CheckedHrpstring;
+use bech32::{Bech32, Checksum, Hrp};
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
 use serde_with::hex::Hex;
@@ -29,21 +30,40 @@ impl<T> LnurlResponse<T> {
     }
 }
 
+/// The bech32 checksum without its 1023 character code length limit.
+///
+/// LUD-01 encodes LNURLs as bech32 but waives the length limit, and
+/// URLs carrying an encoded payload (e.g. an LNv2 receive request listing
+/// every gateway) can exceed 1023 characters once encoded. The `bech32` crate
+/// rejects those for [`Bech32`], so encoding would panic and decoding would
+/// fail.
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum Lnurl {}
+
+impl Checksum for Lnurl {
+    type MidstateRepr = <Bech32 as Checksum>::MidstateRepr;
+    const CODE_LENGTH: usize = usize::MAX;
+    const CHECKSUM_LENGTH: usize = <Bech32 as Checksum>::CHECKSUM_LENGTH;
+    const GENERATOR_SH: [Self::MidstateRepr; 5] = <Bech32 as Checksum>::GENERATOR_SH;
+    const TARGET_RESIDUE: Self::MidstateRepr = <Bech32 as Checksum>::TARGET_RESIDUE;
+}
+
 /// Decode a bech32-encoded LNURL string to a URL string
 pub fn parse_lnurl(s: &str) -> Option<String> {
-    let (hrp, data) = bech32::decode(&s.to_lowercase()).ok()?;
+    let lowercase = s.to_lowercase();
+    let checked = CheckedHrpstring::new::<Lnurl>(&lowercase).ok()?;
 
-    if hrp.as_str() != "lnurl" {
+    if checked.hrp().as_str() != "lnurl" {
         return None;
     }
 
-    String::from_utf8(data).ok()
+    String::from_utf8(checked.byte_iter().collect()).ok()
 }
 
 /// Encode a URL as a bech32 LNURL string
 pub fn encode_lnurl(url: &str) -> String {
-    bech32::encode::<Bech32>(Hrp::parse("lnurl").expect("valid hrp"), url.as_bytes())
-        .expect("encoding succeeds")
+    bech32::encode::<Lnurl>(Hrp::parse("lnurl").expect("valid hrp"), url.as_bytes())
+        .expect("the LNURL checksum has no code length limit")
 }
 
 /// Parse a lightning address (user@domain) to its LNURL-pay endpoint URL
@@ -379,3 +399,6 @@ fn parse_verify_response_lud_21() {
     assert!(verify.settled);
     assert!(verify.preimage.is_some());
 }
+
+#[cfg(test)]
+mod tests;
