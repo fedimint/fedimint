@@ -4491,6 +4491,7 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "async-stream",
+ "async-trait",
  "bitcoin_hashes",
  "bls12_381",
  "clap",

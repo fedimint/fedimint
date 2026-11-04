@@ -53,7 +53,9 @@ use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation
 use fedimint_core::base32::{self, FEDIMINT_PREFIX};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{
+    AutocommitError, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
+};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
@@ -1127,19 +1129,55 @@ impl MintClientModule {
             Self::create_input_bundle(operation_id, ecash.notes(), true, self.cfg.amount_unit);
         let input = self.client_ctx.make_client_inputs(input);
         let ec = base32::encode_prefixed(FEDIMINT_PREFIX, &ecash);
+        let amount = ecash.amount();
+        let tx_builder = TransactionBuilder::new().with_inputs(input);
 
+        // The operation, its state machines and the event announcing it must
+        // commit together, including when finalization needs to be retried.
         self.client_ctx
-            .finalize_and_submit_transaction(
-                operation_id,
-                MintCommonInit::KIND.as_str(),
-                move |change_outpoint_range| MintOperationMeta::Receive {
-                    change_outpoint_range,
-                    ecash: ec.clone(),
-                    custom_meta: custom_meta.clone(),
+            .module_db()
+            .autocommit(
+                |dbtx, _| {
+                    let tx_builder = tx_builder.clone();
+                    let ec = ec.clone();
+                    let custom_meta = custom_meta.clone();
+                    Box::pin(async move {
+                        self.client_ctx
+                            .finalize_and_submit_transaction_dbtx(
+                                dbtx,
+                                operation_id,
+                                MintCommonInit::KIND.as_str(),
+                                move |change_outpoint_range| MintOperationMeta::Receive {
+                                    change_outpoint_range,
+                                    ecash: ec.clone(),
+                                    custom_meta: custom_meta.clone(),
+                                },
+                                tx_builder,
+                            )
+                            .await?;
+
+                        self.client_ctx
+                            .log_event(
+                                dbtx,
+                                ReceivePaymentEvent {
+                                    operation_id,
+                                    amount,
+                                },
+                            )
+                            .await;
+
+                        Ok::<_, TransactionSubmitError>(())
+                    })
                 },
-                TransactionBuilder::new().with_inputs(input),
+                Some(100),
             )
             .await
+            .map_err(|error| match error {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    TransactionSubmitError::Database(last_error)
+                }
+            })
             .map_err(|error| match error {
                 TransactionSubmitError::OperationAlreadyExists(_) => {
                     ReceiveECashError::AlreadyReceived
@@ -1149,20 +1187,6 @@ impl MintClientModule {
                 }
                 other => ReceiveECashError::Failed(other),
             })?;
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                ReceivePaymentEvent {
-                    operation_id,
-                    amount: ecash.amount(),
-                },
-            )
-            .await;
-
-        dbtx.commit_tx().await;
 
         Ok(operation_id)
     }
