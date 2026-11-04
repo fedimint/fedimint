@@ -20,7 +20,7 @@ impl<M: Clone + Send + 'static> IP2PConnections<M> for FakePeerConnections<M> {
 
         // If the peer is gone, just pretend we are going to resend
         // the msg eventually, even if it will never happen.
-        self.tx.try_send(msg).ok();
+        let _ = self.tx.try_send(msg);
     }
 
     async fn receive(&self) -> Option<(PeerId, M)> {
