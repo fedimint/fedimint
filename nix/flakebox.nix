@@ -62,6 +62,7 @@ let
     "db/migrations/.*"
     "devimint/src/cfg/.*"
     "fedimint-server/src/test_fixtures/.*"
+    "crypto/bip445/src/vectors/.*"
     "docs/.*\\.md"
     "fedimint-ui-common/assets/.*"
   ];
@@ -118,6 +119,7 @@ let
         "db/migrations/.*"
         "devimint/src/cfg/.*"
         "fedimint-server/src/test_fixtures/.*"
+        "crypto/bip445/src/vectors/.*"
         "scripts/.*"
         "docs/.*\\.md"
         "fedimint-ui-common/assets/.*"
