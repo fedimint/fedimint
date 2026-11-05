@@ -2,7 +2,10 @@
 //!
 //! This library implements the FROST threshold signature scheme as specified
 //! in BIP 445 over secp256k1, producing BIP340 signatures for use with
-//! taproot. The implementation is validated against the BIP 445 test vectors.
+//! taproot. It covers nonce aggregation, signing and signature aggregation and
+//! is validated against the corresponding test vectors of draft v0.8.0 of the
+//! BIP (`bip-frost-signing` commit `4b566d5`). Key tweaking, deterministic
+//! signing and identifiable aborts are not implemented.
 //!
 //! Signing runs in two broadcast rounds among the signing set: exchange of
 //! the public nonce pairs and exchange of the signature shares. The single
@@ -27,6 +30,14 @@ use serde::{Deserialize, Serialize};
 
 const TAG_NONCECOEF: &[u8] = b"BIP0445/noncecoef";
 const TAG_CHALLENGE: &[u8] = b"BIP0340/challenge";
+const TAG_NONCE_SEED: &[u8] = b"fedimint-bip445/nonce-seed";
+
+/// BIP 445 bounds the total number of participants of a threshold key, the
+/// signing set included, to 128: its adaptive-corruption security argument
+/// holds only within this bound. Identities are the zero-based participant
+/// indices and the evaluation points are the identities plus one, so every
+/// identity has to be below the bound.
+pub const MAX_PARTICIPANTS: usize = 128;
 
 /// Our share of the threshold secret key.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize, Deserialize)]
@@ -74,12 +85,14 @@ pub fn generate_nonce() -> (SecretNonce, PublicNonce) {
     (nonce, public_nonce)
 }
 
-/// Derives the nonce pair for one signing session from a seed. The caller
-/// must guarantee that a seed is used for at most one signing session, since
-/// signing two different sessions with the same nonce leaks the secret key
-/// share.
-pub fn derive_nonce(seed: &[u8; 32]) -> SecretNonce {
-    let mut rng = ChaChaRng::from_seed(*seed);
+/// Derives the nonce pair for one signing session from our secret key share
+/// and a seed. The secret key share keeps the nonce unpredictable even if the
+/// seed is public, such as a session hash or a counter, so the seed only has
+/// to be unique: the caller must guarantee that a seed is used for at most
+/// one signing session, since signing two different sessions with the same
+/// nonce leaks the secret key share.
+pub fn derive_nonce(sks: &SecretKeyShare, seed: &[u8; 32]) -> SecretNonce {
+    let mut rng = ChaChaRng::from_seed(tagged_hash(TAG_NONCE_SEED, &[&sks.0.secret_bytes(), seed]));
 
     SecretNonce(SecretKey::new(&mut rng), SecretKey::new(&mut rng))
 }
@@ -94,7 +107,8 @@ pub fn derive_public_nonce(nonce: &SecretNonce) -> PublicNonce {
 /// consumed since signing twice with the same nonce leaks our secret key
 /// share.
 /// # Panics
-/// If nonces is empty
+/// If the signing set is empty, exceeds the participant bound or does not
+/// contain our identity
 pub fn sign_share(
     msg: [u8; 32],
     sks: &SecretKeyShare,
@@ -103,6 +117,16 @@ pub fn sign_share(
     identity: u64,
     pk: &AggregatePublicKey,
 ) -> SignatureShare {
+    assert!(
+        is_valid_signing_set(nonces),
+        "The signing set is empty or exceeds the participant bound"
+    );
+
+    assert!(
+        nonces.contains_key(&identity),
+        "The signing set does not contain our identity"
+    );
+
     let (binding, group_nonce, challenge) = session_values(&msg, nonces, pk);
 
     let lambda = lagrange_multiplier(nonces, identity);
@@ -151,6 +175,10 @@ pub fn verify_signature_share(
     nonces: &BTreeMap<u64, PublicNonce>,
     pk: &AggregatePublicKey,
 ) -> bool {
+    if !is_valid_signing_set(nonces) {
+        return false;
+    }
+
     let Some(nonce) = nonces.get(&peer) else {
         return false;
     };
@@ -196,13 +224,19 @@ pub fn verify_signature_share(
 /// signature. The responsibility of verifying the shares and supplying the
 /// shares of exactly the signing set that created them lies with the caller.
 /// # Panics
-/// If nonces or shares is empty
+/// If the signing set is empty or exceeds the participant bound, or if shares
+/// is empty
 pub fn aggregate_signature_shares(
     msg: [u8; 32],
     nonces: &BTreeMap<u64, PublicNonce>,
     shares: &BTreeMap<u64, SignatureShare>,
     pk: &AggregatePublicKey,
 ) -> schnorr::Signature {
+    assert!(
+        is_valid_signing_set(nonces),
+        "The signing set is empty or exceeds the participant bound"
+    );
+
     let (_, group_nonce, _) = session_values(&msg, nonces, pk);
 
     let response = shares
@@ -232,6 +266,16 @@ pub fn verify(msg: [u8; 32], signature: &schnorr::Signature, pk: &AggregatePubli
             &pk.0.x_only_public_key().0,
         )
         .is_ok()
+}
+
+/// Whether the signing set is nonempty and lies within the participant bound.
+/// The signing set is a subset of the participants, so an identity at or
+/// above the bound indicates a key that was created outside of it.
+fn is_valid_signing_set(nonces: &BTreeMap<u64, PublicNonce>) -> bool {
+    !nonces.is_empty()
+        && nonces
+            .keys()
+            .all(|id| usize::try_from(*id).is_ok_and(|id| id < MAX_PARTICIPANTS))
 }
 
 /// The binding coefficient, group nonce and challenge of the signing session

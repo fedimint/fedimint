@@ -8,9 +8,10 @@ use rand_chacha::ChaChaRng;
 use secp256k1::{SECP256K1, Scalar, SecretKey, constants};
 
 use crate::{
-    AggregatePublicKey, PublicKeyShare, SecretKeyShare, SignatureShare, aggregate_signature_shares,
-    derive_pk_share, generate_nonce, invert, key_from_u64, key_scalar, scalar_from_u64,
-    scalar_mod_order, sign_share, verify, verify_signature_share,
+    AggregatePublicKey, MAX_PARTICIPANTS, PublicKeyShare, SecretKeyShare, SignatureShare,
+    aggregate_signature_shares, derive_nonce, derive_pk_share, derive_public_nonce, generate_nonce,
+    invert, key_from_u64, key_scalar, scalar_from_u64, scalar_mod_order, sign_share, verify,
+    verify_signature_share,
 };
 
 fn dealer_agg_pk() -> AggregatePublicKey {
@@ -152,4 +153,65 @@ fn test_scalar_mod_order() {
     bytes[31] += 1;
 
     assert_eq!(scalar_mod_order(bytes), Scalar::ONE);
+}
+
+#[test]
+fn test_derive_nonce_binds_secret_share() {
+    let seed = [3_u8; 32];
+
+    let nonce = derive_public_nonce(&derive_nonce(&dealer_sk(3, 0), &seed));
+
+    assert_eq!(
+        nonce,
+        derive_public_nonce(&derive_nonce(&dealer_sk(3, 0), &seed))
+    );
+
+    assert_ne!(
+        nonce,
+        derive_public_nonce(&derive_nonce(&dealer_sk(3, 0), &[4_u8; 32]))
+    );
+
+    assert_ne!(
+        nonce,
+        derive_public_nonce(&derive_nonce(&dealer_sk(3, 1), &seed))
+    );
+}
+
+/// An identity at the participant bound cannot belong to a key created within
+/// it, so such a signing set is rejected.
+#[test]
+fn test_signing_set_exceeding_participant_bound() {
+    let message = [5_u8; 32];
+
+    let out_of_bound = u64::try_from(MAX_PARTICIPANTS).expect("The bound fits a u64");
+
+    let (secret_nonce, public_nonce) = generate_nonce();
+
+    let nonces = [(0, public_nonce), (out_of_bound, generate_nonce().1)]
+        .into_iter()
+        .collect::<BTreeMap<u64, _>>();
+
+    let share = SignatureShare(secret_nonce.0);
+
+    assert!(!verify_signature_share(
+        message,
+        0,
+        &dealer_pk(2, 0),
+        &share,
+        &nonces,
+        &dealer_agg_pk()
+    ));
+
+    let result = std::panic::catch_unwind(|| {
+        sign_share(
+            message,
+            &dealer_sk(2, 0),
+            secret_nonce,
+            &nonces,
+            0,
+            &dealer_agg_pk(),
+        )
+    });
+
+    assert!(result.is_err());
 }

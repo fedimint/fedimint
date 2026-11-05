@@ -4670,6 +4670,7 @@ dependencies = [
  "fedimint-aead",
  "fedimint-aleph-bft",
  "fedimint-api-client",
+ "fedimint-bip445",
  "fedimint-build",
  "fedimint-connectors",
  "fedimint-core",

@@ -2,14 +2,17 @@ use std::collections::BTreeMap;
 use std::iter::once;
 
 use anyhow::{Context, bail, ensure};
+use bip445::MAX_PARTICIPANTS;
 use fedimint_core::bitcoin::hashes::sha256;
 use fedimint_core::config::{DkgMessageSecp, P2PMessage};
 use fedimint_core::encoding::Encodable as _;
-use fedimint_core::net::peers::{DynP2PConnections, Recipient};
+use fedimint_core::net::{DynP2PConnections, Recipient};
 use fedimint_core::{NumPeers, PeerId};
 use rand::rngs::OsRng;
 use secp256k1::{PublicKey, SECP256K1, Scalar, SecretKey};
 use tracing::trace;
+
+use super::receive_from_peer_with_progress;
 
 // Implementation of the classic Pedersen DKG over secp256k1.
 
@@ -23,24 +26,44 @@ struct DkgSecp {
 }
 
 impl DkgSecp {
-    fn new(num_peers: NumPeers, identity: PeerId) -> Self {
+    /// Fails if the federation exceeds the participant bound of BIP 445.
+    fn new(num_peers: NumPeers, identity: PeerId) -> anyhow::Result<Self> {
         let polynomial = (0..num_peers.threshold())
             .map(|_| SecretKey::new(&mut OsRng))
-            .collect::<Vec<SecretKey>>();
+            .collect();
+
+        Self::with_polynomial(num_peers, identity, polynomial)
+    }
+
+    fn with_polynomial(
+        num_peers: NumPeers,
+        identity: PeerId,
+        polynomial: Vec<SecretKey>,
+    ) -> anyhow::Result<Self> {
+        ensure!(
+            num_peers.total() <= MAX_PARTICIPANTS,
+            "DKG secp: BIP 445 bounds the number of participants by {MAX_PARTICIPANTS}, got {}.",
+            num_peers.total()
+        );
+
+        ensure!(
+            polynomial.len() == num_peers.threshold(),
+            "DKG secp: our polynomial is of wrong degree."
+        );
 
         let commitment = polynomial
             .iter()
             .map(|coefficient| coefficient.public_key(SECP256K1))
             .collect::<Vec<PublicKey>>();
 
-        DkgSecp {
+        Ok(DkgSecp {
             num_peers,
             identity,
             polynomial,
             hash_commitments: once((identity, commitment.consensus_hash_sha256())).collect(),
             commitments: once((identity, commitment)).collect(),
             sk_shares: BTreeMap::new(),
-        }
+        })
     }
 
     fn commitment(&self) -> Vec<PublicKey> {
@@ -124,30 +147,38 @@ impl DkgSecp {
                 );
 
                 if self.sk_shares.len() == self.num_peers.total() {
+                    // The hash commitments stop a peer from adapting its polynomial to
+                    // the others, but colluding peers can agree on polynomials that
+                    // cancel while every share verifies against its commitment. The
+                    // sums are therefore accumulated in representations that admit
+                    // zero and the point at infinity, and only the final values are
+                    // required to be nonzero.
                     let sks = self
                         .sk_shares
                         .values()
-                        .copied()
-                        .reduce(|accumulator, share| {
-                            accumulator.add_tweak(&key_scalar(&share)).expect(
-                                "The shares are hash-committed, an intermediate sum of zero is negligible",
-                            )
-                        })
-                        .expect("We have at least one share");
+                        .fold(None, add_key)
+                        .context("DKG secp: the aggregate secret key share is zero.")?;
 
-                    let pks = (0..self.num_peers.threshold())
-                        .map(|i| {
-                            self.commitments
-                                .values()
-                                .map(|coefficients| coefficients[i])
-                                .reduce(|accumulator, coefficient| {
-                                    accumulator.combine(&coefficient).expect(
-                                        "The coefficients are hash-committed, a sum at infinity is negligible",
-                                    )
-                                })
-                                .expect("DKG secp: polynomial commitments are empty.")
-                        })
-                        .collect();
+                    let mut pks = Vec::with_capacity(self.num_peers.threshold());
+
+                    for i in 0..self.num_peers.threshold() {
+                        let coefficient = self
+                            .commitments
+                            .values()
+                            .fold(None, |accumulator, coefficients| {
+                                add_point(accumulator, &coefficients[i])
+                            })
+                            .context(
+                                "DKG secp: the aggregate commitment has a coefficient at infinity.",
+                            )?;
+
+                        pks.push(coefficient);
+                    }
+
+                    ensure!(
+                        eval_poly(&pks, &self.identity)? == sks.public_key(SECP256K1),
+                        "DKG secp: our key share does not match the aggregate commitment."
+                    );
 
                     return Ok(DkgStepSecp::Result((pks, sks)));
                 }
@@ -165,7 +196,7 @@ pub async fn run_dkg_secp(
     identity: PeerId,
     connections: &DynP2PConnections<P2PMessage>,
 ) -> anyhow::Result<(Vec<PublicKey>, SecretKey)> {
-    let mut dkg = DkgSecp::new(num_peers, identity);
+    let mut dkg = DkgSecp::new(num_peers, identity)?;
 
     connections.send(
         Recipient::Everyone,
@@ -174,8 +205,7 @@ pub async fn run_dkg_secp(
 
     loop {
         for peer in num_peers.peer_ids().filter(|p| *p != identity) {
-            let message = connections
-                .receive_from_peer(peer)
+            let message = receive_from_peer_with_progress(connections, peer, "DKG secp")
                 .await
                 .context("Unexpected shutdown of p2p connections during dkg secp")?;
 
@@ -212,6 +242,23 @@ fn scalar(peer: &PeerId) -> Scalar {
 
 fn key_scalar(key: &SecretKey) -> Scalar {
     Scalar::from_be_bytes(key.secret_bytes()).expect("A secret key is a valid scalar")
+}
+
+/// Adds a secret key to a sum of secret keys, where `None` represents zero.
+fn add_key(accumulator: Option<SecretKey>, key: &SecretKey) -> Option<SecretKey> {
+    match accumulator {
+        Some(accumulator) => accumulator.add_tweak(&key_scalar(key)).ok(),
+        None => Some(*key),
+    }
+}
+
+/// Adds a point to a sum of points, where `None` represents the point at
+/// infinity.
+fn add_point(accumulator: Option<PublicKey>, point: &PublicKey) -> Option<PublicKey> {
+    match accumulator {
+        Some(accumulator) => accumulator.combine(point).ok(),
+        None => Some(*point),
+    }
 }
 
 fn eval_poly_scalar(coefficients: &[SecretKey], x: &Scalar) -> SecretKey {
@@ -257,66 +304,4 @@ enum DkgStepSecp {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::collections::{BTreeMap, VecDeque};
-
-    use fedimint_core::{NumPeers, PeerId};
-    use secp256k1::SECP256K1;
-
-    use super::{DkgSecp, DkgStepSecp, eval_poly};
-
-    #[test_log::test]
-    fn test_dkg_secp() {
-        let num_peers = NumPeers::from(7);
-
-        let mut dkgs = num_peers
-            .peer_ids()
-            .map(|peer| (peer, DkgSecp::new(num_peers, peer)))
-            .collect::<BTreeMap<PeerId, DkgSecp>>();
-
-        let mut steps = dkgs
-            .iter()
-            .map(|(peer, dkg)| (*peer, DkgStepSecp::Broadcast(dkg.initial_message())))
-            .collect::<VecDeque<(PeerId, DkgStepSecp)>>();
-
-        let mut keys = BTreeMap::new();
-
-        while keys.len() < num_peers.total() {
-            match steps.pop_front().unwrap() {
-                (send_peer, DkgStepSecp::Broadcast(message)) => {
-                    for receive_peer in num_peers.peer_ids().filter(|p| *p != send_peer) {
-                        let step = dkgs
-                            .get_mut(&receive_peer)
-                            .unwrap()
-                            .step(send_peer, message.clone());
-
-                        steps.push_back((receive_peer, step.unwrap()));
-                    }
-                }
-                (send_peer, DkgStepSecp::Messages(messages)) => {
-                    for (receive_peer, message) in messages {
-                        let step = dkgs
-                            .get_mut(&receive_peer)
-                            .unwrap()
-                            .step(send_peer, message);
-
-                        steps.push_back((receive_peer, step.unwrap()));
-                    }
-                }
-                (send_peer, DkgStepSecp::Result(step_keys)) => {
-                    keys.insert(send_peer, step_keys);
-                }
-            }
-        }
-
-        assert!(steps.is_empty());
-
-        for (peer, (polynomial, sks)) in keys {
-            assert_eq!(polynomial.len(), 5);
-            assert_eq!(
-                eval_poly(&polynomial, &peer).unwrap(),
-                sks.public_key(SECP256K1)
-            );
-        }
-    }
-}
+mod tests;
