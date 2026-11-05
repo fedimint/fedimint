@@ -710,11 +710,11 @@ impl std::fmt::Display for EscrowOutputOutcome {
 
 impl std::fmt::Display for EscrowConsensusItem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            &EscrowConsensusItem::UnixTimeVote(t) => {
+        match *self {
+            EscrowConsensusItem::UnixTimeVote(t) => {
                 write!(f, "Escrow Unix Time {t}")
             }
-            &EscrowConsensusItem::Default { variant, ref bytes } => write!(
+            EscrowConsensusItem::Default { variant, ref bytes } => write!(
                 f,
                 "Escrow Unknown - variant: {variant}, bytes_len: {}",
                 bytes.len()

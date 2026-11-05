@@ -425,7 +425,7 @@ impl FrostDkgSessionRecord {
                 round1_received,
             } => {
                 let secret = Round1SecretPackage::deserialize(round1_secret).map_err(frost_err)?;
-                let received = decode_map(round1_received, |b| Round1Package::deserialize(b))?;
+                let received = decode_map(round1_received, Round1Package::deserialize)?;
                 let round2 = runner
                     .run_round2(
                         &self.session_id,
@@ -449,9 +449,9 @@ impl FrostDkgSessionRecord {
                 round2_secret,
                 round2_received,
             } => {
-                let r1 = decode_map(round1_received, |b| Round1Package::deserialize(b))?;
+                let r1 = decode_map(round1_received, Round1Package::deserialize)?;
                 let secret2 = Round2SecretPackage::deserialize(round2_secret).map_err(frost_err)?;
-                let r2 = decode_map(round2_received, |b| Round2Package::deserialize(b))?;
+                let r2 = decode_map(round2_received, Round2Package::deserialize)?;
                 let result = runner.finalize(&r1, &secret2, &r2)?;
                 Ok(FrostDkgState::Finalized {
                     key_package: result.key_package.serialize().map_err(frost_err)?,
