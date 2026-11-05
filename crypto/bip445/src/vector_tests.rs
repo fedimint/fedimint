@@ -1,13 +1,17 @@
 //! Tests against the BIP 445 test vectors, vendored from
 //! <https://github.com/siv2r/bip-frost-signing> (python/vectors) at
-//! commit 4b566d5.
+//! commit ba299badfbe647e670686de75578dd501a627028 (draft v0.12.1).
 //!
-//! The nonce generation and deterministic signing vectors are not applicable:
-//! we generate nonces from the operating system RNG instead of the spec's
-//! derivation, and deterministic signing is deliberately unsupported. The
-//! sign error vectors test caller-contract violations that our typed API
-//! either cannot represent or documents as caller responsibility, and tweak
-//! test cases do not apply since callers tweak key material externally.
+//! The nonce generation, deterministic signing, threshold info and tweak
+//! vectors are not applicable: we generate nonces from the operating system
+//! RNG instead of the spec's derivation, deterministic signing is deliberately
+//! unsupported, key material is validated by the DKG and callers tweak it
+//! externally. The sign and verify error vectors test caller-contract
+//! violations that our typed API either cannot represent or documents as
+//! caller responsibility; in particular the spec validates the participant
+//! bound from the explicit `n` of its session context, which our API does not
+//! carry, so the `n = 129` groups contribute no cases here and the bound is
+//! covered by the unit tests instead.
 
 use std::collections::BTreeMap;
 
@@ -123,7 +127,7 @@ fn test_sign_verify_vectors() {
                 "aggregated nonce mismatch"
             );
 
-            let my_id = test["my_id"].as_u64().expect("The id is an integer");
+            let my_id = test["signer_id"].as_u64().expect("The id is an integer");
 
             let secnonce = bytes(
                 &secnonces[test["secnonce_index"]

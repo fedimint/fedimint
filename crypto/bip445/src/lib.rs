@@ -3,8 +3,9 @@
 //! This library implements the FROST threshold signature scheme as specified
 //! in BIP 445 over secp256k1, producing BIP340 signatures for use with
 //! taproot. It covers nonce aggregation, signing and signature aggregation and
-//! is validated against the corresponding test vectors of draft v0.8.0 of the
-//! BIP (`bip-frost-signing` commit `4b566d5`). Key tweaking, deterministic
+//! is validated against the corresponding test vectors of draft v0.12.1 of
+//! the BIP (`bip-frost-signing` commit
+//! `ba299badfbe647e670686de75578dd501a627028`). Key tweaking, deterministic
 //! signing and identifiable aborts are not implemented.
 //!
 //! Signing runs in two broadcast rounds among the signing set: exchange of
