@@ -20,8 +20,8 @@ use serde_json::Value;
 
 use crate::{
     AggregatePublicKey, PublicKeyShare, PublicNonce, SecretKeyShare, SecretNonce, SignatureShare,
-    aggregate_nonce_halves, key_scalar, serialize_ids, serialize_point, session_values_from,
-    sign_share, verify, verify_signature_share,
+    aggregate_nonce_halves, derive_pk_share, key_scalar, serialize_ids, serialize_point,
+    session_values_from, sign_share, verify, verify_signature_share,
 };
 
 fn bytes(value: &Value) -> Vec<u8> {
@@ -118,7 +118,6 @@ fn test_sign_verify_vectors() {
             };
 
             let ids = ids(&test["ids"]);
-            let pubshare_indices = indices(&test["pubshare_indices"]);
             let nonces = nonce_map(&ids, &indices(&test["pubnonce_indices"]), pubnonces);
 
             assert_eq!(
@@ -157,12 +156,20 @@ fn test_sign_verify_vectors() {
                 "partial signature mismatch"
             );
 
-            let position = ids
-                .iter()
-                .position(|id| *id == my_id)
-                .expect("The id is present");
+            // The spec allows signing without the public share list; the
+            // signer's public share then follows from its secret share.
+            let pks = if test["pubshare_indices"].is_null() {
+                derive_pk_share(&sks)
+            } else {
+                let position = ids
+                    .iter()
+                    .position(|id| *id == my_id)
+                    .expect("The id is present");
 
-            let pks = PublicKeyShare(point(&pubshares[pubshare_indices[position]]));
+                let pubshare_indices = indices(&test["pubshare_indices"]);
+
+                PublicKeyShare(point(&pubshares[pubshare_indices[position]]))
+            };
 
             assert!(verify_signature_share(
                 msg, my_id, &pks, &share, &nonces, &agg_pk
