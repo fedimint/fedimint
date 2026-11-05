@@ -740,6 +740,31 @@ impl WalletClientModule {
         Ok(self.deposits_paying(&address.script_pubkey()).await)
     }
 
+    /// The progress of every deposit to any address of this client, from a
+    /// single federation query, so that a wallet with many addresses does
+    /// not query the guardians once per address. Ordered by outpoint.
+    pub async fn all_receive_progress(&self) -> Vec<(Address, bitcoin::OutPoint, ReceiveProgress)> {
+        let pending = self.module_api.pending_outputs().await;
+        let ours = self.address_map().await;
+
+        let mut deposits: Vec<_> = pending
+            .outputs
+            .iter()
+            .filter_map(|output| {
+                let (account, index) = ours.get(&output.script)?;
+                Some((
+                    self.derive_address(*account, *index),
+                    output.outpoint,
+                    Self::pending_progress(output, pending.block_count),
+                ))
+            })
+            .collect();
+
+        deposits.sort_by_key(|(_, outpoint, _)| *outpoint);
+
+        deposits
+    }
+
     /// Every deposit the federation currently reports against `script`.
     async fn deposits_paying(&self, script: &ScriptBuf) -> AddressReceiveProgress {
         let pending = self.module_api.pending_outputs().await;

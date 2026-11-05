@@ -31,8 +31,9 @@ use crate::client_db::{
     ClaimedPegInData, ClaimedPegInKey, PegInTweakIndexData, PegInTweakIndexKey,
     PegInTweakIndexPrefix, TweakIdx,
 };
+use crate::error::DepositProgressError;
 use crate::events::{DepositConfirmed, ReceivePaymentEvent};
-use crate::{WalletClientModule, WalletClientModuleData};
+use crate::{DepositProgress, WalletClientModule, WalletClientModuleData};
 
 /// A helper struct meant to combined data from all addresses/records
 /// into a single struct with all actionable data.
@@ -356,6 +357,85 @@ impl CheckOutcome {
     }
 }
 
+/// `tx_block_count` is the deposit's block height plus one.
+fn blocks_until_claimable(tx_block_count: u64, consensus_block_count: u64) -> u64 {
+    tx_block_count.saturating_sub(consensus_block_count)
+}
+
+/// Confirmations a deposit needs before it can be claimed: the block that mined
+/// it, plus the blocks guardians hold their vote back by.
+pub(crate) fn required_confirmations(finality_delay: u32) -> u64 {
+    u64::from(finality_delay) + 1
+}
+
+/// Confirmations shown for a deposit, counted so that they reach
+/// [`required_confirmations`] exactly when [`blocks_until_claimable`] reaches
+/// zero.
+fn deposit_confirmations(
+    tx_block_count: u64,
+    consensus_block_count: u64,
+    finality_delay: u32,
+) -> u64 {
+    required_confirmations(finality_delay).saturating_sub(blocks_until_claimable(
+        tx_block_count,
+        consensus_block_count,
+    ))
+}
+
+/// The progress of every deposit to the address of `tweak_idx` that has not
+/// been claimed yet, from the same sources [`check_idx_pegins`] claims with.
+pub(crate) async fn deposit_progress(
+    data: &WalletClientModuleData,
+    tweak_idx: TweakIdx,
+    btc_rpc: &DynBitcoindRpc,
+    module_rpc: &DynModuleApi,
+    db: &Database,
+) -> Result<Vec<DepositProgress>, DepositProgressError> {
+    let consensus_block_count = module_rpc.fetch_consensus_block_count().await?;
+    let (script, ..) = data.derive_peg_in_script(tweak_idx);
+    let history = btc_rpc.get_script_history(&script).await?;
+
+    let mut deposits = vec![];
+    for (transaction, out_idx) in filter_onchain_deposit_outputs(history.into_iter(), &script) {
+        let txid = transaction.compute_txid();
+        let outpoint = bitcoin::OutPoint {
+            txid,
+            vout: out_idx,
+        };
+
+        let claimed_peg_in_key = ClaimedPegInKey {
+            peg_in_index: tweak_idx,
+            btc_out_point: outpoint,
+        };
+        if db
+            .begin_transaction_nc()
+            .await
+            .get_value(&claimed_peg_in_key)
+            .await
+            .is_some()
+        {
+            continue;
+        }
+
+        let confirmations = match btc_rpc.get_tx_block_height(&txid).await? {
+            Some(tx_block_height) => deposit_confirmations(
+                tx_block_height.saturating_add(1),
+                consensus_block_count,
+                data.cfg.finality_delay,
+            ),
+            None => 0,
+        };
+
+        deposits.push(DepositProgress {
+            outpoint,
+            value: transaction.output[out_idx as usize].value,
+            confirmations,
+            required: required_confirmations(data.cfg.finality_delay),
+        });
+    }
+    Ok(deposits)
+}
+
 /// Query via btc rpc for a history of an address derived with `tweak_idx` and
 /// claim any peg-ins that are ready.
 ///
@@ -415,7 +495,8 @@ async fn check_idx_pegins(
                 continue;
             };
 
-        let num_blocks_needed = tx_block_count.saturating_sub(current_consensus_block_count);
+        let num_blocks_needed =
+            blocks_until_claimable(tx_block_count, current_consensus_block_count);
 
         if 0 < num_blocks_needed {
             outcomes.push(CheckOutcome::Pending { num_blocks_needed });
@@ -630,4 +711,44 @@ enum CheckPegInsError {
         #[source]
         source: DatabaseError,
     },
+}
+
+#[cfg(test)]
+mod deposit_progress_tests {
+    use super::*;
+
+    #[test]
+    fn confirmations_reach_required_exactly_when_claimable() {
+        for finality_delay in [0, 2, 10] {
+            let required = required_confirmations(finality_delay);
+            for tx_block_count in [1, 2, 6, 101] {
+                for consensus_block_count in 0..130 {
+                    assert_eq!(
+                        deposit_confirmations(
+                            tx_block_count,
+                            consensus_block_count,
+                            finality_delay
+                        ) == required,
+                        blocks_until_claimable(tx_block_count, consensus_block_count) == 0,
+                        "finality_delay={finality_delay} tx_block_count={tx_block_count} \
+                         consensus_block_count={consensus_block_count}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn confirmations_count_the_block_that_mined_the_deposit() {
+        // Guardians vote 10 below their block count of 105, so the consensus block
+        // count is 95. A deposit in the tip block, at height 104, has one
+        // confirmation and one at height 102 has three.
+        assert_eq!(deposit_confirmations(105, 95, 10), 1);
+        assert_eq!(deposit_confirmations(103, 95, 10), 3);
+        // The guardians have not seen the block yet.
+        assert_eq!(deposit_confirmations(106, 95, 10), 0);
+        assert_eq!(deposit_confirmations(200, 95, 10), 0);
+        // Stops at the target however deep the deposit gets.
+        assert_eq!(deposit_confirmations(50, 95, 10), 11);
+    }
 }
