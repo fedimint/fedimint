@@ -128,10 +128,17 @@ impl<T: SigningTransport + 'static> SigningMux<T> {
         caller: &FrostParticipant,
         participants: &[FrostParticipant],
     ) -> Arc<Self> {
+        // the caller is always part of the rotation, even if the list left it out
+        let mut participant_ids: BTreeSet<Identifier> = participants
+            .iter()
+            .map(|participant| participant.identifier)
+            .collect();
+        participant_ids.insert(caller.identifier);
+
         let mux = Arc::new(Self {
             transport,
             caller: caller.identifier,
-            participants: participants.iter().map(|p| p.identifier).collect(),
+            participants: participant_ids,
             inbox: Mutex::default(),
             active_escrows: Mutex::default(),
         });
@@ -264,6 +271,34 @@ pub fn pick_outcome(votes: &[Outcome], min_signers: u16) -> Option<Outcome> {
         }
     }
     None
+}
+
+/// The coordinator of a slot. Every arbiter derives the same one from the
+/// escrow id and the slot number, so they agree without talking to each other.
+pub(crate) fn coordinator_for_slot(
+    participants: &BTreeSet<Identifier>,
+    escrow_id: &EscrowId,
+    slot_number: u64,
+) -> Identifier {
+    // the escrow id is a hash, so its first bytes are a uniform start of the
+    // rotation
+    let start = u64::from_be_bytes(escrow_id.0[..8].try_into().expect("8 bytes"));
+    let position = start.wrapping_add(slot_number) % participants.len() as u64;
+    *participants
+        .iter()
+        .nth(position as usize)
+        .expect("the rotation is inside the participants")
+}
+
+/// A signing frame as the transport would carry it, for tests that need to
+/// send something an honest arbiter would never send.
+#[cfg(test)]
+pub(crate) fn finished_frame(escrow_id: EscrowId, outcome: Outcome, signature: Vec<u8>) -> Vec<u8> {
+    serde_json::to_vec(&ArbiterEnvelope {
+        escrow_id,
+        message: ArbiterMessage::Finished { outcome, signature },
+    })
+    .expect("frame encodes")
 }
 
 #[derive(Debug)]
@@ -577,13 +612,7 @@ pub async fn sign_with_failover<T: SigningTransport + 'static>(
         if time_left * 4 >= Duration::from_secs(slot_secs) {
             // the escrow id is a hash, so its first bytes are a uniform start of the
             // rotation
-            let first = u64::from_be_bytes(escrow_id.0[..8].try_into().expect("8 bytes"));
-            let coordinator = *mux
-                .participants
-                .iter()
-                .nth((first.wrapping_add(slot_number) % mux.participants.len() as u64) as usize)
-                .expect("the rotation is inside the participants");
-
+            let coordinator = coordinator_for_slot(&mux.participants, &escrow_id, slot_number);
             let result = if coordinator == mux.caller {
                 sign_as_coordinator(
                     mux,

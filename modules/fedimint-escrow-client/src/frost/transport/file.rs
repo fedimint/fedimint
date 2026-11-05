@@ -12,6 +12,7 @@ use tokio::io::AsyncWriteExt;
 
 use crate::frost::session::SessionId;
 use crate::frost::transport::{DkgTransport, SigningTransport, TransportError};
+pub const FILE_TRANSPORT_ROOT_DIR: &str = "fedimint-escrow-dkg";
 
 pub struct FileTransport {
     root: PathBuf,
@@ -175,7 +176,7 @@ impl SigningTransport for FileTransport {
 impl FileTransport {
     pub async fn new(session_id: &SessionId) -> Result<Self, TransportError> {
         let root = std::env::temp_dir()
-            .join("fedimint-escrow-dkg")
+            .join(FILE_TRANSPORT_ROOT_DIR)
             .join(hex::encode(session_id.0));
 
         fs::create_dir_all(&root).await?;
@@ -288,5 +289,11 @@ impl FileTransport {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(e) => Err(TransportError::IoError(e)),
         }
+    }
+
+    pub fn file_transport_root(session_id: &SessionId) -> PathBuf {
+        std::env::temp_dir()
+            .join(FILE_TRANSPORT_ROOT_DIR)
+            .join(hex::encode(session_id.0))
     }
 }

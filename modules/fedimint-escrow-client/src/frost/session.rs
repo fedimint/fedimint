@@ -29,6 +29,9 @@ use crate::frost::transport::DkgTransport;
 const MAX_ATTEMPTS: u32 = 3;
 const RETRY_DELAY: Duration = Duration::from_secs(3);
 
+/// A contract has room for 32 fee keys, so a consortium cannot be bigger
+const MAX_PARTICIPANTS: usize = 32;
+
 #[derive(Debug, Clone, Copy, Hash, Encodable, Decodable, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SessionId(pub [u8; 32]);
 
@@ -210,6 +213,10 @@ impl FrostDkgSessionRecord {
         if participants.is_empty() {
             return Err(anyhow::anyhow!("participant list cannot be empty"));
         }
+        anyhow::ensure!(
+            participants.len() <= MAX_PARTICIPANTS,
+            "a consortium can have at most {MAX_PARTICIPANTS} arbiters"
+        );
 
         let session_id = create_session_id(&participants, &federation_id);
         let mut identities = std::collections::BTreeSet::new();

@@ -20,6 +20,7 @@ const ROUND2_TAG: u8 = 2;
 const SIGNING_TAG: u8 = 3;
 pub const DKG_ALPN: &[u8] = b"fedimint_escrow_iroh_dkg_consortium";
 const MAX_MESSAGE_BYTES: usize = 128 * 1024;
+const MAX_QUEUED_SIGNING_FRAMES: usize = 1024;
 
 #[derive(Default)]
 struct Inbox {
@@ -178,6 +179,9 @@ async fn handle_incoming(
             inbox.round2.insert(sender, payload.to_vec());
         }
         SIGNING_TAG => {
+            if inbox.signing.len() >= MAX_QUEUED_SIGNING_FRAMES {
+                inbox.signing.pop_front();
+            }
             inbox.signing.push_back((sender, payload.to_vec()));
         }
         _ => anyhow::bail!("unknown round tag"),
