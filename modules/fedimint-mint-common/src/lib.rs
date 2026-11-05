@@ -117,16 +117,16 @@ impl Nonce {
 impl fmt::Display for NonceShortFmt<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let bytes = self.0.0.serialize();
-        fedimint_core::format_hex(&bytes[..4], f)?;
+        fmt::Display::fmt(&bytes[..4].as_hex(), f)?;
         f.write_str("_")?;
-        fedimint_core::format_hex(&bytes[29..], f)
+        fmt::Display::fmt(&bytes[29..].as_hex(), f)
     }
 }
 
 impl fmt::Display for NonceFullFmt<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let bytes = self.0.0.serialize();
-        fedimint_core::format_hex(&bytes, f)
+        fmt::Display::fmt(&bytes.as_hex(), f)
     }
 }
 
@@ -163,9 +163,9 @@ impl BlindNonce {
 impl fmt::Display for BlindNonceShortFmt<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let bytes = self.0.0.consensus_hash_sha256().to_byte_array();
-        fedimint_core::format_hex(&bytes[..4], f)?;
+        fmt::Display::fmt(&bytes[..4].as_hex(), f)?;
         f.write_str("_")?;
-        fedimint_core::format_hex(&bytes[28..], f)
+        fmt::Display::fmt(&bytes[28..].as_hex(), f)
     }
 }
 
