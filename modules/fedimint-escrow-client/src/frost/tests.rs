@@ -1,26 +1,35 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
+use fedimint_core::Amount;
 use fedimint_core::config::FederationId;
 use fedimint_core::db::Database;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::module::registry::ModuleRegistry;
-use fedimint_core::runtime::sleep;
-use fedimint_core::secp256k1::{Keypair, Secp256k1};
-use fedimint_core::task::spawn;
+use fedimint_core::runtime::{sleep, spawn, timeout};
+use fedimint_core::secp256k1::{self, Keypair, Message, Secp256k1};
+use fedimint_escrow_common::rules::{Settlement, check_resolution};
+use fedimint_escrow_common::{
+    ContractHash, EscrowContract, EscrowId, EscrowInputError, EscrowMessage, EscrowStatus,
+    EscrowTransition, FallbackPolicy, Outcome, Resolution, compute_escrow_message,
+};
+use frost_secp256k1_tr::keys::{KeyPackage, PublicKeyPackage};
 use frost_secp256k1_tr::round1::commit as Round1Commit;
 use frost_secp256k1_tr::round2::sign as Round2Sign;
 use frost_secp256k1_tr::{Identifier, Signature, SigningPackage, aggregate};
 use iroh::{Endpoint, NodeAddr, RelayMode, SecretKey};
 use rand::rngs::OsRng;
-use tokio::time::timeout;
 
 use crate::frost::dkg::{DkgResult, DkgRound1, DkgRunner};
+use crate::frost::frost_sign::{
+    SignerOutcome, SigningError, SigningMux, pick_outcome, sign_as_coordinator, sign_as_signer,
+    sign_with_failover,
+};
 use crate::frost::session::{FrostDkgSessionRecord, FrostParticipant, SessionId};
 use crate::frost::transport::file::FileTransport;
 use crate::frost::transport::iroh::{DKG_ALPN, IrohDkgTransport};
-use crate::frost::transport::{DkgTransport, TransportError};
+use crate::frost::transport::{DkgTransport, SigningTransport, TransportError};
 
 fn dummy_federation_id() -> FederationId {
     FederationId::dummy()
@@ -333,7 +342,6 @@ async fn test_session_id_ignores_participant_order() {
 
 #[tokio::test]
 async fn test_threshold_values() {
-    // (participants, expected min signers)
     for (n, expected) in [(3, 3), (4, 3), (5, 4), (7, 5), (10, 7)] {
         let consortium = Consortium::new(n).await.unwrap();
         assert_eq!(consortium.sessions[0].1.min_signers, expected, "n={n}");
@@ -462,7 +470,6 @@ async fn test_early_round2_package_survives_timed_out_attempt() {
     let expected: Vec<Identifier> = participants.iter().map(|p| p.identifier).collect();
     let (_, record) = consortium.sessions[0].clone();
 
-    // all transports exist before anything is sent
     let transport = Arc::new(net.transport(0, session_id));
     let other_transports: Vec<IrohDkgTransport> =
         (1..3).map(|i| net.transport(i, session_id)).collect();
@@ -488,8 +495,6 @@ async fn test_early_round2_package_survives_timed_out_attempt() {
         .await;
     assert!(matches!(first, Err(TransportError::TimeoutError)));
 
-    // the others now run the full dkg and send me their round 2 packages
-    // while I am still not done with round 1
     let mut handles = Vec::new();
     for ((db, record), transport) in other_sessions.into_iter().zip(other_transports) {
         handles.push(spawn("iroh_transport_dkg", async move {
@@ -498,8 +503,6 @@ async fn test_early_round2_package_survives_timed_out_attempt() {
     }
     sleep(Duration::from_secs(1)).await;
 
-    // second attempt with the same transport: the early round 2 packages must still
-    // be there
     let round1_packages = runner
         .exchange_round1(&session_id, &me, &participants, package)
         .await
@@ -565,4 +568,574 @@ async fn test_session_restarts_after_failed_run() {
         .await
         .expect("key must be saved");
     assert_eq!(loaded.pubkey_package.verifying_key().serialize(), group_key);
+}
+
+// frost signing tests
+
+type Frame = (Identifier, Vec<u8>);
+
+/// In-memory transport: every arbiter has an inbox, send puts a message in the
+/// inbox of the receiver.
+struct Loopback {
+    peers: Arc<HashMap<Identifier, tokio::sync::mpsc::UnboundedSender<Frame>>>,
+    rx: tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<Frame>>,
+}
+
+#[async_trait::async_trait]
+impl SigningTransport for Loopback {
+    async fn send(&self, s: &Identifier, r: &Identifier, p: Vec<u8>) -> Result<(), TransportError> {
+        self.peers
+            .get(r)
+            .ok_or(TransportError::InvalidReceiver)?
+            .send((*s, p))
+            .map_err(|_| TransportError::InvalidReceiver)
+    }
+    async fn recv(&self, _: &Identifier, d: Duration) -> Result<Frame, TransportError> {
+        match timeout(d, self.rx.lock().await.recv()).await {
+            Ok(Some(f)) => Ok(f),
+            _ => Err(TransportError::TimeoutError),
+        }
+    }
+}
+
+struct Cluster {
+    ids: Vec<Identifier>,
+    key_packages: Vec<KeyPackage>,
+    pubkey_package: PublicKeyPackage,
+    muxes: Vec<Arc<SigningMux<Loopback>>>,
+}
+
+impl Cluster {
+    async fn new() -> Self {
+        let consortium = Consortium::new(4).await.expect("consortium failed");
+        let results = consortium.run().await;
+
+        let ids: Vec<Identifier> = results
+            .iter()
+            .map(|r| *r.key_package.identifier())
+            .collect();
+        let key_packages: Vec<KeyPackage> = results.iter().map(|r| r.key_package.clone()).collect();
+        let pubkey_package = results[0].pubkey_package.clone();
+
+        let (mut senders, mut receivers) = (HashMap::new(), HashMap::new());
+        for id in &ids {
+            let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+            senders.insert(*id, tx);
+            receivers.insert(*id, rx);
+        }
+        let peers = Arc::new(senders);
+        let participants: Vec<FrostParticipant> = ids
+            .iter()
+            .map(|id| FrostParticipant { identifier: *id })
+            .collect();
+        let muxes = participants
+            .iter()
+            .map(|participant| {
+                let transport = Arc::new(Loopback {
+                    peers: peers.clone(),
+                    rx: tokio::sync::Mutex::new(receivers.remove(&participant.identifier).unwrap()),
+                });
+                SigningMux::start(transport, participant, &participants)
+            })
+            .collect();
+
+        Self {
+            ids,
+            key_packages,
+            pubkey_package,
+            muxes,
+        }
+    }
+}
+
+const TIMEOUT: Duration = Duration::from_secs(5);
+const ESCROW: EscrowId = EscrowId([7; 32]);
+const CONTRACT_HASH: ContractHash = ContractHash([9; 32]);
+
+/// The message the federation checks, for the escrow used in these tests
+fn decision_hash_for(outcome: Outcome) -> [u8; 32] {
+    compute_escrow_message(&EscrowMessage::Resolution {
+        escrow_id: ESCROW,
+        federation_id: dummy_federation_id(),
+        outcome,
+        contract_hash: CONTRACT_HASH,
+    })
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn majority_outcome_is_signed_and_everyone_gets_the_result() {
+    let c = Cluster::new().await;
+    let mut signers = vec![];
+    for i in 1..4 {
+        let (mux, key_package, coordinator) =
+            (c.muxes[i].clone(), c.key_packages[i].clone(), c.ids[0]);
+        // the last arbiter disagrees
+        let vote = if i == 3 {
+            Outcome::Refund
+        } else {
+            Outcome::Release
+        };
+        signers.push(spawn("test", async move {
+            sign_as_signer(
+                &mux,
+                &coordinator,
+                &key_package,
+                ESCROW,
+                vote,
+                decision_hash_for,
+                TIMEOUT,
+            )
+            .await
+        }));
+    }
+    let (outcome, signature) = sign_as_coordinator(
+        &c.muxes[0],
+        &c.key_packages[0],
+        &c.pubkey_package,
+        ESCROW,
+        Outcome::Release,
+        decision_hash_for,
+        TIMEOUT,
+    )
+    .await
+    .unwrap();
+    assert_eq!(outcome, Outcome::Release);
+
+    let consortium_key = FrostDkgSessionRecord::consortium_pubkey(&c.pubkey_package).unwrap();
+    let digest = Message::from_digest(decision_hash_for(Outcome::Release));
+    let x_only = consortium_key.x_only_public_key().0;
+    assert!(
+        secp256k1::global::SECP256K1
+            .verify_schnorr(&signature, &digest, &x_only)
+            .is_ok()
+    );
+    let other = Message::from_digest(decision_hash_for(Outcome::Refund));
+    assert!(
+        secp256k1::global::SECP256K1
+            .verify_schnorr(&signature, &other, &x_only)
+            .is_err()
+    );
+
+    for signer in signers {
+        match signer.await.unwrap().unwrap() {
+            SignerOutcome::Final {
+                outcome,
+                signature: received,
+            } => {
+                assert_eq!(outcome, Outcome::Release);
+                assert_eq!(received, signature);
+            }
+            SignerOutcome::ShareSent => panic!("expected the final result"),
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn no_outcome_with_enough_votes() {
+    let c = Cluster::new().await;
+    let short = Duration::from_secs(2);
+    for i in 1..4 {
+        let (mux, key_package, coordinator) =
+            (c.muxes[i].clone(), c.key_packages[i].clone(), c.ids[0]);
+        // 2 votes for Release (with the coordinator) and 2 for Refund
+        let vote = if i == 1 {
+            Outcome::Release
+        } else {
+            Outcome::Refund
+        };
+        spawn("test", async move {
+            sign_as_signer(
+                &mux,
+                &coordinator,
+                &key_package,
+                ESCROW,
+                vote,
+                decision_hash_for,
+                short,
+            )
+            .await
+        });
+    }
+    let result = sign_as_coordinator(
+        &c.muxes[0],
+        &c.key_packages[0],
+        &c.pubkey_package,
+        ESCROW,
+        Outcome::Release,
+        decision_hash_for,
+        short,
+    )
+    .await;
+    assert!(matches!(result, Err(SigningError::NoQuorum)));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn signer_does_not_sign_what_it_did_not_vote_for() {
+    let c = Cluster::new().await;
+    let mut signers = vec![];
+    for i in 1..4 {
+        let (mux, key_package, coordinator) =
+            (c.muxes[i].clone(), c.key_packages[i].clone(), c.ids[0]);
+        signers.push(spawn("test", async move {
+            sign_as_signer(
+                &mux,
+                &coordinator,
+                &key_package,
+                ESCROW,
+                Outcome::Release,
+                decision_hash_for,
+                Duration::from_secs(3),
+            )
+            .await
+        }));
+    }
+
+    let result = sign_as_coordinator(
+        &c.muxes[0],
+        &c.key_packages[0],
+        &c.pubkey_package,
+        ESCROW,
+        Outcome::Release,
+        |_| [0xEE; 32],
+        Duration::from_secs(3),
+    )
+    .await;
+    assert!(matches!(result, Err(SigningError::MissingShares(_))));
+
+    // the two arbiters picked to sign refuse
+    let mut mismatches = 0;
+    for signer in signers {
+        if matches!(signer.await.unwrap(), Err(SigningError::MessageMismatch)) {
+            mismatches += 1;
+        }
+    }
+    assert!(mismatches >= 2);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn split_that_does_not_add_up_is_refused() {
+    let c = Cluster::new().await;
+    let bad_split = Outcome::Split {
+        funder_split_bps: 9_000,
+        recipient_split_bps: 2_000,
+    };
+
+    let as_signer = sign_as_signer(
+        &c.muxes[1],
+        &c.ids[0],
+        &c.key_packages[1],
+        ESCROW,
+        bad_split,
+        decision_hash_for,
+        TIMEOUT,
+    )
+    .await;
+    assert!(matches!(as_signer, Err(SigningError::InvalidOutcome)));
+
+    let as_coordinator = sign_as_coordinator(
+        &c.muxes[0],
+        &c.key_packages[0],
+        &c.pubkey_package,
+        ESCROW,
+        bad_split,
+        decision_hash_for,
+        TIMEOUT,
+    )
+    .await;
+    assert!(matches!(as_coordinator, Err(SigningError::InvalidOutcome)));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn two_escrows_are_signed_at_the_same_time() {
+    let c = Cluster::new().await;
+    let other_escrow = EscrowId([8; 32]);
+    for escrow_id in [ESCROW, other_escrow] {
+        for i in 1..4 {
+            let (mux, key_package, coordinator) =
+                (c.muxes[i].clone(), c.key_packages[i].clone(), c.ids[0]);
+            spawn("test", async move {
+                sign_as_signer(
+                    &mux,
+                    &coordinator,
+                    &key_package,
+                    escrow_id,
+                    Outcome::Release,
+                    decision_hash_for,
+                    TIMEOUT,
+                )
+                .await
+            });
+        }
+    }
+    let (first, second) = tokio::join!(
+        sign_as_coordinator(
+            &c.muxes[0],
+            &c.key_packages[0],
+            &c.pubkey_package,
+            ESCROW,
+            Outcome::Release,
+            decision_hash_for,
+            TIMEOUT
+        ),
+        sign_as_coordinator(
+            &c.muxes[0],
+            &c.key_packages[0],
+            &c.pubkey_package,
+            other_escrow,
+            Outcome::Release,
+            decision_hash_for,
+            TIMEOUT
+        ),
+    );
+    first.unwrap();
+    second.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn every_arbiter_makes_the_same_call() {
+    let c = Cluster::new().await;
+    let mut arbiters = vec![];
+    for i in 0..4 {
+        let (mux, key_package, pubkey_package) = (
+            c.muxes[i].clone(),
+            c.key_packages[i].clone(),
+            c.pubkey_package.clone(),
+        );
+        arbiters.push(spawn("test", async move {
+            sign_with_failover(
+                &mux,
+                &key_package,
+                &pubkey_package,
+                ESCROW,
+                Outcome::Release,
+                decision_hash_for,
+                Duration::from_secs(8),
+                Duration::from_secs(40),
+            )
+            .await
+        }));
+    }
+    let mut signatures = vec![];
+    for arbiter in arbiters {
+        let (outcome, signature) = arbiter.await.unwrap().unwrap();
+        assert_eq!(outcome, Outcome::Release);
+        signatures.push(signature);
+    }
+    assert!(signatures.windows(2).all(|pair| pair[0] == pair[1]));
+}
+
+/// An arbiter that never shows up costs at most one slot
+#[tokio::test(flavor = "multi_thread")]
+async fn one_arbiter_offline() {
+    let c = Cluster::new().await;
+    let mut arbiters = vec![];
+    for i in 1..4 {
+        let (mux, key_package, pubkey_package) = (
+            c.muxes[i].clone(),
+            c.key_packages[i].clone(),
+            c.pubkey_package.clone(),
+        );
+        arbiters.push(spawn("test", async move {
+            sign_with_failover(
+                &mux,
+                &key_package,
+                &pubkey_package,
+                ESCROW,
+                Outcome::Release,
+                decision_hash_for,
+                Duration::from_secs(6),
+                Duration::from_secs(60),
+            )
+            .await
+        }));
+    }
+    for arbiter in arbiters {
+        arbiter.await.unwrap().unwrap();
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_same_escrow_is_not_signed_twice_on_one_node() {
+    let c = Cluster::new().await;
+    let (mux, key_package, pubkey_package) = (
+        c.muxes[1].clone(),
+        c.key_packages[1].clone(),
+        c.pubkey_package.clone(),
+    );
+    // nobody else takes part, so this keeps trying until it is cancelled
+    let first = spawn("test", {
+        let (mux, key_package, pubkey_package) =
+            (mux.clone(), key_package.clone(), pubkey_package.clone());
+        async move {
+            sign_with_failover(
+                &mux,
+                &key_package,
+                &pubkey_package,
+                ESCROW,
+                Outcome::Release,
+                decision_hash_for,
+                Duration::from_secs(6),
+                Duration::from_secs(20),
+            )
+            .await
+        }
+    });
+    sleep(Duration::from_millis(200)).await;
+    assert!(mux.has_active_escrows());
+
+    let second = sign_with_failover(
+        &mux,
+        &key_package,
+        &pubkey_package,
+        ESCROW,
+        Outcome::Release,
+        decision_hash_for,
+        Duration::from_secs(6),
+        Duration::from_secs(20),
+    )
+    .await;
+    assert!(matches!(second, Err(SigningError::AlreadyInProgress)));
+
+    // cancelling the first signing frees the escrow again
+    first.abort();
+    let _ = first.await;
+    assert!(!mux.has_active_escrows());
+}
+
+#[test]
+fn pick_outcome_needs_min_signers_votes() {
+    let split = Outcome::Split {
+        funder_split_bps: 5_000,
+        recipient_split_bps: 5_000,
+    };
+
+    assert_eq!(pick_outcome(&[], 3), None);
+    assert_eq!(
+        pick_outcome(&[Outcome::Release, Outcome::Release, Outcome::Refund], 3),
+        None
+    );
+    assert_eq!(
+        pick_outcome(
+            &[
+                Outcome::Release,
+                Outcome::Refund,
+                Outcome::Release,
+                Outcome::Release
+            ],
+            3
+        ),
+        Some(Outcome::Release)
+    );
+    assert_eq!(
+        pick_outcome(&[split, split, split, Outcome::Refund], 3),
+        Some(split)
+    );
+}
+
+#[test]
+fn pick_outcome_counts_different_splits_separately() {
+    let even = Outcome::Split {
+        funder_split_bps: 5_000,
+        recipient_split_bps: 5_000,
+    };
+    let uneven = Outcome::Split {
+        funder_split_bps: 4_000,
+        recipient_split_bps: 6_000,
+    };
+
+    assert_eq!(pick_outcome(&[even, uneven, even], 3), None);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn consortium_decision_is_accepted_by_the_escrow_rules() {
+    let c = Cluster::new().await;
+
+    // the key the funder puts in the contract as the arbiter key
+    let consortium_key = FrostDkgSessionRecord::consortium_pubkey(&c.pubkey_package).unwrap();
+
+    let secp = Secp256k1::new();
+    let funder_key = Keypair::new(&secp, &mut OsRng).public_key();
+    let recipient_key = Keypair::new(&secp, &mut OsRng).public_key();
+    let fee_key = Keypair::new(&secp, &mut OsRng).public_key();
+    // same escrow id, federation id and contract hash as `decision_hash_for`
+    let contract = EscrowContract {
+        escrow_id: ESCROW,
+        funder_key,
+        recipient_key,
+        arbiter_key: consortium_key,
+        arbiter_fee_key: vec![fee_key],
+        amount: Amount::from_sats(1000),
+        arbiter_fee: Amount::from_sats(20),
+        contract_hash: CONTRACT_HASH,
+        timeout: 1_000,
+        federation_id: dummy_federation_id(),
+        status: EscrowStatus::Disputed {
+            resolve_by: 5_000,
+            swapped: false,
+        },
+        resolution_period: 3_600,
+        default_fallback: FallbackPolicy::Refund,
+    };
+
+    // the arbiters agree on a split
+    let split = Outcome::Split {
+        funder_split_bps: 2_500,
+        recipient_split_bps: 7_500,
+    };
+    for i in 1..4 {
+        let (mux, key_package, coordinator) =
+            (c.muxes[i].clone(), c.key_packages[i].clone(), c.ids[0]);
+        spawn("test", async move {
+            sign_as_signer(
+                &mux,
+                &coordinator,
+                &key_package,
+                ESCROW,
+                split,
+                decision_hash_for,
+                TIMEOUT,
+            )
+            .await
+        });
+    }
+    let (outcome, signature) = sign_as_coordinator(
+        &c.muxes[0],
+        &c.key_packages[0],
+        &c.pubkey_package,
+        ESCROW,
+        split,
+        decision_hash_for,
+        TIMEOUT,
+    )
+    .await
+    .unwrap();
+    assert_eq!(outcome, split);
+
+    // the funder submits the signature
+    let ruling = Resolution::ArbiterOutcome {
+        arbiter_signature: signature,
+        outcome: split,
+        submitter_pubkey: funder_key,
+    };
+    let accepted = check_resolution(&contract, &ruling, 2_000).unwrap();
+
+    assert_eq!(accepted.transition, EscrowTransition::ArbiterOutcome(split));
+    assert_eq!(
+        accepted.settlement,
+        Settlement::WriteClaims(vec![
+            (funder_key, Amount::from_sats(245)),
+            (recipient_key, Amount::from_sats(735)),
+            (fee_key, Amount::from_sats(20)),
+        ])
+    );
+
+    let tampered = Resolution::ArbiterOutcome {
+        arbiter_signature: signature,
+        outcome: Outcome::Release,
+        submitter_pubkey: funder_key,
+    };
+    assert_eq!(
+        check_resolution(&contract, &tampered, 2_000),
+        Err(EscrowInputError::InvalidSignature)
+    );
 }

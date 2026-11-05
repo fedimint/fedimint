@@ -298,11 +298,11 @@ impl ClientModule for EscrowClientModule {
         let stream: BoxStream<'_, anyhow::Result<serde_json::Value>> = Box::pin(try_stream! {
             match method.as_str() {
                 "get_client_escrow_pubkey"=>{
-                    let pubkey=self.escrow_key.public_key().to_string();
+                    let pubkey=self.escrow_pubkey().to_string();
                     yield serde_json::to_value(pubkey)?;
                 }
                 "get_arbiter_fee_pubkey"=>{
-                    let pubkey=self.arbiter_fee_key.public_key().to_string();
+                    let pubkey=self.arbiter_fee_pubkey().to_string();
                     yield serde_json::to_value(pubkey)?;
                 }
                 "get_contract" => {
@@ -489,6 +489,14 @@ impl EscrowClientModule {
         self.secret
             .child_key(ChildId(EscrowChildKeys::IrohKey as u64))
             .to_secp_key(&Secp256k1::new())
+    }
+
+    pub fn escrow_pubkey(&self) -> PublicKey {
+        self.escrow_key.public_key()
+    }
+
+    pub fn arbiter_fee_pubkey(&self) -> PublicKey {
+        self.arbiter_fee_key.public_key()
     }
 
     #[allow(clippy::too_many_arguments)]

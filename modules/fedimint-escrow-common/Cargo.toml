@@ -20,11 +20,11 @@ anyhow = { workspace = true }
 clap = { workspace = true }
 fedimint-core = { workspace = true }
 futures = { workspace = true }
+ring = { workspace = true }
 serde = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
-ring = { workspace = true }
 
 [lints]
 workspace = true

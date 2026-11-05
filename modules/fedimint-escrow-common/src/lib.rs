@@ -18,6 +18,9 @@ pub mod config;
 pub mod endpoint_constants;
 pub mod rules;
 
+#[cfg(test)]
+mod tests;
+
 pub const KIND: ModuleKind = ModuleKind::from_static_str("escrow");
 
 pub const MODULE_CONSENSUS_VERSION: ModuleConsensusVersion = ModuleConsensusVersion::new(1, 0);
@@ -206,7 +209,7 @@ impl EscrowContract {
         }
     }
 
-    /// The currrent arbiter fee keys that will used to submit tx and claim
+    /// The current arbiter fee keys that will used to submit tx and claim
     /// fees.
     pub fn current_fee_keys(&self) -> &[PublicKey] {
         match (&self.status, &self.default_fallback) {
