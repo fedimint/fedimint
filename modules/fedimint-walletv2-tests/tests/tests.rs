@@ -8,7 +8,7 @@ use bitcoin::Amount;
 use fedimint_client::ClientHandleArc;
 use fedimint_client::db::DbKeyPrefix;
 use fedimint_client::error::OperationLookupError;
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::impl_db_record;
@@ -24,8 +24,8 @@ use fedimint_walletv2_client::events::{
     SendPaymentUpdateEvent,
 };
 use fedimint_walletv2_client::{
-    FinalReceiveOperationState, FinalSendOperationState, MempoolVisibility, ReceiveProgress,
-    SendError, WalletClientInit, WalletClientModule,
+    FinalReceiveOperationState, FinalSendOperationState, MempoolVisibility, ReceiveError,
+    ReceiveProgress, SendError, WalletClientInit, WalletClientModule,
 };
 use fedimint_walletv2_common::KIND;
 use fedimint_walletv2_server::{BLOCK_COUNT_VOTE_DELAY, CONFIRMATION_FINALITY_DELAY, WalletInit};
@@ -186,7 +186,7 @@ async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
     // fall at or after this position.
     let position = client.get_next_event_log_id().await;
 
-    let address = module.receive().await;
+    let address = module.receive(Account::Primary).await?;
 
     assert!(
         module
@@ -343,7 +343,7 @@ async fn a_failed_mempool_fetch_keeps_the_deposits_already_seen() -> anyhow::Res
 
     let module = client.get_first_module::<WalletClientModule>()?;
 
-    let address = module.receive().await;
+    let address = module.receive(Account::Primary).await?;
 
     info!("Broadcast a deposit and wait for the guardians to cache it...");
 
@@ -486,7 +486,7 @@ async fn a_slow_mempool_scan_publishes_partial_progress() -> anyhow::Result<()> 
     initialize_consensus(&client, &bitcoin).await?;
 
     let module = client.get_first_module::<WalletClientModule>()?;
-    let address = module.receive().await;
+    let address = module.receive(Account::Primary).await?;
 
     info!("Slow every mempool fetch past the budget, then broadcast the deposits...");
 
@@ -676,8 +676,8 @@ async fn fee_exceeds_one_bitcoin_with_many_pending_txs() -> anyhow::Result<()> {
 
     let federation_address = client
         .get_first_module::<WalletClientModule>()?
-        .receive()
-        .await;
+        .receive(Account::Primary)
+        .await?;
 
     bitcoin
         .send_and_mine_block(&federation_address, Amount::from_int_btc(100))
@@ -715,6 +715,7 @@ async fn fee_exceeds_one_bitcoin_with_many_pending_txs() -> anyhow::Result<()> {
         let send_op = client
             .get_first_module::<WalletClientModule>()?
             .send(
+                Account::Primary,
                 address.clone(),
                 Amount::from_sat(10_000),
                 None,
@@ -758,13 +759,48 @@ async fn send_to_a_mainnet_address_is_rejected() -> anyhow::Result<()> {
         client
             .get_first_module::<WalletClientModule>()?
             .send(
+                Account::Primary,
                 mainnet_address,
                 Amount::from_sat(100_000),
+                None,
+                serde_json::Value::Null
+            )
+            .await,
+        Err(SendError::WrongNetwork)
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+/// The test fixture's primary module is the dummy module, which holds a single
+/// balance, so neither a send from nor an address for another account may be
+/// handed out.
+async fn primary_only_mint_rejects_other_accounts() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+    let wallet = client.get_first_module::<WalletClientModule>()?;
+
+    let address = bitcoin.get_new_address().await.as_unchecked().clone();
+
+    assert_matches!(
+        wallet
+            .send(
+                Account::Secondary,
+                address,
+                Amount::from_sat(10_000),
                 None,
                 serde_json::Value::Null,
             )
             .await,
-        Err(SendError::WrongNetwork)
+        Err(SendError::AccountNotSupported)
+    );
+
+    assert_matches!(
+        wallet.receive(Account::Secondary).await,
+        Err(ReceiveError::AccountNotSupported)
     );
 
     Ok(())
@@ -782,7 +818,13 @@ async fn send_below_the_dust_limit_is_rejected() -> anyhow::Result<()> {
     assert_matches!(
         client
             .get_first_module::<WalletClientModule>()?
-            .send(address, Amount::from_sat(1), None, serde_json::Value::Null)
+            .send(
+                Account::Primary,
+                address,
+                Amount::from_sat(1),
+                None,
+                serde_json::Value::Null,
+            )
             .await,
         Err(SendError::DustValue)
     );
@@ -828,7 +870,7 @@ async fn first_address_search_survives_concurrent_db_writes() -> anyhow::Result<
     let client_shutdown = client.task_group().make_handle().make_shutdown_rx();
 
     tokio::select! {
-        address = wallet.receive() => info!("Received address {address}"),
+        address = wallet.receive(Account::Primary) => info!("Received address {address:?}"),
         () = client_shutdown => {
             panic!("The client shut down before the output scanner stored an address index")
         }

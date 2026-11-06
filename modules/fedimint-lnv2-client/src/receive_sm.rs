@@ -181,6 +181,8 @@ impl ReceiveStateMachine {
         };
 
         // Log event when receive completes successfully
+        let account = global_context.account(dbtx).await;
+
         context
             .client_ctx
             .log_event(
@@ -189,6 +191,7 @@ impl ReceiveStateMachine {
                     operation_id: old_state.common.operation_id,
                     amount: old_state.common.contract.commitment.amount + fee,
                     fee,
+                    account,
                 },
             )
             .await;

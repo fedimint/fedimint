@@ -219,8 +219,7 @@ async fn test_ecash() -> Result<()> {
     let ln_gateway = get_gateway(&client).await?;
 
     futures::future::try_join_all(
-        (0..10)
-            .map(|_| receive_once(client.clone(), Amount::from_sats(100), ln_gateway.clone())), // Increased from 25 to 100 sats to account for mint fees
+        (0..10).map(|_| receive_once(client.clone(), Amount::from_sats(100), ln_gateway.clone())), // Increased from 25 to 100 sats to account for mint fees
     )
     .await?;
     futures::future::try_join_all((0..10).map(|_| send_and_recv_ecash_once(client.clone())))
