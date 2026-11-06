@@ -280,8 +280,6 @@ pub(crate) fn coordinator_for_slot(
     escrow_id: &EscrowId,
     slot_number: u64,
 ) -> Identifier {
-    // the escrow id is a hash, so its first bytes are a uniform start of the
-    // rotation
     let start = u64::from_be_bytes(escrow_id.0[..8].try_into().expect("8 bytes"));
     let position = start.wrapping_add(slot_number) % participants.len() as u64;
     *participants

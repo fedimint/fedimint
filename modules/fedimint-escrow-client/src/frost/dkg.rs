@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use fedimint_core::bitcoin::hashes::{Hash, HashEngine, sha256};
 use frost_secp256k1_tr::Identifier;
 use frost_secp256k1_tr::keys::dkg::round1::{
     Package as Round1Package, SecretPackage as Round1SecretPackage,
@@ -36,8 +37,37 @@ pub enum DkgError {
     TransportError(#[from] TransportError),
     #[error("frost protocol error: {0}")]
     FrostError(String),
+    #[error("these members have another key than this one: {0:?}")]
+    KeyMismatch(Vec<Identifier>),
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+}
+
+fn frost_error(e: frost_secp256k1_tr::Error) -> DkgError {
+    DkgError::FrostError(e.to_string())
+}
+
+/// What every member must agree on before the key is used: the group key and
+/// the verifying share of every member.
+pub fn key_digest(
+    session_id: &SessionId,
+    pubkey_package: &PublicKeyPackage,
+) -> Result<[u8; 32], DkgError> {
+    let mut engine = sha256::HashEngine::default();
+    engine.input(b"fedimint_escrow_dkg_key_confirmation");
+    engine.input(&session_id.0);
+    engine.input(
+        &pubkey_package
+            .verifying_key()
+            .serialize()
+            .map_err(frost_error)?,
+    );
+    // a BTreeMap, so everybody hashes the shares in the same order
+    for (id, share) in pubkey_package.verifying_shares() {
+        engine.input(&id.serialize());
+        engine.input(&share.serialize().map_err(frost_error)?);
+    }
+    Ok(sha256::Hash::from_engine(engine).to_byte_array())
 }
 
 impl DkgError {
@@ -167,5 +197,43 @@ impl<T: DkgTransport> DkgRunner<T> {
                 pubkey_package,
             })
             .map_err(|e| DkgError::FrostError(e.to_string()))
+    }
+
+    pub async fn confirm_key(
+        &self,
+        session_id: &SessionId,
+        participant_id: &FrostParticipant,
+        participants: &[FrostParticipant],
+        pubkey_package: &PublicKeyPackage,
+    ) -> Result<(), DkgError> {
+        let digest = key_digest(session_id, pubkey_package)?;
+        self.transport
+            .broadcast_confirmation(session_id, &participant_id.identifier, digest)
+            .await?;
+
+        let others: Vec<Identifier> = participants
+            .iter()
+            .map(|participant| participant.identifier)
+            .filter(|id| *id != participant_id.identifier)
+            .collect();
+        let received = self
+            .transport
+            .recv_confirmations(
+                session_id,
+                &participant_id.identifier,
+                &others,
+                ROUND_TIMEOUT,
+            )
+            .await?;
+
+        let disagreeing: Vec<Identifier> = others
+            .into_iter()
+            .filter(|id| received.get(id) != Some(&digest))
+            .collect();
+        if disagreeing.is_empty() {
+            Ok(())
+        } else {
+            Err(DkgError::KeyMismatch(disagreeing))
+        }
     }
 }

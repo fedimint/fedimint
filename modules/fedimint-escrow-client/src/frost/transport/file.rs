@@ -97,6 +97,40 @@ impl DkgTransport for FileTransport {
         })
         .await
     }
+
+    async fn broadcast_confirmation(
+        &self,
+        session_id: &SessionId,
+        sender: &Identifier,
+        digest: [u8; 32],
+    ) -> Result<(), TransportError> {
+        self.check_session(session_id)?;
+        self.write_atomic(&self.confirmation_path(*sender), &digest)
+            .await
+    }
+
+    async fn recv_confirmations(
+        &self,
+        session_id: &SessionId,
+        self_id: &Identifier,
+        expected: &[Identifier],
+        timeout: Duration,
+    ) -> Result<BTreeMap<Identifier, [u8; 32]>, TransportError> {
+        self.check_session(session_id)?;
+
+        let paths: BTreeMap<_, _> = expected
+            .iter()
+            .filter(|id| **id != *self_id)
+            .map(|id| (*id, self.confirmation_path(*id)))
+            .collect();
+
+        self.poll_until_all(paths, timeout, |bytes| {
+            <[u8; 32]>::try_from(bytes).map_err(|_| {
+                TransportError::Serialization("a key confirmation is 32 bytes".to_string())
+            })
+        })
+        .await
+    }
 }
 
 #[async_trait]
@@ -199,6 +233,12 @@ impl FileTransport {
             .join("round2")
             .join(hex::encode(receiver.serialize()))
             .join(format!("{}.json", hex::encode(sender.serialize())))
+    }
+
+    fn confirmation_path(&self, id: Identifier) -> PathBuf {
+        self.root
+            .join("confirm")
+            .join(format!("{}.hex", hex::encode(id.serialize())))
     }
     async fn write_atomic(&self, path: &PathBuf, bytes: &[u8]) -> Result<(), TransportError> {
         if let Some(parent) = path.parent() {

@@ -26,7 +26,10 @@ use crate::client_db::{FrostDkgSessionKey, FrostDkgSessionRecordkey};
 use crate::frost::dkg::{DkgError, DkgResult, DkgRunner};
 use crate::frost::transport::DkgTransport;
 
+// max attempts on transient failures in dkg
 const MAX_ATTEMPTS: u32 = 3;
+
+// retry delay after a transient failures in dkg
 const RETRY_DELAY: Duration = Duration::from_secs(3);
 
 /// A contract has room for 32 fee keys, so a consortium cannot be bigger
@@ -105,6 +108,10 @@ pub enum FrostDkgState {
         round1_received: BTreeMap<Vec<u8>, Vec<u8>>,
         round2_secret: Vec<u8>,
         round2_received: BTreeMap<Vec<u8>, Vec<u8>>,
+    },
+    Confirming {
+        key_package: Vec<u8>,
+        public_key_package: Vec<u8>,
     },
     Finalized {
         key_package: Vec<u8>,
@@ -391,7 +398,7 @@ impl FrostDkgSessionRecord {
         }
     }
 
-    /// One step of the protocol: takes the saved state, returns the next state.
+    // takes the saved state, returns the next state.
     async fn advance<T: DkgTransport>(
         &self,
         runner: &DkgRunner<T>,
@@ -460,9 +467,33 @@ impl FrostDkgSessionRecord {
                 let secret2 = Round2SecretPackage::deserialize(round2_secret).map_err(frost_err)?;
                 let r2 = decode_map(round2_received, Round2Package::deserialize)?;
                 let result = runner.finalize(&r1, &secret2, &r2)?;
-                Ok(FrostDkgState::Finalized {
+                if *result.key_package.min_signers() != self.min_signers {
+                    return Err(DkgError::FrostError(
+                        "the key has another threshold than the consortium".into(),
+                    ));
+                }
+                Ok(FrostDkgState::Confirming {
                     key_package: result.key_package.serialize().map_err(frost_err)?,
                     public_key_package: result.pubkey_package.serialize().map_err(frost_err)?,
+                })
+            }
+            FrostDkgState::Confirming {
+                key_package,
+                public_key_package,
+            } => {
+                let pubkey_package =
+                    PublicKeyPackage::deserialize(public_key_package).map_err(frost_err)?;
+                runner
+                    .confirm_key(
+                        &self.session_id,
+                        &self.participant_id,
+                        &self.participants,
+                        &pubkey_package,
+                    )
+                    .await?;
+                Ok(FrostDkgState::Finalized {
+                    key_package: key_package.clone(),
+                    public_key_package: public_key_package.clone(),
                 })
             }
             FrostDkgState::Finalized { .. } => {

@@ -18,6 +18,7 @@ use crate::frost::transport::{DkgTransport, SigningTransport, TransportError};
 const ROUND1_TAG: u8 = 1;
 const ROUND2_TAG: u8 = 2;
 const SIGNING_TAG: u8 = 3;
+const CONFIRM_TAG: u8 = 4;
 pub const DKG_ALPN: &[u8] = b"fedimint_escrow_iroh_dkg_consortium";
 const MAX_MESSAGE_BYTES: usize = 128 * 1024;
 const MAX_QUEUED_SIGNING_FRAMES: usize = 1024;
@@ -26,6 +27,7 @@ const MAX_QUEUED_SIGNING_FRAMES: usize = 1024;
 struct Inbox {
     round1: BTreeMap<Identifier, Vec<u8>>,
     round2: BTreeMap<Identifier, Vec<u8>>,
+    confirmations: BTreeMap<Identifier, [u8; 32]>,
     signing: std::collections::VecDeque<(Identifier, Vec<u8>)>,
 }
 
@@ -34,6 +36,7 @@ pub struct IrohDkgTransport {
     session_id: SessionId,
     peers: BTreeMap<Identifier, NodeAddr>,
     inbox: Arc<Mutex<Inbox>>,
+    delivered_confirmations: std::sync::Mutex<BTreeMap<Identifier, [u8; 32]>>,
     accept_task: fedimint_core::runtime::JoinHandle<()>,
 }
 
@@ -62,6 +65,7 @@ impl IrohDkgTransport {
         peers: BTreeMap<Identifier, NodeAddr>,
     ) -> Self {
         let inbox = Arc::new(Mutex::new(Inbox::default()));
+        let delivered_confirmations = std::sync::Mutex::new(BTreeMap::default());
         let receiver_mapping: BTreeMap<NodeId, Identifier> =
             peers.iter().map(|(id, addr)| (addr.node_id, *id)).collect();
 
@@ -86,6 +90,7 @@ impl IrohDkgTransport {
             session_id,
             peers,
             inbox,
+            delivered_confirmations,
             accept_task,
         }
     }
@@ -96,16 +101,13 @@ impl IrohDkgTransport {
         tag: u8,
         payload: &[u8],
     ) -> Result<(), TransportError> {
-        if *session_id != self.session_id {
-            return Err(TransportError::SessionMismatch {
-                expected: self.session_id,
-                actual: *session_id,
-            });
-        }
+        self.validate_session(session_id)?;
+
         let receiver_addr = self
             .peers
             .get(&receiver)
             .ok_or(TransportError::InvalidReceiver)?;
+
         let conn = self
             .endpoint
             .connect(receiver_addr.clone(), DKG_ALPN)
@@ -124,6 +126,17 @@ impl IrohDkgTransport {
             .map_err(TransportError::backend)?;
         send.finish().map_err(TransportError::backend)?;
         let _ = send.stopped().await;
+
+        Ok(())
+    }
+
+    fn validate_session(&self, session_id: &SessionId) -> Result<(), TransportError> {
+        if *session_id != self.session_id {
+            return Err(TransportError::SessionMismatch {
+                expected: self.session_id,
+                actual: *session_id,
+            });
+        }
 
         Ok(())
     }
@@ -158,7 +171,7 @@ async fn handle_incoming(
     let bytes = recv.read_to_end(MAX_MESSAGE_BYTES).await?;
 
     if bytes.len() < 33 {
-        anyhow::bail!("message too short to contain tag + session_id");
+        anyhow::bail!("message too short to contain tag & session_id");
     }
     let tag = bytes[0];
     let msg_session_id = SessionId(bytes[1..33].try_into().expect("message too short"));
@@ -183,6 +196,12 @@ async fn handle_incoming(
                 inbox.signing.pop_front();
             }
             inbox.signing.push_back((sender, payload.to_vec()));
+        }
+        CONFIRM_TAG => {
+            let digest: [u8; 32] = payload
+                .try_into()
+                .map_err(|_| anyhow::anyhow!("a key confirmation is 32 bytes"))?;
+            inbox.confirmations.insert(sender, digest);
         }
         _ => anyhow::bail!("unknown round tag"),
     }
@@ -216,11 +235,12 @@ impl DkgTransport for IrohDkgTransport {
 
     async fn recv_round1_all(
         &self,
-        _session_id: &SessionId,
+        session_id: &SessionId,
         self_id: &Identifier,
         expected: &[Identifier],
         timeout: Duration,
     ) -> Result<BTreeMap<Identifier, Round1Package>, TransportError> {
+        self.validate_session(session_id)?;
         let deadline = now()
             .checked_add(timeout)
             .ok_or(TransportError::TimeoutError)?;
@@ -268,11 +288,12 @@ impl DkgTransport for IrohDkgTransport {
 
     async fn recv_round2(
         &self,
-        _session_id: &SessionId,
+        session_id: &SessionId,
         self_id: &Identifier,
         expected: &[Identifier],
         timeout: Duration,
     ) -> Result<BTreeMap<Identifier, Round2Package>, TransportError> {
+        self.validate_session(session_id)?;
         let deadline = now()
             .checked_add(timeout)
             .ok_or(TransportError::TimeoutError)?;
@@ -295,6 +316,76 @@ impl DkgTransport for IrohDkgTransport {
                                 .map_err(|e| TransportError::Serialization(e.to_string()))
                         })
                         .collect();
+                }
+            }
+            if now() >= deadline {
+                return Err(TransportError::TimeoutError);
+            }
+            sleep(Duration::from_millis(200)).await;
+        }
+    }
+
+    async fn broadcast_confirmation(
+        &self,
+        session_id: &SessionId,
+        sender: &Identifier,
+        digest: [u8; 32],
+    ) -> Result<(), TransportError> {
+        let mut first_err = None;
+        for id in self.peers.keys().filter(|id| *id != sender) {
+            let already_delivered =
+                self.delivered_confirmations.lock().unwrap().get(id) == Some(&digest);
+            if already_delivered {
+                continue;
+            }
+            match self
+                .send_tagged(session_id, *id, CONFIRM_TAG, &digest)
+                .await
+            {
+                Ok(()) => {
+                    self.delivered_confirmations
+                        .lock()
+                        .unwrap()
+                        .insert(*id, digest);
+                }
+                Err(e) => {
+                    tracing::warn!("key confirmation: could not reach {id:?}: {e}");
+                    first_err.get_or_insert(e);
+                }
+            }
+        }
+        match first_err {
+            Some(e) => Err(e),
+            None => Ok(()),
+        }
+    }
+
+    async fn recv_confirmations(
+        &self,
+        session_id: &SessionId,
+        self_id: &Identifier,
+        expected: &[Identifier],
+        timeout: Duration,
+    ) -> Result<BTreeMap<Identifier, [u8; 32]>, TransportError> {
+        self.validate_session(session_id)?;
+        let deadline = now()
+            .checked_add(timeout)
+            .ok_or(TransportError::TimeoutError)?;
+
+        loop {
+            {
+                let inbox = self.inbox.lock().await;
+                let ready = expected
+                    .iter()
+                    .filter(|id| **id != *self_id)
+                    .all(|id| inbox.confirmations.contains_key(id));
+                if ready {
+                    return Ok(inbox
+                        .confirmations
+                        .iter()
+                        .filter(|(id, _)| expected.contains(id))
+                        .map(|(id, digest)| (*id, *digest))
+                        .collect());
                 }
             }
             if now() >= deadline {

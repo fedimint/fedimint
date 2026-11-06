@@ -83,6 +83,21 @@ pub trait DkgTransport: Sync + Send {
         expected: &[Identifier],
         timeout: Duration,
     ) -> Result<BTreeMap<Identifier, frost::keys::dkg::round2::Package>, TransportError>;
+
+    async fn broadcast_confirmation(
+        &self,
+        session_id: &SessionId,
+        sender: &Identifier,
+        digest: [u8; 32],
+    ) -> Result<(), TransportError>;
+
+    async fn recv_confirmations(
+        &self,
+        session_id: &SessionId,
+        self_id: &Identifier,
+        expected: &[Identifier],
+        timeout: Duration,
+    ) -> Result<BTreeMap<Identifier, [u8; 32]>, TransportError>;
 }
 
 #[async_trait]
@@ -146,6 +161,30 @@ impl<T: DkgTransport + ?Sized> DkgTransport for Arc<T> {
     ) -> Result<BTreeMap<Identifier, frost::keys::dkg::round2::Package>, TransportError> {
         (**self)
             .recv_round2(session_id, self_id, expected, timeout)
+            .await
+    }
+
+    async fn broadcast_confirmation(
+        &self,
+        session_id: &SessionId,
+        sender: &Identifier,
+        digest: [u8; 32],
+    ) -> Result<(), TransportError> {
+        (**self)
+            .broadcast_confirmation(session_id, sender, digest)
+            .await
+    }
+
+    /// Waits for the digest of every member in `expected` except `self_id`
+    async fn recv_confirmations(
+        &self,
+        session_id: &SessionId,
+        self_id: &Identifier,
+        expected: &[Identifier],
+        timeout: Duration,
+    ) -> Result<BTreeMap<Identifier, [u8; 32]>, TransportError> {
+        (**self)
+            .recv_confirmations(session_id, self_id, expected, timeout)
             .await
     }
 }
