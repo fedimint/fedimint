@@ -6,7 +6,9 @@ use reqwest::Method;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 use tokio::net::TcpListener;
 
-use super::{GATEWAY_ERROR_READ_TIMEOUT, HttpConnection, MAX_GATEWAY_ERROR_BYTES};
+use super::{
+    GATEWAY_ERROR_READ_TIMEOUT, HttpConnection, MAX_ERROR_EXCERPT_CHARS, MAX_GATEWAY_ERROR_BYTES,
+};
 use crate::IGatewayConnection as _;
 use crate::error::ServerError;
 
@@ -62,6 +64,59 @@ async fn http_gateway_response_preserves_only_recognized_structured_errors() {
             Err(ServerError::InvalidRequest(_))
         ));
     }
+}
+
+#[tokio::test]
+async fn unstructured_error_body_reaches_the_client() {
+    let Err(ServerError::InvalidRequest(message)) =
+        request_with_body("  unable to find a path to destination\n").await
+    else {
+        panic!("expected InvalidRequest");
+    };
+    assert_eq!(
+        message,
+        "HTTP request returned unexpected status: 503: unable to find a path to destination"
+    );
+}
+
+#[tokio::test]
+async fn blank_error_body_keeps_the_status_only_message() {
+    let Err(ServerError::InvalidRequest(message)) = request_with_body(" \r\n ").await else {
+        panic!("expected InvalidRequest");
+    };
+    assert_eq!(message, "HTTP request returned unexpected status: 503");
+}
+
+#[tokio::test]
+async fn long_error_body_is_capped() {
+    let body = "y".repeat(MAX_ERROR_EXCERPT_CHARS + 1);
+    let Err(ServerError::InvalidRequest(message)) = request_with_body(&body).await else {
+        panic!("expected InvalidRequest");
+    };
+    assert!(message.ends_with(&format!(": {}...", "y".repeat(MAX_ERROR_EXCERPT_CHARS))));
+}
+
+#[tokio::test]
+async fn control_chars_in_error_body_are_replaced() {
+    let Err(ServerError::InvalidRequest(message)) =
+        request_with_body("no route\x1b[31m\rforged line").await
+    else {
+        panic!("expected InvalidRequest");
+    };
+    assert_eq!(
+        message,
+        "HTTP request returned unexpected status: 503: no route [31m forged line"
+    );
+}
+
+#[tokio::test]
+async fn unrecognized_structured_error_is_not_excerpted() {
+    let Err(ServerError::InvalidRequest(message)) =
+        request_with_body(r#"{"version":2,"error":"federation_unreachable"}"#).await
+    else {
+        panic!("expected InvalidRequest");
+    };
+    assert_eq!(message, "HTTP request returned unexpected status: 503");
 }
 
 #[tokio::test]

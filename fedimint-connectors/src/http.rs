@@ -18,8 +18,11 @@ use crate::{
 const MAX_GATEWAY_ERROR_BYTES: usize = 4096;
 const GATEWAY_ERROR_READ_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Read a complete error envelope with both a byte limit and a total deadline.
-async fn gateway_error_body(response: reqwest::Response) -> Option<Value> {
+/// Non-structured error bodies are surfaced to the caller, but only this much.
+const MAX_ERROR_EXCERPT_CHARS: usize = 256;
+
+/// Read a complete error body with both a byte limit and a total deadline.
+async fn gateway_error_body(response: reqwest::Response) -> Option<Vec<u8>> {
     timeout(GATEWAY_ERROR_READ_TIMEOUT, async {
         let mut body = Vec::new();
         let chunks = response.bytes_stream();
@@ -31,11 +34,31 @@ async fn gateway_error_body(response: reqwest::Response) -> Option<Value> {
             }
             body.extend_from_slice(&chunk);
         }
-        serde_json::from_slice(&body).ok()
+        Some(body)
     })
     .await
     .ok()
     .flatten()
+}
+
+/// A printable, length-capped excerpt of an error body, or `None` if it has
+/// no text worth showing.
+fn error_body_excerpt(body: &[u8]) -> Option<String> {
+    let text = String::from_utf8_lossy(body);
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let mut chars = text.chars();
+    let mut excerpt: String = chars
+        .by_ref()
+        .take(MAX_ERROR_EXCERPT_CHARS)
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    if chars.next().is_some() {
+        excerpt.push_str("...");
+    }
+    Some(excerpt)
 }
 
 #[derive(Clone, Debug, Default)]
@@ -125,15 +148,28 @@ impl IGatewayConnection for HttpConnection {
                 .map_err(|e| ServerError::InvalidResponse(e.fmt_compact().to_string()))?),
             status => {
                 let status = status.as_u16();
-                if let Some(body) = gateway_error_body(response).await
-                    && let Some(error) = ServerError::from_gateway_response(status, body)
+                let body = gateway_error_body(response).await;
+                let json = body
+                    .as_deref()
+                    .and_then(|body| serde_json::from_slice::<Value>(body).ok());
+                let is_json = json.is_some();
+                if let Some(error) =
+                    json.and_then(|json| ServerError::from_gateway_response(status, json))
                 {
                     return Err(error);
                 }
 
-                Err(ServerError::InvalidRequest(format!(
-                    "HTTP request returned unexpected status: {status}"
-                )))
+                // An unrecognized structured body stays opaque; only plain text is shown.
+                let excerpt = body
+                    .as_deref()
+                    .filter(|_| !is_json)
+                    .and_then(error_body_excerpt);
+                Err(ServerError::InvalidRequest(match excerpt {
+                    Some(excerpt) => {
+                        format!("HTTP request returned unexpected status: {status}: {excerpt}")
+                    }
+                    None => format!("HTTP request returned unexpected status: {status}"),
+                }))
             }
         }
     }
