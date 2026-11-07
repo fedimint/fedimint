@@ -2986,6 +2986,9 @@ impl IAdminGateway for Gateway {
 
         Ok(GatewayBalances {
             onchain_balance_sats: lightning_node_balances.onchain_balance_sats,
+            spendable_onchain_balance_sats: Some(
+                lightning_node_balances.spendable_onchain_balance_sats,
+            ),
             lightning_balance_msats: lightning_node_balances.lightning_balance_msats,
             ecash_balances,
             inbound_lightning_liquidity_msats: lightning_node_balances

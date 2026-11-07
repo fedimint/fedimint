@@ -526,6 +526,10 @@ pub struct ListChannelsResponse {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GetBalancesResponse {
     pub onchain_balance_sats: u64,
+    /// The part of the on-chain balance that `send_onchain` can spend now.
+    /// The fee of a send also comes out of it, so it is not the largest
+    /// amount a recipient can receive.
+    pub spendable_onchain_balance_sats: u64,
     pub lightning_balance_msats: u64,
     pub inbound_lightning_liquidity_msats: u64,
 }

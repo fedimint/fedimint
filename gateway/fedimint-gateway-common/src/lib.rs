@@ -331,6 +331,12 @@ pub struct ReceiveEcashResponse {
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct GatewayBalances {
     pub onchain_balance_sats: u64,
+    /// The part of `onchain_balance_sats` that the gateway can send on-chain
+    /// now. The fee of a send also comes out of it, so it is not the largest
+    /// amount a recipient can receive. `None` from gateways that do not
+    /// report it.
+    #[serde(default)]
+    pub spendable_onchain_balance_sats: Option<u64>,
     pub lightning_balance_msats: u64,
     pub ecash_balances: Vec<FederationBalanceInfo>,
     pub inbound_lightning_liquidity_msats: u64,
