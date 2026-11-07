@@ -6,6 +6,9 @@ pub mod invite;
 pub mod latency;
 pub mod modules;
 
+#[cfg(test)]
+mod tests;
+
 use axum::Router;
 use axum::body::Body;
 use axum::extract::{Form, State};
@@ -13,6 +16,7 @@ use axum::http::{StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum_extra::extract::cookie::CookieJar;
+use chrono::{NaiveDate, Utc};
 use consensus_explorer::consensus_explorer_view;
 use fedimint_metrics::{Encoder, REGISTRY, TextEncoder};
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
@@ -75,7 +79,13 @@ async fn download_backup(
         .api
         .download_guardian_config_backup(&user_auth.guardian_auth_token)
         .await;
-    let filename = "guardian-backup.tar";
+    let guardian_id = state.api.guardian_id().await;
+    let guardian_names = state.api.guardian_names().await;
+    let guardian_name = guardian_names
+        .get(&guardian_id)
+        .map(String::as_str)
+        .unwrap_or_default();
+    let filename = guardian_backup_filename(Utc::now().date_naive(), guardian_name);
 
     Response::builder()
         .header(header::CONTENT_TYPE, "application/x-tar")
@@ -85,6 +95,32 @@ async fn download_backup(
         )
         .body(Body::from(backup.tar_archive_bytes))
         .expect("Failed to build response")
+}
+
+/// Keep the peer component portable and safe inside a quoted HTTP filename.
+fn guardian_backup_filename(date: NaiveDate, peer_name: &str) -> String {
+    // Bound the component so the complete filename fits common filesystem limits.
+    let sanitized: String = peer_name
+        .chars()
+        .take(64)
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let peer_name = sanitized.trim_matches(['-', '_']);
+    let peer_name = if peer_name.is_empty() {
+        "guardian"
+    } else {
+        peer_name
+    };
+    format!(
+        "{}-{peer_name}-guardian-backup.tar",
+        date.format("%Y-%m-%d")
+    )
 }
 
 // Prometheus metrics handler
