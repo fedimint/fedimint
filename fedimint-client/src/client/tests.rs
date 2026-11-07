@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bitcoin::key::Secp256k1;
-use fedimint_api_client::api::DynGlobalApi;
 use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
+use fedimint_api_client::api::{ApiVersionSet, DynGlobalApi};
 use fedimint_client_module::OperationId;
 use fedimint_client_module::error::{
     ClientModuleError, OperationNotFoundError, TransactionSubmitError,
@@ -16,7 +16,6 @@ use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{ClientModuleRegistry, FinalClientIface};
 use fedimint_client_module::transaction::TransactionBuilder;
 use fedimint_connectors::ConnectorRegistry;
-use fedimint_core::Amount;
 use fedimint_core::config::{
     ClientConfig, ClientModuleConfig, GlobalClientConfig, ModuleInitRegistry,
 };
@@ -25,9 +24,13 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::DynRawFallback;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
-use fedimint_core::module::{AmountUnit, Amounts, CoreConsensusVersion, ModuleConsensusVersion};
+use fedimint_core::module::{
+    AmountUnit, Amounts, ApiVersion, CoreConsensusVersion, ModuleConsensusVersion, MultiApiVersion,
+    SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
+};
 use fedimint_core::runtime::timeout;
 use fedimint_core::task::TaskGroup;
+use fedimint_core::{Amount, PeerId};
 use fedimint_derive_secret::DerivableSecret;
 use futures::{StreamExt as _, poll};
 use tokio::select;
@@ -1071,4 +1074,68 @@ fn accumulate_transaction_balance_maximum_valid_amounts_succeed() {
             .checked_add(&amounts(fee_unit, u64::MAX))
             .expect("Distinct units cannot overflow")
     );
+}
+
+fn api_versions_summary(module_instances: &[ModuleInstanceId]) -> SupportedApiVersionsSummary {
+    SupportedApiVersionsSummary {
+        core: SupportedCoreApiVersions {
+            core_consensus: CoreConsensusVersion::new(0, 0),
+            api: MultiApiVersion::try_from_iter([ApiVersion { major: 0, minor: 0 }])
+                .expect("Valid api versions"),
+        },
+        modules: module_instances
+            .iter()
+            .map(|instance_id| {
+                (
+                    *instance_id,
+                    SupportedModuleApiVersions::from_raw((0, 0), (0, 0), &[(0, 0)]),
+                )
+            })
+            .collect(),
+    }
+}
+
+#[test]
+fn heal_cached_api_version_set_adds_missing_module() {
+    let client_versions = api_versions_summary(&[1, 2]);
+    let peer_versions = BTreeMap::from([(PeerId::from(0), api_versions_summary(&[1, 2]))]);
+    let cached = ApiVersionSet {
+        core: ApiVersion { major: 0, minor: 0 },
+        modules: BTreeMap::new(),
+    };
+
+    let healed = Client::heal_cached_api_version_set(&client_versions, &cached, &peer_versions)
+        .expect("Cache lacks supported modules");
+    assert_eq!(
+        healed.modules.keys().copied().collect::<Vec<_>>(),
+        vec![1, 2]
+    );
+
+    assert!(
+        Client::heal_cached_api_version_set(&client_versions, &healed, &peer_versions).is_none(),
+        "A cache covering every supported module is left alone"
+    );
+    assert!(
+        Client::heal_cached_api_version_set(&client_versions, &cached, &BTreeMap::new()).is_none(),
+        "Without stored peer summaries the cache is left alone"
+    );
+}
+
+#[test]
+fn heal_cached_api_version_set_keeps_cached_entries() {
+    let client_versions = api_versions_summary(&[1, 2, 3]);
+    let peer_versions = BTreeMap::from([(PeerId::from(0), api_versions_summary(&[1, 2, 3]))]);
+    let cached_module_version = ApiVersion { major: 0, minor: 7 };
+    let cached = ApiVersionSet {
+        core: ApiVersion { major: 0, minor: 0 },
+        modules: BTreeMap::from([(3, cached_module_version)]),
+    };
+
+    let healed = Client::heal_cached_api_version_set(&client_versions, &cached, &peer_versions)
+        .expect("Cache lacks supported modules");
+    assert_eq!(
+        healed.modules.keys().copied().collect::<Vec<_>>(),
+        vec![1, 2, 3]
+    );
+    assert_eq!(healed.modules.get(&3), Some(&cached_module_version));
 }
