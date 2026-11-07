@@ -577,10 +577,15 @@ jobs:
               >&2 echo "Building: $bin"
               nix build -L .#$bin
 
-              closure_size=$(nix path-info -rS --json .#$bin | nix run nixpkgs#jq '. | to_entries[] | select(.value.ultimate == true) | .value.narSize')
+              closure_size=$(nix path-info -S --json "$(readlink -f result)" | nix run nixpkgs#jq -- -r 'if type == "array" then .[0] else (to_entries[0].value) end | .closureSize // empty')
               >&2 echo "$bin's Nix closure size: $closure_size"
 
-              if [ 300000000 -lt $closure_size ]; then
+              if ! [[ "$closure_size" =~ ^[0-9]+$ ]]; then
+                >&2 echo "Could not determine $bin's Nix closure size"
+                exit 1
+              fi
+
+              if [ 300000000 -lt "$closure_size" ]; then
                 >&2 echo "$bin's Nix closure size seems too big: $closure_size"
                 exit 1
               fi
