@@ -47,6 +47,7 @@ use fedimint_client_module::transaction::{
     FeeQuoteRequest, TransactionBuilder, max_affordable_send_amount,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
+use fedimint_core::bolt11::{currency_for_network, currency_matches_network};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
@@ -87,7 +88,7 @@ use futures::{Future, StreamExt, TryStreamExt as _};
 use incoming::IncomingSmError;
 use itertools::Itertools;
 use lightning_invoice::{
-    Bolt11Invoice, CreationError, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop,
+    Bolt11Invoice, CreationError, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop,
     RoutingFees,
 };
 use pay::PayInvoicePayload;
@@ -847,11 +848,10 @@ impl LightningClientModule {
         ),
         PayBolt11InvoiceError,
     > {
-        let federation_currency: Currency = self.cfg.network.0.into();
         let invoice_currency = invoice.currency();
-        if federation_currency != invoice_currency {
+        if !currency_matches_network(&invoice_currency, self.cfg.network.0) {
             return Err(PayBolt11InvoiceError::WrongCurrency {
-                expected: federation_currency,
+                expected: currency_for_network(self.cfg.network.0),
                 found: invoice_currency,
             });
         }
@@ -1107,7 +1107,7 @@ impl LightningClientModule {
 
         let duration_since_epoch = fedimint_core::time::duration_since_epoch();
 
-        let mut invoice_builder = InvoiceBuilder::new(network.into())
+        let mut invoice_builder = InvoiceBuilder::new(currency_for_network(network))
             .amount_milli_satoshis(amount.msats)
             .invoice_description(description)
             .payment_hash(payment_hash)
