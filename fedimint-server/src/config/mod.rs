@@ -343,7 +343,7 @@ impl ServerConfig {
             ),
             version: CORE_CONSENSUS_VERSION,
             broadcast_public_keys,
-            broadcast_rounds_per_session: if is_running_in_test_env() {
+            broadcast_rounds_per_session: if is_running_in_test_env!() {
                 DEFAULT_TEST_BROADCAST_ROUNDS_PER_SESSION
             } else {
                 DEFAULT_BROADCAST_ROUNDS_PER_SESSION
@@ -362,7 +362,7 @@ impl ServerConfig {
             p2p_endpoints: params.p2p_urls(),
             identity,
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
-            broadcast_round_delay_ms: if is_running_in_test_env() {
+            broadcast_round_delay_ms: if is_running_in_test_env!() {
                 DEFAULT_TEST_BROADCAST_ROUND_DELAY_MS
             } else {
                 DEFAULT_BROADCAST_ROUND_DELAY_MS

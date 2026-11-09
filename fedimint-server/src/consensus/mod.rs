@@ -259,7 +259,7 @@ pub async fn run(
 
     update_server_info_version_dbtx(&mut global_dbtx.to_ref_nc(), &code_version_str).await;
 
-    if is_running_in_test_env() {
+    if is_running_in_test_env!() {
         verify_server_db_integrity_dbtx(&mut global_dbtx.to_ref_nc()).await;
     }
     global_dbtx.commit_tx_result().await?;
@@ -279,7 +279,7 @@ pub async fn run(
 
     let bitcoin_rpc_connection = ServerBitcoinRpcMonitor::new(
         dyn_server_bitcoin_rpc,
-        if is_running_in_test_env() {
+        if is_running_in_test_env!() {
             Duration::from_millis(100)
         } else {
             Duration::from_mins(1)
@@ -304,7 +304,7 @@ pub async fn run(
                 .await?;
 
                 if let Some(used_db_prefixes) = module_init.used_db_prefixes()
-                    && is_running_in_test_env()
+                    && is_running_in_test_env!()
                 {
                     verify_module_db_integrity_dbtx(
                         &mut dbtx.to_ref_nc(),
@@ -563,7 +563,7 @@ fn submit_module_ci_proposals(
     module: DynServerModule,
     submission_sender: Sender<ConsensusItem>,
 ) {
-    let mut interval = tokio::time::interval(if is_running_in_test_env() {
+    let mut interval = tokio::time::interval(if is_running_in_test_env!() {
         Duration::from_millis(100)
     } else {
         Duration::from_secs(1)

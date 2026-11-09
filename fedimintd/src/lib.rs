@@ -427,7 +427,9 @@ pub async fn run(
         fedimint_metrics::spawn_api_server(*bind_metrics, root_task_group.clone()).await?;
     }
 
-    let enable_iroh = server_opts.enable_iroh.unwrap_or(!is_running_in_test_env());
+    let enable_iroh = server_opts
+        .enable_iroh
+        .unwrap_or(!is_running_in_test_env!());
     let iroh_next_api_settings = if server_opts.enable_iroh_next {
         Some(IrohNextApiSettings::new(server_opts.bind_api_next))
     } else {

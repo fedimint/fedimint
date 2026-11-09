@@ -457,7 +457,7 @@ impl ServerModule for Wallet {
 
             let consensus_block_count = self.consensus_block_count(dbtx).await;
 
-            let max_block_count_increment = if is_running_in_test_env() {
+            let max_block_count_increment = if is_running_in_test_env!() {
                 TEST_MAX_BLOCK_COUNT_INCREMENT
             } else {
                 MAX_BLOCK_COUNT_INCREMENT

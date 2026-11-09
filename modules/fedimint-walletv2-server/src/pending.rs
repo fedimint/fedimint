@@ -130,7 +130,7 @@ async fn scan_pending_blocks(
 /// every transaction had been fetched. Kept short under test so that a test can
 /// observe a pass running out of budget without a large mempool.
 fn mempool_scan_budget() -> Duration {
-    if is_running_in_test_env() {
+    if is_running_in_test_env!() {
         Duration::from_millis(100)
     } else {
         Duration::from_secs(5)
