@@ -336,6 +336,11 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
                     // is nothing to validate. Seeding them would widen
                     // decode coverage for the next migration.
                 }
+                DbKeyPrefix::VolumeDay | DbKeyPrefix::VolumeStart => {
+                    // Written only by consensus processing in versions that
+                    // count volume, which never back-fill, so the v0 snapshot
+                    // holds no rows under them.
+                }
             }
         }
 
