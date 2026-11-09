@@ -298,7 +298,7 @@ quote = "1.0"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 rayon = "1.10.0"
-rcgen = "=0.13.2"
+rcgen = "=0.14.10"
 redb = "3"
 reqwest = { version = "0.12.28", features = [
     "json",
