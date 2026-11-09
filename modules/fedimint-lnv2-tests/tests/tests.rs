@@ -669,6 +669,35 @@ async fn receive_refuses_a_gateway_with_receives_turned_off() -> anyhow::Result<
     Ok(())
 }
 
+/// A dropped gateway request is retried, so one blip does not fail a
+/// receive. The invoice request is retried with a new contract, because the
+/// gateway registers each payment hash only once.
+#[tokio::test(flavor = "multi_thread")]
+async fn receive_retries_failed_gateway_requests() -> anyhow::Result<()> {
+    let gateway_conn = MockGatewayConnection::failing_first_requests();
+    let fixtures = fixtures_with_gateway(gateway_conn.clone());
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let lightning = client.get_first_module::<LightningClientModule>()?;
+
+    let (invoice, _) = lightning
+        .receive(
+            Amount::from_sats(1000),
+            60,
+            Bolt11InvoiceDescription::Direct(String::new()),
+            Some(mock::gateway()),
+            Value::Null,
+        )
+        .await?;
+
+    let payment_hashes = gateway_conn.invoice_payment_hashes();
+    assert_eq!(payment_hashes.len(), 2);
+    assert_ne!(payment_hashes[0], payment_hashes[1]);
+    assert_eq!(invoice.payment_hash(), &payment_hashes[1]);
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn receive_operation_expires() -> anyhow::Result<()> {
     let fixtures = fixtures();
