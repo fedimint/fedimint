@@ -50,7 +50,7 @@ use fedimint_core::envs::{
 use fedimint_core::module::audit::Audit;
 use fedimint_core::module::{
     Amounts, ApiEndpoint, ApiVersion, CoreConsensusVersion, InputMeta, ModuleConsensusVersion,
-    ModuleInit, MultiApiVersion, TransactionItemAmounts, public_api_endpoint,
+    ModuleInit, MultiApiVersion, TransactionItemAmounts, admin_api_endpoint, public_api_endpoint,
 };
 #[cfg(not(target_family = "wasm"))]
 use fedimint_core::task::TaskGroup;
@@ -63,6 +63,7 @@ use fedimint_logging::LOG_MODULE_WALLETV2;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::config::{PeerHandleOps, PeerHandleOpsExt};
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
+use fedimint_server_core::volume::{counted_whole_window, volume_buckets, volume_day};
 use fedimint_server_core::{
     ConfigGenModuleArgs, EnvVarDoc, ServerModule, ServerModuleInit, ServerModuleInitArgs,
 };
@@ -74,13 +75,15 @@ use fedimint_walletv2_common::endpoint_constants::{
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
     OUTPUT_INFO_SLICE_ENDPOINT, PENDING_OUTPUTS_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT,
     RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
+    VOLUME_STATS_ENDPOINT,
 };
 /// Re-exported for existing callers; the constants live in the common crate so
 /// that the client can render peg-in confirmation progress against them.
 pub use fedimint_walletv2_common::{BLOCK_COUNT_VOTE_DELAY, CONFIRMATION_FINALITY_DELAY};
 use fedimint_walletv2_common::{
     FederationWallet, MODULE_CONSENSUS_VERSION, PendingOutputs, TxInfo, WalletInputError,
-    WalletOutputError, descriptor, is_potential_receive, tweak_public_key,
+    WalletOutputError, WalletVolume, WalletVolumeStats, descriptor, is_potential_receive,
+    tweak_public_key,
 };
 use futures::StreamExt;
 use miniscript::descriptor::Wsh;
@@ -95,6 +98,7 @@ use tracing::{debug, info};
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, FeeRateVoteKey, FeeRateVotePrefix, TxInfoKey,
     TxInfoPrefix, UnconfirmedTxKey, UnconfirmedTxPrefix, UnsignedTxKey, UnsignedTxPrefix,
+    VolumeDay, VolumeDayKey, VolumeDayPrefix, VolumeStartKey, VolumeStartPrefix,
 };
 use crate::metrics::{
     WALLET_BLOCK_COUNT, WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS,
@@ -262,6 +266,26 @@ impl ModuleInit for WalletInit {
                         FederationWallet,
                         wallet,
                         "Federation Wallet"
+                    );
+                }
+                DbKeyPrefix::VolumeDay => {
+                    push_db_pair_items!(
+                        dbtx,
+                        VolumeDayPrefix,
+                        VolumeDayKey,
+                        VolumeDay,
+                        wallet,
+                        "Wallet Volume Days"
+                    );
+                }
+                DbKeyPrefix::VolumeStart => {
+                    push_db_pair_items!(
+                        dbtx,
+                        VolumeStartPrefix,
+                        VolumeStartKey,
+                        u64,
+                        wallet,
+                        "Wallet Volume Start"
                     );
                 }
             }
@@ -493,6 +517,16 @@ impl ServerModule for Wallet {
         consensus_item: WalletConsensusItem,
         peer: PeerId,
     ) -> anyhow::Result<()> {
+        // Consensus items arrive every session, so this marks the start of
+        // counting no later than the first session that counts. A deposit or
+        // withdrawal can still be processed earlier in that session, at the
+        // same block count, which is why the day counting started on is never
+        // complete.
+        if dbtx.get_value(&VolumeStartKey).await.is_none() {
+            let now = self.consensus_block_count(dbtx).await;
+            dbtx.insert_new_entry(&VolumeStartKey, &now).await;
+        }
+
         match consensus_item {
             WalletConsensusItem::BlockCount(block_count_vote) => {
                 self.process_block_count(dbtx, block_count_vote, peer).await
@@ -560,6 +594,7 @@ impl ServerModule for Wallet {
             .checked_sub(input.fee)
             .ok_or(WalletInputError::ArithmeticOverflow)?;
 
+        let block_count = self.consensus_block_count(dbtx).await;
         if let Some(wallet) = dbtx.remove_entry(&FederationWalletKey).await {
             // Assuming the first receive into the federation is made through a
             // standard transaction, its output value is over the P2WSH dust
@@ -607,8 +642,6 @@ impl ServerModule for Wallet {
 
             let tx_index = self.total_txs(dbtx).await;
 
-            let created = self.consensus_block_count(dbtx).await;
-
             dbtx.insert_new_entry(
                 &TxInfoKey(tx_index),
                 &TxInfo {
@@ -618,7 +651,7 @@ impl ServerModule for Wallet {
                     output: change_value,
                     vbytes: self.cfg.consensus.receive_tx_vbytes,
                     fee: input.fee,
-                    created,
+                    created: block_count,
                 },
             )
             .await;
@@ -663,6 +696,16 @@ impl ServerModule for Wallet {
         let fee = self.cfg.consensus.fee_consensus.fee(amount);
 
         calculate_pegin_metrics(dbtx, amount, fee);
+
+        Self::count_volume(
+            dbtx,
+            block_count,
+            VolumeDay {
+                deposited: tracked_output.value,
+                withdrawn: Amount::ZERO,
+            },
+        )
+        .await;
 
         Ok(InputMeta {
             amount: TransactionItemAmounts {
@@ -758,7 +801,7 @@ impl ServerModule for Wallet {
 
         let tx_index = self.total_txs(dbtx).await;
 
-        let created = self.consensus_block_count(dbtx).await;
+        let block_count = self.consensus_block_count(dbtx).await;
 
         dbtx.insert_new_entry(
             &TxInfoKey(tx_index),
@@ -769,7 +812,7 @@ impl ServerModule for Wallet {
                 output: change_value,
                 vbytes: self.cfg.consensus.send_tx_vbytes,
                 fee: output.fee,
-                created,
+                created: block_count,
             },
         )
         .await;
@@ -800,6 +843,16 @@ impl ServerModule for Wallet {
         let fee = self.cfg.consensus.fee_consensus.fee(amount);
 
         calculate_pegout_metrics(dbtx, amount, fee);
+
+        Self::count_volume(
+            dbtx,
+            block_count,
+            VolumeDay {
+                deposited: Amount::ZERO,
+                withdrawn: output.value,
+            },
+        )
+        .await;
 
         Ok(TransactionItemAmounts {
             amounts: Amounts::new_bitcoin(amount),
@@ -833,6 +886,15 @@ impl ServerModule for Wallet {
 
     fn api_endpoints(&self) -> Vec<ApiEndpoint<Self>> {
         vec![
+            admin_api_endpoint! {
+                VOLUME_STATS_ENDPOINT,
+                ApiVersion::new(0, 3),
+                async |module: &Wallet, context, _params: ()| -> WalletVolumeStats {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+                    Ok(module.volume_stats(&mut dbtx).await)
+                }
+            },
             public_api_endpoint! {
                 CONSENSUS_BLOCK_COUNT_ENDPOINT,
                 ApiVersion::new(0, 0),
@@ -928,7 +990,7 @@ impl ServerModule for Wallet {
     }
 
     fn supported_api_versions(&self) -> MultiApiVersion {
-        MultiApiVersion::try_from_iter([ApiVersion::new(0, 2)])
+        MultiApiVersion::try_from_iter([ApiVersion::new(0, 3)])
             .expect("walletv2 declares one API version per major version")
     }
 }
@@ -1209,6 +1271,42 @@ impl Wallet {
             info!(target: LOG_MODULE_WALLETV2, "Waiting for local bitcoin backend to sync to block count {block_count}");
 
             sleep(common::sleep_duration()).await;
+        }
+    }
+
+    /// Add a processed flow to the current volume day.
+    async fn count_volume(dbtx: &mut DatabaseTransaction<'_>, block_count: u64, delta: VolumeDay) {
+        let key = VolumeDayKey(volume_day(block_count));
+        let mut day = dbtx.get_value(&key).await.unwrap_or_default();
+        day.accumulate(delta);
+        dbtx.insert_entry(&key, &day).await;
+    }
+
+    async fn volume_stats(&self, dbtx: &mut DatabaseTransaction<'_>) -> WalletVolumeStats {
+        let block_count = self.consensus_block_count(dbtx).await;
+        let start = dbtx.get_value(&VolumeStartKey).await;
+        let week = volume_buckets(block_count, 7);
+        let month = volume_buckets(block_count, 30);
+        let mut last_7_days = VolumeDay::default();
+        let mut last_30_days = VolumeDay::default();
+        let mut stream = dbtx
+            .find_by_range(VolumeDayKey(month.start)..VolumeDayKey(month.end))
+            .await;
+        while let Some((key, day)) = stream.next().await {
+            last_30_days.accumulate(day);
+            if key.0 >= week.start {
+                last_7_days.accumulate(day);
+            }
+        }
+        let report = |total: VolumeDay, first_bucket: u64| WalletVolume {
+            deposited: total.deposited,
+            withdrawn: total.withdrawn,
+            complete: counted_whole_window(start, first_bucket),
+        };
+        WalletVolumeStats {
+            block_count,
+            last_7_days: report(last_7_days, week.start),
+            last_30_days: report(last_30_days, month.start),
         }
     }
 

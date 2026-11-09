@@ -5,6 +5,7 @@ use std::time::Duration;
 use assert_matches::assert_matches;
 use async_stream::stream;
 use bitcoin::Amount;
+use fedimint_api_client::api::FederationApiExt as _;
 use fedimint_client::ClientHandleArc;
 use fedimint_client::db::DbKeyPrefix;
 use fedimint_client::error::OperationLookupError;
@@ -12,11 +13,13 @@ use fedimint_core::core::{Account, OperationId};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::impl_db_record;
+use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{sleep, sleep_in_test};
 use fedimint_dummy_client::DummyClientInit;
 use fedimint_dummy_server::DummyInit;
 use fedimint_eventlog::{Event, EventLogEntry, EventLogId};
 use fedimint_logging::LOG_TEST;
+use fedimint_testing::API_AUTH;
 use fedimint_testing::btc::BitcoinTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_walletv2_client::events::{
@@ -27,7 +30,8 @@ use fedimint_walletv2_client::{
     FinalReceiveOperationState, FinalSendOperationState, MempoolVisibility, ReceiveError,
     ReceiveProgress, SendError, WalletClientInit, WalletClientModule,
 };
-use fedimint_walletv2_common::KIND;
+use fedimint_walletv2_common::endpoint_constants::VOLUME_STATS_ENDPOINT;
+use fedimint_walletv2_common::{KIND, WalletVolume, WalletVolumeStats};
 use fedimint_walletv2_server::{BLOCK_COUNT_VOTE_DELAY, CONFIRMATION_FINALITY_DELAY, WalletInit};
 use futures::StreamExt;
 use tracing::{info, warn};
@@ -743,6 +747,86 @@ async fn fee_exceeds_one_bitcoin_with_many_pending_txs() -> anyhow::Result<()> {
     }
 
     panic!("Transaction fee did not exceed one bitcoin")
+}
+
+/// The guardians count a claimed deposit at its on-chain value and a
+/// withdrawal at the value sent, neither including fees.
+#[tokio::test(flavor = "multi_thread")]
+async fn volume_stats_count_deposits_and_withdrawals() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+
+    initialize_consensus(&client, &bitcoin).await?;
+
+    let module = client.get_first_module::<WalletClientModule>()?;
+
+    bitcoin
+        .send_and_mine_block(
+            &module.receive(Account::Primary).await?,
+            Amount::from_int_btc(1),
+        )
+        .await;
+
+    await_finality_delay(&client, &bitcoin).await?;
+
+    await_federation_total_value(&client, Amount::from_sat(99_000_000)).await?;
+
+    let send = module
+        .send(
+            Account::Primary,
+            bitcoin.get_new_address().await.as_unchecked().clone(),
+            Amount::from_sat(10_000),
+            None,
+            serde_json::Value::Null,
+        )
+        .await?;
+
+    assert!(matches!(
+        module.await_final_send_operation_state(send).await?,
+        FinalSendOperationState::Success(_)
+    ));
+
+    let wallet_module_id = client
+        .get_first_instance(&KIND)
+        .expect("the fixture federation runs walletv2");
+
+    let peer = fed
+        .online_peer_ids()
+        .next()
+        .expect("fixture has an online peer");
+    let api = fed.new_admin_api(peer).await?.with_module(wallet_module_id);
+    let denied = api
+        .request_single_peer::<WalletVolumeStats>(
+            VOLUME_STATS_ENDPOINT.to_owned(),
+            ApiRequestErased::default(),
+            peer,
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        denied.to_string().contains("Invalid authorization"),
+        "{denied}"
+    );
+    let stats: WalletVolumeStats = api
+        .request_admin(
+            VOLUME_STATS_ENDPOINT,
+            ApiRequestErased::default(),
+            API_AUTH.clone(),
+        )
+        .await?;
+    let expected = WalletVolume {
+        deposited: Amount::from_int_btc(1),
+        withdrawn: Amount::from_sat(10_000),
+        // The federation formed with the counting code.
+        complete: true,
+    };
+
+    assert_eq!(stats.last_7_days, expected);
+    assert_eq!(stats.last_30_days, expected);
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]

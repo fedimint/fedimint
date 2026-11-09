@@ -377,6 +377,11 @@ async fn test_server_db_migrations() -> anyhow::Result<()> {
                         "the federation wallet must round-trip unchanged"
                     );
                 }
+                DbKeyPrefix::VolumeDay | DbKeyPrefix::VolumeStart => {
+                    // Written only by consensus processing in versions that
+                    // count volume, which never back-fill, so the v0 snapshot
+                    // holds no rows under them.
+                }
             }
         }
 

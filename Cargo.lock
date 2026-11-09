@@ -5146,6 +5146,7 @@ dependencies = [
  "bitcoin",
  "bitcoincore-rpc",
  "devimint",
+ "fedimint-api-client",
  "fedimint-bitcoind",
  "fedimint-client",
  "fedimint-core",

@@ -43,16 +43,19 @@ use fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_INCOMING_CONTRACTS_ENDPOINT,
     AWAIT_PREIMAGE_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT, DECRYPTION_KEY_SHARE_ENDPOINT,
     GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
+    VOLUME_STATS_ENDPOINT,
 };
 use fedimint_lnv2_common::{
     ContractId, LightningCommonInit, LightningConsensusItem, LightningInput, LightningInputError,
     LightningInputV0, LightningModuleTypes, LightningOutput, LightningOutputError,
-    LightningOutputOutcome, LightningOutputV0, MODULE_CONSENSUS_VERSION, OutgoingWitness,
+    LightningOutputOutcome, LightningOutputV0, LightningVolume, LightningVolumeStats,
+    MODULE_CONSENSUS_VERSION, OutgoingWitness,
 };
 use fedimint_logging::LOG_MODULE_LNV2;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::config::{PeerHandleOps, eval_poly_g1};
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
+use fedimint_server_core::volume::{counted_whole_window, volume_buckets, volume_day};
 use fedimint_server_core::{
     ConfigGenModuleArgs, EnvVarDoc, ServerModule, ServerModuleInit, ServerModuleInitArgs,
 };
@@ -73,6 +76,7 @@ use crate::db::{
     IncomingContractOutpointPrefix, IncomingContractPrefix, IncomingContractStreamIndexKey,
     IncomingContractStreamKey, IncomingContractStreamPrefix, OutgoingContractKey,
     OutgoingContractPrefix, PreimageKey, PreimagePrefix, UnixTimeVoteKey, UnixTimeVotePrefix,
+    VolumeDay, VolumeDayKey, VolumeDayPrefix, VolumeStartKey, VolumeStartPrefix,
 };
 use crate::metrics::{LN_FUNDED_CONTRACT_SATS, LN_OUTGOING_CONTRACT_SETTLED};
 
@@ -213,6 +217,26 @@ impl ModuleInit for LightningInit {
                         u64,
                         lightning,
                         "Lightning Incoming Contract Index"
+                    );
+                }
+                DbKeyPrefix::VolumeDay => {
+                    push_db_pair_items!(
+                        dbtx,
+                        VolumeDayPrefix,
+                        VolumeDayKey,
+                        VolumeDay,
+                        lightning,
+                        "Lightning Volume Days"
+                    );
+                }
+                DbKeyPrefix::VolumeStart => {
+                    push_db_pair_items!(
+                        dbtx,
+                        VolumeStartPrefix,
+                        VolumeStartKey,
+                        u64,
+                        lightning,
+                        "Lightning Volume Start"
                     );
                 }
             }
@@ -443,6 +467,15 @@ impl ServerModule for Lightning {
     ) -> anyhow::Result<()> {
         trace!(target: LOG_MODULE_LNV2, ?consensus_item, "Processing consensus item proposal");
 
+        // Consensus items arrive every session, so this marks the start of
+        // counting no later than the first session that counts. A payment can
+        // still settle earlier in that session, at the same clock value, which
+        // is why the day counting started on is never complete.
+        if dbtx.get_value(&VolumeStartKey).await.is_none() {
+            let now = self.consensus_block_count(dbtx).await;
+            dbtx.insert_new_entry(&VolumeStartKey, &now).await;
+        }
+
         match consensus_item {
             LightningConsensusItem::BlockCountVote(vote) => {
                 let current_vote = dbtx
@@ -485,7 +518,8 @@ impl ServerModule for Lightning {
 
                 let pub_key = match outgoing_witness {
                     OutgoingWitness::Claim(preimage) => {
-                        if contract.expiration <= self.consensus_block_count(dbtx).await {
+                        let block_count = self.consensus_block_count(dbtx).await;
+                        if contract.expiration <= block_count {
                             return Err(LightningInputError::Expired);
                         }
 
@@ -494,6 +528,16 @@ impl ServerModule for Lightning {
                         }
 
                         dbtx.insert_entry(&PreimageKey(*outpoint), preimage).await;
+
+                        Self::count_volume(
+                            dbtx,
+                            block_count,
+                            VolumeDay {
+                                sent: contract.amount,
+                                received: Amount::ZERO,
+                            },
+                        )
+                        .await;
 
                         contract.claim_pk
                     }
@@ -547,7 +591,20 @@ impl ServerModule for Lightning {
                 }
 
                 let pub_key = match contract.decrypt_preimage(agg_decryption_key) {
-                    Some(..) => contract.commitment.claim_pk,
+                    Some(..) => {
+                        let block_count = self.consensus_block_count(dbtx).await;
+                        Self::count_volume(
+                            dbtx,
+                            block_count,
+                            VolumeDay {
+                                sent: Amount::ZERO,
+                                received: contract.commitment.amount,
+                            },
+                        )
+                        .await;
+
+                        contract.commitment.claim_pk
+                    }
                     None => contract.commitment.refund_pk,
                 };
 
@@ -673,6 +730,16 @@ impl ServerModule for Lightning {
                     let mut dbtx = db.begin_transaction_nc().await;
 
                     Ok(module.consensus_block_count(&mut dbtx).await)
+                }
+            },
+            admin_api_endpoint! {
+                VOLUME_STATS_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |module: &Lightning, context, _params: ()| -> LightningVolumeStats {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+
+                    Ok(module.volume_stats(&mut dbtx).await)
                 }
             },
             public_api_endpoint! {
@@ -817,6 +884,42 @@ impl Lightning {
         // confirmed by a threshold of peers.
 
         times.get(num_peers.threshold() - 1).copied().unwrap_or(0)
+    }
+
+    /// Add a settled payment to the current consensus day.
+    async fn count_volume(dbtx: &mut DatabaseTransaction<'_>, block_count: u64, delta: VolumeDay) {
+        let key = VolumeDayKey(volume_day(block_count));
+        let mut day = dbtx.get_value(&key).await.unwrap_or_default();
+        day.accumulate(delta);
+        dbtx.insert_entry(&key, &day).await;
+    }
+
+    async fn volume_stats(&self, dbtx: &mut DatabaseTransaction<'_>) -> LightningVolumeStats {
+        let block_count = self.consensus_block_count(dbtx).await;
+        let start = dbtx.get_value(&VolumeStartKey).await;
+        let week = volume_buckets(block_count, 7);
+        let month = volume_buckets(block_count, 30);
+        let mut last_7_days = VolumeDay::default();
+        let mut last_30_days = VolumeDay::default();
+        let mut stream = dbtx
+            .find_by_range(VolumeDayKey(month.start)..VolumeDayKey(month.end))
+            .await;
+        while let Some((key, day)) = stream.next().await {
+            last_30_days.accumulate(day);
+            if key.0 >= week.start {
+                last_7_days.accumulate(day);
+            }
+        }
+        let report = |total: VolumeDay, first_bucket: u64| LightningVolume {
+            received: total.received,
+            sent: total.sent,
+            complete: counted_whole_window(start, first_bucket),
+        };
+        LightningVolumeStats {
+            block_count,
+            last_7_days: report(last_7_days, week.start),
+            last_30_days: report(last_30_days, month.start),
+        }
     }
 
     async fn await_incoming_contract(

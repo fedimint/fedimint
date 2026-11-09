@@ -141,6 +141,32 @@ pub struct OutputInfo {
     pub outpoint: Option<bitcoin::OutPoint>,
 }
 
+/// The on-chain flows one guardian counted, as returned by
+/// [`endpoint_constants::VOLUME_STATS_ENDPOINT`].
+///
+/// The guardian admin endpoint reports 144-block buckets of this module's
+/// consensus block count. Each window includes the current unfinished bucket.
+/// An amount of `u64::MAX` satoshis means at least that much.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct WalletVolumeStats {
+    /// The block count at this snapshot. Divide by 144 for the current bucket.
+    pub block_count: u64,
+    pub last_7_days: WalletVolume,
+    pub last_30_days: WalletVolume,
+}
+
+/// The on-chain flows in one window.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct WalletVolume {
+    /// The value of the deposits that were claimed into the federation.
+    pub deposited: bitcoin::Amount,
+    /// The value of the withdrawals the federation sent, without their fees.
+    pub withdrawn: bitcoin::Amount,
+    /// Whether this guardian counted for the whole window. This is true when
+    /// counting started when the federation formed, or before the window began.
+    pub complete: bool,
+}
+
 /// An output passing the probabilistic receive filter that a guardian can see,
 /// but which is not yet deep enough to have entered the federation's consensus
 /// output log.
