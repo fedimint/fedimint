@@ -71,23 +71,7 @@ let
     name = "fedimint";
   };
 
-  filterSrcWithRegexes =
-    regexes: src:
-    let
-      basePath = toString src + "/";
-    in
-    lib.cleanSourceWith {
-      filter =
-        path: type:
-        let
-          relPath = lib.removePrefix basePath (toString path);
-          includePath = (type == "directory") || lib.any (re: builtins.match re relPath != null) regexes;
-        in
-        # uncomment to debug:
-        # builtins.trace "${relPath}: ${lib.boolToString includePath}"
-        includePath;
-      inherit src;
-    };
+  filterSrcWithRegexes = import ./filter-source.nix { inherit lib; };
 
   # Filter only files needed to build project dependencies
   #
