@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -203,7 +206,7 @@ pub fn gen_cert_and_key(
     Ok((
         rustls::pki_types::CertificateDer::from(cert_key.cert.der().to_vec()),
         Arc::new(
-            rustls::pki_types::PrivateKeyDer::try_from(cert_key.key_pair.serialize_der())
+            rustls::pki_types::PrivateKeyDer::try_from(cert_key.signing_key.serialize_der())
                 .expect("Failed to create private key"),
         ),
     ))

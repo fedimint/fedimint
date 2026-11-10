@@ -63,8 +63,14 @@ plugin_types_trait_impl_config!(
     MintClientConfig
 );
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Encodable)]
 pub struct FeeConsensus {
+    base: Amount,
+    parts_per_million: u64,
+}
+
+#[derive(Deserialize)]
+struct UnvalidatedFeeConsensus {
     base: Amount,
     parts_per_million: u64,
 }
@@ -132,6 +138,50 @@ impl FeeConsensus {
             .checked_add(self.base.msats)
             .expect("The division creates sufficient headroom to add the base fee")
     }
+
+    fn from_unvalidated(
+        base: Amount,
+        parts_per_million: u64,
+    ) -> Result<FeeConsensus, &'static str> {
+        // Preserve the legacy static-config invariant. The dynamic-fee design in
+        // #8758 moves broader policy to separate FeeConsensus/FeeRate types.
+        if !((base == Amount::ZERO && parts_per_million == 0)
+            || (base == Amount::from_msats(100) && parts_per_million <= 1_000))
+        {
+            return Err(
+                "Mint fees must be zero or use the 100 msat base fee and at most one thousand parts per million",
+            );
+        }
+
+        Ok(Self {
+            base,
+            parts_per_million,
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for FeeConsensus {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let unvalidated = UnvalidatedFeeConsensus::deserialize(deserializer)?;
+        Self::from_unvalidated(unvalidated.base, unvalidated.parts_per_million)
+            .map_err(serde::de::Error::custom)
+    }
+}
+
+impl Decodable for FeeConsensus {
+    fn consensus_decode_partial<R: std::io::Read>(
+        reader: &mut R,
+        modules: &fedimint_core::module::registry::ModuleDecoderRegistry,
+    ) -> Result<Self, fedimint_core::encoding::DecodeError> {
+        let base = Amount::consensus_decode_partial(reader, modules)?;
+        let parts_per_million = u64::consensus_decode_partial(reader, modules)?;
+
+        Self::from_unvalidated(base, parts_per_million)
+            .map_err(|error| fedimint_core::encoding::DecodeError::custom(error.to_string()))
+    }
 }
 
 #[test]
@@ -171,3 +221,6 @@ fn a_relative_fee_over_the_limit_is_rejected() {
 
     assert_eq!(err.parts_per_million, 1_001);
 }
+
+#[cfg(test)]
+mod tests;

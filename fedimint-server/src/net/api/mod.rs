@@ -4,6 +4,7 @@ mod http_auth;
 pub mod pkarr_publish;
 
 use std::fmt::{self, Formatter};
+use std::future::Future;
 use std::net::SocketAddr;
 use std::panic::AssertUnwindSafe;
 use std::str::FromStr;
@@ -78,8 +79,18 @@ impl ApiSecrets {
     }
 }
 
-/// How long to wait before timing out client connections
-const API_ENDPOINT_TIMEOUT: Duration = Duration::from_mins(1);
+/// How long an API request may spend preparing its context and running its
+/// handler.
+pub(crate) const API_ENDPOINT_TIMEOUT: Duration = Duration::from_mins(1);
+
+/// Apply the same endpoint deadline and timeout error across API transports.
+pub(crate) async fn with_api_endpoint_timeout<T>(
+    handler: impl Future<Output = Result<T, ApiError>>,
+) -> Result<T, ApiError> {
+    tokio::time::timeout(API_ENDPOINT_TIMEOUT, handler)
+        .await
+        .unwrap_or_else(|_| Err(ApiError::new(-32000, "Request timeout".to_owned())))
+}
 
 /// Has the context necessary for serving API endpoints
 ///
@@ -155,7 +166,7 @@ pub fn attach_endpoints<State, T>(
                 // end up with an inconsistent state in theory. In practice most API functions
                 // are only reading and the few that do write anything are atomic. Lastly, this
                 // is only the last line of defense
-                AssertUnwindSafe(tokio::time::timeout(API_ENDPOINT_TIMEOUT, async {
+                AssertUnwindSafe(with_api_endpoint_timeout(async {
                     let request = serde_json::from_value(params)
                         .map_err(|e| ApiError::bad_request(e.to_string()))?;
 
@@ -172,14 +183,11 @@ pub fn attach_endpoints<State, T>(
                     );
                     ErrorObject::owned(500, "API handler panicked", None::<()>)
                 })?
-                .map_err(|tokio::time::error::Elapsed { .. }| {
-                    // TODO: find a better error for this, the error we used before:
-                    // jsonrpsee::core::Error::RequestTimeout
-                    // was moved to be client-side only
-                    ErrorObject::owned(-32000, "Request timeout", None::<()>)
-                })?
                 .map_err(|e| ErrorObject::owned(e.code, e.message, None::<()>))
             })
             .expect("Failed to register async method");
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -15,6 +15,8 @@ use crate::{Mint, MintConfig, MintConfigConsensus, MintConfigPrivate, MintInit};
 
 const MINTS: u16 = 5;
 
+mod audit;
+
 fn build_configs() -> (Vec<ServerModuleConfig>, ClientModuleConfig) {
     let peers = (0..MINTS).map(PeerId::from).collect::<Vec<_>>();
     let args = ConfigGenModuleArgs {

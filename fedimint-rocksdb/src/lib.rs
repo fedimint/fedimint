@@ -337,6 +337,22 @@ impl IRawDatabase for RocksDbReadOnly {
 
 #[async_trait]
 impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
+    async fn raw_insert_bytes_no_previous(
+        &mut self,
+        key: &[u8],
+        value: &[u8],
+    ) -> DatabaseResult<()> {
+        fedimint_core::runtime::block_in_place(|| {
+            self.0.put(key, value).map_err(DatabaseError::backend)
+        })
+    }
+
+    async fn raw_remove_entry_no_previous(&mut self, key: &[u8]) -> DatabaseResult<()> {
+        fedimint_core::runtime::block_in_place(|| {
+            self.0.delete(key).map_err(DatabaseError::backend)
+        })
+    }
+
     async fn raw_insert_bytes(
         &mut self,
         key: &[u8],
@@ -376,7 +392,7 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
                 let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
                 key_bytes
                     .starts_with(&prefix)
-                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+                    .then_some((key_bytes.into_vec(), value_bytes.into_vec()))
             });
             Box::pin(convert_to_async_stream(rocksdb_iter))
         }))
@@ -397,7 +413,7 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
             let rocksdb_iter = iter.map_while(move |res| {
                 let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
                 (key_bytes.as_ref() < range.end.as_slice())
-                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+                    .then_some((key_bytes.into_vec(), value_bytes.into_vec()))
             });
             Box::pin(convert_to_async_stream(rocksdb_iter))
         }))
@@ -419,7 +435,7 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
                     res.map(|(key_bytes, _)| {
                         key_bytes
                             .starts_with(key_prefix)
-                            .then_some(key_bytes.to_vec())
+                            .then_some(key_bytes.into_vec())
                     })
                     .transpose()
                 });
@@ -452,7 +468,7 @@ impl IDatabaseTransactionOpsCore for RocksDbTransaction<'_> {
                 let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
                 key_bytes
                     .starts_with(&prefix)
-                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+                    .then_some((key_bytes.into_vec(), value_bytes.into_vec()))
             });
             Box::pin(convert_to_async_stream(rocksdb_iter))
         }))
@@ -527,7 +543,7 @@ impl IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'_> {
             let rocksdb_iter = iter.map_while(move |res| {
                 let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
                 (key_bytes.as_ref() < range.end.as_slice())
-                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+                    .then_some((key_bytes.into_vec(), value_bytes.into_vec()))
             });
             Box::pin(convert_to_async_stream(rocksdb_iter))
         }))
@@ -546,7 +562,7 @@ impl IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'_> {
                 let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
                 key_bytes
                     .starts_with(&prefix)
-                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+                    .then_some((key_bytes.into_vec(), value_bytes.into_vec()))
             });
             Box::pin(convert_to_async_stream(rocksdb_iter))
         }))
@@ -575,7 +591,7 @@ impl IDatabaseTransactionOpsCore for RocksDbReadOnlyTransaction<'_> {
                 let (key_bytes, value_bytes) = res.expect("Error reading from RocksDb");
                 key_bytes
                     .starts_with(&prefix)
-                    .then_some((key_bytes.to_vec(), value_bytes.to_vec()))
+                    .then_some((key_bytes.into_vec(), value_bytes.into_vec()))
             });
             Box::pin(stream::iter(rocksdb_iter))
         }))

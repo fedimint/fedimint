@@ -594,11 +594,23 @@ pub trait IGlobalFederationApi: IRawFederationApi {
 
     async fn shutdown(&self, session: Option<u64>, auth: ApiAuth) -> FederationResult<()>;
 
+    /// Ask the guardian to shut down once the session it is running
+    /// completes, without starting another one.
+    async fn shutdown_after_current_session(&self, auth: ApiAuth) -> FederationResult<()>;
+
     /// Returns the fedimintd version a peer is running
     async fn fedimintd_version(&self, peer_id: PeerId) -> ServerResult<String>;
 
     /// Returns one guardian's view of the other guardians' availability
     async fn peer_availability(&self, peer_id: PeerId) -> ServerResult<PeerAvailability>;
+
+    /// Reset one peer's observations on the admin guardian. Every call clears
+    /// them again.
+    async fn reset_peer_availability(
+        &self,
+        request: fedimint_core::peer_availability::ResetPeerAvailabilityRequest,
+        auth: ApiAuth,
+    ) -> FederationResult<()>;
 
     /// Fetch the backup statistics from the federation (admin endpoint)
     async fn backup_statistics(&self, auth: ApiAuth) -> FederationResult<BackupStatistics>;

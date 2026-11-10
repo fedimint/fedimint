@@ -49,7 +49,6 @@ impl IntoDynInstance for TxSubmissionContext {
     }
 }
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine to (re-)submit a transaction until it is either accepted or
 /// rejected by the federation
 ///

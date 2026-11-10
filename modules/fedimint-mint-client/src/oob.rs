@@ -33,7 +33,6 @@ pub enum MintOOBStatesV0 {
     TimeoutRefund(MintOOBStatesTimeoutRefund),
 }
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine managing e-cash that has been taken out of the wallet for
 /// out-of-band transmission.
 ///

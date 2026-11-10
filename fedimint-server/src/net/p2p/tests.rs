@@ -740,3 +740,138 @@ async fn replacement_connection_does_not_cancel_in_flight_receive() {
     drop(connection_sender);
     let _ = task.await;
 }
+
+/// A connection whose peer stopped reading it: every send parks for good.
+struct UnreadConnection;
+
+#[async_trait]
+impl IP2PConnection<u64> for UnreadConnection {
+    async fn send(&self, _message: u64) -> anyhow::Result<()> {
+        future::pending().await
+    }
+
+    async fn receive(&self) -> anyhow::Result<DynIP2PFrame<u64>> {
+        future::pending().await
+    }
+
+    fn rtt(&self) -> Option<Duration> {
+        None
+    }
+
+    fn connection_type(&self) -> Option<ConnectionType> {
+        Some(ConnectionType::Direct)
+    }
+}
+
+/// A healthy connection that hands every sent message to the test.
+struct DeliveringConnection(async_channel::Sender<u64>);
+
+#[async_trait]
+impl IP2PConnection<u64> for DeliveringConnection {
+    async fn send(&self, message: u64) -> anyhow::Result<()> {
+        self.0.send(message).await?;
+        Ok(())
+    }
+
+    async fn receive(&self) -> anyhow::Result<DynIP2PFrame<u64>> {
+        future::pending().await
+    }
+
+    fn rtt(&self) -> Option<Duration> {
+        None
+    }
+
+    fn connection_type(&self) -> Option<ConnectionType> {
+        Some(ConnectionType::Direct)
+    }
+}
+
+/// Redials with a healthy connection.
+struct DeliveringConnector {
+    connects: Arc<AtomicUsize>,
+    delivered: async_channel::Sender<u64>,
+}
+
+#[async_trait]
+impl IP2PConnector<u64> for DeliveringConnector {
+    fn peers(&self) -> Vec<PeerId> {
+        vec![PeerId::from(1)]
+    }
+
+    async fn connect(&self, _peer: PeerId) -> anyhow::Result<DynP2PConnection<u64>> {
+        self.connects.fetch_add(1, Ordering::Relaxed);
+        Ok(Arc::new(DeliveringConnection(self.delivered.clone())))
+    }
+
+    async fn accept(&self) -> anyhow::Result<(PeerId, DynP2PConnection<u64>)> {
+        future::pending().await
+    }
+
+    fn connection_type(&self, _peer: PeerId) -> Option<ConnectionType> {
+        None
+    }
+}
+
+/// Regression test for a p2p liveness bug: a send to a peer that stopped
+/// reading the connection parked forever. The link kept reporting itself as
+/// connected, never redialed and dropped every further message.
+#[tokio::test(start_paused = true)]
+async fn redials_when_a_send_stalls() {
+    let (_connection_sender, incoming_connections) = async_channel::bounded(1);
+    let (outgoing_sender, outgoing_receiver) = async_channel::bounded(5);
+    let (incoming_sender, _incoming_receiver) = async_channel::bounded(5);
+    let (status_sender, _status_receiver) = watch::channel(P2PConnectionState {
+        connected: None,
+        last_error: None,
+    });
+    let (delivered_sender, delivered) = async_channel::unbounded();
+    let connects = Arc::new(AtomicUsize::new(0));
+
+    let mut state_machine = P2PConnectionStateMachine {
+        state: P2PConnectionSMState::Connected(Arc::new(UnreadConnection)),
+        common: P2PConnectionSMCommon {
+            incoming_sender,
+            outgoing_receiver,
+            // The lower peer id redials.
+            our_id: PeerId::from(0),
+            our_id_str: "0".to_owned(),
+            peer_id: PeerId::from(1),
+            peer_id_str: "1".to_owned(),
+            connector: Arc::new(DeliveringConnector {
+                connects: connects.clone(),
+                delivered: delivered_sender,
+            }),
+            incoming_connections,
+            status_sender,
+            max_connection_age: None,
+            connection_deadline: None,
+        },
+    };
+
+    let task = runtime::spawn("p2p-send-stall-test", async move {
+        while let Some(next) = state_machine.state_transition().await {
+            state_machine = next;
+        }
+    });
+
+    // Keep offering messages, as consensus does, until one reaches the peer.
+    let delivery = async {
+        for message in 0.. {
+            let _ = outgoing_sender.try_send(message);
+
+            if let Ok(Ok(message)) = timeout(Duration::from_secs(1), delivered.recv()).await {
+                return message;
+            }
+        }
+
+        unreachable!("the message counter does not overflow")
+    };
+
+    timeout(Duration::from_mins(10), delivery)
+        .await
+        .expect("the link recovers after a send stalls");
+
+    assert_eq!(connects.load(Ordering::Relaxed), 1);
+
+    task.abort();
+}
