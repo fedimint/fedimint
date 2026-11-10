@@ -1,10 +1,11 @@
 //! Mapping between Bitcoin networks and BOLT11 invoice currencies.
 //!
 //! BOLT11 uses the `tb` prefix for both testnet3 and testnet4, so
-//! [`Currency::BitcoinTestnet`] cannot be converted back to a single
-//! [`Network`]. The `From` conversions in `lightning-invoice` are lossy in both
-//! directions (`Network::Testnet4` becomes `Currency::Regtest`), so use these
-//! helpers instead.
+//! [`Currency::BitcoinTestnet`](lightning_invoice::Currency::BitcoinTestnet)
+//! cannot be converted back to a single [`Network`](bitcoin::Network). The
+//! `From` conversions in `lightning-invoice` are lossy in both directions
+//! (`Network::Testnet4` becomes `Currency::Regtest`), so use these helpers
+//! instead.
 
 use bitcoin::Network;
 use lightning_invoice::Currency;
