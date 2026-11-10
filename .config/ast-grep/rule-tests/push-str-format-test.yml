@@ -1,0 +1,12 @@
+id: push-str-format
+valid:
+  - output.push_str(&format!("{value}"));
+  - |
+      for value in values { let _ = write!(&mut output, "{value}"); }
+  - |
+      for value in values { output.push_str(value); }
+invalid:
+  - |
+      for value in values { output.push_str(&format!("{value}")); }
+  - |
+      for value in values { output.push_str(format!("{value}").as_str()); }

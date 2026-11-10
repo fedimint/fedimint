@@ -45,6 +45,8 @@ use crate::common::{
     build_client, do_spend_notes, get_invite_code_cli, remint_denomination, try_get_notes_cli,
 };
 pub mod common;
+#[cfg(test)]
+mod tests;
 
 #[derive(Parser, Clone)]
 #[command(version)]
@@ -298,6 +300,7 @@ impl std::fmt::Display for EventMetricComparison {
 async fn main() -> anyhow::Result<()> {
     fedimint_logging::TracingSetup::default().init()?;
     let opts = Opts::parse();
+    validate_total_notes(&opts)?;
     let (event_sender, event_receiver) = tokio::sync::mpsc::unbounded_channel();
     let summary_handle = spawn("handle metrics summary", {
         let opts = opts.clone();
@@ -411,6 +414,28 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn validate_total_notes(opts: &Opts) -> anyhow::Result<()> {
+    match &opts.command {
+        Command::LoadTest(args) => {
+            checked_total(opts.users, args.notes_per_user)?;
+        }
+        Command::LnCircularLoadTest(args) => {
+            checked_total(opts.users, args.notes_per_user)?;
+        }
+        Command::TestConnect { .. } | Command::TestDownload { .. } => {}
+    }
+    Ok(())
+}
+
+fn checked_total(users: u16, notes_per_user: u16) -> anyhow::Result<u16> {
+    users.checked_mul(notes_per_user).ok_or_else(|| {
+        anyhow!(
+            "--users {users} multiplied by --notes-per-user {notes_per_user} exceeds the maximum supported combined note count of {}",
+            u16::MAX
+        )
+    })
+}
+
 async fn invite_code_or_fallback(invite_code: Option<InviteCode>) -> Option<InviteCode> {
     if let Some(invite_code) = invite_code {
         Some(invite_code)
@@ -444,9 +469,9 @@ async fn run_load_test(
     invoice_amount: Amount,
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
+    let minimum_notes = checked_total(users, notes_per_user)?;
     let db_path = get_db_path(&archive_dir);
     let (coordinator, invite_code) = get_coordinator_client(&db_path, &invite_code).await?;
-    let minimum_notes = notes_per_user * users;
     let minimum_amount_required = note_denomination * u64::from(minimum_notes);
 
     reissue_initial_notes(initial_notes, &coordinator, &event_sender).await?;
@@ -750,9 +775,9 @@ async fn run_ln_circular_load_test(
     strategy: LnCircularStrategy,
     event_sender: mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<Vec<BoxFuture<'static, anyhow::Result<()>>>> {
+    let minimum_notes = checked_total(users, notes_per_user)?;
     let db_path = get_db_path(&archive_dir);
     let (coordinator, invite_code) = get_coordinator_client(&db_path, &invite_code).await?;
-    let minimum_notes = notes_per_user * users;
     let minimum_amount_required = note_denomination * u64::from(minimum_notes);
 
     reissue_initial_notes(initial_notes, &coordinator, &event_sender).await?;
@@ -1003,6 +1028,25 @@ async fn wait_invoice_payment(
         .subscribe_ln_receive(operation_id)
         .await?
         .into_stream();
+    wait_invoice_payment_updates(
+        prefix,
+        gateway_name,
+        operation_id,
+        event_sender,
+        pay_invoice_time,
+        &mut updates,
+    )
+    .await
+}
+
+async fn wait_invoice_payment_updates(
+    prefix: &str,
+    gateway_name: &str,
+    operation_id: fedimint_core::core::OperationId,
+    event_sender: &mpsc::UnboundedSender<MetricEvent>,
+    pay_invoice_time: std::time::SystemTime,
+    updates: &mut (impl futures::Stream<Item = LnReceiveState> + Unpin),
+) -> anyhow::Result<()> {
     while let Some(update) = updates.next().await {
         debug!(%prefix, ?update, "Invoice payment update");
         match update {
@@ -1017,7 +1061,7 @@ async fn wait_invoice_payment(
                     name: format!("gateway_{gateway_name}_payment_received_success"),
                     duration: elapsed,
                 })?;
-                break;
+                return Ok(());
             }
             LnReceiveState::Canceled { reason } => {
                 let elapsed: Duration = pay_invoice_time.elapsed()?;
@@ -1028,12 +1072,18 @@ async fn wait_invoice_payment(
                     name: "gateway_payment_received_canceled".into(),
                     duration: elapsed,
                 })?;
-                break;
+                bail!(
+                    "Invoice payment receive for operation {operation_id:?} was canceled on \
+                     {gateway_name}: {reason}"
+                );
             }
             _ => {}
         }
     }
-    Ok(())
+    bail!(
+        "Invoice payment receive stream ended before operation {operation_id:?} was claimed on \
+         {gateway_name}"
+    )
 }
 
 async fn client_create_invoice(

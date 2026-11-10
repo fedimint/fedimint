@@ -72,6 +72,11 @@ impl Amount {
             return Ok(Self::from_msats(s.parse()?));
         }
         let btc_amt = bitcoin::amount::Amount::from_str_in(s, denom)?;
+        // `bitcoin::Amount` parsing only bounds the value by `u64` sats, while
+        // `From<bitcoin::Amount>` asserts the 21M BTC supply cap
+        if btc_amt > bitcoin::Amount::MAX_MONEY {
+            return Err(ParseAmountError::TooLarge);
+        }
         Ok(Self::from(btc_amt))
     }
 
@@ -232,7 +237,13 @@ impl FromStr for Amount {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Some(i) = s.find(char::is_alphabetic) {
             let (amt, denom) = s.split_at(i);
-            Self::from_str_in(amt.trim(), denom.trim().parse()?)
+            Self::from_str_in(
+                amt.trim(),
+                denom
+                    .trim()
+                    .parse()
+                    .map_err(ParseAmountError::WrongBitcoinDenomination)?,
+            )
         } else {
             // default to millisatoshi
             Self::from_str_in(s.trim(), Denomination::MilliSatoshi)
@@ -274,7 +285,9 @@ pub enum ParseAmountError {
     #[error("Error parsing string as a bitcoin amount: {0}")]
     WrongBitcoinAmount(#[from] bitcoin::amount::ParseAmountError),
     #[error("Error parsing string as a bitcoin denomination: {0}")]
-    WrongBitcoinDenomination(#[from] bitcoin_units::amount::ParseDenominationError),
+    WrongBitcoinDenomination(#[source] <Denomination as FromStr>::Err),
+    #[error("Amount exceeds the maximum bitcoin supply of 21,000,000 BTC")]
+    TooLarge,
 }
 
 #[cfg(test)]

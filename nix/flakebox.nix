@@ -43,8 +43,6 @@ let
   # rest randomized to avoid accidentally overwriting innocent bytes in the binary
   gitHashPlaceholderValue = "01234569abcdef7afa1d2683a099c7af48a523c1";
 
-  cargoCrapViolationThreshold = 1000;
-
   filterWorkspaceDepsBuildFilesRegex = [
     "Cargo\\.lock"
     "Cargo\\.toml"
@@ -73,23 +71,7 @@ let
     name = "fedimint";
   };
 
-  filterSrcWithRegexes =
-    regexes: src:
-    let
-      basePath = toString src + "/";
-    in
-    lib.cleanSourceWith {
-      filter =
-        path: type:
-        let
-          relPath = lib.removePrefix basePath (toString path);
-          includePath = (type == "directory") || lib.any (re: builtins.match re relPath != null) regexes;
-        in
-        # uncomment to debug:
-        # builtins.trace "${relPath}: ${lib.boolToString includePath}"
-        includePath;
-      inherit src;
-    };
+  filterSrcWithRegexes = import ./filter-source.nix { inherit lib; };
 
   # Filter only files needed to build project dependencies
   #
@@ -317,9 +299,8 @@ let
         )
       ];
 
-    # we carefully optimize our debug symbols on cargo level,
-    # and in case of errors and panics, would like to see the
-    # line numbers etc.
+    # Cargo controls debuginfo stripping. Keep function symbols for backtraces
+    # instead of letting Nix strip them as well.
     dontStrip = true;
 
     postFixup = ''
@@ -543,22 +524,20 @@ in
       doInstallCargoArtifacts = false;
     };
 
-    # Regenerate nix/cargo-crap-baseline.json from this derivation in the same
-    # change that intentionally accepts CRAP-score regressions.
-    #
     # This intentionally does not use llvm-cov coverage data: Fedimint's e2e
     # tests are too heavy for a coverage-backed cargo-crap gate, so missing
     # coverage is handled pessimistically.
-    crapBaseline = craneLibCrap.mkCargoDerivation {
-      pname = "${commonArgs.pname}-cargo-crap-baseline";
+    # The generated report is diagnostic only, never an input or waiver for
+    # the absolute gate below. Both use the ceiling in .cargo-crap.toml.
+    crapReport = craneLibCrap.mkCargoDerivation {
+      pname = "${commonArgs.pname}-cargo-crap-report";
       cargoArtifacts = null;
       buildPhaseCargoCommand = ''
         mkdir -p $out
         ${cargoCrap}/bin/cargo-crap \
           --workspace \
-          --threshold ${toString cargoCrapViolationThreshold} \
           --format json \
-          --output $out/cargo-crap-baseline.json
+          --output $out/cargo-crap-report.json
       '';
       doInstallCargoArtifacts = false;
       nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargoCrap ];
@@ -572,11 +551,8 @@ in
         mkdir -p $out
         ${cargoCrap}/bin/cargo-crap \
           --workspace \
-          --baseline ${../nix/cargo-crap-baseline.json} \
-          --threshold ${toString cargoCrapViolationThreshold} \
-          --min ${toString cargoCrapViolationThreshold} \
           --format github \
-          --fail-regression
+          --fail-above
       '';
       doInstallCargoArtifacts = false;
       nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ cargoCrap ];
@@ -671,6 +647,26 @@ in
     cargoAudit = craneLib.cargoAudit {
       inherit advisory-db;
       src = filterWorkspaceAuditFiles commonSrc;
+      # Preserve Crane's yanked-package handling; suppress only these advisory IDs.
+      cargoAuditExtraArgs = lib.escapeShellArgs [
+        "--ignore"
+        "yanked"
+        # crypto-bigint 0.5.5: inspected Tor/SSH manifests do not enable optional
+        # p256/p384/p521 arithmetic; this does not rule out every affected operation.
+        # Re-verify after 2026-12-10, or sooner if features or targets change.
+        "--ignore"
+        "RUSTSEC-2026-0387"
+        # libsqlite3-sys 0.35.0: acceptable only with trusted database, sibling WAL,
+        # and restore files; crafted files can disclose process memory.
+        # Re-verify after 2026-11-24, or sooner if file-trust assumptions change.
+        "--ignore"
+        "RUSTSEC-2026-0459"
+        # rustls-webpki 0.102.8: inspected legacy Iroh paths use custom peer
+        # verification, not affected public-CA chains; public-CA paths use 0.103.16.
+        # Re-verify after 2026-12-10, or sooner if TLS verifier paths change.
+        "--ignore"
+        "RUSTSEC-2026-0382"
+      ];
     };
 
     cargoDeny = craneLib.cargoDeny {

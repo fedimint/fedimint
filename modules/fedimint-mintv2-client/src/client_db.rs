@@ -7,7 +7,7 @@ use fedimint_mintv2_common::Denomination;
 use strum::Display;
 use strum_macros::EnumIter;
 
-use crate::SpendableNote;
+use crate::SpendableNoteUndecoded;
 use crate::issuance::NoteIssuanceRequest;
 
 #[repr(u8)]
@@ -18,7 +18,7 @@ pub enum DbKeyPrefix {
 }
 
 #[derive(Debug, Clone, Encodable, Decodable)]
-pub struct SpendableNoteKey(pub SpendableNote);
+pub struct SpendableNoteKey(pub SpendableNoteUndecoded);
 
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct SpendableNotePrefix;

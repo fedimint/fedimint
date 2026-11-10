@@ -242,40 +242,87 @@ impl WalletClientInit {
             });
         }
 
-        let mut dbtx = args.db().begin_transaction().await;
+        let entries = (0..state.new_start_idx().0)
+            .map(|tweak_idx| {
+                let operation_id = data.derive_peg_in_script(TweakIdx(tweak_idx)).3;
 
-        for tweak_idx in 0..state.new_start_idx().0 {
-            let operation_id = data.derive_peg_in_script(TweakIdx(tweak_idx)).3;
+                let claimed = state
+                    .claimed_outpoints
+                    .get(&TweakIdx(tweak_idx))
+                    .cloned()
+                    .unwrap_or_default();
 
-            let claimed = state
-                .claimed_outpoints
-                .get(&TweakIdx(tweak_idx))
-                .cloned()
-                .unwrap_or_default();
+                (
+                    TweakIdx(tweak_idx),
+                    PegInTweakIndexData {
+                        operation_id,
+                        creation_time: fedimint_core::time::now(),
+                        last_check_time: None,
+                        next_check_time: Some(fedimint_core::time::now()),
+                        claimed,
+                    },
+                )
+            })
+            .collect();
 
-            dbtx.insert_new_entry(
-                &PegInTweakIndexKey(TweakIdx(tweak_idx)),
-                &PegInTweakIndexData {
-                    operation_id,
-                    creation_time: fedimint_core::time::now(),
-                    last_check_time: None,
-                    next_check_time: Some(fedimint_core::time::now()),
-                    claimed,
-                },
-            )
-            .await;
-        }
-
-        dbtx.insert_new_entry(&NextPegInTweakIndexKey, &state.new_start_idx())
-            .await;
-
-        dbtx.commit_tx().await;
+        store_recovered_peg_in_indexes(args.db(), entries, state.new_start_idx()).await;
 
         // The wallet only discovers which on-chain outputs belonged to the
         // client during recovery; their value isn't known until the deposits
         // are later claimed, so no amount is reported here.
         None
     }
+}
+
+/// Whether an earlier recovery run already committed its results.
+///
+/// The marker is the same one the history-based recovery stores through
+/// `store_finalized`. Older slices recoveries wrote no marker, but both
+/// recovery paths commit the next tweak index atomically with the recovered
+/// entries.
+///
+/// This is only a completion check during pending recovery: ordinary deposit
+/// address allocation also writes the cursor, but requires an initialized
+/// wallet. The wallet is unusable until recovery finishes.
+async fn recovery_already_finalized(db: &Database) -> bool {
+    let mut dbtx = db.begin_transaction_nc().await;
+    dbtx.get_value(&RecoveryFinalizedKey).await == Some(true)
+        || dbtx.get_value(&NextPegInTweakIndexKey).await.is_some()
+}
+
+/// Writes what a recovery run found together with the marker saying it
+/// finished, in one transaction, and reports whether it wrote anything.
+///
+/// Returns false without writing when a previous run already finalized.
+/// That case is reachable because the client only records a module's
+/// recovery as done after `recover()` returns, so a crash in between
+/// reruns this with the keys already present, and `insert_new_entry`
+/// panics on an existing key, on that open and every open after it.
+async fn store_recovered_peg_in_indexes(
+    db: &Database,
+    entries: Vec<(TweakIdx, PegInTweakIndexData)>,
+    new_start_idx: TweakIdx,
+) -> bool {
+    let mut dbtx = db.begin_transaction().await;
+
+    if dbtx.get_value(&RecoveryFinalizedKey).await == Some(true)
+        || dbtx.get_value(&NextPegInTweakIndexKey).await.is_some()
+    {
+        return false;
+    }
+
+    for (tweak_idx, entry) in entries {
+        dbtx.insert_new_entry(&PegInTweakIndexKey(tweak_idx), &entry)
+            .await;
+    }
+
+    dbtx.insert_new_entry(&NextPegInTweakIndexKey, &new_start_idx)
+        .await;
+    dbtx.insert_entry(&RecoveryFinalizedKey, &true).await;
+
+    dbtx.commit_tx().await;
+
+    true
 }
 
 impl ModuleInit for WalletClientInit {
@@ -431,6 +478,18 @@ impl ClientModuleInit for WalletClientInit {
         args: &ClientModuleRecoverArgs<Self>,
         snapshot: Option<&<Self::Module as ClientModule>::Backup>,
     ) -> Result<Option<fedimint_core::Amount>, ClientModuleError> {
+        // The client records completion only after this method returns. A prior
+        // run may have committed wallet data before being interrupted. Check
+        // before resuming history recovery or making any federation requests,
+        // including for older slices recoveries that did not write a marker.
+        if recovery_already_finalized(args.db()).await {
+            debug!(
+                target: LOG_CLIENT_MODULE_WALLET,
+                "Wallet recovery already finalized by an earlier run, nothing to redo"
+            );
+            return Ok(None);
+        }
+
         // Check if V1 (session-based) recovery state exists (resuming interrupted
         // recovery)
         if args

@@ -10,6 +10,8 @@ version = { workspace = true }
 
 [package.metadata.cargo-udeps.ignore]
 development = ["tokio-test"]
+# Intentionally constrain the transitive modern TLS verifier's security minimum.
+normal = ["rustls-webpki"]
 
 [lib]
 name = "fedimint_core"
@@ -70,6 +72,10 @@ aws-lc-sys = { version = "0.41", features = ["bindgen"] }
 iroh = { workspace = true, default-features = false, features = [
     "discovery-pkarr-dht",
 ] }
+# Rustls 0.23.46 still permits WebPKI versions without the compromised-SPKI
+# distrust fix (rustls/webpki#546). Keep this published, native-only floor until
+# our TLS dependencies require the fixed verifier themselves.
+rustls-webpki = { workspace = true }
 tokio = { workspace = true, features = ["full", "tracing"] }
 tokio-rustls = { workspace = true }
 

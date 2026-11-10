@@ -70,7 +70,6 @@ db-path = "~/.cargo/advisory-db"
 # A list of advisory IDs to ignore. Note that ignored advisories will still
 # output a note when they are encountered.
 ignore = [
-    { id = "RUSTSEC-2024-0370", reason = "TODO" },
     { id = "RUSTSEC-2024-0388", reason = "TODO" },
     { id = "RUSTSEC-2023-0071", reason = "TODO: fix unreleased" },
 ]
