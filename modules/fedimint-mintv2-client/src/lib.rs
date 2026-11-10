@@ -483,6 +483,7 @@ pub struct MintClientModule {
 #[derive(Debug, Clone)]
 pub struct MintClientContext {
     client_ctx: ClientContext<MintClientModule>,
+    amount_unit: AmountUnit,
     tbs_agg_pks: BTreeMap<Denomination, AggregatePublicKey>,
     tbs_pks: BTreeMap<Denomination, BTreeMap<PeerId, tbs::PublicKeyShare>>,
     pub balance_update_sender: tokio::sync::watch::Sender<()>,
@@ -503,6 +504,7 @@ impl ClientModule for MintClientModule {
     fn context(&self) -> Self::ModuleStateMachineContext {
         MintClientContext {
             client_ctx: self.client_ctx.clone(),
+            amount_unit: self.cfg.amount_unit,
             tbs_agg_pks: self.cfg.tbs_agg_pks.clone(),
             tbs_pks: self.cfg.tbs_pks.clone(),
             balance_update_sender: self.balance_update_sender.clone(),

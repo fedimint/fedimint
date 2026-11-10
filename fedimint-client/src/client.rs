@@ -3043,6 +3043,23 @@ impl ClientContextIface for Client {
         Client::await_primary_bitcoin_module_outputs(self, operation_id, outputs).await
     }
 
+    async fn await_primary_module_outputs_for_unit(
+        &self,
+        operation_id: OperationId,
+        unit: AmountUnit,
+        outputs: Vec<OutPoint>,
+    ) -> Result<(), TransactionSubmitError> {
+        for out_point in outputs {
+            self.primary_module_for_unit(unit)
+                .ok_or(TransactionSubmitError::NoPrimaryModule { unit })?
+                .1
+                .await_primary_module_output(operation_id, out_point)
+                .await
+                .map_err(TransactionSubmitError::PrimaryModule)?;
+        }
+        Ok(())
+    }
+
     fn operation_log(&self) -> &dyn IOperationLog {
         Client::operation_log(self)
     }

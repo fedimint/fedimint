@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use bitcoin_hashes::hash160;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::{impl_db_lookup, impl_db_record};
+use fedimint_core::{OutPointRange, impl_db_lookup, impl_db_record};
 use fedimint_mintv2_common::Denomination;
 use strum::Display;
 use strum_macros::EnumIter;
@@ -15,7 +15,25 @@ use crate::issuance::NoteIssuanceRequest;
 pub enum DbKeyPrefix {
     Note = 0x20,
     RecoveryState = 0x21,
+    RefundAttempt = 0x22,
 }
+
+/// A refund submission and its idempotency record commit together. Keep the
+/// record after settlement: a canceled trigger can run again before its state
+/// transition commits.
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct RefundAttemptKey(pub fedimint_core::core::OperationId);
+
+#[derive(Debug, Clone, Encodable, Decodable)]
+pub struct RefundAttemptPrefix;
+
+impl_db_record!(
+    key = RefundAttemptKey,
+    value = OutPointRange,
+    db_prefix = DbKeyPrefix::RefundAttempt,
+);
+
+impl_db_lookup!(key = RefundAttemptKey, query_prefix = RefundAttemptPrefix);
 
 #[derive(Debug, Clone, Encodable, Decodable)]
 pub struct SpendableNoteKey(pub SpendableNoteUndecoded);
