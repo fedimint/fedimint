@@ -363,134 +363,134 @@
 <a href=#363 id=363 data-nosnippet>363</a>        <span class="string">"Supported API versions"</span>,
 <a href=#364 id=364 data-nosnippet>364</a>    );
 <a href=#365 id=365 data-nosnippet>365</a>
-<a href=#366 id=366 data-nosnippet>366</a>    <span class="kw">let </span>consensus_api = ConsensusApi {
-<a href=#367 id=367 data-nosnippet>367</a>        cfg: cfg.clone(),
-<a href=#368 id=368 data-nosnippet>368</a>        db: db.clone(),
-<a href=#369 id=369 data-nosnippet>369</a>        modules: module_registry.clone(),
-<a href=#370 id=370 data-nosnippet>370</a>        client_cfg: client_cfg.clone(),
-<a href=#371 id=371 data-nosnippet>371</a>        submission_sender: submission_sender.clone(),
-<a href=#372 id=372 data-nosnippet>372</a>        shutdown_sender,
-<a href=#373 id=373 data-nosnippet>373</a>        shutdown_receiver: shutdown_receiver.clone(),
-<a href=#374 id=374 data-nosnippet>374</a>        supported_api_versions,
-<a href=#375 id=375 data-nosnippet>375</a>        auth_ui,
-<a href=#376 id=376 data-nosnippet>376</a>        auth_api,
-<a href=#377 id=377 data-nosnippet>377</a>        p2p_status_receivers,
-<a href=#378 id=378 data-nosnippet>378</a>        ci_status_receivers,
-<a href=#379 id=379 data-nosnippet>379</a>        ord_latency_receiver,
-<a href=#380 id=380 data-nosnippet>380</a>        accepted_item_receiver,
-<a href=#381 id=381 data-nosnippet>381</a>        completed_session_receiver,
-<a href=#382 id=382 data-nosnippet>382</a>        bitcoin_rpc_connection: bitcoin_rpc_connection.clone(),
-<a href=#383 id=383 data-nosnippet>383</a>        force_api_secret: force_api_secrets.get_active(),
-<a href=#384 id=384 data-nosnippet>384</a>        code_version_str,
-<a href=#385 id=385 data-nosnippet>385</a>        code_version_hash,
-<a href=#386 id=386 data-nosnippet>386</a>        task_group: task_group.clone(),
-<a href=#387 id=387 data-nosnippet>387</a>    };
-<a href=#388 id=388 data-nosnippet>388</a>
-<a href=#389 id=389 data-nosnippet>389</a>    <span class="kw">let </span>guardian_metadata_api =
-<a href=#390 id=390 data-nosnippet>390</a>        prepare_guardian_metadata_service(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>cfg, force_api_secrets.get_active()).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#391 id=391 data-nosnippet>391</a>
-<a href=#392 id=392 data-nosnippet>392</a>    <span class="kw">let </span>iroh_api_endpoints = prepare_iroh_api_endpoints(
-<a href=#393 id=393 data-nosnippet>393</a>        <span class="kw-2">&amp;</span>cfg,
-<a href=#394 id=394 data-nosnippet>394</a>        api_bind,
-<a href=#395 id=395 data-nosnippet>395</a>        iroh_dns,
-<a href=#396 id=396 data-nosnippet>396</a>        iroh_relays,
-<a href=#397 id=397 data-nosnippet>397</a>        iroh_next_api_settings,
-<a href=#398 id=398 data-nosnippet>398</a>    )
-<a href=#399 id=399 data-nosnippet>399</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#400 id=400 data-nosnippet>400</a>
-<a href=#401 id=401 data-nosnippet>401</a>    <span class="kw">let </span>guardian_metadata_updated =
-<a href=#402 id=402 data-nosnippet>402</a>        reconcile_guardian_metadata(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>cfg, iroh_next_api_settings).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#403 id=403 data-nosnippet>403</a>
-<a href=#404 id=404 data-nosnippet>404</a>    <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Consensus Api..."</span>);
+<a href=#366 id=366 data-nosnippet>366</a>    <span class="kw">let </span>availability = Arc::new(peer_availability::AvailabilityTracker::new(
+<a href=#367 id=367 data-nosnippet>367</a>        cfg.local.identity,
+<a href=#368 id=368 data-nosnippet>368</a>        fedimint_core::NumPeersExt::to_num_peers(<span class="kw-2">&amp;</span>cfg.consensus.broadcast_public_keys),
+<a href=#369 id=369 data-nosnippet>369</a>    ));
+<a href=#370 id=370 data-nosnippet>370</a>    <span class="kw">let </span>consensus_api = ConsensusApi {
+<a href=#371 id=371 data-nosnippet>371</a>        cfg: cfg.clone(),
+<a href=#372 id=372 data-nosnippet>372</a>        db: db.clone(),
+<a href=#373 id=373 data-nosnippet>373</a>        availability: availability.clone(),
+<a href=#374 id=374 data-nosnippet>374</a>        modules: module_registry.clone(),
+<a href=#375 id=375 data-nosnippet>375</a>        client_cfg: client_cfg.clone(),
+<a href=#376 id=376 data-nosnippet>376</a>        submission_sender: submission_sender.clone(),
+<a href=#377 id=377 data-nosnippet>377</a>        shutdown_sender,
+<a href=#378 id=378 data-nosnippet>378</a>        shutdown_receiver: shutdown_receiver.clone(),
+<a href=#379 id=379 data-nosnippet>379</a>        supported_api_versions,
+<a href=#380 id=380 data-nosnippet>380</a>        auth_ui,
+<a href=#381 id=381 data-nosnippet>381</a>        auth_api,
+<a href=#382 id=382 data-nosnippet>382</a>        p2p_status_receivers,
+<a href=#383 id=383 data-nosnippet>383</a>        ci_status_receivers,
+<a href=#384 id=384 data-nosnippet>384</a>        ord_latency_receiver,
+<a href=#385 id=385 data-nosnippet>385</a>        accepted_item_receiver,
+<a href=#386 id=386 data-nosnippet>386</a>        completed_session_receiver,
+<a href=#387 id=387 data-nosnippet>387</a>        bitcoin_rpc_connection: bitcoin_rpc_connection.clone(),
+<a href=#388 id=388 data-nosnippet>388</a>        force_api_secret: force_api_secrets.get_active(),
+<a href=#389 id=389 data-nosnippet>389</a>        code_version_str,
+<a href=#390 id=390 data-nosnippet>390</a>        code_version_hash,
+<a href=#391 id=391 data-nosnippet>391</a>        task_group: task_group.clone(),
+<a href=#392 id=392 data-nosnippet>392</a>    };
+<a href=#393 id=393 data-nosnippet>393</a>
+<a href=#394 id=394 data-nosnippet>394</a>    <span class="kw">let </span>guardian_metadata_api =
+<a href=#395 id=395 data-nosnippet>395</a>        prepare_guardian_metadata_service(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>cfg, force_api_secrets.get_active()).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#396 id=396 data-nosnippet>396</a>
+<a href=#397 id=397 data-nosnippet>397</a>    <span class="kw">let </span>iroh_api_endpoints = prepare_iroh_api_endpoints(
+<a href=#398 id=398 data-nosnippet>398</a>        <span class="kw-2">&amp;</span>cfg,
+<a href=#399 id=399 data-nosnippet>399</a>        api_bind,
+<a href=#400 id=400 data-nosnippet>400</a>        iroh_dns,
+<a href=#401 id=401 data-nosnippet>401</a>        iroh_relays,
+<a href=#402 id=402 data-nosnippet>402</a>        iroh_next_api_settings,
+<a href=#403 id=403 data-nosnippet>403</a>    )
+<a href=#404 id=404 data-nosnippet>404</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#405 id=405 data-nosnippet>405</a>
-<a href=#406 id=406 data-nosnippet>406</a>    <span class="kw">let </span>api_handler = start_consensus_api(
-<a href=#407 id=407 data-nosnippet>407</a>        <span class="kw-2">&amp;</span>cfg.local,
-<a href=#408 id=408 data-nosnippet>408</a>        consensus_api.clone(),
-<a href=#409 id=409 data-nosnippet>409</a>        force_api_secrets.clone(),
-<a href=#410 id=410 data-nosnippet>410</a>        api_bind,
-<a href=#411 id=411 data-nosnippet>411</a>    )
-<a href=#412 id=412 data-nosnippet>412</a>    .<span class="kw">await</span>;
-<a href=#413 id=413 data-nosnippet>413</a>
-<a href=#414 id=414 data-nosnippet>414</a>    spawn_iroh_api_tasks(
-<a href=#415 id=415 data-nosnippet>415</a>        consensus_api.clone(),
-<a href=#416 id=416 data-nosnippet>416</a>        iroh_api_limits,
-<a href=#417 id=417 data-nosnippet>417</a>        iroh_api_endpoints,
-<a href=#418 id=418 data-nosnippet>418</a>        task_group,
-<a href=#419 id=419 data-nosnippet>419</a>    );
-<a href=#420 id=420 data-nosnippet>420</a>
-<a href=#421 id=421 data-nosnippet>421</a>    start_guardian_metadata_service(
-<a href=#422 id=422 data-nosnippet>422</a>        <span class="kw-2">&amp;</span>db,
+<a href=#406 id=406 data-nosnippet>406</a>    <span class="kw">let </span>guardian_metadata_updated =
+<a href=#407 id=407 data-nosnippet>407</a>        reconcile_guardian_metadata(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>cfg, iroh_next_api_settings).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#408 id=408 data-nosnippet>408</a>
+<a href=#409 id=409 data-nosnippet>409</a>    <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Consensus Api..."</span>);
+<a href=#410 id=410 data-nosnippet>410</a>
+<a href=#411 id=411 data-nosnippet>411</a>    <span class="kw">let </span>api_handler = start_consensus_api(
+<a href=#412 id=412 data-nosnippet>412</a>        <span class="kw-2">&amp;</span>cfg.local,
+<a href=#413 id=413 data-nosnippet>413</a>        consensus_api.clone(),
+<a href=#414 id=414 data-nosnippet>414</a>        force_api_secrets.clone(),
+<a href=#415 id=415 data-nosnippet>415</a>        api_bind,
+<a href=#416 id=416 data-nosnippet>416</a>    )
+<a href=#417 id=417 data-nosnippet>417</a>    .<span class="kw">await</span>;
+<a href=#418 id=418 data-nosnippet>418</a>
+<a href=#419 id=419 data-nosnippet>419</a>    spawn_iroh_api_tasks(
+<a href=#420 id=420 data-nosnippet>420</a>        consensus_api.clone(),
+<a href=#421 id=421 data-nosnippet>421</a>        iroh_api_limits,
+<a href=#422 id=422 data-nosnippet>422</a>        iroh_api_endpoints,
 <a href=#423 id=423 data-nosnippet>423</a>        task_group,
-<a href=#424 id=424 data-nosnippet>424</a>        <span class="kw-2">&amp;</span>cfg,
-<a href=#425 id=425 data-nosnippet>425</a>        guardian_metadata_api,
-<a href=#426 id=426 data-nosnippet>426</a>        guardian_metadata_updated,
-<a href=#427 id=427 data-nosnippet>427</a>    );
-<a href=#428 id=428 data-nosnippet>428</a>
-<a href=#429 id=429 data-nosnippet>429</a>    <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Submission of Module CI proposals..."</span>);
-<a href=#430 id=430 data-nosnippet>430</a>
-<a href=#431 id=431 data-nosnippet>431</a>    <span class="kw">for </span>(module_id, kind, module) <span class="kw">in </span>module_registry.iter_modules() {
-<a href=#432 id=432 data-nosnippet>432</a>        submit_module_ci_proposals(
-<a href=#433 id=433 data-nosnippet>433</a>            task_group,
-<a href=#434 id=434 data-nosnippet>434</a>            db.clone(),
-<a href=#435 id=435 data-nosnippet>435</a>            module_id,
-<a href=#436 id=436 data-nosnippet>436</a>            kind.clone(),
-<a href=#437 id=437 data-nosnippet>437</a>            module.clone(),
-<a href=#438 id=438 data-nosnippet>438</a>            submission_sender.clone(),
-<a href=#439 id=439 data-nosnippet>439</a>        );
-<a href=#440 id=440 data-nosnippet>440</a>    }
-<a href=#441 id=441 data-nosnippet>441</a>
-<a href=#442 id=442 data-nosnippet>442</a>    <span class="kw">let </span>ui_service = dashboard_ui_router(consensus_api.clone().into_dyn()).into_make_service();
-<a href=#443 id=443 data-nosnippet>443</a>
-<a href=#444 id=444 data-nosnippet>444</a>    <span class="kw">let </span>ui_listener = TcpListener::bind(ui_bind)
-<a href=#445 id=445 data-nosnippet>445</a>        .<span class="kw">await
-<a href=#446 id=446 data-nosnippet>446</a>        </span>.expect(<span class="string">"Failed to bind dashboard UI"</span>);
-<a href=#447 id=447 data-nosnippet>447</a>
-<a href=#448 id=448 data-nosnippet>448</a>    task_group.spawn(<span class="string">"dashboard-ui"</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
-<a href=#449 id=449 data-nosnippet>449</a>        axum::serve(ui_listener, ui_service)
-<a href=#450 id=450 data-nosnippet>450</a>            .with_graceful_shutdown(handle.make_shutdown_rx())
-<a href=#451 id=451 data-nosnippet>451</a>            .<span class="kw">await
-<a href=#452 id=452 data-nosnippet>452</a>            </span>.expect(<span class="string">"Failed to serve dashboard UI"</span>);
-<a href=#453 id=453 data-nosnippet>453</a>    });
-<a href=#454 id=454 data-nosnippet>454</a>
-<a href=#455 id=455 data-nosnippet>455</a>    <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Dashboard UI running at http://{ui_bind} 🚀"</span>);
-<a href=#456 id=456 data-nosnippet>456</a>
-<a href=#457 id=457 data-nosnippet>457</a>    <span class="kw">loop </span>{
-<a href=#458 id=458 data-nosnippet>458</a>        <span class="kw">match </span>bitcoin_rpc_connection.status() {
-<a href=#459 id=459 data-nosnippet>459</a>            <span class="prelude-val">Some</span>(status) =&gt; {
-<a href=#460 id=460 data-nosnippet>460</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(progress) = status.sync_progress {
-<a href=#461 id=461 data-nosnippet>461</a>                    <span class="kw">if </span>progress &gt;= <span class="number">0.999 </span>{
-<a href=#462 id=462 data-nosnippet>462</a>                        <span class="kw">break</span>;
-<a href=#463 id=463 data-nosnippet>463</a>                    }
-<a href=#464 id=464 data-nosnippet>464</a>
-<a href=#465 id=465 data-nosnippet>465</a>                    <span class="macro">info!</span>(
-<a href=#466 id=466 data-nosnippet>466</a>                        target: LOG_CONSENSUS,
-<a href=#467 id=467 data-nosnippet>467</a>                        <span class="string">"Waiting for bitcoin backend to sync... {:.1}%"</span>,
-<a href=#468 id=468 data-nosnippet>468</a>                        progress * <span class="number">100.0
-<a href=#469 id=469 data-nosnippet>469</a>                    </span>);
-<a href=#470 id=470 data-nosnippet>470</a>                } <span class="kw">else </span>{
-<a href=#471 id=471 data-nosnippet>471</a>                    <span class="kw">break</span>;
-<a href=#472 id=472 data-nosnippet>472</a>                }
-<a href=#473 id=473 data-nosnippet>473</a>            }
-<a href=#474 id=474 data-nosnippet>474</a>            <span class="prelude-val">None </span>=&gt; {
-<a href=#475 id=475 data-nosnippet>475</a>                <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Waiting to connect to bitcoin backend..."</span>);
-<a href=#476 id=476 data-nosnippet>476</a>            }
-<a href=#477 id=477 data-nosnippet>477</a>        }
-<a href=#478 id=478 data-nosnippet>478</a>
-<a href=#479 id=479 data-nosnippet>479</a>        sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
-<a href=#480 id=480 data-nosnippet>480</a>    }
-<a href=#481 id=481 data-nosnippet>481</a>
-<a href=#482 id=482 data-nosnippet>482</a>    <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Consensus Engine..."</span>);
+<a href=#424 id=424 data-nosnippet>424</a>    );
+<a href=#425 id=425 data-nosnippet>425</a>
+<a href=#426 id=426 data-nosnippet>426</a>    start_guardian_metadata_service(
+<a href=#427 id=427 data-nosnippet>427</a>        <span class="kw-2">&amp;</span>db,
+<a href=#428 id=428 data-nosnippet>428</a>        task_group,
+<a href=#429 id=429 data-nosnippet>429</a>        <span class="kw-2">&amp;</span>cfg,
+<a href=#430 id=430 data-nosnippet>430</a>        guardian_metadata_api,
+<a href=#431 id=431 data-nosnippet>431</a>        guardian_metadata_updated,
+<a href=#432 id=432 data-nosnippet>432</a>    );
+<a href=#433 id=433 data-nosnippet>433</a>
+<a href=#434 id=434 data-nosnippet>434</a>    <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Submission of Module CI proposals..."</span>);
+<a href=#435 id=435 data-nosnippet>435</a>
+<a href=#436 id=436 data-nosnippet>436</a>    <span class="kw">for </span>(module_id, kind, module) <span class="kw">in </span>module_registry.iter_modules() {
+<a href=#437 id=437 data-nosnippet>437</a>        submit_module_ci_proposals(
+<a href=#438 id=438 data-nosnippet>438</a>            task_group,
+<a href=#439 id=439 data-nosnippet>439</a>            db.clone(),
+<a href=#440 id=440 data-nosnippet>440</a>            module_id,
+<a href=#441 id=441 data-nosnippet>441</a>            kind.clone(),
+<a href=#442 id=442 data-nosnippet>442</a>            module.clone(),
+<a href=#443 id=443 data-nosnippet>443</a>            submission_sender.clone(),
+<a href=#444 id=444 data-nosnippet>444</a>        );
+<a href=#445 id=445 data-nosnippet>445</a>    }
+<a href=#446 id=446 data-nosnippet>446</a>
+<a href=#447 id=447 data-nosnippet>447</a>    <span class="kw">let </span>ui_service = dashboard_ui_router(consensus_api.clone().into_dyn()).into_make_service();
+<a href=#448 id=448 data-nosnippet>448</a>
+<a href=#449 id=449 data-nosnippet>449</a>    <span class="kw">let </span>ui_listener = TcpListener::bind(ui_bind)
+<a href=#450 id=450 data-nosnippet>450</a>        .<span class="kw">await
+<a href=#451 id=451 data-nosnippet>451</a>        </span>.expect(<span class="string">"Failed to bind dashboard UI"</span>);
+<a href=#452 id=452 data-nosnippet>452</a>
+<a href=#453 id=453 data-nosnippet>453</a>    task_group.spawn(<span class="string">"dashboard-ui"</span>, <span class="kw">move </span>|handle| <span class="kw">async move </span>{
+<a href=#454 id=454 data-nosnippet>454</a>        axum::serve(ui_listener, ui_service)
+<a href=#455 id=455 data-nosnippet>455</a>            .with_graceful_shutdown(handle.make_shutdown_rx())
+<a href=#456 id=456 data-nosnippet>456</a>            .<span class="kw">await
+<a href=#457 id=457 data-nosnippet>457</a>            </span>.expect(<span class="string">"Failed to serve dashboard UI"</span>);
+<a href=#458 id=458 data-nosnippet>458</a>    });
+<a href=#459 id=459 data-nosnippet>459</a>
+<a href=#460 id=460 data-nosnippet>460</a>    <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Dashboard UI running at http://{ui_bind} 🚀"</span>);
+<a href=#461 id=461 data-nosnippet>461</a>
+<a href=#462 id=462 data-nosnippet>462</a>    <span class="kw">loop </span>{
+<a href=#463 id=463 data-nosnippet>463</a>        <span class="kw">match </span>bitcoin_rpc_connection.status() {
+<a href=#464 id=464 data-nosnippet>464</a>            <span class="prelude-val">Some</span>(status) =&gt; {
+<a href=#465 id=465 data-nosnippet>465</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(progress) = status.sync_progress {
+<a href=#466 id=466 data-nosnippet>466</a>                    <span class="kw">if </span>progress &gt;= <span class="number">0.999 </span>{
+<a href=#467 id=467 data-nosnippet>467</a>                        <span class="kw">break</span>;
+<a href=#468 id=468 data-nosnippet>468</a>                    }
+<a href=#469 id=469 data-nosnippet>469</a>
+<a href=#470 id=470 data-nosnippet>470</a>                    <span class="macro">info!</span>(
+<a href=#471 id=471 data-nosnippet>471</a>                        target: LOG_CONSENSUS,
+<a href=#472 id=472 data-nosnippet>472</a>                        <span class="string">"Waiting for bitcoin backend to sync... {:.1}%"</span>,
+<a href=#473 id=473 data-nosnippet>473</a>                        progress * <span class="number">100.0
+<a href=#474 id=474 data-nosnippet>474</a>                    </span>);
+<a href=#475 id=475 data-nosnippet>475</a>                } <span class="kw">else </span>{
+<a href=#476 id=476 data-nosnippet>476</a>                    <span class="kw">break</span>;
+<a href=#477 id=477 data-nosnippet>477</a>                }
+<a href=#478 id=478 data-nosnippet>478</a>            }
+<a href=#479 id=479 data-nosnippet>479</a>            <span class="prelude-val">None </span>=&gt; {
+<a href=#480 id=480 data-nosnippet>480</a>                <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Waiting to connect to bitcoin backend..."</span>);
+<a href=#481 id=481 data-nosnippet>481</a>            }
+<a href=#482 id=482 data-nosnippet>482</a>        }
 <a href=#483 id=483 data-nosnippet>483</a>
-<a href=#484 id=484 data-nosnippet>484</a>    <span class="kw">let </span>api_urls = get_api_urls(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>cfg.consensus).<span class="kw">await</span>;
-<a href=#485 id=485 data-nosnippet>485</a>
-<a href=#486 id=486 data-nosnippet>486</a>    <span class="kw">let </span>peer_activity = Arc::new(std::sync::Mutex::new(peer_availability::PeerActivity::new(
-<a href=#487 id=487 data-nosnippet>487</a>        cfg.local.identity,
-<a href=#488 id=488 data-nosnippet>488</a>        fedimint_core::NumPeersExt::to_num_peers(<span class="kw-2">&amp;</span>cfg.consensus.broadcast_public_keys),
-<a href=#489 id=489 data-nosnippet>489</a>    )));
+<a href=#484 id=484 data-nosnippet>484</a>        sleep(Duration::from_secs(<span class="number">1</span>)).<span class="kw">await</span>;
+<a href=#485 id=485 data-nosnippet>485</a>    }
+<a href=#486 id=486 data-nosnippet>486</a>
+<a href=#487 id=487 data-nosnippet>487</a>    <span class="macro">info!</span>(target: LOG_CONSENSUS, <span class="string">"Starting Consensus Engine..."</span>);
+<a href=#488 id=488 data-nosnippet>488</a>
+<a href=#489 id=489 data-nosnippet>489</a>    <span class="kw">let </span>api_urls = get_api_urls(<span class="kw-2">&amp;</span>db, <span class="kw-2">&amp;</span>cfg.consensus).<span class="kw">await</span>;
 <a href=#490 id=490 data-nosnippet>490</a>
 <a href=#491 id=491 data-nosnippet>491</a>    task_group.spawn_cancellable(
 <a href=#492 id=492 data-nosnippet>492</a>        <span class="string">"peer-availability"</span>,
-<a href=#493 id=493 data-nosnippet>493</a>        peer_availability::persist_peer_availability(db.clone(), peer_activity.clone()),
+<a href=#493 id=493 data-nosnippet>493</a>        peer_availability::persist_peer_availability(db.clone(), availability.clone()),
 <a href=#494 id=494 data-nosnippet>494</a>    );
 <a href=#495 id=495 data-nosnippet>495</a>
 <a href=#496 id=496 data-nosnippet>496</a>    <span class="comment">// FIXME: (@leonardo) How should this be handled ?
@@ -515,7 +515,7 @@
 <a href=#515 id=515 data-nosnippet>515</a>        data_dir,
 <a href=#516 id=516 data-nosnippet>516</a>        db_checkpoint_retention,
 <a href=#517 id=517 data-nosnippet>517</a>        session_timeout,
-<a href=#518 id=518 data-nosnippet>518</a>        peer_activity,
+<a href=#518 id=518 data-nosnippet>518</a>        peer_activity: availability.activity.clone(),
 <a href=#519 id=519 data-nosnippet>519</a>    }
 <a href=#520 id=520 data-nosnippet>520</a>    .run()
 <a href=#521 id=521 data-nosnippet>521</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
