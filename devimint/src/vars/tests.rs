@@ -4,6 +4,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use clap::Parser as _;
 
+use super::ports::{GLOBAL_PORTS, PortRange};
 use super::{
     GATEWAY_PORT_OFFSET_LDK, GATEWAY_PORT_OFFSET_LDK2_METRICS, GATEWAY_PORT_OFFSET_LND, Global,
     gateway_port,
@@ -75,9 +76,18 @@ async fn global_new_rejects_overflowing_gateway_base_before_initialization() {
 async fn direct_global_init_rejects_overflowing_gateway_base() {
     let test_dir = unique_test_dir("direct-init-overflow");
 
-    let error = Global::init(&test_dir, 1, 1, 0, 10_000, 3, Some(65_535))
-        .await
-        .expect_err("direct initialization must reject gateway port overflow");
+    let error = Global::init(
+        &test_dir,
+        1,
+        1,
+        0,
+        10_000,
+        3,
+        Some(65_535),
+        &mut PortRange::from_base(20_000, GLOBAL_PORTS),
+    )
+    .await
+    .expect_err("direct initialization must reject gateway port overflow");
 
     assert!(error.to_string().contains("maximum base port 65527"));
     std::fs::remove_dir_all(test_dir).expect("remove test directory");
@@ -168,6 +178,26 @@ async fn global_vars_export_distinct_ldk_ports() {
             ("FM_PORT_LDK2".to_owned(), globals.FM_PORT_LDK2.to_string()),
         ]
     );
+
+    std::fs::remove_dir_all(test_dir).expect("remove test directory");
+}
+
+#[tokio::test]
+async fn global_init_fits_in_reserved_port_range() {
+    let test_dir = unique_test_dir("port-range");
+
+    Global::init(
+        &test_dir,
+        1,
+        1,
+        0,
+        10_000,
+        3,
+        None,
+        &mut PortRange::from_base(20_000, GLOBAL_PORTS),
+    )
+    .await
+    .expect("GLOBAL_PORTS covers every port Global::init takes");
 
     std::fs::remove_dir_all(test_dir).expect("remove test directory");
 }

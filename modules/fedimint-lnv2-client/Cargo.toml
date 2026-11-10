@@ -6,10 +6,6 @@ license = { workspace = true }
 name = "fedimint-lnv2-client"
 version = { workspace = true }
 
-[package.metadata.cargo-udeps.ignore]
-# cargo udeps can't detect that one
-normal = ["aquamarine"]
-
 [features]
 cli = ["dep:clap"]
 default = []
@@ -19,7 +15,6 @@ name = "fedimint_lnv2_client"
 path = "src/lib.rs"
 
 [dependencies]
-aquamarine = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }

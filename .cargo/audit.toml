@@ -12,8 +12,6 @@
 ignore = [
   # `rsa` Marvin timing sidechannel; no fix available upstream
   "RUSTSEC-2023-0071",
-  # `proc-macro-error` unmaintained; transitive
-  "RUSTSEC-2024-0370",
   # `instant` unmaintained; transitive
   "RUSTSEC-2024-0384",
   # `derivative` unmaintained; transitive
@@ -62,6 +60,21 @@ ignore = [
   # The key-share prediction downgrade loses post-quantum confidentiality.
   # rustls 0.21 supports only X25519/P-256/P-384, not hybrid/PQ key exchange.
   "RUSTSEC-2026-0349",
+  # crypto-bigint 0.5.5 is absent from the all-features workspace graph.
+  # Reassess before enabling ssh-key's p256, p384 or p521 features.
+  "RUSTSEC-2026-0387",
+  # ctutils 0.4.2 is used only for Iroh 1.3 byte-slice equality.
+  # Reassess if a consumer uses mask conversions or u128 comparisons.
+  "RUSTSEC-2026-0385",
+  # libz-sys enables static, which skips the affected probe, and cc is 1.2.27.
+  # Reassess if dynamic probing and cc >=1.6.0 become enabled together.
+  "RUSTSEC-2026-0418",
+  # Iroh 0.35 rejects intermediate certificates. Public-CA verification uses
+  # patched webpki 0.103.16; keep it patched when updating the legacy 0.102 line.
+  "RUSTSEC-2026-0382",
+  # zstd-sys is used only by native RocksDB builds. The affected allocator
+  # is wasm32-only; reassess before adding Zstd to a supported WASM build.
+  "RUSTSEC-2026-0410",
 ]
 
 [output]

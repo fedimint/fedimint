@@ -5,7 +5,9 @@ use assert_matches::assert_matches;
 use bls12_381::G1Affine;
 use fedimint_client::ClientHandleArc;
 use fedimint_client::backup::{ClientBackup, Metadata};
-use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
+use fedimint_client::transaction::{
+    ClientInput, ClientInputBundle, ClientOutputBundle, TransactionBuilder,
+};
 use fedimint_client_module::ClientModule;
 use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
 use fedimint_core::config::FederationId;
@@ -17,19 +19,20 @@ use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::backoff_util::aggressive_backoff;
 use fedimint_core::util::{FmtCompact as _, NextOrPending, retry};
-use fedimint_core::{Amount, TieredMulti, sats, secp256k1};
+use fedimint_core::{Amount, IdxRange, OutPointRange, TieredMulti, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_logging::LOG_TEST;
 use fedimint_mint_client::api::MintFederationApi;
 use fedimint_mint_client::client_db::{NextECashNoteIndexKey, NoteKey};
 use fedimint_mint_client::{
-    MintClientInit, MintClientModule, Note, OOBNotes, ReissueExternalNotesError,
-    ReissueExternalNotesState, SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
-    SpendOOBError, SpendOOBState, SpendableNote, SpendableNoteUndecoded,
-    SubscribeReissueExternalNotesError, SubscribeSpendNotesError, ValidateNotesError,
+    MintClientInit, MintClientModule, MintClientStateMachines, Note, OOBNotes,
+    ReissueExternalNotesError, ReissueExternalNotesState, SelectNotesWithAtleastAmount,
+    SelectNotesWithExactAmount, SpendOOBError, SpendOOBState, SpendableNote,
+    SpendableNoteUndecoded, SubscribeReissueExternalNotesError, SubscribeSpendNotesError,
+    ValidateNotesError,
 };
-use fedimint_mint_common::{MintInput, MintInputV0, Nonce};
+use fedimint_mint_common::{MintInput, MintInputV0, MintOutput, Nonce};
 use fedimint_mint_server::MintInit;
 use fedimint_testing::fixtures::{Fixtures, TIMEOUT};
 use futures::StreamExt;
@@ -334,6 +337,135 @@ async fn send_oob_notes_reissue_without_settling() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Adds output state machines for `bundle`'s outputs at `out_points`,
+/// under an operation that has no transaction submission state machine
+///
+/// This is what mint recovery does for the pending notes it restores from a
+/// backup.
+async fn add_restored_output_state_machines(
+    client_mint: &MintClientModule,
+    dbtx: &mut fedimint_core::db::DatabaseTransaction<'_>,
+    bundle: &ClientOutputBundle<MintOutput, MintClientStateMachines>,
+    out_points: OutPointRange,
+) {
+    let state_machines = bundle
+        .sms()
+        .iter()
+        .flat_map(|sm| (sm.state_machines)(out_points))
+        .collect::<Vec<_>>();
+    client_mint
+        .client_ctx
+        .add_state_machines_dbtx(
+            dbtx,
+            client_mint.client_ctx.map_dyn(state_machines).collect(),
+        )
+        .await
+        .expect("Adding state machines can't fail");
+}
+
+/// A note restored by recovery has no transaction submission state machine
+/// to report that its transaction was accepted. It still has to be issued
+/// once the transaction is accepted, whether that happened before the
+/// restore or happens after it.
+async fn restored_output_is_issued(restore_before_tx_accepted: bool) -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let client_mint = client.get_first_module::<MintClientModule>()?;
+    let dummy_module = client.get_first_module::<DummyClientModule>()?;
+
+    let mut dbtx = client_mint.db.begin_transaction().await;
+    let bundle = client_mint
+        .create_output(
+            &mut dbtx.to_ref_nc(),
+            OperationId::new_random(),
+            1,
+            sats(500),
+        )
+        .await;
+    dbtx.commit_tx().await;
+    let num_outputs = bundle.outputs().len() as u64;
+    let restored_amount = bundle
+        .outputs()
+        .iter()
+        .map(|output| Ok(output.output.ensure_v0_ref()?.amount))
+        .sum::<anyhow::Result<Amount>>()?;
+
+    // Submit the outputs without their state machines, so only the restored
+    // state machines can collect their notes
+    let tx = TransactionBuilder::new()
+        .with_inputs(dummy_module.create_input(sats(1000)))
+        .with_outputs(client_mint.client_ctx.make_dyn(ClientOutputBundle::<
+            _,
+            MintClientStateMachines,
+        >::new(
+            bundle.outputs().to_vec(), vec![]
+        )));
+    let operation_id = OperationId::new_random();
+    let mut dbtx = client_mint.db.begin_transaction().await;
+    let change_range = client_mint
+        .client_ctx
+        .finalize_and_submit_transaction_dbtx(
+            &mut dbtx.to_ref_nc(),
+            operation_id,
+            "mint",
+            |_| (),
+            tx,
+        )
+        .await?;
+    assert_eq!(change_range.start_idx(), num_outputs);
+    let restored_range = OutPointRange::new(change_range.txid(), IdxRange::from(0..num_outputs));
+    if restore_before_tx_accepted {
+        // Same dbtx, so the state machines exist before the tx is submitted
+        add_restored_output_state_machines(
+            &client_mint,
+            &mut dbtx.to_ref_nc(),
+            &bundle,
+            restored_range,
+        )
+        .await;
+    }
+    dbtx.commit_tx().await;
+    client
+        .await_primary_bitcoin_module_outputs(operation_id, change_range.into_iter().collect())
+        .await?;
+    if !restore_before_tx_accepted {
+        let mut dbtx = client_mint.db.begin_transaction().await;
+        add_restored_output_state_machines(
+            &client_mint,
+            &mut dbtx.to_ref_nc(),
+            &bundle,
+            restored_range,
+        )
+        .await;
+        dbtx.commit_tx().await;
+    }
+
+    // All of the input ends up in the wallet: the change, and the restored
+    // notes
+    let expected_balance = sats(1000) - EXPECTED_MAXIMUM_FEE;
+    assert!(
+        restored_amount > EXPECTED_MAXIMUM_FEE,
+        "The change alone must not reach the expected balance"
+    );
+    let mut balances = client.subscribe_balance_changes(AmountUnit::BITCOIN).await;
+    fedimint_core::runtime::timeout(TIMEOUT, async {
+        while balances.next().await.expect("Balance stream never ends") < expected_balance {}
+    })
+    .await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn restored_output_of_accepted_tx_is_issued() -> anyhow::Result<()> {
+    restored_output_is_issued(false).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn restored_output_is_issued_once_its_tx_is_accepted() -> anyhow::Result<()> {
+    restored_output_is_issued(true).await
 }
 
 #[tokio::test(flavor = "multi_thread")]

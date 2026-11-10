@@ -25,7 +25,6 @@ enum CompleteHtlcError {
     FailedToCompleteHtlc,
 }
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine that completes the incoming payment by contacting the
 /// lightning node when the incoming contract has been funded and the preimage
 /// is available.

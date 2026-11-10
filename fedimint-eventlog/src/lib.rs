@@ -588,7 +588,10 @@ where
                 &UnorderedEventLogEntry {
                     flags: match persist {
                         EventPersistence::Transient => 0,
-                        EventPersistence::Trimable => UnorderedEventLogEntry::FLAG_TRIMABLE,
+                        EventPersistence::Trimable => {
+                            UnorderedEventLogEntry::FLAG_PERSIST
+                                | UnorderedEventLogEntry::FLAG_TRIMABLE
+                        }
                         EventPersistence::Persistent => UnorderedEventLogEntry::FLAG_PERSIST,
                     },
                     inner: EventLogEntry {

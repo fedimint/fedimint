@@ -8,11 +8,15 @@ use bitcoin::key::Secp256k1;
 use fedimint_api_client::api::DynGlobalApi;
 use fedimint_api_client::api::global_api::with_request_hook::ApiRequestHook;
 use fedimint_client_module::OperationId;
-use fedimint_client_module::error::{ClientModuleError, OperationNotFoundError};
+use fedimint_client_module::error::{
+    ClientModuleError, OperationNotFoundError, TransactionSubmitError,
+};
 use fedimint_client_module::meta::LegacyMetaSource;
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{ClientModuleRegistry, FinalClientIface};
+use fedimint_client_module::transaction::TransactionBuilder;
 use fedimint_connectors::ConnectorRegistry;
+use fedimint_core::Amount;
 use fedimint_core::config::{
     ClientConfig, ClientModuleConfig, GlobalClientConfig, ModuleInitRegistry,
 };
@@ -21,7 +25,7 @@ use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::encoding::DynRawFallback;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
-use fedimint_core::module::{CoreConsensusVersion, ModuleConsensusVersion};
+use fedimint_core::module::{AmountUnit, Amounts, CoreConsensusVersion, ModuleConsensusVersion};
 use fedimint_core::runtime::timeout;
 use fedimint_core::task::TaskGroup;
 use fedimint_derive_secret::DerivableSecret;
@@ -977,4 +981,94 @@ async fn storing_a_second_client_secret_is_typed() {
         .expect_err("A stored secret must not be overwritten");
 
     assert!(matches!(err, ClientSecretError::AlreadyExists), "{err:?}");
+}
+
+#[tokio::test]
+async fn transaction_builder_get_balance_empty_succeeds() {
+    let client = client_for_lookup_test().await;
+    let builder = TransactionBuilder::new();
+    let (in_amounts, out_amounts) = client
+        .transaction_builder_get_balance(&builder)
+        .expect("Empty builder must have valid balance");
+    assert_eq!(in_amounts, Amounts::ZERO);
+    assert_eq!(out_amounts, Amounts::ZERO);
+}
+
+fn amounts(unit: AmountUnit, msats: u64) -> Amounts {
+    Amounts::new_custom(unit, Amount::from_msats(msats))
+}
+
+/// Each case overflows at exactly one addition. Item amounts and fees use
+/// distinct units where needed, so ignoring that single overflow would let the
+/// later additions succeed and the case would no longer report an error.
+#[test]
+fn accumulate_transaction_balance_overflow_fails() {
+    let amount_unit = AmountUnit::BITCOIN;
+    let fee_unit = AmountUnit::new_custom(1);
+
+    let max = amounts(amount_unit, u64::MAX);
+    let one = amounts(amount_unit, 1);
+    let max_fee = amounts(fee_unit, u64::MAX);
+    let one_fee = amounts(fee_unit, 1);
+
+    type Items<'a> = Vec<(&'a Amounts, Amounts)>;
+    let cases: Vec<(&str, Items<'_>, Items<'_>)> = vec![
+        (
+            "input totals",
+            vec![(&max, Amounts::ZERO), (&one, Amounts::ZERO)],
+            vec![],
+        ),
+        (
+            "output totals",
+            vec![],
+            vec![(&max, Amounts::ZERO), (&one, Amounts::ZERO)],
+        ),
+        (
+            "accumulated input fees",
+            vec![(&one, max_fee.clone()), (&one, one_fee.clone())],
+            vec![],
+        ),
+        (
+            "accumulated output fees",
+            vec![],
+            vec![(&one, max_fee.clone()), (&one, one_fee.clone())],
+        ),
+        ("output plus fees", vec![], vec![(&max, one.clone())]),
+    ];
+
+    for (name, inputs, outputs) in cases {
+        let result = super::accumulate_transaction_balance(inputs, outputs);
+        assert!(
+            matches!(result, Err(TransactionSubmitError::AmountOverflow)),
+            "Overflow in {name} must fail: {result:?}"
+        );
+    }
+}
+
+#[test]
+fn accumulate_transaction_balance_maximum_valid_amounts_succeed() {
+    let input_unit = AmountUnit::BITCOIN;
+    let output_unit = AmountUnit::new_custom(1);
+    let fee_unit = AmountUnit::new_custom(2);
+
+    let input_a = amounts(input_unit, u64::MAX - 1);
+    let input_b = amounts(input_unit, 1);
+    let output = amounts(output_unit, u64::MAX);
+
+    let (in_amounts, out_amounts) = super::accumulate_transaction_balance(
+        [
+            (&input_a, amounts(fee_unit, u64::MAX - 1)),
+            (&input_b, Amounts::ZERO),
+        ],
+        [(&output, amounts(fee_unit, 1))],
+    )
+    .expect("Totals of exactly u64::MAX must not overflow");
+
+    assert_eq!(in_amounts, amounts(input_unit, u64::MAX));
+    assert_eq!(
+        out_amounts,
+        amounts(output_unit, u64::MAX)
+            .checked_add(&amounts(fee_unit, u64::MAX))
+            .expect("Distinct units cannot overflow")
+    );
 }

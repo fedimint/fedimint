@@ -18,10 +18,11 @@ use crate::WalletClientContext;
 use crate::events::{SendPaymentStatus, SendPaymentStatusEvent, WithdrawRequest};
 
 // TODO: track tx confirmations
-#[aquamarine::aquamarine]
+/// ```mermaid
 /// graph LR
 ///     Created --> Success
 ///     Created --> Aborted
+/// ```
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub struct WithdrawStateMachine {
     pub(crate) operation_id: OperationId,
