@@ -679,6 +679,19 @@ where
         .await
     }
 
+    async fn reset_peer_availability(
+        &self,
+        request: fedimint_core::peer_availability::ResetPeerAvailabilityRequest,
+        auth: ApiAuth,
+    ) -> FederationResult<()> {
+        self.request_admin(
+            fedimint_core::endpoint_constants::RESET_PEER_AVAILABILITY_ENDPOINT,
+            ApiRequestErased::new(request),
+            auth,
+        )
+        .await
+    }
+
     async fn get_invite_code(&self, guardian: PeerId) -> ServerResult<InviteCode> {
         self.request_single_peer(
             INVITE_CODE_ENDPOINT.to_owned(),

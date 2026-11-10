@@ -59,6 +59,7 @@ fn run(state: &mut PeerAvailabilityState, from: u64, to: u64, peer_1_up: bool) {
     for now in (from..to).step_by(180) {
         let activity = ObservedActivity {
             observed_secs: 180,
+            peer_observed_secs: BTreeMap::new(),
             availability: BTreeMap::from([
                 (peer(0), 1.0),
                 (peer(1), if peer_1_up { 1.0 } else { 0.0 }),
@@ -141,4 +142,97 @@ fn state_roundtrips_through_the_database_encoding() {
     .unwrap();
 
     assert_eq!(decoded, state);
+}
+
+#[tokio::test]
+async fn reset_survives_writes_and_restart_and_only_uses_fresh_samples() {
+    use fedimint_core::db::mem_impl::MemDatabase;
+    use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+
+    use super::{AvailabilityTracker, PeerAvailabilityKey, report};
+
+    let db: Database = MemDatabase::new().into();
+    let tracker = AvailabilityTracker::new(peer(0), NumPeers::from(4));
+    // Start with the old database format and a full day of observations.
+    let mut state = PeerAvailabilityState::default();
+    run(&mut state, 180, DAY, true);
+    for window in &mut state.availability {
+        window.insert(peer(2), window[&peer(0)]);
+    }
+    let before = state.report(DAY);
+    let mut tx = db.begin_transaction().await;
+    tx.insert_entry(&PeerAvailabilityKey, &state).await;
+    tx.commit_tx().await;
+    assert_eq!(report(&db, DAY).await, before);
+
+    for now in [DAY, DAY + 60] {
+        let mut activity = tracker.activity.lock().unwrap();
+        activity.heard(peer(1), now);
+        activity.heard(peer(2), now);
+    }
+    // Force a writer to queue before a reset, then release them together.
+    let guard = tracker.writes.lock().await;
+    let write = tracker.persist(&db, DAY + 60);
+    let reset = tracker.reset(&db, peer(1), DAY + 60);
+    tokio::pin!(write, reset);
+    assert!(futures::poll!(&mut write).is_pending());
+    assert!(futures::poll!(&mut reset).is_pending());
+    drop(guard);
+    let ((), reset) = tokio::join!(write, reset);
+    reset.unwrap();
+    // This write closes the partially observed slot from before the reset.
+    tracker.persist(&db, DAY + 120).await;
+    let empty = report(&db, DAY + 120).await;
+    assert!(!empty.last_seen_secs.contains_key(&peer(1)));
+    for window in &empty.windows {
+        assert!(!window.peers.contains_key(&peer(1)));
+        assert_eq!(window.peer_coverage_bps[&peer(1)], 0);
+        assert_eq!(window.peers[&peer(0)], 10_000);
+        assert_eq!(window.peers[&peer(2)], 10_000);
+    }
+
+    // A new tracker models restart: the reset persists.
+    let tracker = AvailabilityTracker::new(peer(0), NumPeers::from(4));
+    assert_eq!(report(&db, DAY + 120).await, empty);
+    for slot in 2..12 {
+        let now = DAY + slot * SLOT_SECS;
+        let mut activity = tracker.activity.lock().unwrap();
+        activity.heard(peer(2), now);
+        activity.heard(peer(3), now);
+        if slot < 7 {
+            activity.heard(peer(1), now);
+        }
+    }
+    tracker.persist(&db, DAY + 720).await;
+    let fresh = report(&db, DAY + 720).await;
+    assert_eq!(fresh.last_seen_secs[&peer(1)], DAY + 360);
+    for window in &fresh.windows {
+        assert_eq!(window.peers[&peer(1)], 5_000);
+        let coverage = super::to_bps(1.0 - (-600.0 / window.window_secs as f64).exp());
+        assert_eq!(window.peer_coverage_bps[&peer(1)], coverage);
+    }
+    // Resetting ourselves also clears only that peer, including synthetic
+    // last-seen.
+    tracker.reset(&db, peer(0), DAY + 720).await.unwrap();
+    tracker.persist(&db, DAY + 720).await;
+    let own_reset = report(&db, DAY + 720).await;
+    assert!(!own_reset.last_seen_secs.contains_key(&peer(0)));
+    assert_eq!(
+        own_reset.last_seen_secs[&peer(1)],
+        fresh.last_seen_secs[&peer(1)]
+    );
+    assert_eq!(own_reset.windows[0].peers[&peer(1)], 5_000);
+    // A later reset clears the fresh observations again and keeps other peers.
+    tracker.reset(&db, peer(1), DAY + 720).await.unwrap();
+    let again = report(&db, DAY + 720).await;
+    assert!(!again.last_seen_secs.contains_key(&peer(1)));
+    assert_eq!(
+        again.last_seen_secs[&peer(2)],
+        own_reset.last_seen_secs[&peer(2)]
+    );
+    for (window, before) in again.windows.iter().zip(&own_reset.windows) {
+        assert!(!window.peers.contains_key(&peer(1)));
+        assert_eq!(window.peer_coverage_bps[&peer(1)], 0);
+        assert_eq!(window.peers[&peer(2)], before.peers[&peer(2)]);
+    }
 }

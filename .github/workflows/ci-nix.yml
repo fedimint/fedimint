@@ -90,7 +90,7 @@ jobs:
             build-in-pr: false
             timeout: 30
           - host: macos
-            runs-on: macos-14
+            runs-on: macos-15
             build-in-pr: false
             timeout: 90
 
@@ -130,7 +130,7 @@ jobs:
             timeout: 90
             run-tests: true
           - host: macos
-            runs-on: macos-14
+            runs-on: macos-15
             build-in-pr: false
             # TODO: Too slow; see https://github.com/actions/runner-images/issues/1336
             timeout: 75
@@ -509,7 +509,7 @@ jobs:
             build-tarball: false
             shasum-cmd: sha256sum
           - name: macos-aarch64
-            runs-on: macos-14
+            runs-on: macos-15
             timeout: 180
             build-deb: false
             build-rpm: false
