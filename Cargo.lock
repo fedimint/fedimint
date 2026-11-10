@@ -82,7 +82,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e99189e0c434af4bb0f4238925df15091962ae843f509561def48ecf36c163d"
 dependencies = [
  "async-trait",
- "bit-vec",
+ "bit-vec 0.8.0",
  "derive_more 1.0.0",
  "log",
  "parity-scale-codec",
@@ -384,6 +384,7 @@ dependencies = [
  "num-traits",
  "rusticata-macros",
  "thiserror 2.0.21",
+ "time",
 ]
 
 [[package]]
@@ -1024,6 +1025,15 @@ name = "bit-vec"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
+
+[[package]]
+name = "bit-vec"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b71798fca2c1fe1086445a7258a4bc81e6e49dcd24c8d0dd9a1e57395b603f51"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "bitcoin"
@@ -2331,6 +2341,7 @@ dependencies = [
  "cookie-factory",
  "displaydoc",
  "nom",
+ "num-bigint",
  "num-traits",
  "rusticata-macros",
 ]
@@ -4679,7 +4690,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rayon",
- "rcgen",
+ "rcgen 0.14.10",
  "scopeguard",
  "serde",
  "serde_json",
@@ -6636,7 +6647,7 @@ dependencies = [
  "pkarr",
  "portmapper 0.5.0",
  "rand 0.8.5",
- "rcgen",
+ "rcgen 0.13.2",
  "reqwest 0.12.28",
  "ring",
  "rustls",
@@ -6656,7 +6667,7 @@ dependencies = [
  "url",
  "wasm-bindgen-futures",
  "webpki-roots 0.26.11",
- "x509-parser",
+ "x509-parser 0.16.0",
  "z32",
 ]
 
@@ -8653,6 +8664,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "oid-registry"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12f40cff3dde1b6087cc5d5f5d4d65712f34016a03ed60e9c08dcc392736b5b7"
+dependencies = [
+ "asn1-rs 0.7.1",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8956,6 +8976,16 @@ checksum = "38af38e8470ac9dee3ce1bae1af9c1671fffc44ddfd8bd1d0a3445bf349a8ef3"
 dependencies = [
  "base64 0.22.1",
  "serde",
+]
+
+[[package]]
+name = "pem"
+version = "4.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d354a98a3d1251555de99e8fdd8afda05573c31b82f59063a7b0a29b5527f120"
+dependencies = [
+ "base64 0.23.1",
+ "serde_core",
 ]
 
 [[package]]
@@ -9976,11 +10006,25 @@ version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75e669e5202259b5314d1ea5397316ad400819437857b90861765f24c4cf80a2"
 dependencies = [
- "pem",
+ "pem 3.0.5",
  "ring",
  "rustls-pki-types",
  "time",
- "yasna",
+ "yasna 0.5.2",
+]
+
+[[package]]
+name = "rcgen"
+version = "0.14.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8774e05a7d0de114588e6a28fe7e71694b82614ed569d86d8b389dfbc98b8ad8"
+dependencies = [
+ "pem 4.0.0",
+ "ring",
+ "rustls-pki-types",
+ "time",
+ "x509-parser 0.18.1",
+ "yasna 0.6.0",
 ]
 
 [[package]]
@@ -14328,9 +14372,27 @@ dependencies = [
  "der-parser 9.0.0",
  "lazy_static",
  "nom",
- "oid-registry",
+ "oid-registry 0.7.1",
  "rusticata-macros",
  "thiserror 1.0.69",
+ "time",
+]
+
+[[package]]
+name = "x509-parser"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d43b0f71ce057da06bc0851b23ee24f3f86190b07203dd8f567d0b706a185202"
+dependencies = [
+ "asn1-rs 0.7.1",
+ "data-encoding",
+ "der-parser 10.0.0",
+ "lazy_static",
+ "nom",
+ "oid-registry 0.8.1",
+ "ring",
+ "rusticata-macros",
+ "thiserror 2.0.21",
  "time",
 ]
 
@@ -14365,6 +14427,16 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e17bb3549cc1321ae1296b9cdc2698e2b6cb1992adfa19a8c72e5b7a738f44cd"
 dependencies = [
+ "time",
+]
+
+[[package]]
+name = "yasna"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5f6765e852b9b4dc8e2a76843e4d64d1cea8e79bcde0b6901aea8e7c7f08282"
+dependencies = [
+ "bit-vec 0.9.1",
  "time",
 ]
 
