@@ -1173,6 +1173,7 @@ impl ILnRpcClient for GatewayLdkClient {
 
         Ok(GetBalancesResponse {
             onchain_balance_sats: balances.total_onchain_balance_sats,
+            spendable_onchain_balance_sats: balances.spendable_onchain_balance_sats,
             lightning_balance_msats: balances.total_lightning_balance_sats * 1000,
             inbound_lightning_liquidity_msats: total_inbound_liquidity_balance_msat,
         })

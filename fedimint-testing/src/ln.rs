@@ -339,6 +339,7 @@ impl ILnRpcClient for FakeLightningTest {
     async fn get_balances(&self) -> Result<GetBalancesResponse, LightningRpcError> {
         Ok(GetBalancesResponse {
             onchain_balance_sats: 0,
+            spendable_onchain_balance_sats: 0,
             lightning_balance_msats: 0,
             inbound_lightning_liquidity_msats: 0,
         })

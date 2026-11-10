@@ -2134,6 +2134,12 @@ impl ILnRpcClient for GatewayLndClient {
             onchain_balance_sats: (wallet_balance_response.total_balance
                 + wallet_balance_response.reserved_balance_anchor_chan)
                 as u64,
+            // `send_onchain` spends unconfirmed outputs, and LND refuses a send
+            // that would leave less than the anchor-channel reserve.
+            spendable_onchain_balance_sats: wallet_balance_response
+                .total_balance
+                .saturating_sub(wallet_balance_response.reserved_balance_anchor_chan)
+                .max(0) as u64,
             lightning_balance_msats,
             inbound_lightning_liquidity_msats,
         })
