@@ -1342,6 +1342,20 @@ impl FedimintCli {
                     serde_json::to_value(status).map_err_cli_msg("invalid response")?,
                 ))
             }
+            AdminCmd::ResetPeerAvailability { peer_id } => {
+                let client = self.client_open(&cli).await?;
+                cli.admin_client(
+                    &client.get_peer_urls().await,
+                    client.api_secret().as_deref(),
+                )
+                .await?
+                .reset_peer_availability(
+                    fedimint_core::peer_availability::ResetPeerAvailabilityRequest { peer_id },
+                    cli.auth()?,
+                )
+                .await?;
+                Ok(CliOutput::Raw(serde_json::Value::Null))
+            }
             AdminCmd::GuardianConfigBackup => {
                 let client = self.client_open(&cli).await?;
 
