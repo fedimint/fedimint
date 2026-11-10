@@ -37,6 +37,10 @@ where
     }
 }
 
+/// Empty vectors are supported for all element types. Nonempty vectors of
+/// zero-sized types return a decode error without invoking the element decoder.
+/// A finite reader alone cannot bound iteration over elements that consume no
+/// bytes.
 impl<T> Decodable for Vec<T>
 where
     T: Decodable + 'static,
@@ -70,6 +74,15 @@ where
             return Ok(unsafe { std::mem::transmute::<Vec<u8>, Self>(bytes) });
         }
         let len = u64::consensus_decode_partial_from_finite_reader(d, modules)?;
+
+        if len == 0 {
+            return Ok(Self::new());
+        }
+        if std::mem::size_of::<T>() == 0 {
+            return Err(DecodeError::from_str(
+                "cannot decode nonempty vector of zero-sized elements",
+            ));
+        }
 
         // `collect` under the hood uses `FromIter::from_iter`, which can potentially be
         // backed by code like:
@@ -109,6 +122,8 @@ where
     }
 }
 
+/// Uses the same zero-sized element policy as [`Vec<T>`]: empty deques are
+/// supported, but nonempty deques of zero-sized types return a decode error.
 impl<T> Decodable for VecDeque<T>
 where
     T: Decodable + 'static,
@@ -258,3 +273,6 @@ where
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod zst_tests;

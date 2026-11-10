@@ -69,22 +69,37 @@ Out of scope:
 Configured Bitcoin RPC endpoints, including Esplora, are trusted inputs to a
 guardian. Esplora is a trusted chain oracle: Fedimint does not independently
 verify its chain selection, work, consensus rules, or freshness. Block payload
-integrity checks and chain-identity comparisons are defense in depth against
+integrity checks and configured-network checks are defense in depth against
 inconsistent responses and misconfiguration, not the basis of this trust model.
 Use operator-controlled or explicitly trusted services, with encrypted transport
 across untrusted networks. A shared public provider can correlate guardian
 activity and influence multiple guardians at once; independent operators should
 consider this correlated trust dependency.
 
-In hybrid mode (`FM_BITCOIND_URL` and `FM_ESPLORA_URL` together), available
-endpoints are compared once at startup using the height-1 block hash. A detected
-mismatch stops startup. If either or both endpoints are unavailable, the
-comparison is skipped with a warning so backend availability does not become a
-new startup requirement. The comparison is not retried after recovery. If
-neither identity was available at startup, the first later identity needed for
-ordinary status monitoring is cached without comparing endpoints. Trusted
-endpoints are expected to keep serving their configured chain, and operators
+In hybrid mode (`FM_BITCOIND_URL` and `FM_ESPLORA_URL` together), construction
+does not contact either endpoint or compare their chain identities. This avoids
+another startup dependency and comparison/reconnection complexity: matching a
+height-1 hash once would not validate subsequent chain answers. The first
+identity needed for ordinary status monitoring is read from bitcoind, or from
+Esplora if bitcoind fails, and cached without comparing endpoints. The monitor
+still needs Bitcoin RPC status, the wallet still checks its configured network,
+and consensus still waits for applicable Bitcoin readiness before starting.
+Runtime identity lookup, configured-network checks, and block payload integrity
+checks remain. Trusted endpoints must keep serving the intended chain; operators
 must restart the guardian when deliberately changing chains.
+
+Federation-level voting, validation, and threshold signing tolerate at most
+`f = floor((n - 1) / 3)` faulty guardians out of `n`, with `q = n - f` needed
+for threshold decisions. A guardian using a wrong or inconsistent backend
+consumes that fault budget, including any other faults. Not every fetched block
+is voted on: incorrect chain data can stall a guardian, corrupt its local wallet
+state, or require operator recovery; quorum decisions do not repair local state.
+Independent guardian backends matter because shared providers or correlated
+configuration mistakes can exceed the fault bound. This redundancy does not
+protect client or gateway local decisions or provider-facing privacy. Revisit
+the no-constructor-comparison policy if this wrapper gains non-guardian users or
+one guardian can authorize irreversible shared effects without a threshold
+decision, not simply because construction omits an identity check.
 
 Reads try bitcoind first and retry only the failed request on Esplora. Fee
 estimation also falls back when Core successfully responds without an estimate,
@@ -106,7 +121,7 @@ Bitcoin connectivity; successful local submission is not proof of propagation.
 We do not broadcast to both endpoints unconditionally. The federation's normal
 rebroadcast and confirmation handling remain necessary.
 
-Esplora sees fallback and startup/IBD queries and, when used for broadcast
+Esplora sees fallback and IBD queries and, when used for broadcast
 fallback, complete peg-out transactions and guardian-origin timing. Any primary
 broadcast error, including policy rejection, may trigger this disclosure. Only
 configure a fallback if these trust and privacy consequences are acceptable.

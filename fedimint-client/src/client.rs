@@ -53,6 +53,7 @@ use fedimint_core::module::{
     SupportedApiVersionsSummary, SupportedCoreApiVersions, SupportedModuleApiVersions,
 };
 use fedimint_core::net::api_announcement::SignedApiAnnouncement;
+use fedimint_core::peer_availability::{MergedPeerAvailability, merge_peer_availability};
 use fedimint_core::runtime::sleep;
 use fedimint_core::task::{
     Elapsed, MaybeSend, MaybeSync, ShuttingDownError, TaskGroup, TaskHandle,
@@ -655,38 +656,69 @@ impl Client {
     /// # Panics
     /// If any of the input or output versions in the transaction builder are
     /// unknown by the respective module.
-    fn transaction_builder_get_balance(&self, builder: &TransactionBuilder) -> (Amounts, Amounts) {
-        // FIXME: prevent overflows, currently not suitable for untrusted input
-        let mut in_amounts = Amounts::ZERO;
-        let mut out_amounts = Amounts::ZERO;
-        let mut fee_amounts = Amounts::ZERO;
-
-        for input in builder.inputs() {
+    fn transaction_builder_get_balance(
+        &self,
+        builder: &TransactionBuilder,
+    ) -> Result<(Amounts, Amounts), TransactionSubmitError> {
+        let inputs = builder.inputs().map(|input| {
             let module = self.get_module(input.input.module_instance_id());
 
             let item_fees = module.input_fee(&input.amounts, &input.input).expect(
                 "We only build transactions with input versions that are supported by the module",
             );
 
-            in_amounts.checked_add_mut(&input.amounts);
-            fee_amounts.checked_add_mut(&item_fees);
-        }
+            (&input.amounts, item_fees)
+        });
 
-        for output in builder.outputs() {
+        let outputs = builder.outputs().map(|output| {
             let module = self.get_module(output.output.module_instance_id());
 
             let item_fees = module.output_fee(&output.amounts, &output.output).expect(
                 "We only build transactions with output versions that are supported by the module",
             );
 
-            out_amounts.checked_add_mut(&output.amounts);
-            fee_amounts.checked_add_mut(&item_fees);
-        }
+            (&output.amounts, item_fees)
+        });
 
-        out_amounts.checked_add_mut(&fee_amounts);
-        (in_amounts, out_amounts)
+        accumulate_transaction_balance(inputs, outputs)
+    }
+}
+
+/// Accumulate the transaction input and output amounts (including fees) and
+/// check for overflow.
+fn accumulate_transaction_balance<'a>(
+    inputs: impl IntoIterator<Item = (&'a Amounts, Amounts)>,
+    outputs: impl IntoIterator<Item = (&'a Amounts, Amounts)>,
+) -> Result<(Amounts, Amounts), TransactionSubmitError> {
+    let mut in_amounts = Amounts::ZERO;
+    let mut out_amounts = Amounts::ZERO;
+    let mut fee_amounts = Amounts::ZERO;
+
+    for (amount, item_fees) in inputs {
+        in_amounts
+            .checked_add_mut(amount)
+            .ok_or(TransactionSubmitError::AmountOverflow)?;
+        fee_amounts
+            .checked_add_mut(&item_fees)
+            .ok_or(TransactionSubmitError::AmountOverflow)?;
     }
 
+    for (amount, item_fees) in outputs {
+        out_amounts
+            .checked_add_mut(amount)
+            .ok_or(TransactionSubmitError::AmountOverflow)?;
+        fee_amounts
+            .checked_add_mut(&item_fees)
+            .ok_or(TransactionSubmitError::AmountOverflow)?;
+    }
+
+    out_amounts
+        .checked_add_mut(&fee_amounts)
+        .ok_or(TransactionSubmitError::AmountOverflow)?;
+    Ok((in_amounts, out_amounts))
+}
+
+impl Client {
     pub fn get_internal_payment_markers(
         &self,
     ) -> Result<(PublicKey, u64), bitcoin::secp256k1::Error> {
@@ -754,7 +786,8 @@ impl Client {
         operation_id: OperationId,
         mut partial_transaction: TransactionBuilder,
     ) -> Result<FinalizedTransaction, TransactionSubmitError> {
-        let (in_amounts, out_amounts) = self.transaction_builder_get_balance(&partial_transaction);
+        let (in_amounts, out_amounts) =
+            self.transaction_builder_get_balance(&partial_transaction)?;
 
         let mut added_inputs_bundles = vec![];
         let mut added_outputs_bundles = vec![];
@@ -816,7 +849,7 @@ impl Client {
         }
 
         let (input_amounts, output_amounts) =
-            self.transaction_builder_get_balance(&partial_transaction);
+            self.transaction_builder_get_balance(&partial_transaction)?;
 
         for (unit, output_amount) in output_amounts {
             let input_amount = input_amounts.get(&unit).copied().unwrap_or_default();
@@ -1008,7 +1041,8 @@ impl Client {
     /// transaction, and [`PrimaryModule`] for every other failure of that
     /// module; [`TransactionTooLarge`] if the finalized transaction exceeds
     /// the federation's size limit; [`StateMachines`] if the transaction's
-    /// state machines cannot be registered; and [`Database`] if the
+    /// state machines cannot be registered; [`AmountOverflow`] if calculating
+    /// the transaction balance or fees overflowed; and [`Database`] if the
     /// transaction keeps colliding with others and cannot be committed within
     /// its retry budget, which should not happen except in excessively
     /// concurrent scenarios.
@@ -1019,6 +1053,7 @@ impl Client {
     /// [`PrimaryModule`]: TransactionSubmitError::PrimaryModule
     /// [`TransactionTooLarge`]: TransactionSubmitError::TransactionTooLarge
     /// [`StateMachines`]: TransactionSubmitError::StateMachines
+    /// [`AmountOverflow`]: TransactionSubmitError::AmountOverflow
     /// [`Database`]: TransactionSubmitError::Database
     pub async fn finalize_and_submit_transaction<F, M>(
         &self,
@@ -2396,6 +2431,28 @@ impl Client {
             .map(|(key, metadata)| (key.0, metadata))
             .collect()
             .await
+    }
+
+    /// Asks every guardian for its view of the others' availability and
+    /// combines the answers with [`merge_peer_availability`]. Guardians that do
+    /// not answer within a few seconds are left out.
+    pub async fn peer_availability(&self) -> MergedPeerAvailability {
+        let reports =
+            futures::future::join_all(self.api.all_peers().iter().map(|peer| async move {
+                let report =
+                    runtime::timeout(Duration::from_secs(10), self.api.peer_availability(*peer))
+                        .await;
+                (*peer, report)
+            }))
+            .await
+            .into_iter()
+            .filter_map(|(peer, report)| Some((peer, report.ok()?.ok()?)))
+            .collect();
+
+        merge_peer_availability(
+            &reports,
+            fedimint_core::NumPeersExt::to_num_peers(self.api.all_peers()),
+        )
     }
 
     /// Returns a list of guardian API URLs

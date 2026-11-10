@@ -1,7 +1,7 @@
 use std::time::{Duration, SystemTime};
 
 use assert_matches::assert_matches;
-use bitcoin::hashes::sha256;
+use bitcoin::hashes::{Hash as _, sha256};
 use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
 use fedimint_client_module::transaction::{ClientInput, ClientInputBundle};
@@ -340,7 +340,10 @@ impl LightningPayFunded {
                 .gateway_conn
                 .pay_invoice(gateway.clone(), payload.clone())
                 .await
-            {
+                .and_then(|preimage| {
+                    verify_gateway_preimage(&preimage, payload.payment_data.payment_hash())?;
+                    Ok(preimage)
+                }) {
                 Ok(preimage) => return Ok(preimage),
                 Err(err) => {
                     match err.clone() {
@@ -485,6 +488,29 @@ impl LightningPayRefundable {
                 },
             ),
         ]
+    }
+}
+
+/// Checks that the hex `preimage` a gateway returned hashes to `payment_hash`.
+///
+/// A mismatch is reported as a gateway error, like any other failed gateway
+/// response, so the payment stays `Funded` and is refunded on cancellation or
+/// timeout.
+fn verify_gateway_preimage(
+    preimage: &str,
+    payment_hash: sha256::Hash,
+) -> Result<(), GatewayPayError> {
+    let matches = fedimint_core::hex::decode(preimage)
+        .is_ok_and(|bytes| sha256::Hash::hash(&bytes) == payment_hash);
+    if matches {
+        Ok(())
+    } else {
+        Err(GatewayPayError::GatewayInternalError {
+            error_code: None,
+            error_message: format!(
+                "Gateway returned preimage {preimage} that does not match payment hash {payment_hash}"
+            ),
+        })
     }
 }
 

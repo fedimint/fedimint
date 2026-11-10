@@ -76,7 +76,6 @@ and solutions for variety of cases.
 ## Hosted solutions
 
 * [Clovyr hosted Fedimint](https://clovyr.app/tag/fedimint)
-* [Nodana hosted Fedimint](https://nodana.io/services/fedimintd)
 
 ## Help and support
 

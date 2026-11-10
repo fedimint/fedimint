@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod regression_tests;
+
 use std::collections::{BTreeMap, HashSet};
 use std::io::Write;
 use std::ops::ControlFlow;
@@ -8,6 +11,7 @@ use std::{env, ffi};
 
 use anyhow::{Context, Result, anyhow, bail};
 use bitcoin::Txid;
+use bitcoin::hashes::Hash as _;
 use clap::Subcommand;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -38,11 +42,12 @@ use tracing::{debug, error, info};
 use crate::cli::{CommonArgs, cleanup_on_exit, exec_or_wait_for_shutdown, setup};
 use crate::devfed::DevJitFed;
 use crate::envs::{FM_DATA_DIR_ENV, FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV};
-use crate::federation::Client;
+use crate::federation::{Client, Federation};
+use crate::gatewayd::GatewayClient;
 use crate::util::{LoadTestTool, ProcessManager, almost_equal, poll};
 use crate::version_constants::{
     VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA, VERSION_0_13_0_ALPHA,
-    ensure_expected_fedimintd_version,
+    VERSION_0_14_0_ALPHA, ensure_expected_fedimintd_version,
 };
 use crate::{DevFed, Gatewayd, LightningNode, Lnd, cmd, dev_fed};
 
@@ -131,9 +136,6 @@ pub async fn latency_tests(
         ..
     } = dev_fed;
 
-    let max_p90_factor = 10.0;
-    let p90_median_factor = 10;
-
     let client = match upgrade_clients {
         Some(c) => match r#type {
             LatencyTest::Reissue => c.reissue_client.clone(),
@@ -155,200 +157,249 @@ pub async fn latency_tests(
 
     match r#type {
         LatencyTest::Reissue => {
-            info!("Testing latency of reissue");
-            let mut reissues = Vec::with_capacity(iterations);
-            let amount_per_iteration_msats =
-                // use a highest 2^-1 amount that fits, to try to use as many notes as possible
-                ((initial_balance_sats * 1000 / iterations as u64).next_power_of_two() >> 1) - 1;
-            for _ in 0..iterations {
-                let notes = cmd!(client, "spend", amount_per_iteration_msats.to_string())
-                    .out_json()
-                    .await?["notes"]
-                    .as_str()
-                    .context("note must be a string")?
-                    .to_owned();
-
-                let start_time = Instant::now();
-                cmd!(client, "reissue", notes).run().await?;
-                reissues.push(start_time.elapsed());
-            }
-            let reissue_stats = stats_for(reissues);
-            println!("### LATENCY REISSUE: {reissue_stats}");
-
-            if assert_thresholds {
-                assert!(reissue_stats.median < Duration::from_secs(10));
-                assert!(reissue_stats.p90 < reissue_stats.median * p90_median_factor);
-                assert!(
-                    reissue_stats.max.as_secs_f64()
-                        < reissue_stats.p90.as_secs_f64() * max_p90_factor
-                );
-            }
+            latency_reissue(&client, initial_balance_sats, iterations, assert_thresholds).await
         }
         LatencyTest::LnSend => {
-            info!("Testing latency of ln send");
-            let mut ln_sends = Vec::with_capacity(iterations);
-            for _ in 0..iterations {
-                let invoice = gw_ldk.create_invoice(1_000_000).await?;
-                let start_time = Instant::now();
-                ln_pay(&client, invoice.to_string(), lnd_gw_id.clone()).await?;
-                gw_ldk
-                    .wait_bolt11_invoice(invoice.payment_hash().consensus_encode_to_vec())
-                    .await?;
-                ln_sends.push(start_time.elapsed());
-
-                if crate::util::supports_lnv2() {
-                    let invoice = gw_lnd.create_invoice(1_000_000).await?;
-
-                    let start_time = Instant::now();
-
-                    lnv2_send(&client, &gw_ldk.address(), &invoice.to_string()).await?;
-
-                    ln_sends.push(start_time.elapsed());
-                }
-            }
-            let ln_sends_stats = stats_for(ln_sends);
-            println!("### LATENCY LN SEND: {ln_sends_stats}");
-
-            if assert_thresholds {
-                assert!(ln_sends_stats.median < Duration::from_secs(10));
-                assert!(ln_sends_stats.p90 < ln_sends_stats.median * p90_median_factor);
-                assert!(
-                    ln_sends_stats.max.as_secs_f64()
-                        < ln_sends_stats.p90.as_secs_f64() * max_p90_factor
-                );
-            }
+            latency_ln_send(
+                &client,
+                &gw_lnd,
+                &gw_ldk,
+                &lnd_gw_id,
+                iterations,
+                assert_thresholds,
+            )
+            .await
         }
         LatencyTest::LnReceive => {
-            info!("Testing latency of ln receive");
-            let mut ln_receives = Vec::with_capacity(iterations);
-
-            // give lnd some funds
-            let invoice = gw_ldk.create_invoice(10_000_000).await?;
-            ln_pay(&client, invoice.to_string(), lnd_gw_id.clone()).await?;
-
-            for _ in 0..iterations {
-                let invoice = ln_invoice(
-                    &client,
-                    Amount::from_msats(100_000),
-                    "latency-over-lnd-gw".to_string(),
-                    lnd_gw_id.clone(),
-                )
-                .await?
-                .invoice;
-
-                let start_time = Instant::now();
-                gw_ldk
-                    .pay_invoice(
-                        Bolt11Invoice::from_str(&invoice).expect("Could not parse invoice"),
-                    )
-                    .await?;
-                ln_receives.push(start_time.elapsed());
-
-                if crate::util::supports_lnv2() {
-                    let invoice = lnv2_receive(&client, &gw_lnd.address(), 100_000).await?.0;
-
-                    let start_time = Instant::now();
-
-                    gw_ldk.pay_invoice(invoice).await?;
-
-                    ln_receives.push(start_time.elapsed());
-                }
-            }
-            let ln_receives_stats = stats_for(ln_receives);
-            println!("### LATENCY LN RECV: {ln_receives_stats}");
-
-            if assert_thresholds {
-                assert!(ln_receives_stats.median < Duration::from_secs(10));
-                assert!(ln_receives_stats.p90 < ln_receives_stats.median * p90_median_factor);
-                assert!(
-                    ln_receives_stats.max.as_secs_f64()
-                        < ln_receives_stats.p90.as_secs_f64() * max_p90_factor
-                );
-            }
+            latency_ln_receive(
+                &client,
+                &gw_lnd,
+                &gw_ldk,
+                &lnd_gw_id,
+                iterations,
+                assert_thresholds,
+            )
+            .await
         }
-        LatencyTest::FmPay => {
-            info!("Testing latency of internal payments within a federation");
-            let mut fm_internal_pay = Vec::with_capacity(iterations);
-            let sender = fed.new_joined_client("internal-swap-sender").await?;
-            fed.pegin_client(10_000_000, &sender).await?;
-            for _ in 0..iterations {
-                let recv = cmd!(
-                    client,
-                    "ln-invoice",
-                    "--amount=1000000msat",
-                    "--description=internal-swap-invoice",
-                    "--force-internal"
-                )
-                .out_json()
-                .await?;
+        LatencyTest::FmPay => latency_fm_pay(&fed, &client, iterations, assert_thresholds).await,
+        LatencyTest::Restore => latency_restore(&fed, &client, assert_thresholds).await,
+    }
+}
 
-                let invoice = recv["invoice"]
-                    .as_str()
-                    .context("invoice must be string")?
-                    .to_owned();
-                let recv_op = recv["operation_id"]
-                    .as_str()
-                    .context("operation id must be string")?
-                    .to_owned();
+/// Check the common latency-distribution limits after collecting samples.
+fn assert_latency_stats(stats: &Stats, median_limit: Duration) {
+    assert!(stats.median < median_limit);
+    assert!(stats.p90 < stats.median * 10);
+    assert!(stats.max.as_secs_f64() < stats.p90.as_secs_f64() * 10.0);
+}
 
-                let start_time = Instant::now();
-                cmd!(sender, "ln-pay", invoice, "--force-internal")
-                    .run()
-                    .await?;
+/// Measure reissue completion, excluding the preparation of each note bundle.
+async fn latency_reissue(
+    client: &Client,
+    initial_balance_sats: u64,
+    iterations: usize,
+    assert_thresholds: bool,
+) -> Result<()> {
+    info!("Testing latency of reissue");
+    let mut reissues = Vec::with_capacity(iterations);
+    // Use the highest 2^n - 1 amount that fits, to spend as many notes as possible.
+    let amount_per_iteration_msats =
+        ((initial_balance_sats * 1000 / iterations as u64).next_power_of_two() >> 1) - 1;
+    for _ in 0..iterations {
+        let notes = cmd!(client, "spend", amount_per_iteration_msats.to_string())
+            .out_json()
+            .await?["notes"]
+            .as_str()
+            .context("note must be a string")?
+            .to_owned();
 
-                cmd!(client, "await-invoice", recv_op).run().await?;
-                fm_internal_pay.push(start_time.elapsed());
-            }
-            let fm_pay_stats = stats_for(fm_internal_pay);
+        let start_time = Instant::now();
+        cmd!(client, "reissue", notes).run().await?;
+        reissues.push(start_time.elapsed());
+    }
+    let reissue_stats = stats_for(reissues);
+    println!("### LATENCY REISSUE: {reissue_stats}");
 
-            println!("### LATENCY FM PAY: {fm_pay_stats}");
+    if assert_thresholds {
+        assert_latency_stats(&reissue_stats, Duration::from_secs(10));
+    }
+    Ok(())
+}
 
-            if assert_thresholds {
-                assert!(fm_pay_stats.median < Duration::from_secs(15));
-                assert!(fm_pay_stats.p90 < fm_pay_stats.median * p90_median_factor);
-                assert!(
-                    fm_pay_stats.max.as_secs_f64()
-                        < fm_pay_stats.p90.as_secs_f64() * max_p90_factor
-                );
-            }
-        }
-        LatencyTest::Restore => {
-            info!("Testing latency of restore");
-            let backup_secret = cmd!(client, "print-secret").out_json().await?["secret"]
-                .as_str()
-                .map(ToOwned::to_owned)
-                .unwrap();
-            if !is_env_var_set(FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV) {
-                info!("Skipping tests, as in previous versions restore was very slow to test");
-                return Ok(());
-            }
+/// Measure outgoing Lightning payments using the existing v1 and v2 paths.
+async fn latency_ln_send(
+    client: &Client,
+    gw_lnd: &GatewayClient,
+    gw_ldk: &GatewayClient,
+    lnd_gw_id: &str,
+    iterations: usize,
+    assert_thresholds: bool,
+) -> Result<()> {
+    info!("Testing latency of ln send");
+    let mut ln_sends = Vec::with_capacity(iterations);
+    for _ in 0..iterations {
+        let invoice = gw_ldk.create_invoice(1_000_000).await?;
+        let start_time = Instant::now();
+        ln_pay(client, invoice.to_string(), lnd_gw_id.to_owned()).await?;
+        gw_ldk
+            .wait_bolt11_invoice(invoice.payment_hash().consensus_encode_to_vec())
+            .await?;
+        ln_sends.push(start_time.elapsed());
+
+        if crate::util::supports_lnv2() {
+            let invoice = gw_lnd.create_invoice(1_000_000).await?;
 
             let start_time = Instant::now();
-            let restore_client = Client::create("restore").await?;
-            cmd!(
-                restore_client,
-                "restore",
-                "--mnemonic",
-                &backup_secret,
-                "--invite-code",
-                fed.invite_code()?
-            )
-            .run()
-            .await?;
-            let restore_time = start_time.elapsed();
 
-            println!("### LATENCY RESTORE: {restore_time:?}");
+            lnv2_send(client, &gw_ldk.address(), &invoice.to_string()).await?;
 
-            if assert_thresholds {
-                if crate::util::is_backwards_compatibility_test() {
-                    assert!(restore_time < Duration::from_secs(160));
-                } else {
-                    assert!(restore_time < Duration::from_secs(30));
-                }
-            }
+            ln_sends.push(start_time.elapsed());
         }
     }
+    let ln_sends_stats = stats_for(ln_sends);
+    println!("### LATENCY LN SEND: {ln_sends_stats}");
 
+    if assert_thresholds {
+        assert_latency_stats(&ln_sends_stats, Duration::from_secs(10));
+    }
+    Ok(())
+}
+
+/// Fund the gateway and measure incoming Lightning payment completion.
+async fn latency_ln_receive(
+    client: &Client,
+    gw_lnd: &GatewayClient,
+    gw_ldk: &GatewayClient,
+    lnd_gw_id: &str,
+    iterations: usize,
+    assert_thresholds: bool,
+) -> Result<()> {
+    info!("Testing latency of ln receive");
+    let mut ln_receives = Vec::with_capacity(iterations);
+
+    // give lnd some funds
+    let invoice = gw_ldk.create_invoice(10_000_000).await?;
+    ln_pay(client, invoice.to_string(), lnd_gw_id.to_owned()).await?;
+
+    for _ in 0..iterations {
+        let invoice = ln_invoice(
+            client,
+            Amount::from_msats(100_000),
+            "latency-over-lnd-gw".to_string(),
+            lnd_gw_id.to_owned(),
+        )
+        .await?
+        .invoice;
+
+        let start_time = Instant::now();
+        gw_ldk
+            .pay_invoice(Bolt11Invoice::from_str(&invoice).expect("Could not parse invoice"))
+            .await?;
+        ln_receives.push(start_time.elapsed());
+
+        if crate::util::supports_lnv2() {
+            let invoice = lnv2_receive(client, &gw_lnd.address(), 100_000).await?.0;
+
+            let start_time = Instant::now();
+
+            gw_ldk.pay_invoice(invoice).await?;
+
+            ln_receives.push(start_time.elapsed());
+        }
+    }
+    let ln_receives_stats = stats_for(ln_receives);
+    println!("### LATENCY LN RECV: {ln_receives_stats}");
+
+    if assert_thresholds {
+        assert_latency_stats(&ln_receives_stats, Duration::from_secs(10));
+    }
+    Ok(())
+}
+
+/// Measure internal payments after funding a separate sending client.
+async fn latency_fm_pay(
+    fed: &Federation,
+    client: &Client,
+    iterations: usize,
+    assert_thresholds: bool,
+) -> Result<()> {
+    info!("Testing latency of internal payments within a federation");
+    let mut fm_internal_pay = Vec::with_capacity(iterations);
+    let sender = fed.new_joined_client("internal-swap-sender").await?;
+    fed.pegin_client(10_000_000, &sender).await?;
+    for _ in 0..iterations {
+        let recv = cmd!(
+            client,
+            "ln-invoice",
+            "--amount=1000000msat",
+            "--description=internal-swap-invoice",
+            "--force-internal"
+        )
+        .out_json()
+        .await?;
+
+        let invoice = recv["invoice"]
+            .as_str()
+            .context("invoice must be string")?
+            .to_owned();
+        let recv_op = recv["operation_id"]
+            .as_str()
+            .context("operation id must be string")?
+            .to_owned();
+
+        let start_time = Instant::now();
+        cmd!(sender, "ln-pay", invoice, "--force-internal")
+            .run()
+            .await?;
+
+        cmd!(client, "await-invoice", recv_op).run().await?;
+        fm_internal_pay.push(start_time.elapsed());
+    }
+    let fm_pay_stats = stats_for(fm_internal_pay);
+
+    println!("### LATENCY FM PAY: {fm_pay_stats}");
+
+    if assert_thresholds {
+        assert_latency_stats(&fm_pay_stats, Duration::from_secs(15));
+    }
+    Ok(())
+}
+
+/// Measure restore only when deprecated tests are enabled.
+async fn latency_restore(fed: &Federation, client: &Client, assert_thresholds: bool) -> Result<()> {
+    info!("Testing latency of restore");
+    let backup_secret = cmd!(client, "print-secret").out_json().await?["secret"]
+        .as_str()
+        .map(ToOwned::to_owned)
+        .unwrap();
+    if !is_env_var_set(FM_DEVIMINT_RUN_DEPRECATED_TESTS_ENV) {
+        info!("Skipping tests, as in previous versions restore was very slow to test");
+        return Ok(());
+    }
+
+    let start_time = Instant::now();
+    let restore_client = Client::create("restore").await?;
+    cmd!(
+        restore_client,
+        "restore",
+        "--mnemonic",
+        &backup_secret,
+        "--invite-code",
+        fed.invite_code()?
+    )
+    .run()
+    .await?;
+    let restore_time = start_time.elapsed();
+
+    println!("### LATENCY RESTORE: {restore_time:?}");
+
+    if assert_thresholds {
+        if crate::util::is_backwards_compatibility_test() {
+            assert!(restore_time < Duration::from_secs(160));
+        } else {
+            assert!(restore_time < Duration::from_secs(30));
+        }
+    }
     Ok(())
 }
 
@@ -1138,12 +1189,25 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         );
     }
 
+    cli_wallet_tests(&fed, &client, &bitcoind, &fedimint_cli_version).await?;
+    cli_peer_tests(&fed, &client, fedimintd_version).await?;
+    Ok(())
+}
+
+/// Exercise deposits, fixed withdrawals and version-gated full-balance
+/// withdrawals.
+async fn cli_wallet_tests(
+    fed: &Federation,
+    client: &Client,
+    bitcoind: &crate::external::Bitcoind,
+    fedimint_cli_version: &semver::Version,
+) -> Result<()> {
     // # Wallet tests
     // ## Deposit
     info!("Testing client deposit");
     let initial_walletng_balance = client.balance().await?;
 
-    fed.pegin_client(100_000, &client).await?; // deposit in sats
+    fed.pegin_client(100_000, client).await?; // deposit in sats
 
     let post_deposit_walletng_balance = client.balance().await?;
 
@@ -1197,7 +1261,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
     //
     // `module wallet withdraw --amount all` was added in 0.13.0-alpha; before
     // that the module CLI rejected "all" outright.
-    if fedimint_cli_version >= *VERSION_0_13_0_ALPHA {
+    if fedimint_cli_version >= &*VERSION_0_13_0_ALPHA {
         info!("Testing client withdraw all");
 
         let pre_sweep_balance = client.balance().await?;
@@ -1238,6 +1302,15 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         );
     }
 
+    Ok(())
+}
+
+/// Check peer versions and propagation of a newly signed API announcement.
+async fn cli_peer_tests(
+    fed: &Federation,
+    client: &Client,
+    fedimintd_version: semver::Version,
+) -> Result<()> {
     // # peer-version command
     let peer_0_fedimintd_version = cmd!(client, "dev", "peer-version", "--peer-id", "0")
         .out_json()
@@ -1875,13 +1948,25 @@ pub async fn do_try_create_and_pay_invoice(
 }
 
 async fn ln_pay(client: &Client, invoice: String, gw_id: String) -> anyhow::Result<String> {
+    let payment_hash = *Bolt11Invoice::from_str(&invoice)?.payment_hash();
     let value = cmd!(client, "ln-pay", invoice, "--gateway-id", gw_id,)
         .out_json()
         .await?;
     let outcome = serde_json::from_value::<LightningPaymentOutcome>(value)
         .expect("Could not deserialize Lightning payment outcome");
     match outcome {
-        LightningPaymentOutcome::Success { preimage } => Ok(preimage),
+        LightningPaymentOutcome::Success { preimage } => {
+            // Clients before v0.14.0 cut the first and last hex digit off the preimage
+            // the gateway returns, so only newer clients can be checked
+            if crate::util::FedimintCli::version_or_default().await >= *VERSION_0_14_0_ALPHA {
+                let preimage_bytes = hex::decode(&preimage).context("Preimage is not hex")?;
+                anyhow::ensure!(
+                    bitcoin::hashes::sha256::Hash::hash(&preimage_bytes) == payment_hash,
+                    "Preimage {preimage} does not match the invoice's payment hash {payment_hash}"
+                );
+            }
+            Ok(preimage)
+        }
         LightningPaymentOutcome::Failure { error_message } => {
             Err(anyhow!("Failed to pay lightning invoice: {error_message}"))
         }
@@ -2872,137 +2957,128 @@ pub enum TestCmd {
     },
 }
 
+/// Run the WASM faucet lifecycle, joining tasks before terminating its
+/// federation.
+async fn wasm_test_setup(common_args: CommonArgs, exec: Option<Vec<ffi::OsString>>) -> Result<()> {
+    let (process_mgr, task_group) = setup(common_args).await?;
+    // Bind before bringing up the federation, and outside the faucet
+    // task, so that a port clash fails the setup right away instead of
+    // leaving the test suite talking to whatever else is listening on
+    // that port. Holding the socket from here on also keeps other port
+    // allocators off it.
+    let faucet_bind_addr = process_mgr.globals.FM_FAUCET_BIND_ADDR.clone();
+    let faucet_listener = TcpListener::bind(&faucet_bind_addr)
+        .await
+        .with_context(|| format!("binding faucet to {faucet_bind_addr}"))?;
+    let gw_lnd_port = process_mgr.globals.FM_PORT_GW_LND;
+    let dev_fed = DevJitFed::new(&process_mgr, false, false)?;
+    let main = {
+        let task_group = task_group.clone();
+        let dev_fed = dev_fed.clone();
+        async move {
+            let dev_fed = dev_fed.to_dev_fed(&process_mgr).await?;
+            dev_fed
+                .gw_lnd
+                .client()
+                .set_federation_routing_fee(dev_fed.fed.calculate_federation_id(), 0, 0)
+                .await?;
+            let faucet = crate::faucet::Faucet::new(&dev_fed)?;
+            info!(addr = %faucet_bind_addr, "Faucet listening");
+            task_group.spawn_cancellable("faucet", async move {
+                if let Err(err) = crate::faucet::run(faucet, faucet_listener, gw_lnd_port).await {
+                    error!(err = %err.fmt_compact(), "Faucet failed");
+                }
+            });
+            dev_fed
+                .fed
+                .pegin_gateways(30_000, vec![&dev_fed.gw_lnd])
+                .await?;
+            exec_or_wait_for_shutdown(exec, &task_group).await
+        }
+    };
+    let result = cleanup_on_exit(main, task_group).await;
+    // Explicit teardown in async context; `cleanup_on_exit` has joined
+    // the task group by now.
+    dev_fed.fast_terminate().await;
+    result
+}
+
+/// Start admin-auth tests only when both binaries support stored credentials.
+async fn run_admin_auth_tests(common_args: CommonArgs) -> Result<()> {
+    // Check versions early before starting infrastructure
+    let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
+    let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
+
+    if fedimint_cli_version < *VERSION_0_11_0_ALPHA || fedimintd_version < *VERSION_0_11_0_ALPHA {
+        info!(target: LOG_DEVIMINT, "Skipping admin_auth_tests - requires v0.11.0-alpha or later");
+        return Ok(());
+    }
+
+    let (process_mgr, _) = setup(common_args).await?;
+    let dev_fed = dev_fed(&process_mgr).await?;
+    admin_auth_tests(dev_fed).await
+}
+
+/// Dispatch integration scenarios, preserving their individual setup policies.
 pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()> {
     match cmd {
-        TestCmd::WasmTestSetup { exec } => {
-            let (process_mgr, task_group) = setup(common_args).await?;
-            // Bind before bringing up the federation, and outside the faucet
-            // task, so that a port clash fails the setup right away instead of
-            // leaving the test suite talking to whatever else is listening on
-            // that port. Holding the socket from here on also keeps other port
-            // allocators off it.
-            let faucet_bind_addr = process_mgr.globals.FM_FAUCET_BIND_ADDR.clone();
-            let faucet_listener = TcpListener::bind(&faucet_bind_addr)
-                .await
-                .with_context(|| format!("binding faucet to {faucet_bind_addr}"))?;
-            let gw_lnd_port = process_mgr.globals.FM_PORT_GW_LND;
-            let dev_fed = DevJitFed::new(&process_mgr, false, false)?;
-            let main = {
-                let task_group = task_group.clone();
-                let dev_fed = dev_fed.clone();
-                async move {
-                    let dev_fed = dev_fed.to_dev_fed(&process_mgr).await?;
-                    dev_fed
-                        .gw_lnd
-                        .client()
-                        .set_federation_routing_fee(dev_fed.fed.calculate_federation_id(), 0, 0)
-                        .await?;
-                    let faucet = crate::faucet::Faucet::new(&dev_fed)?;
-                    info!(addr = %faucet_bind_addr, "Faucet listening");
-                    task_group.spawn_cancellable("faucet", async move {
-                        if let Err(err) =
-                            crate::faucet::run(faucet, faucet_listener, gw_lnd_port).await
-                        {
-                            error!(err = %err.fmt_compact(), "Faucet failed");
-                        }
-                    });
-                    dev_fed
-                        .fed
-                        .pegin_gateways(30_000, vec![&dev_fed.gw_lnd])
-                        .await?;
-                    exec_or_wait_for_shutdown(exec, &task_group).await
-                }
-            };
-            let result = cleanup_on_exit(main, task_group).await;
-            // Explicit teardown in async context; `cleanup_on_exit` has joined
-            // the task group by now.
-            dev_fed.fast_terminate().await;
-            result?;
-        }
+        TestCmd::WasmTestSetup { exec } => wasm_test_setup(common_args, exec).await?,
         TestCmd::LatencyTests { r#type, iterations } => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (_process_mgr, dev_fed) = setup_test_federation(common_args).await?;
             latency_tests(dev_fed, r#type, None, iterations, true).await?;
         }
         TestCmd::ReconnectTest => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (process_mgr, dev_fed) = setup_test_federation(common_args).await?;
             reconnect_test(dev_fed, &process_mgr).await?;
         }
         TestCmd::CliTests => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (_process_mgr, dev_fed) = setup_test_federation(common_args).await?;
             cli_tests(dev_fed).await?;
         }
         TestCmd::GuardianMetadataTests => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (_process_mgr, dev_fed) = setup_test_federation(common_args).await?;
             guardian_metadata_tests(dev_fed).await?;
         }
         TestCmd::LoadTestToolTest => {
             // For the load test tool test, explicitly disable mint base fees
             unsafe { std::env::set_var(FM_DISABLE_BASE_FEES_ENV, "1") };
 
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (_process_mgr, dev_fed) = setup_test_federation(common_args).await?;
             cli_load_test_tool_test(dev_fed).await?;
         }
         TestCmd::LightningReconnectTest => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (process_mgr, dev_fed) = setup_test_federation(common_args).await?;
             lightning_gw_reconnect_test(dev_fed, &process_mgr).await?;
         }
         TestCmd::GatewayRebootTest => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (process_mgr, dev_fed) = setup_test_federation(common_args).await?;
             gw_reboot_test(dev_fed, &process_mgr).await?;
         }
         TestCmd::RecoverytoolTests => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (_process_mgr, dev_fed) = setup_test_federation(common_args).await?;
             recoverytool_test(dev_fed).await?;
         }
         TestCmd::LnurlRecoveryTest => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (_process_mgr, dev_fed) = setup_test_federation(common_args).await?;
             lnurl_recovery_test(dev_fed).await?;
         }
         TestCmd::GuardianBackup => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (process_mgr, dev_fed) = setup_test_federation(common_args).await?;
             guardian_backup_test(dev_fed, &process_mgr).await?;
         }
         TestCmd::CannotReplayTransaction => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (_process_mgr, dev_fed) = setup_test_federation(common_args).await?;
             cannot_replay_tx_test(dev_fed).await?;
         }
         TestCmd::TestOfflineClientInitialization => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (process_mgr, dev_fed) = setup_test_federation(common_args).await?;
             test_offline_client_initialization(dev_fed, &process_mgr).await?;
         }
         TestCmd::TestClientConfigChangeDetection => {
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
+            let (process_mgr, dev_fed) = setup_test_federation(common_args).await?;
             test_client_config_change_detection(dev_fed, &process_mgr).await?;
         }
-        TestCmd::TestAdminAuth => {
-            // Check versions early before starting infrastructure
-            let fedimint_cli_version = crate::util::FedimintCli::version_or_default().await;
-            let fedimintd_version = crate::util::FedimintdCmd::version_or_default().await;
-
-            if fedimint_cli_version < *VERSION_0_11_0_ALPHA
-                || fedimintd_version < *VERSION_0_11_0_ALPHA
-            {
-                info!(target: LOG_DEVIMINT, "Skipping admin_auth_tests - requires v0.11.0-alpha or later");
-                return Ok(());
-            }
-
-            let (process_mgr, _) = setup(common_args).await?;
-            let dev_fed = dev_fed(&process_mgr).await?;
-            admin_auth_tests(dev_fed).await?;
-        }
+        TestCmd::TestAdminAuth => run_admin_auth_tests(common_args).await?,
         TestCmd::UpgradeTests { binary, lnv2 } => {
             // TODO: Audit that the environment access only happens in single-threaded code.
             unsafe {
@@ -3021,4 +3097,11 @@ pub async fn handle_command(cmd: TestCmd, common_args: CommonArgs) -> Result<()>
         }
     }
     Ok(())
+}
+
+/// Start a standard scenario and return its manager so it outlives the test.
+async fn setup_test_federation(common_args: CommonArgs) -> Result<(ProcessManager, DevFed)> {
+    let (process_mgr, _) = setup(common_args).await?;
+    let dev_fed = dev_fed(&process_mgr).await?;
+    Ok((process_mgr, dev_fed))
 }

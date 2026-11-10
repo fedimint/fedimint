@@ -71,7 +71,7 @@ case "$SELFCI_JOB_NAME" in
   cargo-crap)
     selfci step start "cargo-crap"
     if ! nix build -L .#ci.crap ; then
-      >&2 echo "cargo-crap: failed - CRAP-score regression above 1000 detected"
+      >&2 echo "cargo-crap: failed - see diagnostics; ceiling configured in .cargo-crap.toml"
       selfci step fail
     fi
     ;;

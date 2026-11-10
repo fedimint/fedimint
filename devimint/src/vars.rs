@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 mod net_overrides;
+mod ports;
 use std::path::{Path, PathBuf};
 use std::str::FromStr as _;
 
@@ -32,6 +33,7 @@ macro_rules! declare_vars {
         }
 
         impl $struct {
+            #[allow(clippy::too_many_arguments)]
             pub async fn init($($args)*) -> ::anyhow::Result<Self> {
                 $(let $name: $ty = $value.into();)*
                 Ok(Self {
@@ -110,11 +112,12 @@ use fedimintd_envs::FM_FORCE_API_SECRETS_ENV;
 use format as f;
 use net_overrides::{FederationsNetOverrides, FedimintdPeerOverrides};
 
-use crate::envs::FM_FAUCET_PORT_ENV;
+use crate::envs::{FM_FAUCET_PORT_ENV, FM_GATEWAY_BASE_PORT_ENV};
 use crate::federation::{
     FEDIMINTD_METRICS_PORT_OFFSET, FEDIMINTD_UI_PORT_OFFSET, PORTS_PER_FEDIMINTD,
 };
 use crate::vars::net_overrides::GatewaydNetOverrides;
+use crate::vars::ports::{GLOBAL_PORTS, PortRange};
 
 pub fn utf8(path: &Path) -> &str {
     path.as_os_str().to_str().expect("must be valid utf8")
@@ -129,8 +132,18 @@ const GATEWAY_PORT_OFFSET_LDK_METRICS: u16 = 6;
 const GATEWAY_PORT_OFFSET_LDK2: u16 = 7;
 const GATEWAY_PORT_OFFSET_LDK2_METRICS: u16 = 8;
 
+fn gateway_port(base: u16, offset: u16) -> anyhow::Result<u16> {
+    base.checked_add(offset).with_context(|| {
+        f!(
+            "--gateway-base-port/{FM_GATEWAY_BASE_PORT_ENV} value {base} must accommodate \
+             gateway port offset {GATEWAY_PORT_OFFSET_LDK2_METRICS} (maximum base port {})",
+            u16::MAX - GATEWAY_PORT_OFFSET_LDK2_METRICS
+        )
+    })
+}
+
 declare_vars! {
-    Global = (test_dir: &Path, num_feds: usize, fed_size: usize, offline_nodes: usize, federation_base_ports: u16, num_gateways: usize, gateway_base_port: Option<u16>) =>
+    Global = (test_dir: &Path, num_feds: usize, fed_size: usize, offline_nodes: usize, federation_base_ports: u16, num_gateways: usize, gateway_base_port: Option<u16>, ports: &mut PortRange) =>
     {
         FM_USE_UNKNOWN_MODULE: String = std::env::var(FM_USE_UNKNOWN_MODULE_ENV).unwrap_or_else(|_| "1".into()); env: "FM_USE_UNKNOWN_MODULE";
 
@@ -151,54 +164,54 @@ declare_vars! {
         FM_TEST_FAST_WEAK_CRYPTO: String = "1"; env: "FM_TEST_FAST_WEAK_CRYPTO";
         FM_LOGS_DIR: PathBuf = mkdir(FM_TEST_DIR.join("logs")).await?; env: "FM_LOGS_DIR";
 
-        FM_PORT_BTC_RPC: u16 = port_alloc(1)?; env: "FM_PORT_BTC_RPC";
-        FM_PORT_BTC_P2P: u16 = port_alloc(1)?; env: "FM_PORT_BTC_P2P";
-        FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK: u16 = port_alloc(1)?; env: "FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK";
-        FM_PORT_BTC_ZMQ_PUB_RAW_TX: u16 = port_alloc(1)?; env: "FM_PORT_BTC_ZMQ_PUB_RAW_TX";
-        FM_PORT_LND_LISTEN: u16 = port_alloc(1)?; env: "FM_PORT_LND_LISTEN";
-        FM_PORT_LDK: u16 = port_alloc(1)?; env: "FM_PORT_LDK";
-        FM_PORT_LDK2: u16 = port_alloc(1)?; env: "FM_PORT_LDK";
-        FM_PORT_LND_RPC: u16 = port_alloc(1)?; env: "FM_PORT_LND_RPC";
-        FM_PORT_LND_REST: u16 = port_alloc(1)?; env: "FM_PORT_LND_REST";
-        FM_PORT_ESPLORA: u16 = port_alloc(1)?; env: "FM_PORT_ESPLORA";
-        FM_PORT_ESPLORA_MONITORING: u16 = port_alloc(1)?; env: "FM_PORT_ESPLORA_MONITORING";
-        FM_PORT_ESPLORA_ELECTRUM: u16 = port_alloc(1)?; env: "FM_PORT_ESPLORA_ELECTRUM";
+        FM_PORT_BTC_RPC: u16 = ports.take(1)?; env: "FM_PORT_BTC_RPC";
+        FM_PORT_BTC_P2P: u16 = ports.take(1)?; env: "FM_PORT_BTC_P2P";
+        FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK: u16 = ports.take(1)?; env: "FM_PORT_BTC_ZMQ_PUB_RAW_BLOCK";
+        FM_PORT_BTC_ZMQ_PUB_RAW_TX: u16 = ports.take(1)?; env: "FM_PORT_BTC_ZMQ_PUB_RAW_TX";
+        FM_PORT_LND_LISTEN: u16 = ports.take(1)?; env: "FM_PORT_LND_LISTEN";
+        FM_PORT_LDK: u16 = ports.take(1)?; env: "FM_PORT_LDK";
+        FM_PORT_LDK2: u16 = ports.take(1)?; env: "FM_PORT_LDK2";
+        FM_PORT_LND_RPC: u16 = ports.take(1)?; env: "FM_PORT_LND_RPC";
+        FM_PORT_LND_REST: u16 = ports.take(1)?; env: "FM_PORT_LND_REST";
+        FM_PORT_ESPLORA: u16 = ports.take(1)?; env: "FM_PORT_ESPLORA";
+        FM_PORT_ESPLORA_MONITORING: u16 = ports.take(1)?; env: "FM_PORT_ESPLORA_MONITORING";
+        FM_PORT_ESPLORA_ELECTRUM: u16 = ports.take(1)?; env: "FM_PORT_ESPLORA_ELECTRUM";
         FM_PORT_GW_LND: u16 = match gateway_base_port {
-            Some(b) => b + GATEWAY_PORT_OFFSET_LND,
-            None => port_alloc(1)?,
+            Some(b) => gateway_port(b, GATEWAY_PORT_OFFSET_LND)?,
+            None => ports.take(1)?,
         }; env: "FM_PORT_GW_LND";
         FM_PORT_GW_LND_METRICS: u16 = match gateway_base_port {
-            Some(b) => b + GATEWAY_PORT_OFFSET_LND_METRICS,
-            None => port_alloc(1)?,
+            Some(b) => gateway_port(b, GATEWAY_PORT_OFFSET_LND_METRICS)?,
+            None => ports.take(1)?,
         }; env: "FM_PORT_GW_LND_METRICS";
         FM_PORT_GW_LDK: u16 = match gateway_base_port {
-            Some(b) => b + GATEWAY_PORT_OFFSET_LDK,
-            None => port_alloc(1)?,
+            Some(b) => gateway_port(b, GATEWAY_PORT_OFFSET_LDK)?,
+            None => ports.take(1)?,
         }; env: "FM_PORT_GW_LDK";
         FM_PORT_GW_LDK_METRICS: u16 = match gateway_base_port {
-            Some(b) => b + GATEWAY_PORT_OFFSET_LDK_METRICS,
-            None => port_alloc(1)?,
+            Some(b) => gateway_port(b, GATEWAY_PORT_OFFSET_LDK_METRICS)?,
+            None => ports.take(1)?,
         }; env: "FM_PORT_GW_LDK_METRICS";
         FM_PORT_GW_LDK2: u16 = match gateway_base_port {
-            Some(b) => b + GATEWAY_PORT_OFFSET_LDK2,
-            None => port_alloc(1)?,
+            Some(b) => gateway_port(b, GATEWAY_PORT_OFFSET_LDK2)?,
+            None => ports.take(1)?,
         }; env: "FM_PORT_GW_LDK2";
         FM_PORT_GW_LDK2_METRICS: u16 = match gateway_base_port {
-            Some(b) => b + GATEWAY_PORT_OFFSET_LDK2_METRICS,
-            None => port_alloc(1)?,
+            Some(b) => gateway_port(b, GATEWAY_PORT_OFFSET_LDK2_METRICS)?,
+            None => ports.take(1)?,
         }; env: "FM_PORT_GW_LDK2_METRICS";
         FM_PORT_FAUCET: u16 = match std::env::var(FM_FAUCET_PORT_ENV) {
             Ok(port) => port.parse().with_context(|| f!("parsing {FM_FAUCET_PORT_ENV}={port}"))?,
-            Err(_) => port_alloc(1)?,
+            Err(_) => ports.take(1)?,
         }; env: "FM_PORT_FAUCET";
-        FM_PORT_RECURRINGD: u16 = port_alloc(1)?; env: "FM_PORT_RECURRINGD";
-        FM_PORT_RECURRINGDV2: u16 = port_alloc(1)?; env: "FM_PORT_RECURRINGDV2";
+        FM_PORT_RECURRINGD: u16 = ports.take(1)?; env: "FM_PORT_RECURRINGD";
+        FM_PORT_RECURRINGDV2: u16 = ports.take(1)?; env: "FM_PORT_RECURRINGDV2";
 
         FM_FEDERATION_BASE_PORT: u16 = federation_base_ports; env: "FM_FEDERATION_BASE_PORT";
         fedimintd_overrides: FederationsNetOverrides = FederationsNetOverrides::new(FM_FEDERATION_BASE_PORT, num_feds, NumPeers::from(fed_size)); env: "NOT_USED_FOR_ANYTHING";
         gw_base_port: u16 = match gateway_base_port {
             Some(b) => b,
-            None => port_alloc(3)?,
+            None => ports.take(3)?,
         }; env: "NOT_USED_FOR_ANYTHING";
         gatewayd_overrides: GatewaydNetOverrides = GatewaydNetOverrides::new(gw_base_port, num_gateways); env: "NOT_USED_FOR_ANYTHING";
 
@@ -261,6 +274,9 @@ declare_vars! {
     }
 }
 
+#[cfg(test)]
+mod tests;
+
 impl Global {
     pub async fn new(
         test_dir: &Path,
@@ -270,6 +286,10 @@ impl Global {
         federations_base_port: Option<u16>,
         gateway_base_port: Option<u16>,
     ) -> anyhow::Result<Self> {
+        if let Some(gateway_base_port) = gateway_base_port {
+            gateway_port(gateway_base_port, GATEWAY_PORT_OFFSET_LDK2_METRICS)?;
+        }
+
         let federations_base_port = if let Some(federations_base_port) = federations_base_port {
             federations_base_port
         } else {
@@ -280,6 +300,7 @@ impl Global {
             )?
         };
         let num_gateways: usize = 3;
+        let mut ports = PortRange::alloc(GLOBAL_PORTS)?;
         let this = Self::init(
             test_dir,
             num_feds,
@@ -288,6 +309,7 @@ impl Global {
             federations_base_port,
             num_gateways,
             gateway_base_port,
+            &mut ports,
         )
         .await?;
         Ok(this)

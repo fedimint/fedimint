@@ -126,6 +126,12 @@ Use [GitHub search to find more details about every API](https://github.com/sear
 - **Returns**: None
 - **Purpose**: Initiates a shutdown of the federation server.
 
+### Shutdown After Current Session Endpoint
+- **Endpoint**: `shutdown_after_current_session`
+- **Arguments**: None (requires authentication)
+- **Returns**: None
+- **Purpose**: Shuts the guardian down once the session it is running completes, without starting another one. Repeating the request keeps the earliest scheduled boundary. `fedimintd` then exits with `SESSION_BOUNDARY_EXIT_CODE` (3).
+
 ### Audit Endpoint
 - **Endpoint**: `audit`
 - **Arguments**: None (requires authentication)

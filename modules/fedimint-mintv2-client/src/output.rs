@@ -186,7 +186,7 @@ impl MintOutputStateMachine {
 
         for (request, signature) in old_state.common.issuance_requests.iter().zip(signatures) {
             dbtx.module_tx()
-                .insert_new_entry(&SpendableNoteKey(request.finalize(signature)), &())
+                .insert_new_entry(&SpendableNoteKey(request.finalize(signature).into()), &())
                 .await;
         }
 
