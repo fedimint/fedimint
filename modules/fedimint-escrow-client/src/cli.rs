@@ -15,29 +15,30 @@ use crate::output::EscrowOutputSMState;
 
 #[derive(Parser, Serialize)]
 enum Opts {
-    /// Create a new escrow contract
+    /// Create a new escrow contract with the parties, fees, arbiter fee keys,
+    /// amount, timeout, resolution deadline and a default fallback
     Create {
-        #[clap(long)]
+        #[clap(long, short = 'r')]
         recipient_key: secp256k1::PublicKey,
-        #[clap(long)]
+        #[clap(long, short = 'a')]
         arbiter_key: secp256k1::PublicKey,
-        #[clap(long)]
-        arbiter_fee_msats: Amount,
-        #[clap(long)]
+        #[clap(long, short = 'f')]
+        arbiter_fee: u64,
+        #[clap(long, short = 'k')]
         arbiter_fee_key: Vec<PublicKey>,
-        #[clap(long)]
+        #[clap(long, short = 'm')]
         amount_sats: u64,
-        #[clap(long)]
+        #[clap(long, short = 't')]
         timeout: u64,
-        #[clap(long)]
+        #[clap(long, short = 'd')]
         resolution_deadline: u64,
-        #[clap(long)]
+        #[clap(long, short = 'p')]
         default_fallback: FallbackPolicy,
     },
 
-    /// Get the created contract for the escrow_id
+    /// Get the escrow contract for the escrow_id
     GetContract {
-        #[clap(long)]
+        #[clap(long, visible_alias = "id")]
         escrow_id: EscrowId,
     },
 
@@ -46,28 +47,43 @@ enum Opts {
 
     /// Resolve the specific escrow with the funder signature
     ResolveEscrow {
+        #[clap(long, visible_alias = "id")]
         escrow_id: EscrowId,
+        #[clap(long, short = 's')]
         funder_signature: Signature,
     },
 
-    /// Resolve the escrow with the arbiter outcom
+    /// Resolve the escrow with the arbiter outcome
     SubmitArbiterDecision {
+        #[clap(long, visible_alias = "id")]
         escrow_id: EscrowId,
+        #[clap(long, short = 'o')]
         outcome: Outcome,
+        #[clap(long, short = 's')]
         arbiter_signature: Signature,
     },
 
-    /// Contract get in disputed state, resolution timeout is calculated from
-    /// when the contract goes in disputed state
-    EngageArbiter { escrow_id: EscrowId },
+    /// Engaging the arbiter will get the contract in disputed state, resolution
+    /// timeout is calculated from when the contract goes in disputed state
+    EngageArbiter {
+        #[clap(long, visible_alias = "id")]
+        escrow_id: EscrowId,
+    },
 
-    /// parties(funder/recipient) can trigger a fallback after resolution
+    /// Either party(funder/recipient) can trigger a fallback after resolution
     /// timeout for a disputed contract
-    TriggerFallback { escrow_id: EscrowId },
+    TriggerFallback {
+        #[clap(long, visible_alias = "id")]
+        escrow_id: EscrowId,
+    },
 
-    /// Arbiter claims its fees for the escrow
-    ClaimPayout { escrow_id: EscrowId },
+    /// Parties including the arbiter can claim their payouts for the escrow
+    ClaimPayout {
+        #[clap(long, visible_alias = "id")]
+        escrow_id: EscrowId,
+    },
 
+    /// Sign a resolution message or arbiter engagement signature
     SignMessage {
         #[command(subcommand)]
         message: SignMessageOpts,
@@ -76,16 +92,18 @@ enum Opts {
 
 #[derive(clap::Subcommand, Serialize)]
 enum SignMessageOpts {
+    /// Sign resolution message for the given escrow with the outcome
     Resolution {
-        #[clap(long)]
+        #[clap(long, visible_alias = "id")]
         escrow_id: EscrowId,
 
-        #[clap(long)]
+        #[clap(long, short = 'o')]
         outcome: Outcome,
     },
 
+    /// Sign message to engage the arbiter for the given escrow
     ArbiterEngaged {
-        #[clap(long)]
+        #[clap(long, visible_alias = "id")]
         escrow_id: EscrowId,
     },
 }
@@ -100,7 +118,7 @@ pub(crate) async fn handle_cli_command(
         Opts::Create {
             recipient_key,
             arbiter_key,
-            arbiter_fee_msats,
+            arbiter_fee,
             arbiter_fee_key,
             amount_sats,
             timeout,
@@ -111,7 +129,7 @@ pub(crate) async fn handle_cli_command(
                 .create_escrow(
                     recipient_key,
                     arbiter_key,
-                    arbiter_fee_msats,
+                    Amount::from_sats(arbiter_fee),
                     Amount::from_sats(amount_sats),
                     Duration::from_secs(timeout),
                     arbiter_fee_key,

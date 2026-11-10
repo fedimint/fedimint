@@ -47,6 +47,7 @@ There currently are three `FederationModule`s used in `FedimintConsensus` that e
 * [Wallet module](wallet_module.md) - handles bitcoin on-chain `PegInProof` inputs and `PegOut` outputs
 * `Mint` module - verifies `Note` input signatures and issues `BlindNote` outputs of different denominations
 * `LightningModule` - creates `ContractInput` inputs and `ContractOrOfferOutput` outputs representing a payment sent or received by a gateway on behalf of a user
+* [Escrow module](./escrow_module.md) - two parties lock ecash and settle it with a signature, or with an arbiter if they disagree.
 
 Any module can contribute inputs and outputs in the same `Transaction`.
 For instance, if users wish to convert on-chain bitcoin to Fedimint notes they can create a transaction with `PegInProof` inputs from `modules/fedimint-wallet`  and `BlindNote` outputs from `modules/fedimint-mint`.

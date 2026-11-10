@@ -423,3 +423,29 @@ Use [GitHub search to find more details about every API](https://github.com/sear
 - **Arguments**: [`RemoveGatewayRequest`](https://docs.fedimint.org/?search=RemoveGatewayRequest) - Request with gateway ID and signatures
 - **Returns**: `bool` - Whether the gateway was successfully removed
 - **Purpose**: Removes a Lightning gateway from the federation's list.
+
+## Escrow Module API Endpoints
+
+### Get Contract Endpoint
+- **Endpoint**: `get_contract`
+- **Arguments**: [`GetContractParams`](https://docs.fedimint.org/?search=GetContractParams) - Contains the `escrow_id`
+- **Returns**: `Option<`[`EscrowContract`](https://docs.fedimint.org/?search=EscrowContract)`>` - The contract if it exists
+- **Purpose**: Returns the contract of an escrow, including its current status.
+
+### Get Claim Amount Endpoint
+- **Endpoint**: `get_claim_amount`
+- **Arguments**: [`GetClaimAmount`](https://docs.fedimint.org/?search=GetClaimAmount) - Contains the `escrow_id`
+- **Returns**: `Option<`[`ClaimPool`](https://docs.fedimint.org/?search=ClaimPool)`>` - The entries that are not claimed yet
+- **Purpose**: Returns who can still claim how much after a contract was resolved. `None` if there is no pool.
+
+### List Contracts By Key Endpoint
+- **Endpoint**: `list_contract_by_key`
+- **Arguments**: [`ListContractParams`](https://docs.fedimint.org/?search=ListContractParams) - A public key and a federation id (the federation id is not used by the server)
+- **Returns**: `Vec<`[`EscrowContract`](https://docs.fedimint.org/?search=EscrowContract)`>` - Contracts that have the key in them
+- **Purpose**: Finds the contracts where the key is the funder, recipient, arbiter, a fee key or a key of the swap arbiter. Keys are compared by their x-only form.
+
+### Consensus Unix Time Endpoint
+- **Endpoint**: `consensus_unix_time`
+- **Arguments**: None
+- **Returns**: `u64` - Federation time in seconds
+- **Purpose**: Returns the time the escrow module uses for timeouts. It moves in steps of one minute and is 0 until the first votes are in.

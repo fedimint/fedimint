@@ -145,6 +145,14 @@ struct DkgSlot {
     running: Arc<Mutex<()>>,
 }
 
+/// Client-side implementation of the Fedimint escrow module.
+///
+/// Provides the APIs required to create and manage escrow contracts,
+/// initiate dispute resolution, submit arbiter decisions, claim payouts,
+/// and coordinate FROST based arbiter consortiums.
+///
+/// The escrow module does not support being the primary module and
+/// does not currently support client backups.
 pub struct EscrowClientModule {
     federation_id: FederationId,
     cfg: EscrowClientConfig,
@@ -470,6 +478,7 @@ struct SignClientMessageRequest {
     message: EscrowMessage,
 }
 
+/// Response returned after submitting an escrow creation transaction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateContractResponse {
     pub operation_id: OperationId,
@@ -478,6 +487,15 @@ pub struct CreateContractResponse {
     pub timeout: u64,
 }
 
+/// A persisted FROST arbiter consortium session.
+///
+/// Contains the consortium session record and the current DKG
+/// protocol state.
+///
+/// This type is returned by
+/// [`EscrowClientModule::get_consortium_state`] and can be used
+/// to inspect the progress and persisted information of a
+/// consortium attempt.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsortiumSession {
     record: FrostDkgSessionRecord,
@@ -485,20 +503,40 @@ pub struct ConsortiumSession {
 }
 
 impl EscrowClientModule {
+    /// Get the Iroh identity key
     fn iroh_identity_key(&self) -> Keypair {
         self.secret
             .child_key(ChildId(EscrowChildKeys::IrohKey as u64))
             .to_secp_key(&Secp256k1::new())
     }
 
+    /// Returns the public key identifying this client's escrow identity.
+    ///
+    /// This key is derived from the client's module root secret and is
+    /// used as the parties identity when creating escrow contracts and
+    /// authorizing operations
     pub fn escrow_pubkey(&self) -> PublicKey {
         self.escrow_key.public_key()
     }
 
+    /// Returns the public key used by this client to receive arbiter fees.
+    ///
+    /// This key is derived independently from the client's module root
+    /// secret and should be used as arbiter fee recipient when
+    /// creating an escrow contract.
     pub fn arbiter_fee_pubkey(&self) -> PublicKey {
         self.arbiter_fee_key.public_key()
     }
 
+    /// Creates a new escrow contract and submits a transaction locking
+    /// the client's e-cash in the federation
+    ///
+    /// Once the transaction is submitted, the returned operation ID can
+    /// be used with [`Self::subscribe_escrow_creation`] to monitor the
+    /// creation process.
+    ///
+    /// Returns [`CreateContractResponse`] containing the operation ID,
+    /// escrow ID, contract hash, and calculated timeout deadline.
     #[allow(clippy::too_many_arguments)]
     pub async fn create_escrow(
         &self,
@@ -609,6 +647,16 @@ impl EscrowClientModule {
         Ok(result)
     }
 
+    /// Initiates the funder authorized release of an escrow contract.
+    ///
+    /// This method allows the recipient to submit a release transaction
+    /// using a Schnorr signature provided by the funder. On successful
+    /// resolution, the settlement pays the recipient in
+    /// the same transaction rather than creating a claim pool.
+    ///
+    /// Use [`Self::subscribe_escrow_resolution`] to monitor the operation.
+    ///
+    /// Returns an operation ID that can be used to track the resolution.
     pub async fn resolve_escrow(
         &self,
         escrow_id: EscrowId,
@@ -687,6 +735,15 @@ impl EscrowClientModule {
         Ok(operation_id)
     }
 
+    /// Initiates the arbiter dispute resolution process for an escrow contract.
+    ///
+    /// Arbiter engagement is only permitted after the contract timeout
+    /// has been reached and the caller is a recognized contract participant. No
+    /// funds will be moved with this method.
+    ///
+    /// Use [`Self::subscribe_escrow_resolution`] to monitor the operation.
+    ///
+    /// Returns an operation ID for tracking the arbiter engagement.
     pub async fn engage_arbiter(&self, escrow_id: EscrowId) -> anyhow::Result<OperationId> {
         let operation_id = OperationId::new_random();
         let contract = self
@@ -764,6 +821,25 @@ impl EscrowClientModule {
         Ok(operation_id)
     }
 
+    /// Submits an arbiter decision for a disputed escrow contract.
+    ///
+    /// The arbiter provides a Schnorr signature authorizing the selected
+    /// outcome. Could be submitted by either party.
+    ///
+    /// Supported outcomes are:
+    ///
+    /// - [`Outcome::Release`] - Allocates the payout to the recipient.
+    /// - [`Outcome::Refund`] - Allocates the payout to the funder.
+    /// - [`Outcome::Split`] - Divides the payout between the funder and
+    ///   recipient according to the configured split ratio.
+    ///
+    /// Accepted arbiter outcomes create a claim pool. Beneficiaries must
+    /// subsequently claim their allocated amounts using
+    /// [`Self::claim_payout`].
+    ///
+    /// Use [`Self::subscribe_escrow_resolution`] to monitor the operation.
+    ///
+    /// Returns an operation ID for tracking the submitted decision.
     pub async fn submit_arbiter_decision(
         &self,
         escrow_id: EscrowId,
@@ -860,6 +936,16 @@ impl EscrowClientModule {
             .find(|kp| x_only_eq(&kp.public_key(), key))
     }
 
+    /// Claims the payout assigned to a locally controlled key in an
+    /// escrow contract's claim pool.
+    /// This operation is used after arbiter or fallback resolution has
+    /// created a claim pool. It does not initiate contract resolution.
+    ///
+    /// Use [`Self::subscribe_claim_payout`] to monitor the claim operation,
+    /// including confirmation that the resulting primary module outputs
+    /// have been received.
+    ///
+    /// Returns an operation ID for tracking the payout claim.
     pub async fn claim_payout(&self, escrow_id: EscrowId) -> anyhow::Result<OperationId> {
         let operation_id = OperationId::new_random();
         let pool = self
@@ -931,6 +1017,17 @@ impl EscrowClientModule {
         Ok(operation_id)
     }
 
+    /// Triggers the configured fallback policy for a disputed escrow contract.
+    ///
+    /// This operation is available to a contract participant after the
+    /// arbiter's resolution deadline has passed.
+    /// Fallback settlement does not include an arbiter fee.
+    ///
+    /// Use [`Self::subscribe_escrow_resolution`] to monitor the operation.
+    /// If a claim pool is created, use [`Self::claim_payout`] to claim
+    /// locally controlled allocations.
+    ///
+    /// Returns an operation ID for tracking the fallback operation.
     pub async fn trigger_fallback(&self, escrow_id: EscrowId) -> anyhow::Result<OperationId> {
         let operation_id = OperationId::new_random();
 
@@ -1017,10 +1114,33 @@ impl EscrowClientModule {
         Ok(operation_id)
     }
 
+    /// Returns the FROST participant identity derived from the client's
+    /// escrow public key.
+    ///
+    /// The returned identity is used to identify this client as a
+    /// participant in distributed key generation (DKG) sessions.
+    ///
+    /// Returns the client's [`FrostParticipant`] identity.
     pub fn get_frost_identity(&self) -> anyhow::Result<FrostParticipant> {
         FrostParticipant::from_pubkey(self.escrow_key.public_key())
     }
 
+    /// Creates or resumes a FROST arbiter consortium using Iroh transport.
+    ///
+    /// This method initializes a DKG session for the supplied participants
+    /// and coordinates the distributed key generation protocol over the
+    /// provided Iroh peer addresses.
+    /// The local client is automatically included as the DKG initiator
+    /// using its escrow identity.
+    ///
+    /// Transient failures retain the transport so that the same attempt
+    /// can be retried. Non-transient failures and successful completion
+    /// remove the cached transport.
+    ///
+    /// Only one DKG for a given session can run at a time.
+    ///
+    /// Returns the [`DkgResult`] containing the result of the distributed
+    /// key generation protocol.
     pub async fn create_arbiter_consortium(
         &self,
         participants: Vec<FrostParticipant>,
@@ -1073,12 +1193,26 @@ impl EscrowClientModule {
         result
     }
 
-    /// Give up on a consortium attempt and close its transport.
+    /// Aborts a cached arbiter consortium attempt by removing its
+    /// in-memory Iroh transport.
+    ///
+    /// This method prevents the client from reusing the cached transport
+    /// associated with the specified session ID.
+    ///
+    /// It does not reset or delete the persisted DKG session record.
+    /// Use [`Self::reset_arbiter_consortium`] when the intention is to
+    /// discard the unfinished DKG attempt and start again.
     pub async fn abort_arbiter_consortium(&self, session_id: SessionId) {
         self.dkg_transports.lock().await.remove(&session_id);
     }
 
-    /// Wipe an unfinished DKG attempt and drop its cached transport.
+    /// Resets an unfinished FROST consortium DKG attempt. Removes the persisted
+    /// DKG session state and cached transport associated with the specified
+    /// session ID,
+    /// The reset is rejected if a DKG execution for the session
+    /// is currently running.
+    ///
+    /// Returns `Ok(())` if the session was successfully reset.
     pub async fn reset_arbiter_consortium(&self, session_id: SessionId) -> anyhow::Result<()> {
         let db = self.client_ctx.module_db();
         let record = {
@@ -1100,6 +1234,13 @@ impl EscrowClientModule {
         Ok(())
     }
 
+    /// Creates and executes a FROST arbiter consortium using a custom
+    /// DKG transport implementation.
+    ///
+    /// This method allows integrators to provide their own implementation
+    /// of [`DkgTransport`] instead of using the built-in Iroh transport.
+    ///
+    /// Returns the [`DkgResult`] produced by the DKG protocol.
     pub async fn create_arbiter_consortium_with_custom_transport<T: DkgTransport>(
         &self,
         participants: Vec<FrostParticipant>,
@@ -1115,6 +1256,10 @@ impl EscrowClientModule {
         Ok(result)
     }
 
+    /// Retrieves the persisted state of a FROST arbiter consortium session.
+    ///
+    /// Returns [`ConsortiumSession`] containing the session record and DKG
+    /// state
     pub async fn get_consortium_state(
         &self,
         session_id: SessionId,
@@ -1136,6 +1281,10 @@ impl EscrowClientModule {
         })
     }
 
+    /// Retrieves an escrow contract from the federation.
+    ///
+    /// Returns `Some(EscrowContract)` if the contract exists, or `None`
+    /// if no matching contract is found.
     pub async fn get_contract(
         &self,
         escrow_id: EscrowId,
@@ -1160,6 +1309,8 @@ impl EscrowClientModule {
         Ok(operation_log)
     }
 
+    /// Lists escrow contracts associated with the client's locally
+    /// controlled escrow and arbiter fee public keys.
     pub async fn list_contracts(&self) -> anyhow::Result<Vec<EscrowContract>> {
         let mut all = BTreeMap::new();
         for pubkey in [
@@ -1185,6 +1336,13 @@ impl EscrowClientModule {
         Ok(self.client_ctx.module_api().consensus_unix_time().await?)
     }
 
+    /// Retrieves the claim pool associated with an escrow contract.
+    ///
+    /// The claim pool contains the payout allocations created when an
+    /// arbiter decision or fallback policy settles an escrow contract.
+    ///
+    /// Each allocation associates a public key with the amount that
+    /// the corresponding key is entitled to claim.
     pub async fn get_claim_pool(&self, escrow_id: EscrowId) -> anyhow::Result<Option<ClaimPool>> {
         Ok(self
             .client_ctx
@@ -1193,6 +1351,25 @@ impl EscrowClientModule {
             .await?)
     }
 
+    /// Subscribes to updates for an escrow creation operation.
+    ///
+    /// Returns a stream that reports the progress of the escrow output
+    /// state machine.
+    ///
+    /// The stream initially reports `Creating` and subsequently reports:
+    ///
+    /// - `Active` when the creation transaction is accepted by the federation.
+    /// - `Failed` when the transaction is rejected or cannot be accepted.
+    ///
+    /// # Returns
+    ///
+    /// Returns an [`UpdateStreamOrOutcome`] containing escrow creation
+    /// state updates or the previously recorded outcome.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the operation does not exist, belongs to
+    /// another module, or its metadata cannot be retrieved.
     pub async fn subscribe_escrow_creation(
         &self,
         operation_id: OperationId,
@@ -1235,6 +1412,31 @@ impl EscrowClientModule {
         ))
     }
 
+    /// Subscribes to updates for an escrow resolution operation.
+    ///
+    /// Tracks operations that modify the escrow contract state, including
+    /// funder release, arbiter engagement, arbiter decisions, and fallback
+    /// transitions.
+    ///
+    /// The stream initially reports `Pending` and then reports the
+    /// corresponding resolution result:
+    ///
+    /// - `Released` when the escrow is released.
+    /// - `Refunded` when the escrow is refunded.
+    /// - `Split` when the escrow is split between the parties.
+    /// - `Disputed` when an arbiter is engaged or replaced.
+    /// - `Failed` when the transaction cannot be accepted or an unexpected
+    ///   operation action is encountered.
+    ///
+    /// # Returns
+    ///
+    /// Returns an [`UpdateStreamOrOutcome`] containing resolution state
+    /// updates or the previously recorded outcome.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the operation does not exist, belongs to
+    /// another module, or its metadata cannot be retrieved.
     pub async fn subscribe_escrow_resolution(
         &self,
         operation_id: OperationId,
@@ -1280,6 +1482,26 @@ impl EscrowClientModule {
         ))
     }
 
+    /// Subscribes to updates for an escrow payout claim operation.
+    ///
+    /// Tracks both transaction acceptance and the retrieval of the
+    /// resulting primary module outputs.
+    ///
+    /// The stream initially reports `Pending` and subsequently reports:
+    ///
+    /// - `Claimed` when the transaction is accepted and the resulting primary
+    ///   module outputs have been received.
+    /// - `Failed` if transaction acceptance or output retrieval fails.
+    ///
+    /// # Returns
+    ///
+    /// Returns an [`UpdateStreamOrOutcome`] containing payout claim
+    /// state updates or the previously recorded outcome.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the operation does not exist, belongs to
+    /// another module, or its metadata cannot be retrieved.
     pub async fn subscribe_claim_payout(
         &self,
         operation_id: OperationId,
@@ -1329,6 +1551,10 @@ impl EscrowClientModule {
         ))
     }
 
+    /// Signs an escrow protocol message using the client's escrow identity.
+    ///
+    /// This method can be used by integrators to generate signatures
+    /// required by escrow protocol operations, such as arbiter engagement
     pub fn sign_message(&self, message: EscrowMessage) -> anyhow::Result<Signature> {
         let secp = Secp256k1::new();
 

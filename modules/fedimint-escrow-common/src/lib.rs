@@ -30,9 +30,11 @@ pub const SPLIT_BPS_DENOMINATOR: u16 = 10_000;
 
 const MIN_PERIOD: u64 = 10 * 60;
 
+/// Unique identifier for an escrow contract.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Encodable, Decodable)]
 pub struct EscrowId(pub [u8; 32]);
 
+/// Hash representing the immutable terms of an escrow contract.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Encodable, Decodable)]
 pub struct ContractHash(pub [u8; 32]);
 
@@ -133,6 +135,8 @@ pub struct EscrowContract {
     pub default_fallback: FallbackPolicy,
 }
 
+/// Defines the policy applied when an escrow dispute
+/// is not resolved within the allowed resolution period.
 #[derive(Debug, Clone, Serialize, Hash, Eq, PartialEq, Deserialize, Encodable, Decodable)]
 pub enum FallbackPolicy {
     Refund,
@@ -234,7 +238,8 @@ impl EscrowContract {
         }
     }
 
-    /// The fallback that will actually run on the next trigger.
+    /// Returns the effective fallback policy that will be applied
+    /// when the fallback resolution is triggered.
     pub fn effective_fallback(&self) -> FallbackPolicy {
         match &self.default_fallback {
             FallbackPolicy::SwapArbiter { .. } if !self.can_swap_arbiter() => {
@@ -829,6 +834,7 @@ pub fn validate_split_bps(funder_split: u16, recipient_split: u16) -> bool {
     u32::from(funder_split) + u32::from(recipient_split) == u32::from(SPLIT_BPS_DENOMINATOR)
 }
 
+/// Validates the contract fields before the escrow contract is created.
 pub fn validate_contract_fields(
     contract: &EscrowContract,
     now: u64,

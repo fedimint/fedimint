@@ -45,6 +45,7 @@ Some additional built-in modules are also available:
 * [fedimint-meta-server](./fedimint_meta_server/index.html) and [fedimint-meta-client](./fedimint_meta_client/index.html) implement guardian managing additional ("meta") information about the Federation.
 * [fedimint-empty-server](./fedimint_empty_server/index.html) and [fedimint-empty-client](./fedimint_empty_client/index.html) are a reference "empty" module that can be used as a starting point for new modules.
 * [fedimint-dummy-server](./fedimint_dummy_server/index.html) and [fedimint-dummy-client](./fedimint_dummy_client/index.html) are a test-only modules, possibly useful as a simple example.
+* [fedimint-escrow-server](./fedimint_escrow_server/index.html) and [fedimint-escrow-client](./fedimint_escrow_client/index.html) implement escrow, locking ecash in a contract.
 
 Developers and builders are encouraged to create their own modules. Check ["Fedimint Modules" Discussions](https://github.com/fedimint/fedimint/discussions/categories/fedimint-modules/) for ideas and help.
 
