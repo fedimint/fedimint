@@ -129,7 +129,7 @@ use tracing::{debug, info, instrument, trace, warn};
 use crate::core::{ModuleInstanceId, ModuleKind};
 use crate::encoding::{Decodable, DecodeError, Encodable};
 use crate::fmt_utils::AbbreviateHexBytes;
-use crate::task::{MaybeSend, MaybeSync};
+use crate::task::{MaybeSend, MaybeSync, ShuttingDownError, TaskShutdownToken};
 use crate::{async_trait_maybe_send, maybe_add_send, maybe_add_send_sync, timing};
 
 pub mod mem_impl;
@@ -638,6 +638,9 @@ impl Database {
     ///
     /// Calls the `checker` when value of the key may have changed.
     /// Returns the value when `checker` returns a `Some(T)`.
+    ///
+    /// This wait has no shutdown signal. Use
+    /// [`Self::wait_key_check_with_shutdown`] for a wait owned by a task group.
     pub async fn wait_key_check<'a, K, T>(
         &'a self,
         key: &K,
@@ -682,6 +685,44 @@ impl Database {
         K: DatabaseKey + DatabaseRecord + DatabaseKeyWithNotify,
     {
         self.wait_key_check(key, std::convert::identity).await.0
+    }
+
+    /// Like [`Self::wait_key_check`], but fails when the owning task group
+    /// shuts down, including while acquiring or reading a transaction.
+    ///
+    /// Obtain `shutdown` from [`crate::task::TaskHandle::make_shutdown_rx`].
+    /// Shutdown takes precedence if both futures are ready in the same poll.
+    /// Cancelling drops the pending notification and transaction, without
+    /// committing anything or shutting down other users of this database.
+    pub async fn wait_key_check_with_shutdown<'a, K, T>(
+        &'a self,
+        key: &K,
+        checker: impl Fn(Option<K::Value>) -> Option<T>,
+        shutdown: TaskShutdownToken,
+    ) -> Result<(T, DatabaseTransaction<'a, Committable>), ShuttingDownError>
+    where
+        K: DatabaseKey + DatabaseRecord + DatabaseKeyWithNotify,
+    {
+        match futures::future::select(shutdown, Box::pin(self.wait_key_check(key, checker))).await {
+            futures::future::Either::Left(((), _)) => Err(ShuttingDownError {}),
+            futures::future::Either::Right((value, _)) => Ok(value),
+        }
+    }
+
+    /// Like [`Self::wait_key_exists`], but fails on task-group shutdown.
+    ///
+    /// See [`Self::wait_key_check_with_shutdown`] for cancellation semantics.
+    pub async fn wait_key_exists_with_shutdown<K>(
+        &self,
+        key: &K,
+        shutdown: TaskShutdownToken,
+    ) -> Result<K::Value, ShuttingDownError>
+    where
+        K: DatabaseKey + DatabaseRecord + DatabaseKeyWithNotify,
+    {
+        self.wait_key_check_with_shutdown(key, std::convert::identity, shutdown)
+            .await
+            .map(|(value, _)| value)
     }
 }
 

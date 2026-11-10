@@ -52,7 +52,7 @@ use fedimint_core::net::auth::GuardianAuthToken;
 use fedimint_core::peer_availability::PeerAvailability;
 use fedimint_core::secp256k1::{PublicKey, SECP256K1};
 use fedimint_core::session_outcome::{ConsensusItem, SessionStatus, SessionStatusV2};
-use fedimint_core::task::TaskGroup;
+use fedimint_core::task::{ShuttingDownError, TaskGroup};
 use fedimint_core::transaction::{
     SerdeTransaction, Transaction, TransactionError, TransactionSubmissionOutcome,
 };
@@ -311,10 +311,17 @@ impl ConsensusApi {
     pub async fn await_transaction(
         &self,
         txid: TransactionId,
-    ) -> (Vec<ModuleInstanceId>, DatabaseTransaction<'_, Committable>) {
+    ) -> std::result::Result<
+        (Vec<ModuleInstanceId>, DatabaseTransaction<'_, Committable>),
+        ShuttingDownError,
+    > {
         debug!(target: LOG_NET_API, %txid, "Awaiting transaction acceptance");
         self.db
-            .wait_key_check(&AcceptedTransactionKey(txid), std::convert::identity)
+            .wait_key_check_with_shutdown(
+                &AcceptedTransactionKey(txid),
+                std::convert::identity,
+                self.task_group.make_handle().make_shutdown_rx(),
+            )
             .await
     }
 
@@ -323,7 +330,7 @@ impl ConsensusApi {
         outpoint: OutPoint,
     ) -> Result<SerdeModuleEncoding<DynOutputOutcome>> {
         debug!(target: LOG_NET_API, %outpoint, "Awaiting output outcome");
-        let (module_ids, mut dbtx) = self.await_transaction(outpoint.txid).await;
+        let (module_ids, mut dbtx) = self.await_transaction(outpoint.txid).await?;
 
         let module_id = module_ids
             .into_iter()
@@ -354,7 +361,7 @@ impl ConsensusApi {
         let count = checked_outputs_outcomes_count(outpoint_range)?;
 
         // Wait for the transaction to be accepted first
-        let (module_ids, mut dbtx) = self.await_transaction(outpoint_range.txid()).await;
+        let (module_ids, mut dbtx) = self.await_transaction(outpoint_range.txid()).await?;
 
         let mut outcomes = Vec::with_capacity(count);
 
@@ -996,7 +1003,8 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
             AWAIT_TRANSACTION_ENDPOINT,
             ApiVersion::new(0, 0),
             async |fedimint: &ConsensusApi, _context, tx_hash: TransactionId| -> TransactionId {
-                fedimint.await_transaction(tx_hash).await;
+                fedimint.await_transaction(tx_hash).await
+                    .map_err(|_| ApiError::server_error("Server shutting down".to_owned()))?;
 
                 Ok(tx_hash)
             }
@@ -1008,7 +1016,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                 let outcome = fedimint
                     .await_output_outcome(outpoint)
                     .await
-                    .map_err(|e| ApiError::bad_request(e.to_string()))?;
+                    .map_err(output_outcome_api_error)?;
 
                 Ok(outcome)
             }
@@ -1020,7 +1028,7 @@ pub fn server_endpoints() -> Vec<ApiEndpoint<ConsensusApi>> {
                 let outcomes = fedimint
                     .await_outputs_outcomes(outpoint_range)
                     .await
-                    .map_err(|e| ApiError::bad_request(e.to_string()))?;
+                    .map_err(output_outcome_api_error)?;
 
                 Ok(outcomes)
             }
@@ -1306,6 +1314,14 @@ pub(crate) async fn backup_statistics_static(
     }
 
     backup_stats
+}
+
+fn output_outcome_api_error(error: anyhow::Error) -> ApiError {
+    if error.is::<ShuttingDownError>() {
+        ApiError::server_error("Server shutting down".to_owned())
+    } else {
+        ApiError::bad_request(error.to_string())
+    }
 }
 
 /// Schedules a shutdown after `current_session`, keeping the session of a

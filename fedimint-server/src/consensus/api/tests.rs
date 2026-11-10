@@ -7,16 +7,35 @@ use std::time::Instant;
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{IDatabaseTransactionOpsCoreTyped as _, IRawDatabaseExt as _};
 use fedimint_core::net::guardian_metadata::GuardianMetadata;
+use fedimint_core::task::TaskGroup;
 use fedimint_core::{BitcoinHash as _, IdxRange, TransactionId};
 
 use super::{
     Database, Duration, LegacyP2PConnectionStatus, MAX_BACKUP_FUTURE_TIMESTAMP_SECS,
     MAX_OUTPUTS_OUTCOMES_BATCH, OutPointRange, P2PConnectionState, P2PConnectionStatus, PeerId,
     ScheduledShutdown, ShutdownRequest, SystemTime, backup_timestamp_is_too_far_in_future,
-    checked_outputs_outcomes_count, legacy_peer_status, schedule_shutdown_after, secp256k1,
-    sign_guardian_metadata_preserving_iroh_endpoint, watch,
+    checked_outputs_outcomes_count, legacy_peer_status, output_outcome_api_error,
+    schedule_shutdown_after, secp256k1, sign_guardian_metadata_preserving_iroh_endpoint, watch,
 };
 use crate::net::api::guardian_metadata::GuardianMetadataKey;
+
+#[tokio::test]
+async fn output_wait_shutdown_is_not_a_bad_request() {
+    let group = TaskGroup::new();
+    group.shutdown();
+    let shutdown = group
+        .make_handle()
+        .cancel_on_shutdown(std::future::pending::<()>())
+        .await
+        .unwrap_err();
+    let error = output_outcome_api_error(shutdown.into());
+    assert_eq!(error.code, 500);
+    assert_eq!(error.message, "Server shutting down");
+
+    let error = output_outcome_api_error(anyhow::anyhow!("Invalid output request"));
+    assert_eq!(error.code, 400);
+    assert_eq!(error.message, "Invalid output request");
+}
 
 #[test]
 fn repeated_shutdown_after_current_session_keeps_the_earliest_boundary() {
