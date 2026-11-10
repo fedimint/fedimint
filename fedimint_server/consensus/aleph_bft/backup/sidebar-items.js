@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["BackupReader","BackupWriter"]};
+window.SIDEBAR_ITEMS = {"fn":["unit_digest"],"struct":["BackupReader","BackupWriter"]};
