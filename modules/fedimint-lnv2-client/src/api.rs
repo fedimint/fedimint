@@ -1,13 +1,12 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::future::ready;
 
 use fedimint_api_client::api::{
-    FederationApiExt, FederationResult, IModuleFederationApi, ServerResult,
+    FederationApiExt, FederationError, FederationResult, IModuleFederationApi, ServerResult,
 };
-use fedimint_api_client::query::FilterMapThreshold;
 #[cfg(feature = "cli")]
 use fedimint_core::module::ApiAuth;
 use fedimint_core::module::ApiRequestErased;
+use fedimint_core::runtime::{Duration, Instant, timeout};
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send};
@@ -19,7 +18,21 @@ use fedimint_lnv2_common::endpoint_constants::{
     AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_INCOMING_CONTRACTS_ENDPOINT, AWAIT_PREIMAGE_ENDPOINT,
     CONSENSUS_BLOCK_COUNT_ENDPOINT, GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
 };
+use futures::StreamExt;
+use futures::stream::FuturesUnordered;
 use rand::seq::SliceRandom;
+
+#[cfg(test)]
+mod tests;
+
+/// How long [`LightningFederationApi::gateways`] keeps waiting for a threshold
+/// of guardians to answer once the first guardian has answered.
+///
+/// Waiting for more answers lets gateways listed by many guardians be ranked
+/// above a gateway listed only by the guardian that happened to answer first,
+/// while the bound keeps unreachable or failing guardians from stalling
+/// gateway selection.
+pub const GATEWAYS_GRACE_PERIOD: Duration = Duration::from_secs(5);
 
 #[apply(async_trait_maybe_send!)]
 pub trait LightningFederationApi {
@@ -104,16 +117,73 @@ where
     }
 
     async fn gateways(&self) -> FederationResult<Vec<SafeUrl>> {
-        let gateways: BTreeMap<PeerId, Vec<SafeUrl>> = self
-            .request_with_strategy(
-                FilterMapThreshold::new(
-                    |_, gateways| ready(Ok(gateways)),
-                    self.all_peers().to_num_peers(),
-                ),
-                GATEWAYS_ENDPOINT.to_string(),
-                ApiRequestErased::default(),
-            )
-            .await?;
+        // Unlike `request_with_strategy` this does not give up once `f + 1`
+        // guardians have failed: any guardian's list is usable, so the query
+        // only fails if every guardian failed.
+        let mut requests = self
+            .all_peers()
+            .iter()
+            .map(|peer| async move {
+                let response = self
+                    .request_single_peer::<Vec<SafeUrl>>(
+                        GATEWAYS_ENDPOINT.to_string(),
+                        ApiRequestErased::default(),
+                        *peer,
+                    )
+                    .await;
+
+                (*peer, response)
+            })
+            .collect::<FuturesUnordered<_>>();
+
+        let threshold = self.all_peers().to_num_peers().threshold();
+        let mut gateways = BTreeMap::new();
+        let mut peer_errors = BTreeMap::new();
+        // Starts with the first answer; until then we wait for as long as
+        // some guardian may still answer.
+        let mut deadline = None;
+
+        while gateways.len() < threshold {
+            let next = match deadline {
+                Some(deadline) => {
+                    match timeout(
+                        Instant::saturating_duration_since(&deadline, Instant::now()),
+                        requests.next(),
+                    )
+                    .await
+                    {
+                        Ok(next) => next,
+                        Err(_elapsed) => break,
+                    }
+                }
+                None => requests.next().await,
+            };
+
+            let Some((peer, response)) = next else {
+                break;
+            };
+
+            match response {
+                Ok(response) => {
+                    gateways.insert(peer, response);
+
+                    deadline.get_or_insert_with(|| Instant::now() + GATEWAYS_GRACE_PERIOD);
+                }
+                Err(e) => {
+                    e.report_if_unusual(peer, "Gateways");
+
+                    peer_errors.insert(peer, e);
+                }
+            }
+        }
+
+        if gateways.is_empty() {
+            return Err(FederationError::peer_errors(
+                GATEWAYS_ENDPOINT,
+                (),
+                peer_errors,
+            ));
+        }
 
         let mut union = gateways
             .values()
@@ -127,6 +197,9 @@ where
         // gateways evenly.
         union.shuffle(&mut rand::thread_rng());
 
+        // Gateways listed by more guardians come first, so a gateway listed by
+        // a single guardian does not take precedence over the ones the other
+        // guardians agree on.
         union.sort_by_cached_key(|r| {
             gateways
                 .values()
