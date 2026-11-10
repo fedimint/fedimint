@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"trait":["LightningFederationApi"]};
+window.SIDEBAR_ITEMS = {"constant":["GATEWAYS_GRACE_PERIOD"],"trait":["LightningFederationApi"]};
