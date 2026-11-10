@@ -363,9 +363,14 @@ pub async fn run(
         "Supported API versions",
     );
 
+    let availability = Arc::new(peer_availability::AvailabilityTracker::new(
+        cfg.local.identity,
+        fedimint_core::NumPeersExt::to_num_peers(&cfg.consensus.broadcast_public_keys),
+    ));
     let consensus_api = ConsensusApi {
         cfg: cfg.clone(),
         db: db.clone(),
+        availability: availability.clone(),
         modules: module_registry.clone(),
         client_cfg: client_cfg.clone(),
         submission_sender: submission_sender.clone(),
@@ -483,14 +488,9 @@ pub async fn run(
 
     let api_urls = get_api_urls(&db, &cfg.consensus).await;
 
-    let peer_activity = Arc::new(std::sync::Mutex::new(peer_availability::PeerActivity::new(
-        cfg.local.identity,
-        fedimint_core::NumPeersExt::to_num_peers(&cfg.consensus.broadcast_public_keys),
-    )));
-
     task_group.spawn_cancellable(
         "peer-availability",
-        peer_availability::persist_peer_availability(db.clone(), peer_activity.clone()),
+        peer_availability::persist_peer_availability(db.clone(), availability.clone()),
     );
 
     // FIXME: (@leonardo) How should this be handled ?
@@ -515,7 +515,7 @@ pub async fn run(
         data_dir,
         db_checkpoint_retention,
         session_timeout,
-        peer_activity,
+        peer_activity: availability.activity.clone(),
     }
     .run()
     .await?;

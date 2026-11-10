@@ -318,7 +318,7 @@ impl ServerConfig {
             core_consensus: CORE_CONSENSUS_VERSION,
             api: MultiApiVersion::try_from_iter([ApiVersion {
                 major: 0,
-                minor: 10,
+                minor: 11,
             }])
             .expect("not version conflicts"),
         }

@@ -18,7 +18,7 @@ use std::io::{Error, Read, Write};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{AutocommitResultExt, Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -31,14 +31,14 @@ use fedimint_core::{NumPeers, PeerId};
 use fedimint_logging::LOG_CONSENSUS;
 use tracing::debug;
 
-use super::db::PeerAvailabilityKey;
+use super::db::{PeerAvailabilityKey, PeerAvailabilityResetsKey};
 
 const SLOT_SECS: u64 = 60;
 
 /// Folds the [`PeerActivity`] into the persisted [`PeerAvailabilityState`]
 /// every 10 minutes, or every 10 seconds in tests. A restart loses at most one
 /// interval of activity.
-pub async fn persist_peer_availability(db: Database, peer_activity: Arc<Mutex<PeerActivity>>) {
+pub async fn persist_peer_availability(db: Database, tracker: Arc<AvailabilityTracker>) {
     let interval = if is_running_in_test_env() {
         Duration::from_secs(10)
     } else {
@@ -48,20 +48,132 @@ pub async fn persist_peer_availability(db: Database, peer_activity: Arc<Mutex<Pe
     loop {
         sleep(interval).await;
 
-        let now_secs = duration_since_epoch().as_secs();
-        let activity = peer_activity.lock().expect("poisoned").take(now_secs);
+        tracker.persist(&db, duration_since_epoch().as_secs()).await;
+    }
+}
+
+/// Serializes resets and writes, including taking the buffered samples.
+pub struct AvailabilityTracker {
+    pub activity: Arc<Mutex<PeerActivity>>,
+    writes: tokio::sync::Mutex<()>,
+}
+
+impl AvailabilityTracker {
+    pub fn new(identity: PeerId, num_peers: NumPeers) -> Self {
+        Self {
+            activity: Arc::new(Mutex::new(PeerActivity::new(identity, num_peers))),
+            writes: tokio::sync::Mutex::new(()),
+        }
+    }
+
+    async fn persist(&self, db: &Database, now_secs: u64) {
+        let _guard = self.writes.lock().await;
+        let mut activity = self.activity.lock().expect("poisoned").take(now_secs);
 
         debug!(target: LOG_CONSENSUS, ?activity, "Peer activity since last update");
 
         let mut dbtx = db.begin_transaction().await;
+        let mut resets = dbtx
+            .get_value(&PeerAvailabilityResetsKey)
+            .await
+            .unwrap_or_default();
+        for (peer, fresh_state) in &mut resets {
+            let fresh = ObservedActivity {
+                observed_secs: activity
+                    .peer_observed_secs
+                    .get(peer)
+                    .copied()
+                    .unwrap_or(activity.observed_secs),
+                availability: activity
+                    .availability
+                    .remove(peer)
+                    .map(|v| BTreeMap::from([(*peer, v)]))
+                    .unwrap_or_default(),
+                last_heard_secs: activity
+                    .last_heard_secs
+                    .remove(peer)
+                    .map(|v| BTreeMap::from([(*peer, v)]))
+                    .unwrap_or_default(),
+                ..Default::default()
+            };
+            fresh_state.update(now_secs, &fresh);
+        }
         let mut state = dbtx
             .get_value(&PeerAvailabilityKey)
             .await
             .unwrap_or_default();
         state.update(now_secs, &activity);
         dbtx.insert_entry(&PeerAvailabilityKey, &state).await;
+        dbtx.insert_entry(&PeerAvailabilityResetsKey, &resets).await;
         dbtx.commit_tx().await;
     }
+
+    /// Clears `peer`'s observations and starts fresh ones, also when it was
+    /// reset before.
+    pub async fn reset(
+        &self,
+        db: &Database,
+        peer: PeerId,
+        now_secs: u64,
+    ) -> fedimint_core::db::DatabaseResult<()> {
+        let _guard = self.writes.lock().await;
+        db.autocommit(
+            |dbtx, _| {
+                let activity = self.activity.clone();
+                Box::pin(async move {
+                    let mut resets = dbtx
+                        .get_value(&PeerAvailabilityResetsKey)
+                        .await
+                        .unwrap_or_default();
+                    let mut state = dbtx
+                        .get_value(&PeerAvailabilityKey)
+                        .await
+                        .unwrap_or_default();
+                    state.last_seen_secs.remove(&peer);
+                    for window in &mut state.availability {
+                        window.remove(&peer);
+                    }
+                    resets.insert(peer, PeerAvailabilityState::default());
+                    dbtx.insert_entry(&PeerAvailabilityKey, &state).await;
+                    dbtx.insert_entry(&PeerAvailabilityResetsKey, &resets).await;
+                    // Keep samples until the reset commits. The writer stays
+                    // locked until this hook has cleared the buffer.
+                    dbtx.on_commit(move || {
+                        activity.lock().expect("poisoned").reset(peer, now_secs);
+                    });
+                    Ok(())
+                })
+            },
+            None,
+        )
+        .await
+        .unwrap_autocommit()
+    }
+}
+
+pub async fn report(db: &Database, now_secs: u64) -> PeerAvailability {
+    let mut dbtx = db.begin_transaction_nc().await;
+    let mut report = dbtx
+        .get_value(&PeerAvailabilityKey)
+        .await
+        .unwrap_or_default()
+        .report(now_secs);
+    for (peer, fresh_state) in dbtx
+        .get_value(&PeerAvailabilityResetsKey)
+        .await
+        .unwrap_or_default()
+    {
+        let fresh = fresh_state.report(now_secs);
+        report.last_seen_secs.extend(fresh.last_seen_secs);
+        for (i, window) in report.windows.iter_mut().enumerate() {
+            let coverage = fresh.windows.get(i).map_or(0, |w| w.coverage_bps);
+            window.peer_coverage_bps.insert(peer, coverage);
+            if let Some(fresh) = fresh.windows.get(i) {
+                window.peers.extend(&fresh.peers);
+            }
+        }
+    }
+    report
 }
 
 /// Slots of consensus traffic per peer since the last [`PeerActivity::take`].
@@ -72,6 +184,8 @@ pub struct PeerActivity {
     slot: u64,
     heard_in_slot: BTreeSet<PeerId>,
     observed_slots: u32,
+    excluded_slots: BTreeMap<PeerId, u32>,
+    skip_slot: BTreeSet<PeerId>,
     active_slots: BTreeMap<PeerId, u32>,
     last_heard_secs: BTreeMap<PeerId, u64>,
 }
@@ -80,6 +194,7 @@ pub struct PeerActivity {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ObservedActivity {
     pub observed_secs: u64,
+    pub peer_observed_secs: BTreeMap<PeerId, u64>,
     /// Each peer's share of the observed slots in `0.0..=1.0`
     pub availability: BTreeMap<PeerId, f64>,
     pub last_heard_secs: BTreeMap<PeerId, u64>,
@@ -93,9 +208,21 @@ impl PeerActivity {
             slot: 0,
             heard_in_slot: BTreeSet::new(),
             observed_slots: 0,
+            excluded_slots: BTreeMap::new(),
+            skip_slot: BTreeSet::new(),
             active_slots: BTreeMap::new(),
             last_heard_secs: BTreeMap::new(),
         }
+    }
+
+    fn reset(&mut self, peer: PeerId, now_secs: u64) {
+        self.advance(now_secs);
+        self.active_slots.remove(&peer);
+        self.last_heard_secs.remove(&peer);
+        self.excluded_slots.insert(peer, self.observed_slots);
+        // Keep this slot's traffic for judging other peers, but exclude the
+        // partial slot from this peer's observations.
+        self.skip_slot.insert(peer);
     }
 
     /// Records a consensus message from `peer`.
@@ -110,23 +237,29 @@ impl PeerActivity {
         self.advance(now_secs);
 
         let observed_slots = std::mem::take(&mut self.observed_slots);
+        let excluded = std::mem::take(&mut self.excluded_slots);
+        let observed = |peer| observed_slots - excluded.get(&peer).copied().unwrap_or(0);
         let mut active_slots = std::mem::take(&mut self.active_slots);
 
         // We were up in every slot we observed
-        active_slots.insert(self.identity, observed_slots);
-        if 0 < observed_slots {
+        active_slots.insert(self.identity, observed(self.identity));
+        if 0 < observed(self.identity) {
             self.last_heard_secs.insert(self.identity, now_secs);
         }
 
         ObservedActivity {
             observed_secs: u64::from(observed_slots) * SLOT_SECS,
+            peer_observed_secs: excluded
+                .keys()
+                .map(|peer| (*peer, u64::from(observed(*peer)) * SLOT_SECS))
+                .collect(),
             availability: self
                 .num_peers
                 .peer_ids()
-                .filter(|_| 0 < observed_slots)
+                .filter(|peer| 0 < observed(*peer))
                 .map(|peer| {
                     let active = active_slots.get(&peer).copied().unwrap_or(0);
-                    (peer, f64::from(active) / f64::from(observed_slots))
+                    (peer, f64::from(active) / f64::from(observed(peer)))
                 })
                 .collect(),
             last_heard_secs: self.last_heard_secs.clone(),
@@ -137,19 +270,23 @@ impl PeerActivity {
     /// nothing at all arrived are not observed.
     fn advance(&mut self, now_secs: u64) {
         let slot = now_secs / SLOT_SECS;
-        if slot == self.slot {
+        if slot <= self.slot {
             return;
         }
 
         // We never hear from ourselves
         if self.num_peers.threshold() - 1 <= self.heard_in_slot.len() {
             self.observed_slots += 1;
-            for peer in &self.heard_in_slot {
+            for peer in &self.skip_slot {
+                *self.excluded_slots.entry(*peer).or_default() += 1;
+            }
+            for peer in self.heard_in_slot.difference(&self.skip_slot) {
                 *self.active_slots.entry(*peer).or_default() += 1;
             }
         }
 
         self.heard_in_slot.clear();
+        self.skip_slot.clear();
         self.slot = slot;
     }
 }
@@ -238,6 +375,7 @@ impl PeerAvailabilityState {
                         // Time since the last update is unobserved, so coverage
                         // decays over it while the ratio below does not change
                         coverage_bps: to_bps(coverage.0 * (-elapsed / *window_secs as f64).exp()),
+                        peer_coverage_bps: BTreeMap::new(),
                         peers: availability
                             .iter()
                             .map(|(peer, average)| (*peer, to_bps(average.0 / coverage.0)))

@@ -13,6 +13,7 @@ fn report(coverage_bps: u16, peers: &[(u16, u16)]) -> PeerAvailability {
             .map(|window_secs| WindowAvailability {
                 window_secs: *window_secs,
                 coverage_bps,
+                peer_coverage_bps: BTreeMap::new(),
                 peers: peers
                     .iter()
                     .map(|(peer, bps)| (PeerId::from(*peer), *bps))
@@ -20,6 +21,27 @@ fn report(coverage_bps: u16, peers: &[(u16, u16)]) -> PeerAvailability {
             })
             .collect(),
     }
+}
+
+#[test]
+fn old_reports_use_shared_coverage_and_resets_use_fresh_coverage() {
+    let old = report(10_000, &[(0, 9_000), (3, 8_000)]);
+    let json = serde_json::to_string(&old).unwrap();
+    assert!(!json.contains("peer_coverage_bps"));
+    assert_eq!(
+        serde_json::from_str::<PeerAvailability>(&json).unwrap(),
+        old
+    );
+    let mut reports: BTreeMap<_, _> = (1..=3).map(|p| (PeerId::from(p), old.clone())).collect();
+    for p in [1, 2] {
+        for window in &mut reports.get_mut(&PeerId::from(p)).unwrap().windows {
+            window.peer_coverage_bps.insert(PeerId::from(0), 10);
+            window.peers.insert(PeerId::from(0), 5_000);
+        }
+    }
+    let merged = merge_peer_availability(&reports, NumPeers::from(4));
+    assert_eq!(merged.windows[0][&PeerId::from(0)], 5_000);
+    assert_eq!(merged.windows[0][&PeerId::from(3)], 8_000);
 }
 
 #[test]
