@@ -82,12 +82,12 @@ use fedimint_gateway_common::{
     GatewayInfo, GetInvoiceRequest, GetInvoiceResponse, LeaveFedPayload, LightningInfo,
     LightningMode, ListTransactionsPayload, ListTransactionsResponse, MnemonicResponse,
     OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, PayOfferResponse,
-    PaymentLogPayload, PaymentLogResponse, PaymentPolicy, PaymentStats, PaymentSummaryPayload,
-    PaymentSummaryResponse, PeginFromOnchainPayload, ReceiveEcashPayload, ReceiveEcashResponse,
-    RegisteredProtocol, SendOnchainRequest, SetChannelFeesRequest, SetFeesPayload,
-    SetMnemonicPayload, SetPaymentPolicyPayload, SpendEcashPayload, SpendEcashResponse,
-    V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload, WithdrawPreviewResponse,
-    WithdrawResponse, WithdrawToOnchainPayload,
+    PaymentLogPayload, PaymentLogResponse, PaymentPolicy, PaymentPolicyGuard, PaymentStats,
+    PaymentSummaryPayload, PaymentSummaryResponse, PeginFromOnchainPayload, ReceiveEcashPayload,
+    ReceiveEcashResponse, RegisteredProtocol, SendOnchainRequest, SetChannelFeesRequest,
+    SetFeesPayload, SetMnemonicPayload, SetPaymentPolicyPayload, SpendEcashPayload,
+    SpendEcashResponse, V1_API_ENDPOINT, WithdrawPayload, WithdrawPreviewPayload,
+    WithdrawPreviewResponse, WithdrawResponse, WithdrawToOnchainPayload,
 };
 use fedimint_gateway_server_db::{GatewayDbtxNcExt as _, get_gatewayd_database_migrations};
 pub use fedimint_gateway_ui::IAdminGateway;
@@ -102,6 +102,7 @@ use fedimint_gwv2_client::{
     EXPIRATION_DELTA_MINIMUM_V2, FinalReceiveState, GatewayClientModuleV2, GatewayClientV2Error,
     IGatewayClientV2,
 };
+use fedimint_lightning::ldk::MnemonicSource;
 use fedimint_lightning::lnd::GatewayLndClient;
 use fedimint_lightning::{
     CreateInvoiceRequest, ILnRpcClient, InterceptPaymentRequest, InterceptPaymentResponse,
@@ -181,7 +182,6 @@ const DB_FILE: &str = "gatewayd.db";
 /// running in LDK mode.
 const LDK_NODE_DB_FOLDER: &str = "ldk_node";
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// ```mermaid
 /// graph LR
 /// classDef virtual fill:#fff,stroke-dasharray: 5 5
@@ -198,8 +198,8 @@ const LDK_NODE_DB_FOLDER: &str = "ldk_node";
 pub enum GatewayState {
     NotConfigured {
         // Broadcast channel to alert gateway background threads that the mnemonic has been
-        // created/set.
-        mnemonic_sender: tokio::sync::broadcast::Sender<()>,
+        // created/set, and how it was obtained.
+        mnemonic_sender: tokio::sync::broadcast::Sender<MnemonicSource>,
     },
     Disconnected,
     Syncing,
@@ -318,6 +318,7 @@ impl Gateway {
             client_builder,
             gateway_state,
             chain_source,
+            MnemonicSource::Existing,
         )
         .await
     }
@@ -405,6 +406,15 @@ pub struct Gateway {
     /// handled, so that a duplicate delivery is dropped; see
     /// [`Self::handle_lightning_payment`].
     lnv2_hold_invoice_lock_pool: Arc<lockable::LockPool<sha256::Hash>>,
+
+    /// Serializes payment policy changes against the funding of the payments
+    /// those policies admit.
+    payment_policy_lock: Arc<RwLock<()>>,
+
+    /// How the mnemonic was obtained at startup. When the gateway starts
+    /// unconfigured, the source of the mnemonic set later arrives through the
+    /// `mnemonic_sender` channel instead.
+    mnemonic_source: MnemonicSource,
 }
 
 impl std::fmt::Debug for Gateway {
@@ -668,7 +678,7 @@ impl Gateway {
     /// Default function for creating a gateway with the `Mint`, `Wallet`, and
     /// `Gateway` modules.
     pub async fn new_with_default_modules(
-        mnemonic_sender: tokio::sync::broadcast::Sender<()>,
+        mnemonic_sender: tokio::sync::broadcast::Sender<MnemonicSource>,
     ) -> anyhow::Result<Gateway> {
         let opts = GatewayOpts::parse();
         let gateway_parameters = opts.to_gateway_parameters()?;
@@ -745,32 +755,42 @@ impl Gateway {
         let client_builder =
             GatewayClientBuilder::new(opts.data_dir.clone(), registry, opts.db_backend).await?;
 
-        let gateway_state = if Self::load_mnemonic(&gateway_db).await.is_some() {
-            GatewayState::Disconnected
+        let (gateway_state, mnemonic_source) = if Self::load_mnemonic(&gateway_db).await.is_some() {
+            (GatewayState::Disconnected, MnemonicSource::Existing)
         } else {
             // Generate a mnemonic or use one from an environment variable if `skip_setup`
             // is true
             if gateway_parameters.skip_setup {
-                let mnemonic = if let Ok(words) = std::env::var(FM_GATEWAY_MNEMONIC_ENV) {
+                let (mnemonic, mnemonic_source) = if let Ok(words) =
+                    std::env::var(FM_GATEWAY_MNEMONIC_ENV)
+                {
                     info!(target: LOG_GATEWAY, "Using provided mnemonic from environment variable");
-                    Mnemonic::parse_in_normalized(Language::English, words.as_str()).map_err(
-                        |e| {
+                    let mnemonic = Mnemonic::parse_in_normalized(Language::English, words.as_str())
+                        .map_err(|e| {
                             AdminGatewayError::MnemonicError(anyhow!(format!(
                                 "Seed phrase provided in environment was invalid {e:?}"
                             )))
-                        },
-                    )?
+                        })?;
+                    (mnemonic, MnemonicSource::Existing)
                 } else {
                     debug!(target: LOG_GATEWAY, "Generating mnemonic and writing entropy to client storage");
-                    Bip39RootSecretStrategy::<12>::random(&mut OsRng)
+                    (
+                        Bip39RootSecretStrategy::<12>::random(&mut OsRng),
+                        MnemonicSource::Generated,
+                    )
                 };
 
                 Client::store_encodable_client_secret(&gateway_db, mnemonic.to_entropy())
                     .await
                     .map_err(|err| AdminGatewayError::MnemonicError(err.into()))?;
-                GatewayState::Disconnected
+                (GatewayState::Disconnected, mnemonic_source)
             } else {
-                GatewayState::NotConfigured { mnemonic_sender }
+                // The mnemonic's source arrives through `mnemonic_sender` once
+                // it is set
+                (
+                    GatewayState::NotConfigured { mnemonic_sender },
+                    MnemonicSource::Existing,
+                )
             }
         };
 
@@ -787,6 +807,7 @@ impl Gateway {
             client_builder,
             gateway_state,
             chain_source,
+            mnemonic_source,
         )
         .await
     }
@@ -800,6 +821,7 @@ impl Gateway {
         client_builder: GatewayClientBuilder,
         gateway_state: GatewayState,
         chain_source: ChainSource,
+        mnemonic_source: MnemonicSource,
     ) -> anyhow::Result<Gateway> {
         let num_route_hints = gateway_parameters.num_route_hints;
         let network = gateway_parameters.network;
@@ -853,6 +875,8 @@ impl Gateway {
                 gateway_parameters.invoice_rate_limit_per_second,
             )),
             lnv2_hold_invoice_lock_pool: Arc::new(lockable::LockPool::new()),
+            payment_policy_lock: Arc::new(RwLock::new(())),
+            mnemonic_source,
         })
     }
 
@@ -901,7 +925,7 @@ impl Gateway {
     pub async fn run(
         self,
         runtime: Arc<tokio::runtime::Runtime>,
-        mnemonic_receiver: tokio::sync::broadcast::Receiver<()>,
+        mnemonic_receiver: tokio::sync::broadcast::Receiver<MnemonicSource>,
     ) -> anyhow::Result<TaskShutdownToken> {
         install_crypto_provider().await;
         self.register_clients_timer();
@@ -1017,7 +1041,7 @@ impl Gateway {
     fn start_gateway(
         &self,
         runtime: Arc<tokio::runtime::Runtime>,
-        mut mnemonic_receiver: tokio::sync::broadcast::Receiver<()>,
+        mut mnemonic_receiver: tokio::sync::broadcast::Receiver<MnemonicSource>,
     ) {
         const PAYMENT_STREAM_RETRY_SECONDS: u64 = 60;
 
@@ -1026,6 +1050,7 @@ impl Gateway {
         self.task_group.spawn(
             "Subscribe to intercepted lightning payments in stream",
             |handle| async move {
+                let mut mnemonic_source = self_copy.mnemonic_source;
                 // Repeatedly attempt to establish a connection to the lightning node and create a payment stream, re-trying if the connection is broken.
                 loop {
                     if handle.is_shutting_down() {
@@ -1043,15 +1068,18 @@ impl Gateway {
                             "You might need to provide it from the UI or refer to documentation w.r.t how to initialize it."
                         );
 
-                        let _ = mnemonic_receiver.recv().await;
+                        if let Ok(source) = mnemonic_receiver.recv().await {
+                            mnemonic_source = source;
+                        }
                         info!(
                             target: LOG_GATEWAY,
+                            ?mnemonic_source,
                             "Received mnemonic, attempting to start lightning receive loop"
                         );
                     }
 
                     let payment_stream_task_group = tg.make_subgroup();
-                    let lnrpc_route = self_copy.create_lightning_client(runtime.clone()).await;
+                    let lnrpc_route = self_copy.create_lightning_client(runtime.clone(), mnemonic_source).await;
 
                     debug!(target: LOG_GATEWAY, "Establishing lightning payment stream...");
                     let (stream, ln_client) = match lnrpc_route.route_htlcs(&payment_stream_task_group).await
@@ -1365,16 +1393,7 @@ impl Gateway {
             None => false,
         };
 
-        // An LNv2 payment carries no federation scid, so a registered contract
-        // whose federation has receives turned off is only recognisable by the
-        // error the LNv2 attempt returned. It is cancelled explicitly rather
-        // than left to the forward branch, whose meaning for a HOLD invoice is
-        // up to the lightning backend.
-        let receive_disabled = [&lnv2_result, &lnv1_result]
-            .into_iter()
-            .any(|result| matches!(result, Err(PublicGatewayError::ReceiveDisabled { .. })));
-
-        if is_federation_scid || receive_disabled {
+        if is_federation_scid {
             // The HTLC targeted a federation we serve but we couldn't claim
             // it (no LNv1 offer / no LNv2 contract / receives turned off /
             // underfunded gateway / federation timeout / etc.). Surface the
@@ -1388,7 +1407,6 @@ impl Gateway {
                 amount_msat = payment_request.amount_msat,
                 incoming_chan_id = payment_request.incoming_chan_id,
                 htlc_id = payment_request.htlc_id,
-                receive_disabled,
                 lnv2_err = ?lnv2_result.as_ref().err(),
                 lnv1_err = ?lnv1_result.as_ref().err(),
                 "Lightning payment for a served federation could not be accepted: cancelling HTLC",
@@ -1495,16 +1513,6 @@ impl Gateway {
         else {
             return Err(PublicGatewayError::LNv1(LNv1Error::IncomingPayment("Incoming payment has a last hop short channel id that does not map to a known federation".to_string())));
         };
-
-        // LNv1 clients cannot be told that receives are off, so their invoices
-        // still route here. Refusing before any federation interaction fails
-        // the HTLC back to the sender without spending anything.
-        let federation_id = client.borrow().with_sync(|client| client.federation_id());
-        if !self.receive_enabled(federation_id).await {
-            return Err(PublicGatewayError::ReceiveDisabled {
-                federation_id_prefix: federation_id.to_prefix(),
-            });
-        }
 
         // Both LND's `incoming_expiry` and LDK's `claim_deadline` are absolute
         // Bitcoin heights. LDK does not currently produce LNv1 forwards (it has
@@ -2330,6 +2338,7 @@ impl Gateway {
     async fn create_lightning_client(
         &self,
         runtime: Arc<tokio::runtime::Runtime>,
+        mnemonic_source: MnemonicSource,
     ) -> Box<dyn ILnRpcClient> {
         match self.lightning_mode.clone() {
             LightningMode::Lnd {
@@ -2384,6 +2393,7 @@ impl Gateway {
                         lightning_port,
                         alias.clone(),
                         mnemonic.clone(),
+                        mnemonic_source,
                         runtime.clone(),
                     )
                     .map(Box::new)
@@ -2703,6 +2713,17 @@ impl IAdminGateway for Gateway {
             dbtx.load_federation_configs().await
         };
 
+        // Silently succeeding on an unknown federation would let a mistyped id
+        // pass for fees that were never changed.
+        if let Some(fed_id) = federation_id
+            && fed_configs.is_empty()
+        {
+            return Err(FederationNotConnected {
+                federation_id_prefix: fed_id.to_prefix(),
+            }
+            .into());
+        }
+
         let federation_manager = self.federation_manager.read().await;
 
         for (federation_id, config) in &mut fed_configs {
@@ -2788,6 +2809,11 @@ impl IAdminGateway for Gateway {
             receive_enabled,
         }: SetPaymentPolicyPayload,
     ) -> AdminResult<()> {
+        // Taken before the policy is read anywhere else: every payment admitted
+        // under the old policy funds before this returns, and none is admitted
+        // afterwards.
+        let _policy_change = self.payment_policy_lock.write().await;
+
         let mut dbtx = self.gateway_db.begin_transaction().await;
         let mut fed_configs = if let Some(fed_id) = federation_id {
             dbtx.load_federation_configs()
@@ -3293,6 +3319,16 @@ impl IAdminGateway for Gateway {
         &self,
         payload: WithdrawPreviewPayload,
     ) -> AdminResult<WithdrawPreviewResponse> {
+        // Deserialized amounts can bypass BitcoinAmountOrAll::from_str.
+        // Reject them before converting to millisatoshis or querying either wallet.
+        if let BitcoinAmountOrAll::Amount(amount) = payload.amount
+            && amount > bitcoin::Amount::MAX_MONEY
+        {
+            return Err(AdminGatewayError::WithdrawError {
+                failure_reason: "Withdrawal amount exceeds maximum Bitcoin supply".to_string(),
+            });
+        }
+
         let gateway_network = self.network;
         let address_checked = payload
             .address
@@ -3465,16 +3501,21 @@ impl IAdminGateway for Gateway {
             )));
         };
 
-        let mnemonic = if let Some(words) = payload.words {
+        let (mnemonic, mnemonic_source) = if let Some(words) = payload.words {
             info!(target: LOG_GATEWAY, "Using user provided mnemonic");
-            Mnemonic::parse_in_normalized(Language::English, words.as_str()).map_err(|e| {
-                AdminGatewayError::MnemonicError(anyhow!(format!(
-                    "Seed phrase provided in environment was invalid {e:?}"
-                )))
-            })?
+            let mnemonic = Mnemonic::parse_in_normalized(Language::English, words.as_str())
+                .map_err(|e| {
+                    AdminGatewayError::MnemonicError(anyhow!(format!(
+                        "Seed phrase provided in environment was invalid {e:?}"
+                    )))
+                })?;
+            (mnemonic, MnemonicSource::Existing)
         } else {
             debug!(target: LOG_GATEWAY, "Generating mnemonic and writing entropy to client storage");
-            Bip39RootSecretStrategy::<12>::random(&mut OsRng)
+            (
+                Bip39RootSecretStrategy::<12>::random(&mut OsRng),
+                MnemonicSource::Generated,
+            )
         };
 
         Client::store_encodable_client_secret(&self.gateway_db, mnemonic.to_entropy())
@@ -3485,7 +3526,7 @@ impl IAdminGateway for Gateway {
         drop(state_guard);
 
         // Alert the gateway background threads that the mnemonic has been set
-        let _ = mnemonic_sender.send(());
+        let _ = mnemonic_sender.send(mnemonic_source);
 
         Ok(())
     }
@@ -3598,6 +3639,19 @@ impl Gateway {
             .load_federation_config(federation_id)
             .await
             .is_none_or(|config| config.receive_enabled())
+    }
+
+    /// Admits a fresh incoming payment when the receive policy allows it,
+    /// returning a guard that holds off a policy change until the caller has
+    /// funded the payment.
+    async fn admit_fresh_receive(&self, federation_id: FederationId) -> Option<PaymentPolicyGuard> {
+        // The policy is read under the guard, so it cannot change between this
+        // read and the funding the caller performs while holding it.
+        let guard = self.payment_policy_lock.clone().read_owned().await;
+
+        self.receive_enabled(federation_id)
+            .await
+            .then(|| PaymentPolicyGuard::new(guard))
     }
 
     /// Returns payment information that LNv2 clients can use to instruct this
@@ -3920,18 +3974,6 @@ impl Gateway {
             ));
         }
 
-        // Turning receives off covers invoices issued before the switch was
-        // flipped: every incoming contract of the federation is refused, whether
-        // it would be funded from an HTLC or from a direct swap.
-        if !self
-            .receive_enabled(registered_incoming_contract.federation_id)
-            .await
-        {
-            return Err(PublicGatewayError::ReceiveDisabled {
-                federation_id_prefix: registered_incoming_contract.federation_id.to_prefix(),
-            });
-        }
-
         let client = self
             .select_client(registered_incoming_contract.federation_id)
             .await?
@@ -4064,6 +4106,13 @@ impl IGatewayClientV2 for Gateway {
 
     async fn outbound_payment_exists(&self, payment_hash: sha256::Hash) -> bool {
         self.await_outbound_payment_exists(payment_hash).await
+    }
+
+    async fn begin_fresh_receive(
+        &self,
+        federation_id: &FederationId,
+    ) -> Option<PaymentPolicyGuard> {
+        self.admit_fresh_receive(*federation_id).await
     }
 
     async fn min_contract_amount(
@@ -4249,6 +4298,10 @@ impl IGatewayClientV1 for Gateway {
         }
 
         Ok(())
+    }
+
+    async fn begin_fresh_receive(&self, federation_id: FederationId) -> Option<PaymentPolicyGuard> {
+        self.admit_fresh_receive(federation_id).await
     }
 
     async fn get_routing_fees(&self, federation_id: FederationId) -> Option<RoutingFees> {

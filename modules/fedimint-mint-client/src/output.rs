@@ -19,6 +19,7 @@ use fedimint_core::endpoint_constants::AWAIT_OUTPUTS_OUTCOMES_ENDPOINT;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::secp256k1::{Keypair, Secp256k1, Signing};
 use fedimint_core::util::FmtCompact as _;
+use fedimint_core::util::backoff_util::custom_backoff;
 use fedimint_core::{Amount, NumPeersExt, OutPoint, PeerId, Tiered, TransactionId, crit};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
@@ -33,6 +34,7 @@ use tbs::{
 };
 use tracing::{debug, warn};
 
+use crate::api::MintFederationApi as _;
 use crate::client_db::NoteKey;
 use crate::error::VerifyBlindShareError;
 use crate::events::{NoteCreated, ReceivePaymentStatus, ReceivePaymentUpdateEvent};
@@ -44,7 +46,6 @@ const SPEND_KEY_CHILD_ID: ChildId = ChildId(0);
 /// Child ID used to derive the blinding key from a note's [`DerivableSecret`]
 const BLINDING_KEY_CHILD_ID: ChildId = ChildId(1);
 
-#[cfg_attr(doc, aquamarine::aquamarine)]
 /// State machine managing the e-cash issuance process related to a mint output.
 ///
 /// ```mermaid
@@ -52,7 +53,7 @@ const BLINDING_KEY_CHILD_ID: ChildId = ChildId(1);
 ///     classDef virtual fill:#fff,stroke-dasharray: 5 5
 ///
 ///     Created -- containing tx rejected --> Aborted
-///     Created -- await output outcome --> Outcome["Outcome Received"]:::virtual
+///     Created -- tx accepted, await output outcome --> Outcome["Outcome Received"]:::virtual
 ///     subgraph Await Outcome
 ///     Outcome -- valid blind signatures  --> Succeeded
 ///     Outcome -- invalid blind signatures  --> Failed
@@ -330,6 +331,7 @@ impl MintOutputStatesCreated {
     ) -> BTreeMap<PeerId, BlindedSignatureShare> {
         let txid = common.txid();
         let out_idx = common.out_point_range.start_idx();
+        await_tx_accepted_before_polling(&global_context, txid, BlindNonce(message)).await;
         debug!(target: LOG_CLIENT_MODULE_MINT, %txid, %out_idx, "Awaiting output outcome");
         global_context
             .api()
@@ -550,6 +552,16 @@ impl MintOutputStatesCreatedMulti {
     ) -> Vec<(u64, BTreeMap<PeerId, BlindedSignatureShare>)> {
         let txid = common.txid();
         let out_idx = common.out_point_range.start_idx();
+        let (_, first_request) = issuance_requests
+            .values()
+            .next()
+            .expect("A mint output state machine has at least one output");
+        await_tx_accepted_before_polling(
+            &global_context,
+            txid,
+            BlindNonce(first_request.blinded_message()),
+        )
+        .await;
         debug!(target: LOG_CLIENT_MODULE_MINT, %txid, %out_idx, "Awaiting output outcome");
         let api = global_context.api();
         let core_api_version = global_context.core_api_version().await;
@@ -868,6 +880,70 @@ impl MintOutputStatesCreatedMulti {
 
 /// # Panics
 /// If the given `outcome` is not a [`MintOutputOutcome::V0`] outcome.
+/// Longest wait between two checks of whether an output's blind nonce was
+/// used, see [`await_tx_accepted_before_polling`]
+const BLIND_NONCE_USED_CHECK_MAX_DELAY: Duration = Duration::from_hours(1);
+
+/// Waits until the transaction `txid` is known to be accepted
+///
+/// Long-polling a peer for the outcome of an output never returns while its
+/// transaction is not accepted, and occupies one of the peer's request slots
+/// on the client's connection for as long as it waits. So output state
+/// machines must not start long-polling for a transaction that may never get
+/// accepted.
+///
+/// The client learns of the acceptance from the transaction's submission
+/// state machine. Output state machines restored by recovery have none, so
+/// this also polls whether the federation has used `blind_nonce`, which it
+/// does exactly when it accepts a transaction issuing the output. That check
+/// answers immediately, and is repeated with a backoff of up to
+/// [`BLIND_NONCE_USED_CHECK_MAX_DELAY`].
+///
+/// If the transaction gets rejected this never returns, and the state
+/// machine's rejection transition fires instead.
+async fn await_tx_accepted_before_polling(
+    global_context: &DynGlobalClientContext,
+    txid: TransactionId,
+    blind_nonce: BlindNonce,
+) {
+    let submission_accepted = async {
+        if global_context.await_tx_accepted(txid).await.is_err() {
+            std::future::pending::<()>().await;
+        }
+    };
+
+    let blind_nonce_used = async {
+        let module_api = global_context.module_api();
+        let mut backoff = custom_backoff(
+            Duration::from_secs(1),
+            BLIND_NONCE_USED_CHECK_MAX_DELAY,
+            None,
+        );
+        loop {
+            match module_api.check_blind_nonce_used(blind_nonce).await {
+                Ok(true) => return,
+                Ok(false) => {
+                    debug!(target: LOG_CLIENT_MODULE_MINT, %txid, "Output's blind nonce not used yet");
+                }
+                Err(err) => {
+                    debug!(target: LOG_CLIENT_MODULE_MINT, %txid, err = %err.fmt_compact(), "Failed to check whether output's blind nonce was used");
+                }
+            }
+            fedimint_core::runtime::sleep(
+                backoff
+                    .next()
+                    .expect("Backoff without a retry limit never ends"),
+            )
+            .await;
+        }
+    };
+
+    tokio::select! {
+        () = submission_accepted => {},
+        () = blind_nonce_used => {},
+    }
+}
+
 pub fn verify_blind_share(
     peer: PeerId,
     outcome: &SerdeOutputOutcome,

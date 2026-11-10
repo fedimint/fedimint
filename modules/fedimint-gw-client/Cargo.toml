@@ -11,16 +11,11 @@ version = { workspace = true }
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "tokio_unstable"]
 
-[package.metadata.cargo-udeps.ignore]
-# cargo udeps can't detect that one
-normal = ["aquamarine"]
-
 [lib]
 name = "fedimint_gw_client"
 path = "src/lib.rs"
 
 [dependencies]
-aquamarine = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
@@ -32,6 +27,7 @@ fedimint-connectors = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-derive-secret = { workspace = true }
 fedimint-eventlog = { workspace = true }
+fedimint-gateway-common = { workspace = true }
 fedimint-gwv2-client = { workspace = true }
 fedimint-lightning = { workspace = true }
 fedimint-ln-client = { workspace = true }

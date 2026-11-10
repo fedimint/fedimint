@@ -57,6 +57,7 @@
       overlayAll = nixpkgs.lib.composeManyExtensions [
         (import ./nix/overlays/wasm-bindgen.nix)
         (import ./nix/overlays/cargo-nextest.nix)
+        (import ./nix/overlays/lnd.nix)
         (import ./nix/overlays/esplora-electrs.nix)
         (import ./nix/overlays/darwin-compile-fixes.nix)
         (import ./nix/overlays/cargo-honggfuzz.nix)
@@ -118,14 +119,6 @@
           "linked-specs"
           "linked-specs-updating"
           "linked-specs-review"
-          "multipart-review"
-          "multipart-review-architecture"
-          "multipart-review-coordination"
-          "multipart-review-judgment"
-          "multipart-review-maintainability"
-          "multipart-review-reliability"
-          "multipart-review-rust-style"
-          "multipart-review-skills"
         ];
 
         linkProjectSkills = pkgs.writeShellScriptBin "link-project-skills" ''
