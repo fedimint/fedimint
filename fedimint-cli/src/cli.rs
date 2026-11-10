@@ -129,6 +129,11 @@ pub(crate) enum AdminCmd {
     /// Show the status according to the `status` endpoint
     Status,
 
+    /// Start fresh availability observations for a peer on this guardian
+    ResetPeerAvailability {
+        peer_id: PeerId,
+    },
+
     /// Show an audit across all modules
     Audit,
 

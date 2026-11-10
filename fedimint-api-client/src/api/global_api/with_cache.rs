@@ -15,12 +15,13 @@ use fedimint_core::endpoint_constants::{
     AWAIT_SESSION_OUTCOME_ENDPOINT, AWAIT_TRANSACTION_ENDPOINT, BACKUP_ENDPOINT,
     BACKUP_STATISTICS_ENDPOINT, CHAIN_ID_ENDPOINT, FEDIMINTD_VERSION_ENDPOINT,
     GET_SETUP_CODE_ENDPOINT, GUARDIAN_CONFIG_BACKUP_ENDPOINT, GUARDIAN_METADATA_ENDPOINT,
-    INVITE_CODE_ENDPOINT, RECOVER_ENDPOINT, RESET_PEER_SETUP_CODES_ENDPOINT,
-    RESTART_FEDERATION_SETUP_ENDPOINT, SESSION_COUNT_ENDPOINT, SESSION_STATUS_ENDPOINT,
-    SESSION_STATUS_V2_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT, SETUP_STATUS_ENDPOINT,
-    SHUTDOWN_ENDPOINT, SIGN_API_ANNOUNCEMENT_ENDPOINT, SIGN_GUARDIAN_METADATA_ENDPOINT,
-    START_DKG_ENDPOINT, STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT,
-    SUBMIT_GUARDIAN_METADATA_ENDPOINT, SUBMIT_TRANSACTION_ENDPOINT,
+    INVITE_CODE_ENDPOINT, PEER_AVAILABILITY_ENDPOINT, RECOVER_ENDPOINT,
+    RESET_PEER_SETUP_CODES_ENDPOINT, RESTART_FEDERATION_SETUP_ENDPOINT, SESSION_COUNT_ENDPOINT,
+    SESSION_STATUS_ENDPOINT, SESSION_STATUS_V2_ENDPOINT, SET_LOCAL_PARAMS_ENDPOINT,
+    SETUP_STATUS_ENDPOINT, SHUTDOWN_AFTER_CURRENT_SESSION_ENDPOINT, SHUTDOWN_ENDPOINT,
+    SIGN_API_ANNOUNCEMENT_ENDPOINT, SIGN_GUARDIAN_METADATA_ENDPOINT, START_DKG_ENDPOINT,
+    STATUS_ENDPOINT, SUBMIT_API_ANNOUNCEMENT_ENDPOINT, SUBMIT_GUARDIAN_METADATA_ENDPOINT,
+    SUBMIT_TRANSACTION_ENDPOINT,
 };
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::audit::AuditSummary;
@@ -31,6 +32,7 @@ use fedimint_core::module::{
 use fedimint_core::net::api_announcement::{
     SignedApiAnnouncement, SignedApiAnnouncementSubmission,
 };
+use fedimint_core::peer_availability::PeerAvailability;
 use fedimint_core::session_outcome::{
     AcceptedItem, SessionOutcome, SessionStatus, SessionStatusV2,
 };
@@ -641,6 +643,15 @@ where
             .await
     }
 
+    async fn shutdown_after_current_session(&self, auth: ApiAuth) -> FederationResult<()> {
+        self.request_admin(
+            SHUTDOWN_AFTER_CURRENT_SESSION_ENDPOINT,
+            ApiRequestErased::default(),
+            auth,
+        )
+        .await
+    }
+
     async fn backup_statistics(&self, auth: ApiAuth) -> FederationResult<BackupStatistics> {
         self.request_admin(
             BACKUP_STATISTICS_ENDPOINT,
@@ -655,6 +666,28 @@ where
             FEDIMINTD_VERSION_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
             peer_id,
+        )
+        .await
+    }
+
+    async fn peer_availability(&self, peer_id: PeerId) -> ServerResult<PeerAvailability> {
+        self.request_single_peer(
+            PEER_AVAILABILITY_ENDPOINT.to_owned(),
+            ApiRequestErased::default(),
+            peer_id,
+        )
+        .await
+    }
+
+    async fn reset_peer_availability(
+        &self,
+        request: fedimint_core::peer_availability::ResetPeerAvailabilityRequest,
+        auth: ApiAuth,
+    ) -> FederationResult<()> {
+        self.request_admin(
+            fedimint_core::endpoint_constants::RESET_PEER_AVAILABILITY_ENDPOINT,
+            ApiRequestErased::new(request),
+            auth,
         )
         .await
     }

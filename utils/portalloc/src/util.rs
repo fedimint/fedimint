@@ -1,9 +1,12 @@
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, BufWriter, Write};
 use std::path::Path;
 
 use serde::Serialize;
 use tracing::debug;
+
+#[cfg(test)]
+mod tests;
 
 pub fn open_lock_file(root_path: &Path) -> anyhow::Result<fs::File> {
     let path = root_path.join("lock");
@@ -38,10 +41,14 @@ where
         .truncate(true)
         .write(true)
         .open(&tmp_path)?;
-    if let Err(e) = f(&mut file) {
-        return Ok(Err(e));
+    {
+        let mut writer = BufWriter::new(&mut file);
+        if let Err(e) = f(&mut writer) {
+            return Ok(Err(e));
+        }
+        // Propagate buffered write errors before syncing or replacing the destination.
+        writer.flush()?;
     }
-    file.flush()?;
     file.sync_data()?;
     drop(file);
     std::fs::rename(tmp_path, path)?;

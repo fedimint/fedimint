@@ -13,6 +13,8 @@ use group::ff::Field;
 use rand::rngs::OsRng;
 use tracing::trace;
 
+use super::receive_from_peer_with_progress;
+
 // Implementation of the classic Pedersen DKG for G2.
 
 struct DkgG2 {
@@ -159,8 +161,7 @@ pub async fn run_dkg_g2(
 
     loop {
         for peer in num_peers.peer_ids().filter(|p| *p != identity) {
-            let message = connections
-                .receive_from_peer(peer)
+            let message = receive_from_peer_with_progress(connections, peer, "DKG G2")
                 .await
                 .context("Unexpected shutdown of p2p connections during dkg g2")?;
 

@@ -2833,8 +2833,9 @@ impl GatewayConnection for RealGatewayConnection {
         gateway: LightningGateway,
         payload: PayInvoicePayload,
     ) -> Result<String, GatewayPayError> {
-        let preimage: String = self
-            .api
+        // `GatewayApi::request` already deserializes the JSON response, so the
+        // hex preimage arrives without surrounding quotes.
+        self.api
             .request(
                 &gateway.api,
                 Method::POST,
@@ -2845,9 +2846,7 @@ impl GatewayConnection for RealGatewayConnection {
             .map_err(|e| GatewayPayError::GatewayInternalError {
                 error_code: None,
                 error_message: e.to_string(),
-            })?;
-        let length = preimage.len();
-        Ok(preimage[1..length - 1].to_string())
+            })
     }
 }
 
@@ -2868,7 +2867,9 @@ impl GatewayConnection for MockGatewayConnection {
         _gateway: LightningGateway,
         _payload: PayInvoicePayload,
     ) -> Result<String, GatewayPayError> {
-        // Just return a fake preimage to indicate success
-        Ok("00000000".to_string())
+        // The preimage of every invoice created by `FakeLightningTest`
+        // (`fedimint_testing::ln::MOCK_INVOICE_PREIMAGE`), so the client
+        // accepts the payment as made
+        Ok("01".repeat(32))
     }
 }

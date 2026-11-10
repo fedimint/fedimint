@@ -15,6 +15,7 @@ use fedimint_server_core::migration::{
 use futures::StreamExt;
 use serde::Serialize;
 
+use crate::consensus::peer_availability::PeerAvailabilityState;
 use crate::db::DbKeyPrefix;
 
 #[derive(Clone, Debug, Encodable, Decodable)]
@@ -63,6 +64,27 @@ impl_db_record!(
 impl_db_lookup!(
     key = SignedSessionOutcomeKey,
     query_prefix = SignedSessionOutcomePrefix
+);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct PeerAvailabilityKey;
+
+/// Observations of each reset peer since its latest reset.
+#[derive(Debug, Encodable, Decodable)]
+pub struct PeerAvailabilityResetsKey;
+
+impl_db_record!(
+    key = PeerAvailabilityResetsKey,
+    value = BTreeMap<fedimint_core::PeerId, PeerAvailabilityState>,
+    db_prefix = DbKeyPrefix::PeerAvailabilityResets,
+    notify_on_modify = false,
+);
+
+impl_db_record!(
+    key = PeerAvailabilityKey,
+    value = PeerAvailabilityState,
+    db_prefix = DbKeyPrefix::PeerAvailability,
+    notify_on_modify = false,
 );
 
 #[derive(Debug, Encodable, Decodable)]

@@ -10,6 +10,7 @@ use fedimint_connectors::ConnectorRegistry;
 use fedimint_connectors::error::ServerError;
 use fedimint_core::config::{ClientConfig, FederationId};
 use fedimint_core::endpoint_constants::CLIENT_CONFIG_ENDPOINT;
+use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiRequestErased;
 use fedimint_core::util::backoff_util;
@@ -24,8 +25,22 @@ pub mod metrics;
 /// Client query system
 pub mod query;
 
-/// Tries to download the [`ClientConfig`], attempts to retry ten times before
-/// giving up.
+/// Retry config downloads without making test fixtures wait through production
+/// backoffs. Only delays change: both policies allow fourteen retries.
+fn client_config_download_backoff() -> backoff_util::FibonacciBackoff {
+    if is_running_in_test_env() {
+        backoff_util::custom_backoff(
+            std::time::Duration::from_millis(20),
+            std::time::Duration::from_millis(100),
+            Some(14),
+        )
+    } else {
+        backoff_util::aggressive_backoff()
+    }
+}
+
+/// Tries to download the [`ClientConfig`], retrying up to fourteen times after
+/// the initial attempt before giving up.
 pub async fn download_from_invite_code(
     endpoints: &ConnectorRegistry,
     invite: &InviteCode,
@@ -47,7 +62,7 @@ pub async fn download_from_invite_code(
 
     fedimint_core::util::retry(
         "Downloading client config",
-        backoff_util::aggressive_backoff(),
+        client_config_download_backoff(),
         || {
             try_download_client_config(
                 endpoints,

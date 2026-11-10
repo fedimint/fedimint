@@ -47,6 +47,8 @@ pub static VERSION_0_12_2_ALPHA: LazyLock<Version> =
     LazyLock::new(|| Version::parse("0.12.2-alpha").expect("version is parsable"));
 pub static VERSION_0_13_0_ALPHA: LazyLock<Version> =
     LazyLock::new(|| Version::parse("0.13.0-alpha").expect("version is parsable"));
+pub static VERSION_0_14_0_ALPHA: LazyLock<Version> =
+    LazyLock::new(|| Version::parse("0.14.0-alpha").expect("version is parsable"));
 
 #[cfg(test)]
 mod tests;
