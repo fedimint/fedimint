@@ -2134,236 +2134,242 @@
 <a href=#2134 id=2134 data-nosnippet>2134</a>            onchain_balance_sats: (wallet_balance_response.total_balance
 <a href=#2135 id=2135 data-nosnippet>2135</a>                + wallet_balance_response.reserved_balance_anchor_chan)
 <a href=#2136 id=2136 data-nosnippet>2136</a>                <span class="kw">as </span>u64,
-<a href=#2137 id=2137 data-nosnippet>2137</a>            lightning_balance_msats,
-<a href=#2138 id=2138 data-nosnippet>2138</a>            inbound_lightning_liquidity_msats,
-<a href=#2139 id=2139 data-nosnippet>2139</a>        })
-<a href=#2140 id=2140 data-nosnippet>2140</a>    }
-<a href=#2141 id=2141 data-nosnippet>2141</a>
-<a href=#2142 id=2142 data-nosnippet>2142</a>    <span class="kw">async fn </span>get_invoice(
-<a href=#2143 id=2143 data-nosnippet>2143</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2144 id=2144 data-nosnippet>2144</a>        get_invoice_request: GetInvoiceRequest,
-<a href=#2145 id=2145 data-nosnippet>2145</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;GetInvoiceResponse&gt;, LightningRpcError&gt; {
-<a href=#2146 id=2146 data-nosnippet>2146</a>        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#2147 id=2147 data-nosnippet>2147</a>        <span class="kw">let </span>invoice = client
-<a href=#2148 id=2148 data-nosnippet>2148</a>            .invoices()
-<a href=#2149 id=2149 data-nosnippet>2149</a>            .lookup_invoice_v2(LookupInvoiceMsg {
-<a href=#2150 id=2150 data-nosnippet>2150</a>                invoice_ref: <span class="prelude-val">Some</span>(InvoiceRef::PaymentHash(
-<a href=#2151 id=2151 data-nosnippet>2151</a>                    get_invoice_request.payment_hash.consensus_encode_to_vec(),
-<a href=#2152 id=2152 data-nosnippet>2152</a>                )),
-<a href=#2153 id=2153 data-nosnippet>2153</a>                ..Default::default()
-<a href=#2154 id=2154 data-nosnippet>2154</a>            })
-<a href=#2155 id=2155 data-nosnippet>2155</a>            .<span class="kw">await</span>;
-<a href=#2156 id=2156 data-nosnippet>2156</a>        <span class="kw">let </span>invoice = <span class="kw">match </span>invoice {
-<a href=#2157 id=2157 data-nosnippet>2157</a>            <span class="prelude-val">Ok</span>(invoice) =&gt; invoice.into_inner(),
-<a href=#2158 id=2158 data-nosnippet>2158</a>            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
-<a href=#2159 id=2159 data-nosnippet>2159</a>        };
-<a href=#2160 id=2160 data-nosnippet>2160</a>        <span class="kw">let </span>status = <span class="kw">match </span><span class="kw-2">&amp;</span>invoice.state() {
-<a href=#2161 id=2161 data-nosnippet>2161</a>            InvoiceState::Settled =&gt; fedimint_gateway_common::PaymentStatus::Succeeded,
-<a href=#2162 id=2162 data-nosnippet>2162</a>            InvoiceState::Canceled =&gt; fedimint_gateway_common::PaymentStatus::Failed,
-<a href=#2163 id=2163 data-nosnippet>2163</a>            <span class="kw">_ </span>=&gt; fedimint_gateway_common::PaymentStatus::Pending,
-<a href=#2164 id=2164 data-nosnippet>2164</a>        };
-<a href=#2165 id=2165 data-nosnippet>2165</a>
-<a href=#2166 id=2166 data-nosnippet>2166</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(GetInvoiceResponse {
-<a href=#2167 id=2167 data-nosnippet>2167</a>            preimage: invoice_preimage_hex(<span class="kw-2">&amp;</span>invoice),
-<a href=#2168 id=2168 data-nosnippet>2168</a>            payment_hash: <span class="prelude-val">Some</span>(
-<a href=#2169 id=2169 data-nosnippet>2169</a>                sha256::Hash::from_slice(<span class="kw-2">&amp;</span>invoice.r_hash).expect(<span class="string">"Could not convert payment hash"</span>),
-<a href=#2170 id=2170 data-nosnippet>2170</a>            ),
-<a href=#2171 id=2171 data-nosnippet>2171</a>            amount: Amount::from_msats(invoice.value_msat <span class="kw">as </span>u64),
-<a href=#2172 id=2172 data-nosnippet>2172</a>            created_at: UNIX_EPOCH + Duration::from_secs(invoice.creation_date <span class="kw">as </span>u64),
-<a href=#2173 id=2173 data-nosnippet>2173</a>            status,
-<a href=#2174 id=2174 data-nosnippet>2174</a>        }))
-<a href=#2175 id=2175 data-nosnippet>2175</a>    }
-<a href=#2176 id=2176 data-nosnippet>2176</a>
-<a href=#2177 id=2177 data-nosnippet>2177</a>    <span class="kw">async fn </span>list_transactions(
-<a href=#2178 id=2178 data-nosnippet>2178</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2179 id=2179 data-nosnippet>2179</a>        start_secs: u64,
-<a href=#2180 id=2180 data-nosnippet>2180</a>        end_secs: u64,
-<a href=#2181 id=2181 data-nosnippet>2181</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;ListTransactionsResponse, LightningRpcError&gt; {
-<a href=#2182 id=2182 data-nosnippet>2182</a>        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#2183 id=2183 data-nosnippet>2183</a>        <span class="kw">let </span>payments = client
-<a href=#2184 id=2184 data-nosnippet>2184</a>            .lightning()
-<a href=#2185 id=2185 data-nosnippet>2185</a>            .list_payments(ListPaymentsRequest {
-<a href=#2186 id=2186 data-nosnippet>2186</a>                <span class="comment">// On higher versions on LND, we can filter on the time range directly in the query
-<a href=#2187 id=2187 data-nosnippet>2187</a>                </span>..Default::default()
-<a href=#2188 id=2188 data-nosnippet>2188</a>            })
-<a href=#2189 id=2189 data-nosnippet>2189</a>            .<span class="kw">await
-<a href=#2190 id=2190 data-nosnippet>2190</a>            </span>.map_err(|err| LightningRpcError::FailedToListTransactions {
-<a href=#2191 id=2191 data-nosnippet>2191</a>                failure_reason: err.to_string(),
-<a href=#2192 id=2192 data-nosnippet>2192</a>            })<span class="question-mark">?
-<a href=#2193 id=2193 data-nosnippet>2193</a>            </span>.into_inner();
-<a href=#2194 id=2194 data-nosnippet>2194</a>
-<a href=#2195 id=2195 data-nosnippet>2195</a>        <span class="kw">let </span><span class="kw-2">mut </span>payments = payments
-<a href=#2196 id=2196 data-nosnippet>2196</a>            .payments
-<a href=#2197 id=2197 data-nosnippet>2197</a>            .iter()
-<a href=#2198 id=2198 data-nosnippet>2198</a>            .filter_map(|payment| {
-<a href=#2199 id=2199 data-nosnippet>2199</a>                <span class="kw">let </span>timestamp_secs = (payment.creation_time_ns / <span class="number">1_000_000_000</span>) <span class="kw">as </span>u64;
-<a href=#2200 id=2200 data-nosnippet>2200</a>                <span class="kw">if </span>timestamp_secs &lt; start_secs || timestamp_secs &gt;= end_secs {
-<a href=#2201 id=2201 data-nosnippet>2201</a>                    <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#2202 id=2202 data-nosnippet>2202</a>                }
-<a href=#2203 id=2203 data-nosnippet>2203</a>                <span class="kw">let </span>payment_hash = sha256::Hash::from_str(<span class="kw-2">&amp;</span>payment.payment_hash).ok();
-<a href=#2204 id=2204 data-nosnippet>2204</a>                <span class="kw">let </span>preimage = (!payment.payment_preimage.is_empty())
-<a href=#2205 id=2205 data-nosnippet>2205</a>                    .then_some(payment.payment_preimage.clone());
-<a href=#2206 id=2206 data-nosnippet>2206</a>                <span class="kw">let </span>status = <span class="kw">match </span><span class="kw-2">&amp;</span>payment.status() {
-<a href=#2207 id=2207 data-nosnippet>2207</a>                    PaymentStatus::Succeeded =&gt; fedimint_gateway_common::PaymentStatus::Succeeded,
-<a href=#2208 id=2208 data-nosnippet>2208</a>                    PaymentStatus::Failed =&gt; fedimint_gateway_common::PaymentStatus::Failed,
-<a href=#2209 id=2209 data-nosnippet>2209</a>                    <span class="kw">_ </span>=&gt; fedimint_gateway_common::PaymentStatus::Pending,
-<a href=#2210 id=2210 data-nosnippet>2210</a>                };
-<a href=#2211 id=2211 data-nosnippet>2211</a>                <span class="prelude-val">Some</span>(PaymentDetails {
-<a href=#2212 id=2212 data-nosnippet>2212</a>                    payment_hash,
-<a href=#2213 id=2213 data-nosnippet>2213</a>                    preimage,
-<a href=#2214 id=2214 data-nosnippet>2214</a>                    payment_kind: PaymentKind::Bolt11,
-<a href=#2215 id=2215 data-nosnippet>2215</a>                    amount: Amount::from_msats(payment.value_msat <span class="kw">as </span>u64),
-<a href=#2216 id=2216 data-nosnippet>2216</a>                    direction: PaymentDirection::Outbound,
-<a href=#2217 id=2217 data-nosnippet>2217</a>                    status,
-<a href=#2218 id=2218 data-nosnippet>2218</a>                    timestamp_secs,
-<a href=#2219 id=2219 data-nosnippet>2219</a>                })
-<a href=#2220 id=2220 data-nosnippet>2220</a>            })
-<a href=#2221 id=2221 data-nosnippet>2221</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-<a href=#2222 id=2222 data-nosnippet>2222</a>
-<a href=#2223 id=2223 data-nosnippet>2223</a>        <span class="kw">let </span>invoices = client
-<a href=#2224 id=2224 data-nosnippet>2224</a>            .lightning()
-<a href=#2225 id=2225 data-nosnippet>2225</a>            .list_invoices(ListInvoiceRequest {
-<a href=#2226 id=2226 data-nosnippet>2226</a>                pending_only: <span class="bool-val">false</span>,
-<a href=#2227 id=2227 data-nosnippet>2227</a>                <span class="comment">// On higher versions on LND, we can filter on the time range directly in the query
-<a href=#2228 id=2228 data-nosnippet>2228</a>                </span>..Default::default()
-<a href=#2229 id=2229 data-nosnippet>2229</a>            })
-<a href=#2230 id=2230 data-nosnippet>2230</a>            .<span class="kw">await
-<a href=#2231 id=2231 data-nosnippet>2231</a>            </span>.map_err(|err| LightningRpcError::FailedToListTransactions {
-<a href=#2232 id=2232 data-nosnippet>2232</a>                failure_reason: err.to_string(),
-<a href=#2233 id=2233 data-nosnippet>2233</a>            })<span class="question-mark">?
-<a href=#2234 id=2234 data-nosnippet>2234</a>            </span>.into_inner();
-<a href=#2235 id=2235 data-nosnippet>2235</a>
-<a href=#2236 id=2236 data-nosnippet>2236</a>        <span class="kw">let </span><span class="kw-2">mut </span>incoming_payments = invoices
-<a href=#2237 id=2237 data-nosnippet>2237</a>            .invoices
-<a href=#2238 id=2238 data-nosnippet>2238</a>            .iter()
-<a href=#2239 id=2239 data-nosnippet>2239</a>            .filter_map(|invoice| {
-<a href=#2240 id=2240 data-nosnippet>2240</a>                <span class="kw">let </span>timestamp_secs = invoice.settle_date <span class="kw">as </span>u64;
-<a href=#2241 id=2241 data-nosnippet>2241</a>                <span class="kw">if </span>timestamp_secs &lt; start_secs || timestamp_secs &gt;= end_secs {
-<a href=#2242 id=2242 data-nosnippet>2242</a>                    <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#2243 id=2243 data-nosnippet>2243</a>                }
-<a href=#2244 id=2244 data-nosnippet>2244</a>                <span class="kw">let </span>status = <span class="kw">match </span><span class="kw-2">&amp;</span>invoice.state() {
-<a href=#2245 id=2245 data-nosnippet>2245</a>                    InvoiceState::Settled =&gt; fedimint_gateway_common::PaymentStatus::Succeeded,
-<a href=#2246 id=2246 data-nosnippet>2246</a>                    InvoiceState::Canceled =&gt; fedimint_gateway_common::PaymentStatus::Failed,
-<a href=#2247 id=2247 data-nosnippet>2247</a>                    <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
-<a href=#2248 id=2248 data-nosnippet>2248</a>                };
-<a href=#2249 id=2249 data-nosnippet>2249</a>                <span class="kw">let </span>preimage = (!invoice.r_preimage.is_empty())
-<a href=#2250 id=2250 data-nosnippet>2250</a>                    .then_some(invoice.r_preimage.encode_hex::&lt;String&gt;());
-<a href=#2251 id=2251 data-nosnippet>2251</a>                <span class="prelude-val">Some</span>(PaymentDetails {
-<a href=#2252 id=2252 data-nosnippet>2252</a>                    payment_hash: <span class="prelude-val">Some</span>(
-<a href=#2253 id=2253 data-nosnippet>2253</a>                        sha256::Hash::from_slice(<span class="kw-2">&amp;</span>invoice.r_hash)
-<a href=#2254 id=2254 data-nosnippet>2254</a>                            .expect(<span class="string">"Could not convert payment hash"</span>),
-<a href=#2255 id=2255 data-nosnippet>2255</a>                    ),
-<a href=#2256 id=2256 data-nosnippet>2256</a>                    preimage,
-<a href=#2257 id=2257 data-nosnippet>2257</a>                    payment_kind: PaymentKind::Bolt11,
-<a href=#2258 id=2258 data-nosnippet>2258</a>                    amount: Amount::from_msats(invoice.value_msat <span class="kw">as </span>u64),
-<a href=#2259 id=2259 data-nosnippet>2259</a>                    direction: PaymentDirection::Inbound,
-<a href=#2260 id=2260 data-nosnippet>2260</a>                    status,
-<a href=#2261 id=2261 data-nosnippet>2261</a>                    timestamp_secs,
-<a href=#2262 id=2262 data-nosnippet>2262</a>                })
-<a href=#2263 id=2263 data-nosnippet>2263</a>            })
-<a href=#2264 id=2264 data-nosnippet>2264</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-<a href=#2265 id=2265 data-nosnippet>2265</a>
-<a href=#2266 id=2266 data-nosnippet>2266</a>        payments.append(<span class="kw-2">&amp;mut </span>incoming_payments);
-<a href=#2267 id=2267 data-nosnippet>2267</a>        payments.sort_by_key(|p| p.timestamp_secs);
-<a href=#2268 id=2268 data-nosnippet>2268</a>
-<a href=#2269 id=2269 data-nosnippet>2269</a>        <span class="prelude-val">Ok</span>(ListTransactionsResponse {
-<a href=#2270 id=2270 data-nosnippet>2270</a>            transactions: payments,
-<a href=#2271 id=2271 data-nosnippet>2271</a>        })
-<a href=#2272 id=2272 data-nosnippet>2272</a>    }
-<a href=#2273 id=2273 data-nosnippet>2273</a>
-<a href=#2274 id=2274 data-nosnippet>2274</a>    <span class="kw">fn </span>create_offer(
-<a href=#2275 id=2275 data-nosnippet>2275</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2276 id=2276 data-nosnippet>2276</a>        _amount_msat: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
-<a href=#2277 id=2277 data-nosnippet>2277</a>        _description: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#2278 id=2278 data-nosnippet>2278</a>        _expiry_secs: <span class="prelude-ty">Option</span>&lt;u32&gt;,
-<a href=#2279 id=2279 data-nosnippet>2279</a>        _quantity: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-<a href=#2280 id=2280 data-nosnippet>2280</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;String, LightningRpcError&gt; {
-<a href=#2281 id=2281 data-nosnippet>2281</a>        <span class="prelude-val">Err</span>(LightningRpcError::Bolt12Error {
-<a href=#2282 id=2282 data-nosnippet>2282</a>            failure_reason: <span class="string">"LND Does not support Bolt12"</span>.to_string(),
-<a href=#2283 id=2283 data-nosnippet>2283</a>        })
-<a href=#2284 id=2284 data-nosnippet>2284</a>    }
-<a href=#2285 id=2285 data-nosnippet>2285</a>
-<a href=#2286 id=2286 data-nosnippet>2286</a>    <span class="kw">async fn </span>pay_offer(
-<a href=#2287 id=2287 data-nosnippet>2287</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#2288 id=2288 data-nosnippet>2288</a>        _offer: String,
-<a href=#2289 id=2289 data-nosnippet>2289</a>        _quantity: <span class="prelude-ty">Option</span>&lt;u64&gt;,
-<a href=#2290 id=2290 data-nosnippet>2290</a>        _amount: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
-<a href=#2291 id=2291 data-nosnippet>2291</a>        _payer_note: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#2292 id=2292 data-nosnippet>2292</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, LightningRpcError&gt; {
-<a href=#2293 id=2293 data-nosnippet>2293</a>        <span class="prelude-val">Err</span>(LightningRpcError::Bolt12Error {
-<a href=#2294 id=2294 data-nosnippet>2294</a>            failure_reason: <span class="string">"LND Does not support Bolt12"</span>.to_string(),
-<a href=#2295 id=2295 data-nosnippet>2295</a>        })
-<a href=#2296 id=2296 data-nosnippet>2296</a>    }
-<a href=#2297 id=2297 data-nosnippet>2297</a>
-<a href=#2298 id=2298 data-nosnippet>2298</a>    <span class="kw">fn </span>sync_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
-<a href=#2299 id=2299 data-nosnippet>2299</a>        <span class="comment">// There is nothing explicit needed to do for syncing an LND node
-<a href=#2300 id=2300 data-nosnippet>2300</a>        </span><span class="prelude-val">Ok</span>(())
-<a href=#2301 id=2301 data-nosnippet>2301</a>    }
-<a href=#2302 id=2302 data-nosnippet>2302</a>}
+<a href=#2137 id=2137 data-nosnippet>2137</a>            <span class="comment">// `send_onchain` spends unconfirmed outputs, and LND refuses a send
+<a href=#2138 id=2138 data-nosnippet>2138</a>            // that would leave less than the anchor-channel reserve.
+<a href=#2139 id=2139 data-nosnippet>2139</a>            </span>spendable_onchain_balance_sats: wallet_balance_response
+<a href=#2140 id=2140 data-nosnippet>2140</a>                .total_balance
+<a href=#2141 id=2141 data-nosnippet>2141</a>                .saturating_sub(wallet_balance_response.reserved_balance_anchor_chan)
+<a href=#2142 id=2142 data-nosnippet>2142</a>                .max(<span class="number">0</span>) <span class="kw">as </span>u64,
+<a href=#2143 id=2143 data-nosnippet>2143</a>            lightning_balance_msats,
+<a href=#2144 id=2144 data-nosnippet>2144</a>            inbound_lightning_liquidity_msats,
+<a href=#2145 id=2145 data-nosnippet>2145</a>        })
+<a href=#2146 id=2146 data-nosnippet>2146</a>    }
+<a href=#2147 id=2147 data-nosnippet>2147</a>
+<a href=#2148 id=2148 data-nosnippet>2148</a>    <span class="kw">async fn </span>get_invoice(
+<a href=#2149 id=2149 data-nosnippet>2149</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2150 id=2150 data-nosnippet>2150</a>        get_invoice_request: GetInvoiceRequest,
+<a href=#2151 id=2151 data-nosnippet>2151</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;GetInvoiceResponse&gt;, LightningRpcError&gt; {
+<a href=#2152 id=2152 data-nosnippet>2152</a>        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#2153 id=2153 data-nosnippet>2153</a>        <span class="kw">let </span>invoice = client
+<a href=#2154 id=2154 data-nosnippet>2154</a>            .invoices()
+<a href=#2155 id=2155 data-nosnippet>2155</a>            .lookup_invoice_v2(LookupInvoiceMsg {
+<a href=#2156 id=2156 data-nosnippet>2156</a>                invoice_ref: <span class="prelude-val">Some</span>(InvoiceRef::PaymentHash(
+<a href=#2157 id=2157 data-nosnippet>2157</a>                    get_invoice_request.payment_hash.consensus_encode_to_vec(),
+<a href=#2158 id=2158 data-nosnippet>2158</a>                )),
+<a href=#2159 id=2159 data-nosnippet>2159</a>                ..Default::default()
+<a href=#2160 id=2160 data-nosnippet>2160</a>            })
+<a href=#2161 id=2161 data-nosnippet>2161</a>            .<span class="kw">await</span>;
+<a href=#2162 id=2162 data-nosnippet>2162</a>        <span class="kw">let </span>invoice = <span class="kw">match </span>invoice {
+<a href=#2163 id=2163 data-nosnippet>2163</a>            <span class="prelude-val">Ok</span>(invoice) =&gt; invoice.into_inner(),
+<a href=#2164 id=2164 data-nosnippet>2164</a>            <span class="prelude-val">Err</span>(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">Ok</span>(<span class="prelude-val">None</span>),
+<a href=#2165 id=2165 data-nosnippet>2165</a>        };
+<a href=#2166 id=2166 data-nosnippet>2166</a>        <span class="kw">let </span>status = <span class="kw">match </span><span class="kw-2">&amp;</span>invoice.state() {
+<a href=#2167 id=2167 data-nosnippet>2167</a>            InvoiceState::Settled =&gt; fedimint_gateway_common::PaymentStatus::Succeeded,
+<a href=#2168 id=2168 data-nosnippet>2168</a>            InvoiceState::Canceled =&gt; fedimint_gateway_common::PaymentStatus::Failed,
+<a href=#2169 id=2169 data-nosnippet>2169</a>            <span class="kw">_ </span>=&gt; fedimint_gateway_common::PaymentStatus::Pending,
+<a href=#2170 id=2170 data-nosnippet>2170</a>        };
+<a href=#2171 id=2171 data-nosnippet>2171</a>
+<a href=#2172 id=2172 data-nosnippet>2172</a>        <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(GetInvoiceResponse {
+<a href=#2173 id=2173 data-nosnippet>2173</a>            preimage: invoice_preimage_hex(<span class="kw-2">&amp;</span>invoice),
+<a href=#2174 id=2174 data-nosnippet>2174</a>            payment_hash: <span class="prelude-val">Some</span>(
+<a href=#2175 id=2175 data-nosnippet>2175</a>                sha256::Hash::from_slice(<span class="kw-2">&amp;</span>invoice.r_hash).expect(<span class="string">"Could not convert payment hash"</span>),
+<a href=#2176 id=2176 data-nosnippet>2176</a>            ),
+<a href=#2177 id=2177 data-nosnippet>2177</a>            amount: Amount::from_msats(invoice.value_msat <span class="kw">as </span>u64),
+<a href=#2178 id=2178 data-nosnippet>2178</a>            created_at: UNIX_EPOCH + Duration::from_secs(invoice.creation_date <span class="kw">as </span>u64),
+<a href=#2179 id=2179 data-nosnippet>2179</a>            status,
+<a href=#2180 id=2180 data-nosnippet>2180</a>        }))
+<a href=#2181 id=2181 data-nosnippet>2181</a>    }
+<a href=#2182 id=2182 data-nosnippet>2182</a>
+<a href=#2183 id=2183 data-nosnippet>2183</a>    <span class="kw">async fn </span>list_transactions(
+<a href=#2184 id=2184 data-nosnippet>2184</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2185 id=2185 data-nosnippet>2185</a>        start_secs: u64,
+<a href=#2186 id=2186 data-nosnippet>2186</a>        end_secs: u64,
+<a href=#2187 id=2187 data-nosnippet>2187</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;ListTransactionsResponse, LightningRpcError&gt; {
+<a href=#2188 id=2188 data-nosnippet>2188</a>        <span class="kw">let </span><span class="kw-2">mut </span>client = <span class="self">self</span>.connect().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#2189 id=2189 data-nosnippet>2189</a>        <span class="kw">let </span>payments = client
+<a href=#2190 id=2190 data-nosnippet>2190</a>            .lightning()
+<a href=#2191 id=2191 data-nosnippet>2191</a>            .list_payments(ListPaymentsRequest {
+<a href=#2192 id=2192 data-nosnippet>2192</a>                <span class="comment">// On higher versions on LND, we can filter on the time range directly in the query
+<a href=#2193 id=2193 data-nosnippet>2193</a>                </span>..Default::default()
+<a href=#2194 id=2194 data-nosnippet>2194</a>            })
+<a href=#2195 id=2195 data-nosnippet>2195</a>            .<span class="kw">await
+<a href=#2196 id=2196 data-nosnippet>2196</a>            </span>.map_err(|err| LightningRpcError::FailedToListTransactions {
+<a href=#2197 id=2197 data-nosnippet>2197</a>                failure_reason: err.to_string(),
+<a href=#2198 id=2198 data-nosnippet>2198</a>            })<span class="question-mark">?
+<a href=#2199 id=2199 data-nosnippet>2199</a>            </span>.into_inner();
+<a href=#2200 id=2200 data-nosnippet>2200</a>
+<a href=#2201 id=2201 data-nosnippet>2201</a>        <span class="kw">let </span><span class="kw-2">mut </span>payments = payments
+<a href=#2202 id=2202 data-nosnippet>2202</a>            .payments
+<a href=#2203 id=2203 data-nosnippet>2203</a>            .iter()
+<a href=#2204 id=2204 data-nosnippet>2204</a>            .filter_map(|payment| {
+<a href=#2205 id=2205 data-nosnippet>2205</a>                <span class="kw">let </span>timestamp_secs = (payment.creation_time_ns / <span class="number">1_000_000_000</span>) <span class="kw">as </span>u64;
+<a href=#2206 id=2206 data-nosnippet>2206</a>                <span class="kw">if </span>timestamp_secs &lt; start_secs || timestamp_secs &gt;= end_secs {
+<a href=#2207 id=2207 data-nosnippet>2207</a>                    <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#2208 id=2208 data-nosnippet>2208</a>                }
+<a href=#2209 id=2209 data-nosnippet>2209</a>                <span class="kw">let </span>payment_hash = sha256::Hash::from_str(<span class="kw-2">&amp;</span>payment.payment_hash).ok();
+<a href=#2210 id=2210 data-nosnippet>2210</a>                <span class="kw">let </span>preimage = (!payment.payment_preimage.is_empty())
+<a href=#2211 id=2211 data-nosnippet>2211</a>                    .then_some(payment.payment_preimage.clone());
+<a href=#2212 id=2212 data-nosnippet>2212</a>                <span class="kw">let </span>status = <span class="kw">match </span><span class="kw-2">&amp;</span>payment.status() {
+<a href=#2213 id=2213 data-nosnippet>2213</a>                    PaymentStatus::Succeeded =&gt; fedimint_gateway_common::PaymentStatus::Succeeded,
+<a href=#2214 id=2214 data-nosnippet>2214</a>                    PaymentStatus::Failed =&gt; fedimint_gateway_common::PaymentStatus::Failed,
+<a href=#2215 id=2215 data-nosnippet>2215</a>                    <span class="kw">_ </span>=&gt; fedimint_gateway_common::PaymentStatus::Pending,
+<a href=#2216 id=2216 data-nosnippet>2216</a>                };
+<a href=#2217 id=2217 data-nosnippet>2217</a>                <span class="prelude-val">Some</span>(PaymentDetails {
+<a href=#2218 id=2218 data-nosnippet>2218</a>                    payment_hash,
+<a href=#2219 id=2219 data-nosnippet>2219</a>                    preimage,
+<a href=#2220 id=2220 data-nosnippet>2220</a>                    payment_kind: PaymentKind::Bolt11,
+<a href=#2221 id=2221 data-nosnippet>2221</a>                    amount: Amount::from_msats(payment.value_msat <span class="kw">as </span>u64),
+<a href=#2222 id=2222 data-nosnippet>2222</a>                    direction: PaymentDirection::Outbound,
+<a href=#2223 id=2223 data-nosnippet>2223</a>                    status,
+<a href=#2224 id=2224 data-nosnippet>2224</a>                    timestamp_secs,
+<a href=#2225 id=2225 data-nosnippet>2225</a>                })
+<a href=#2226 id=2226 data-nosnippet>2226</a>            })
+<a href=#2227 id=2227 data-nosnippet>2227</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#2228 id=2228 data-nosnippet>2228</a>
+<a href=#2229 id=2229 data-nosnippet>2229</a>        <span class="kw">let </span>invoices = client
+<a href=#2230 id=2230 data-nosnippet>2230</a>            .lightning()
+<a href=#2231 id=2231 data-nosnippet>2231</a>            .list_invoices(ListInvoiceRequest {
+<a href=#2232 id=2232 data-nosnippet>2232</a>                pending_only: <span class="bool-val">false</span>,
+<a href=#2233 id=2233 data-nosnippet>2233</a>                <span class="comment">// On higher versions on LND, we can filter on the time range directly in the query
+<a href=#2234 id=2234 data-nosnippet>2234</a>                </span>..Default::default()
+<a href=#2235 id=2235 data-nosnippet>2235</a>            })
+<a href=#2236 id=2236 data-nosnippet>2236</a>            .<span class="kw">await
+<a href=#2237 id=2237 data-nosnippet>2237</a>            </span>.map_err(|err| LightningRpcError::FailedToListTransactions {
+<a href=#2238 id=2238 data-nosnippet>2238</a>                failure_reason: err.to_string(),
+<a href=#2239 id=2239 data-nosnippet>2239</a>            })<span class="question-mark">?
+<a href=#2240 id=2240 data-nosnippet>2240</a>            </span>.into_inner();
+<a href=#2241 id=2241 data-nosnippet>2241</a>
+<a href=#2242 id=2242 data-nosnippet>2242</a>        <span class="kw">let </span><span class="kw-2">mut </span>incoming_payments = invoices
+<a href=#2243 id=2243 data-nosnippet>2243</a>            .invoices
+<a href=#2244 id=2244 data-nosnippet>2244</a>            .iter()
+<a href=#2245 id=2245 data-nosnippet>2245</a>            .filter_map(|invoice| {
+<a href=#2246 id=2246 data-nosnippet>2246</a>                <span class="kw">let </span>timestamp_secs = invoice.settle_date <span class="kw">as </span>u64;
+<a href=#2247 id=2247 data-nosnippet>2247</a>                <span class="kw">if </span>timestamp_secs &lt; start_secs || timestamp_secs &gt;= end_secs {
+<a href=#2248 id=2248 data-nosnippet>2248</a>                    <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#2249 id=2249 data-nosnippet>2249</a>                }
+<a href=#2250 id=2250 data-nosnippet>2250</a>                <span class="kw">let </span>status = <span class="kw">match </span><span class="kw-2">&amp;</span>invoice.state() {
+<a href=#2251 id=2251 data-nosnippet>2251</a>                    InvoiceState::Settled =&gt; fedimint_gateway_common::PaymentStatus::Succeeded,
+<a href=#2252 id=2252 data-nosnippet>2252</a>                    InvoiceState::Canceled =&gt; fedimint_gateway_common::PaymentStatus::Failed,
+<a href=#2253 id=2253 data-nosnippet>2253</a>                    <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
+<a href=#2254 id=2254 data-nosnippet>2254</a>                };
+<a href=#2255 id=2255 data-nosnippet>2255</a>                <span class="kw">let </span>preimage = (!invoice.r_preimage.is_empty())
+<a href=#2256 id=2256 data-nosnippet>2256</a>                    .then_some(invoice.r_preimage.encode_hex::&lt;String&gt;());
+<a href=#2257 id=2257 data-nosnippet>2257</a>                <span class="prelude-val">Some</span>(PaymentDetails {
+<a href=#2258 id=2258 data-nosnippet>2258</a>                    payment_hash: <span class="prelude-val">Some</span>(
+<a href=#2259 id=2259 data-nosnippet>2259</a>                        sha256::Hash::from_slice(<span class="kw-2">&amp;</span>invoice.r_hash)
+<a href=#2260 id=2260 data-nosnippet>2260</a>                            .expect(<span class="string">"Could not convert payment hash"</span>),
+<a href=#2261 id=2261 data-nosnippet>2261</a>                    ),
+<a href=#2262 id=2262 data-nosnippet>2262</a>                    preimage,
+<a href=#2263 id=2263 data-nosnippet>2263</a>                    payment_kind: PaymentKind::Bolt11,
+<a href=#2264 id=2264 data-nosnippet>2264</a>                    amount: Amount::from_msats(invoice.value_msat <span class="kw">as </span>u64),
+<a href=#2265 id=2265 data-nosnippet>2265</a>                    direction: PaymentDirection::Inbound,
+<a href=#2266 id=2266 data-nosnippet>2266</a>                    status,
+<a href=#2267 id=2267 data-nosnippet>2267</a>                    timestamp_secs,
+<a href=#2268 id=2268 data-nosnippet>2268</a>                })
+<a href=#2269 id=2269 data-nosnippet>2269</a>            })
+<a href=#2270 id=2270 data-nosnippet>2270</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#2271 id=2271 data-nosnippet>2271</a>
+<a href=#2272 id=2272 data-nosnippet>2272</a>        payments.append(<span class="kw-2">&amp;mut </span>incoming_payments);
+<a href=#2273 id=2273 data-nosnippet>2273</a>        payments.sort_by_key(|p| p.timestamp_secs);
+<a href=#2274 id=2274 data-nosnippet>2274</a>
+<a href=#2275 id=2275 data-nosnippet>2275</a>        <span class="prelude-val">Ok</span>(ListTransactionsResponse {
+<a href=#2276 id=2276 data-nosnippet>2276</a>            transactions: payments,
+<a href=#2277 id=2277 data-nosnippet>2277</a>        })
+<a href=#2278 id=2278 data-nosnippet>2278</a>    }
+<a href=#2279 id=2279 data-nosnippet>2279</a>
+<a href=#2280 id=2280 data-nosnippet>2280</a>    <span class="kw">fn </span>create_offer(
+<a href=#2281 id=2281 data-nosnippet>2281</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2282 id=2282 data-nosnippet>2282</a>        _amount_msat: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
+<a href=#2283 id=2283 data-nosnippet>2283</a>        _description: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#2284 id=2284 data-nosnippet>2284</a>        _expiry_secs: <span class="prelude-ty">Option</span>&lt;u32&gt;,
+<a href=#2285 id=2285 data-nosnippet>2285</a>        _quantity: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#2286 id=2286 data-nosnippet>2286</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;String, LightningRpcError&gt; {
+<a href=#2287 id=2287 data-nosnippet>2287</a>        <span class="prelude-val">Err</span>(LightningRpcError::Bolt12Error {
+<a href=#2288 id=2288 data-nosnippet>2288</a>            failure_reason: <span class="string">"LND Does not support Bolt12"</span>.to_string(),
+<a href=#2289 id=2289 data-nosnippet>2289</a>        })
+<a href=#2290 id=2290 data-nosnippet>2290</a>    }
+<a href=#2291 id=2291 data-nosnippet>2291</a>
+<a href=#2292 id=2292 data-nosnippet>2292</a>    <span class="kw">async fn </span>pay_offer(
+<a href=#2293 id=2293 data-nosnippet>2293</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#2294 id=2294 data-nosnippet>2294</a>        _offer: String,
+<a href=#2295 id=2295 data-nosnippet>2295</a>        _quantity: <span class="prelude-ty">Option</span>&lt;u64&gt;,
+<a href=#2296 id=2296 data-nosnippet>2296</a>        _amount: <span class="prelude-ty">Option</span>&lt;Amount&gt;,
+<a href=#2297 id=2297 data-nosnippet>2297</a>        _payer_note: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#2298 id=2298 data-nosnippet>2298</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;Preimage, LightningRpcError&gt; {
+<a href=#2299 id=2299 data-nosnippet>2299</a>        <span class="prelude-val">Err</span>(LightningRpcError::Bolt12Error {
+<a href=#2300 id=2300 data-nosnippet>2300</a>            failure_reason: <span class="string">"LND Does not support Bolt12"</span>.to_string(),
+<a href=#2301 id=2301 data-nosnippet>2301</a>        })
+<a href=#2302 id=2302 data-nosnippet>2302</a>    }
 <a href=#2303 id=2303 data-nosnippet>2303</a>
-<a href=#2304 id=2304 data-nosnippet>2304</a><span class="kw">fn </span>route_hints_to_lnd(
-<a href=#2305 id=2305 data-nosnippet>2305</a>    route_hints: <span class="kw-2">&amp;</span>[fedimint_ln_common::route_hints::RouteHint],
-<a href=#2306 id=2306 data-nosnippet>2306</a>) -&gt; Vec&lt;tonic_lnd::lnrpc::RouteHint&gt; {
-<a href=#2307 id=2307 data-nosnippet>2307</a>    route_hints
-<a href=#2308 id=2308 data-nosnippet>2308</a>        .iter()
-<a href=#2309 id=2309 data-nosnippet>2309</a>        .map(|hint| tonic_lnd::lnrpc::RouteHint {
-<a href=#2310 id=2310 data-nosnippet>2310</a>            hop_hints: hint
-<a href=#2311 id=2311 data-nosnippet>2311</a>                .<span class="number">0
-<a href=#2312 id=2312 data-nosnippet>2312</a>                </span>.iter()
-<a href=#2313 id=2313 data-nosnippet>2313</a>                .map(|hop| tonic_lnd::lnrpc::HopHint {
-<a href=#2314 id=2314 data-nosnippet>2314</a>                    node_id: hop.src_node_id.serialize().encode_hex(),
-<a href=#2315 id=2315 data-nosnippet>2315</a>                    chan_id: hop.short_channel_id,
-<a href=#2316 id=2316 data-nosnippet>2316</a>                    fee_base_msat: hop.base_msat,
-<a href=#2317 id=2317 data-nosnippet>2317</a>                    fee_proportional_millionths: hop.proportional_millionths,
-<a href=#2318 id=2318 data-nosnippet>2318</a>                    cltv_expiry_delta: u32::from(hop.cltv_expiry_delta),
-<a href=#2319 id=2319 data-nosnippet>2319</a>                })
-<a href=#2320 id=2320 data-nosnippet>2320</a>                .collect(),
-<a href=#2321 id=2321 data-nosnippet>2321</a>        })
-<a href=#2322 id=2322 data-nosnippet>2322</a>        .collect()
-<a href=#2323 id=2323 data-nosnippet>2323</a>}
-<a href=#2324 id=2324 data-nosnippet>2324</a>
-<a href=#2325 id=2325 data-nosnippet>2325</a><span class="kw">fn </span>wire_features_to_lnd_feature_vec(
-<a href=#2326 id=2326 data-nosnippet>2326</a>    features_wire_encoded: <span class="kw-2">&amp;</span>[u8],
-<a href=#2327 id=2327 data-nosnippet>2327</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;i32&gt;, FeatureVectorTooLargeError&gt; {
-<a href=#2328 id=2328 data-nosnippet>2328</a>    <span class="kw">if </span>features_wire_encoded.len() &gt; <span class="number">1_000 </span>{
-<a href=#2329 id=2329 data-nosnippet>2329</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(FeatureVectorTooLargeError);
-<a href=#2330 id=2330 data-nosnippet>2330</a>    }
-<a href=#2331 id=2331 data-nosnippet>2331</a>
-<a href=#2332 id=2332 data-nosnippet>2332</a>    <span class="kw">let </span>lnd_features = features_wire_encoded
-<a href=#2333 id=2333 data-nosnippet>2333</a>        .iter()
-<a href=#2334 id=2334 data-nosnippet>2334</a>        .rev()
-<a href=#2335 id=2335 data-nosnippet>2335</a>        .enumerate()
-<a href=#2336 id=2336 data-nosnippet>2336</a>        .flat_map(|(byte_idx, <span class="kw-2">&amp;</span>feature_byte)| {
-<a href=#2337 id=2337 data-nosnippet>2337</a>            (<span class="number">0</span>..<span class="number">8</span>).filter_map(<span class="kw">move </span>|bit_idx| {
-<a href=#2338 id=2338 data-nosnippet>2338</a>                <span class="kw">if </span>(feature_byte &amp; (<span class="number">1u8 </span>&lt;&lt; bit_idx)) != <span class="number">0 </span>{
-<a href=#2339 id=2339 data-nosnippet>2339</a>                    <span class="prelude-val">Some</span>(
-<a href=#2340 id=2340 data-nosnippet>2340</a>                        i32::try_from(byte_idx * <span class="number">8 </span>+ bit_idx)
-<a href=#2341 id=2341 data-nosnippet>2341</a>                            .expect(<span class="string">"Index will never exceed i32::MAX for feature vectors &lt;8MB"</span>),
-<a href=#2342 id=2342 data-nosnippet>2342</a>                    )
-<a href=#2343 id=2343 data-nosnippet>2343</a>                } <span class="kw">else </span>{
-<a href=#2344 id=2344 data-nosnippet>2344</a>                    <span class="prelude-val">None
-<a href=#2345 id=2345 data-nosnippet>2345</a>                </span>}
-<a href=#2346 id=2346 data-nosnippet>2346</a>            })
-<a href=#2347 id=2347 data-nosnippet>2347</a>        })
-<a href=#2348 id=2348 data-nosnippet>2348</a>        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-<a href=#2349 id=2349 data-nosnippet>2349</a>
-<a href=#2350 id=2350 data-nosnippet>2350</a>    <span class="prelude-val">Ok</span>(lnd_features)
-<a href=#2351 id=2351 data-nosnippet>2351</a>}
-<a href=#2352 id=2352 data-nosnippet>2352</a>
-<a href=#2353 id=2353 data-nosnippet>2353</a><span class="doccomment">/// Utility struct for logging payment hashes. Useful for debugging.
-<a href=#2354 id=2354 data-nosnippet>2354</a></span><span class="kw">struct </span>PrettyPaymentHash&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Vec&lt;u8&gt;);
+<a href=#2304 id=2304 data-nosnippet>2304</a>    <span class="kw">fn </span>sync_wallet(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;(), LightningRpcError&gt; {
+<a href=#2305 id=2305 data-nosnippet>2305</a>        <span class="comment">// There is nothing explicit needed to do for syncing an LND node
+<a href=#2306 id=2306 data-nosnippet>2306</a>        </span><span class="prelude-val">Ok</span>(())
+<a href=#2307 id=2307 data-nosnippet>2307</a>    }
+<a href=#2308 id=2308 data-nosnippet>2308</a>}
+<a href=#2309 id=2309 data-nosnippet>2309</a>
+<a href=#2310 id=2310 data-nosnippet>2310</a><span class="kw">fn </span>route_hints_to_lnd(
+<a href=#2311 id=2311 data-nosnippet>2311</a>    route_hints: <span class="kw-2">&amp;</span>[fedimint_ln_common::route_hints::RouteHint],
+<a href=#2312 id=2312 data-nosnippet>2312</a>) -&gt; Vec&lt;tonic_lnd::lnrpc::RouteHint&gt; {
+<a href=#2313 id=2313 data-nosnippet>2313</a>    route_hints
+<a href=#2314 id=2314 data-nosnippet>2314</a>        .iter()
+<a href=#2315 id=2315 data-nosnippet>2315</a>        .map(|hint| tonic_lnd::lnrpc::RouteHint {
+<a href=#2316 id=2316 data-nosnippet>2316</a>            hop_hints: hint
+<a href=#2317 id=2317 data-nosnippet>2317</a>                .<span class="number">0
+<a href=#2318 id=2318 data-nosnippet>2318</a>                </span>.iter()
+<a href=#2319 id=2319 data-nosnippet>2319</a>                .map(|hop| tonic_lnd::lnrpc::HopHint {
+<a href=#2320 id=2320 data-nosnippet>2320</a>                    node_id: hop.src_node_id.serialize().encode_hex(),
+<a href=#2321 id=2321 data-nosnippet>2321</a>                    chan_id: hop.short_channel_id,
+<a href=#2322 id=2322 data-nosnippet>2322</a>                    fee_base_msat: hop.base_msat,
+<a href=#2323 id=2323 data-nosnippet>2323</a>                    fee_proportional_millionths: hop.proportional_millionths,
+<a href=#2324 id=2324 data-nosnippet>2324</a>                    cltv_expiry_delta: u32::from(hop.cltv_expiry_delta),
+<a href=#2325 id=2325 data-nosnippet>2325</a>                })
+<a href=#2326 id=2326 data-nosnippet>2326</a>                .collect(),
+<a href=#2327 id=2327 data-nosnippet>2327</a>        })
+<a href=#2328 id=2328 data-nosnippet>2328</a>        .collect()
+<a href=#2329 id=2329 data-nosnippet>2329</a>}
+<a href=#2330 id=2330 data-nosnippet>2330</a>
+<a href=#2331 id=2331 data-nosnippet>2331</a><span class="kw">fn </span>wire_features_to_lnd_feature_vec(
+<a href=#2332 id=2332 data-nosnippet>2332</a>    features_wire_encoded: <span class="kw-2">&amp;</span>[u8],
+<a href=#2333 id=2333 data-nosnippet>2333</a>) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;i32&gt;, FeatureVectorTooLargeError&gt; {
+<a href=#2334 id=2334 data-nosnippet>2334</a>    <span class="kw">if </span>features_wire_encoded.len() &gt; <span class="number">1_000 </span>{
+<a href=#2335 id=2335 data-nosnippet>2335</a>        <span class="kw">return </span><span class="prelude-val">Err</span>(FeatureVectorTooLargeError);
+<a href=#2336 id=2336 data-nosnippet>2336</a>    }
+<a href=#2337 id=2337 data-nosnippet>2337</a>
+<a href=#2338 id=2338 data-nosnippet>2338</a>    <span class="kw">let </span>lnd_features = features_wire_encoded
+<a href=#2339 id=2339 data-nosnippet>2339</a>        .iter()
+<a href=#2340 id=2340 data-nosnippet>2340</a>        .rev()
+<a href=#2341 id=2341 data-nosnippet>2341</a>        .enumerate()
+<a href=#2342 id=2342 data-nosnippet>2342</a>        .flat_map(|(byte_idx, <span class="kw-2">&amp;</span>feature_byte)| {
+<a href=#2343 id=2343 data-nosnippet>2343</a>            (<span class="number">0</span>..<span class="number">8</span>).filter_map(<span class="kw">move </span>|bit_idx| {
+<a href=#2344 id=2344 data-nosnippet>2344</a>                <span class="kw">if </span>(feature_byte &amp; (<span class="number">1u8 </span>&lt;&lt; bit_idx)) != <span class="number">0 </span>{
+<a href=#2345 id=2345 data-nosnippet>2345</a>                    <span class="prelude-val">Some</span>(
+<a href=#2346 id=2346 data-nosnippet>2346</a>                        i32::try_from(byte_idx * <span class="number">8 </span>+ bit_idx)
+<a href=#2347 id=2347 data-nosnippet>2347</a>                            .expect(<span class="string">"Index will never exceed i32::MAX for feature vectors &lt;8MB"</span>),
+<a href=#2348 id=2348 data-nosnippet>2348</a>                    )
+<a href=#2349 id=2349 data-nosnippet>2349</a>                } <span class="kw">else </span>{
+<a href=#2350 id=2350 data-nosnippet>2350</a>                    <span class="prelude-val">None
+<a href=#2351 id=2351 data-nosnippet>2351</a>                </span>}
+<a href=#2352 id=2352 data-nosnippet>2352</a>            })
+<a href=#2353 id=2353 data-nosnippet>2353</a>        })
+<a href=#2354 id=2354 data-nosnippet>2354</a>        .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 <a href=#2355 id=2355 data-nosnippet>2355</a>
-<a href=#2356 id=2356 data-nosnippet>2356</a><span class="kw">impl </span>Display <span class="kw">for </span>PrettyPaymentHash&lt;<span class="lifetime">'_</span>&gt; {
-<a href=#2357 id=2357 data-nosnippet>2357</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
-<a href=#2358 id=2358 data-nosnippet>2358</a>        <span class="macro">write!</span>(f, <span class="string">"payment_hash={}"</span>, <span class="self">self</span>.<span class="number">0</span>.encode_hex::&lt;String&gt;())
-<a href=#2359 id=2359 data-nosnippet>2359</a>    }
-<a href=#2360 id=2360 data-nosnippet>2360</a>}
+<a href=#2356 id=2356 data-nosnippet>2356</a>    <span class="prelude-val">Ok</span>(lnd_features)
+<a href=#2357 id=2357 data-nosnippet>2357</a>}
+<a href=#2358 id=2358 data-nosnippet>2358</a>
+<a href=#2359 id=2359 data-nosnippet>2359</a><span class="doccomment">/// Utility struct for logging payment hashes. Useful for debugging.
+<a href=#2360 id=2360 data-nosnippet>2360</a></span><span class="kw">struct </span>PrettyPaymentHash&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Vec&lt;u8&gt;);
 <a href=#2361 id=2361 data-nosnippet>2361</a>
-<a href=#2362 id=2362 data-nosnippet>2362</a><span class="doccomment">/// An invoice's destination feature bits are too long to convert for LND.
-<a href=#2363 id=2363 data-nosnippet>2363</a></span><span class="attr">#[derive(Debug, thiserror::Error)]
-<a href=#2364 id=2364 data-nosnippet>2364</a>#[error(<span class="string">"Will not process feature bit vectors larger than 1000 byte"</span>)]
-<a href=#2365 id=2365 data-nosnippet>2365</a></span><span class="kw">struct </span>FeatureVectorTooLargeError;
-<a href=#2366 id=2366 data-nosnippet>2366</a>
-<a href=#2367 id=2367 data-nosnippet>2367</a><span class="attr">#[cfg(test)]
-<a href=#2368 id=2368 data-nosnippet>2368</a></span><span class="kw">mod </span>tests;
+<a href=#2362 id=2362 data-nosnippet>2362</a><span class="kw">impl </span>Display <span class="kw">for </span>PrettyPaymentHash&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#2363 id=2363 data-nosnippet>2363</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#2364 id=2364 data-nosnippet>2364</a>        <span class="macro">write!</span>(f, <span class="string">"payment_hash={}"</span>, <span class="self">self</span>.<span class="number">0</span>.encode_hex::&lt;String&gt;())
+<a href=#2365 id=2365 data-nosnippet>2365</a>    }
+<a href=#2366 id=2366 data-nosnippet>2366</a>}
+<a href=#2367 id=2367 data-nosnippet>2367</a>
+<a href=#2368 id=2368 data-nosnippet>2368</a><span class="doccomment">/// An invoice's destination feature bits are too long to convert for LND.
+<a href=#2369 id=2369 data-nosnippet>2369</a></span><span class="attr">#[derive(Debug, thiserror::Error)]
+<a href=#2370 id=2370 data-nosnippet>2370</a>#[error(<span class="string">"Will not process feature bit vectors larger than 1000 byte"</span>)]
+<a href=#2371 id=2371 data-nosnippet>2371</a></span><span class="kw">struct </span>FeatureVectorTooLargeError;
+<a href=#2372 id=2372 data-nosnippet>2372</a>
+<a href=#2373 id=2373 data-nosnippet>2373</a><span class="attr">#[cfg(test)]
+<a href=#2374 id=2374 data-nosnippet>2374</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
