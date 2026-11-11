@@ -25,7 +25,7 @@ use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::secp256k1::schnorr::Signature;
-use fedimint_core::secp256k1::{Keypair, Message, PublicKey, Secp256k1, schnorr};
+use fedimint_core::secp256k1::{self, Keypair, Message, PublicKey, Secp256k1, schnorr};
 use fedimint_core::util::BoxStream;
 use fedimint_core::{Amount, OutPoint, apply, async_trait_maybe_send, push_db_pair_items};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
@@ -157,6 +157,7 @@ pub struct EscrowClientModule {
     federation_id: FederationId,
     cfg: EscrowClientConfig,
     pub client_ctx: ClientContext<Self>,
+    secp: Secp256k1<secp256k1::All>,
     escrow_key: Keypair,
     arbiter_fee_key: Keypair,
     secret: DerivableSecret,
@@ -237,18 +238,25 @@ impl ClientModuleInit for EscrowClientInit {
         &self,
         args: &ClientModuleInitArgs<Self>,
     ) -> Result<Self::Module, ClientModuleError> {
+        let secp = Secp256k1::new();
+
+        let escrow_key = args
+            .module_root_secret()
+            .child_key(ChildId(EscrowChildKeys::Escrow as u64))
+            .to_secp_key(&secp);
+
+        let arbiter_fee_key = args
+            .module_root_secret()
+            .child_key(ChildId(EscrowChildKeys::ArbiterFee as u64))
+            .to_secp_key(&secp);
+
         Ok(EscrowClientModule {
             federation_id: args.federation_id,
             cfg: args.cfg.clone(),
             client_ctx: args.context.clone(),
-            escrow_key: args
-                .module_root_secret()
-                .child_key(ChildId(EscrowChildKeys::Escrow as u64))
-                .to_secp_key(&Secp256k1::new()),
-            arbiter_fee_key: args
-                .module_root_secret()
-                .child_key(ChildId(EscrowChildKeys::ArbiterFee as u64))
-                .to_secp_key(&Secp256k1::new()),
+            secp,
+            escrow_key,
+            arbiter_fee_key,
             secret: args.module_root_secret.clone(),
             notifier: args.notifier().clone(),
             dkg_transports: Default::default(),
@@ -498,8 +506,8 @@ pub struct CreateContractResponse {
 /// consortium attempt.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsortiumSession {
-    record: FrostDkgSessionRecord,
-    session: FrostDkgSession,
+    pub record: FrostDkgSessionRecord,
+    pub session: FrostDkgSession,
 }
 
 impl EscrowClientModule {
@@ -507,7 +515,7 @@ impl EscrowClientModule {
     fn iroh_identity_key(&self) -> Keypair {
         self.secret
             .child_key(ChildId(EscrowChildKeys::IrohKey as u64))
-            .to_secp_key(&Secp256k1::new())
+            .to_secp_key(&self.secp)
     }
 
     /// Returns the public key identifying this client's escrow identity.
@@ -550,8 +558,12 @@ impl EscrowClientModule {
         default_fallback: FallbackPolicy,
     ) -> Result<CreateContractResponse, anyhow::Error> {
         let funder_key = self.escrow_key.public_key();
+
         let now = self.federation_unix_time().await?;
-        let timeout_deadline = now + timeout.as_secs();
+        let timeout_deadline = now
+            .checked_add(timeout.as_secs())
+            .ok_or_else(|| anyhow!("escrow timeout exceeds"))?;
+
         // resolution deadline will be calculated once the contract goes into disputed
         // state
         let resolution_period = resolution_period.as_secs();
@@ -953,7 +965,7 @@ impl EscrowClientModule {
             .module_api()
             .get_claim_amount(GetClaimAmount { escrow_id })
             .await?
-            .ok_or_else(|| anyhow!("No pool found"))?;
+            .ok_or_else(|| anyhow!("No claim pool exists for escrow {escrow_id:?}"))?;
 
         let (signing_key, amount) = pool
             .claimer
@@ -1197,7 +1209,9 @@ impl EscrowClientModule {
     /// in-memory Iroh transport.
     ///
     /// This method prevents the client from reusing the cached transport
-    /// associated with the specified session ID.
+    /// associated with the specified session ID. This does not cancel an
+    /// already-running DKG execution. The running execution retains its own
+    /// reference to the transport.
     ///
     /// It does not reset or delete the persisted DKG session record.
     /// Use [`Self::reset_arbiter_consortium`] when the intention is to
@@ -1556,11 +1570,9 @@ impl EscrowClientModule {
     /// This method can be used by integrators to generate signatures
     /// required by escrow protocol operations, such as arbiter engagement
     pub fn sign_message(&self, message: EscrowMessage) -> anyhow::Result<Signature> {
-        let secp = Secp256k1::new();
-
         let msg_bytes = compute_escrow_message(&message);
         let msg = Message::from_digest(msg_bytes);
 
-        Ok(secp.sign_schnorr(&msg, &self.escrow_key))
+        Ok(self.secp.sign_schnorr(&msg, &self.escrow_key))
     }
 }

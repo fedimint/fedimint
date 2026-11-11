@@ -4,7 +4,7 @@ use fedimint_core::{Amount, secp256k1};
 
 use crate::{
     EscrowContract, EscrowInputError, EscrowMessage, EscrowStatus, EscrowTransition, Outcome,
-    Resolution, compute_escrow_message,
+    Resolution, SPLIT_BPS_DENOMINATOR, compute_escrow_message,
 };
 
 /// What the federation must do with the funds once a resolution is accepted.
@@ -142,13 +142,15 @@ fn resolve_fallback(
     if !contract.is_party(claimer) {
         return Err(EscrowInputError::NotAParticipant);
     }
+
     let EscrowStatus::Disputed { resolve_by, .. } = contract.status else {
-        return Err(EscrowInputError::ContractNotDisputed);
+        return Err(if contract.is_terminal() {
+            EscrowInputError::ContractAlreadyResolved
+        } else {
+            EscrowInputError::ContractNotDisputed
+        });
     };
 
-    if contract.is_terminal() {
-        return Err(EscrowInputError::ContractAlreadyResolved);
-    }
     if now <= resolve_by {
         return Err(EscrowInputError::FallbackNotAvailable);
     }
@@ -236,7 +238,8 @@ fn payout_claims(
                 return Err(EscrowInputError::InvalidSplitRatio);
             }
             let funder_amount = Amount::from_msats(
-                ((payout_amount.msats as u128 * u128::from(*funder_split_bps)) / 10_000u128) as u64,
+                ((payout_amount.msats as u128 * u128::from(*funder_split_bps))
+                    / u128::from(SPLIT_BPS_DENOMINATOR)) as u64,
             );
             let recipient_amount = payout_amount
                 .checked_sub(funder_amount)

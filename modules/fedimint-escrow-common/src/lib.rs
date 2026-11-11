@@ -250,6 +250,12 @@ impl EscrowContract {
     }
 
     pub fn transition(&mut self, transition: EscrowTransition) -> Result<(), EscrowInputError> {
+        if let EscrowTransition::ArbiterOutcome(outcome) = transition
+            && !outcome.is_valid()
+        {
+            return Err(EscrowInputError::InvalidSplitRatio);
+        }
+
         let new_status = match (&self.status, transition) {
             (EscrowStatus::Active, EscrowTransition::FunderRelease) => EscrowStatus::Released,
             (EscrowStatus::Active, EscrowTransition::ArbiterEngaged { resolve_by }) => {
@@ -600,7 +606,7 @@ pub enum EscrowInputError {
     ContractDisputed,
     #[error("Contract not disputed")]
     ContractNotDisputed,
-    #[error("Contract already resolved,claim the amount if not!")]
+    #[error("Contract already resolved; claim the payout if available")]
     ContractAlreadyResolved,
     #[error("No pending claim")]
     NoPendingClaim,
@@ -636,10 +642,10 @@ pub enum EscrowContractValidationError {
     #[error("arbiter fee must be less than the escrow amount")]
     InvalidArbiterFee,
 
-    #[error("escrow timeout must be in the future")]
+    #[error("invalid escrow timeout")]
     InvalidTimeout,
 
-    #[error("resolution timeout must be greater than zero")]
+    #[error("invalid resolution timeout")]
     InvalidResolutionTimeout,
 
     #[error("invalid split ratio")]

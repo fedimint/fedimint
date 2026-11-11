@@ -42,10 +42,10 @@ enum Opts {
         escrow_id: EscrowId,
     },
 
-    /// List the client's escrow operations
+    /// List escrow contracts associated with the client
     ListEscrow,
 
-    /// Resolve the specific escrow with the funder signature
+    /// Release an escrow using the funder's signature
     ResolveEscrow {
         #[clap(long, visible_alias = "id")]
         escrow_id: EscrowId,
@@ -70,8 +70,8 @@ enum Opts {
         escrow_id: EscrowId,
     },
 
-    /// Either party(funder/recipient) can trigger a fallback after resolution
-    /// timeout for a disputed contract
+    /// Either party (funder or recipient) can trigger fallback after the
+    /// resolution deadline for a disputed contract.
     TriggerFallback {
         #[clap(long, visible_alias = "id")]
         escrow_id: EscrowId,
@@ -181,7 +181,7 @@ pub(crate) async fn handle_cli_command(
             while let Some(state) = stream.next().await {
                 match &state {
                     EscrowInputSMState::Failed { reason } => {
-                        return Err(anyhow::anyhow!("Escrow resolution failed: {reason}"));
+                        return Err(anyhow::anyhow!("arbiter engagement failed: {reason}"));
                     }
                     EscrowInputSMState::Disputed => {
                         break;
@@ -237,13 +237,9 @@ pub(crate) async fn handle_cli_command(
 
             while let Some(state) = stream.next().await {
                 match &state {
-                    EscrowInputSMState::Refunded => {
-                        break;
-                    }
-                    EscrowInputSMState::Released => {
-                        break;
-                    }
-                    EscrowInputSMState::Split => {
+                    EscrowInputSMState::Refunded
+                    | EscrowInputSMState::Released
+                    | EscrowInputSMState::Split => {
                         break;
                     }
                     EscrowInputSMState::Failed { reason } => {
@@ -270,9 +266,7 @@ pub(crate) async fn handle_cli_command(
             while let Some(state) = stream.next().await {
                 match &state {
                     EscrowInputSMState::Failed { reason } => {
-                        return Err(anyhow::anyhow!(
-                            "Escrow arbiter resolution failed: {reason}"
-                        ));
+                        return Err(anyhow::anyhow!("escrow claim payout failed: {reason}"));
                     }
                     EscrowInputSMState::Claimed => {
                         break;
@@ -295,18 +289,14 @@ pub(crate) async fn handle_cli_command(
 
             while let Some(state) = stream.next().await {
                 match &state {
-                    EscrowInputSMState::Refunded => {
-                        break;
-                    }
-                    EscrowInputSMState::Released => {
-                        break;
-                    }
-                    EscrowInputSMState::Split => {
+                    EscrowInputSMState::Refunded
+                    | EscrowInputSMState::Released
+                    | EscrowInputSMState::Split => {
                         break;
                     }
                     EscrowInputSMState::Failed { reason } => {
                         return Err(anyhow::anyhow!(
-                            "Escrow arbiter resolution failed: {reason}"
+                            "Escrow fallback resolution failed: {reason}"
                         ));
                     }
                     _ => {}
