@@ -29,7 +29,7 @@ fn response(
     mempool_visibility: MempoolVisibility,
 ) -> PendingOutputs {
     PendingOutputs {
-        block_count,
+        block_count: (block_count != 0).then_some(block_count),
         outputs,
         mempool_visibility,
     }
@@ -46,7 +46,7 @@ fn block_count_is_the_highest_a_threshold_of_peers_reached() {
     // everyone's progress along with it.
     let merged = merge_pending_outputs(vec![tip(101), tip(500), tip(100), tip(102)], THRESHOLD);
 
-    assert_eq!(merged.block_count, 101);
+    assert_eq!(merged.block_count, Some(101));
 }
 
 #[test]
@@ -55,7 +55,58 @@ fn block_count_falls_back_to_the_highest_tip_below_a_threshold() {
     // upgraded federation, so no tip is backed by a threshold.
     let merged = merge_pending_outputs(vec![tip(100), tip(105)], THRESHOLD);
 
-    assert_eq!(merged.block_count, 105);
+    assert_eq!(merged.block_count, Some(105));
+}
+
+#[test]
+fn unavailable_counts_keep_the_existing_threshold_policy() {
+    // Unknown is below every known observation, but is still a response.
+    // Excluding it would incorrectly trigger the highest-tip fallback here.
+    let merged = merge_pending_outputs(vec![tip(105), tip(104), tip(0)], THRESHOLD);
+    assert_eq!(merged.block_count, None);
+
+    for lagging in [0, 1, 100] {
+        let merged =
+            merge_pending_outputs(vec![tip(105), tip(104), tip(103), tip(lagging)], THRESHOLD);
+        assert_eq!(merged.block_count, Some(103));
+    }
+    let merged = merge_pending_outputs(vec![tip(105), tip(104), tip(1)], THRESHOLD);
+    assert_eq!(merged.block_count, Some(1));
+
+    let merged = merge_pending_outputs(vec![tip(0), tip(0), tip(0)], THRESHOLD);
+    assert_eq!(merged, PendingOutputs::default());
+
+    let merged = merge_pending_outputs(vec![tip(0), tip(105)], THRESHOLD);
+    assert_eq!(merged.block_count, Some(105));
+}
+
+#[test]
+fn merged_optional_tip_preserves_confirmation_progress() {
+    use crate::{ReceiveProgress, WalletClientModule};
+
+    let mined = output(1, Some(100));
+    for (counts, confirmations) in [
+        (vec![105, 104, 0], 0),
+        (vec![105, 104, 1], 0),
+        (vec![105, 104, 103, 0], 3),
+        (vec![105, 104], 5),
+        (vec![200, 200, 200], 8),
+    ] {
+        let merged = merge_pending_outputs(counts.into_iter().map(tip).collect(), THRESHOLD);
+        assert_eq!(
+            WalletClientModule::pending_progress(&mined, merged.block_count),
+            ReceiveProgress::Confirming {
+                value: mined.value,
+                height: 100,
+                confirmations,
+                required: 8,
+            }
+        );
+        assert_eq!(
+            WalletClientModule::pending_progress(&output(1, None), merged.block_count),
+            ReceiveProgress::Mempool { value: mined.value }
+        );
+    }
 }
 
 #[test]

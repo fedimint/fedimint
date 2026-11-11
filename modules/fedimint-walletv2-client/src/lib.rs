@@ -748,7 +748,7 @@ impl WalletClientModule {
             .await
     }
 
-    fn pending_progress(output: &PendingOutput, block_count: u64) -> ReceiveProgress {
+    fn pending_progress(output: &PendingOutput, block_count: Option<u64>) -> ReceiveProgress {
         // Block count votes trail the chain tip by the vote delay, and an output
         // is only recorded once the consensus block count is past the block that
         // mined it, so a peg-in is claimable one standard confirmation later than
@@ -766,7 +766,9 @@ impl WalletClientModule {
                 // final, so that progress does not blank out before the claim
                 // begins. Clamp so a progress display cannot run past its own
                 // target during that overlap.
-                confirmations: block_count.saturating_sub(height).min(required),
+                confirmations: block_count
+                    .map_or(0, |count| count.saturating_sub(height))
+                    .min(required),
                 required,
             },
             None => ReceiveProgress::Mempool {
