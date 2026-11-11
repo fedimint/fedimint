@@ -1,5 +1,9 @@
+#[cfg(test)]
+mod tests;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
+use std::num::NonZeroUsize;
 use std::str::FromStr;
 
 use fedimint_core::config::PeerUrl;
@@ -59,19 +63,31 @@ impl From<PeerId> for u16 {
     }
 }
 
-/// The number of guardians in a federation.
+/// The nonzero number of guardians in a federation.
+///
+/// Use [`Self::new`] for unchecked input. The legacy [`From`] conversions panic
+/// on zero; the standard blanket [`TryFrom`] conversions also use those paths
+/// and are not fallible validation.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct NumPeers(usize);
+pub struct NumPeers(NonZeroUsize);
 
 impl NumPeers {
+    /// Constructs a guardian count, returning `None` when `total` is zero.
+    pub const fn new(total: usize) -> Option<Self> {
+        match NonZeroUsize::new(total) {
+            Some(total) => Some(Self(total)),
+            None => None,
+        }
+    }
+
     /// Returns an iterator over all peer IDs in the federation.
     pub fn peer_ids(self) -> impl Iterator<Item = PeerId> {
-        (0u16..(self.0 as u16)).map(PeerId)
+        (0u16..(self.total() as u16)).map(PeerId)
     }
 
     /// Returns the total number of guardians in the federation.
     pub fn total(self) -> usize {
-        self.0
+        self.0.get()
     }
 
     /// Returns the number of guardians that can be evil without disrupting the
@@ -100,20 +116,45 @@ impl NumPeers {
 }
 
 impl From<usize> for NumPeers {
+    /// Converts a known nonzero count, panicking if it is zero.
     fn from(value: usize) -> Self {
-        Self(value)
+        Self::new(value).expect("a federation must have at least one guardian")
     }
 }
 
+/// Error returned when constructing [`NumPeers`] from a zero count.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct EmptyPeerSet;
+
+impl std::fmt::Display for EmptyPeerSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("a federation must have at least one guardian")
+    }
+}
+
+impl std::error::Error for EmptyPeerSet {}
+
 /// Types that can be easily converted to [`NumPeers`]
 pub trait NumPeersExt {
+    /// Tries to return the number of guardians in this collection.
+    ///
+    /// The default preserves existing implementations of this trait and relies
+    /// on their nonempty invariant. Implementations that can represent an empty
+    /// collection must override this method to return [`EmptyPeerSet`].
+    fn try_num_peers(&self) -> Result<NumPeers, EmptyPeerSet> {
+        Ok(self.to_num_peers())
+    }
+
+    /// Returns the number of guardians in this non-empty collection.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the collection is empty.
     fn to_num_peers(&self) -> NumPeers;
 }
 
-impl<T> From<T> for NumPeers
-where
-    T: NumPeersExt,
-{
+impl<T: NumPeersExt> From<T> for NumPeers {
+    /// Converts a nonempty collection using its peer-count invariant.
     fn from(value: T) -> Self {
         value.to_num_peers()
     }
@@ -121,30 +162,50 @@ where
 
 impl<T> NumPeersExt for BTreeMap<PeerId, T> {
     fn to_num_peers(&self) -> NumPeers {
-        NumPeers(self.len())
+        NumPeers::from(self.len())
+    }
+
+    fn try_num_peers(&self) -> Result<NumPeers, EmptyPeerSet> {
+        NumPeers::new(self.len()).ok_or(EmptyPeerSet)
     }
 }
 
 impl NumPeersExt for &[PeerId] {
     fn to_num_peers(&self) -> NumPeers {
-        NumPeers(self.len())
+        NumPeers::from(self.len())
+    }
+
+    fn try_num_peers(&self) -> Result<NumPeers, EmptyPeerSet> {
+        NumPeers::new(self.len()).ok_or(EmptyPeerSet)
     }
 }
 
 impl NumPeersExt for Vec<PeerId> {
     fn to_num_peers(&self) -> NumPeers {
-        NumPeers(self.len())
+        NumPeers::from(self.len())
+    }
+
+    fn try_num_peers(&self) -> Result<NumPeers, EmptyPeerSet> {
+        NumPeers::new(self.len()).ok_or(EmptyPeerSet)
     }
 }
 
 impl NumPeersExt for Vec<PeerUrl> {
     fn to_num_peers(&self) -> NumPeers {
-        NumPeers(self.len())
+        NumPeers::from(self.len())
+    }
+
+    fn try_num_peers(&self) -> Result<NumPeers, EmptyPeerSet> {
+        NumPeers::new(self.len()).ok_or(EmptyPeerSet)
     }
 }
 
 impl NumPeersExt for BTreeSet<PeerId> {
     fn to_num_peers(&self) -> NumPeers {
-        NumPeers(self.len())
+        NumPeers::from(self.len())
+    }
+
+    fn try_num_peers(&self) -> Result<NumPeers, EmptyPeerSet> {
+        NumPeers::new(self.len()).ok_or(EmptyPeerSet)
     }
 }

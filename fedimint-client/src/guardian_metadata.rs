@@ -89,7 +89,11 @@ pub(crate) async fn fetch_guardian_metadata_from_at_least_num_of_peers(
     guardian_pub_keys: &BTreeMap<PeerId, bitcoin::secp256k1::PublicKey>,
     extra_response_wait: Duration,
 ) -> Vec<PeersSignedGuardianMetadata> {
-    let num_peers = guardian_pub_keys.to_num_peers();
+    let Ok(num_peers) = guardian_pub_keys.try_num_peers() else {
+        // Older or malformed configs may contain Some(empty) broadcast keys.
+        // Preserve the empty result without terminating the refresh task.
+        return Vec::new();
+    };
     // Keep trying, initially somewhat aggressively, but after a while retry very
     // slowly, because chances for response are getting lower and lower.
     let mut backoff = custom_backoff(Duration::from_millis(200), Duration::from_secs(600), None);
