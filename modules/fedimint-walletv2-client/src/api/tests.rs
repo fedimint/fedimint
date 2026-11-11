@@ -59,6 +59,28 @@ fn block_count_falls_back_to_the_highest_tip_below_a_threshold() {
 }
 
 #[test]
+fn block_count_ignores_guardians_without_a_bitcoin_backend() {
+    // One guardian is offline and another cannot reach its bitcoin backend, so
+    // it reports a block count of `0`. That is not a tip it has reached, and it
+    // must not pull the merged tip, and every deposit's confirmations, down to
+    // zero. Only two guardians can see the chain, fewer than a threshold, so
+    // fall back to the highest tip.
+    let merged = merge_pending_outputs(vec![tip(105), tip(0), tip(104)], THRESHOLD);
+
+    assert_eq!(merged.block_count, 105);
+
+    // A blind guardian among a threshold of guardians that see the chain does
+    // not change the result.
+    let merged = merge_pending_outputs(vec![tip(105), tip(0), tip(103), tip(104)], THRESHOLD);
+
+    assert_eq!(merged.block_count, 103);
+
+    let merged = merge_pending_outputs(vec![tip(0), tip(0), tip(0)], THRESHOLD);
+
+    assert_eq!(merged.block_count, 0);
+}
+
+#[test]
 fn no_responses_merge_into_an_empty_blind_view() {
     let merged = merge_pending_outputs(vec![], THRESHOLD);
 
