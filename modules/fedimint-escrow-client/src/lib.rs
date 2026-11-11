@@ -52,7 +52,10 @@ use crate::client_db::{
     FrostDkgSessionRecordPrefix, FrostDkgSessionRecordkey,
 };
 use crate::frost::dkg::{DkgError, DkgResult};
-use crate::frost::session::{FrostDkgSession, FrostDkgSessionRecord, FrostParticipant, SessionId};
+use crate::frost::secret::StateKey;
+use crate::frost::session::{
+    DkgStage, FrostDkgSession, FrostDkgSessionRecord, FrostParticipant, SessionId,
+};
 use crate::frost::transport::DkgTransport;
 use crate::frost::transport::iroh::IrohDkgTransport;
 use crate::input::{EscrowInputSMCommon, EscrowInputSMState, EscrowInputStateMachine};
@@ -504,10 +507,27 @@ pub struct CreateContractResponse {
 /// [`EscrowClientModule::get_consortium_state`] and can be used
 /// to inspect the progress and persisted information of a
 /// consortium attempt.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ConsortiumSession {
     pub record: FrostDkgSessionRecord,
-    pub session: FrostDkgSession,
+    pub stage: DkgStage,
+}
+
+/// Public result of a finished consortium DKG. The key share stays sealed in
+/// the client db, use `get_consortium_signing_keys` when you need to sign.
+#[derive(Debug, Clone)]
+pub struct ConsortiumInfo {
+    pub session_id: SessionId,
+    pub consortium_pubkey: PublicKey,
+}
+
+impl ConsortiumInfo {
+    fn from_result(session_id: SessionId, result: &DkgResult) -> Result<Self, DkgError> {
+        Ok(Self {
+            session_id,
+            consortium_pubkey: FrostDkgSessionRecord::consortium_pubkey(&result.pubkey_package)?,
+        })
+    }
 }
 
 impl EscrowClientModule {
@@ -516,6 +536,18 @@ impl EscrowClientModule {
         self.secret
             .child_key(ChildId(EscrowChildKeys::IrohKey as u64))
             .to_secp_key(&self.secp)
+    }
+
+    /// key that seals the dkg state in the client db, derived from the module
+    /// root secret
+    fn dkg_state_key(&self) -> StateKey {
+        let bytes = self
+            .secret
+            .child_key(ChildId(EscrowChildKeys::Escrow as u64))
+            .to_secp_key(&self.secp)
+            .secret_key()
+            .secret_bytes();
+        StateKey::new(&bytes)
     }
 
     /// Returns the public key identifying this client's escrow identity.
@@ -1142,8 +1174,7 @@ impl EscrowClientModule {
     /// This method initializes a DKG session for the supplied participants
     /// and coordinates the distributed key generation protocol over the
     /// provided Iroh peer addresses.
-    /// The local client is automatically included as the DKG initiator
-    /// using its escrow identity.
+    /// The caller needs to be in the participants list.
     ///
     /// Transient failures retain the transport so that the same attempt
     /// can be retried. Non-transient failures and successful completion
@@ -1151,22 +1182,25 @@ impl EscrowClientModule {
     ///
     /// Only one DKG for a given session can run at a time.
     ///
-    /// Returns the [`DkgResult`] containing the result of the distributed
+    /// Returns the [`ConsortiumInfo`] containing the result of the distributed
     /// key generation protocol.
-    pub async fn create_arbiter_consortium(
+    pub async fn run_arbiter_consortium(
         &self,
         participants: Vec<FrostParticipant>,
         iroh_peers: BTreeMap<Identifier, NodeAddr>,
-    ) -> Result<DkgResult, DkgError> {
+    ) -> Result<ConsortiumInfo, DkgError> {
         let db = self.client_ctx.module_db();
+        let state_key = self.dkg_state_key();
         let self_participant_id = self.get_frost_identity()?;
         let session =
             FrostDkgSessionRecord::new(self_participant_id, participants, self.federation_id, db)
                 .await?;
 
-        if let Ok(done) = FrostDkgSessionRecord::load_dkg_result(db, session.session_id).await {
+        if let Ok(result) =
+            FrostDkgSessionRecord::load_dkg_result(db, session.session_id, &state_key).await
+        {
             self.dkg_transports.lock().await.remove(&session.session_id);
-            return Ok(done);
+            return ConsortiumInfo::from_result(session.session_id, &result);
         }
 
         let slot = {
@@ -1195,14 +1229,16 @@ impl EscrowClientModule {
             )));
         };
 
-        let result = session.run(db, slot.transport.clone()).await;
+        let result = session.run(db, slot.transport.clone(), &state_key).await;
 
         // Keep the transport only if the caller can retry the same attempt.
         let keep = matches!(&result, Err(e) if e.is_transient());
         if !keep {
             self.dkg_transports.lock().await.remove(&session.session_id);
         }
-        result
+
+        let done = result?;
+        ConsortiumInfo::from_result(session.session_id, &done)
     }
 
     /// Aborts a cached arbiter consortium attempt by removing its
@@ -1261,19 +1297,20 @@ impl EscrowClientModule {
         transport: T,
     ) -> Result<DkgResult, DkgError> {
         let db = self.client_ctx.module_db();
+        let state_key = self.dkg_state_key();
         let self_participant_id = self.get_frost_identity()?;
         let session =
             FrostDkgSessionRecord::new(self_participant_id, participants, self.federation_id, db)
                 .await?;
 
-        let result = session.run(db, transport).await?;
+        let result = session.run(db, transport, &state_key).await?;
         Ok(result)
     }
 
     /// Retrieves the persisted state of a FROST arbiter consortium session.
     ///
     /// Returns [`ConsortiumSession`] containing the session record and DKG
-    /// state
+    /// stage
     pub async fn get_consortium_state(
         &self,
         session_id: SessionId,
@@ -1291,7 +1328,7 @@ impl EscrowClientModule {
 
         anyhow::Ok(ConsortiumSession {
             record,
-            session: state,
+            stage: state.stage(),
         })
     }
 

@@ -28,11 +28,13 @@ use crate::frost::frost_sign::{
     SignerOutcome, SigningError, SigningMux, coordinator_for_slot, finished_frame, pick_outcome,
     sign_as_coordinator, sign_as_signer, sign_with_failover,
 };
+use crate::frost::secret::StateKey;
 use crate::frost::session::{FrostDkgSessionRecord, FrostParticipant, SessionId};
 use crate::frost::transport::file::FileTransport;
 use crate::frost::transport::iroh::{DKG_ALPN, IrohDkgTransport};
 use crate::frost::transport::{DkgTransport, SigningTransport, TransportError};
 
+const DKG_STATE_KEY: [u8; 32] = [7u8; 32];
 fn dummy_federation_id() -> FederationId {
     FederationId::dummy()
 }
@@ -150,16 +152,17 @@ impl Consortium {
 
     async fn run(self) -> Vec<DkgResult> {
         let mut handles = Vec::with_capacity(self.sessions.len());
-
         for (db, record) in self.sessions {
             let session_id = self.session_id;
-
             handles.push(spawn("file_transport_dkg", async move {
                 let transport = FileTransport::new(&session_id)
                     .await
                     .expect("transport init");
 
-                record.run(&db, transport).await.expect("dkg failed")
+                record
+                    .run(&db, transport, &StateKey::new(&DKG_STATE_KEY))
+                    .await
+                    .expect("dkg failed")
             }));
         }
 
@@ -190,7 +193,10 @@ impl Consortium {
 
             handles.push(spawn("iroh_transport_dkg", async move {
                 sleep(Duration::from_millis(200 * index as u64)).await;
-                record.run(&db, transport).await.expect("dkg failed")
+                record
+                    .run(&db, transport, &StateKey::new(&DKG_STATE_KEY))
+                    .await
+                    .expect("dkg failed")
             }));
         }
 
@@ -485,7 +491,10 @@ async fn test_run_after_finish_returns_same_key() {
     let results = consortium.run().await;
 
     let transport = FileTransport::new(&session_id).await.unwrap();
-    let again = record.run(&db, transport).await.expect("second run failed");
+    let again = record
+        .run(&db, transport, &StateKey::new(&DKG_STATE_KEY))
+        .await
+        .expect("second run failed");
 
     assert_eq!(
         again.pubkey_package.verifying_key().serialize(),
@@ -508,7 +517,10 @@ async fn test_dkg_completes_when_a_member_joins_late() {
             let transport = FileTransport::new(&session_id)
                 .await
                 .expect("transport init");
-            record.run(&db, transport).await.expect("dkg failed")
+            record
+                .run(&db, transport, &StateKey::new(&DKG_STATE_KEY))
+                .await
+                .expect("dkg failed")
         }));
     }
 
@@ -533,7 +545,11 @@ async fn test_interrupted_run_keeps_its_state_and_reset_clears_it() {
     let transport = FileTransport::new(&session_id)
         .await
         .expect("transport init");
-    let interrupted = timeout(Duration::from_secs(2), record.run(&db, transport)).await;
+    let interrupted = timeout(
+        Duration::from_secs(2),
+        record.run(&db, transport, &StateKey::new(&DKG_STATE_KEY)),
+    )
+    .await;
     assert!(interrupted.is_err(), "run must not finish alone");
     assert!(has_saved_state(&db, session_id).await);
 
@@ -556,9 +572,10 @@ async fn test_reset_never_destroys_a_finished_key() {
         "resetting would destroy the key share"
     );
 
-    let kept = FrostDkgSessionRecord::load_dkg_result(&db, session_id)
-        .await
-        .expect("the key must still be there");
+    let kept =
+        FrostDkgSessionRecord::load_dkg_result(&db, session_id, &StateKey::new(&DKG_STATE_KEY))
+            .await
+            .expect("the key must still be there");
     assert_eq!(
         kept.pubkey_package.verifying_key().serialize(),
         results[0].pubkey_package.verifying_key().serialize()
@@ -575,7 +592,12 @@ async fn test_member_resumes_after_a_restart() {
     let first_transport = FileTransport::new(&session_id)
         .await
         .expect("transport init");
-    let interrupted = timeout(Duration::from_secs(2), record.run(&db, first_transport)).await;
+    let interrupted = timeout(
+        Duration::from_secs(2),
+        record.run(&db, first_transport, &StateKey::new(&DKG_STATE_KEY)),
+    )
+    .await;
+
     assert!(interrupted.is_err());
     assert!(has_saved_state(&db, session_id).await);
 
@@ -590,7 +612,7 @@ async fn test_member_resumes_after_a_restart() {
         .await
         .expect("transport init");
     let restarted = record
-        .run(&db, second_transport)
+        .run(&db, second_transport, &StateKey::new(&DKG_STATE_KEY))
         .await
         .expect("resumed run failed");
 
@@ -618,7 +640,9 @@ async fn run_honest_members(
                 let transport = FileTransport::new(&session_id)
                     .await
                     .expect("transport init");
-                let result = record.run(&db, transport).await;
+                let result = record
+                    .run(&db, transport, &StateKey::new(&DKG_STATE_KEY))
+                    .await;
                 (db, result)
             })
         })
@@ -645,7 +669,7 @@ async fn aborted_errors(outcomes: Vec<MemberOutcome>, session_id: SessionId) -> 
             "bad data must not be retried: {error}"
         );
         assert!(
-            FrostDkgSessionRecord::load_dkg_result(&db, session_id)
+            FrostDkgSessionRecord::load_dkg_result(&db, session_id, &StateKey::new(&DKG_STATE_KEY))
                 .await
                 .is_err()
         );
@@ -879,6 +903,7 @@ async fn test_early_round2_package_survives_timed_out_attempt() {
     let session_id = consortium.session_id;
     let participants = consortium.participants.clone();
     let local_member = participants[0].clone();
+
     let expected: Vec<Identifier> = participants
         .iter()
         .map(|participant| participant.identifier)
@@ -915,7 +940,10 @@ async fn test_early_round2_package_survives_timed_out_attempt() {
     let mut handles = Vec::new();
     for ((db, record), transport) in other_sessions.into_iter().zip(other_transports) {
         handles.push(spawn("iroh_transport_dkg", async move {
-            record.run(&db, transport).await.expect("dkg failed")
+            record
+                .run(&db, transport, &StateKey::new(&DKG_STATE_KEY))
+                .await
+                .expect("dkg failed")
         }));
     }
     sleep(Duration::from_secs(1)).await;
@@ -965,10 +993,14 @@ async fn test_session_restarts_after_failed_run() {
     let other_sessions = consortium.sessions[1..].to_vec();
 
     // nobody else is running, so this run cannot finish and gets cut off
-    let first = timeout(Duration::from_secs(1), record.run(&db, transport.clone())).await;
+    let first = timeout(
+        Duration::from_secs(1),
+        record.run(&db, transport.clone(), &StateKey::new(&DKG_STATE_KEY)),
+    )
+    .await;
     assert!(first.is_err(), "run must not finish alone");
     assert!(
-        FrostDkgSessionRecord::load_dkg_result(&db, session_id)
+        FrostDkgSessionRecord::load_dkg_result(&db, session_id, &StateKey::new(&DKG_STATE_KEY))
             .await
             .is_err()
     );
@@ -978,10 +1010,17 @@ async fn test_session_restarts_after_failed_run() {
     let mut handles = Vec::new();
     for ((db, record), transport) in other_sessions.into_iter().zip(other_transports) {
         handles.push(spawn("iroh_transport_dkg", async move {
-            record.run(&db, transport).await.expect("dkg failed")
+            record
+                .run(&db, transport, &StateKey::new(&DKG_STATE_KEY))
+                .await
+                .expect("dkg failed")
         }));
     }
-    let first_member = record.run(&db, transport).await.expect("second run failed");
+
+    let first_member = record
+        .run(&db, transport, &StateKey::new(&DKG_STATE_KEY))
+        .await
+        .expect("second run failed");
 
     let group_key = first_member.pubkey_package.verifying_key().serialize();
     for handle in handles {
@@ -990,9 +1029,10 @@ async fn test_session_restarts_after_failed_run() {
     }
 
     // the finished key is stored
-    let loaded = FrostDkgSessionRecord::load_dkg_result(&db, session_id)
-        .await
-        .expect("key must be saved");
+    let loaded =
+        FrostDkgSessionRecord::load_dkg_result(&db, session_id, &StateKey::new(&DKG_STATE_KEY))
+            .await
+            .expect("key must be saved");
     assert_eq!(loaded.pubkey_package.verifying_key().serialize(), group_key);
 }
 

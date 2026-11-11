@@ -24,6 +24,7 @@ use tracing::warn;
 
 use crate::client_db::{FrostDkgSessionKey, FrostDkgSessionRecordkey};
 use crate::frost::dkg::{DkgError, DkgResult, DkgRunner};
+use crate::frost::secret::{EncryptedPackage, StateKey};
 use crate::frost::transport::DkgTransport;
 
 // max attempts on transient failures in dkg
@@ -93,34 +94,46 @@ impl FrostParticipant {
     }
 }
 
-#[derive(Debug, Clone, Encodable, Decodable, Serialize, Deserialize)]
+/// consortium state for internal usage
+#[derive(Debug, Clone, Encodable, Decodable)]
 pub enum FrostDkgState {
     Created,
     Round1Started {
-        round1_secret: Vec<u8>,
+        round1_secret: EncryptedPackage,
         round1_package: Vec<u8>,
     },
     Round1Complete {
-        round1_secret: Vec<u8>,
+        round1_secret: EncryptedPackage,
         round1_received: BTreeMap<Vec<u8>, Vec<u8>>,
     },
     Round2Complete {
         round1_received: BTreeMap<Vec<u8>, Vec<u8>>,
-        round2_secret: Vec<u8>,
-        round2_received: BTreeMap<Vec<u8>, Vec<u8>>,
+        round2_secret: EncryptedPackage,
+        round2_received: BTreeMap<Vec<u8>, EncryptedPackage>,
     },
     Confirming {
-        key_package: Vec<u8>,
+        key_package: EncryptedPackage,
         public_key_package: Vec<u8>,
     },
     Finalized {
-        key_package: Vec<u8>,
+        key_package: EncryptedPackage,
         public_key_package: Vec<u8>,
     },
     Failed {
         round: u8,
         error: String,
     },
+}
+
+/// Consortium state info for client
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum DkgStage {
+    Created,
+    Round1,
+    Round2,
+    Confirming,
+    Finalized,
+    Failed,
 }
 
 #[derive(Debug, Clone, Hash, Encodable, Decodable, PartialEq, Eq, Serialize, Deserialize)]
@@ -132,9 +145,33 @@ pub struct FrostDkgSessionRecord {
     pub min_signers: u16,
 }
 
-#[derive(Debug, Clone, Encodable, Decodable, Serialize, Deserialize)]
+#[derive(Debug, Clone, Encodable, Decodable)]
 pub struct FrostDkgSession {
     state: FrostDkgState,
+}
+
+impl FrostDkgSession {
+    pub fn stage(&self) -> DkgStage {
+        match self.state {
+            FrostDkgState::Created => DkgStage::Created,
+            FrostDkgState::Round1Started { .. } | FrostDkgState::Round1Complete { .. } => {
+                DkgStage::Round1
+            }
+            FrostDkgState::Round2Complete { .. } => DkgStage::Round2,
+            FrostDkgState::Confirming { .. } => DkgStage::Confirming,
+            FrostDkgState::Finalized { .. } => DkgStage::Finalized,
+            FrostDkgState::Failed { .. } => DkgStage::Failed,
+        }
+    }
+}
+
+impl Serialize for FrostDkgSession {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut out = serializer.serialize_struct("FrostDkgSession", 1)?;
+        out.serialize_field("stage", &self.stage())?;
+        out.end()
+    }
 }
 
 impl Serialize for SessionId {
@@ -185,15 +222,15 @@ fn frost_err(e: Error) -> DkgError {
     DkgError::FrostError(e.to_string())
 }
 
-fn decode_map<T>(
-    map: &BTreeMap<Vec<u8>, Vec<u8>>,
+fn decode_map<V: AsRef<[u8]>, T>(
+    map: &BTreeMap<Vec<u8>, V>,
     de: impl Fn(&[u8]) -> Result<T, Error>,
 ) -> Result<BTreeMap<Identifier, T>, DkgError> {
     let mut out = BTreeMap::new();
     for (id, bytes) in map {
         out.insert(
             Identifier::deserialize(id).map_err(frost_err)?,
-            de(bytes.as_slice()).map_err(frost_err)?,
+            de(bytes.as_ref()).map_err(frost_err)?,
         );
     }
     Ok(out)
@@ -208,6 +245,19 @@ fn encode_map<T>(
         out.insert(id.serialize().to_vec(), ser(value).map_err(frost_err)?);
     }
     Ok(out)
+}
+
+fn decrypt_result(
+    state_key: &StateKey,
+    session_id: &SessionId,
+    key_package: &EncryptedPackage,
+    public_key_package: &[u8],
+) -> Result<DkgResult, DkgError> {
+    let raw = state_key.decrypt(session_id, "key_package", key_package)?;
+    Ok(DkgResult {
+        key_package: KeyPackage::deserialize(&raw).map_err(frost_err)?,
+        pubkey_package: PublicKeyPackage::deserialize(public_key_package).map_err(frost_err)?,
+    })
 }
 
 impl FrostDkgSessionRecord {
@@ -265,24 +315,50 @@ impl FrostDkgSessionRecord {
         anyhow::Ok(record)
     }
 
+    fn encrypt_map(
+        &self,
+        state_key: &StateKey,
+        label: &str,
+        map: BTreeMap<Vec<u8>, Vec<u8>>,
+    ) -> Result<BTreeMap<Vec<u8>, EncryptedPackage>, DkgError> {
+        map.into_iter()
+            .map(|(id, bytes)| {
+                let field = format!("{label}/{}", hex::encode(&id));
+                Ok((id, state_key.encrypt(&self.session_id, &field, &bytes)?))
+            })
+            .collect()
+    }
+
+    fn decrypt_map(
+        &self,
+        state_key: &StateKey,
+        label: &str,
+        map: &BTreeMap<Vec<u8>, EncryptedPackage>,
+    ) -> Result<BTreeMap<Vec<u8>, Vec<u8>>, DkgError> {
+        map.iter()
+            .map(|(id, package)| {
+                let field = format!("{label}/{}", hex::encode(id));
+                Ok((
+                    id.clone(),
+                    state_key.decrypt(&self.session_id, &field, package)?,
+                ))
+            })
+            .collect()
+    }
+
     pub async fn load_dkg_result(
         db: &Database,
         session_id: SessionId,
+        state_key: &StateKey,
     ) -> Result<DkgResult, DkgError> {
         let mut dbtx = db.begin_transaction_nc().await;
-        let session: Option<FrostDkgSession> =
-            dbtx.get_value(&FrostDkgSessionKey(session_id)).await;
+        let session = dbtx.get_value(&FrostDkgSessionKey(session_id)).await;
 
         match session.map(|s| s.state) {
             Some(FrostDkgState::Finalized {
                 key_package,
                 public_key_package,
-            }) => Ok(DkgResult {
-                key_package: KeyPackage::deserialize(&key_package)
-                    .map_err(|e| DkgError::FrostError(e.to_string()))?,
-                pubkey_package: PublicKeyPackage::deserialize(&public_key_package)
-                    .map_err(|e| DkgError::FrostError(e.to_string()))?,
-            }),
+            }) => decrypt_result(state_key, &session_id, &key_package, &public_key_package),
             _ => Err(DkgError::FrostError(
                 "Consortium DKG is not finished".to_string(),
             )),
@@ -356,6 +432,7 @@ impl FrostDkgSessionRecord {
         &self,
         db: &Database,
         transport: T,
+        state_key: &StateKey,
     ) -> Result<DkgResult, DkgError> {
         let runner = DkgRunner::new(transport);
         let mut state = Self::load_state(db, self.session_id).await;
@@ -367,14 +444,15 @@ impl FrostDkgSessionRecord {
                 public_key_package,
             } = &state
             {
-                return Ok(DkgResult {
-                    key_package: KeyPackage::deserialize(key_package).map_err(frost_err)?,
-                    pubkey_package: PublicKeyPackage::deserialize(public_key_package)
-                        .map_err(frost_err)?,
-                });
+                return decrypt_result(
+                    state_key,
+                    &self.session_id,
+                    key_package,
+                    public_key_package,
+                );
             }
 
-            let result = self.advance(&runner, &state).await;
+            let result = self.advance(&runner, &state, state_key).await;
             match result {
                 Ok(next) => {
                     Self::persist_state(db, self.session_id, next.clone()).await;
@@ -403,6 +481,7 @@ impl FrostDkgSessionRecord {
         &self,
         runner: &DkgRunner<T>,
         state: &FrostDkgState,
+        state_key: &StateKey,
     ) -> Result<FrostDkgState, DkgError> {
         match state {
             FrostDkgState::Created | FrostDkgState::Failed { .. } => {
@@ -412,7 +491,11 @@ impl FrostDkgSessionRecord {
                     self.min_signers,
                 )?;
                 Ok(FrostDkgState::Round1Started {
-                    round1_secret: secret.serialize().map_err(frost_err)?,
+                    round1_secret: state_key.encrypt(
+                        &self.session_id,
+                        "round1_secret",
+                        &secret.serialize().map_err(frost_err)?,
+                    )?,
                     round1_package: package.serialize().map_err(frost_err)?,
                 })
             }
@@ -438,7 +521,8 @@ impl FrostDkgSessionRecord {
                 round1_secret,
                 round1_received,
             } => {
-                let secret = Round1SecretPackage::deserialize(round1_secret).map_err(frost_err)?;
+                let raw = state_key.decrypt(&self.session_id, "round1_secret", round1_secret)?;
+                let secret = Round1SecretPackage::deserialize(&raw).map_err(frost_err)?;
                 let received = decode_map(round1_received, Round1Package::deserialize)?;
                 let round2 = runner
                     .run_round2(
@@ -451,11 +535,19 @@ impl FrostDkgSessionRecord {
                     .await?;
                 Ok(FrostDkgState::Round2Complete {
                     round1_received: round1_received.clone(),
-                    round2_secret: round2
-                        .round2_secret_package
-                        .serialize()
-                        .map_err(frost_err)?,
-                    round2_received: encode_map(&round2.round2_received, |p| p.serialize())?,
+                    round2_secret: state_key.encrypt(
+                        &self.session_id,
+                        "round2_secret",
+                        &round2
+                            .round2_secret_package
+                            .serialize()
+                            .map_err(frost_err)?,
+                    )?,
+                    round2_received: self.encrypt_map(
+                        state_key,
+                        "round2_in",
+                        encode_map(&round2.round2_received, |p| p.serialize())?,
+                    )?,
                 })
             }
             FrostDkgState::Round2Complete {
@@ -464,8 +556,11 @@ impl FrostDkgSessionRecord {
                 round2_received,
             } => {
                 let r1 = decode_map(round1_received, Round1Package::deserialize)?;
-                let secret2 = Round2SecretPackage::deserialize(round2_secret).map_err(frost_err)?;
-                let r2 = decode_map(round2_received, Round2Package::deserialize)?;
+                let raw2 = state_key.decrypt(&self.session_id, "round2_secret", round2_secret)?;
+                let secret2 = Round2SecretPackage::deserialize(&raw2).map_err(frost_err)?;
+                let decrypted = self.decrypt_map(state_key, "round2_in", round2_received)?;
+                let r2 = decode_map(&decrypted, Round2Package::deserialize)?;
+
                 let result = runner.finalize(&r1, &secret2, &r2)?;
                 if *result.key_package.min_signers() != self.min_signers {
                     return Err(DkgError::FrostError(
@@ -473,7 +568,11 @@ impl FrostDkgSessionRecord {
                     ));
                 }
                 Ok(FrostDkgState::Confirming {
-                    key_package: result.key_package.serialize().map_err(frost_err)?,
+                    key_package: state_key.encrypt(
+                        &self.session_id,
+                        "key_package",
+                        &result.key_package.serialize().map_err(frost_err)?,
+                    )?,
                     public_key_package: result.pubkey_package.serialize().map_err(frost_err)?,
                 })
             }
