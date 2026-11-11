@@ -29,7 +29,7 @@ fn response(
     mempool_visibility: MempoolVisibility,
 ) -> PendingOutputs {
     PendingOutputs {
-        block_count: std::num::NonZeroU64::new(block_count),
+        block_count: (block_count != 0).then_some(block_count),
         outputs,
         mempool_visibility,
     }
@@ -46,7 +46,7 @@ fn block_count_is_the_highest_a_threshold_of_peers_reached() {
     // everyone's progress along with it.
     let merged = merge_pending_outputs(vec![tip(101), tip(500), tip(100), tip(102)], THRESHOLD);
 
-    assert_eq!(merged.block_count, std::num::NonZeroU64::new(101));
+    assert_eq!(merged.block_count, Some(101));
 }
 
 #[test]
@@ -55,7 +55,7 @@ fn block_count_falls_back_to_the_highest_tip_below_a_threshold() {
     // upgraded federation, so no tip is backed by a threshold.
     let merged = merge_pending_outputs(vec![tip(100), tip(105)], THRESHOLD);
 
-    assert_eq!(merged.block_count, std::num::NonZeroU64::new(105));
+    assert_eq!(merged.block_count, Some(105));
 }
 
 #[test]
@@ -68,16 +68,16 @@ fn unavailable_counts_keep_the_existing_threshold_policy() {
     for lagging in [0, 1, 100] {
         let merged =
             merge_pending_outputs(vec![tip(105), tip(104), tip(103), tip(lagging)], THRESHOLD);
-        assert_eq!(merged.block_count, std::num::NonZeroU64::new(103));
+        assert_eq!(merged.block_count, Some(103));
     }
     let merged = merge_pending_outputs(vec![tip(105), tip(104), tip(1)], THRESHOLD);
-    assert_eq!(merged.block_count, std::num::NonZeroU64::new(1));
+    assert_eq!(merged.block_count, Some(1));
 
     let merged = merge_pending_outputs(vec![tip(0), tip(0), tip(0)], THRESHOLD);
     assert_eq!(merged, PendingOutputs::default());
 
     let merged = merge_pending_outputs(vec![tip(0), tip(105)], THRESHOLD);
-    assert_eq!(merged.block_count, std::num::NonZeroU64::new(105));
+    assert_eq!(merged.block_count, Some(105));
 }
 
 #[test]

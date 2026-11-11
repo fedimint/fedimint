@@ -9,8 +9,6 @@ use super::{descriptor, tweak_public_key};
 
 #[test]
 fn pending_outputs_preserves_legacy_numeric_wire_format() {
-    use std::num::NonZeroU64;
-
     use serde_json::json;
 
     use super::{MempoolVisibility, PendingOutput, PendingOutputs};
@@ -32,7 +30,7 @@ fn pending_outputs_preserves_legacy_numeric_wire_format() {
         let wire = serde_json::to_value(&legacy).expect("Legacy response serializes");
         let pending: PendingOutputs =
             serde_json::from_value(wire.clone()).expect("New clients read legacy responses");
-        assert_eq!(pending.block_count, NonZeroU64::new(count));
+        assert_eq!(pending.block_count, (count != 0).then_some(count));
         let encoded = serde_json::to_value(&pending).expect("New response serializes");
         assert_eq!(encoded, wire);
         assert_eq!(
@@ -45,6 +43,17 @@ fn pending_outputs_preserves_legacy_numeric_wire_format() {
     let default_wire =
         serde_json::to_value(PendingOutputs::default()).expect("Default response serializes");
     assert_eq!(default_wire["block_count"], json!(0));
+    let zero_count = PendingOutputs {
+        block_count: Some(0),
+        ..PendingOutputs::default()
+    };
+    let zero_wire = serde_json::to_value(zero_count).expect("A zero count serializes");
+    assert_eq!(zero_wire, default_wire);
+    assert_eq!(
+        serde_json::from_value::<PendingOutputs>(zero_wire)
+            .expect("The wire sentinel decodes as unavailable"),
+        PendingOutputs::default()
+    );
     // The compatibility boundary remains a required u64, not a nullable field.
     for invalid in [json!(null), json!(-1), json!("105")] {
         let mut wire = default_wire.clone();

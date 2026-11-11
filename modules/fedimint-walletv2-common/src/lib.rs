@@ -6,7 +6,6 @@
 #![allow(clippy::return_self_not_must_use)]
 
 use std::collections::BTreeMap;
-use std::num::NonZeroU64;
 use std::time::Duration;
 
 use bitcoin::hashes::{Hash, hash160, sha256};
@@ -188,6 +187,7 @@ pub struct PendingOutputs {
     /// The API retains its numeric wire format: `None` is encoded as `0` and
     /// nonzero counts as numbers. This is not a freshness or finality
     /// guarantee.
+    /// A `Some(0)` also encodes as `0` and decodes as `None`.
     ///
     /// A mined output's confirmations are `block_count - height`, which counts
     /// the block that mined it as the first confirmation. Note this is offset
@@ -198,7 +198,7 @@ pub struct PendingOutputs {
         serialize_with = "serialize_pending_block_count",
         deserialize_with = "deserialize_pending_block_count"
     )]
-    pub block_count: Option<NonZeroU64>,
+    pub block_count: Option<u64>,
     pub outputs: Vec<PendingOutput>,
     /// How much of its mempool this guardian inspected for these outputs.
     ///
@@ -209,18 +209,18 @@ pub struct PendingOutputs {
 }
 
 // Serde's field serializer requires a reference to the field.
-#[allow(clippy::ref_option, clippy::trivially_copy_pass_by_ref)]
+#[allow(clippy::ref_option)]
 fn serialize_pending_block_count<S: serde::Serializer>(
-    block_count: &Option<NonZeroU64>,
+    block_count: &Option<u64>,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
-    block_count.map_or(0, NonZeroU64::get).serialize(serializer)
+    block_count.unwrap_or(0).serialize(serializer)
 }
 
 fn deserialize_pending_block_count<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
-) -> Result<Option<NonZeroU64>, D::Error> {
-    u64::deserialize(deserializer).map(NonZeroU64::new)
+) -> Result<Option<u64>, D::Error> {
+    u64::deserialize(deserializer).map(|count| (count != 0).then_some(count))
 }
 
 /// How much of a mempool was inspected for unmined peg-ins.

@@ -319,7 +319,7 @@ async fn scan_pending_receives(
     );
 
     let pending = PendingOutputs {
-        block_count: std::num::NonZeroU64::new(status.block_count),
+        block_count: Some(status.block_count),
         outputs,
         mempool_visibility: mempool.visibility(),
     };
