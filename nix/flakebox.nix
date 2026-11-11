@@ -252,7 +252,14 @@ let
         bc
         bitcoind
         jq
-        lnd
+        (lnd.overrideAttrs (oldAttrs: {
+          postPatch = (oldAttrs.postPatch or "") + ''
+            cp ${./tests/lnd-taproot-check_test.go} chainreg/taproot_check_test.go
+          '';
+          postCheck = (oldAttrs.postCheck or "") + ''
+            go test ./chainreg -run '^TestBackendSupportsTaprootRPCCompatibility$' -count=1
+          '';
+        }))
         netcat
         perl
         esplora-electrs
