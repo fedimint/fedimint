@@ -1,0 +1,90 @@
+{
+  "status": "provisional; blocked on post-fix all-platform measurements",
+  "metric": "sum of uncompressed layer tar bytes",
+  "images": {
+    "fedimintd": {
+      "x86_64-linux": {
+        "uncompressed_bytes": 611328000,
+        "source_revision": "d0a0b430c18d7ccd5715c4947cafe6a3ffa3e4b4",
+        "manifest_digest": "sha256:7202adec9f67e26858cfae4f6224eedc4e27564502eaba5b74ef222ad3b24bbb"
+      },
+      "aarch64-linux": {
+        "uncompressed_bytes": 2134702080,
+        "source_revision": "d0a0b430c18d7ccd5715c4947cafe6a3ffa3e4b4",
+        "manifest_digest": "sha256:50412a5fa91165e9b8a366540142627661ddb841f5b589990baa38b451240f9e"
+      }
+    },
+    "fedimint-cli": {
+      "x86_64-linux": {
+        "uncompressed_bytes": 611307520,
+        "source_revision": "d0a0b430c18d7ccd5715c4947cafe6a3ffa3e4b4",
+        "manifest_digest": "sha256:6c29fa6dbaadd74cd4fe227e8b2fad3a70b1be1445442ef8ade5df03819ef7aa"
+      },
+      "aarch64-linux": {
+        "uncompressed_bytes": 2134702080,
+        "source_revision": "d0a0b430c18d7ccd5715c4947cafe6a3ffa3e4b4",
+        "manifest_digest": "sha256:159b026dbb853b4770e5d1c89c43af908fe7a210bc26ba24332c7af7900a76fd"
+      }
+    },
+    "gatewayd": {
+      "x86_64-linux": {
+        "uncompressed_bytes": 404592640,
+        "source_revision": "d0a0b430c18d7ccd5715c4947cafe6a3ffa3e4b4",
+        "manifest_digest": "sha256:67f2a515b819b4965ba19083558c1f237c45de5bdc8d3bdc94d456837d563f48"
+      },
+      "aarch64-linux": {
+        "uncompressed_bytes": 410480640,
+        "source_revision": "d0a0b430c18d7ccd5715c4947cafe6a3ffa3e4b4",
+        "manifest_digest": "sha256:6705921e7fe3aad4beadf4accee61f0ae30b84977cbfe1a4e48c3e176e04458d"
+      }
+    },
+    "gateway-cli": {
+      "x86_64-linux": {
+        "uncompressed_bytes": 404592640,
+        "source_revision": "d0a0b430c18d7ccd5715c4947cafe6a3ffa3e4b4",
+        "manifest_digest": "sha256:daf116dba20fd2ac930d71989d4dc513cbef807c4fb64cf504d01d25c45b0795"
+      },
+      "aarch64-linux": {
+        "uncompressed_bytes": 410480640,
+        "source_revision": "d0a0b430c18d7ccd5715c4947cafe6a3ffa3e4b4",
+        "manifest_digest": "sha256:c30bb939be4485fafa14d737a67c885980a6ebfaebf042138c019eb3622b6a9f"
+      }
+    },
+    "fedimint-recurringd": {
+      "x86_64-linux": {
+        "uncompressed_bytes": 223016960,
+        "source_revision": "d0a0b430c18d7ccd5715c4947cafe6a3ffa3e4b4",
+        "manifest_digest": "sha256:c9101ace7de14f04102c68fe18cb28c132d031783ffaeab20e0497c38195ca03"
+      },
+      "aarch64-linux": {
+        "uncompressed_bytes": 2142525440,
+        "source_revision": "d0a0b430c18d7ccd5715c4947cafe6a3ffa3e4b4",
+        "manifest_digest": "sha256:7a3509290c05832bbb5e7d7b843a198d1c82bcaf2a7aae5fd4eaa731cea70c64"
+      }
+    },
+    "fedimint-recurringdv2": {
+      "x86_64-linux": {
+        "uncompressed_bytes": 153313280,
+        "source_revision": "d0a0b430c18d7ccd5715c4947cafe6a3ffa3e4b4",
+        "manifest_digest": "sha256:47612b6066c4e949daca50b6c08a7f5597b780dd120aa5187cf7d6168dbf725c"
+      },
+      "aarch64-linux": {
+        "uncompressed_bytes": 168284160,
+        "source_revision": "d0a0b430c18d7ccd5715c4947cafe6a3ffa3e4b4",
+        "manifest_digest": "sha256:2b37cec4caf0a9e014ca1d2a092aff19cf511ad9a83c6e53fbf65ad7968673ad"
+      }
+    },
+    "devtools": {
+      "x86_64-linux": {
+        "uncompressed_bytes": 2365163520,
+        "source_revision": "d0a0b430c18d7ccd5715c4947cafe6a3ffa3e4b4",
+        "manifest_digest": "sha256:fc475afffa3060d67f9da9ff88c8e41f78f7da4510cf16d907e387f91283e697"
+      },
+      "aarch64-linux": {
+        "uncompressed_bytes": 2004336640,
+        "source_revision": "d0a0b430c18d7ccd5715c4947cafe6a3ffa3e4b4",
+        "manifest_digest": "sha256:8a29cc97c599383e6798f54519905e4c7e86bd11d3c45d8db73969ede8cfec2d"
+      }
+    }
+  }
+}
