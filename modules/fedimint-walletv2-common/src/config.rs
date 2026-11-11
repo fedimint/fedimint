@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use bitcoin::Network;
 use bitcoin::hashes::{Hash, sha256};
+use bitcoin::{Network, XOnlyPublicKey};
 use fedimint_core::config::ExcessiveRelativeFeeError;
 use fedimint_core::core::ModuleKind;
 use fedimint_core::encoding::{Decodable, Encodable};
@@ -9,7 +9,9 @@ use fedimint_core::{Amount, PeerId, plugin_types_trait_impl_config, weight_to_vb
 use secp256k1::{PublicKey, SecretKey};
 use serde::{Deserialize, Serialize};
 
-use crate::{WalletCommonInit, descriptor};
+use crate::WalletCommonInit;
+use crate::taproot::frost::FrostPolynomial;
+use crate::taproot::{descriptor_tr, descriptor_tr_single_peer, nums_point};
 
 plugin_types_trait_impl_config!(
     WalletCommonInit,
@@ -28,6 +30,10 @@ pub struct WalletConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WalletConfigPrivate {
     pub bitcoin_sk: SecretKey,
+    /// Our share of the FROST secret key, set only for
+    /// [`WalletDescriptor::Frost`].
+    #[serde(default)]
+    pub frost_secret_share: Option<SecretKey>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Encodable, Decodable)]
@@ -75,10 +81,17 @@ impl WalletConfigConsensus {
     /// | 18        | 530  | 920     |
     /// | 19        | 539  | 937     |
     /// | 20        | 565  | 991     |
+    /// For [`WalletDescriptor::Frost`] we size the change input off the
+    /// key-path spend with the aggregate key as internal key. For
+    /// [`WalletDescriptor::Tr`] we use a NUMS point as the internal key
+    /// instead, which makes the key path provably unspendable and forces all
+    /// spends through the script-path multisig. For [`WalletDescriptor::Wsh`]
+    /// there's no internal key at all (P2WSH multisig).
     pub fn new(
         bitcoin_pks: BTreeMap<PeerId, PublicKey>,
         fee_consensus: FeeConsensus,
         network: Network,
+        descriptor: WalletDescriptor,
     ) -> Self {
         let tx_overhead_weight = 4 * 4 // nVersion
             + 1 // SegWit marker
@@ -87,10 +100,38 @@ impl WalletConfigConsensus {
             + 4 // up to 2 outputs
             + 4 * 4; // nLockTime
 
-        let change_witness_weight = descriptor(&bitcoin_pks, &sha256::Hash::all_zeros())
-            .max_weight_to_satisfy()
-            .expect("Cannot satisfy the change descriptor.")
-            .to_wu();
+        let change_witness_weight = match &descriptor {
+            WalletDescriptor::Wsh => crate::descriptor(&bitcoin_pks, &sha256::Hash::all_zeros())
+                .max_weight_to_satisfy()
+                .expect("Cannot satisfy the change descriptor.")
+                .to_wu(),
+            WalletDescriptor::SinglePeer(xonly) => {
+                descriptor_tr_single_peer(*xonly, &sha256::Hash::all_zeros())
+                    .max_weight_to_satisfy()
+                    .expect("Cannot satisfy the single-peer taproot descriptor.")
+                    .to_wu()
+            }
+            WalletDescriptor::Tr => {
+                descriptor_tr(&bitcoin_pks, &sha256::Hash::all_zeros(), nums_point())
+                    .max_weight_to_satisfy()
+                    .expect("Cannot satisfy the taproot change descriptor.")
+                    .to_wu()
+            }
+            WalletDescriptor::Frost(polynomial) => {
+                // FROST always spends via key-path (single 64-byte
+                // Schnorr signature). The on-chain `script_pubkey` for
+                // a FROST utxo is built by `descriptor_tr` with the
+                // `multi_a` script tree present as a fallback, but we
+                // never actually script-spend — sizing here off the
+                // script-path would over-estimate witness weight by
+                // an order of magnitude. Use the key-path-only shape
+                // for accurate sizing.
+                descriptor_tr_single_peer(polynomial.internal_key(), &sha256::Hash::all_zeros())
+                    .max_weight_to_satisfy()
+                    .expect("Cannot satisfy the FROST keypath descriptor.")
+                    .to_wu()
+            }
+        };
 
         let change_input_weight = 32 * 4 // txid
             + 4 * 4 // vout
@@ -108,7 +149,7 @@ impl WalletConfigConsensus {
 
         Self {
             bitcoin_pks,
-            descriptor: WalletDescriptor::Wsh,
+            descriptor,
             send_tx_vbytes: weight_to_vbytes(
                 tx_overhead_weight
                     + change_input_weight
@@ -218,11 +259,40 @@ fn test_fee_consensus() {
     );
 }
 
-/// Which kind of bitcoin descriptor the federation uses. Currently only `Wsh`
-/// is defined, we can expand in the future.
+/// Which kind of bitcoin descriptor the federation uses.
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub enum WalletDescriptor {
+    /// `SegWit` v0 (`P2WSH`) k-of-n ECDSA multisig.
     Wsh,
+    /// Taproot (P2TR) with NUMS internal key + k-of-n Schnorr multisig
+    /// in the script path. Used when the federation has more than one
+    /// peer and the leader picked Tr.
+    Tr,
+    /// Taproot (P2TR) key-path with the FROST aggregated public key as
+    /// internal key. The federation produces a single threshold Schnorr
+    /// signature via FROST. Carries the DKG's polynomial commitment: its
+    /// constant term is the internal key, and every guardian's public key
+    /// share, against which signature shares are verified, is derived from it.
+    Frost(FrostPolynomial),
+    /// Single-peer federation: taproot key-path spend with the lone
+    /// peer's bitcoin xonly pubkey as internal key. Collapses both Tr and
+    /// Frost when `bitcoin_pks.len() == 1` — no NUMS, no script-path,
+    /// no FROST protocol; signing is a direct schnorr signature with the
+    /// peer's bitcoin secret key.
+    SinglePeer(XOnlyPublicKey),
+}
+
+impl WalletDescriptor {
+    /// The descriptor a federation with a single guardian collapses a taproot
+    /// descriptor (Tr or Frost) into, or `None` for a larger federation:
+    /// multisig and FROST both degenerate to a single signature with the lone
+    /// guardian's bitcoin key.
+    pub fn single_peer(bitcoin_pks: &BTreeMap<PeerId, PublicKey>) -> Option<Self> {
+        match bitcoin_pks.values().collect::<Vec<_>>().as_slice() {
+            [pk] => Some(Self::SinglePeer(pk.x_only_public_key().0)),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
