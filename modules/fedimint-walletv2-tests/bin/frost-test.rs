@@ -61,8 +61,8 @@ struct Opts {
 /// offline, so peer `1` is online in every combination this test runs.
 const NONCE_LOSS_PEER: usize = 1;
 
-/// How long the `--nonce-loss` scenario may take from the wipe until a
-/// FROST-signed transaction completes.
+/// How long the `--nonce-loss` scenario waits for each FROST-signed
+/// transaction, from when it is submitted until it is signed.
 ///
 /// Every guardian runs with a nonce buffer of 2, so the pool holds exactly 4
 /// unusable commitments: the wiped guardian's 2 and the offline guardian's 2.
@@ -73,7 +73,8 @@ const NONCE_LOSS_PEER: usize = 1;
 const NONCE_LOSS_TIMEOUT: Duration = Duration::from_mins(4);
 
 /// How long the `--stalled-signer` scenario waits for each FROST-signed
-/// transaction: the first attempt always stalls, so signing takes one
+/// transaction, from when it is submitted until it is signed: the first
+/// attempt always stalls, so signing takes one
 /// `LOCAL_ADVANCE_TIMEOUT` (30s) plus the second attempt.
 const STALLED_SIGNER_TIMEOUT: Duration = Duration::from_mins(2);
 
@@ -313,27 +314,28 @@ async fn run_single_federation(
             //
             // The restarted guardian's process handle lives in the returned
             // clone and terminates the process when dropped, so keep it alive.
+            let signing_timeout = if nonce_loss {
+                Some(NONCE_LOSS_TIMEOUT)
+            } else if stalled_signer {
+                Some(STALLED_SIGNER_TIMEOUT)
+            } else {
+                None
+            };
+
             let _degraded_fed = if nonce_loss {
-                let fed = tokio::time::timeout(NONCE_LOSS_TIMEOUT, async {
-                    let fed =
-                        lose_nonces_then_degrade(fed, &client, &process_mgr, offline_nodes).await?;
-                    consolidate(&client, bitcoind).await?;
-                    anyhow::Ok(fed)
-                })
-                .await
-                .context("FROST signing stalled after a guardian lost its nonces")??;
+                let fed =
+                    lose_nonces_then_degrade(fed, &client, &process_mgr, offline_nodes).await?;
+                consolidate(&client, bitcoind, signing_timeout).await?;
                 Some(fed)
             } else if stalled_signer {
                 // Its commitments stay in the pool, so the forced first attempt
                 // still selects it.
                 let mut fed = fed.clone();
                 take_offline(&mut fed, offline_nodes).await?;
-                tokio::time::timeout(STALLED_SIGNER_TIMEOUT, consolidate(&client, bitcoind))
-                    .await
-                    .context("FROST signing stalled after the forced signer went offline")??;
+                consolidate(&client, bitcoind, signing_timeout).await?;
                 Some(fed)
             } else {
-                consolidate(&client, bitcoind).await?;
+                consolidate(&client, bitcoind, signing_timeout).await?;
                 None
             };
 
@@ -381,14 +383,7 @@ async fn run_single_federation(
             // signed, broadcast, and confirmed (it polls the unsigned +
             // unconfirmed sets), which also guarantees the FROST finalization
             // stat has been recorded — so no separate on-chain poll is needed.
-            let timeout = if nonce_loss {
-                Some(NONCE_LOSS_TIMEOUT)
-            } else if stalled_signer {
-                Some(STALLED_SIGNER_TIMEOUT)
-            } else {
-                None
-            };
-            await_signed(&client, timeout).await?;
+            await_signed(&client, signing_timeout).await?;
 
             let peg_out_attempts =
                 report_frost_finalization_stats(&client, "peg-out", txid, fed_size, offline_nodes)
@@ -416,9 +411,16 @@ async fn run_single_federation(
 /// Deposits into the non-empty wallet, which sweeps the existing UTXO and the
 /// new deposit into a single FROST-signed consolidation transaction, and waits
 /// until it is signed.
+///
+/// `signing_timeout` only bounds the wait for signing, which starts once the
+/// deposit is claimed. Confirming and claiming the deposit is left to the
+/// client's own timeouts: with a guardian offline it can take most of a
+/// minute or more on a loaded CI runner, and must not eat into the signing
+/// budget.
 async fn consolidate(
     client: &devimint::federation::Client,
     bitcoind: &devimint::external::Bitcoind,
+    signing_timeout: Option<Duration>,
 ) -> anyhow::Result<()> {
     info!("Deposit again to trigger a FROST-signed consolidation tx...");
 
@@ -435,7 +437,7 @@ async fn consolidate(
     // Once there are no pending transactions, the consolidation tx has
     // finalized and every online guardian has deterministically recorded
     // its FROST finalization stat.
-    await_no_pending_txs(client).await
+    await_signed(client, signing_timeout).await
 }
 
 /// Restarts [`NONCE_LOSS_PEER`] with an empty database, as after a disk loss
@@ -560,5 +562,5 @@ async fn await_signed(
 
     tokio::time::timeout(timeout, await_no_pending_txs(client))
         .await
-        .context("FROST signing stalled after a guardian lost its nonces")?
+        .with_context(|| format!("FROST signing did not complete within {timeout:?}"))?
 }
