@@ -8,3 +8,4 @@ pub const OUTPUT_INFO_SLICE_ENDPOINT: &str = "output_info_slice";
 pub const PENDING_TRANSACTION_CHAIN_ENDPOINT: &str = "pending_transaction_chain";
 pub const TRANSACTION_CHAIN_ENDPOINT: &str = "transaction_chain";
 pub const PENDING_OUTPUTS_ENDPOINT: &str = "pending_outputs";
+pub const FROST_FINALIZATION_STATS_ENDPOINT: &str = "frost_finalization_stats";
