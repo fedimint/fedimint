@@ -263,6 +263,12 @@ where
         }
     }
 
+    /// Returns the module instance id for this context.
+    /// Useful for encoding metadata about which module instance handled an operation.
+    pub fn module_instance_id(&self) -> ModuleInstanceId {
+        self.module_instance_id
+    }
+
     /// Get a reference back to client module from the [`Self`]
     ///
     /// It's often necessary for a client module to "move self"
