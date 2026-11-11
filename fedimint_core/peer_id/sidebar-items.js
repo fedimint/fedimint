@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["NumPeers","PeerId"],"trait":["NumPeersExt"]};
+window.SIDEBAR_ITEMS = {"struct":["EmptyPeerSet","NumPeers","PeerId"],"trait":["NumPeersExt"]};
