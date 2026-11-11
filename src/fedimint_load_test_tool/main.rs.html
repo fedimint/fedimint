@@ -407,7 +407,7 @@
 <a href=#407 id=407 data-nosnippet>407</a>            <span class="macro">warn!</span>(<span class="string">"Task failed: {:?}"</span>, e);
 <a href=#408 id=408 data-nosnippet>408</a>        }
 <a href=#409 id=409 data-nosnippet>409</a>    }
-<a href=#410 id=410 data-nosnippet>410</a>    <span class="kw">if </span>len_failures &gt; <span class="number">0 </span>{
+<a href=#410 id=410 data-nosnippet>410</a>    <span class="kw">if </span><span class="number">0 </span>&lt; len_failures {
 <a href=#411 id=411 data-nosnippet>411</a>        <span class="macro">bail!</span>(<span class="string">"Finished with failures"</span>);
 <a href=#412 id=412 data-nosnippet>412</a>    }
 <a href=#413 id=413 data-nosnippet>413</a>    <span class="macro">info!</span>(<span class="string">"Finished successfully"</span>);
@@ -700,7 +700,7 @@
 <a href=#700 id=700 data-nosnippet>700</a>    <span class="kw">let </span><span class="kw-2">mut </span>generated_invoices_per_user_iterator = (<span class="number">0</span>..generated_invoices_per_user).peekable();
 <a href=#701 id=701 data-nosnippet>701</a>    <span class="kw">while let </span><span class="prelude-val">Some</span>(<span class="kw">_</span>) = generated_invoices_per_user_iterator.next() {
 <a href=#702 id=702 data-nosnippet>702</a>        <span class="kw">let </span>total_amount = get_note_summary(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>.total_amount();
-<a href=#703 id=703 data-nosnippet>703</a>        <span class="kw">if </span>invoice_amount &gt; total_amount {
+<a href=#703 id=703 data-nosnippet>703</a>        <span class="kw">if </span>total_amount &lt; invoice_amount {
 <a href=#704 id=704 data-nosnippet>704</a>            <span class="macro">warn!</span>(<span class="string">"Can't pay invoice, not enough funds: {invoice_amount} &gt; {total_amount}"</span>);
 <a href=#705 id=705 data-nosnippet>705</a>        } <span class="kw">else </span>{
 <a href=#706 id=706 data-nosnippet>706</a>            <span class="kw">match </span>generate_invoice_with {
@@ -738,7 +738,7 @@
 <a href=#738 id=738 data-nosnippet>738</a>        <span class="kw">let </span>total_amount = get_note_summary(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>.total_amount();
 <a href=#739 id=739 data-nosnippet>739</a>        <span class="kw">let </span>invoice_amount =
 <a href=#740 id=740 data-nosnippet>740</a>            Amount::from_msats(invoice.amount_milli_satoshis().unwrap_or_default());
-<a href=#741 id=741 data-nosnippet>741</a>        <span class="kw">if </span>invoice_amount &gt; total_amount {
+<a href=#741 id=741 data-nosnippet>741</a>        <span class="kw">if </span>total_amount &lt; invoice_amount {
 <a href=#742 id=742 data-nosnippet>742</a>            <span class="macro">warn!</span>(<span class="string">"Can't pay invoice, not enough funds: {invoice_amount} &gt; {total_amount}"</span>);
 <a href=#743 id=743 data-nosnippet>743</a>        } <span class="kw">else if </span>invoice_amount == Amount::ZERO {
 <a href=#744 id=744 data-nosnippet>744</a>            <span class="macro">warn!</span>(<span class="string">"Can't pay invoice {invoice}, amount is zero"</span>);

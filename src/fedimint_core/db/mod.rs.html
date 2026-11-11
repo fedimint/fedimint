@@ -2600,7 +2600,7 @@
 <a href=#2600 id=2600 data-nosnippet>2600</a>    <span class="kw">let </span>db_version = <span class="kw">if let </span><span class="prelude-val">Some</span>(disk_version) = disk_version {
 <a href=#2601 id=2601 data-nosnippet>2601</a>        <span class="kw">let </span><span class="kw-2">mut </span>current_db_version = disk_version;
 <a href=#2602 id=2602 data-nosnippet>2602</a>
-<a href=#2603 id=2603 data-nosnippet>2603</a>        <span class="kw">if </span>current_db_version &gt; target_db_version {
+<a href=#2603 id=2603 data-nosnippet>2603</a>        <span class="kw">if </span>target_db_version &lt; current_db_version {
 <a href=#2604 id=2604 data-nosnippet>2604</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(DbMigrationError::VersionTooHigh {
 <a href=#2605 id=2605 data-nosnippet>2605</a>                kind,
 <a href=#2606 id=2606 data-nosnippet>2606</a>                on_disk: current_db_version,

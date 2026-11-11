@@ -268,7 +268,7 @@
 <a href=#268 id=268 data-nosnippet>268</a>            <span class="macro">cmd!</span>(<span class="self">self</span>, <span class="string">"dev"</span>, <span class="string">"wait"</span>, <span class="string">"3"</span>).out_json().<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#269 id=269 data-nosnippet>269</a>
 <a href=#270 id=270 data-nosnippet>270</a>            <span class="kw">let </span>balance = <span class="self">self</span>.balance().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#271 id=271 data-nosnippet>271</a>            <span class="kw">if </span>balance &gt;= min_balance_msat {
+<a href=#271 id=271 data-nosnippet>271</a>            <span class="kw">if </span>min_balance_msat &lt;= balance {
 <a href=#272 id=272 data-nosnippet>272</a>                <span class="kw">return </span><span class="prelude-val">Ok</span>(());
 <a href=#273 id=273 data-nosnippet>273</a>            }
 <a href=#274 id=274 data-nosnippet>274</a>
@@ -886,7 +886,7 @@
 <a href=#886 id=886 data-nosnippet>886</a>            <span class="self">self</span>.terminate_server(<span class="self">self</span>.num_members() - <span class="number">1</span>).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#887 id=887 data-nosnippet>887</a>        }
 <a href=#888 id=888 data-nosnippet>888</a>
-<a href=#889 id=889 data-nosnippet>889</a>        <span class="kw">if </span>offline_nodes &gt; <span class="number">0 </span>{
+<a href=#889 id=889 data-nosnippet>889</a>        <span class="kw">if </span><span class="number">0 </span>&lt; offline_nodes {
 <a href=#890 id=890 data-nosnippet>890</a>            <span class="macro">info!</span>(fed_size, offline_nodes, <span class="string">"federation is degraded"</span>);
 <a href=#891 id=891 data-nosnippet>891</a>        }
 <a href=#892 id=892 data-nosnippet>892</a>        <span class="prelude-val">Ok</span>(())
@@ -1273,7 +1273,7 @@
 <a href=#1273 id=1273 data-nosnippet>1273</a>                    .out_json()
 <a href=#1274 id=1274 data-nosnippet>1274</a>                    .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#1275 id=1275 data-nosnippet>1275</a>                <span class="kw">let </span>current: u64 = serde_json::from_value(value)<span class="question-mark">?</span>;
-<a href=#1276 id=1276 data-nosnippet>1276</a>                <span class="kw">if </span>current &gt;= expected {
+<a href=#1276 id=1276 data-nosnippet>1276</a>                <span class="kw">if </span>expected &lt;= current {
 <a href=#1277 id=1277 data-nosnippet>1277</a>                    <span class="kw">break</span>;
 <a href=#1278 id=1278 data-nosnippet>1278</a>                }
 <a href=#1279 id=1279 data-nosnippet>1279</a>                fedimint_core::task::sleep_in_test(

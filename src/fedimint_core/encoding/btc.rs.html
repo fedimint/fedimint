@@ -424,7 +424,7 @@
 <a href=#424 id=424 data-nosnippet>424</a>    <span class="attr">#[inline]
 <a href=#425 id=425 data-nosnippet>425</a>    </span><span class="kw">fn </span>consume(<span class="kw-2">&amp;mut </span><span class="self">self</span>, amount: usize) {
 <a href=#426 id=426 data-nosnippet>426</a>        <span class="macro">debug_assert!</span>(<span class="bool-val">false</span>, <span class="string">"rust-bitcoin doesn't actually use this"</span>);
-<a href=#427 id=427 data-nosnippet>427</a>        <span class="kw">if </span>amount &gt;= <span class="number">1 </span>{
+<a href=#427 id=427 data-nosnippet>427</a>        <span class="kw">if </span><span class="number">1 </span>&lt;= amount {
 <a href=#428 id=428 data-nosnippet>428</a>            <span class="macro">debug_assert_eq!</span>(amount, <span class="number">1</span>, <span class="string">"Can only consume one byte"</span>);
 <a href=#429 id=429 data-nosnippet>429</a>            <span class="macro">debug_assert!</span>(!<span class="self">self</span>.is_consumed, <span class="string">"Cannot consume more than had been read"</span>);
 <a href=#430 id=430 data-nosnippet>430</a>            <span class="self">self</span>.is_consumed = <span class="bool-val">true</span>;

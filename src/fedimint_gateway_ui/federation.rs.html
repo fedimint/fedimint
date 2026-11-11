@@ -1061,7 +1061,7 @@
 <a href=#1061 id=1061 data-nosnippet>1061</a>                    .into_string(),
 <a href=#1062 id=1062 data-nosnippet>1062</a>                );
 <a href=#1063 id=1063 data-nosnippet>1063</a>            };
-<a href=#1064 id=1064 data-nosnippet>1064</a>            <span class="kw">let </span>overspent = actual_amount &gt; requested_amount;
+<a href=#1064 id=1064 data-nosnippet>1064</a>            <span class="kw">let </span>overspent = requested_amount &lt; actual_amount;
 <a href=#1065 id=1065 data-nosnippet>1065</a>
 <a href=#1066 id=1066 data-nosnippet>1066</a>            <span class="comment">// Fetch updated balance for the out-of-band swap
 <a href=#1067 id=1067 data-nosnippet>1067</a>            </span><span class="kw">let </span>updated_balance = state

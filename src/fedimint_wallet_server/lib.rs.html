@@ -2294,7 +2294,7 @@
 <a href=#2294 id=2294 data-nosnippet>2294</a>                .and_then(|target| target.checked_add(fees))
 <a href=#2295 id=2295 data-nosnippet>2295</a>                .ok_or(WalletOutputError::NotEnoughSpendableUTXO)<span class="question-mark">?</span>;
 <a href=#2296 id=2296 data-nosnippet>2296</a>
-<a href=#2297 id=2297 data-nosnippet>2297</a>            <span class="kw">if </span>total_selected_value &gt;= target {
+<a href=#2297 id=2297 data-nosnippet>2297</a>            <span class="kw">if </span>target &lt;= total_selected_value {
 <a href=#2298 id=2298 data-nosnippet>2298</a>                <span class="kw">break</span>;
 <a href=#2299 id=2299 data-nosnippet>2299</a>            }
 <a href=#2300 id=2300 data-nosnippet>2300</a>

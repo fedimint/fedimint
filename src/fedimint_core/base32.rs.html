@@ -24,7 +24,7 @@
 <a href=#24 id=24 data-nosnippet>24</a>        buffer |= (<span class="kw-2">*</span>byte <span class="kw">as </span>usize) &lt;&lt; bits;
 <a href=#25 id=25 data-nosnippet>25</a>        bits += <span class="number">8</span>;
 <a href=#26 id=26 data-nosnippet>26</a>
-<a href=#27 id=27 data-nosnippet>27</a>        <span class="kw">while </span>bits &gt;= <span class="number">5 </span>{
+<a href=#27 id=27 data-nosnippet>27</a>        <span class="kw">while </span><span class="number">5 </span>&lt;= bits {
 <a href=#28 id=28 data-nosnippet>28</a>            output.push(RFC4648[buffer &amp; <span class="number">0b11111</span>]);
 <a href=#29 id=29 data-nosnippet>29</a>
 <a href=#30 id=30 data-nosnippet>30</a>            buffer &gt;&gt;= <span class="number">5</span>;
@@ -32,7 +32,7 @@
 <a href=#32 id=32 data-nosnippet>32</a>        }
 <a href=#33 id=33 data-nosnippet>33</a>    }
 <a href=#34 id=34 data-nosnippet>34</a>
-<a href=#35 id=35 data-nosnippet>35</a>    <span class="kw">if </span>bits &gt; <span class="number">0 </span>{
+<a href=#35 id=35 data-nosnippet>35</a>    <span class="kw">if </span><span class="number">0 </span>&lt; bits {
 <a href=#36 id=36 data-nosnippet>36</a>        output.push(RFC4648[buffer &amp; <span class="number">0b11111</span>]);
 <a href=#37 id=37 data-nosnippet>37</a>    }
 <a href=#38 id=38 data-nosnippet>38</a>
@@ -63,7 +63,7 @@
 <a href=#63 id=63 data-nosnippet>63</a>        buffer |= value &lt;&lt; bits;
 <a href=#64 id=64 data-nosnippet>64</a>        bits += <span class="number">5</span>;
 <a href=#65 id=65 data-nosnippet>65</a>
-<a href=#66 id=66 data-nosnippet>66</a>        <span class="kw">while </span>bits &gt;= <span class="number">8 </span>{
+<a href=#66 id=66 data-nosnippet>66</a>        <span class="kw">while </span><span class="number">8 </span>&lt;= bits {
 <a href=#67 id=67 data-nosnippet>67</a>            output.push((buffer &amp; <span class="number">0xFF</span>) <span class="kw">as </span>u8);
 <a href=#68 id=68 data-nosnippet>68</a>
 <a href=#69 id=69 data-nosnippet>69</a>            buffer &gt;&gt;= <span class="number">8</span>;

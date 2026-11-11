@@ -1827,7 +1827,7 @@
 <a href=#1827 id=1827 data-nosnippet>1827</a>
 <a href=#1828 id=1828 data-nosnippet>1828</a>    <span class="comment">// Generate BOLT11 if amount is provided
 <a href=#1829 id=1829 data-nosnippet>1829</a>    </span><span class="kw">if let </span><span class="prelude-val">Some</span>(amount_msats) = payload.amount_msats {
-<a href=#1830 id=1830 data-nosnippet>1830</a>        <span class="kw">if </span>amount_msats &gt; <span class="number">0 </span>{
+<a href=#1830 id=1830 data-nosnippet>1830</a>        <span class="kw">if </span><span class="number">0 </span>&lt; amount_msats {
 <a href=#1831 id=1831 data-nosnippet>1831</a>            <span class="kw">let </span>bolt11_payload = CreateInvoiceForOperatorPayload {
 <a href=#1832 id=1832 data-nosnippet>1832</a>                amount_msats,
 <a href=#1833 id=1833 data-nosnippet>1833</a>                expiry_secs: <span class="prelude-val">None</span>,
@@ -1855,7 +1855,7 @@
 <a href=#1855 id=1855 data-nosnippet>1855</a>    </span><span class="kw">if </span>!is_lnd {
 <a href=#1856 id=1856 data-nosnippet>1856</a>        <span class="kw">let </span>bolt12_payload = CreateOfferPayload {
 <a href=#1857 id=1857 data-nosnippet>1857</a>            amount: payload.amount_msats.and_then(|a| {
-<a href=#1858 id=1858 data-nosnippet>1858</a>                <span class="kw">if </span>a &gt; <span class="number">0 </span>{
+<a href=#1858 id=1858 data-nosnippet>1858</a>                <span class="kw">if </span><span class="number">0 </span>&lt; a {
 <a href=#1859 id=1859 data-nosnippet>1859</a>                    <span class="prelude-val">Some</span>(fedimint_core::Amount::from_msats(a))
 <a href=#1860 id=1860 data-nosnippet>1860</a>                } <span class="kw">else </span>{
 <a href=#1861 id=1861 data-nosnippet>1861</a>                    <span class="prelude-val">None

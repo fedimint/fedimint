@@ -974,7 +974,7 @@
 <a href=#974 id=974 data-nosnippet>974</a>        gateway: <span class="prelude-ty">Option</span>&lt;SafeUrl&gt;,
 <a href=#975 id=975 data-nosnippet>975</a>        custom_meta: Value,
 <a href=#976 id=976 data-nosnippet>976</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Bolt11Invoice, OperationId), ReceiveError&gt; {
-<a href=#977 id=977 data-nosnippet>977</a>        <span class="kw">if </span>expiry_secs &gt; MAX_INVOICE_EXPIRY_SECS {
+<a href=#977 id=977 data-nosnippet>977</a>        <span class="kw">if </span>MAX_INVOICE_EXPIRY_SECS &lt; expiry_secs {
 <a href=#978 id=978 data-nosnippet>978</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::InvoiceExpiryTooLong);
 <a href=#979 id=979 data-nosnippet>979</a>        }
 <a href=#980 id=980 data-nosnippet>980</a>
@@ -1012,7 +1012,7 @@
 <a href=#1012 id=1012 data-nosnippet>1012</a>        receive_fee: PaymentFee,
 <a href=#1013 id=1013 data-nosnippet>1013</a>        custom_meta: Value,
 <a href=#1014 id=1014 data-nosnippet>1014</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;(Bolt11Invoice, OperationId), ReceiveWithTermsError&gt; {
-<a href=#1015 id=1015 data-nosnippet>1015</a>        <span class="kw">if </span>expiry_secs &gt; MAX_INVOICE_EXPIRY_SECS {
+<a href=#1015 id=1015 data-nosnippet>1015</a>        <span class="kw">if </span>MAX_INVOICE_EXPIRY_SECS &lt; expiry_secs {
 <a href=#1016 id=1016 data-nosnippet>1016</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(ReceiveError::InvoiceExpiryTooLong.into());
 <a href=#1017 id=1017 data-nosnippet>1017</a>        }
 <a href=#1018 id=1018 data-nosnippet>1018</a>

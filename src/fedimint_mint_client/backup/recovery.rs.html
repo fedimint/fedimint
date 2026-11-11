@@ -679,7 +679,7 @@
 <a href=#679 id=679 data-nosnippet>679</a>            .add(GAP_LIMIT)
 <a href=#680 id=680 data-nosnippet>680</a>            .saturating_sub(next_pending_note_idx);
 <a href=#681 id=681 data-nosnippet>681</a>
-<a href=#682 id=682 data-nosnippet>682</a>        <span class="kw">if </span>missing &gt; <span class="number">0 </span>{
+<a href=#682 id=682 data-nosnippet>682</a>        <span class="kw">if </span><span class="number">0 </span>&lt; missing {
 <a href=#683 id=683 data-nosnippet>683</a>            <span class="self">self</span>.add_pending_nonces(amount, missing, secret);
 <a href=#684 id=684 data-nosnippet>684</a>        }
 <a href=#685 id=685 data-nosnippet>685</a>    }

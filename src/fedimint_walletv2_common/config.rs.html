@@ -153,7 +153,7 @@
 <a href=#153 id=153 data-nosnippet>153</a>    </span><span class="kw">pub fn </span>new(parts_per_million: u64) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, ExcessiveRelativeFeeError&gt; {
 <a href=#154 id=154 data-nosnippet>154</a>        <span class="kw">const </span>MAX_PARTS_PER_MILLION: u64 = <span class="number">10_000</span>;
 <a href=#155 id=155 data-nosnippet>155</a>
-<a href=#156 id=156 data-nosnippet>156</a>        <span class="kw">if </span>parts_per_million &gt; MAX_PARTS_PER_MILLION {
+<a href=#156 id=156 data-nosnippet>156</a>        <span class="kw">if </span>MAX_PARTS_PER_MILLION &lt; parts_per_million {
 <a href=#157 id=157 data-nosnippet>157</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(ExcessiveRelativeFeeError {
 <a href=#158 id=158 data-nosnippet>158</a>                parts_per_million,
 <a href=#159 id=159 data-nosnippet>159</a>                max: MAX_PARTS_PER_MILLION,

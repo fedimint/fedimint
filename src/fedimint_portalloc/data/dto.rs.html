@@ -65,7 +65,7 @@
 <a href=#65 id=65 data-nosnippet>65</a>        <span class="kw">let </span><span class="kw-2">mut </span>base_port: u16 = <span class="self">self</span>.next;
 <a href=#66 id=66 data-nosnippet>66</a>        <span class="lifetime">'retry</span>: <span class="kw">loop </span>{
 <a href=#67 id=67 data-nosnippet>67</a>            <span class="macro">trace!</span>(target: LOG_PORT_ALLOC, base_port, range_size, <span class="string">"Checking a port"</span>);
-<a href=#68 id=68 data-nosnippet>68</a>            <span class="kw">if </span>base_port &gt; HIGH {
+<a href=#68 id=68 data-nosnippet>68</a>            <span class="kw">if </span>HIGH &lt; base_port {
 <a href=#69 id=69 data-nosnippet>69</a>                <span class="self">self</span>.reclaim();
 <a href=#70 id=70 data-nosnippet>70</a>                base_port = LOW;
 <a href=#71 id=71 data-nosnippet>71</a>            }
