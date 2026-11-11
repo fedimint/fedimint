@@ -6,6 +6,7 @@
 #![allow(clippy::return_self_not_must_use)]
 
 use std::collections::BTreeMap;
+use std::num::NonZeroU64;
 use std::time::Duration;
 
 use bitcoin::hashes::{Hash, hash160, sha256};
@@ -181,15 +182,23 @@ pub struct PendingOutput {
 /// from one guardian with a chain tip from another.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PendingOutputs {
-    /// The responding guardian's local block count, or `0` if its bitcoin
-    /// backend is unavailable.
+    /// The responding guardian's local block count, or `None` before the first
+    /// successful scan or while its bitcoin backend is unavailable.
+    ///
+    /// The API retains its numeric wire format: `None` is encoded as `0` and
+    /// nonzero counts as numbers. This is not a freshness or finality
+    /// guarantee.
     ///
     /// A mined output's confirmations are `block_count - height`, which counts
     /// the block that mined it as the first confirmation. Note this is offset
     /// by one from [`BLOCK_COUNT_VOTE_DELAY`], which does not count the mining
     /// block, so a peg-in becomes claimable at `BLOCK_COUNT_VOTE_DELAY + 1`
     /// confirmations.
-    pub block_count: u64,
+    #[serde(
+        serialize_with = "serialize_pending_block_count",
+        deserialize_with = "deserialize_pending_block_count"
+    )]
+    pub block_count: Option<NonZeroU64>,
     pub outputs: Vec<PendingOutput>,
     /// How much of its mempool this guardian inspected for these outputs.
     ///
@@ -197,6 +206,21 @@ pub struct PendingOutputs {
     /// which an esplora-backed guardian never can. Without it a client could
     /// not tell an empty mempool from a blind guardian.
     pub mempool_visibility: MempoolVisibility,
+}
+
+// Serde's field serializer requires a reference to the field.
+#[allow(clippy::ref_option, clippy::trivially_copy_pass_by_ref)]
+fn serialize_pending_block_count<S: serde::Serializer>(
+    block_count: &Option<NonZeroU64>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    block_count.map_or(0, NonZeroU64::get).serialize(serializer)
+}
+
+fn deserialize_pending_block_count<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<NonZeroU64>, D::Error> {
+    u64::deserialize(deserializer).map(NonZeroU64::new)
 }
 
 /// How much of a mempool was inspected for unmined peg-ins.

@@ -7,6 +7,58 @@ use secp256k1::{PublicKey, Scalar, SecretKey};
 
 use super::{descriptor, tweak_public_key};
 
+#[test]
+fn pending_outputs_preserves_legacy_numeric_wire_format() {
+    use std::num::NonZeroU64;
+
+    use serde_json::json;
+
+    use super::{MempoolVisibility, PendingOutput, PendingOutputs};
+
+    // This mirrors the old API model, independently of the new field adapter.
+    #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+    struct LegacyPendingOutputs {
+        block_count: u64,
+        outputs: Vec<PendingOutput>,
+        mempool_visibility: MempoolVisibility,
+    }
+
+    for count in [0, 1, 105, u64::MAX] {
+        let legacy = LegacyPendingOutputs {
+            block_count: count,
+            outputs: vec![],
+            mempool_visibility: MempoolVisibility::Unavailable,
+        };
+        let wire = serde_json::to_value(&legacy).expect("Legacy response serializes");
+        let pending: PendingOutputs =
+            serde_json::from_value(wire.clone()).expect("New clients read legacy responses");
+        assert_eq!(pending.block_count, NonZeroU64::new(count));
+        let encoded = serde_json::to_value(&pending).expect("New response serializes");
+        assert_eq!(encoded, wire);
+        assert_eq!(
+            serde_json::from_value::<LegacyPendingOutputs>(encoded)
+                .expect("Legacy clients read new responses"),
+            legacy
+        );
+    }
+
+    let default_wire =
+        serde_json::to_value(PendingOutputs::default()).expect("Default response serializes");
+    assert_eq!(default_wire["block_count"], json!(0));
+    // The compatibility boundary remains a required u64, not a nullable field.
+    for invalid in [json!(null), json!(-1), json!("105")] {
+        let mut wire = default_wire.clone();
+        wire["block_count"] = invalid;
+        assert!(serde_json::from_value::<PendingOutputs>(wire).is_err());
+    }
+    let mut missing = default_wire;
+    missing
+        .as_object_mut()
+        .expect("Response is an object")
+        .remove("block_count");
+    assert!(serde_json::from_value::<PendingOutputs>(missing).is_err());
+}
+
 fn guardian_keys(count: u8) -> BTreeMap<PeerId, PublicKey> {
     (1..=count)
         .map(|index| {
