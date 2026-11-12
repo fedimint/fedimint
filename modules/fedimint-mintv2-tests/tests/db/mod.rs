@@ -314,6 +314,16 @@ async fn test_client_db_migrations() -> anyhow::Result<()> {
 
             for prefix in client_db::DbKeyPrefix::iter() {
                 match prefix {
+                    client_db::DbKeyPrefix::RefundAttempt => {
+                        ensure!(
+                            dbtx.find_by_prefix(&client_db::RefundAttemptPrefix)
+                                .await
+                                .next()
+                                .await
+                                .is_none(),
+                            "legacy snapshots must not contain new refund-attempt records"
+                        );
+                    }
                     client_db::DbKeyPrefix::Note => {
                         let notes = dbtx
                             .find_by_prefix(&SpendableNotePrefix)

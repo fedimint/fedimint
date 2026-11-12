@@ -111,6 +111,13 @@ pub trait ClientContextIface: MaybeSend + MaybeSync {
         outputs: Vec<OutPoint>,
     ) -> Result<(), TransactionSubmitError>;
 
+    async fn await_primary_module_outputs_for_unit(
+        &self,
+        operation_id: OperationId,
+        unit: AmountUnit,
+        outputs: Vec<OutPoint>,
+    ) -> Result<(), TransactionSubmitError>;
+
     fn operation_log(&self) -> &dyn IOperationLog;
 
     async fn has_active_states(&self, operation_id: OperationId) -> bool;
@@ -468,6 +475,20 @@ where
         self.client
             .get()
             .await_primary_module_outputs(operation_id, outputs)
+            .await
+    }
+
+    /// Wait for change outputs from the primary module for `unit`, rather than
+    /// implicitly selecting the Bitcoin primary module.
+    pub async fn await_primary_module_outputs_for_unit(
+        &self,
+        operation_id: OperationId,
+        unit: AmountUnit,
+        outputs: Vec<OutPoint>,
+    ) -> Result<(), TransactionSubmitError> {
+        self.client
+            .get()
+            .await_primary_module_outputs_for_unit(operation_id, unit, outputs)
             .await
     }
 
