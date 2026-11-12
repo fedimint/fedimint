@@ -149,9 +149,10 @@ async fn reset_survives_writes_and_restart_and_only_uses_fresh_samples() {
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 
-    use super::{AvailabilityTracker, PeerAvailabilityKey, report};
+    use super::{AvailabilityTracker, PeerAvailabilityKey, report, report_with_timestamp};
 
     let db: Database = MemDatabase::new().into();
+    assert_eq!(report_with_timestamp(&db, DAY).await.0, 0);
     let tracker = AvailabilityTracker::new(peer(0), NumPeers::from(4));
     // Start with the old database format and a full day of observations.
     let mut state = PeerAvailabilityState::default();
@@ -204,12 +205,15 @@ async fn reset_survives_writes_and_restart_and_only_uses_fresh_samples() {
         }
     }
     tracker.persist(&db, DAY + 720).await;
-    let fresh = report(&db, DAY + 720).await;
+    let (updated_at_secs, fresh) = report_with_timestamp(&db, DAY + 720).await;
+    assert_eq!(updated_at_secs, DAY + 720);
+    assert_eq!(fresh, report(&db, DAY + 720).await);
     assert_eq!(fresh.last_seen_secs[&peer(1)], DAY + 360);
     for window in &fresh.windows {
         assert_eq!(window.peers[&peer(1)], 5_000);
         let coverage = super::to_bps(1.0 - (-600.0 / window.window_secs as f64).exp());
         assert_eq!(window.peer_coverage_bps[&peer(1)], coverage);
+        assert!(coverage < window.coverage_bps);
     }
     // Resetting ourselves also clears only that peer, including synthetic
     // last-seen.
