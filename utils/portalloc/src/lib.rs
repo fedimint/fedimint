@@ -33,14 +33,34 @@ pub fn port_alloc(range_size: u16) -> anyhow::Result<u16> {
         bail!("Can't allocate range of 0 ports");
     }
 
+    let start = std::time::Instant::now();
     let mut data_dir = DataDir::new(data_dir()?)?;
 
-    data_dir.with_lock(|data_dir| {
+    let base_port = data_dir.with_lock(|data_dir| {
         let mut data = data_dir.load_data()?;
         let base_port = data.get_free_port_range(range_size)?;
         data_dir.store_data(&data)?;
         Ok(base_port)
-    })
+    })?;
+
+    let elapsed = start.elapsed();
+    if elapsed > std::time::Duration::from_millis(500) {
+        tracing::warn!(
+            range_size,
+            base_port,
+            elapsed_ms = elapsed.as_millis(),
+            "Slow port allocation"
+        );
+    } else {
+        tracing::debug!(
+            range_size,
+            base_port,
+            elapsed_ms = elapsed.as_millis(),
+            "Allocated port range"
+        );
+    }
+
+    Ok(base_port)
 }
 
 fn data_dir() -> anyhow::Result<PathBuf> {

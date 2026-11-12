@@ -152,19 +152,11 @@ fn env_gateway_base_port_child() {
     assert!(error.to_string().contains("value 65535"));
 }
 
-#[tokio::test]
-async fn global_vars_export_distinct_ldk_ports() {
-    let test_dir = env::temp_dir().join(format!(
-        "devimint-vars-test-{}-{}",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time must be after the Unix epoch")
-            .as_nanos()
-    ));
-    let globals = Global::new(&test_dir, 1, 1, 0, None, None)
-        .await
-        .expect("global variables initialize");
+#[test]
+fn global_vars_export_distinct_ldk_ports() {
+    let mut globals = Global::default();
+    globals.FM_PORT_LDK = 10001;
+    globals.FM_PORT_LDK2 = 10002;
 
     let ldk_port_exports = globals
         .vars()
@@ -178,8 +170,6 @@ async fn global_vars_export_distinct_ldk_ports() {
             ("FM_PORT_LDK2".to_owned(), globals.FM_PORT_LDK2.to_string()),
         ]
     );
-
-    std::fs::remove_dir_all(test_dir).expect("remove test directory");
 }
 
 #[tokio::test]

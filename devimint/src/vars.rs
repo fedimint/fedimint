@@ -24,7 +24,7 @@ macro_rules! declare_vars {
             $($name:ident : $ty:ty = $value:expr_2021; env: $env:expr_2021;)*
         }
     ) => {
-        #[derive(Clone, Debug)]
+        #[derive(Clone, Debug, Default)]
         pub struct $struct {
             $(
                 #[allow(unused)]
@@ -286,6 +286,7 @@ impl Global {
         federations_base_port: Option<u16>,
         gateway_base_port: Option<u16>,
     ) -> anyhow::Result<Self> {
+        let start = std::time::Instant::now();
         if let Some(gateway_base_port) = gateway_base_port {
             gateway_port(gateway_base_port, GATEWAY_PORT_OFFSET_LDK2_METRICS)?;
         }
@@ -312,6 +313,20 @@ impl Global {
             &mut ports,
         )
         .await?;
+        let elapsed = start.elapsed();
+        if elapsed > std::time::Duration::from_secs(2) {
+            tracing::warn!(
+                test_dir = %test_dir.display(),
+                elapsed_ms = elapsed.as_millis(),
+                "Slow Global::new initialization"
+            );
+        } else {
+            tracing::debug!(
+                test_dir = %test_dir.display(),
+                elapsed_ms = elapsed.as_millis(),
+                "Initialized Global"
+            );
+        }
         Ok(this)
     }
 }

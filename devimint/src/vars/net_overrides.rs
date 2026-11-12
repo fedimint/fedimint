@@ -122,7 +122,7 @@ impl FederationNetOverrides {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct FederationsNetOverrides {
     federations: Vec<FederationNetOverrides>,
 }
@@ -202,7 +202,7 @@ impl ToEnvVar for FederationsNetOverrides {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct GatewaydNetOverrides {
     pub gateway_iroh_endpoints: Vec<FedimintIrohEndpoint>,
 }

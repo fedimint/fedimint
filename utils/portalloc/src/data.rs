@@ -78,9 +78,23 @@ impl<'a> LockedRoot<'a> {
     fn lock(&mut self) -> Result<()> {
         debug!(path = %self.path.display(), "Acquiring lock...");
         if self.lock_file.try_lock_exclusive().is_err() {
-            info!("Lock taken, waiting...");
+            let start = std::time::Instant::now();
+            info!(path = %self.path.display(), "Lock taken, waiting...");
             self.lock_file.lock_exclusive()?;
-            info!("Acquired lock after wait");
+            let elapsed = start.elapsed();
+            if elapsed > std::time::Duration::from_millis(500) {
+                warn!(
+                    path = %self.path.display(),
+                    elapsed_ms = elapsed.as_millis(),
+                    "Acquired lock after slow wait"
+                );
+            } else {
+                info!(
+                    path = %self.path.display(),
+                    elapsed_ms = elapsed.as_millis(),
+                    "Acquired lock after wait"
+                );
+            }
         };
         debug!("Acquired lock");
         self.locked = true;
