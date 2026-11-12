@@ -11,6 +11,7 @@ use fedimint_core::module::registry::ModuleRegistry;
 use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 
+use crate::Client;
 use crate::db::{ChronologicalOperationLogKey, OperationLogKey};
 use crate::oplog::{OperationLog, OperationLogEntry};
 
@@ -515,4 +516,47 @@ async fn test_pagination_after_historical_insert() {
             .collect::<Vec<_>>(),
         vec![recent_operation_id, historical_operation_id]
     );
+}
+
+#[tokio::test]
+async fn operation_account_is_recorded_once_and_may_be_repeated() {
+    let op_id = OperationId([0x42; 32]);
+    let db = MemDatabase::new().into_database();
+
+    let mut dbtx = db.begin_transaction().await;
+    Client::set_operation_account_dbtx(&mut dbtx.to_ref_nc(), op_id, Account::Secondary).await;
+    // A recovery records the account up front and the log records it again as
+    // the operation is started; the second write has to be accepted.
+    Client::set_operation_account_dbtx(&mut dbtx.to_ref_nc(), op_id, Account::Secondary).await;
+    dbtx.commit_tx().await;
+
+    let mut dbtx = db.begin_transaction_nc().await;
+    assert_eq!(
+        Client::operation_account_dbtx(&mut dbtx, op_id).await,
+        Account::Secondary
+    );
+}
+
+#[tokio::test]
+#[should_panic(expected = "cannot be rebound")]
+async fn operation_account_cannot_be_rebound_to_another_account() {
+    let op_id = OperationId([0x42; 32]);
+    let db = MemDatabase::new().into_database();
+
+    let mut dbtx = db.begin_transaction().await;
+    Client::set_operation_account_dbtx(&mut dbtx.to_ref_nc(), op_id, Account::Secondary).await;
+    Client::set_operation_account_dbtx(&mut dbtx.to_ref_nc(), op_id, Account::Tertiary).await;
+}
+
+#[tokio::test]
+#[should_panic(expected = "cannot be rebound")]
+async fn operation_account_cannot_be_rebound_to_primary() {
+    let op_id = OperationId([0x42; 32]);
+    let db = MemDatabase::new().into_database();
+
+    let mut dbtx = db.begin_transaction().await;
+    Client::set_operation_account_dbtx(&mut dbtx.to_ref_nc(), op_id, Account::Secondary).await;
+    // Primary leaves no row, so silently keeping the old binding would be the
+    // failure mode here; it has to be rejected like any other rebind.
+    Client::set_operation_account_dbtx(&mut dbtx.to_ref_nc(), op_id, Account::Primary).await;
 }

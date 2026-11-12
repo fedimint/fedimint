@@ -1275,17 +1275,33 @@ impl Client {
 
     /// Records the account an operation acts on. The operation log calls
     /// this as it writes an entry; a module that starts state machines
-    /// without one, as a recovery does, calls it directly. Idempotent, so an
-    /// operation recorded here and then started through the log is fine.
-    /// Absent reads as primary, see [`OperationAccountKey`].
+    /// without one, as a recovery does, calls it directly.
+    ///
+    /// Write-once: the binding is what a state machine's later claims and
+    /// refunds are credited by, so an operation already bound to one account
+    /// cannot be rebound to another. Recording the same account again is a
+    /// no-op, so an operation recorded here and then started through the log
+    /// is fine. Absent reads as primary, see [`OperationAccountKey`].
     pub async fn set_operation_account_dbtx(
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
         account: Account,
     ) {
+        let key = OperationAccountKey(operation_id);
+
+        if let Some(existing) = dbtx.get_value(&key).await {
+            assert_eq!(
+                existing,
+                account,
+                "operation {} is bound to {existing} and cannot be rebound to {account}",
+                operation_id.fmt_full()
+            );
+
+            return;
+        }
+
         if account != Account::Primary {
-            dbtx.insert_entry(&OperationAccountKey(operation_id), &account)
-                .await;
+            dbtx.insert_entry(&key, &account).await;
         }
     }
 
