@@ -5,6 +5,7 @@ use fedimint_core::module::serde_json;
 use fedimint_lightning::LightningRpcError;
 
 use crate::complete_sm::{CompleteSMCommon, CompletionOutcome, completion_outcome};
+use crate::send_sm::{Cancelled, fresh_dispatch_refusal};
 use crate::{
     CompleteSMState, CompleteStateMachine, GatewayClientStateMachinesV2, GatewayOperationMetaV2,
     GatewayOperationRoleV2, IncomingCircuitKey, IncomingRelayPlan, OperationId,
@@ -124,4 +125,23 @@ fn operation_metadata_preserves_legacy_and_dispatches_new_roles() {
     );
     assert!(!GatewayOperationMetaV2::role(GatewayOperationRoleV2::Receive).waits_for_completion());
     assert!(!GatewayOperationMetaV2::role(GatewayOperationRoleV2::Send).waits_for_completion());
+}
+
+#[test]
+fn fresh_dispatch_is_refused_once_the_invoice_expires_or_the_budget_runs_out() {
+    assert_eq!(fresh_dispatch_refusal(false, 1), None);
+    assert_eq!(
+        fresh_dispatch_refusal(false, 0),
+        Some(Cancelled::TimeoutTooClose),
+        "a contract with no blocks left to spare must not be paid out against"
+    );
+    assert_eq!(
+        fresh_dispatch_refusal(true, 1),
+        Some(Cancelled::InvoiceExpired)
+    );
+    assert_eq!(
+        fresh_dispatch_refusal(true, 0),
+        Some(Cancelled::InvoiceExpired),
+        "invoice expiry keeps taking precedence, as before the budget check"
+    );
 }

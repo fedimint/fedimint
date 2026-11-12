@@ -3,7 +3,9 @@ use fedimint_core::module::ApiRequestErased;
 use fedimint_core::task::{MaybeSend, MaybeSync};
 use fedimint_core::{OutPoint, apply, async_trait_maybe_send};
 use fedimint_lnv2_common::ContractId;
-use fedimint_lnv2_common::endpoint_constants::OUTGOING_CONTRACT_EXPIRATION_ENDPOINT;
+use fedimint_lnv2_common::endpoint_constants::{
+    CONSENSUS_BLOCK_COUNT_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT,
+};
 
 #[apply(async_trait_maybe_send!)]
 pub trait GatewayFederationApi {
@@ -11,6 +13,10 @@ pub trait GatewayFederationApi {
         &self,
         outpoint: OutPoint,
     ) -> FederationResult<Option<(ContractId, u64)>>;
+
+    /// The consensus block count, answered once a threshold of guardians
+    /// report the same value.
+    async fn consensus_block_count(&self) -> FederationResult<u64>;
 }
 
 #[apply(async_trait_maybe_send!)]
@@ -25,6 +31,14 @@ where
         self.request_current_consensus(
             OUTGOING_CONTRACT_EXPIRATION_ENDPOINT.to_string(),
             ApiRequestErased::new(outpoint),
+        )
+        .await
+    }
+
+    async fn consensus_block_count(&self) -> FederationResult<u64> {
+        self.request_current_consensus(
+            CONSENSUS_BLOCK_COUNT_ENDPOINT.to_string(),
+            ApiRequestErased::new(()),
         )
         .await
     }
