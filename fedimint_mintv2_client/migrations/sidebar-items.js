@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["migrate_to_accounts_v1"],"mod":["legacy"]};

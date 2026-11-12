@@ -219,26 +219,25 @@
 <a href=#219 id=219 data-nosnippet>219</a>    <span class="kw">let </span>ln_gateway = get_gateway(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#220 id=220 data-nosnippet>220</a>
 <a href=#221 id=221 data-nosnippet>221</a>    futures::future::try_join_all(
-<a href=#222 id=222 data-nosnippet>222</a>        (<span class="number">0</span>..<span class="number">10</span>)
-<a href=#223 id=223 data-nosnippet>223</a>            .map(|<span class="kw">_</span>| receive_once(client.clone(), Amount::from_sats(<span class="number">100</span>), ln_gateway.clone())), <span class="comment">// Increased from 25 to 100 sats to account for mint fees
-<a href=#224 id=224 data-nosnippet>224</a>    </span>)
-<a href=#225 id=225 data-nosnippet>225</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#226 id=226 data-nosnippet>226</a>    futures::future::try_join_all((<span class="number">0</span>..<span class="number">10</span>).map(|<span class="kw">_</span>| send_and_recv_ecash_once(client.clone())))
-<a href=#227 id=227 data-nosnippet>227</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#228 id=228 data-nosnippet>228</a>    <span class="prelude-val">Ok</span>(())
-<a href=#229 id=229 data-nosnippet>229</a>}
-<a href=#230 id=230 data-nosnippet>230</a>
-<a href=#231 id=231 data-nosnippet>231</a><span class="attr">#[wasm_bindgen_test]
-<a href=#232 id=232 data-nosnippet>232</a></span><span class="kw">async fn </span>test_ecash_exact() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#233 id=233 data-nosnippet>233</a>    <span class="kw">let </span>client = client(<span class="kw-2">&amp;</span>faucet::invite_code().<span class="kw">await</span><span class="question-mark">?</span>.parse()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#234 id=234 data-nosnippet>234</a>    client.start_executor();
-<a href=#235 id=235 data-nosnippet>235</a>    <span class="kw">let </span>ln_gateway = get_gateway(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#236 id=236 data-nosnippet>236</a>
-<a href=#237 id=237 data-nosnippet>237</a>    receive_once(client.clone(), Amount::from_sats(<span class="number">100</span>), ln_gateway).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#238 id=238 data-nosnippet>238</a>    futures::future::try_join_all(
-<a href=#239 id=239 data-nosnippet>239</a>        (<span class="number">0</span>..<span class="number">3</span>).map(|<span class="kw">_</span>| send_ecash_exact(client.clone(), Amount::from_sats(<span class="number">1</span>))),
-<a href=#240 id=240 data-nosnippet>240</a>    )
-<a href=#241 id=241 data-nosnippet>241</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#242 id=242 data-nosnippet>242</a>    <span class="prelude-val">Ok</span>(())
-<a href=#243 id=243 data-nosnippet>243</a>}
+<a href=#222 id=222 data-nosnippet>222</a>        (<span class="number">0</span>..<span class="number">10</span>).map(|<span class="kw">_</span>| receive_once(client.clone(), Amount::from_sats(<span class="number">100</span>), ln_gateway.clone())), <span class="comment">// Increased from 25 to 100 sats to account for mint fees
+<a href=#223 id=223 data-nosnippet>223</a>    </span>)
+<a href=#224 id=224 data-nosnippet>224</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#225 id=225 data-nosnippet>225</a>    futures::future::try_join_all((<span class="number">0</span>..<span class="number">10</span>).map(|<span class="kw">_</span>| send_and_recv_ecash_once(client.clone())))
+<a href=#226 id=226 data-nosnippet>226</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#227 id=227 data-nosnippet>227</a>    <span class="prelude-val">Ok</span>(())
+<a href=#228 id=228 data-nosnippet>228</a>}
+<a href=#229 id=229 data-nosnippet>229</a>
+<a href=#230 id=230 data-nosnippet>230</a><span class="attr">#[wasm_bindgen_test]
+<a href=#231 id=231 data-nosnippet>231</a></span><span class="kw">async fn </span>test_ecash_exact() -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#232 id=232 data-nosnippet>232</a>    <span class="kw">let </span>client = client(<span class="kw-2">&amp;</span>faucet::invite_code().<span class="kw">await</span><span class="question-mark">?</span>.parse()<span class="question-mark">?</span>).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#233 id=233 data-nosnippet>233</a>    client.start_executor();
+<a href=#234 id=234 data-nosnippet>234</a>    <span class="kw">let </span>ln_gateway = get_gateway(<span class="kw-2">&amp;</span>client).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#235 id=235 data-nosnippet>235</a>
+<a href=#236 id=236 data-nosnippet>236</a>    receive_once(client.clone(), Amount::from_sats(<span class="number">100</span>), ln_gateway).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#237 id=237 data-nosnippet>237</a>    futures::future::try_join_all(
+<a href=#238 id=238 data-nosnippet>238</a>        (<span class="number">0</span>..<span class="number">3</span>).map(|<span class="kw">_</span>| send_ecash_exact(client.clone(), Amount::from_sats(<span class="number">1</span>))),
+<a href=#239 id=239 data-nosnippet>239</a>    )
+<a href=#240 id=240 data-nosnippet>240</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#241 id=241 data-nosnippet>241</a>    <span class="prelude-val">Ok</span>(())
+<a href=#242 id=242 data-nosnippet>242</a>}
 </code></pre></div></section></main></body></html>
