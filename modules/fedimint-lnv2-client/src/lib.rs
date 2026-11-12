@@ -1254,6 +1254,7 @@ impl LightningClientModule {
 
     /// Creates a new incoming contract locked to a public key derived from
     /// our static module public key and requests its invoice from `gateway`.
+    #[allow(clippy::too_many_arguments)]
     async fn request_invoice_for_new_contract(
         &self,
         account: Account,
