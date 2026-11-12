@@ -389,6 +389,12 @@ pub async fn run(
 
     tracing_builder.init().map_err(anyhow::Error::from).unwrap();
 
+    // Must run before anything that may open a TLS connection (e.g. the
+    // hybrid bitcoind/Esplora backend checks chain IDs over HTTPS during
+    // construction). Without a process-level provider rustls panics, since
+    // both `ring` and `aws-lc-rs` are present in the dependency graph.
+    install_crypto_provider().await;
+
     info!("Starting fedimintd (version: {fedimint_version} version_hash: {code_version_hash})");
 
     #[cfg(all(
@@ -500,8 +506,6 @@ pub async fn run(
         ServerBitcoinRpcTracked::new(dyn_server_bitcoin_rpc, "server").into_dyn();
 
     root_task_group.install_kill_handler();
-
-    install_crypto_provider().await;
 
     // The UI password falls back to the legacy password.private file on disk
     // if its env var is not set, since the UI defaults to a loopback bind.
