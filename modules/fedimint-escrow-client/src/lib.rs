@@ -143,6 +143,7 @@ enum EscrowChildKeys {
     Escrow = 0,
     ArbiterFee = 1,
     IrohKey = 3,
+    DkgStateKey = 4,
 }
 
 #[derive(Clone)]
@@ -546,7 +547,7 @@ impl EscrowClientModule {
     fn dkg_state_key(&self) -> StateKey {
         let bytes = self
             .secret
-            .child_key(ChildId(EscrowChildKeys::Escrow as u64))
+            .child_key(ChildId(EscrowChildKeys::DkgStateKey as u64))
             .to_secp_key(&self.secp)
             .secret_key()
             .secret_bytes();
