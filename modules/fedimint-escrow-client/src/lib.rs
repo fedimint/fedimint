@@ -24,6 +24,7 @@ use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind
 use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
+use fedimint_core::runtime::{sleep, spawn};
 use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::secp256k1::{self, Keypair, Message, PublicKey, Secp256k1, schnorr};
 use fedimint_core::util::BoxStream;
@@ -68,6 +69,8 @@ pub mod output;
 
 #[cfg(feature = "cli")]
 pub mod cli;
+
+const DKG_TRANSPORT_GRACE_PERIOD: Duration = Duration::from_secs(10 * 60);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable)]
 pub enum EscrowStateMachine {
@@ -165,7 +168,7 @@ pub struct EscrowClientModule {
     arbiter_fee_key: Keypair,
     secret: DerivableSecret,
     notifier: ModuleNotifier<EscrowStateMachine>,
-    dkg_transports: Mutex<BTreeMap<SessionId, DkgSlot>>,
+    dkg_transports: Arc<Mutex<BTreeMap<SessionId, DkgSlot>>>,
 }
 
 impl fmt::Debug for EscrowClientModule {
@@ -1196,13 +1199,6 @@ impl EscrowClientModule {
             FrostDkgSessionRecord::new(self_participant_id, participants, self.federation_id, db)
                 .await?;
 
-        if let Ok(result) =
-            FrostDkgSessionRecord::load_dkg_result(db, session.session_id, &state_key).await
-        {
-            self.dkg_transports.lock().await.remove(&session.session_id);
-            return ConsortiumInfo::from_result(session.session_id, &result);
-        }
-
         let slot = {
             let mut slots = self.dkg_transports.lock().await;
             match slots.get(&session.session_id) {
@@ -1231,10 +1227,22 @@ impl EscrowClientModule {
 
         let result = session.run(db, slot.transport.clone(), &state_key).await;
 
-        // Keep the transport only if the caller can retry the same attempt.
-        let keep = matches!(&result, Err(e) if e.is_transient());
-        if !keep {
-            self.dkg_transports.lock().await.remove(&session.session_id);
+        match &result {
+            // done: keep answering late peers for a while, then let go
+            Ok(_) => {
+                let slots = self.dkg_transports.clone();
+                let session_id = session.session_id;
+                spawn("dkg-serve-late-peers", async move {
+                    sleep(DKG_TRANSPORT_GRACE_PERIOD).await;
+                    slots.lock().await.remove(&session_id);
+                });
+            }
+            // for transient error keep it so the caller can retry the same attempt
+            Err(e) if e.is_transient() => {}
+            // the state was wiped, start the next attempt with a fresh transport
+            Err(_) => {
+                self.dkg_transports.lock().await.remove(&session.session_id);
+            }
         }
 
         let done = result?;
