@@ -17,12 +17,14 @@ use db::DbKeyPrefix;
 use fedimint_api_client::api::{DynGlobalApi, DynModuleApi, FederationError};
 use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::error::{ClientModuleError, MetaFetchError};
-use fedimint_client_module::meta::{FetchKind, LegacyMetaSource, MetaSource, MetaValues};
+use fedimint_client_module::meta::{
+    FetchKind, LegacyMetaSource, MetaFieldKey, MetaFieldValue, MetaSource, MetaValues,
+};
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientModule, IClientModule};
 use fedimint_client_module::sm::Context;
-use fedimint_core::config::ClientConfig;
+use fedimint_core::config::{ClientConfig, META_FEDERATION_NAME_KEY};
 use fedimint_core::core::{Decoder, ModuleKind};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion};
 use fedimint_core::module::{
@@ -362,7 +364,7 @@ impl<S: MetaSource> MetaSource for MetaModuleMetaSourceWithFallback<S> {
             last_revision,
         ) {
             MetaModuleSource::Consensus(meta) => Ok(MetaValues {
-                values: serde_json::from_slice(meta.value.as_slice())?,
+                values: parse_meta_values(meta.value.as_slice())?,
                 revision: meta.revision,
             }),
             MetaModuleSource::Legacy => {
@@ -398,6 +400,22 @@ fn meta_module_source(value: MetaModuleValue, last_revision: Option<u64>) -> Met
         Some(Err(error)) if last_revision.is_some() => MetaModuleSource::KeepStored(error),
         None | Some(Ok(None) | Err(_)) => MetaModuleSource::Legacy,
     }
+}
+
+fn parse_meta_values(
+    value: &[u8],
+) -> Result<BTreeMap<MetaFieldKey, MetaFieldValue>, serde_json::Error> {
+    let json: serde_json::Value = serde_json::from_slice(value)?;
+    let mut values: BTreeMap<MetaFieldKey, MetaFieldValue> = serde_json::from_value(json.clone())?;
+    // Other metadata fields retain the legacy JSON-string unwrapping behavior,
+    // but a federation name is a literal string, even if it looks like JSON.
+    if let Some(name) = json.get(META_FEDERATION_NAME_KEY) {
+        values.insert(
+            MetaFieldKey(META_FEDERATION_NAME_KEY.to_owned()),
+            MetaFieldValue(name.clone()),
+        );
+    }
+    Ok(values)
 }
 
 async fn get_meta_module_value(
