@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["SLOT_SECS"],"fn":["persist_peer_availability","report","to_bps"],"struct":["AvailabilityTracker","Average","ObservedActivity","PeerActivity","PeerAvailabilityState"]};
+window.SIDEBAR_ITEMS = {"constant":["SLOT_SECS"],"fn":["persist_peer_availability","report","report_with_timestamp","to_bps"],"struct":["AvailabilityTracker","Average","ObservedActivity","PeerActivity","PeerAvailabilityState"]};
