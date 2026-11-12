@@ -6,7 +6,8 @@ use fedimint_client::module_init::DynClientModuleInit;
 use fedimint_core::db::{
     Database, DatabaseVersion, DatabaseVersionKeyV0, IDatabaseTransactionOpsCoreTyped,
 };
-use fedimint_core::{OutPoint, PeerId, TransactionId};
+use fedimint_core::encoding::{Decodable, Encodable};
+use fedimint_core::{OutPoint, PeerId, TransactionId, impl_db_record};
 use fedimint_logging::TracingSetup;
 use fedimint_server_core::DynServerModuleInit;
 use fedimint_testing::db::{
@@ -14,9 +15,7 @@ use fedimint_testing::db::{
     validate_migrations_server,
 };
 use fedimint_walletv2_client::WalletClientModule;
-use fedimint_walletv2_client::db::{
-    self, NextOutputIndexKey, ValidAddressIndexKey, ValidAddressIndexPrefix,
-};
+use fedimint_walletv2_client::db::{self, NextOutputIndexKey, ValidAddressIndexPrefix};
 use fedimint_walletv2_common::{FederationWallet, TxInfo, WalletCommonInit};
 use fedimint_walletv2_server::db::{
     BlockCountVoteKey, BlockCountVotePrefix, DbKeyPrefix, FederationWalletKey, FeeRateVoteKey,
@@ -397,11 +396,23 @@ async fn create_client_db_with_v0_data(db: Database) {
 
     dbtx.insert_new_entry(&NextOutputIndexKey, &3).await;
 
-    dbtx.insert_new_entry(&ValidAddressIndexKey(0), &()).await;
-    dbtx.insert_new_entry(&ValidAddressIndexKey(1), &()).await;
+    dbtx.insert_new_entry(&ValidAddressIndexKeyV0(0), &()).await;
+    dbtx.insert_new_entry(&ValidAddressIndexKeyV0(1), &()).await;
 
     dbtx.commit_tx().await;
 }
+
+/// The v0 shape of the address-index key: the index alone, before accounts
+/// split the table. Spelt out here so the snapshot keeps producing v0
+/// bytes now that the live key leads with an account.
+#[derive(Clone, Debug, Encodable, Decodable)]
+struct ValidAddressIndexKeyV0(u64);
+
+impl_db_record!(
+    key = ValidAddressIndexKeyV0,
+    value = (),
+    db_prefix = db::DbKeyPrefix::ValidAddressIndex
+);
 
 #[tokio::test(flavor = "multi_thread")]
 async fn snapshot_client_db_migrations() -> anyhow::Result<()> {
@@ -426,29 +437,27 @@ async fn test_client_db_migrations() -> anyhow::Result<()> {
 
             for prefix in db::DbKeyPrefix::iter() {
                 match prefix {
+                    // The accounts migration drops the cursor rather than
+                    // re-keying it, so the scanner replays the federation's
+                    // output stream from zero and re-derives every index.
                     db::DbKeyPrefix::NextOutputIndex => {
-                        let index = dbtx
-                            .get_value(&NextOutputIndexKey)
-                            .await
-                            .context("the seeded next output index must still decode")?;
-
                         ensure!(
-                            index == 3,
-                            "the next output index must round-trip unchanged, got {index}"
+                            dbtx.get_value(&NextOutputIndexKey).await.is_none(),
+                            "the scan cursor must be cleared so the rescan starts from zero"
                         );
                     }
                     db::DbKeyPrefix::ValidAddressIndex => {
                         let indices = dbtx
                             .find_by_prefix(&ValidAddressIndexPrefix)
                             .await
-                            .map(|(key, ())| key.0)
                             .collect::<Vec<_>>()
                             .await;
 
                         ensure!(
-                            indices == vec![0, 1],
-                            "both seeded valid address indices must round-trip unchanged, \
-                             got {indices:?}"
+                            indices.is_empty(),
+                            "the pre-accounts address indices must be dropped for the \
+                             rescan to re-derive them per account, got {} entries",
+                            indices.len()
                         );
                     }
                 }

@@ -31,6 +31,7 @@ use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArg
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
 use fedimint_client_module::oplog::UpdateStreamOrOutcome;
+use fedimint_client_module::secret::DeriveableSecretClientExt;
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::transaction::{
     ClientOutput, ClientOutputBundle, ClientOutputSM, FeeQuote, FeeQuoteRequest,
@@ -38,11 +39,12 @@ use fedimint_client_module::transaction::{
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{Account, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
-    Amounts, ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
+    AmountUnit, Amounts, ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit,
+    MultiApiVersion,
 };
 use fedimint_core::secp256k1::SECP256K1;
 use fedimint_core::task::TaskGroup;
@@ -342,8 +344,11 @@ pub struct LightningClientModule {
     notifier: ModuleNotifier<LightningClientStateMachines>,
     client_ctx: ClientContext<Self>,
     module_api: DynModuleApi,
-    keypair: Keypair,
-    lnurl_keypair: Keypair,
+    /// Every account's static receive key and lnurl key, derived once at
+    /// startup and indexed by [`Account::index`]. Both are static per account,
+    /// so an extra account costs one more trial decryption per streamed
+    /// contract rather than another pass over the stream.
+    keys: [AccountKeys; Account::ALL.len()],
     gateway_conn: Arc<dyn GatewayConnection + Send + Sync>,
     #[allow(unused)] // The field is only used by the cli feature
     admin_auth: Option<ApiAuth>,
@@ -396,7 +401,22 @@ impl ClientModule for LightningClientModule {
     }
 }
 
+/// The two static keys an account receives on.
+#[derive(Debug, Clone, Copy)]
+struct AccountKeys {
+    /// Contracts are locked to a tweak of this, so it is what a gateway
+    /// invoice names and what the stream scanner trials each contract against.
+    keypair: Keypair,
+    /// The key an lnurl advertises, kept distinct from `keypair` so a
+    /// shareable address cannot be correlated with a one-shot invoice.
+    lnurl_keypair: Keypair,
+}
+
 impl LightningClientModule {
+    fn keys(&self, account: Account) -> AccountKeys {
+        self.keys[usize::from(account.index())]
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn new(
         federation_id: FederationId,
@@ -417,12 +437,14 @@ impl LightningClientModule {
             notifier,
             client_ctx,
             module_api,
-            keypair: module_root_secret
-                .child_key(ChildId(0))
-                .to_secp_key(SECP256K1),
-            lnurl_keypair: module_root_secret
-                .child_key(ChildId(1))
-                .to_secp_key(SECP256K1),
+            keys: Account::ALL.map(|account| {
+                let account_secret = module_root_secret.derive_account_secret(account);
+
+                AccountKeys {
+                    keypair: account_secret.child_key(ChildId(0)).to_secp_key(SECP256K1),
+                    lnurl_keypair: account_secret.child_key(ChildId(1)).to_secp_key(SECP256K1),
+                }
+            }),
             gateway_conn,
             admin_auth,
         };
@@ -571,15 +593,17 @@ impl LightningClientModule {
     /// to be shown to the user in the transaction history.
     pub async fn send(
         &self,
+        account: Account,
         invoice: Bolt11Invoice,
         gateway: Option<SafeUrl>,
         custom_meta: Value,
     ) -> Result<OperationId, SendPaymentError> {
-        let (amount, operation_id) = self.validate_send_invoice(&invoice).await?;
+        let (amount, operation_id) = self.validate_send_invoice(account, &invoice).await?;
 
         let (gateway_api, routing_info) = self.resolve_send_gateway(&invoice, gateway).await?;
 
         self.fund_outgoing_contract(
+            account,
             invoice,
             amount,
             operation_id,
@@ -607,13 +631,14 @@ impl LightningClientModule {
     /// refunded. The error carries the current terms for re-quoting.
     pub async fn send_with_terms(
         &self,
+        account: Account,
         invoice: Bolt11Invoice,
         gateway: SafeUrl,
         send_fee: PaymentFee,
         expiration_delta: u64,
         custom_meta: Value,
     ) -> Result<OperationId, SendWithTermsError> {
-        let (amount, operation_id) = self.validate_send_invoice(&invoice).await?;
+        let (amount, operation_id) = self.validate_send_invoice(account, &invoice).await?;
 
         let (gateway_api, routing_info) =
             self.resolve_send_gateway(&invoice, Some(gateway)).await?;
@@ -629,6 +654,7 @@ impl LightningClientModule {
 
         let operation_id = self
             .fund_outgoing_contract(
+                account,
                 invoice,
                 amount,
                 operation_id,
@@ -646,6 +672,7 @@ impl LightningClientModule {
     /// operation id a payment of it uses.
     async fn validate_send_invoice(
         &self,
+        account: Account,
         invoice: &Bolt11Invoice,
     ) -> Result<(u64, OperationId), SendPaymentError> {
         let amount = invoice
@@ -661,6 +688,13 @@ impl LightningClientModule {
                 invoice_currency: invoice.currency(),
                 federation_currency: self.cfg.network.into(),
             });
+        }
+
+        if !self
+            .client_ctx
+            .supports_account(AmountUnit::BITCOIN, account)
+        {
+            return Err(SendPaymentError::AccountNotSupported);
         }
 
         // The attempt index is fixed at `0` so the operation id matches the one
@@ -700,8 +734,10 @@ impl LightningClientModule {
     /// Funds an outgoing contract for `invoice` at the terms in `routing_info`
     /// and starts the state machine that hands it to `gateway_api`.
     #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_arguments)]
     async fn fund_outgoing_contract(
         &self,
+        account: Account,
         invoice: Bolt11Invoice,
         amount: u64,
         operation_id: OperationId,
@@ -709,7 +745,8 @@ impl LightningClientModule {
         routing_info: RoutingInfo,
         custom_meta: Value,
     ) -> Result<OperationId, SendPaymentError> {
-        let (ephemeral_tweak, ephemeral_pk) = tweak::generate(self.keypair.public_key());
+        let (ephemeral_tweak, ephemeral_pk) =
+            tweak::generate(self.keys(account).keypair.public_key());
 
         let refund_keypair = SecretKey::from_slice(&ephemeral_tweak)
             .expect("32 bytes, within curve order")
@@ -770,7 +807,7 @@ impl LightningClientModule {
             vec![client_output_sm],
         ));
 
-        let transaction = TransactionBuilder::new().with_outputs(client_output);
+        let transaction = TransactionBuilder::new(account).with_outputs(client_output);
 
         let operation_meta_gen = move |change_outpoint_range| {
             LightningOperationMeta::Send(SendOperationMeta {
@@ -807,6 +844,7 @@ impl LightningClientModule {
                                     operation_id,
                                     amount: Amount::from_msats(amount),
                                     fee: send_fee.fee(amount),
+                                    account,
                                 },
                             )
                             .await;
@@ -988,12 +1026,20 @@ impl LightningClientModule {
     /// to be shown to the user in the transaction history.
     pub async fn receive(
         &self,
+        account: Account,
         amount: Amount,
         expiry_secs: u32,
         description: Bolt11InvoiceDescription,
         gateway: Option<SafeUrl>,
         custom_meta: Value,
     ) -> Result<(Bolt11Invoice, OperationId), ReceiveError> {
+        if !self
+            .client_ctx
+            .supports_account(AmountUnit::BITCOIN, account)
+        {
+            return Err(ReceiveError::AccountNotSupported);
+        }
+
         if MAX_INVOICE_EXPIRY_SECS < expiry_secs {
             return Err(ReceiveError::InvoiceExpiryTooLong);
         }
@@ -1001,6 +1047,7 @@ impl LightningClientModule {
         let (gateway, routing_info) = self.resolve_receive_gateway(gateway).await?;
 
         self.receive_with_routing_info(
+            account,
             amount,
             expiry_secs,
             description,
@@ -1023,8 +1070,10 @@ impl LightningClientModule {
     /// the gateway currently reports a different fee. A cheaper fee counts as
     /// changed too, so the contract always matches what was approved; the
     /// error carries the current fee for re-quoting.
+    #[allow(clippy::too_many_arguments)]
     pub async fn receive_with_terms(
         &self,
+        account: Account,
         amount: Amount,
         expiry_secs: u32,
         description: Bolt11InvoiceDescription,
@@ -1032,6 +1081,13 @@ impl LightningClientModule {
         receive_fee: PaymentFee,
         custom_meta: Value,
     ) -> Result<(Bolt11Invoice, OperationId), ReceiveWithTermsError> {
+        if !self
+            .client_ctx
+            .supports_account(AmountUnit::BITCOIN, account)
+        {
+            return Err(ReceiveError::AccountNotSupported.into());
+        }
+
         if MAX_INVOICE_EXPIRY_SECS < expiry_secs {
             return Err(ReceiveError::InvoiceExpiryTooLong.into());
         }
@@ -1046,6 +1102,7 @@ impl LightningClientModule {
 
         let (invoice, operation_id) = self
             .receive_with_routing_info(
+                account,
                 amount,
                 expiry_secs,
                 description,
@@ -1123,8 +1180,10 @@ impl LightningClientModule {
     /// Creates the incoming contract locked to a public key derived from our
     /// static module public key, fetches its invoice from `gateway` at the
     /// terms in `routing_info`, then starts the receive operation.
+    #[allow(clippy::too_many_arguments)]
     async fn receive_with_routing_info(
         &self,
+        account: Account,
         amount: Amount,
         expiry_secs: u32,
         description: Bolt11InvoiceDescription,
@@ -1144,7 +1203,7 @@ impl LightningClientModule {
         // Quoting the claim against this federation's fee consensus is exact, where a
         // fixed floor is either too permissive or too strict depending on how the
         // federation is configured.
-        if !self.is_worth_claiming(contract_amount).await {
+        if !self.is_worth_claiming(account, contract_amount).await {
             return Err(ReceiveError::AmountTooSmall);
         }
 
@@ -1155,6 +1214,7 @@ impl LightningClientModule {
         let (contract, preimage, invoice) =
             util::retry("gateway-bolt11-invoice", gateway_request_backoff(), || {
                 self.request_invoice_for_new_contract(
+                    account,
                     &gateway,
                     &routing_info,
                     contract_amount,
@@ -1176,7 +1236,8 @@ impl LightningClientModule {
 
         let operation_id = self
             .receive_incoming_contract(
-                self.keypair.secret_key(),
+                account,
+                self.keys(account).keypair.secret_key(),
                 contract.clone(),
                 LightningOperationMeta::Receive(ReceiveOperationMeta {
                     gateway,
@@ -1193,8 +1254,10 @@ impl LightningClientModule {
 
     /// Creates a new incoming contract locked to a public key derived from
     /// our static module public key and requests its invoice from `gateway`.
+    #[allow(clippy::too_many_arguments)]
     async fn request_invoice_for_new_contract(
         &self,
+        account: Account,
         gateway: &SafeUrl,
         routing_info: &RoutingInfo,
         contract_amount: Amount,
@@ -1202,7 +1265,7 @@ impl LightningClientModule {
         description: Bolt11InvoiceDescription,
         expiry_secs: u32,
     ) -> Result<(IncomingContract, [u8; 32], Bolt11Invoice), ServerError> {
-        let recipient_static_pk = self.keypair.public_key();
+        let recipient_static_pk = self.keys(account).keypair.public_key();
 
         let (ephemeral_tweak, ephemeral_pk) = tweak::generate(recipient_static_pk);
 
@@ -1268,6 +1331,7 @@ impl LightningClientModule {
     /// amount), and no gateway round-trip is needed.
     pub async fn receive_fee_quote(
         &self,
+        account: Account,
         amount: Amount,
     ) -> Result<FeeQuote, TransactionSubmitError> {
         self.client_ctx
@@ -1278,6 +1342,7 @@ impl LightningClientModule {
                     output_amount: Amounts::ZERO,
                     input_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.fee(amount)),
                     output_fee: Amounts::ZERO,
+                    account,
                 },
             )
             .await
@@ -1293,8 +1358,8 @@ impl LightningClientModule {
     /// assuming a floor. A quote that fails outright is the same verdict: the
     /// claim spends the contract as the transaction's only input, so a fee
     /// larger than the contract leaves a transaction that cannot be balanced.
-    async fn is_worth_claiming(&self, amount: Amount) -> bool {
-        match self.receive_fee_quote(amount).await {
+    async fn is_worth_claiming(&self, account: Account, amount: Amount) -> bool {
+        match self.receive_fee_quote(account, amount).await {
             Ok(quote) => quote.total().get_bitcoin() < amount,
             Err(_) => false,
         }
@@ -1315,7 +1380,11 @@ impl LightningClientModule {
     /// part of the contract `amount` the gateway claims, not the on-federation
     /// transaction fee. So `amount` is the full outgoing contract value
     /// (`send_fee.add_to(invoice_amount)`).
-    pub async fn send_fee_quote(&self, amount: Amount) -> Result<FeeQuote, TransactionSubmitError> {
+    pub async fn send_fee_quote(
+        &self,
+        account: Account,
+        amount: Amount,
+    ) -> Result<FeeQuote, TransactionSubmitError> {
         self.client_ctx
             .fee_quote(
                 OperationId::new_random(),
@@ -1324,6 +1393,7 @@ impl LightningClientModule {
                     output_amount: Amounts::new_bitcoin(amount),
                     input_fee: Amounts::ZERO,
                     output_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.fee(amount)),
+                    account,
                 },
             )
             .await
@@ -1367,6 +1437,7 @@ impl LightningClientModule {
     /// gateway-side, and none of them means the wallet is short.
     pub async fn spendable_amount(
         &self,
+        account: Account,
         balance: Amount,
         gateway: Option<SafeUrl>,
     ) -> Result<Amount, SpendableAmountError> {
@@ -1396,7 +1467,7 @@ impl LightningClientModule {
             Amount::from_msats(1),
             balance,
             |invoice_amount: Amount| send_fee.add_to(invoice_amount.msats),
-            |contract_amount: Amount| self.send_fee_quote(contract_amount),
+            |contract_amount: Amount| self.send_fee_quote(account, contract_amount),
         )
         .await
         .map_err(SpendableAmountError::Quote)?
@@ -1407,6 +1478,7 @@ impl LightningClientModule {
     // static module public key.
     async fn receive_incoming_contract(
         &self,
+        account: Account,
         sk: SecretKey,
         contract: IncomingContract,
         operation_meta: LightningOperationMeta,
@@ -1437,6 +1509,7 @@ impl LightningClientModule {
         self.client_ctx
             .manual_operation_start(
                 operation_id,
+                account,
                 LightningCommonInit::KIND.as_str(),
                 operation_meta,
                 vec![self.client_ctx.make_dyn_state(receive_sm)],
@@ -1530,9 +1603,20 @@ impl LightningClientModule {
     /// to use for testing purposes.
     pub async fn generate_lnurl(
         &self,
+        account: Account,
         recurringd: SafeUrl,
         gateway: Option<SafeUrl>,
     ) -> Result<String, GenerateLnurlError> {
+        // Checked before the lnurl exists: anyone can pay into a published
+        // key, and a contract locked to an account the primary module cannot
+        // fund a claim for would strand the payer's money.
+        if !self
+            .client_ctx
+            .supports_account(AmountUnit::BITCOIN, account)
+        {
+            return Err(GenerateLnurlError::AccountNotSupported);
+        }
+
         let gateways = if let Some(gateway) = gateway {
             vec![gateway]
         } else {
@@ -1553,7 +1637,7 @@ impl LightningClientModule {
             fedimint_core::base32::FEDIMINT_PREFIX,
             &lnurl::LnurlRequest {
                 federation_id: self.federation_id,
-                recipient_pk: self.lnurl_keypair.public_key(),
+                recipient_pk: self.keys(account).lnurl_keypair.public_key(),
                 aggregate_pk: self.cfg.tpe_agg_pk,
                 gateways,
             },
@@ -1612,24 +1696,40 @@ impl LightningClientModule {
 
         for contract in &contracts {
             // The stream carries every incoming contract the federation funded, and
-            // anyone can address one to a published lnurl key. Check that it is ours
-            // before quoting - recovering the keys is local arithmetic, the quote
-            // reads the wallet - and skip the contracts the claim fee would swallow,
-            // so that unsolicited dust never becomes an operation in the first place.
-            let keys = runtime::spawn_blocking({
-                let sk = self.lnurl_keypair.secret_key();
+            // anyone can address one to a published lnurl key. Trialling each account's
+            // key both finds the one the contract is locked to and establishes that it
+            // is ours at all, before quoting - recovering the keys is local arithmetic,
+            // the quote reads the wallet. The stream and its cursor are shared, so an
+            // extra account costs one more trial decryption per contract rather than
+            // another sweep.
+            let account = runtime::spawn_blocking({
+                let keys = self.keys.map(|keys| keys.lnurl_keypair.secret_key());
                 let tpe_agg_pk = self.cfg.tpe_agg_pk;
                 let contract = contract.clone();
 
-                move || recover_contract_keys(sk, &tpe_agg_pk, &contract)
+                move || {
+                    Account::ALL.into_iter().find(|account| {
+                        recover_contract_keys(
+                            keys[usize::from(account.index())],
+                            &tpe_agg_pk,
+                            &contract,
+                        )
+                        .is_some()
+                    })
+                }
             })
             .await;
 
-            if keys.is_none() {
+            let Some(account) = account else {
                 continue;
-            }
+            };
 
-            if !self.is_worth_claiming(contract.commitment.amount).await {
+            // Skip the contracts the claim fee would swallow, so that unsolicited dust
+            // never becomes an operation in the first place.
+            if !self
+                .is_worth_claiming(account, contract.commitment.amount)
+                .await
+            {
                 warn!(
                     target: LOG_CLIENT_MODULE_LNV2,
                     amount = %contract.commitment.amount,
@@ -1641,7 +1741,8 @@ impl LightningClientModule {
 
             if let Some(operation_id) = self
                 .receive_incoming_contract(
-                    self.lnurl_keypair.secret_key(),
+                    account,
+                    self.keys(account).lnurl_keypair.secret_key(),
                     contract.clone(),
                     LightningOperationMeta::LnurlReceive(LnurlReceiveOperationMeta {
                         contract: contract.clone(),
@@ -1702,6 +1803,8 @@ pub enum InvoiceSendStatus {
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum SendPaymentError {
+    #[error("The primary module only holds a balance for the primary account")]
+    AccountNotSupported,
     #[error("Invoice is missing an amount")]
     InvoiceMissingAmount,
     #[error("Invoice has expired")]
@@ -1752,6 +1855,8 @@ pub enum SendWithTermsError {
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum ReceiveError {
+    #[error("The primary module only holds a balance for the primary account")]
+    AccountNotSupported,
     #[error(transparent)]
     SelectGateway(SelectGatewayError),
     #[error("Failed to connect to gateway")]
@@ -1787,6 +1892,8 @@ pub enum ReceiveWithTermsError {
 
 #[derive(Error, Debug, Clone, Eq, PartialEq)]
 pub enum GenerateLnurlError {
+    #[error("The primary module only holds a balance for the primary account")]
+    AccountNotSupported,
     #[error("No gateways are available")]
     NoGatewaysAvailable,
     #[error("Failed to request gateways")]

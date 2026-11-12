@@ -2,7 +2,7 @@ use std::time::{Duration, SystemTime};
 
 use assert_matches::assert_matches;
 use fedimint_client_module::oplog::{JsonStringed, OperationOutcome, UpdateStreamOrOutcome};
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{
     Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt,
@@ -11,6 +11,7 @@ use fedimint_core::module::registry::ModuleRegistry;
 use futures::stream::StreamExt;
 use serde::{Deserialize, Serialize};
 
+use crate::Client;
 use crate::db::{ChronologicalOperationLogKey, OperationLogKey};
 use crate::oplog::{OperationLog, OperationLogEntry};
 
@@ -60,7 +61,7 @@ async fn test_operation_log_update() {
 
     let mut dbtx = db.begin_transaction().await;
     op_log
-        .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), op_id, "foo", "bar")
+        .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), op_id, Account::Primary, "foo", "bar")
         .await;
     dbtx.commit_tx().await;
 
@@ -104,7 +105,7 @@ async fn test_operation_log_update_from_stream() {
 
     let mut dbtx = db.begin_transaction().await;
     op_log
-        .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), op_id, "foo", "bar")
+        .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), op_id, Account::Primary, "foo", "bar")
         .await;
     dbtx.commit_tx().await;
 
@@ -145,7 +146,7 @@ async fn test_no_outcome_cached_for_non_terminal_stream_end() {
 
     let mut dbtx = db.begin_transaction().await;
     op_log
-        .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), op_id, "foo", "bar")
+        .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), op_id, Account::Primary, "foo", "bar")
         .await;
     dbtx.commit_tx().await;
 
@@ -203,7 +204,7 @@ async fn test_non_terminal_cached_outcome_falls_back_to_update_stream() {
 
     let mut dbtx = db.begin_transaction().await;
     op_log
-        .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), op_id, "foo", "bar")
+        .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), op_id, Account::Primary, "foo", "bar")
         .await;
     dbtx.commit_tx().await;
 
@@ -258,7 +259,7 @@ async fn test_undeserializable_outcome_falls_back_to_update_stream() {
 
     let mut dbtx = db.begin_transaction().await;
     op_log
-        .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), op_id, "foo", "bar")
+        .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), op_id, Account::Primary, "foo", "bar")
         .await;
     dbtx.commit_tx().await;
 
@@ -310,6 +311,7 @@ async fn test_pagination() {
             .add_operation_log_entry_dbtx(
                 &mut dbtx.to_ref_nc(),
                 OperationId([operation_idx; 32]),
+                Account::Primary,
                 "foo",
                 operation_idx,
             )
@@ -454,7 +456,13 @@ async fn test_pagination_empty_then_not() {
 
     let mut dbtx = db.begin_transaction().await;
     op_log
-        .add_operation_log_entry_dbtx(&mut dbtx.to_ref_nc(), OperationId([0; 32]), "foo", "bar")
+        .add_operation_log_entry_dbtx(
+            &mut dbtx.to_ref_nc(),
+            OperationId([0; 32]),
+            Account::Primary,
+            "foo",
+            "bar",
+        )
         .await;
     dbtx.commit_tx().await;
 
@@ -474,6 +482,7 @@ async fn test_pagination_after_historical_insert() {
         .add_operation_log_entry_dbtx_with_creation_time(
             &mut dbtx.to_ref_nc(),
             recent_operation_id,
+            Account::Primary,
             "foo",
             1u8,
             recent_creation_time,
@@ -492,6 +501,7 @@ async fn test_pagination_after_historical_insert() {
         .add_operation_log_entry_dbtx_with_creation_time(
             &mut dbtx.to_ref_nc(),
             historical_operation_id,
+            Account::Primary,
             "foo",
             0u8,
             historical_creation_time,
@@ -506,4 +516,47 @@ async fn test_pagination_after_historical_insert() {
             .collect::<Vec<_>>(),
         vec![recent_operation_id, historical_operation_id]
     );
+}
+
+#[tokio::test]
+async fn operation_account_is_recorded_once_and_may_be_repeated() {
+    let op_id = OperationId([0x42; 32]);
+    let db = MemDatabase::new().into_database();
+
+    let mut dbtx = db.begin_transaction().await;
+    Client::set_operation_account_dbtx(&mut dbtx.to_ref_nc(), op_id, Account::Secondary).await;
+    // A recovery records the account up front and the log records it again as
+    // the operation is started; the second write has to be accepted.
+    Client::set_operation_account_dbtx(&mut dbtx.to_ref_nc(), op_id, Account::Secondary).await;
+    dbtx.commit_tx().await;
+
+    let mut dbtx = db.begin_transaction_nc().await;
+    assert_eq!(
+        Client::operation_account_dbtx(&mut dbtx, op_id).await,
+        Account::Secondary
+    );
+}
+
+#[tokio::test]
+#[should_panic(expected = "cannot be rebound")]
+async fn operation_account_cannot_be_rebound_to_another_account() {
+    let op_id = OperationId([0x42; 32]);
+    let db = MemDatabase::new().into_database();
+
+    let mut dbtx = db.begin_transaction().await;
+    Client::set_operation_account_dbtx(&mut dbtx.to_ref_nc(), op_id, Account::Secondary).await;
+    Client::set_operation_account_dbtx(&mut dbtx.to_ref_nc(), op_id, Account::Tertiary).await;
+}
+
+#[tokio::test]
+#[should_panic(expected = "cannot be rebound")]
+async fn operation_account_cannot_be_rebound_to_primary() {
+    let op_id = OperationId([0x42; 32]);
+    let db = MemDatabase::new().into_database();
+
+    let mut dbtx = db.begin_transaction().await;
+    Client::set_operation_account_dbtx(&mut dbtx.to_ref_nc(), op_id, Account::Secondary).await;
+    // Primary leaves no row, so silently keeping the old binding would be the
+    // failure mode here; it has to be rejected like any other rebind.
+    Client::set_operation_account_dbtx(&mut dbtx.to_ref_nc(), op_id, Account::Primary).await;
 }

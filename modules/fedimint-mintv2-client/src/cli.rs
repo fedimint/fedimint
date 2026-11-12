@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 use fedimint_client_module::error::OperationLookupError;
 use fedimint_core::Amount;
 use fedimint_core::base32::{self, FEDIMINT_PREFIX, PrefixedDecodeError};
+use fedimint_core::core::Account;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -12,13 +13,26 @@ use crate::{ECash, MintClientModule, ReceiveECashError, SendECashError, Spendabl
 
 #[derive(Parser, Serialize)]
 enum Opts {
-    /// Count the `ECash` notes in the client's database by denomination.
-    Count,
+    /// Count the `ECash` notes an account holds by denomination.
+    Count {
+        #[clap(long, default_value_t = Account::Primary)]
+        account: Account,
+    },
     /// Send `ECash` for the given amount.
     Send {
         amount: Amount,
+        #[clap(long, default_value_t = Account::Primary)]
+        account: Account,
         /// Embed the federation's invite code in the serialized ecash so a
         /// recipient that hasn't joined the federation can do so from it.
+        #[clap(long)]
+        include_invite: bool,
+    },
+    /// Hand out everything an account holds as one bundle. Receive it into
+    /// another account to move a balance across.
+    SendMax {
+        #[clap(long, default_value_t = Account::Primary)]
+        account: Account,
         #[clap(long)]
         include_invite: bool,
     },
@@ -28,6 +42,8 @@ enum Opts {
         /// Read serialized e-cash from a file, or '-' for stdin.
         #[clap(long)]
         ecash_file: Option<PathBuf>,
+        #[clap(long, default_value_t = Account::Primary)]
+        account: Account,
     },
     /// Developer and debugging commands.
     Dev {
@@ -71,20 +87,38 @@ pub(crate) async fn handle_cli_command(
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("mintv2")).chain(args.iter()));
 
     match opts {
-        Opts::Count => Ok(json(mint.get_count_by_denomination().await)),
+        Opts::Count { account } => Ok(json(mint.get_count_by_denomination(account).await)),
         Opts::Send {
             amount,
+            account,
             include_invite,
         } => {
-            let (_, ecash) = mint.send(amount, Value::Null, include_invite).await?;
+            let (_, ecash) = mint
+                .send(account, amount, Value::Null, include_invite)
+                .await?;
             let ecash = base32::encode_prefixed(FEDIMINT_PREFIX, &ecash);
 
             Ok(json(ecash))
         }
-        Opts::Receive { ecash, ecash_file } => {
+        Opts::SendMax {
+            account,
+            include_invite,
+        } => {
+            let ecash = mint
+                .send_max(account, Value::Null, include_invite)
+                .await
+                .map(|(_, ecash)| base32::encode_prefixed(FEDIMINT_PREFIX, &ecash));
+
+            Ok(json(ecash))
+        }
+        Opts::Receive {
+            ecash,
+            ecash_file,
+            account,
+        } => {
             let ecash = resolve_ecash(ecash, ecash_file)?;
 
-            let operation_id = mint.receive(ecash, Value::Null).await?;
+            let operation_id = mint.receive(account, ecash, Value::Null).await?;
 
             let state = mint
                 .await_final_receive_operation_state(operation_id)

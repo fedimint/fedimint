@@ -6,6 +6,7 @@ use std::time::SystemTime;
 use bitcoin::secp256k1::Keypair;
 use fedimint_client::ClientHandleArc;
 use fedimint_core::config::{FederationId, FederationIdPrefix, JsonClientConfig};
+use fedimint_core::core::Account;
 use fedimint_core::db::{Committable, DatabaseTransaction, NonCommittable};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::AmountUnit;
@@ -233,7 +234,7 @@ impl FederationManager {
             .borrow()
             .with(|client| async move {
                 let balance_msat = client
-                    .get_balance_for_btc()
+                    .get_balance_for_btc(Account::Primary)
                     .await
                     // If primary module is not available, we're not really connected yet
                     .map_err(|_err| FederationNotConnected {
@@ -277,7 +278,7 @@ impl FederationManager {
         for (federation_id, client) in &self.clients {
             let balance_msat = match client
                 .borrow()
-                .with(|client| client.get_balance_for_btc())
+                .with(|client| client.get_balance_for_btc(Account::Primary))
                 .await
             {
                 Ok(balance_msat) => balance_msat,
@@ -400,7 +401,7 @@ impl FederationManager {
             .get_primary_module_for_unit::<MintV2ClientModule>(AmountUnit::BITCOIN)
         {
             let mut counts = TieredCounts::default();
-            for (denomination, count) in mint.get_count_by_denomination().await {
+            for (denomination, count) in mint.get_count_by_denomination(Account::Primary).await {
                 counts.inc(
                     denomination.amount(),
                     usize::try_from(count).expect("Note count fits in usize"),

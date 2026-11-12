@@ -7,7 +7,7 @@ use std::time::Duration;
 use fedimint_client::RootSecret;
 use fedimint_client::db::OperationLogKey;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::db::mem_impl::{MemDatabase, MemTransaction};
 use fedimint_core::db::{
     Database, DatabaseError, DatabaseKeyPrefix, DatabaseResult, IDatabaseTransactionOps,
@@ -168,7 +168,7 @@ async fn send_atomicity(cancel_before_commit: bool) -> anyhow::Result<()> {
         .get_first_module::<fedimint_dummy_client::DummyClientModule>()?
         .mock_receive(sats(10_000), fedimint_core::module::AmountUnit::BITCOIN)
         .await;
-    let balance = client.get_balance_for_btc().await?;
+    let balance = client.get_balance_for_btc(Account::Primary).await?;
 
     let send = fedimint_core::runtime::spawn("send-atomicity", {
         let client = client.clone();
@@ -176,7 +176,12 @@ async fn send_atomicity(cancel_before_commit: bool) -> anyhow::Result<()> {
             client
                 .get_first_module::<LightningClientModule>()
                 .expect("Lightning module exists")
-                .send(invoice, Some(mock::gateway()), serde_json::Value::Null)
+                .send(
+                    Account::Primary,
+                    invoice,
+                    Some(mock::gateway()),
+                    serde_json::Value::Null,
+                )
                 .await
         }
     });
@@ -191,7 +196,7 @@ async fn send_atomicity(cancel_before_commit: bool) -> anyhow::Result<()> {
             .await
             .is_none()
     );
-    assert_eq!(client.get_balance_for_btc().await?, balance);
+    assert_eq!(client.get_balance_for_btc(Account::Primary).await?, balance);
     assert!(
         db.begin_transaction_nc()
             .await
@@ -217,7 +222,7 @@ async fn send_atomicity(cancel_before_commit: bool) -> anyhow::Result<()> {
                 .await
                 .is_none()
         );
-        assert_eq!(client.get_balance_for_btc().await?, balance);
+        assert_eq!(client.get_balance_for_btc(Account::Primary).await?, balance);
     } else {
         // The first commit fails without applying writes; autocommit must retry the
         // pair.
@@ -276,7 +281,12 @@ async fn insufficient_funds_does_not_announce_send() -> anyhow::Result<()> {
     assert!(matches!(
         client
             .get_first_module::<LightningClientModule>()?
-            .send(invoice, Some(mock::gateway()), serde_json::Value::Null)
+            .send(
+                Account::Primary,
+                invoice,
+                Some(mock::gateway()),
+                serde_json::Value::Null
+            )
             .await,
         Err(SendPaymentError::InsufficientFunds(_))
     ));
