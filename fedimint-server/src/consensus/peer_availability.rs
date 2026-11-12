@@ -152,12 +152,19 @@ impl AvailabilityTracker {
 }
 
 pub async fn report(db: &Database, now_secs: u64) -> PeerAvailability {
+    report_with_timestamp(db, now_secs).await.1
+}
+
+/// Read the local report, including reset peers, and its last persistence time
+/// from the same database snapshot. Zero means no observations were saved yet.
+pub async fn report_with_timestamp(db: &Database, now_secs: u64) -> (u64, PeerAvailability) {
     let mut dbtx = db.begin_transaction_nc().await;
-    let mut report = dbtx
+    let state = dbtx
         .get_value(&PeerAvailabilityKey)
         .await
-        .unwrap_or_default()
-        .report(now_secs);
+        .unwrap_or_default();
+    let updated_at_secs = state.updated_at_secs();
+    let mut report = state.report(now_secs);
     for (peer, fresh_state) in dbtx
         .get_value(&PeerAvailabilityResetsKey)
         .await
@@ -173,7 +180,7 @@ pub async fn report(db: &Database, now_secs: u64) -> PeerAvailability {
             }
         }
     }
-    report
+    (updated_at_secs, report)
 }
 
 /// Slots of consensus traffic per peer since the last [`PeerActivity::take`].
@@ -325,6 +332,11 @@ impl Decodable for Average {
 }
 
 impl PeerAvailabilityState {
+    /// When this local observation was last persisted, for dashboard freshness.
+    pub fn updated_at_secs(&self) -> u64 {
+        self.updated_at_secs
+    }
+
     /// Folds in the activity observed since the last update.
     pub fn update(&mut self, now_secs: u64, activity: &ObservedActivity) {
         for (peer, heard) in &activity.last_heard_secs {
