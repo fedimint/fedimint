@@ -41,13 +41,15 @@ enum Opts {
         #[arg(long, default_value_t = Account::Primary)]
         account: Account,
     },
-    /// Block until the next payment is received, starting from the given event
-    /// log position. Returns the receive's final state and the event log
-    /// position to pass to the following `await-receive`.
+    /// Block until the next payment to an account is received, starting from
+    /// the given event log position. Returns the receive's final state and the
+    /// event log position to pass to the following `await-receive`.
     AwaitReceive {
         /// Event log position to start scanning from, as returned by
         /// `dev next-event-log-id` or a prior `await-receive`.
         position: EventLogId,
+        #[arg(long, default_value_t = Account::Primary)]
+        account: Account,
     },
 }
 
@@ -118,7 +120,9 @@ pub(crate) async fn handle_cli_command(
             )
         }
         Opts::Receive { account } => json(wallet.receive(account).await?),
-        Opts::AwaitReceive { position } => json(wallet.await_receive(position).await?),
+        Opts::AwaitReceive { position, account } => {
+            json(wallet.await_receive(account, position).await?)
+        }
     };
 
     Ok(value)

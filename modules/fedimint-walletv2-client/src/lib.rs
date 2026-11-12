@@ -870,12 +870,14 @@ impl WalletClientModule {
     /// operation; this keeps waiting until one succeeds.
     pub async fn await_receive(
         &self,
+        account: Account,
         position: EventLogId,
     ) -> Result<(FinalReceiveOperationState, EventLogId), AwaitReceiveError> {
         let mut position = position;
 
         loop {
-            let (operation_id, next_position) = self.next_receive_operation(position).await;
+            let (operation_id, next_position) =
+                self.next_receive_operation(account, position).await;
 
             position = next_position;
 
@@ -911,10 +913,18 @@ impl WalletClientModule {
         }
     }
 
-    /// Scan the event log from `position` for the next [`ReceivePaymentEvent`],
-    /// blocking until one is found, and return its operation id together with
-    /// the event log position just past it.
-    async fn next_receive_operation(&self, position: EventLogId) -> (OperationId, EventLogId) {
+    /// Scan the event log from `position` for the next [`ReceivePaymentEvent`]
+    /// crediting `account`, blocking until one is found, and return its
+    /// operation id together with the event log position just past it.
+    ///
+    /// Every account's deposits land in the same log, so a waiter has to skip
+    /// the other accounts' receives rather than report the first one it sees
+    /// as its own.
+    async fn next_receive_operation(
+        &self,
+        account: Account,
+        position: EventLogId,
+    ) -> (OperationId, EventLogId) {
         let mut position = position;
 
         loop {
@@ -929,6 +939,7 @@ impl WalletClientModule {
                 if entry.module_kind() == Some(&KIND)
                     && entry.kind == ReceivePaymentEvent::KIND
                     && let Some(event) = entry.to_event::<ReceivePaymentEvent>()
+                    && event.account == account
                 {
                     return (event.operation_id, position);
                 }

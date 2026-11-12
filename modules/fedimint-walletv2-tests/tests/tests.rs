@@ -303,11 +303,11 @@ async fn receive_reports_confirmation_progress() -> anyhow::Result<()> {
     // keeps reporting an output for a while after it turns final, so the receive
     // operations themselves settle it. Only these two deposits exist, so waiting
     // for two successful receives covers both.
-    let (state, position) = module.await_receive(position).await?;
+    let (state, position) = module.await_receive(Account::Primary, position).await?;
 
     assert_eq!(state, FinalReceiveOperationState::Success);
 
-    let (state, _) = module.await_receive(position).await?;
+    let (state, _) = module.await_receive(Account::Primary, position).await?;
 
     assert_eq!(state, FinalReceiveOperationState::Success);
 
