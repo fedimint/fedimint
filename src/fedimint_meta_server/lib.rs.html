@@ -588,5 +588,10 @@
 <a href=#588 id=588 data-nosnippet>588</a>
 <a href=#589 id=589 data-nosnippet>589</a>        <span class="prelude-val">Ok</span>(submissions)
 <a href=#590 id=590 data-nosnippet>590</a>    }
-<a href=#591 id=591 data-nosnippet>591</a>}
+<a href=#591 id=591 data-nosnippet>591</a>
+<a href=#592 id=592 data-nosnippet>592</a>    <span class="doccomment">/// Get the consensus data as JSON
+<a href=#593 id=593 data-nosnippet>593</a>    </span><span class="kw">pub async fn </span>get_consensus_json(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;serde_json::Value&gt; {
+<a href=#594 id=594 data-nosnippet>594</a>        <span class="self">self</span>.handle_get_consensus_request_ui().<span class="kw">await</span>.ok().flatten()
+<a href=#595 id=595 data-nosnippet>595</a>    }
+<a href=#596 id=596 data-nosnippet>596</a>}
 </code></pre></div></section></main></body></html>

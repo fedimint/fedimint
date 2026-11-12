@@ -53,8 +53,8 @@
 <a href=#53 id=53 data-nosnippet>53</a>    <span class="doccomment">/// Get a map of peer IDs to guardian names
 <a href=#54 id=54 data-nosnippet>54</a>    </span><span class="kw">async fn </span>guardian_names(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; BTreeMap&lt;PeerId, String&gt;;
 <a href=#55 id=55 data-nosnippet>55</a>
-<a href=#56 id=56 data-nosnippet>56</a>    <span class="doccomment">/// Get the federation name
-<a href=#57 id=57 data-nosnippet>57</a>    </span><span class="kw">async fn </span>federation_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; String;
+<a href=#56 id=56 data-nosnippet>56</a>    <span class="doccomment">/// Read the legacy name from the immutable configuration, if present.
+<a href=#57 id=57 data-nosnippet>57</a>    </span><span class="kw">async fn </span>federation_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt;;
 <a href=#58 id=58 data-nosnippet>58</a>
 <a href=#59 id=59 data-nosnippet>59</a>    <span class="doccomment">/// Get the current active session count
 <a href=#60 id=60 data-nosnippet>60</a>    </span><span class="kw">async fn </span>session_count(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; u64;
