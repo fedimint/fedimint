@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["CliCommandError","DevOpts","Opts","PeerCheckResult"],"fn":["check_blind_nonce","check_blind_nonce_used","check_nonce","check_nonce_spent","combine","handle_cli_command","spend","split"]};
+window.SIDEBAR_ITEMS = {"constant":["MAX_NOTES_BYTES"],"enum":["CliCommandError","DevOpts","Opts","PeerCheckResult"],"fn":["check_blind_nonce","check_blind_nonce_used","check_nonce","check_nonce_spent","combine","handle_cli_command","read_notes_file","resolve_nonce_argument","resolve_notes","resolve_notes_list","spend","split"]};
