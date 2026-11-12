@@ -74,6 +74,7 @@ async fn invite_encoding_and_decoding_do_not_open_a_client() {
             federation_id,
             peer: 3.into(),
             api_secret: Some("secret".to_owned()),
+            api_secret_file: None,
         },
     });
     let Ok(CliOutput::InviteCode {
@@ -85,7 +86,8 @@ async fn invite_encoding_and_decoding_do_not_open_a_client() {
     assert_eq!(encoded.api_secret().as_deref(), Some("secret"));
     opts.command = Command::Dev(DevCmd::Decode {
         decode_type: DecodeType::InviteCode {
-            invite_code: encoded,
+            invite_code: Some(encoded.to_string()),
+            invite_code_file: None,
         },
     });
     match cli.handle_command(opts).await {
@@ -121,7 +123,8 @@ async fn join_secret_conflict_precedes_invite_parsing_and_database_access() {
     let mut opts = cli.cli_args.clone();
     opts.federation_secret_hex = Some("invalid secret".to_owned());
     opts.command = Command::Join {
-        invite_code: "invalid invite".to_owned(),
+        invite_code: Some("invalid invite".to_owned()),
+        invite_code_file: None,
     };
     match cli.handle_command(opts).await {
         Err(error) => assert_eq!(
