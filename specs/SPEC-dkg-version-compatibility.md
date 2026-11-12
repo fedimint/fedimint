@@ -2,7 +2,7 @@
 
 ## Status
 
-Guardian setup currently strips prerelease and build metadata, exchanges `major.minor.patch`, requires exact equality of that release version, and stores the same release version in `ServerConfigConsensus::code_version`; it therefore neither preserves vendor identity nor permits patch skew. The compatibility contract below is the agreed target tracked by [#9087](https://github.com/fedimint/fedimint/issues/9087) and [#9092](https://github.com/fedimint/fedimint/pull/9092), but is not yet implemented.
+Guardian setup implements the version projection below. This specification does not claim verified end-to-end compatibility between released binaries.
 
 ## Record justification
 
@@ -18,8 +18,14 @@ A guardian must validate its local version and reject a malformed or incompatibl
 
 Newly generated `ServerConfigConsensus::code_version` values must use the same compatibility identity as the early setup and start-DKG checks. Guardians admitted under patch or prerelease skew must therefore derive the same consensus-config checksum, while guardians from another major/minor series or vendor identity must not be admitted merely because their remaining configuration agrees.
 
-This contract applies when every participating binary implements this compatibility projection. Already-shipped binaries that use another projection for setup admission or the consensus-config checksum are not retroactively compatible.
+This contract applies when every participating binary implements this compatibility projection.
 
-This contract governs new setup and DKG only. It does not rewrite persisted configurations, promise compatibility for the setup API itself, or define compatibility for upgrading an operating federation.
+## Setup-code and DKG compatibility policy
+
+Guardians in the same major/minor/vendor compatibility group must be able to decode each other's serialized `PeerSetupCode` values and complete the whole DKG process together. Passing version admission alone does not satisfy this requirement.
+
+Setup-code and DKG compatibility is not guaranteed across major/minor series or vendor identities.
+
+This contract governs new setup and DKG only. It does not rewrite persisted configurations, promise general setup API compatibility beyond the setup-code and DKG requirement above, or define compatibility for upgrading an operating federation.
 
 This specification refines the setup boundary in [ARCH-fedimint](ARCH-fedimint.md).
