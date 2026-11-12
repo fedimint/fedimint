@@ -22,6 +22,8 @@ This contract applies when every participating binary implements this compatibil
 
 ## Setup-code and DKG compatibility policy
 
+DKG backward compatibility is required only on release branches; trunk may make breaking DKG changes before release.
+
 Guardians in the same major/minor/vendor compatibility group must be able to decode each other's serialized `PeerSetupCode` values and complete the whole DKG process together. Passing version admission alone does not satisfy this requirement.
 
 Setup-code and DKG compatibility is not guaranteed across major/minor series or vendor identities.
