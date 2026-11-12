@@ -389,221 +389,225 @@
 <a href=#389 id=389 data-nosnippet>389</a>
 <a href=#390 id=390 data-nosnippet>390</a>    tracing_builder.init().map_err(anyhow::Error::from).unwrap();
 <a href=#391 id=391 data-nosnippet>391</a>
-<a href=#392 id=392 data-nosnippet>392</a>    <span class="macro">info!</span>(<span class="string">"Starting fedimintd (version: {fedimint_version} version_hash: {code_version_hash})"</span>);
-<a href=#393 id=393 data-nosnippet>393</a>
-<a href=#394 id=394 data-nosnippet>394</a>    <span class="attr">#[cfg(all(
-<a href=#395 id=395 data-nosnippet>395</a>        not(feature = <span class="string">"jemalloc"</span>),
-<a href=#396 id=396 data-nosnippet>396</a>        not(any(target_env = <span class="string">"msvc"</span>, target_os = <span class="string">"ios"</span>, target_os = <span class="string">"android"</span>))
-<a href=#397 id=397 data-nosnippet>397</a>    ))]
-<a href=#398 id=398 data-nosnippet>398</a>    </span><span class="macro">warn!</span>(
-<a href=#399 id=399 data-nosnippet>399</a>        target: LOG_SERVER,
-<a href=#400 id=400 data-nosnippet>400</a>        <span class="string">"fedimintd was built without the `jemalloc` feature. rocksdb is prone to memory \
-<a href=#401 id=401 data-nosnippet>401</a>         fragmentation with the default allocator; consider rebuilding with `--features jemalloc`."
-<a href=#402 id=402 data-nosnippet>402</a>    </span>);
-<a href=#403 id=403 data-nosnippet>403</a>
-<a href=#404 id=404 data-nosnippet>404</a>    <span class="macro">debug!</span>(
+<a href=#392 id=392 data-nosnippet>392</a>    <span class="comment">// Must run before anything that may open a TLS connection (e.g. the
+<a href=#393 id=393 data-nosnippet>393</a>    // hybrid bitcoind/Esplora backend checks chain IDs over HTTPS during
+<a href=#394 id=394 data-nosnippet>394</a>    // construction). Without a process-level provider rustls panics, since
+<a href=#395 id=395 data-nosnippet>395</a>    // both `ring` and `aws-lc-rs` are present in the dependency graph.
+<a href=#396 id=396 data-nosnippet>396</a>    </span>install_crypto_provider().<span class="kw">await</span>;
+<a href=#397 id=397 data-nosnippet>397</a>
+<a href=#398 id=398 data-nosnippet>398</a>    <span class="macro">info!</span>(<span class="string">"Starting fedimintd (version: {fedimint_version} version_hash: {code_version_hash})"</span>);
+<a href=#399 id=399 data-nosnippet>399</a>
+<a href=#400 id=400 data-nosnippet>400</a>    <span class="attr">#[cfg(all(
+<a href=#401 id=401 data-nosnippet>401</a>        not(feature = <span class="string">"jemalloc"</span>),
+<a href=#402 id=402 data-nosnippet>402</a>        not(any(target_env = <span class="string">"msvc"</span>, target_os = <span class="string">"ios"</span>, target_os = <span class="string">"android"</span>))
+<a href=#403 id=403 data-nosnippet>403</a>    ))]
+<a href=#404 id=404 data-nosnippet>404</a>    </span><span class="macro">warn!</span>(
 <a href=#405 id=405 data-nosnippet>405</a>        target: LOG_SERVER,
-<a href=#406 id=406 data-nosnippet>406</a>        core_consensus = %CORE_CONSENSUS_VERSION,
-<a href=#407 id=407 data-nosnippet>407</a>        <span class="string">"Supported core consensus version"</span>,
-<a href=#408 id=408 data-nosnippet>408</a>    );
+<a href=#406 id=406 data-nosnippet>406</a>        <span class="string">"fedimintd was built without the `jemalloc` feature. rocksdb is prone to memory \
+<a href=#407 id=407 data-nosnippet>407</a>         fragmentation with the default allocator; consider rebuilding with `--features jemalloc`."
+<a href=#408 id=408 data-nosnippet>408</a>    </span>);
 <a href=#409 id=409 data-nosnippet>409</a>
-<a href=#410 id=410 data-nosnippet>410</a>    <span class="kw">let </span>code_version_str = code_version_vendor_suffix.map_or_else(
-<a href=#411 id=411 data-nosnippet>411</a>        || fedimint_version.to_string(),
-<a href=#412 id=412 data-nosnippet>412</a>        |suffix| <span class="macro">format!</span>(<span class="string">"{fedimint_version}+{suffix}"</span>),
-<a href=#413 id=413 data-nosnippet>413</a>    );
-<a href=#414 id=414 data-nosnippet>414</a>    fedimint_core::version::DkgVersion::parse(<span class="kw-2">&amp;</span>code_version_str)
-<a href=#415 id=415 data-nosnippet>415</a>        .context(<span class="string">"Invalid Fedimint version vendor string"</span>)<span class="question-mark">?</span>;
-<a href=#416 id=416 data-nosnippet>416</a>
-<a href=#417 id=417 data-nosnippet>417</a>    <span class="kw">let </span>timing_total_runtime = timing::TimeReporter::new(<span class="string">"total-runtime"</span>).info();
-<a href=#418 id=418 data-nosnippet>418</a>
-<a href=#419 id=419 data-nosnippet>419</a>    <span class="kw">let </span>root_task_group = TaskGroup::new();
-<a href=#420 id=420 data-nosnippet>420</a>
-<a href=#421 id=421 data-nosnippet>421</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(bind_metrics) = server_opts.bind_metrics.as_ref() {
-<a href=#422 id=422 data-nosnippet>422</a>        <span class="macro">info!</span>(
-<a href=#423 id=423 data-nosnippet>423</a>            target: LOG_SERVER,
-<a href=#424 id=424 data-nosnippet>424</a>            url = %<span class="macro">format!</span>(<span class="string">"http://{}/metrics"</span>, bind_metrics),
-<a href=#425 id=425 data-nosnippet>425</a>            <span class="string">"Initializing metrics server"</span>,
-<a href=#426 id=426 data-nosnippet>426</a>        );
-<a href=#427 id=427 data-nosnippet>427</a>        fedimint_metrics::spawn_api_server(<span class="kw-2">*</span>bind_metrics, root_task_group.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#428 id=428 data-nosnippet>428</a>    }
-<a href=#429 id=429 data-nosnippet>429</a>
-<a href=#430 id=430 data-nosnippet>430</a>    <span class="kw">let </span>enable_iroh = server_opts.enable_iroh.unwrap_or(!is_running_in_test_env());
-<a href=#431 id=431 data-nosnippet>431</a>    <span class="kw">let </span>iroh_next_api_settings = <span class="kw">if </span>server_opts.enable_iroh_next {
-<a href=#432 id=432 data-nosnippet>432</a>        <span class="prelude-val">Some</span>(IrohNextApiSettings::new(server_opts.bind_api_next))
-<a href=#433 id=433 data-nosnippet>433</a>    } <span class="kw">else </span>{
-<a href=#434 id=434 data-nosnippet>434</a>        <span class="prelude-val">None
-<a href=#435 id=435 data-nosnippet>435</a>    </span>};
-<a href=#436 id=436 data-nosnippet>436</a>
-<a href=#437 id=437 data-nosnippet>437</a>    <span class="kw">let </span>settings = ConfigGenSettings {
-<a href=#438 id=438 data-nosnippet>438</a>        p2p_bind: server_opts.bind_p2p,
-<a href=#439 id=439 data-nosnippet>439</a>        api_bind: server_opts.bind_api,
-<a href=#440 id=440 data-nosnippet>440</a>        ui_bind: server_opts.bind_ui,
-<a href=#441 id=441 data-nosnippet>441</a>        p2p_url: server_opts.p2p_url.clone(),
-<a href=#442 id=442 data-nosnippet>442</a>        api_url: server_opts.api_url.clone(),
-<a href=#443 id=443 data-nosnippet>443</a>        enable_iroh,
-<a href=#444 id=444 data-nosnippet>444</a>        iroh_dns: server_opts.iroh_dns.clone(),
-<a href=#445 id=445 data-nosnippet>445</a>        iroh_relays: server_opts.iroh_relays.clone(),
-<a href=#446 id=446 data-nosnippet>446</a>        network: server_opts.bitcoin_network,
-<a href=#447 id=447 data-nosnippet>447</a>        available_modules: module_init_registry.kinds(),
-<a href=#448 id=448 data-nosnippet>448</a>        default_modules: module_init_registry.default_modules(),
-<a href=#449 id=449 data-nosnippet>449</a>    };
-<a href=#450 id=450 data-nosnippet>450</a>
-<a href=#451 id=451 data-nosnippet>451</a>    <span class="kw">let </span>db = Database::new(
-<a href=#452 id=452 data-nosnippet>452</a>        RocksDb::build(server_opts.data_dir.join(DB_FILE))
-<a href=#453 id=453 data-nosnippet>453</a>            .open()
-<a href=#454 id=454 data-nosnippet>454</a>            .<span class="kw">await
-<a href=#455 id=455 data-nosnippet>455</a>            </span>.map_err(anyhow::Error::from)
-<a href=#456 id=456 data-nosnippet>456</a>            .unwrap(),
-<a href=#457 id=457 data-nosnippet>457</a>        ModuleRegistry::default(),
-<a href=#458 id=458 data-nosnippet>458</a>    );
-<a href=#459 id=459 data-nosnippet>459</a>
-<a href=#460 id=460 data-nosnippet>460</a>    <span class="kw">let </span>dyn_server_bitcoin_rpc = <span class="kw">match </span>(
-<a href=#461 id=461 data-nosnippet>461</a>        server_opts.bitcoind_url.as_ref(),
-<a href=#462 id=462 data-nosnippet>462</a>        server_opts.esplora_url.as_ref(),
-<a href=#463 id=463 data-nosnippet>463</a>    ) {
-<a href=#464 id=464 data-nosnippet>464</a>        (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">None</span>) =&gt; {
-<a href=#465 id=465 data-nosnippet>465</a>            <span class="kw">let </span>bitcoind_username = server_opts
-<a href=#466 id=466 data-nosnippet>466</a>                .bitcoind_username
-<a href=#467 id=467 data-nosnippet>467</a>                .clone()
-<a href=#468 id=468 data-nosnippet>468</a>                .expect(<span class="string">"FM_BITCOIND_URL is set but FM_BITCOIND_USERNAME is not"</span>);
-<a href=#469 id=469 data-nosnippet>469</a>            <span class="kw">let </span>(bitcoind_url, bitcoind_password) = server_opts
-<a href=#470 id=470 data-nosnippet>470</a>                .get_bitcoind_url_and_password()
-<a href=#471 id=471 data-nosnippet>471</a>                .<span class="kw">await
-<a href=#472 id=472 data-nosnippet>472</a>                </span>.expect(<span class="string">"Failed to get bitcoind url"</span>);
-<a href=#473 id=473 data-nosnippet>473</a>            BitcoindClient::new(bitcoind_username, bitcoind_password, <span class="kw-2">&amp;</span>bitcoind_url)
-<a href=#474 id=474 data-nosnippet>474</a>                .unwrap()
-<a href=#475 id=475 data-nosnippet>475</a>                .into_dyn()
-<a href=#476 id=476 data-nosnippet>476</a>        }
-<a href=#477 id=477 data-nosnippet>477</a>        (<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(url)) =&gt; EsploraClient::new(url).unwrap().into_dyn(),
-<a href=#478 id=478 data-nosnippet>478</a>        (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">Some</span>(esplora_url)) =&gt; {
-<a href=#479 id=479 data-nosnippet>479</a>            <span class="kw">let </span>bitcoind_username = server_opts
-<a href=#480 id=480 data-nosnippet>480</a>                .bitcoind_username
-<a href=#481 id=481 data-nosnippet>481</a>                .clone()
-<a href=#482 id=482 data-nosnippet>482</a>                .expect(<span class="string">"FM_BITCOIND_URL is set but FM_BITCOIND_USERNAME is not"</span>);
-<a href=#483 id=483 data-nosnippet>483</a>            <span class="kw">let </span>(bitcoind_url, bitcoind_password) = server_opts
-<a href=#484 id=484 data-nosnippet>484</a>                .get_bitcoind_url_and_password()
-<a href=#485 id=485 data-nosnippet>485</a>                .<span class="kw">await
-<a href=#486 id=486 data-nosnippet>486</a>                </span>.expect(<span class="string">"Failed to get bitcoind url"</span>);
-<a href=#487 id=487 data-nosnippet>487</a>            BitcoindClientWithFallback::new(
-<a href=#488 id=488 data-nosnippet>488</a>                bitcoind_username,
-<a href=#489 id=489 data-nosnippet>489</a>                bitcoind_password,
-<a href=#490 id=490 data-nosnippet>490</a>                <span class="kw-2">&amp;</span>bitcoind_url,
-<a href=#491 id=491 data-nosnippet>491</a>                esplora_url,
-<a href=#492 id=492 data-nosnippet>492</a>            )
-<a href=#493 id=493 data-nosnippet>493</a>            .<span class="kw">await
-<a href=#494 id=494 data-nosnippet>494</a>            </span>.unwrap()
-<a href=#495 id=495 data-nosnippet>495</a>            .into_dyn()
-<a href=#496 id=496 data-nosnippet>496</a>        }
-<a href=#497 id=497 data-nosnippet>497</a>        <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"ArgGroup already enforced at least one Bitcoin backend"</span>),
-<a href=#498 id=498 data-nosnippet>498</a>    };
-<a href=#499 id=499 data-nosnippet>499</a>    <span class="kw">let </span>dyn_server_bitcoin_rpc =
-<a href=#500 id=500 data-nosnippet>500</a>        ServerBitcoinRpcTracked::new(dyn_server_bitcoin_rpc, <span class="string">"server"</span>).into_dyn();
-<a href=#501 id=501 data-nosnippet>501</a>
-<a href=#502 id=502 data-nosnippet>502</a>    root_task_group.install_kill_handler();
-<a href=#503 id=503 data-nosnippet>503</a>
-<a href=#504 id=504 data-nosnippet>504</a>    install_crypto_provider().<span class="kw">await</span>;
-<a href=#505 id=505 data-nosnippet>505</a>
-<a href=#506 id=506 data-nosnippet>506</a>    <span class="comment">// The UI password falls back to the legacy password.private file on disk
-<a href=#507 id=507 data-nosnippet>507</a>    // if its env var is not set, since the UI defaults to a loopback bind.
-<a href=#508 id=508 data-nosnippet>508</a>    // The API password never falls back: the public admin API is always
-<a href=#509 id=509 data-nosnippet>509</a>    // network-reachable, so it must be enabled explicitly via its env var or
-<a href=#510 id=510 data-nosnippet>510</a>    // else admin RPCs return 401. Absence of a password for a given plane opts
-<a href=#511 id=511 data-nosnippet>511</a>    // that plane into passwordless mode (UI) or disabled admin RPCs (API).
-<a href=#512 id=512 data-nosnippet>512</a>    </span><span class="kw">let </span>password_file = std::fs::read_to_string(server_opts.data_dir.join(PLAINTEXT_PASSWORD))
-<a href=#513 id=513 data-nosnippet>513</a>        .ok()
-<a href=#514 id=514 data-nosnippet>514</a>        .map(|s| s.trim().to_owned());
-<a href=#515 id=515 data-nosnippet>515</a>
-<a href=#516 id=516 data-nosnippet>516</a>    <span class="kw">let </span>auth_ui = server_opts.password_ui.or(password_file).map(ApiAuth::new);
-<a href=#517 id=517 data-nosnippet>517</a>    <span class="kw">let </span>auth_api = server_opts.password_api.map(ApiAuth::new);
-<a href=#518 id=518 data-nosnippet>518</a>
-<a href=#519 id=519 data-nosnippet>519</a>    <span class="kw">let </span>task_group = root_task_group.clone();
-<a href=#520 id=520 data-nosnippet>520</a>    <span class="kw">let </span>code_version_hash = code_version_hash.to_string();
-<a href=#521 id=521 data-nosnippet>521</a>    <span class="kw">let </span>stopped_at_session_boundary = Arc::new(AtomicBool::new(<span class="bool-val">false</span>));
-<a href=#522 id=522 data-nosnippet>522</a>    <span class="kw">let </span>main_stopped_at_session_boundary = stopped_at_session_boundary.clone();
-<a href=#523 id=523 data-nosnippet>523</a>    root_task_group.spawn_cancellable(<span class="string">"main"</span>, <span class="kw">async move </span>{
-<a href=#524 id=524 data-nosnippet>524</a>        <span class="kw">let </span>stop = fedimint_server::run_with_iroh_p2p_relays_and_next_api(
-<a href=#525 id=525 data-nosnippet>525</a>            server_opts.data_dir,
-<a href=#526 id=526 data-nosnippet>526</a>            auth_ui,
-<a href=#527 id=527 data-nosnippet>527</a>            auth_api,
-<a href=#528 id=528 data-nosnippet>528</a>            server_opts.force_api_secrets,
-<a href=#529 id=529 data-nosnippet>529</a>            settings,
-<a href=#530 id=530 data-nosnippet>530</a>            db,
-<a href=#531 id=531 data-nosnippet>531</a>            code_version_str,
-<a href=#532 id=532 data-nosnippet>532</a>            code_version_hash,
-<a href=#533 id=533 data-nosnippet>533</a>            module_init_registry,
-<a href=#534 id=534 data-nosnippet>534</a>            task_group,
-<a href=#535 id=535 data-nosnippet>535</a>            dyn_server_bitcoin_rpc,
-<a href=#536 id=536 data-nosnippet>536</a>            Box::new(fedimint_server_ui::setup::router),
-<a href=#537 id=537 data-nosnippet>537</a>            Box::new(fedimint_server_ui::dashboard::router),
-<a href=#538 id=538 data-nosnippet>538</a>            server_opts.db_checkpoint_retention,
-<a href=#539 id=539 data-nosnippet>539</a>            Duration::from_secs(server_opts.session_timeout_secs),
-<a href=#540 id=540 data-nosnippet>540</a>            server_opts
-<a href=#541 id=541 data-nosnippet>541</a>                .p2p_max_connection_age_secs
-<a href=#542 id=542 data-nosnippet>542</a>                .map(Duration::from_secs),
-<a href=#543 id=543 data-nosnippet>543</a>            fedimint_server::ConnectionLimits::new(
-<a href=#544 id=544 data-nosnippet>544</a>                server_opts.iroh_api_max_connections,
-<a href=#545 id=545 data-nosnippet>545</a>                server_opts.iroh_api_max_requests_per_connection,
-<a href=#546 id=546 data-nosnippet>546</a>            ),
-<a href=#547 id=547 data-nosnippet>547</a>            server_opts.iroh_p2p_relays,
-<a href=#548 id=548 data-nosnippet>548</a>            iroh_next_api_settings,
-<a href=#549 id=549 data-nosnippet>549</a>        )
-<a href=#550 id=550 data-nosnippet>550</a>        .<span class="kw">await
-<a href=#551 id=551 data-nosnippet>551</a>        </span>.unwrap_or_else(|err| <span class="macro">panic!</span>(<span class="string">"Main task returned error: {}"</span>, err.fmt_compact()));
-<a href=#552 id=552 data-nosnippet>552</a>        <span class="kw">if </span>stop == ConsensusStop::ScheduledShutdown(ShutdownRequest::AfterCurrentSession) {
-<a href=#553 id=553 data-nosnippet>553</a>            main_stopped_at_session_boundary.store(<span class="bool-val">true</span>, Ordering::SeqCst);
-<a href=#554 id=554 data-nosnippet>554</a>        }
-<a href=#555 id=555 data-nosnippet>555</a>    });
-<a href=#556 id=556 data-nosnippet>556</a>
-<a href=#557 id=557 data-nosnippet>557</a>    <span class="kw">let </span>shutdown_future = root_task_group
-<a href=#558 id=558 data-nosnippet>558</a>        .make_handle()
-<a href=#559 id=559 data-nosnippet>559</a>        .make_shutdown_rx()
-<a href=#560 id=560 data-nosnippet>560</a>        .then(|()| <span class="kw">async </span>{
-<a href=#561 id=561 data-nosnippet>561</a>            <span class="macro">info!</span>(target: LOG_CORE, <span class="string">"Shutdown called"</span>);
-<a href=#562 id=562 data-nosnippet>562</a>        });
-<a href=#563 id=563 data-nosnippet>563</a>
-<a href=#564 id=564 data-nosnippet>564</a>    shutdown_future.<span class="kw">await</span>;
-<a href=#565 id=565 data-nosnippet>565</a>
-<a href=#566 id=566 data-nosnippet>566</a>    <span class="macro">debug!</span>(target: LOG_CORE, <span class="string">"Terminating main task"</span>);
+<a href=#410 id=410 data-nosnippet>410</a>    <span class="macro">debug!</span>(
+<a href=#411 id=411 data-nosnippet>411</a>        target: LOG_SERVER,
+<a href=#412 id=412 data-nosnippet>412</a>        core_consensus = %CORE_CONSENSUS_VERSION,
+<a href=#413 id=413 data-nosnippet>413</a>        <span class="string">"Supported core consensus version"</span>,
+<a href=#414 id=414 data-nosnippet>414</a>    );
+<a href=#415 id=415 data-nosnippet>415</a>
+<a href=#416 id=416 data-nosnippet>416</a>    <span class="kw">let </span>code_version_str = code_version_vendor_suffix.map_or_else(
+<a href=#417 id=417 data-nosnippet>417</a>        || fedimint_version.to_string(),
+<a href=#418 id=418 data-nosnippet>418</a>        |suffix| <span class="macro">format!</span>(<span class="string">"{fedimint_version}+{suffix}"</span>),
+<a href=#419 id=419 data-nosnippet>419</a>    );
+<a href=#420 id=420 data-nosnippet>420</a>    fedimint_core::version::DkgVersion::parse(<span class="kw-2">&amp;</span>code_version_str)
+<a href=#421 id=421 data-nosnippet>421</a>        .context(<span class="string">"Invalid Fedimint version vendor string"</span>)<span class="question-mark">?</span>;
+<a href=#422 id=422 data-nosnippet>422</a>
+<a href=#423 id=423 data-nosnippet>423</a>    <span class="kw">let </span>timing_total_runtime = timing::TimeReporter::new(<span class="string">"total-runtime"</span>).info();
+<a href=#424 id=424 data-nosnippet>424</a>
+<a href=#425 id=425 data-nosnippet>425</a>    <span class="kw">let </span>root_task_group = TaskGroup::new();
+<a href=#426 id=426 data-nosnippet>426</a>
+<a href=#427 id=427 data-nosnippet>427</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(bind_metrics) = server_opts.bind_metrics.as_ref() {
+<a href=#428 id=428 data-nosnippet>428</a>        <span class="macro">info!</span>(
+<a href=#429 id=429 data-nosnippet>429</a>            target: LOG_SERVER,
+<a href=#430 id=430 data-nosnippet>430</a>            url = %<span class="macro">format!</span>(<span class="string">"http://{}/metrics"</span>, bind_metrics),
+<a href=#431 id=431 data-nosnippet>431</a>            <span class="string">"Initializing metrics server"</span>,
+<a href=#432 id=432 data-nosnippet>432</a>        );
+<a href=#433 id=433 data-nosnippet>433</a>        fedimint_metrics::spawn_api_server(<span class="kw-2">*</span>bind_metrics, root_task_group.clone()).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#434 id=434 data-nosnippet>434</a>    }
+<a href=#435 id=435 data-nosnippet>435</a>
+<a href=#436 id=436 data-nosnippet>436</a>    <span class="kw">let </span>enable_iroh = server_opts.enable_iroh.unwrap_or(!is_running_in_test_env());
+<a href=#437 id=437 data-nosnippet>437</a>    <span class="kw">let </span>iroh_next_api_settings = <span class="kw">if </span>server_opts.enable_iroh_next {
+<a href=#438 id=438 data-nosnippet>438</a>        <span class="prelude-val">Some</span>(IrohNextApiSettings::new(server_opts.bind_api_next))
+<a href=#439 id=439 data-nosnippet>439</a>    } <span class="kw">else </span>{
+<a href=#440 id=440 data-nosnippet>440</a>        <span class="prelude-val">None
+<a href=#441 id=441 data-nosnippet>441</a>    </span>};
+<a href=#442 id=442 data-nosnippet>442</a>
+<a href=#443 id=443 data-nosnippet>443</a>    <span class="kw">let </span>settings = ConfigGenSettings {
+<a href=#444 id=444 data-nosnippet>444</a>        p2p_bind: server_opts.bind_p2p,
+<a href=#445 id=445 data-nosnippet>445</a>        api_bind: server_opts.bind_api,
+<a href=#446 id=446 data-nosnippet>446</a>        ui_bind: server_opts.bind_ui,
+<a href=#447 id=447 data-nosnippet>447</a>        p2p_url: server_opts.p2p_url.clone(),
+<a href=#448 id=448 data-nosnippet>448</a>        api_url: server_opts.api_url.clone(),
+<a href=#449 id=449 data-nosnippet>449</a>        enable_iroh,
+<a href=#450 id=450 data-nosnippet>450</a>        iroh_dns: server_opts.iroh_dns.clone(),
+<a href=#451 id=451 data-nosnippet>451</a>        iroh_relays: server_opts.iroh_relays.clone(),
+<a href=#452 id=452 data-nosnippet>452</a>        network: server_opts.bitcoin_network,
+<a href=#453 id=453 data-nosnippet>453</a>        available_modules: module_init_registry.kinds(),
+<a href=#454 id=454 data-nosnippet>454</a>        default_modules: module_init_registry.default_modules(),
+<a href=#455 id=455 data-nosnippet>455</a>    };
+<a href=#456 id=456 data-nosnippet>456</a>
+<a href=#457 id=457 data-nosnippet>457</a>    <span class="kw">let </span>db = Database::new(
+<a href=#458 id=458 data-nosnippet>458</a>        RocksDb::build(server_opts.data_dir.join(DB_FILE))
+<a href=#459 id=459 data-nosnippet>459</a>            .open()
+<a href=#460 id=460 data-nosnippet>460</a>            .<span class="kw">await
+<a href=#461 id=461 data-nosnippet>461</a>            </span>.map_err(anyhow::Error::from)
+<a href=#462 id=462 data-nosnippet>462</a>            .unwrap(),
+<a href=#463 id=463 data-nosnippet>463</a>        ModuleRegistry::default(),
+<a href=#464 id=464 data-nosnippet>464</a>    );
+<a href=#465 id=465 data-nosnippet>465</a>
+<a href=#466 id=466 data-nosnippet>466</a>    <span class="kw">let </span>dyn_server_bitcoin_rpc = <span class="kw">match </span>(
+<a href=#467 id=467 data-nosnippet>467</a>        server_opts.bitcoind_url.as_ref(),
+<a href=#468 id=468 data-nosnippet>468</a>        server_opts.esplora_url.as_ref(),
+<a href=#469 id=469 data-nosnippet>469</a>    ) {
+<a href=#470 id=470 data-nosnippet>470</a>        (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">None</span>) =&gt; {
+<a href=#471 id=471 data-nosnippet>471</a>            <span class="kw">let </span>bitcoind_username = server_opts
+<a href=#472 id=472 data-nosnippet>472</a>                .bitcoind_username
+<a href=#473 id=473 data-nosnippet>473</a>                .clone()
+<a href=#474 id=474 data-nosnippet>474</a>                .expect(<span class="string">"FM_BITCOIND_URL is set but FM_BITCOIND_USERNAME is not"</span>);
+<a href=#475 id=475 data-nosnippet>475</a>            <span class="kw">let </span>(bitcoind_url, bitcoind_password) = server_opts
+<a href=#476 id=476 data-nosnippet>476</a>                .get_bitcoind_url_and_password()
+<a href=#477 id=477 data-nosnippet>477</a>                .<span class="kw">await
+<a href=#478 id=478 data-nosnippet>478</a>                </span>.expect(<span class="string">"Failed to get bitcoind url"</span>);
+<a href=#479 id=479 data-nosnippet>479</a>            BitcoindClient::new(bitcoind_username, bitcoind_password, <span class="kw-2">&amp;</span>bitcoind_url)
+<a href=#480 id=480 data-nosnippet>480</a>                .unwrap()
+<a href=#481 id=481 data-nosnippet>481</a>                .into_dyn()
+<a href=#482 id=482 data-nosnippet>482</a>        }
+<a href=#483 id=483 data-nosnippet>483</a>        (<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(url)) =&gt; EsploraClient::new(url).unwrap().into_dyn(),
+<a href=#484 id=484 data-nosnippet>484</a>        (<span class="prelude-val">Some</span>(<span class="kw">_</span>), <span class="prelude-val">Some</span>(esplora_url)) =&gt; {
+<a href=#485 id=485 data-nosnippet>485</a>            <span class="kw">let </span>bitcoind_username = server_opts
+<a href=#486 id=486 data-nosnippet>486</a>                .bitcoind_username
+<a href=#487 id=487 data-nosnippet>487</a>                .clone()
+<a href=#488 id=488 data-nosnippet>488</a>                .expect(<span class="string">"FM_BITCOIND_URL is set but FM_BITCOIND_USERNAME is not"</span>);
+<a href=#489 id=489 data-nosnippet>489</a>            <span class="kw">let </span>(bitcoind_url, bitcoind_password) = server_opts
+<a href=#490 id=490 data-nosnippet>490</a>                .get_bitcoind_url_and_password()
+<a href=#491 id=491 data-nosnippet>491</a>                .<span class="kw">await
+<a href=#492 id=492 data-nosnippet>492</a>                </span>.expect(<span class="string">"Failed to get bitcoind url"</span>);
+<a href=#493 id=493 data-nosnippet>493</a>            BitcoindClientWithFallback::new(
+<a href=#494 id=494 data-nosnippet>494</a>                bitcoind_username,
+<a href=#495 id=495 data-nosnippet>495</a>                bitcoind_password,
+<a href=#496 id=496 data-nosnippet>496</a>                <span class="kw-2">&amp;</span>bitcoind_url,
+<a href=#497 id=497 data-nosnippet>497</a>                esplora_url,
+<a href=#498 id=498 data-nosnippet>498</a>            )
+<a href=#499 id=499 data-nosnippet>499</a>            .<span class="kw">await
+<a href=#500 id=500 data-nosnippet>500</a>            </span>.unwrap()
+<a href=#501 id=501 data-nosnippet>501</a>            .into_dyn()
+<a href=#502 id=502 data-nosnippet>502</a>        }
+<a href=#503 id=503 data-nosnippet>503</a>        <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"ArgGroup already enforced at least one Bitcoin backend"</span>),
+<a href=#504 id=504 data-nosnippet>504</a>    };
+<a href=#505 id=505 data-nosnippet>505</a>    <span class="kw">let </span>dyn_server_bitcoin_rpc =
+<a href=#506 id=506 data-nosnippet>506</a>        ServerBitcoinRpcTracked::new(dyn_server_bitcoin_rpc, <span class="string">"server"</span>).into_dyn();
+<a href=#507 id=507 data-nosnippet>507</a>
+<a href=#508 id=508 data-nosnippet>508</a>    root_task_group.install_kill_handler();
+<a href=#509 id=509 data-nosnippet>509</a>
+<a href=#510 id=510 data-nosnippet>510</a>    <span class="comment">// The UI password falls back to the legacy password.private file on disk
+<a href=#511 id=511 data-nosnippet>511</a>    // if its env var is not set, since the UI defaults to a loopback bind.
+<a href=#512 id=512 data-nosnippet>512</a>    // The API password never falls back: the public admin API is always
+<a href=#513 id=513 data-nosnippet>513</a>    // network-reachable, so it must be enabled explicitly via its env var or
+<a href=#514 id=514 data-nosnippet>514</a>    // else admin RPCs return 401. Absence of a password for a given plane opts
+<a href=#515 id=515 data-nosnippet>515</a>    // that plane into passwordless mode (UI) or disabled admin RPCs (API).
+<a href=#516 id=516 data-nosnippet>516</a>    </span><span class="kw">let </span>password_file = std::fs::read_to_string(server_opts.data_dir.join(PLAINTEXT_PASSWORD))
+<a href=#517 id=517 data-nosnippet>517</a>        .ok()
+<a href=#518 id=518 data-nosnippet>518</a>        .map(|s| s.trim().to_owned());
+<a href=#519 id=519 data-nosnippet>519</a>
+<a href=#520 id=520 data-nosnippet>520</a>    <span class="kw">let </span>auth_ui = server_opts.password_ui.or(password_file).map(ApiAuth::new);
+<a href=#521 id=521 data-nosnippet>521</a>    <span class="kw">let </span>auth_api = server_opts.password_api.map(ApiAuth::new);
+<a href=#522 id=522 data-nosnippet>522</a>
+<a href=#523 id=523 data-nosnippet>523</a>    <span class="kw">let </span>task_group = root_task_group.clone();
+<a href=#524 id=524 data-nosnippet>524</a>    <span class="kw">let </span>code_version_hash = code_version_hash.to_string();
+<a href=#525 id=525 data-nosnippet>525</a>    <span class="kw">let </span>stopped_at_session_boundary = Arc::new(AtomicBool::new(<span class="bool-val">false</span>));
+<a href=#526 id=526 data-nosnippet>526</a>    <span class="kw">let </span>main_stopped_at_session_boundary = stopped_at_session_boundary.clone();
+<a href=#527 id=527 data-nosnippet>527</a>    root_task_group.spawn_cancellable(<span class="string">"main"</span>, <span class="kw">async move </span>{
+<a href=#528 id=528 data-nosnippet>528</a>        <span class="kw">let </span>stop = fedimint_server::run_with_iroh_p2p_relays_and_next_api(
+<a href=#529 id=529 data-nosnippet>529</a>            server_opts.data_dir,
+<a href=#530 id=530 data-nosnippet>530</a>            auth_ui,
+<a href=#531 id=531 data-nosnippet>531</a>            auth_api,
+<a href=#532 id=532 data-nosnippet>532</a>            server_opts.force_api_secrets,
+<a href=#533 id=533 data-nosnippet>533</a>            settings,
+<a href=#534 id=534 data-nosnippet>534</a>            db,
+<a href=#535 id=535 data-nosnippet>535</a>            code_version_str,
+<a href=#536 id=536 data-nosnippet>536</a>            code_version_hash,
+<a href=#537 id=537 data-nosnippet>537</a>            module_init_registry,
+<a href=#538 id=538 data-nosnippet>538</a>            task_group,
+<a href=#539 id=539 data-nosnippet>539</a>            dyn_server_bitcoin_rpc,
+<a href=#540 id=540 data-nosnippet>540</a>            Box::new(fedimint_server_ui::setup::router),
+<a href=#541 id=541 data-nosnippet>541</a>            Box::new(fedimint_server_ui::dashboard::router),
+<a href=#542 id=542 data-nosnippet>542</a>            server_opts.db_checkpoint_retention,
+<a href=#543 id=543 data-nosnippet>543</a>            Duration::from_secs(server_opts.session_timeout_secs),
+<a href=#544 id=544 data-nosnippet>544</a>            server_opts
+<a href=#545 id=545 data-nosnippet>545</a>                .p2p_max_connection_age_secs
+<a href=#546 id=546 data-nosnippet>546</a>                .map(Duration::from_secs),
+<a href=#547 id=547 data-nosnippet>547</a>            fedimint_server::ConnectionLimits::new(
+<a href=#548 id=548 data-nosnippet>548</a>                server_opts.iroh_api_max_connections,
+<a href=#549 id=549 data-nosnippet>549</a>                server_opts.iroh_api_max_requests_per_connection,
+<a href=#550 id=550 data-nosnippet>550</a>            ),
+<a href=#551 id=551 data-nosnippet>551</a>            server_opts.iroh_p2p_relays,
+<a href=#552 id=552 data-nosnippet>552</a>            iroh_next_api_settings,
+<a href=#553 id=553 data-nosnippet>553</a>        )
+<a href=#554 id=554 data-nosnippet>554</a>        .<span class="kw">await
+<a href=#555 id=555 data-nosnippet>555</a>        </span>.unwrap_or_else(|err| <span class="macro">panic!</span>(<span class="string">"Main task returned error: {}"</span>, err.fmt_compact()));
+<a href=#556 id=556 data-nosnippet>556</a>        <span class="kw">if </span>stop == ConsensusStop::ScheduledShutdown(ShutdownRequest::AfterCurrentSession) {
+<a href=#557 id=557 data-nosnippet>557</a>            main_stopped_at_session_boundary.store(<span class="bool-val">true</span>, Ordering::SeqCst);
+<a href=#558 id=558 data-nosnippet>558</a>        }
+<a href=#559 id=559 data-nosnippet>559</a>    });
+<a href=#560 id=560 data-nosnippet>560</a>
+<a href=#561 id=561 data-nosnippet>561</a>    <span class="kw">let </span>shutdown_future = root_task_group
+<a href=#562 id=562 data-nosnippet>562</a>        .make_handle()
+<a href=#563 id=563 data-nosnippet>563</a>        .make_shutdown_rx()
+<a href=#564 id=564 data-nosnippet>564</a>        .then(|()| <span class="kw">async </span>{
+<a href=#565 id=565 data-nosnippet>565</a>            <span class="macro">info!</span>(target: LOG_CORE, <span class="string">"Shutdown called"</span>);
+<a href=#566 id=566 data-nosnippet>566</a>        });
 <a href=#567 id=567 data-nosnippet>567</a>
-<a href=#568 id=568 data-nosnippet>568</a>    <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = root_task_group.join_all(<span class="prelude-val">Some</span>(SHUTDOWN_TIMEOUT)).<span class="kw">await </span>{
-<a href=#569 id=569 data-nosnippet>569</a>        <span class="macro">error!</span>(target: LOG_CORE, err = %err.fmt_compact(), <span class="string">"Error while shutting down task group"</span>);
-<a href=#570 id=570 data-nosnippet>570</a>    }
+<a href=#568 id=568 data-nosnippet>568</a>    shutdown_future.<span class="kw">await</span>;
+<a href=#569 id=569 data-nosnippet>569</a>
+<a href=#570 id=570 data-nosnippet>570</a>    <span class="macro">debug!</span>(target: LOG_CORE, <span class="string">"Terminating main task"</span>);
 <a href=#571 id=571 data-nosnippet>571</a>
-<a href=#572 id=572 data-nosnippet>572</a>    <span class="macro">debug!</span>(target: LOG_CORE, <span class="string">"Shutdown complete"</span>);
-<a href=#573 id=573 data-nosnippet>573</a>
-<a href=#574 id=574 data-nosnippet>574</a>    fedimint_logging::shutdown();
+<a href=#572 id=572 data-nosnippet>572</a>    <span class="kw">if let </span><span class="prelude-val">Err</span>(err) = root_task_group.join_all(<span class="prelude-val">Some</span>(SHUTDOWN_TIMEOUT)).<span class="kw">await </span>{
+<a href=#573 id=573 data-nosnippet>573</a>        <span class="macro">error!</span>(target: LOG_CORE, err = %err.fmt_compact(), <span class="string">"Error while shutting down task group"</span>);
+<a href=#574 id=574 data-nosnippet>574</a>    }
 <a href=#575 id=575 data-nosnippet>575</a>
-<a href=#576 id=576 data-nosnippet>576</a>    drop(timing_total_runtime);
+<a href=#576 id=576 data-nosnippet>576</a>    <span class="macro">debug!</span>(target: LOG_CORE, <span class="string">"Shutdown complete"</span>);
 <a href=#577 id=577 data-nosnippet>577</a>
-<a href=#578 id=578 data-nosnippet>578</a>    <span class="kw">if </span>stopped_at_session_boundary.load(Ordering::SeqCst) {
-<a href=#579 id=579 data-nosnippet>579</a>        std::process::exit(SESSION_BOUNDARY_EXIT_CODE);
-<a href=#580 id=580 data-nosnippet>580</a>    }
-<a href=#581 id=581 data-nosnippet>581</a>    std::process::exit(-<span class="number">1</span>);
-<a href=#582 id=582 data-nosnippet>582</a>}
-<a href=#583 id=583 data-nosnippet>583</a>
-<a href=#584 id=584 data-nosnippet>584</a><span class="kw">pub fn </span>default_modules() -&gt; ServerModuleInitRegistry {
-<a href=#585 id=585 data-nosnippet>585</a>    <span class="kw">let </span><span class="kw-2">mut </span>server_gens = ServerModuleInitRegistry::new();
-<a href=#586 id=586 data-nosnippet>586</a>
-<a href=#587 id=587 data-nosnippet>587</a>    server_gens.attach(MintInit);
-<a href=#588 id=588 data-nosnippet>588</a>    server_gens.attach(fedimint_mintv2_server::MintInit);
-<a href=#589 id=589 data-nosnippet>589</a>
-<a href=#590 id=590 data-nosnippet>590</a>    server_gens.attach(WalletInit);
-<a href=#591 id=591 data-nosnippet>591</a>    server_gens.attach(fedimint_walletv2_server::WalletInit);
-<a href=#592 id=592 data-nosnippet>592</a>
-<a href=#593 id=593 data-nosnippet>593</a>    server_gens.attach(LightningInit);
-<a href=#594 id=594 data-nosnippet>594</a>    server_gens.attach(fedimint_lnv2_server::LightningInit);
-<a href=#595 id=595 data-nosnippet>595</a>
-<a href=#596 id=596 data-nosnippet>596</a>    <span class="kw">if </span>!is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
-<a href=#597 id=597 data-nosnippet>597</a>        server_gens.attach(MetaInit);
-<a href=#598 id=598 data-nosnippet>598</a>    }
+<a href=#578 id=578 data-nosnippet>578</a>    fedimint_logging::shutdown();
+<a href=#579 id=579 data-nosnippet>579</a>
+<a href=#580 id=580 data-nosnippet>580</a>    drop(timing_total_runtime);
+<a href=#581 id=581 data-nosnippet>581</a>
+<a href=#582 id=582 data-nosnippet>582</a>    <span class="kw">if </span>stopped_at_session_boundary.load(Ordering::SeqCst) {
+<a href=#583 id=583 data-nosnippet>583</a>        std::process::exit(SESSION_BOUNDARY_EXIT_CODE);
+<a href=#584 id=584 data-nosnippet>584</a>    }
+<a href=#585 id=585 data-nosnippet>585</a>    std::process::exit(-<span class="number">1</span>);
+<a href=#586 id=586 data-nosnippet>586</a>}
+<a href=#587 id=587 data-nosnippet>587</a>
+<a href=#588 id=588 data-nosnippet>588</a><span class="kw">pub fn </span>default_modules() -&gt; ServerModuleInitRegistry {
+<a href=#589 id=589 data-nosnippet>589</a>    <span class="kw">let </span><span class="kw-2">mut </span>server_gens = ServerModuleInitRegistry::new();
+<a href=#590 id=590 data-nosnippet>590</a>
+<a href=#591 id=591 data-nosnippet>591</a>    server_gens.attach(MintInit);
+<a href=#592 id=592 data-nosnippet>592</a>    server_gens.attach(fedimint_mintv2_server::MintInit);
+<a href=#593 id=593 data-nosnippet>593</a>
+<a href=#594 id=594 data-nosnippet>594</a>    server_gens.attach(WalletInit);
+<a href=#595 id=595 data-nosnippet>595</a>    server_gens.attach(fedimint_walletv2_server::WalletInit);
+<a href=#596 id=596 data-nosnippet>596</a>
+<a href=#597 id=597 data-nosnippet>597</a>    server_gens.attach(LightningInit);
+<a href=#598 id=598 data-nosnippet>598</a>    server_gens.attach(fedimint_lnv2_server::LightningInit);
 <a href=#599 id=599 data-nosnippet>599</a>
-<a href=#600 id=600 data-nosnippet>600</a>    <span class="kw">if </span>is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
-<a href=#601 id=601 data-nosnippet>601</a>        server_gens.attach(UnknownInit);
+<a href=#600 id=600 data-nosnippet>600</a>    <span class="kw">if </span>!is_env_var_set(FM_DISABLE_META_MODULE_ENV) {
+<a href=#601 id=601 data-nosnippet>601</a>        server_gens.attach(MetaInit);
 <a href=#602 id=602 data-nosnippet>602</a>    }
 <a href=#603 id=603 data-nosnippet>603</a>
-<a href=#604 id=604 data-nosnippet>604</a>    server_gens
-<a href=#605 id=605 data-nosnippet>605</a>}
-<a href=#606 id=606 data-nosnippet>606</a>
-<a href=#607 id=607 data-nosnippet>607</a><span class="attr">#[cfg(test)]
-<a href=#608 id=608 data-nosnippet>608</a></span><span class="kw">mod </span>tests;
+<a href=#604 id=604 data-nosnippet>604</a>    <span class="kw">if </span>is_env_var_set(FM_USE_UNKNOWN_MODULE_ENV) {
+<a href=#605 id=605 data-nosnippet>605</a>        server_gens.attach(UnknownInit);
+<a href=#606 id=606 data-nosnippet>606</a>    }
+<a href=#607 id=607 data-nosnippet>607</a>
+<a href=#608 id=608 data-nosnippet>608</a>    server_gens
+<a href=#609 id=609 data-nosnippet>609</a>}
+<a href=#610 id=610 data-nosnippet>610</a>
+<a href=#611 id=611 data-nosnippet>611</a><span class="attr">#[cfg(test)]
+<a href=#612 id=612 data-nosnippet>612</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
