@@ -1,4 +1,5 @@
 use std::pin::pin;
+use std::time::Duration;
 
 use anyhow::ensure;
 use assert_matches::assert_matches;
@@ -754,3 +755,224 @@ async fn send_without_funds_reports_insufficient_balance() -> anyhow::Result<()>
 }
 
 mod db;
+
+/// Receives `ecash` into `account` and waits until the reissued notes have
+/// been credited, so the balance read afterwards is the settled one.
+async fn receive_settled(
+    client: &ClientHandleArc,
+    account: Account,
+    ecash: ECash,
+) -> anyhow::Result<OperationId> {
+    let mint = client.get_first_module::<MintClientModule>()?;
+
+    let operation_id = mint.receive(account, ecash, Value::Null).await?;
+
+    let state = mint
+        .await_final_receive_operation_state(operation_id)
+        .await?;
+
+    ensure!(state == FinalReceiveOperationState::Success);
+
+    let MintOperationMeta::Receive {
+        change_outpoint_range,
+        ..
+    } = client
+        .operation_log()
+        .get_operation(operation_id)
+        .await
+        .expect("operation exists")
+        .meta::<MintOperationMeta>()
+    else {
+        panic!("expected a receive operation");
+    };
+
+    client
+        .await_primary_bitcoin_module_outputs(
+            operation_id,
+            change_outpoint_range.into_iter().collect(),
+        )
+        .await?;
+
+    Ok(operation_id)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+/// Every account is a balance of its own. Funding one leaves the others and
+/// their balance streams untouched, `send_max` empties exactly the one it is
+/// given, and a recovery puts each account's notes back where they were.
+async fn accounts_hold_separate_balances() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+
+    let client = fed
+        .join_client_with_db(MemDatabase::new().into(), root_secret(&SEND_SK))
+        .await;
+    let mint = client.get_first_module::<MintClientModule>()?;
+
+    issue_ecash(&client, Amount::from_sats(10_000)).await?;
+
+    let mut events = pin!(mint_event_stream(&client));
+
+    // Funds cross accounts the same way they cross wallets: a send out of one
+    // account and a receive into the other.
+    let (send_operation_id, ecash) = mint
+        .send(
+            Account::Primary,
+            Amount::from_sats(3_000),
+            Value::Null,
+            false,
+        )
+        .await?;
+
+    let Some(MintEvent::Send(send)) = events.next().await else {
+        panic!("Expected Send event");
+    };
+    assert_eq!(send.operation_id, send_operation_id);
+    assert_eq!(send.account, Account::Primary);
+
+    let primary_before = client.get_balance_for_btc(Account::Primary).await?;
+
+    let mut primary_balances = client
+        .subscribe_balance_changes(AmountUnit::BITCOIN, Account::Primary)
+        .await;
+    let mut secondary_balances = client
+        .subscribe_balance_changes(AmountUnit::BITCOIN, Account::Secondary)
+        .await;
+
+    assert_eq!(primary_balances.next().await, Some(primary_before));
+    assert_eq!(secondary_balances.next().await, Some(Amount::ZERO));
+
+    let fee = mint
+        .receive_fee_quote(Account::Secondary, &ecash)
+        .await?
+        .total()
+        .get_bitcoin();
+    let expected_secondary = ecash.amount() - fee;
+
+    let receive_operation_id = receive_settled(&client, Account::Secondary, ecash).await?;
+
+    let Some(MintEvent::Receive(receive)) = events.next().await else {
+        panic!("Expected Receive event");
+    };
+    assert_eq!(receive.operation_id, receive_operation_id);
+    assert_eq!(receive.account, Account::Secondary);
+
+    // The notes landed in secondary and nowhere else.
+    assert_eq!(
+        client.get_balance_for_btc(Account::Secondary).await?,
+        expected_secondary
+    );
+    assert_eq!(
+        client.get_balance_for_btc(Account::Primary).await?,
+        primary_before
+    );
+    for account in Account::ALL.into_iter().skip(2) {
+        assert_eq!(client.get_balance_for_btc(account).await?, Amount::ZERO);
+    }
+
+    // Secondary's stream reports the credit, while primary's stays quiet: a
+    // subscription is per account, not per wallet.
+    fedimint_core::runtime::timeout(Duration::from_secs(30), async {
+        while secondary_balances
+            .next()
+            .await
+            .expect("Balance stream never ends")
+            < expected_secondary
+        {}
+    })
+    .await?;
+
+    assert!(
+        fedimint_core::runtime::timeout(Duration::from_secs(2), primary_balances.next())
+            .await
+            .is_err(),
+        "primary's balance stream must not report a change to secondary"
+    );
+
+    // `send_max` hands out everything the account holds, and only that.
+    let (_, ecash) = mint
+        .send_max(Account::Secondary, Value::Null, false)
+        .await
+        .expect("secondary holds funds");
+
+    assert_eq!(ecash.amount(), expected_secondary);
+    assert_eq!(
+        client.get_balance_for_btc(Account::Secondary).await?,
+        Amount::ZERO
+    );
+    assert!(
+        mint.send_max(Account::Secondary, Value::Null, false)
+            .await
+            .is_none(),
+        "an emptied account has nothing left to send"
+    );
+
+    let fee = mint
+        .receive_fee_quote(Account::Primary, &ecash)
+        .await?
+        .total()
+        .get_bitcoin();
+
+    receive_settled(&client, Account::Primary, ecash).await?;
+
+    assert_eq!(
+        client.get_balance_for_btc(Account::Primary).await?,
+        primary_before + expected_secondary - fee
+    );
+
+    // Fund secondary again so the recovery has two accounts to tell apart.
+    let (_, ecash) = mint
+        .send(
+            Account::Primary,
+            Amount::from_sats(2_000),
+            Value::Null,
+            false,
+        )
+        .await?;
+
+    receive_settled(&client, Account::Secondary, ecash).await?;
+
+    client.wait_for_all_active_state_machines().await;
+
+    let primary_balance = client.get_balance_for_btc(Account::Primary).await?;
+    let secondary_balance = client.get_balance_for_btc(Account::Secondary).await?;
+
+    assert_ne!(primary_balance, Amount::ZERO);
+    assert_ne!(secondary_balance, Amount::ZERO);
+
+    // One seed restores every account; the notes come back in the account
+    // they were in, not pooled into primary.
+    let recovering_client = fed
+        .recover_client_with_db(MemDatabase::new().into(), root_secret(&SEND_SK))
+        .await;
+
+    recovering_client.wait_for_all_recoveries().await?;
+
+    assert_eq!(
+        mintv2_recovery_completed_amount(&recovering_client).await,
+        Some(primary_balance + secondary_balance)
+    );
+
+    recovering_client.wait_for_all_active_state_machines().await;
+
+    assert_eq!(
+        recovering_client
+            .get_balance_for_btc(Account::Primary)
+            .await?,
+        primary_balance
+    );
+    assert_eq!(
+        recovering_client
+            .get_balance_for_btc(Account::Secondary)
+            .await?,
+        secondary_balance
+    );
+    for account in Account::ALL.into_iter().skip(2) {
+        assert_eq!(
+            recovering_client.get_balance_for_btc(account).await?,
+            Amount::ZERO
+        );
+    }
+
+    Ok(())
+}
