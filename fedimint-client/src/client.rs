@@ -1915,12 +1915,34 @@ impl Client {
         task_group: &TaskGroup,
         client_span: &Span,
     ) -> Result<ApiVersionSet, ApiVersionDiscoveryError> {
-        if let Some(v) = db
+        if let Some(mut v) = db
             .begin_transaction_nc()
             .await
             .get_value(&CachedApiVersionSetKey)
             .await
         {
+            let client_versions = Self::supported_api_versions_summary_static(config, module_init);
+            if Self::api_version_set_lacks_modules(&client_versions, &v.0)
+                && let Some(healed) = Self::heal_cached_api_version_set(
+                    &client_versions,
+                    &v.0,
+                    &Self::load_peers_last_api_versions(
+                        db,
+                        NumPeers::from(config.global.api_endpoints.len()),
+                    )
+                    .await,
+                )
+            {
+                info!(
+                    target: LOG_CLIENT,
+                    "Cached common api versions lacked supported modules, rewriting"
+                );
+                let mut dbtx = db.begin_transaction().await;
+                Self::write_api_version_cache(&mut dbtx.to_ref_nc(), healed.clone()).await;
+                dbtx.commit_tx().await;
+                v = CachedApiVersionSet(healed);
+            }
+
             client_span.in_scope(|| {
                 debug!(
                     target: LOG_CLIENT,
@@ -1977,6 +1999,49 @@ impl Client {
             true,
         )
         .await
+    }
+
+    fn api_version_set_lacks_modules(
+        client_versions: &SupportedApiVersionsSummary,
+        cached: &ApiVersionSet,
+    ) -> bool {
+        client_versions
+            .modules
+            .keys()
+            .any(|instance_id| !cached.modules.contains_key(instance_id))
+    }
+
+    /// Recompute `cached` from the stored peer summaries if it lacks a module
+    /// the client supports.
+    fn heal_cached_api_version_set(
+        client_versions: &SupportedApiVersionsSummary,
+        cached: &ApiVersionSet,
+        peer_versions: &BTreeMap<PeerId, SupportedApiVersionsSummary>,
+    ) -> Option<ApiVersionSet> {
+        if !Self::api_version_set_lacks_modules(client_versions, cached) {
+            return None;
+        }
+
+        match fedimint_client_module::api_version_discovery::discover_common_api_versions_set(
+            client_versions,
+            peer_versions,
+        ) {
+            Ok(recomputed) => {
+                let mut healed = cached.clone();
+                for (instance_id, version) in recomputed.modules {
+                    healed.modules.entry(instance_id).or_insert(version);
+                }
+                (healed.modules.len() > cached.modules.len()).then_some(healed)
+            }
+            Err(err) => {
+                warn!(
+                    target: LOG_CLIENT,
+                    err = %err.fmt_compact(),
+                    "Could not recompute the cached common api versions"
+                );
+                None
+            }
+        }
     }
 
     async fn refresh_common_api_version_static(
