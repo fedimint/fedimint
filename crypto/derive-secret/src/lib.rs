@@ -20,6 +20,7 @@ use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::secp256k1::{Keypair, Secp256k1, Signing};
+use hex_conservative::DisplayHex;
 use hkdf::hashes::Sha512;
 use hkdf::{BitcoinHash, Hkdf};
 use ring::aead;
@@ -165,10 +166,11 @@ fn tagged_derive(tag: &[u8; 8], derivation: ChildId) -> [u8; 16] {
 impl std::fmt::Debug for DerivableSecret {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DerivableSecret#")?;
-        fedimint_core::format_hex(
+        std::fmt::Display::fmt(
             &self
                 .kdf
-                .derive::<8>(b"just a debug fingerprint derivation salt"),
+                .derive::<8>(b"just a debug fingerprint derivation salt")
+                .as_hex(),
             f,
         )
     }

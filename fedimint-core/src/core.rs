@@ -16,6 +16,7 @@ use std::sync::Arc;
 use bitcoin::hashes::{Hash, sha256};
 use fedimint_core::encoding::{Decodable, DecodeError, DynEncodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
+use hex_conservative::DisplayHex;
 use rand::RngCore;
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -81,16 +82,16 @@ impl OperationId {
 
 impl Display for OperationIdShortFmt<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        fedimint_core::format_hex(&self.0.0[0..4], f)?;
+        Display::fmt(&self.0.0[0..4].as_hex(), f)?;
         f.write_str("_")?;
-        fedimint_core::format_hex(&self.0.0[28..], f)?;
+        Display::fmt(&self.0.0[28..].as_hex(), f)?;
         Ok(())
     }
 }
 
 impl Display for OperationIdFullFmt<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        fedimint_core::format_hex(&self.0.0, f)
+        Display::fmt(&self.0.0.as_hex(), f)
     }
 }
 

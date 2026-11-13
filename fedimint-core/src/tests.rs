@@ -85,3 +85,25 @@ fn operation_id_parse_error_is_typed() {
         hex::FromHexError::InvalidHexCharacter { c: 'z', index: 0 }
     ));
 }
+
+#[test]
+fn hex_display_of_ids_is_unchanged() {
+    use crate::core::OperationId;
+    use crate::fmt_utils::AbbreviateHexBytes;
+    use crate::{BitcoinHash, TransactionId};
+
+    let bytes: [u8; 32] = std::array::from_fn(|i| u8::try_from(i).expect("fits in u8"));
+    let full = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+
+    let txid = TransactionId::from_byte_array(bytes);
+    assert_eq!(txid.fmt_full().to_string(), full);
+    assert_eq!(txid.fmt_short().to_string(), "00010203_1c1d1e1f");
+    // Precision truncates the hex, including to an odd number of digits
+    assert_eq!(format!("{:.5}", txid.fmt_full()), "00010");
+
+    let operation_id = OperationId(bytes);
+    assert_eq!(operation_id.fmt_full().to_string(), full);
+    assert_eq!(operation_id.fmt_short().to_string(), "00010203_1c1d1e1f");
+
+    assert_eq!(AbbreviateHexBytes(&bytes).to_string(), full);
+}

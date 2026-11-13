@@ -18,6 +18,7 @@ path = "src/lib.rs"
 [dependencies]
 bitcoin_hashes = { workspace = true }
 fedimint-core = { workspace = true }
+hex-conservative = { workspace = true }
 serde = { workspace = true }
 tbs = { workspace = true }
 thiserror = { workspace = true }
