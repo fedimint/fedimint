@@ -38,6 +38,7 @@ use fedimint_client_module::transaction::{
     TransactionBuilder, max_affordable_send_amount,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
+use fedimint_core::bolt11::{currency_for_network, currency_matches_network};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Account, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{AutocommitError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
@@ -683,10 +684,10 @@ impl LightningClientModule {
             return Err(SendPaymentError::InvoiceExpired);
         }
 
-        if self.cfg.network != invoice.currency().into() {
+        if !currency_matches_network(&invoice.currency(), self.cfg.network) {
             return Err(SendPaymentError::WrongCurrency {
                 invoice_currency: invoice.currency(),
-                federation_currency: self.cfg.network.into(),
+                federation_currency: currency_for_network(self.cfg.network),
             });
         }
 
