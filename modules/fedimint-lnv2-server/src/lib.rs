@@ -826,12 +826,12 @@ impl Lightning {
         expiration: u64,
     ) -> Option<OutPoint> {
         loop {
-            timeout(
+            // A timeout just wakes the loop to recheck the contract and its expiration.
+            let _ = timeout(
                 Duration::from_secs(10),
                 db.wait_key_exists(&IncomingContractOutpointKey(contract_id)),
             )
-            .await
-            .ok();
+            .await;
 
             // to avoid race conditions we have to check for the contract and
             // its expiration in the same database transaction
@@ -857,12 +857,12 @@ impl Lightning {
         expiration: u64,
     ) -> Option<[u8; 32]> {
         loop {
-            timeout(
+            // A timeout just wakes the loop to recheck the preimage and expiration.
+            let _ = timeout(
                 Duration::from_secs(10),
                 db.wait_key_exists(&PreimageKey(outpoint)),
             )
-            .await
-            .ok();
+            .await;
 
             // to avoid race conditions we have to check for the preimage and
             // the contracts expiration in the same database transaction
