@@ -133,9 +133,11 @@ impl IrohConnector {
     pub(crate) async fn new(
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
+        iroh_p2p: bool,
         path_change: Arc<watch::Sender<u64>>,
     ) -> Result<Self, ConnectorError> {
-        let mut s = Self::new_no_overrides(iroh_dns, iroh_enable_dht, path_change).await?;
+        let mut s =
+            Self::new_no_overrides(iroh_dns, iroh_enable_dht, iroh_p2p, path_change).await?;
 
         // Overrides are `<node-id>=<socket-addr>` pairs: the node id is the key
         // and the value is a single direct address. iroh 1.0 no longer ships
@@ -159,6 +161,7 @@ impl IrohConnector {
     pub(crate) async fn new_no_overrides(
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
+        iroh_p2p: bool,
         path_change: Arc<watch::Sender<u64>>,
     ) -> Result<Self, ConnectorError> {
         let endpoint_stable = Box::pin({
@@ -232,6 +235,14 @@ impl IrohConnector {
             // the client must be able to dial via relays; `RelayMode::Disabled`
             // would disable dialing them, not just registration.
             let mut builder = builder.relay_mode(iroh_next::RelayMode::Default);
+
+            // Browsers have no IP transports to clear: wasm is always relay-only.
+            #[cfg(not(target_family = "wasm"))]
+            if !iroh_p2p {
+                builder = builder.clear_ip_transports();
+            }
+            #[cfg(target_family = "wasm")]
+            let _ = iroh_p2p;
 
             // iOS prompts for Local Network access when the port mapper probes
             // the router, and another crate can turn iroh's `portmapper` on.
