@@ -1,0 +1,88 @@
+name: Weekly dev-call agenda (read-only)
+
+on:
+  schedule:
+    - cron: '0 14 * * 1'
+  workflow_dispatch:
+    inputs:
+      end:
+        description: 'Exclusive window endpoint in UTC, YYYY-MM-DDTHH:MM:SSZ'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  checks: read
+  actions: read
+
+jobs:
+  agenda:
+    if: >-
+      github.repository == 'fedimint/fedimint' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Collect public evidence and render draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MANUAL_END: ${{ inputs.end }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            python3 .github/scripts/weekly-dev-call-agenda.py \
+              --end "$MANUAL_END" --output-dir agenda-output
+          else
+            # Run creation is stable across reruns, unlike job start or current time.
+            scheduled_at=$(gh api --hostname github.com --method GET \
+              "repos/fedimint/fedimint/actions/runs/$GITHUB_RUN_ID" --jq '.created_at')
+            python3 .github/scripts/weekly-dev-call-agenda.py \
+              --scheduled-at "$scheduled_at" --output-dir agenda-output
+          fi
+
+      - name: Upload evidence or failure report
+        id: artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: weekly-dev-call-agenda-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            agenda-output/evidence.json
+            agenda-output/agenda.md
+            agenda-output/failure.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Add complete draft or artifact pointer to job summary
+        env:
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          agenda = Path("agenda-output/agenda.md").read_bytes()
+          pointer = (
+              "\n\nFull agenda and evidence: "
+              f"{os.environ['ARTIFACT_URL']}\n"
+              "\nAutomatic wiki delivery is BLOCKED pending an operator-approved "
+              "durable Tau publisher or narrowly provisioned wiki publisher.\n"
+          )
+          # Keep below the job-summary byte limit; never truncate the agenda.
+          if len(agenda) + len(pointer.encode("utf-8")) <= 900_000:
+              summary = agenda.decode("utf-8") + pointer
+          else:
+              summary = (
+                  "# Weekly dev-call agenda\n\n"
+                  "The draft exceeds the safe job-summary size. No content was "
+                  "truncated; download the complete artifact."
+              ) + pointer
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
+              output.write(summary)
+          PY
