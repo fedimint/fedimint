@@ -9,7 +9,6 @@ use core::fmt;
 use std::hash::Hash;
 
 use bitcoin_hashes::Hash as _;
-use bitcoin_hashes::hex::DisplayHex;
 pub use common::{BackupRequest, SignedBackupRequest};
 use config::MintClientConfig;
 pub use fedimint_core::config::ExcessiveRelativeFeeError;
@@ -19,6 +18,7 @@ use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersi
 use fedimint_core::{
     Amount, extensible_associated_module_type, plugin_types_trait_impl_common, secp256k1,
 };
+use hex_conservative::DisplayHex;
 use serde::{Deserialize, Serialize};
 use tbs::BlindedSignatureShare;
 use thiserror::Error;
@@ -339,3 +339,6 @@ pub enum MintOutputError {
     #[error("The mint output blind nonce was already used before")]
     BlindNonceAlreadyUsed,
 }
+
+#[cfg(test)]
+mod tests;

@@ -15,12 +15,12 @@
 //! * chacha20-poly1305 for symmetric encryption used for backups.
 use std::fmt::Formatter;
 
-use bitcoin_hashes::hex::DisplayHex;
 use bls12_381::Scalar;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::secp256k1::{Keypair, Secp256k1, Signing};
+use hex_conservative::DisplayHex;
 use hkdf::hashes::Sha512;
 use hkdf::{BitcoinHash, Hkdf};
 use ring::aead;
