@@ -1,3 +1,4 @@
+pub mod binding;
 pub mod dkg;
 pub mod frost_sign;
 pub mod secret;

@@ -40,10 +40,9 @@ use fedimint_escrow_common::{
     EscrowMessage, EscrowModuleTypes, EscrowOutput, FallbackPolicy, KIND, Outcome, Resolution,
     compute_contract_hash, compute_escrow_message, x_only_eq,
 };
-use frost_secp256k1_tr::Identifier;
 use futures::lock::Mutex;
 use futures::{StreamExt, TryStreamExt};
-use iroh::{NodeAddr, SecretKey};
+use iroh::{NodeAddr, NodeId, SecretKey};
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
@@ -52,6 +51,7 @@ use crate::client_db::{
     DbKeyPrefix, EscrowAction, EscrowOperationMeta, FrostDkgSessionKey, FrostDkgSessionPrefix,
     FrostDkgSessionRecordPrefix, FrostDkgSessionRecordkey,
 };
+use crate::frost::binding::{PeerBinding, verify_peers};
 use crate::frost::dkg::{DkgError, DkgResult};
 use crate::frost::secret::StateKey;
 use crate::frost::session::{
@@ -570,6 +570,29 @@ impl EscrowClientModule {
     /// creating an escrow contract.
     pub fn arbiter_fee_pubkey(&self) -> PublicKey {
         self.arbiter_fee_key.public_key()
+    }
+
+    fn iroh_secret_key(&self) -> SecretKey {
+        SecretKey::from_bytes(&self.iroh_identity_key().secret_key().secret_bytes())
+    }
+
+    /// the node id other arbiters will get for this client
+    pub fn local_node_id(&self) -> NodeId {
+        self.iroh_secret_key().public()
+    }
+
+    /// Build [`PeerBinding`] for this arbiter client and should be given to
+    /// other participants
+    pub fn sign_peer_binding(
+        &self,
+        session_id: SessionId,
+        node_addr: NodeAddr,
+    ) -> anyhow::Result<PeerBinding> {
+        anyhow::ensure!(
+            node_addr.node_id == self.local_node_id(),
+            "node_addr is not the node of this client"
+        );
+        PeerBinding::sign(&session_id, &self.escrow_key, node_addr)
     }
 
     /// Creates a new escrow contract and submits a transaction locking
@@ -1191,25 +1214,34 @@ impl EscrowClientModule {
     pub async fn run_arbiter_consortium(
         &self,
         participants: Vec<FrostParticipant>,
-        iroh_peers: BTreeMap<Identifier, NodeAddr>,
+        peer_bindings: Vec<PeerBinding>,
     ) -> Result<ConsortiumInfo, DkgError> {
         let db = self.client_ctx.module_db();
         let state_key = self.dkg_state_key();
         let self_participant_id = self.get_frost_identity()?;
-        let session =
-            FrostDkgSessionRecord::new(self_participant_id, participants, self.federation_id, db)
-                .await?;
+        let session = FrostDkgSessionRecord::new(
+            self_participant_id.clone(),
+            participants,
+            self.federation_id,
+            db,
+        )
+        .await?;
 
         let slot = {
             let mut slots = self.dkg_transports.lock().await;
             match slots.get(&session.session_id) {
                 Some(slot) => slot.clone(),
                 None => {
-                    let iroh_secret = SecretKey::from_bytes(
-                        &self.iroh_identity_key().secret_key().secret_bytes(),
-                    );
+                    let iroh_secret = self.iroh_secret_key();
+                    let peers = verify_peers(
+                        &session.session_id,
+                        &self_participant_id,
+                        iroh_secret.public(),
+                        &session.participants,
+                        peer_bindings,
+                    )?;
                     let transport =
-                        IrohDkgTransport::new(session.session_id, iroh_secret, iroh_peers).await?;
+                        IrohDkgTransport::new(session.session_id, iroh_secret, peers).await?;
                     let slot = DkgSlot {
                         transport: Arc::new(transport),
                         running: Arc::new(Mutex::new(())),
