@@ -1430,7 +1430,15 @@ fn get_esplora_url(server_url: SafeUrl) -> Result<String, LdkClientInitError> {
         .host_str()
         .ok_or(LdkClientInitError::MissingEsploraHost)?;
     let server_url = if let Some(port) = server_url.port() {
-        format!("{}://{}:{}", server_url.scheme(), host, port)
+        // Keep the path, e.g. the `/api` of a self-hosted mempool instance,
+        // since LDK appends its endpoints to it.
+        format!(
+            "{}://{}:{}{}",
+            server_url.scheme(),
+            host,
+            port,
+            server_url.path().trim_end_matches('/')
+        )
     } else {
         server_url.to_string()
     };
