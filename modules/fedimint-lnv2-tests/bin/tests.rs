@@ -11,7 +11,7 @@ use devimint::federation::{Client, Federation};
 use devimint::util::{ProcessManager, almost_equal, poll_simple};
 use devimint::version_constants::{
     VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA, VERSION_0_12_2_ALPHA,
-    VERSION_0_13_0_ALPHA,
+    VERSION_0_14_0_ALPHA,
 };
 use devimint::{Gatewayd, cmd, util};
 use fedimint_core::core::OperationId;
@@ -1395,7 +1395,7 @@ async fn test_iroh_payment(
 /// funder's funding txid and contract JSON, and the forfeit signature. The
 /// claimer's secret key and preimage are passed through files and stdin.
 async fn test_direct_htlc(dev_fed: &DevJitFed) -> anyhow::Result<()> {
-    if util::FedimintCli::version_or_default().await < *VERSION_0_13_0_ALPHA {
+    if util::FedimintCli::version_or_default().await < *VERSION_0_14_0_ALPHA {
         info!("fedimint-cli does not support direct HTLCs, skipping");
         return Ok(());
     }
