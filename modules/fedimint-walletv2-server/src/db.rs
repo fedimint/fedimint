@@ -21,6 +21,8 @@ pub enum DbKeyPrefix {
     Signatures = 0x37,
     UnconfirmedTx = 0x38,
     FederationWallet = 0x39,
+    VolumeDay = 0x3a,
+    VolumeStart = 0x3b,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -179,3 +181,42 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = FeeRateVoteKey, query_prefix = FeeRateVotePrefix);
+
+/// One volume day of consensus blocks (`block_count / BLOCKS_PER_DAY`).
+#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize)]
+pub struct VolumeDayKey(pub u64);
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct VolumeDayPrefix;
+
+/// The on-chain flows this guardian processed in one volume day.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Encodable, Decodable, Serialize)]
+pub struct VolumeDay {
+    pub deposited: bitcoin::Amount,
+    pub withdrawn: bitcoin::Amount,
+}
+
+impl_db_record!(
+    key = VolumeDayKey,
+    value = VolumeDay,
+    db_prefix = DbKeyPrefix::VolumeDay
+);
+
+impl_db_lookup!(key = VolumeDayKey, query_prefix = VolumeDayPrefix);
+
+/// The consensus block count when this guardian started counting volume. The
+/// value is 0 if the consensus block count had not started yet, which means the
+/// guardian has counted since the federation formed.
+#[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize)]
+pub struct VolumeStartKey;
+
+#[derive(Clone, Debug, Encodable, Decodable)]
+pub struct VolumeStartPrefix;
+
+impl_db_record!(
+    key = VolumeStartKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::VolumeStart
+);
+
+impl_db_lookup!(key = VolumeStartKey, query_prefix = VolumeStartPrefix);

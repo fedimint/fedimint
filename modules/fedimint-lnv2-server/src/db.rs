@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use fedimint_core::db::{DbMigrationError, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{OutPoint, PeerId, impl_db_lookup, impl_db_record};
+use fedimint_core::{Amount, OutPoint, PeerId, impl_db_lookup, impl_db_record};
 use fedimint_lnv2_common::contracts::{IncomingContract, OutgoingContract};
 use fedimint_lnv2_common::{ContractId, LightningInputV0, LightningOutputV0};
 use fedimint_server_core::migration::{
@@ -30,6 +30,8 @@ pub enum DbKeyPrefix {
     IncomingContractStreamIndex = 0x09,
     IncomingContractStream = 0x10,
     IncomingContractIndex = 0x11,
+    VolumeDay = 0x12,
+    VolumeStart = 0x13,
 }
 
 impl std::fmt::Display for DbKeyPrefix {
@@ -226,6 +228,45 @@ impl_db_lookup!(
     key = IncomingContractIndexKey,
     query_prefix = IncomingContractIndexPrefix
 );
+
+/// One day of consensus unix time (`unix_time / SECONDS_PER_DAY`).
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct VolumeDayKey(pub u64);
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct VolumeDayPrefix;
+
+/// The payments this guardian settled on one consensus day.
+#[derive(Debug, Clone, Default, Eq, PartialEq, Serialize, Encodable, Decodable)]
+pub struct VolumeDay {
+    pub received: Amount,
+    pub sent: Amount,
+}
+
+impl_db_record!(
+    key = VolumeDayKey,
+    value = VolumeDay,
+    db_prefix = DbKeyPrefix::VolumeDay,
+);
+
+impl_db_lookup!(key = VolumeDayKey, query_prefix = VolumeDayPrefix);
+
+/// The consensus unix time when this guardian started counting volume. The
+/// value is 0 if the consensus clock had not started yet, which means the
+/// guardian has counted since the federation formed.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
+pub struct VolumeStartKey;
+
+#[derive(Debug, Encodable, Decodable)]
+pub struct VolumeStartPrefix;
+
+impl_db_record!(
+    key = VolumeStartKey,
+    value = u64,
+    db_prefix = DbKeyPrefix::VolumeStart,
+);
+
+impl_db_lookup!(key = VolumeStartKey, query_prefix = VolumeStartPrefix);
 
 pub(crate) async fn migrate_to_v1(
     mut ctx: ServerModuleDbMigrationFnContext<'_, Lightning>,

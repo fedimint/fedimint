@@ -141,6 +141,33 @@ pub struct OutputInfo {
     pub outpoint: Option<bitcoin::OutPoint>,
 }
 
+/// The on-chain flows one guardian counted, as returned by
+/// [`endpoint_constants::VOLUME_STATS_ENDPOINT`].
+///
+/// A guardian counts flows as it processes them, bucketed by days of
+/// [`BLOCKS_PER_DAY`] consensus blocks. Windows end at the current consensus
+/// day, so "7 days" covers the current day and the six before it.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct WalletVolumeStats {
+    pub last_7_days: WalletVolume,
+    pub last_30_days: WalletVolume,
+}
+
+/// The on-chain flows in one window.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct WalletVolume {
+    /// The value of the deposits that were claimed into the federation.
+    pub deposited: bitcoin::Amount,
+    /// The value of the withdrawals the federation sent, without their fees.
+    pub withdrawn: bitcoin::Amount,
+    /// Whether this guardian counted for the whole window. This is true when
+    /// counting started when the federation formed, or before the window began.
+    pub complete: bool,
+}
+
+/// The number of consensus blocks that make one volume day.
+pub const BLOCKS_PER_DAY: u64 = 144;
+
 /// An output passing the probabilistic receive filter that a guardian can see,
 /// but which is not yet deep enough to have entered the federation's consensus
 /// output log.
