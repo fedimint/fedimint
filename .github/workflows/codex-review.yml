@@ -34,13 +34,14 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      issues: write # Acknowledge /review issue comments with a reaction
       pull-requests: write
 
     steps:
       - name: Resolve PR metadata
         id: pr
         env:
-          GH_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ github.event_name }}" = "issue_comment" ]; then
             PR_NUMBER="${{ github.event.issue.number }}"
@@ -61,7 +62,7 @@ jobs:
       - name: Acknowledge review request
         if: github.event_name == 'issue_comment'
         env:
-          GH_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh api \
             "repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions" \
@@ -137,17 +138,22 @@ jobs:
       - name: Fetch prior AI reviews
         id: prior
         env:
-          GH_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           PR_NUMBER="${{ steps.pr.outputs.number }}"
 
-          # Determine the bot account login from the token
-          BOT_LOGIN=$(gh api user --jq '.login')
-
-          # Fetch all reviews on this PR by the bot account
+          # GITHUB_TOKEN is an installation token, not a user token: /user
+          # cannot discover its identity. Mark our reviews to distinguish them
+          # from other workflows using github-actions[bot]. Retain the legacy
+          # fedimint-bot reviews when re-reviewing PRs across this migration.
           PRIOR=$(gh api \
             "repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews" \
-            --jq "[.[] | select(.user.login == \"${BOT_LOGIN}\") | {submitted_at, body, state}] | sort_by(.submitted_at)")
+            --paginate --slurp | jq '
+              add | map(select(
+                .user.login == "fedimint-bot" or
+                (.user.login == "github-actions[bot]" and
+                 ((.body // "") | startswith("<!-- fedimint-codex-review -->")))
+              )) | sort_by(.submitted_at)')
 
           PRIOR_COUNT=$(echo "$PRIOR" | jq 'length')
 
@@ -156,14 +162,19 @@ jobs:
             # Also grab inline comments from the bot
             PRIOR_COMMENTS=$(gh api \
               "repos/${{ github.repository }}/pulls/${PR_NUMBER}/comments" \
-              --jq "[.[] | select(.user.login == \"${BOT_LOGIN}\") | {path, line, side, body, created_at}] | sort_by(.created_at)")
+              --paginate --slurp | jq --argjson reviews "$PRIOR" '
+                [$reviews[].id] as $ids |
+                add | map(select(
+                  (.user.login == "fedimint-bot" or .user.login == "github-actions[bot]") and
+                  (.pull_request_review_id as $id | $ids | index($id))
+                ) | {path, line, side, body, created_at}) | sort_by(.created_at)')
 
             {
               echo "## Previous AI reviews on this PR"
               echo ""
               echo "Review bodies:"
               echo '```json'
-              echo "$PRIOR"
+              echo "$PRIOR" | jq 'map({submitted_at, body, state})'
               echo '```'
               echo ""
               echo "Inline comments from previous reviews:"
@@ -546,12 +557,25 @@ jobs:
       - name: Submit review with inline comments
         if: steps.codex-review.outputs.verdict != 'SKIP'
         env:
-          GH_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERDICT="${{ steps.codex-review.outputs.verdict }}"
           HAS_INLINE="${{ steps.codex-review.outputs.has_inline }}"
           PR_NUMBER="${{ steps.pr.outputs.number }}"
           COMMIT_SHA="${{ steps.pr.outputs.head_sha }}"
+
+          # Keep identity independent of token-owner discovery and distinguish
+          # this workflow from other reviews by github-actions[bot].
+          REVIEW_BODY=$(cat /tmp/review_body.txt)
+          printf '<!-- fedimint-codex-review -->\n\n%s\n' "$REVIEW_BODY" > /tmp/review_body.txt
+
+          # pull-requests: write permits reviews, but repository/organization
+          # policy can separately prohibit Actions approvals. Do not bypass
+          # that policy or silently downgrade an approval on failure.
+          review_failed() {
+            echo "::error::Review submission failed. Check the API error and effective Actions permissions; approving reviews also require the Allow GitHub Actions to create and approve pull requests policy. A repository/organization administrator must resolve policy restrictions."
+            exit 1
+          }
 
           if [ "$VERDICT" = "APPROVE" ]; then
             GH_EVENT="APPROVE"
@@ -589,14 +613,14 @@ jobs:
                 commit_id: $commit_id,
                 comments: $comments
               }' | gh api \
-              "repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews" \
-              --method POST \
-              --input -
+               "repos/${{ github.repository }}/pulls/${PR_NUMBER}/reviews" \
+               --method POST \
+               --input - || review_failed
           else
             # No inline comments, use simple gh pr review
             if [ "$VERDICT" = "APPROVE" ]; then
-              gh pr review "$PR_NUMBER" --approve --body-file /tmp/review_body.txt
+              gh pr review "$PR_NUMBER" --approve --body-file /tmp/review_body.txt || review_failed
             else
-              gh pr review "$PR_NUMBER" --comment --body-file /tmp/review_body.txt
+              gh pr review "$PR_NUMBER" --comment --body-file /tmp/review_body.txt || review_failed
             fi
           fi
