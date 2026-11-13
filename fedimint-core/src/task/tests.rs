@@ -1,4 +1,4 @@
-use super::{Duration, JoinAllError, TaskGroup, sleep};
+use super::{Duration, JoinAllError, TaskGroup, sleep, timeout};
 
 #[test_log::test(tokio::test)]
 async fn shutdown_task_group_after() -> Result<(), JoinAllError> {
@@ -43,6 +43,29 @@ async fn shutdown_task_subgroup_before() -> Result<(), JoinAllError> {
             handle.make_shutdown_rx().await;
         });
     tg.shutdown_join_all(None).await?;
+    Ok(())
+}
+
+#[test_log::test(tokio::test)]
+async fn subgroup_created_after_shutdown_is_shutting_down() {
+    let tg = TaskGroup::new();
+    tg.shutdown();
+    let sg = tg.make_subgroup();
+    assert!(sg.is_shutting_down());
+    assert!(sg.make_subgroup().is_shutting_down());
+}
+
+#[test_log::test(tokio::test)]
+async fn shutdown_task_subgroup_created_after_shutdown() -> Result<(), JoinAllError> {
+    let tg = TaskGroup::new();
+    tg.shutdown();
+    tg.make_subgroup()
+        .spawn("shutdown waiter", |handle| async move {
+            handle.make_shutdown_rx().await;
+        });
+    timeout(Duration::from_secs(10), tg.join_all(None))
+        .await
+        .expect("subgroup task must observe the parent's shutdown")?;
     Ok(())
 }
 
