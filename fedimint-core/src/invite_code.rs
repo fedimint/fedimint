@@ -270,12 +270,21 @@ impl From<PrefixedDecodeError> for InviteCodeParseError {
     }
 }
 
-/// Parses the invite code from a bech32 string
+/// Formats the invite code as a bech32m string
+///
+/// Bech32m caps the encoded string at 1023 characters, so an invite code whose
+/// payload does not fit (e.g. a long API secret or many guardian URLs) falls
+/// back to the [`FEDIMINT_PREFIX`]ed base 32 form, which [`FromStr`] accepts too.
 impl Display for InviteCode {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> fmt::Result {
         let data = self.consensus_encode_to_vec();
-        let encode = bech32::encode::<Bech32m>(BECH32_HRP, &data).map_err(|_| fmt::Error)?;
-        formatter.write_str(&encode)
+        match bech32::encode::<Bech32m>(BECH32_HRP, &data) {
+            Ok(encoded) => formatter.write_str(&encoded),
+            Err(_) => formatter.write_str(&crate::base32::encode_prefixed_bytes(
+                FEDIMINT_PREFIX,
+                &data,
+            )),
+        }
     }
 }
 
