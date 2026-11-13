@@ -25,19 +25,17 @@ impl aleph_bft::FinalizationHandler<UnitData> for FinalizationHandler {
     }
 
     fn unit_finalized(&mut self, creator: NodeIndex, round: Round, data: Option<UnitData>) {
-        // the channel is unbounded
-        self.sender
-            .try_send(OrderedUnit {
-                // Skipping a finalized unit would make us compute a different session
-                // outcome than our peers, so we must not swallow an invalid index here.
-                // It is unreachable regardless: a unit is only finalized after its
-                // signature was verified against our broadcast public key set, which
-                // requires its creator to be one of our peers.
-                creator: super::to_peer_id(creator)
-                    .expect("Finalized units were verified against the broadcast public key set"),
-                round,
-                data,
-            })
-            .ok();
+        // The channel is unbounded; ignore closure after the session consumer exits.
+        let _ = self.sender.try_send(OrderedUnit {
+            // Skipping a finalized unit would make us compute a different session
+            // outcome than our peers, so we must not swallow an invalid index here.
+            // It is unreachable regardless: a unit is only finalized after its
+            // signature was verified against our broadcast public key set, which
+            // requires its creator to be one of our peers.
+            creator: super::to_peer_id(creator)
+                .expect("Finalized units were verified against the broadcast public key set"),
+            round,
+            data,
+        });
     }
 }

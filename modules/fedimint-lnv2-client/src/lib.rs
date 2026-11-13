@@ -1506,7 +1506,8 @@ impl LightningClientModule {
 
         // this may only fail if the operation id is already in use, in which case we
         // ignore the error such that the method is idempotent
-        self.client_ctx
+        let _ = self
+            .client_ctx
             .manual_operation_start(
                 operation_id,
                 account,
@@ -1514,8 +1515,7 @@ impl LightningClientModule {
                 operation_meta,
                 vec![self.client_ctx.make_dyn_state(receive_sm)],
             )
-            .await
-            .ok();
+            .await;
 
         Some(operation_id)
     }
@@ -1751,9 +1751,7 @@ impl LightningClientModule {
                 )
                 .await
             {
-                self.await_final_receive_operation_state(operation_id)
-                    .await
-                    .ok();
+                let _ = self.await_final_receive_operation_state(operation_id).await;
             }
         }
 
