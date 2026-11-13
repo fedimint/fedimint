@@ -5,9 +5,84 @@ use tonic_lnd::lnrpc::invoice::InvoiceState;
 use tonic_lnd::lnrpc::{Invoice, InvoiceHtlc, InvoiceHtlcState};
 
 use super::{
-    HoldInvoiceAction, PaymentActionKind, hold_invoice_action, hold_invoice_claim_deadline,
-    invoice_preimage_hex, wire_features_to_lnd_feature_vec,
+    HoldInvoiceAction, PaymentActionKind, channel_amounts_to_lnd, hold_invoice_action,
+    hold_invoice_claim_deadline, invoice_preimage_hex, wire_features_to_lnd_feature_vec,
 };
+use crate::LightningRpcError;
+
+#[test]
+fn channel_amount_conversions_preserve_lnd_values() {
+    assert_eq!(channel_amounts_to_lnd(0, 0).unwrap(), (0, 0));
+    assert_eq!(
+        channel_amounts_to_lnd(100_000, 1_000).unwrap(),
+        (100_000, 1_000)
+    );
+    let max = i64::MAX as u64;
+    assert_eq!(
+        channel_amounts_to_lnd(max, max).unwrap(),
+        (i64::MAX, i64::MAX)
+    );
+}
+
+#[test]
+fn channel_amount_conversions_reject_lnd_overflow() {
+    for overflow in [i64::MAX as u64 + 1, u64::MAX] {
+        for (size, push, field) in [
+            (overflow, 0, "channel_size_sats"),
+            (1, overflow, "push_amount_sats"),
+        ] {
+            let err = channel_amounts_to_lnd(size, push).unwrap_err();
+            assert!(
+                matches!(err, LightningRpcError::FailedToOpenChannel { failure_reason }
+                    if failure_reason.contains(field))
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn invalid_channel_amounts_are_rejected_before_connecting_to_lnd() {
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use super::GatewayLndClient;
+    use crate::{ILnRpcClient, OpenChannelRequest};
+
+    // No usable backend: validation must return without trying to connect.
+    let client = GatewayLndClient::new(
+        String::new(),
+        String::new(),
+        String::new(),
+        0.0,
+        30,
+        None,
+        Arc::new(|_| Box::pin(async { false })),
+    );
+    let pubkey = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+        .parse()
+        .unwrap();
+    let overflow = i64::MAX as u64 + 1;
+    for (channel_size_sats, push_amount_sats) in [(overflow, 0), (1, overflow)] {
+        let result = tokio::time::timeout(
+            Duration::from_secs(1),
+            client.open_channel(OpenChannelRequest {
+                pubkey,
+                host: String::new(),
+                channel_size_sats,
+                push_amount_sats,
+                fee_rate_sats_per_vbyte: None,
+                base_fee_msat: None,
+                parts_per_million: None,
+            }),
+        )
+        .await
+        .expect("invalid channel amounts must not wait for an LND connection");
+        assert!(matches!(
+            result,
+            Err(LightningRpcError::FailedToOpenChannel { .. })
+        ));
+    }
+}
 
 /// An HTLC carrying an MPP record, as every non-keysend HTLC to an LND invoice
 /// must.
