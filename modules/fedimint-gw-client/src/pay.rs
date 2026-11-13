@@ -1,5 +1,6 @@
 use std::fmt::{self, Display};
 
+use fedimint_api_client::api::FederationApiExt as _;
 use fedimint_client::ClientHandleArc;
 use fedimint_client_module::DynGlobalClientContext;
 use fedimint_client_module::sm::{ClientSMDatabaseTransaction, State, StateTransition};
@@ -9,7 +10,7 @@ use fedimint_client_module::transaction::{
 use fedimint_core::config::FederationId;
 use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
-use fedimint_core::module::Amounts;
+use fedimint_core::module::{Amounts, ApiRequestErased};
 use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, OutPoint, TransactionId, secp256k1};
 use fedimint_lightning::{LightningRpcError, PayInvoiceResponse};
@@ -18,6 +19,7 @@ use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
 use fedimint_ln_common::config::FeeToAmount;
 use fedimint_ln_common::contracts::outgoing::OutgoingContractAccount;
 use fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract, Preimage};
+use fedimint_ln_common::federation_endpoint_constants::BLOCK_COUNT_ENDPOINT;
 use fedimint_ln_common::{LightningInput, LightningOutput};
 use futures::future;
 use lightning_invoice::RoutingFees;
@@ -49,6 +51,8 @@ const TIMELOCK_DELTA: u64 = 10;
 ///    ClaimOutgoingContract -- claim tx submission --> Preimage
 ///    CancelContract -- cancel tx submission successful --> Canceled
 ///    CancelContract -- cancel tx submission unsuccessful --> Failed
+///    CheckFederation -- federation connectivity failure --> FederationUnreachable
+///    CheckFederation -- checks complete --> PayInvoice
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Decodable, Encodable, Serialize, Deserialize)]
 pub enum GatewayPayStates {
@@ -67,6 +71,10 @@ pub enum GatewayPayStates {
         error: OutgoingPaymentError,
         error_message: String,
     },
+    FederationUnreachable,
+    /// No payment has been dispatched by this operation. Commit `PayInvoice`
+    /// before performing any Lightning payment or direct swap.
+    CheckFederation(GatewayPayInvoice),
 }
 
 impl fmt::Display for GatewayPayStates {
@@ -80,6 +88,8 @@ impl fmt::Display for GatewayPayStates {
             GatewayPayStates::WaitForSwapPreimage(_) => write!(f, "WaitForSwapPreimage"),
             GatewayPayStates::ClaimOutgoingContract(_) => write!(f, "ClaimOutgoingContract"),
             GatewayPayStates::Failed { .. } => write!(f, "Failed"),
+            GatewayPayStates::FederationUnreachable => write!(f, "FederationUnreachable"),
+            GatewayPayStates::CheckFederation(_) => write!(f, "CheckFederation"),
         }
     }
 }
@@ -114,6 +124,17 @@ impl State for GatewayPayStateMachine {
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         match &self.state {
+            GatewayPayStates::CheckFederation(invoice) => {
+                vec![StateTransition::new(
+                    invoice.clone().check_federation(global_context.clone()),
+                    |_dbtx, state, old_state: GatewayPayStateMachine| {
+                        Box::pin(futures::future::ready(GatewayPayStateMachine {
+                            common: old_state.common,
+                            state,
+                        }))
+                    },
+                )]
+            }
             GatewayPayStates::PayInvoice(gateway_pay_invoice) => {
                 gateway_pay_invoice.transitions(global_context.clone(), context, &self.common)
             }
@@ -210,6 +231,34 @@ pub struct GatewayPayInvoice {
 }
 
 impl GatewayPayInvoice {
+    /// Diagnose connectivity only before the durable dispatch boundary.
+    ///
+    /// A persisted `PayInvoice`, including one written by an older gateway, may
+    /// already have paid. It must never enter this terminal diagnostic path.
+    async fn check_federation(self, global_context: DynGlobalClientContext) -> GatewayPayStates {
+        let module_api = global_context.module_api();
+        let contract_id = self.pay_invoice_payload.contract_id;
+        match module_api.fetch_contract(contract_id).await {
+            Ok(None) => return GatewayPayStates::OfferDoesNotExist(contract_id),
+            Err(error)
+                if module_api
+                    .contract_query_failure_is_unreachable(&error, contract_id)
+                    .await =>
+            {
+                return GatewayPayStates::FederationUnreachable;
+            }
+            _ => {}
+        }
+        if let Err(error) = module_api.fetch_consensus_block_count().await
+            && module_api
+                .block_count_query_failure_is_unreachable(&error)
+                .await
+        {
+            return GatewayPayStates::FederationUnreachable;
+        }
+        GatewayPayStates::PayInvoice(self)
+    }
+
     fn transitions(
         &self,
         global_context: DynGlobalClientContext,
@@ -255,6 +304,16 @@ impl GatewayPayInvoice {
             }
             Err(e) => {
                 warn!("Failed to get payment parameters: {e:?}");
+                if matches!(
+                    e.error_type,
+                    OutgoingPaymentErrorType::OutgoingContractDoesNotExist { .. }
+                ) {
+                    return GatewayPayStateMachine {
+                        common,
+                        state: GatewayPayStates::OfferDoesNotExist(e.contract_id),
+                    };
+                }
+
                 match e.contract.clone() {
                     Some(contract) => GatewayPayStateMachine {
                         common,
@@ -264,7 +323,11 @@ impl GatewayPayInvoice {
                     },
                     None => GatewayPayStateMachine {
                         common,
-                        state: GatewayPayStates::OfferDoesNotExist(e.contract_id),
+                        state: GatewayPayStates::Failed {
+                            error: e,
+                            error_message: "Gateway could not retrieve the outgoing contract"
+                                .to_string(),
+                        },
                     },
                 }
             }
@@ -455,10 +518,12 @@ impl GatewayPayInvoice {
         federation_id: FederationId,
     ) -> Result<(OutgoingContractAccount, PaymentParameters), OutgoingPaymentError> {
         debug!("Await payment parameters for outgoing contract {contract_id:?}");
-        let account = global_context
-            .module_api()
-            .await_contract(contract_id)
-            .await;
+        let module_api = global_context.module_api();
+        // Trigger side effects precede committing the next state. After a crash,
+        // PayInvoice can therefore represent an already dispatched payment or
+        // swap. Keep retrying federation reads so its preimage can be recovered
+        // and claimed; an outage is not evidence that no payment happened.
+        let account = module_api.await_contract(contract_id).await;
 
         if let FundedContract::Outgoing(contract) = account.contract {
             let outgoing_contract_account = OutgoingContractAccount {
@@ -466,17 +531,12 @@ impl GatewayPayInvoice {
                 contract,
             };
 
-            let consensus_block_count = global_context
-                .module_api()
-                .fetch_consensus_block_count()
-                .await
-                .map_err(|_| OutgoingPaymentError {
-                    contract_id,
-                    contract: Some(outgoing_contract_account.clone()),
-                    error_type: OutgoingPaymentErrorType::InvalidOutgoingContract {
-                        error: OutgoingContractError::TimeoutTooClose,
-                    },
-                })?;
+            let consensus_block_count: Option<u64> = module_api
+                .request_current_consensus_retry(
+                    BLOCK_COUNT_ENDPOINT.to_owned(),
+                    ApiRequestErased::new(()),
+                )
+                .await;
 
             debug!(
                 "Consensus block count: {consensus_block_count:?} for outgoing contract {contract_id:?}"
