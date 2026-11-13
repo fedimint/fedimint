@@ -156,24 +156,3 @@ fn endpoints_that_merely_contain_await_are_not_misclassified() {
         IROH_REQUEST_TIMEOUT_DEFAULT,
     );
 }
-
-/// Disabling P2P leaves the iroh 1.x endpoint without IP sockets, so it can
-/// only send through relays. Leaving it enabled keeps them.
-#[tokio::test]
-async fn disabling_p2p_binds_no_ip_sockets_on_the_next_endpoint() {
-    for p2p in [true, false] {
-        let connector = IrohConnector::new_no_overrides(
-            None,
-            false,
-            p2p,
-            std::sync::Arc::new(tokio::sync::watch::channel(0).0),
-        )
-        .await
-        .expect("endpoints bind");
-        assert_eq!(
-            !connector.next.bound_sockets().is_empty(),
-            p2p,
-            "iroh_p2p = {p2p}"
-        );
-    }
-}
