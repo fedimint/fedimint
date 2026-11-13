@@ -172,3 +172,42 @@ async fn set_mnemonic_parse_failure_is_forwarded_unchanged() {
 
     assert_error_response(&responses, &cause.fmt_compact().to_string());
 }
+
+#[tokio::test]
+async fn opening_a_client_with_a_short_name_is_an_error() {
+    let state = new_state().await;
+    let collector = ResponseCollector::default();
+
+    for (request_id, kind) in [
+        (1, RpcRequestKind::GenerateMnemonic),
+        (
+            2,
+            RpcRequestKind::OpenClient {
+                client_name: "wallet1".to_string(),
+            },
+        ),
+    ] {
+        let HandledRpc { task } = state
+            .clone()
+            .handle_rpc(RpcRequest { request_id, kind }, collector.clone());
+        if let Some(task) = task {
+            task.await;
+        }
+    }
+
+    let responses = collector.0.lock().expect("not poisoned").clone();
+    let open_response = responses
+        .iter()
+        .map(|response| serde_json::to_value(response).expect("a response always serializes"))
+        .find(|value| value["request_id"] == 2)
+        .expect("the open request answers");
+
+    assert_eq!(
+        open_response,
+        serde_json::json!({
+            "request_id": 2,
+            "type": "error",
+            "error": "Client name must be 36 bytes long, got 7",
+        }),
+    );
+}

@@ -154,6 +154,9 @@ pub struct HandledRpc<'a> {
     pub task: Option<BoxFuture<'a, ()>>,
 }
 
+/// Length of a client name: a UUID in its hyphenated string form.
+const CLIENT_NAME_LEN: usize = 36;
+
 impl RpcGlobalState {
     pub fn new(connectors: ConnectorRegistry, unified_database: Database) -> Self {
         Self {
@@ -197,13 +200,20 @@ impl RpcGlobalState {
     }
 
     /// Get client-specific database with proper prefix
-    async fn client_db(&self, client_name: String) -> Database {
-        assert_eq!(client_name.len(), 36);
+    ///
+    /// Names have a fixed length so that one client's prefix can never be a
+    /// prefix of another client's.
+    async fn client_db(&self, client_name: String) -> Result<Database, RpcRequestError> {
+        if client_name.len() != CLIENT_NAME_LEN {
+            return Err(RpcRequestError::InvalidClientName {
+                len: client_name.len(),
+            });
+        }
 
         let unified_db = &self.unified_database;
         let mut client_prefix = vec![DbKeyPrefix::ClientDatabase as u8];
         client_prefix.extend_from_slice(client_name.as_bytes());
-        unified_db.with_prefix(client_prefix)
+        Ok(unified_db.with_prefix(client_prefix))
     }
 
     /// Handle joining federation using unified database
@@ -220,7 +230,7 @@ impl RpcGlobalState {
             .await?
             .ok_or(RpcRequestError::NoMnemonic)?;
 
-        let client_db = self.client_db(client_name.clone()).await;
+        let client_db = self.client_db(client_name.clone()).await?;
 
         let invite_code = InviteCode::from_str(&invite_code)?;
         let federation_id = invite_code.federation_id();
@@ -280,7 +290,7 @@ impl RpcGlobalState {
             .await?
             .ok_or(RpcRequestError::NoMnemonic)?;
 
-        let client_db = self.client_db(client_name.clone()).await;
+        let client_db = self.client_db(client_name.clone()).await?;
 
         if !fedimint_client::Client::is_initialized(&client_db).await {
             return Err(RpcRequestError::ClientNotInitialized);
@@ -725,6 +735,10 @@ enum RpcRequestError {
     /// The client could not be joined, recovered or opened.
     #[error(transparent)]
     ClientBuild(#[from] ClientBuildError),
+
+    /// The client name is not a UUID-length string.
+    #[error("Client name must be 36 bytes long, got {len}")]
+    InvalidClientName { len: usize },
 
     /// The client's database was never joined to a federation.
     #[error("client is not initialized for this database")]
