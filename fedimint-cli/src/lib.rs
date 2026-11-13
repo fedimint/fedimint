@@ -14,6 +14,7 @@ mod cli;
 mod client;
 mod command_encoding;
 mod command_wait;
+mod consensus;
 mod db;
 pub mod envs;
 mod event_output;
@@ -40,7 +41,8 @@ use anyhow::{Context, format_err};
 use api_request::ApiRequest;
 use clap::{CommandFactory, Parser};
 use cli::{
-    AdminCmd, Command, DatabaseBackend, DevCmd, Opts, SetupAdminArgs, SetupAdminCmd, VisualizeCmd,
+    AdminCmd, Command, ConsensusCmd, DatabaseBackend, DevCmd, Opts, SetupAdminArgs, SetupAdminCmd,
+    VisualizeCmd,
 };
 use envs::SALT_FILE;
 use fedimint_aead::{encrypted_read, encrypted_write, get_encryption_key};
@@ -130,6 +132,11 @@ enum CliOutput {
     },
 
     Raw(serde_json::Value),
+
+    /// The command already wrote its output to stdout, nothing is printed
+    /// (and nothing must be serialized) by [`FedimintCli::run`]
+    #[serde(skip)]
+    Streamed,
 }
 
 impl fmt::Display for CliOutput {
@@ -854,6 +861,7 @@ impl FedimintCli {
 
     pub async fn run(&mut self) {
         match self.handle_command(self.cli_args.clone()).await {
+            Ok(CliOutput::Streamed) => {}
             Ok(output) => {
                 // ignore if there's anyone reading the stuff we're writing out
                 let _ = writeln!(std::io::stdout(), "{output}");
@@ -1852,6 +1860,13 @@ impl FedimintCli {
             }
             DevCmd::Visualize { visualize_type } => {
                 self.handle_visualize(&cli, visualize_type).await
+            }
+            DevCmd::Consensus {
+                consensus_cmd: ConsensusCmd::Follow(args),
+            } => {
+                let client = self.client_open(&cli).await?;
+                consensus::follow(&client, args).await.map_err_cli()?;
+                Ok(CliOutput::Streamed)
             }
             DevCmd::RefreshApiVersions => {
                 let client = self.client_open(&cli).await?;
