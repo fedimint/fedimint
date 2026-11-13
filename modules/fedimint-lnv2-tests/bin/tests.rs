@@ -1165,6 +1165,9 @@ async fn test_lnurl_recovery(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     info!("Phase 2: Recovering client from seed");
 
     let restored = Client::create("lnv2-lnurl-recovery-restored").await?;
+    // Keep command boundaries visible even when a child never exits. Log only
+    // static labels: restore arguments contain the mnemonic and invite code.
+    info!("LNURL recovery: starting restore");
     cmd!(
         restored,
         "restore",
@@ -1175,13 +1178,24 @@ async fn test_lnurl_recovery(dev_fed: &DevJitFed) -> anyhow::Result<()> {
     )
     .run()
     .await?;
+    info!("LNURL recovery: finished restore");
 
-    while restored.balance().await? < pre_recovery_balance {
+    loop {
+        info!("LNURL recovery: starting balance info");
+        let restored_balance = restored.balance().await?;
+        info!("LNURL recovery: finished balance info");
+        if pre_recovery_balance <= restored_balance {
+            break;
+        }
         info!("Waiting for recovery to complete...");
+        info!("LNURL recovery: starting dev wait");
         cmd!(restored, "dev", "wait", "1").out_json().await?;
+        info!("LNURL recovery: finished dev wait");
     }
 
+    info!("LNURL recovery: starting final balance info");
     let post_recovery_balance = restored.balance().await?;
+    info!("LNURL recovery: finished final balance info");
     info!("Post-recovery balance: {post_recovery_balance} msats");
 
     // ── Phase 3: Post-recovery LNURL receives ─────────────────────────

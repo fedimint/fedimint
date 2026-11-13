@@ -36,7 +36,7 @@ iroh = { workspace = true, default-features = false }
 iroh-next = { workspace = true, default-features = false }
 jsonrpsee-core = { workspace = true }
 jsonrpsee-types = { workspace = true }
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
