@@ -47,6 +47,7 @@ A contract is rejected if:
 - a split doesn't add up to 10,000
 - funder, recipient, arbiter and fee keys are not all different from each other (also counting the keys in `SwapArbiter`)
 - there is a fee but no fee key, or more than 32 fee keys
+- timeout plus two resolution periods must fit in 64 bits
 
 ### Resolving
 After creation everything is an `EscrowInput { escrow_id, resolution }`. Every input has a key that has to sign the transaction, the last column below says which one.

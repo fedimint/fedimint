@@ -30,6 +30,9 @@ pub const SPLIT_BPS_DENOMINATOR: u16 = 10_000;
 
 const MIN_PERIOD: u64 = 10 * 60;
 
+/// A contract has room for 32 fee keys, so a consortium cannot be bigger
+pub const MAX_FEE_PARTICIPANTS: usize = 32;
+
 /// Unique identifier for an escrow contract.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Encodable, Decodable)]
 pub struct EscrowId(pub [u8; 32]);
@@ -885,7 +888,7 @@ pub fn validate_contract_fields(
     if contract.arbiter_fee > Amount::ZERO && contract.arbiter_fee_key.is_empty() {
         return Err(EscrowContractValidationError::MissingArbiterFeeKeys);
     }
-    if contract.arbiter_fee_key.len() > 32 {
+    if contract.arbiter_fee_key.len() > MAX_FEE_PARTICIPANTS {
         return Err(EscrowContractValidationError::InvalidInput);
     }
 
@@ -901,7 +904,7 @@ pub fn validate_contract_fields(
         if *arbiter_fee > Amount::ZERO && arbiter_fee_key.is_empty() {
             return Err(EscrowContractValidationError::MissingArbiterFeeKeys);
         }
-        if arbiter_fee_key.len() > 32 {
+        if arbiter_fee_key.len() > MAX_FEE_PARTICIPANTS {
             return Err(EscrowContractValidationError::InvalidInput);
         }
         for key in std::iter::once(arbiter_key).chain(arbiter_fee_key.iter()) {
@@ -914,6 +917,19 @@ pub fn validate_contract_fields(
     if contract.resolution_period < MIN_PERIOD {
         return Err(EscrowContractValidationError::InvalidResolutionTimeout);
     }
+
+    // A contract can produce deadlines up to timeout plus two windows (the
+    // ruling window and one more after a swap). If that doesn't fit in a u64,
+    // opening a dispute would fail later with an internal error
+    let two_windows = contract
+        .resolution_period
+        .checked_mul(2)
+        .ok_or(EscrowContractValidationError::InvalidResolutionTimeout)?;
+    contract
+        .timeout
+        .checked_add(two_windows)
+        .ok_or(EscrowContractValidationError::InvalidTimeout)?;
+
     Ok(())
 }
 

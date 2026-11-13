@@ -9,7 +9,7 @@ use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::runtime::sleep;
 use fedimint_core::secp256k1::PublicKey;
-use fedimint_escrow_common::x_only;
+use fedimint_escrow_common::{MAX_FEE_PARTICIPANTS, x_only};
 use frost_secp256k1_tr;
 use frost_secp256k1_tr::keys::dkg::round1::{
     Package as Round1Package, SecretPackage as Round1SecretPackage,
@@ -32,9 +32,6 @@ const MAX_ATTEMPTS: u32 = 3;
 
 // retry delay after a transient failures in dkg
 const RETRY_DELAY: Duration = Duration::from_secs(3);
-
-/// A contract has room for 32 fee keys, so a consortium cannot be bigger
-const MAX_PARTICIPANTS: usize = 32;
 
 #[derive(Debug, Clone, Copy, Hash, Encodable, Decodable, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SessionId(pub [u8; 32]);
@@ -119,10 +116,6 @@ pub enum FrostDkgState {
         key_package: EncryptedPackage,
         public_key_package: Vec<u8>,
     },
-    Failed {
-        round: u8,
-        error: String,
-    },
 }
 
 /// Consortium state info for client
@@ -133,7 +126,6 @@ pub enum DkgStage {
     Round2,
     Confirming,
     Finalized,
-    Failed,
 }
 
 #[derive(Debug, Clone, Hash, Encodable, Decodable, PartialEq, Eq, Serialize, Deserialize)]
@@ -160,7 +152,6 @@ impl FrostDkgSession {
             FrostDkgState::Round2Complete { .. } => DkgStage::Round2,
             FrostDkgState::Confirming { .. } => DkgStage::Confirming,
             FrostDkgState::Finalized { .. } => DkgStage::Finalized,
-            FrostDkgState::Failed { .. } => DkgStage::Failed,
         }
     }
 }
@@ -271,8 +262,8 @@ impl FrostDkgSessionRecord {
             return Err(anyhow::anyhow!("participant list cannot be empty"));
         }
         anyhow::ensure!(
-            participants.len() <= MAX_PARTICIPANTS,
-            "a consortium can have at most {MAX_PARTICIPANTS} arbiters"
+            participants.len() <= MAX_FEE_PARTICIPANTS,
+            "a consortium can have at most {MAX_FEE_PARTICIPANTS} arbiters"
         );
 
         let session_id = create_session_id(&participants, &federation_id);
@@ -484,7 +475,7 @@ impl FrostDkgSessionRecord {
         state_key: &StateKey,
     ) -> Result<FrostDkgState, DkgError> {
         match state {
-            FrostDkgState::Created | FrostDkgState::Failed { .. } => {
+            FrostDkgState::Created => {
                 let (secret, package) = runner.start_round1(
                     &self.participant_id,
                     self.max_signers,
