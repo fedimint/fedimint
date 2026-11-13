@@ -199,6 +199,63 @@ async fn withdraw_preview_preserves_in_range_and_all_client_lookup() {
 }
 
 #[tokio::test]
+async fn withdraw_rejects_oversupply_before_client_or_fee_lookup() {
+    let fixture = test_gateway(GatewayState::Disconnected).await;
+    let gateway = &fixture.gateway;
+    let address = bitcoin::Address::p2wsh(bitcoin::Script::new(), gateway.network);
+
+    // Match the UI's string-valued amount deserialization, not FromStr.
+    // No federation is connected: a range error proves we never reach a wallet
+    // or issue a fee query.
+    for sats in [bitcoin::Amount::MAX_MONEY.to_sat() + 1, u64::MAX] {
+        let payload = serde_json::from_value(serde_json::json!({
+            "federation_id": fedimint_core::config::FederationId::dummy(),
+            "amount": sats.to_string(),
+            "address": address.to_string(),
+        }))
+        .expect("withdraw payload deserializes");
+        let error = gateway
+            .handle_withdraw_msg(payload)
+            .await
+            .expect_err("oversupply withdraw must fail without panicking");
+        assert!(matches!(
+            error,
+            crate::error::AdminGatewayError::WithdrawError { failure_reason }
+                if failure_reason == "Withdrawal amount exceeds maximum Bitcoin supply"
+        ));
+    }
+}
+
+#[tokio::test]
+async fn withdraw_preserves_in_range_and_all_client_lookup() {
+    let fixture = test_gateway(GatewayState::Disconnected).await;
+    let gateway = &fixture.gateway;
+    let address = bitcoin::Address::p2wsh(bitcoin::Script::new(), gateway.network);
+
+    for amount in [
+        "0".to_owned(),
+        "1000".to_owned(),
+        bitcoin::Amount::MAX_MONEY.to_sat().to_string(),
+        "all".to_owned(),
+    ] {
+        let payload = serde_json::from_value(serde_json::json!({
+            "federation_id": fedimint_core::config::FederationId::dummy(),
+            "amount": amount,
+            "address": address.to_string(),
+        }))
+        .expect("withdraw payload deserializes");
+        let error = gateway
+            .handle_withdraw_msg(payload)
+            .await
+            .expect_err("fixture has no connected federation");
+        assert!(matches!(
+            error,
+            crate::error::AdminGatewayError::FederationNotConnected(_)
+        ));
+    }
+}
+
+#[tokio::test]
 async fn http_and_iroh_dispatch_status_publicly_but_protect_global_info() {
     let gateway_fixture = test_gateway(GatewayState::Disconnected).await;
     let gateway = gateway_fixture.gateway.clone();
