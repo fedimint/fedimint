@@ -6,7 +6,9 @@ pub mod tracked;
 #[cfg(test)]
 mod tests;
 
-use anyhow::Result;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use anyhow::{Result, anyhow};
 use bitcoin::{BlockHash, Transaction};
 use fedimint_core::envs::BitcoinRpcConfig;
 use fedimint_core::util::{FmtCompactAnyhow, SafeUrl};
@@ -18,10 +20,16 @@ use tracing::warn;
 use crate::bitcoind::BitcoindClient;
 use crate::esplora::EsploraClient;
 
+/// A Core-first backend using trusted Esplora for failed reads and IBD counts.
 #[derive(Debug)]
 pub struct BitcoindClientWithFallback {
+    /// Primary full-node RPC.
     bitcoind_client: BitcoindClient,
+    /// Operator-configured trusted fallback.
     esplora_client: EsploraClient,
+    /// Whether Core has reported completion of IBD during this process
+    /// lifetime.
+    bitcoind_ibd_complete: AtomicBool,
 }
 
 impl BitcoindClientWithFallback {
@@ -43,7 +51,27 @@ impl BitcoindClientWithFallback {
         Ok(Self {
             bitcoind_client,
             esplora_client,
+            bitcoind_ibd_complete: AtomicBool::new(false),
         })
+    }
+
+    /// Use the trusted fallback without accepting Core's incomplete IBD count.
+    async fn fallback_block_count(&self, primary: anyhow::Error) -> Result<u64> {
+        warn!(
+            target: LOG_SERVER,
+            error = %primary.fmt_compact_anyhow(),
+            "Bitcoind block count unavailable; falling back to Esplora"
+        );
+        match self.esplora_client.get_block_count().await {
+            Ok(count) => Ok(count),
+            Err(_) => {
+                warn!(
+                    target: LOG_SERVER,
+                    "Esplora block-count fallback also failed; returning the bitcoind error"
+                );
+                Err(primary)
+            }
+        }
     }
 }
 
@@ -58,16 +86,29 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
     }
 
     async fn get_block_count(&self) -> Result<u64> {
-        match self.bitcoind_client.get_block_count().await {
-            Ok(count) => Ok(count),
-            Err(e) => {
-                warn!(
-                    target: LOG_SERVER,
-                    error = %e.fmt_compact_anyhow(),
-                    "BitcoindClient failed for get_block_count, falling back to EsploraClient"
-                );
-                self.esplora_client.get_block_count().await
+        // Match the newer hybrid policy: check IBD until its first completion,
+        // then keep Core-first reads. Do not compare tips or switch on mere lag.
+        if self.bitcoind_ibd_complete.load(Ordering::Relaxed) {
+            return match self.bitcoind_client.get_block_count().await {
+                Ok(count) => Ok(count),
+                Err(primary) => self.fallback_block_count(primary).await,
+            };
+        }
+
+        match self
+            .bitcoind_client
+            .get_block_count_and_initial_block_download()
+            .await
+        {
+            Ok((_count, true)) => {
+                self.fallback_block_count(anyhow!("Bitcoind is in initial block download"))
+                    .await
             }
+            Ok((count, false)) => {
+                self.bitcoind_ibd_complete.store(true, Ordering::Relaxed);
+                Ok(count)
+            }
+            Err(primary) => self.fallback_block_count(primary).await,
         }
     }
 
