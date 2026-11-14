@@ -9,10 +9,31 @@ use tokio::task::JoinHandle;
 
 use super::BitcoindClientWithFallback;
 
+mod block_count;
+
 /// Exercise the real Core and Esplora adapters without external services.
 async fn endpoint(
     core: bool,
     response: &'static str,
+) -> (SafeUrl, Arc<AtomicUsize>, JoinHandle<()>) {
+    scripted_endpoint(
+        core,
+        vec![(
+            if core {
+                "estimatesmartfee"
+            } else {
+                "/fee-estimates"
+            },
+            response.to_owned(),
+        )],
+    )
+    .await
+}
+
+/// Serve successive responses, repeating the final one for retries.
+async fn scripted_endpoint(
+    core: bool,
+    responses: Vec<(&'static str, String)>,
 ) -> (SafeUrl, Arc<AtomicUsize>, JoinHandle<()>) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap())
@@ -20,9 +41,11 @@ async fn endpoint(
         .unwrap();
     let calls = Arc::new(AtomicUsize::new(0));
     let server_calls = calls.clone();
-    let server = fedimint_core::runtime::spawn("fee-estimate-test-http", async move {
+    let server = fedimint_core::runtime::spawn("bitcoin-rpc-test-http", async move {
         loop {
             let (mut socket, _) = listener.accept().await.unwrap();
+            let index = server_calls.load(Ordering::SeqCst).min(responses.len() - 1);
+            let (method, response) = &responses[index];
             let mut request = Vec::new();
             let mut chunk = [0; 1024];
             let header_end = loop {
@@ -44,10 +67,10 @@ async fn endpoint(
                 })
                 .unwrap_or(0);
             assert!(content_length <= 64 * 1024);
-            assert!(headers.starts_with(if core {
-                "POST / "
+            assert!(headers.starts_with(&if core {
+                "POST / ".to_owned()
             } else {
-                "GET /fee-estimates "
+                format!("GET {method} ")
             }));
             while request.len() < header_end + content_length {
                 let len = socket.read(&mut chunk).await.unwrap();
@@ -57,14 +80,21 @@ async fn endpoint(
             let (status, body) = if core {
                 let request: serde_json::Value =
                     serde_json::from_slice(&request[header_end..]).unwrap();
-                assert_eq!(request["method"], "estimatesmartfee");
-                assert_eq!(request["params"], serde_json::json!([1, "CONSERVATIVE"]));
+                assert_eq!(request["method"], *method);
+                assert_eq!(
+                    request["params"],
+                    if *method == "estimatesmartfee" {
+                        serde_json::json!([1, "CONSERVATIVE"])
+                    } else {
+                        serde_json::json!([])
+                    }
+                );
                 (
                     "200 OK",
                     if response == "failure" {
                         serde_json::json!({
                             "result": null,
-                            "error": {"code": -1, "message": "primary fee failure"},
+                            "error": {"code": -1, "message": "primary RPC failure"},
                             "id": request["id"],
                         })
                     } else {
@@ -119,7 +149,7 @@ async fn hybrid_fee_estimate_fallback() {
         (r#"{"blocks":0}"#, "failure", Ok(None), 1),
         ("failure", r#"{"1":3}"#, Ok(Some(3000)), 1),
         ("failure", "{}", Ok(Some(1000)), 1),
-        ("failure", "failure", Err("primary fee failure"), 1),
+        ("failure", "failure", Err("primary RPC failure"), 1),
     ] {
         let (primary_url, primary_calls, primary_server) = endpoint(true, primary).await;
         let (fallback_url, calls, fallback_server) = endpoint(false, fallback).await;

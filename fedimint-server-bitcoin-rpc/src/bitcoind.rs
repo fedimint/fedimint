@@ -19,6 +19,14 @@ pub struct BitcoindClient {
 }
 
 impl BitcoindClient {
+    /// Read a normalized count and IBD status from the same Core response.
+    pub(crate) async fn get_block_count_and_initial_block_download(
+        &self,
+    ) -> anyhow::Result<(u64, bool)> {
+        let info = block_in_place(|| self.client.get_blockchain_info())?;
+        Ok((info.blocks + 1, info.initial_block_download))
+    }
+
     pub fn new(username: String, password: String, url: &SafeUrl) -> anyhow::Result<Self> {
         let auth = Auth::UserPass(username, password);
 
