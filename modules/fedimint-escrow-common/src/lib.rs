@@ -33,6 +33,8 @@ const MIN_PERIOD: u64 = 10 * 60;
 /// A contract has room for 32 fee keys, so a consortium cannot be bigger
 pub const MAX_FEE_PARTICIPANTS: usize = 32;
 
+pub const DEFAULT_PAGE_LIMIT: u32 = 50;
+
 /// Unique identifier for an escrow contract.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Encodable, Decodable)]
 pub struct EscrowId(pub [u8; 32]);
@@ -325,6 +327,21 @@ impl EscrowContract {
                 }
                 _ => false,
             }
+    }
+
+    pub fn all_keys(&self) -> Vec<PublicKey> {
+        let mut keys = vec![self.funder_key, self.recipient_key, self.arbiter_key];
+        keys.extend(self.arbiter_fee_key.iter().copied());
+        if let FallbackPolicy::SwapArbiter {
+            arbiter_key,
+            arbiter_fee_key,
+            ..
+        } = &self.default_fallback
+        {
+            keys.push(*arbiter_key);
+            keys.extend(arbiter_fee_key.iter().copied());
+        }
+        keys
     }
 
     pub fn engage_message(&self) -> EscrowMessage {

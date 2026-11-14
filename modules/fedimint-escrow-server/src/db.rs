@@ -11,6 +11,7 @@ pub enum DbKeyPrefix {
     ClaimPool = 0x02,
     UnixTimeVote = 0x03,
     OutputOutcome = 0x04,
+    ContractByKey = 0x05,
 }
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]
@@ -54,6 +55,25 @@ impl_db_record!(
 );
 
 impl_db_lookup!(key = UnixTimeVoteKey, query_prefix = UnixTimeVotePrefix);
+
+#[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash)]
+pub struct ContractByKeyKey {
+    pub key: [u8; 32],
+    pub escrow_id: EscrowId,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Encodable, Decodable)]
+pub struct ContractByKeyPrefix {
+    pub key: [u8; 32],
+}
+
+impl_db_record!(
+    key = ContractByKeyKey,
+    value = (),
+    db_prefix = DbKeyPrefix::ContractByKey
+);
+impl_db_lookup!(key = ContractByKeyKey, query_prefix = ContractByKeyPrefix);
 
 #[derive(Debug, Clone, Copy, Encodable, Decodable, Serialize)]
 pub struct EscrowOutputOutcomeKey(pub OutPoint);

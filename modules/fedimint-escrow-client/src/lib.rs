@@ -334,7 +334,8 @@ impl ClientModule for EscrowClientModule {
                     yield serde_json::to_value(result)?;
                 }
                 "list_escrows"=>{
-                    let result=self.list_contracts().await?;
+                    let req:ListContractsRequest= serde_json::from_value(request)?;
+                    let result=self.list_contracts(req.pubkey,req.limit,req.last_seen).await?;
                     yield serde_json::to_value(result)?;
                 }
                 "create_contract"=>{
@@ -491,6 +492,14 @@ struct SubscribeClaimPayoutRequest {
 #[derive(Deserialize)]
 struct SignClientMessageRequest {
     message: EscrowMessage,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct ListContractsRequest {
+    pubkey: Option<PublicKey>,
+    limit: Option<u32>,
+    last_seen: Option<EscrowId>,
 }
 
 /// Response returned after submitting an escrow creation transaction.
@@ -1401,27 +1410,24 @@ impl EscrowClientModule {
         Ok(operation_log)
     }
 
-    /// Lists escrow contracts associated with the client's locally
-    /// controlled escrow and arbiter fee public keys.
-    pub async fn list_contracts(&self) -> anyhow::Result<Vec<EscrowContract>> {
-        let mut all = BTreeMap::new();
-        for pubkey in [
-            self.escrow_key.public_key(),
-            self.arbiter_fee_key.public_key(),
-        ] {
-            let found = self
-                .client_ctx
-                .module_api()
-                .list_contracts_by_key(ListContractParams {
-                    pubkey,
-                    federation_id: self.federation_id,
-                })
-                .await?;
-            for contract in found {
-                all.insert(contract.escrow_id, contract);
-            }
-        }
-        Ok(all.into_values().collect())
+    /// Lists escrow contracts that contain `pubkey` (the escrow key by default,
+    /// pass the arbiter fee key to list its contracts).
+    pub async fn list_contracts(
+        &self,
+        pubkey: Option<PublicKey>,
+        limit: Option<u32>,
+        last_seen: Option<EscrowId>,
+    ) -> anyhow::Result<Vec<EscrowContract>> {
+        Ok(self
+            .client_ctx
+            .module_api()
+            .list_contracts_by_key(ListContractParams {
+                pubkey: pubkey.unwrap_or_else(|| self.escrow_pubkey()),
+                federation_id: self.federation_id,
+                limit,
+                last_seen,
+            })
+            .await?)
     }
 
     async fn federation_unix_time(&self) -> anyhow::Result<u64> {

@@ -43,7 +43,11 @@ enum Opts {
     },
 
     /// List escrow contracts associated with the client
-    ListEscrow,
+    ListEscrow {
+        pubkey: Option<PublicKey>,
+        limit: Option<u32>,
+        last_seen: Option<EscrowId>,
+    },
 
     /// Release an escrow using the funder's signature
     ResolveEscrow {
@@ -166,8 +170,12 @@ pub(crate) async fn handle_cli_command(
             let contract = client.get_contract(escrow_id).await?;
             Ok(serde_json::to_value(contract)?)
         }
-        Opts::ListEscrow => {
-            let contracts = client.list_contracts().await?;
+        Opts::ListEscrow {
+            pubkey,
+            limit,
+            last_seen,
+        } => {
+            let contracts = client.list_contracts(pubkey, limit, last_seen).await?;
             Ok(serde_json::to_value(contracts)?)
         }
         Opts::EngageArbiter { escrow_id } => {

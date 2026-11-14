@@ -28,7 +28,7 @@ use fedimint_escrow_common::{
     ClaimPool, ContractHash, EscrowCommonInit, EscrowConsensusItem, EscrowContract, EscrowId,
     EscrowInput, EscrowInputError, EscrowModuleTypes, EscrowOutput, EscrowOutputError,
     EscrowOutputOutcome, EscrowStatus, KIND, MODULE_CONSENSUS_VERSION, Resolution,
-    compute_contract_hash, validate_contract_fields,
+    compute_contract_hash, validate_contract_fields, x_only,
 };
 use fedimint_logging::LOG_MODULE_ESCROW;
 use fedimint_server_core::config::PeerHandleOps;
@@ -42,8 +42,9 @@ use tracing::{debug, info};
 
 mod db;
 use crate::db::{
-    ClaimPoolKey, ClaimPoolPrefix, DbKeyPrefix, EscrowContractKey, EscrowContractPrefix,
-    EscrowOutputOutcomeKey, EscrowOutputOutcomePrefix, UnixTimeVoteKey, UnixTimeVotePrefix,
+    ClaimPoolKey, ClaimPoolPrefix, ContractByKeyKey, DbKeyPrefix, EscrowContractKey,
+    EscrowContractPrefix, EscrowOutputOutcomeKey, EscrowOutputOutcomePrefix, UnixTimeVoteKey,
+    UnixTimeVotePrefix,
 };
 
 #[derive(Debug, Clone)]
@@ -105,6 +106,7 @@ impl ModuleInit for EscrowInit {
                         "Escrow Output Outcomes"
                     );
                 }
+                DbKeyPrefix::ContractByKey => {}
             }
         }
 
@@ -278,6 +280,17 @@ impl ServerModule for Escrow {
         dbtx.insert_entry(&EscrowContractKey(contract.escrow_id), contract)
             .await;
 
+        for key in contract.all_keys() {
+            dbtx.insert_entry(
+                &ContractByKeyKey {
+                    key: x_only(&key).serialize(),
+                    escrow_id: contract.escrow_id,
+                },
+                &(),
+            )
+            .await;
+        }
+
         dbtx.insert_entry(&EscrowOutputOutcomeKey(out_point), &EscrowOutputOutcome)
             .await;
 
@@ -376,27 +389,40 @@ impl ServerModule for Escrow {
                 async |_module: &Escrow, context, params: ListContractParams|
                     -> Vec<EscrowContract>
                 {
+                    let limit = params.limit.map_or(usize::MAX, |l| l as usize);
+
+                    let key = x_only(&params.pubkey).serialize();
+                    let Some(end_key) = next_key(key) else {
+                        return Ok(vec![]);
+                    };
+
+                    let start = ContractByKeyKey {
+                        key,
+                        escrow_id: params.last_seen.unwrap_or(EscrowId([0u8; 32])),
+                    };
+                    let end = ContractByKeyKey {
+                        key: end_key,
+                        escrow_id: EscrowId([0u8; 32]),
+                    };
+
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
-                    let pubkey = params.pubkey;
 
-                    let contracts: Vec<EscrowContract> = dbtx
-                        .find_by_prefix(&EscrowContractPrefix)
+                    let ids: Vec<EscrowId> = dbtx
+                        .find_by_range(start..end)
                         .await
-                        .filter_map(move |(_, contract)| {
-                            let pubkey = pubkey;
-
-                            async move {
-                                if contract.contains_key(&pubkey) {
-                                    Some(contract)
-                                } else {
-                                    None
-                                }
-                            }
-                        })
+                        .map(|(index_key, ())| index_key.escrow_id)
+                        .filter(|id| futures::future::ready(Some(*id) != params.last_seen))
+                        .take(limit)
                         .collect()
                         .await;
 
+                    let mut contracts = Vec::with_capacity(ids.len());
+                    for id in ids {
+                        if let Some(contract) = dbtx.get_value(&EscrowContractKey(id)).await {
+                            contracts.push(contract);
+                        }
+                    }
                     Ok(contracts)
                 }
             },
@@ -411,6 +437,21 @@ impl ServerModule for Escrow {
             },
         ]
     }
+}
+
+// smallest 32 byte value bigger than every row of `key`, none if `key` is all
+// 0xff
+fn next_key(key: [u8; 32]) -> Option<[u8; 32]> {
+    let mut next = key;
+    for byte in next.iter_mut().rev() {
+        if *byte == u8::MAX {
+            *byte = 0;
+        } else {
+            *byte += 1;
+            return Some(next);
+        }
+    }
+    None
 }
 
 fn verify_contract_hash(contract_hash: &[u8; 32], contract: &EscrowContract) -> bool {

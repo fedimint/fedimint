@@ -24,4 +24,6 @@ pub struct GetClaimAmount {
 pub struct ListContractParams {
     pub pubkey: PublicKey,
     pub federation_id: FederationId,
+    pub limit: Option<u32>,
+    pub last_seen: Option<EscrowId>,
 }

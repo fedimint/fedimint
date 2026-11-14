@@ -711,11 +711,11 @@ async fn test_contract_is_listed_for_every_key_in_it() -> anyhow::Result<()> {
     .await?;
 
     for escrow in [&funder_escrow, &recipient_escrow, &arbiter_escrow] {
-        let listed = escrow.list_contracts().await?;
+        let listed = escrow.list_contracts(None, None, None).await?;
         assert!(listed.iter().any(|c| c.escrow_id == escrow_id));
     }
 
-    let listed = stranger_escrow.list_contracts().await?;
+    let listed = stranger_escrow.list_contracts(None, None, None).await?;
     assert!(!listed.iter().any(|c| c.escrow_id == escrow_id));
 
     Ok(())
@@ -831,7 +831,9 @@ async fn test_arbiter_consortium_dkg_then_escrow() -> anyhow::Result<()> {
 
     // every consortium member finds the escrow through its fee key
     for arbiter in &arbiters {
-        let listed = arbiter.list_contracts().await?;
+        let listed = arbiter
+            .list_contracts(Some(arbiter.arbiter_fee_pubkey()), None, None)
+            .await?;
         assert!(listed.iter().any(|c| c.escrow_id == escrow_id));
     }
 
