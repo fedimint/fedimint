@@ -122,6 +122,9 @@ impl DashboardApiModuleExt for DynDashboardApi {
 pub struct ServerBitcoinRpcStatus {
     pub network: Network,
     pub block_count: u64,
-    pub fee_rate: Feerate,
+    /// `None` while the backend cannot estimate fees yet — a node in initial
+    /// block download has no fee data until it reaches the tip, and consensus
+    /// does not start before then.
+    pub fee_rate: Option<Feerate>,
     pub sync_progress: Option<f64>,
 }
