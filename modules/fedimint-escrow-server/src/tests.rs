@@ -130,9 +130,7 @@ async fn test_process_output_valid_contract_stored() {
         3_600,
         FallbackPolicy::Refund,
     );
-    let output = EscrowOutput {
-        contract: contract.clone(),
-    };
+    let output = EscrowOutput::new_v0(contract.clone());
     let out_point = dummy_out_point();
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -191,10 +189,8 @@ async fn test_process_output_swap_arbiter_contract_stored() {
             arbiter_fee: Amount::from_sats(30),
         },
     );
-    let output = EscrowOutput {
-        contract: contract.clone(),
-    };
 
+    let output = EscrowOutput::new_v0(contract.clone());
     let mut dbtx = db.begin_transaction_nc().await;
     let result = escrow
         .process_output(
@@ -233,7 +229,7 @@ async fn test_process_output_duplicate_rejected() {
         3_600,
         FallbackPolicy::Refund,
     );
-    let output = EscrowOutput { contract };
+    let output = EscrowOutput::new_v0(contract);
 
     let mut dbtx = db.begin_transaction_nc().await;
     escrow
@@ -278,7 +274,7 @@ async fn test_process_output_arbiter_fee_equals_amount_rejected() {
         3_600,
         FallbackPolicy::Refund,
     );
-    let output = EscrowOutput { contract };
+    let output = EscrowOutput::new_v0(contract);
 
     let mut dbtx = db.begin_transaction_nc().await;
     let result = escrow
@@ -317,7 +313,7 @@ async fn test_process_output_timeout_not_in_future_rejected() {
         3_600,
         FallbackPolicy::Refund,
     );
-    let output = EscrowOutput { contract };
+    let output = EscrowOutput::new_v0(contract);
 
     let mut dbtx = db.begin_transaction_nc().await;
     let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0.into_nc();
@@ -356,7 +352,7 @@ async fn test_process_output_duplicate_keys_rejected() {
         3_600,
         FallbackPolicy::Refund,
     );
-    let output = EscrowOutput { contract };
+    let output = EscrowOutput::new_v0(contract);
 
     let mut dbtx = db.begin_transaction_nc().await;
     let result = escrow
@@ -400,7 +396,7 @@ async fn test_process_output_swap_key_reusing_contract_key_rejected() {
             arbiter_fee: Amount::from_sats(30),
         },
     );
-    let output = EscrowOutput { contract };
+    let output = EscrowOutput::new_v0(contract);
 
     let mut dbtx = db.begin_transaction_nc().await;
     let result = escrow
@@ -440,7 +436,7 @@ async fn test_process_output_missing_fee_keys_rejected() {
     );
     // a fee is given but not the claiming keys
     contract.arbiter_fee_key = vec![];
-    let output = EscrowOutput { contract };
+    let output = EscrowOutput::new_v0(contract);
 
     let mut dbtx = db.begin_transaction_nc().await;
     let result = escrow
@@ -479,7 +475,7 @@ async fn test_process_output_short_resolution_period_rejected() {
         599,
         FallbackPolicy::Refund,
     );
-    let output = EscrowOutput { contract };
+    let output = EscrowOutput::new_v0(contract);
 
     let mut dbtx = db.begin_transaction_nc().await;
     let result = escrow
@@ -521,7 +517,7 @@ async fn test_process_output_invalid_fallback_split_rejected() {
             recipient_split_bps: 3_000,
         },
     );
-    let output = EscrowOutput { contract };
+    let output = EscrowOutput::new_v0(contract);
 
     let mut dbtx = db.begin_transaction_nc().await;
     let result = escrow
@@ -561,7 +557,7 @@ async fn test_process_output_tampered_contract_hash_rejected() {
         FallbackPolicy::Refund,
     );
     contract.contract_hash = ContractHash([0xff; 32]);
-    let output = EscrowOutput { contract };
+    let output = EscrowOutput::new_v0(contract);
 
     let mut dbtx = db.begin_transaction_nc().await;
     let result = escrow
@@ -601,13 +597,12 @@ async fn test_funder_release_valid() {
         .insert_entry(&EscrowContractKey(contract.escrow_id), &contract)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::FunderRelease {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::FunderRelease {
             funder_signature: sign_release(&funder_kp, &contract),
         },
-    };
-
+    );
     let meta = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await
@@ -657,12 +652,12 @@ async fn test_funder_release_wrong_signature_rejected() {
         .await;
 
     // recipient signing instead of funder
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::FunderRelease {
-            funder_signature: sign_release(&recipient_kp, &contract),
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::FunderRelease {
+            funder_signature: sign_release(&funder_kp, &contract),
         },
-    };
+    );
 
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
@@ -704,13 +699,12 @@ async fn test_funder_release_signs_refund_outcome_rejected() {
         .await;
 
     // funder signs the Refund outcome, which is invalid for happy path
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::FunderRelease {
-            funder_signature: sign_arbiter(&funder_kp, &contract, Outcome::Refund),
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::FunderRelease {
+            funder_signature: sign_arbiter(&arbiter_kp, &contract, Outcome::Refund),
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -745,13 +739,12 @@ async fn test_funder_release_already_released_rejected() {
         .insert_entry(&EscrowContractKey(contract.escrow_id), &contract)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::FunderRelease {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::FunderRelease {
             funder_signature: sign_release(&funder_kp, &contract),
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -790,13 +783,12 @@ async fn test_funder_release_after_dispute_rejected() {
         .await;
 
     // a perfectly valid release signature is useless once the arbiter is engaged
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::FunderRelease {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::FunderRelease {
             funder_signature: sign_release(&funder_kp, &contract),
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -828,13 +820,12 @@ async fn test_input_for_unknown_contract_rejected() {
     let mut dbtx = db.begin_transaction_nc().await;
     let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0.into_nc();
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::FunderRelease {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::FunderRelease {
             funder_signature: sign_release(&funder_kp, &contract),
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -874,14 +865,13 @@ async fn test_engage_arbiter_valid_at_exact_timeout() {
 
     let msg_bytes = compute_escrow_message(&contract.engage_message());
     let sig = Secp256k1::new().sign_schnorr(&Message::from_digest(msg_bytes), &funder_kp);
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterEngaged {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterEngaged {
             disputant_pubkey: funder_kp.public_key(),
             disputant_signature: sig,
         },
-    };
-
+    );
     let meta = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await
@@ -937,14 +927,13 @@ async fn test_engage_arbiter_before_timeout_rejected() {
 
     let msg_bytes = compute_escrow_message(&contract.engage_message());
     let sig = Secp256k1::new().sign_schnorr(&Message::from_digest(msg_bytes), &funder_kp);
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterEngaged {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterEngaged {
             disputant_pubkey: funder_kp.public_key(),
             disputant_signature: sig,
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -990,14 +979,13 @@ async fn test_engage_arbiter_by_arbiter_rejected() {
     // only the funder and the recipient can bring in the arbiter
     let msg_bytes = compute_escrow_message(&contract.engage_message());
     let sig = Secp256k1::new().sign_schnorr(&Message::from_digest(msg_bytes), &arbiter_kp);
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterEngaged {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterEngaged {
             disputant_pubkey: arbiter_kp.public_key(),
             disputant_signature: sig,
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -1037,14 +1025,13 @@ async fn test_engage_arbiter_wrong_signature_rejected() {
     // the input says funder, but the recipient signed
     let msg_bytes = compute_escrow_message(&contract.engage_message());
     let sig = Secp256k1::new().sign_schnorr(&Message::from_digest(msg_bytes), &recipient_kp);
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterEngaged {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterEngaged {
             disputant_pubkey: funder_kp.public_key(),
             disputant_signature: sig,
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -1089,14 +1076,13 @@ async fn test_engage_arbiter_twice_rejected() {
 
     let msg_bytes = compute_escrow_message(&contract.engage_message());
     let sig = Secp256k1::new().sign_schnorr(&Message::from_digest(msg_bytes), &funder_kp);
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterEngaged {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterEngaged {
             disputant_pubkey: funder_kp.public_key(),
             disputant_signature: sig,
         },
-    };
-
+    );
     escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await
@@ -1141,15 +1127,14 @@ async fn test_arbiter_release_valid() {
         .insert_entry(&UnixTimeVoteKey(PeerId::from(0u16)), &4_000)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterOutcome {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterOutcome {
             arbiter_signature: sign_arbiter(&arbiter_kp, &contract, Outcome::Release),
             outcome: Outcome::Release,
             submitter_pubkey: recipient_kp.public_key(),
         },
-    };
-
+    );
     let meta = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await
@@ -1215,15 +1200,14 @@ async fn test_arbiter_refund_valid() {
         .insert_entry(&UnixTimeVoteKey(PeerId::from(0u16)), &4_000)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterOutcome {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterOutcome {
             arbiter_signature: sign_arbiter(&arbiter_kp, &contract, Outcome::Refund),
             outcome: Outcome::Refund,
             submitter_pubkey: funder_kp.public_key(),
         },
-    };
-
+    );
     let meta = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await
@@ -1288,15 +1272,14 @@ async fn test_arbiter_split_valid() {
         funder_split_bps: 2_500,
         recipient_split_bps: 7_500,
     };
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterOutcome {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterOutcome {
             arbiter_signature: sign_arbiter(&arbiter_kp, &contract, outcome),
             outcome,
             submitter_pubkey: recipient_kp.public_key(),
         },
-    };
-
+    );
     escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await
@@ -1356,15 +1339,14 @@ async fn test_arbiter_ruling_at_resolve_by_valid() {
         .insert_entry(&UnixTimeVoteKey(PeerId::from(0u16)), &5_000)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterOutcome {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterOutcome {
             arbiter_signature: sign_arbiter(&arbiter_kp, &contract, Outcome::Refund),
             outcome: Outcome::Refund,
             submitter_pubkey: funder_kp.public_key(),
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -1406,15 +1388,14 @@ async fn test_arbiter_ruling_after_resolve_by_rejected() {
         .insert_entry(&UnixTimeVoteKey(PeerId::from(0u16)), &5_001)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterOutcome {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterOutcome {
             arbiter_signature: sign_arbiter(&arbiter_kp, &contract, Outcome::Refund),
             outcome: Outcome::Refund,
             submitter_pubkey: funder_kp.public_key(),
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -1456,15 +1437,14 @@ async fn test_arbiter_wrong_signature_rejected() {
         .await;
 
     // funder signing instead of the arbiter
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterOutcome {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterOutcome {
             arbiter_signature: sign_arbiter(&funder_kp, &contract, Outcome::Refund),
             outcome: Outcome::Refund,
             submitter_pubkey: funder_kp.public_key(),
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -1523,15 +1503,14 @@ async fn test_arbiter_outcome_mismatch_rejected() {
         .insert_entry(&UnixTimeVoteKey(PeerId::from(0u16)), &4_000)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterOutcome {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterOutcome {
             arbiter_signature: sign_arbiter(&arbiter_kp, &contract, Outcome::Release),
             outcome: Outcome::Refund,
             submitter_pubkey: funder_kp.public_key(),
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -1570,15 +1549,14 @@ async fn test_arbiter_ruling_on_active_contract_rejected() {
         .insert_entry(&UnixTimeVoteKey(PeerId::from(0u16)), &2_000)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterOutcome {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterOutcome {
             arbiter_signature: sign_arbiter(&arbiter_kp, &contract, Outcome::Refund),
             outcome: Outcome::Refund,
             submitter_pubkey: funder_kp.public_key(),
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -1620,15 +1598,14 @@ async fn test_arbiter_ruling_twice_rejected() {
         .insert_entry(&UnixTimeVoteKey(PeerId::from(0u16)), &4_000)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterOutcome {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterOutcome {
             arbiter_signature: sign_arbiter(&arbiter_kp, &contract, Outcome::Release),
             outcome: Outcome::Release,
             submitter_pubkey: recipient_kp.public_key(),
         },
-    };
-
+    );
     escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await
@@ -1682,15 +1659,14 @@ async fn test_arbiter_ruling_by_stranger_rejected() {
         .await;
 
     // the signature is valid, but the submitter is not part of the contract
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterOutcome {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterOutcome {
             arbiter_signature: sign_arbiter(&arbiter_kp, &contract, Outcome::Refund),
             outcome: Outcome::Refund,
             submitter_pubkey: stranger_kp.public_key(),
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -1739,15 +1715,14 @@ async fn test_arbiter_ruling_with_existing_claim_pool_rejected() {
         .insert_entry(&UnixTimeVoteKey(PeerId::from(0u16)), &4_000)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterOutcome {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterOutcome {
             arbiter_signature: sign_arbiter(&arbiter_kp, &contract, Outcome::Refund),
             outcome: Outcome::Refund,
             submitter_pubkey: funder_kp.public_key(),
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -1806,14 +1781,13 @@ async fn test_fallback_refund_valid() {
         .insert_entry(&UnixTimeVoteKey(PeerId::from(0u16)), &5_001)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ResolveFallbackPolicy {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ResolveFallbackPolicy {
             claimer_pubkey: recipient_kp.public_key(),
             fallback: FallbackPolicy::Refund,
         },
-    };
-
+    );
     let meta = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await
@@ -1873,14 +1847,13 @@ async fn test_fallback_before_resolve_by_rejected() {
         .insert_entry(&UnixTimeVoteKey(PeerId::from(0u16)), &5_000)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ResolveFallbackPolicy {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ResolveFallbackPolicy {
             claimer_pubkey: funder_kp.public_key(),
             fallback: FallbackPolicy::Refund,
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -1921,14 +1894,13 @@ async fn test_fallback_by_arbiter_rejected() {
         .insert_entry(&UnixTimeVoteKey(PeerId::from(0u16)), &5_001)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ResolveFallbackPolicy {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ResolveFallbackPolicy {
             claimer_pubkey: arbiter_kp.public_key(),
             fallback: FallbackPolicy::Refund,
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -1965,14 +1937,13 @@ async fn test_fallback_on_active_contract_rejected() {
         .insert_entry(&UnixTimeVoteKey(PeerId::from(0u16)), &9_000)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ResolveFallbackPolicy {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ResolveFallbackPolicy {
             claimer_pubkey: funder_kp.public_key(),
             fallback: FallbackPolicy::Refund,
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -2016,17 +1987,16 @@ async fn test_fallback_ignores_policy_sent_in_input() {
         .await;
 
     // the input claims an even split
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ResolveFallbackPolicy {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ResolveFallbackPolicy {
             claimer_pubkey: funder_kp.public_key(),
             fallback: FallbackPolicy::Split {
                 funder_split_bps: 5_000,
                 recipient_split_bps: 5_000,
             },
         },
-    };
-
+    );
     escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await
@@ -2086,14 +2056,13 @@ async fn test_fallback_swaps_arbiter() {
         .insert_entry(&UnixTimeVoteKey(PeerId::from(0u16)), &5_001)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ResolveFallbackPolicy {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ResolveFallbackPolicy {
             claimer_pubkey: funder_kp.public_key(),
             fallback: contract.default_fallback.clone(),
         },
-    };
-
+    );
     let meta = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await
@@ -2160,41 +2129,41 @@ async fn test_swapped_arbiter_replaces_old_arbiter() {
         .await;
 
     // first arbiter missed the deadline: swap
-    let swap_input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ResolveFallbackPolicy {
+    let swap_input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ResolveFallbackPolicy {
             claimer_pubkey: funder_kp.public_key(),
             fallback: contract.default_fallback.clone(),
         },
-    };
+    );
     escrow
         .process_input(&mut module_dbtx, &swap_input, dummy_in_point())
         .await
         .unwrap();
 
     // the old arbiter's ruling no longer works
-    let old_input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterOutcome {
+    let old_input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterOutcome {
             arbiter_signature: sign_arbiter(&arbiter_kp, &contract, Outcome::Release),
             outcome: Outcome::Release,
             submitter_pubkey: recipient_kp.public_key(),
         },
-    };
+    );
     let old_result = escrow
         .process_input(&mut module_dbtx, &old_input, dummy_in_point())
         .await;
     assert_matches!(old_result, Err(EscrowInputError::InvalidSignature));
 
     // the replacement arbiter's ruling works, with its own fee and fee key
-    let new_input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterOutcome {
+    let new_input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterOutcome {
             arbiter_signature: sign_arbiter(&swap_arbiter_kp, &contract, Outcome::Release),
             outcome: Outcome::Release,
             submitter_pubkey: recipient_kp.public_key(),
         },
-    };
+    );
     escrow
         .process_input(&mut module_dbtx, &new_input, dummy_in_point())
         .await
@@ -2257,14 +2226,13 @@ async fn test_second_fallback_after_swap_refunds() {
         .insert_entry(&UnixTimeVoteKey(PeerId::from(0u16)), &5_001)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ResolveFallbackPolicy {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ResolveFallbackPolicy {
             claimer_pubkey: funder_kp.public_key(),
             fallback: contract.default_fallback.clone(),
         },
-    };
-
+    );
     // first trigger swaps the arbiter, the new window ends at 8_601
     escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
@@ -2334,12 +2302,12 @@ async fn test_claim_payout_valid() {
         .await;
 
     // the recipient claims first
-    let recipient_input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ClaimPayout {
+    let recipient_input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ClaimPayout {
             claimer_pubkey: recipient_kp.public_key(),
         },
-    };
+    );
     let meta = escrow
         .process_input(&mut module_dbtx, &recipient_input, dummy_in_point())
         .await
@@ -2360,12 +2328,12 @@ async fn test_claim_payout_valid() {
     );
 
     // the fee key claims the last entry, which removes the pool
-    let fee_input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ClaimPayout {
+    let fee_input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ClaimPayout {
             claimer_pubkey: fee_kp.public_key(),
         },
-    };
+    );
     let meta = escrow
         .process_input(&mut module_dbtx, &fee_input, dummy_in_point())
         .await
@@ -2419,12 +2387,12 @@ async fn test_claim_payout_twice_rejected() {
         .insert_entry(&ClaimPoolKey(contract.escrow_id), &pool)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ClaimPayout {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ClaimPayout {
             claimer_pubkey: recipient_kp.public_key(),
         },
-    };
+    );
     escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await
@@ -2476,13 +2444,12 @@ async fn test_claim_payout_by_party_not_in_pool_rejected() {
         .insert_entry(&ClaimPoolKey(contract.escrow_id), &pool)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ClaimPayout {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ClaimPayout {
             claimer_pubkey: funder_kp.public_key(),
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -2532,13 +2499,12 @@ async fn test_claim_payout_by_third_party_rejected() {
         .insert_entry(&ClaimPoolKey(contract.escrow_id), &pool)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ClaimPayout {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ClaimPayout {
             claimer_pubkey: stranger_kp.public_key(),
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -2573,13 +2539,12 @@ async fn test_claim_payout_without_pool_rejected() {
         .insert_entry(&EscrowContractKey(contract.escrow_id), &contract)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ClaimPayout {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ClaimPayout {
             claimer_pubkey: recipient_kp.public_key(),
         },
-    };
-
+    );
     let result = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await;
@@ -2630,13 +2595,12 @@ async fn test_claim_payout_matches_key_by_x_only() {
         .insert_entry(&ClaimPoolKey(contract.escrow_id), &pool)
         .await;
 
-    let input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ClaimPayout {
+    let input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ClaimPayout {
             claimer_pubkey: flipped_key,
         },
-    };
-
+    );
     let meta = escrow
         .process_input(&mut module_dbtx, &input, dummy_in_point())
         .await
@@ -2681,14 +2645,13 @@ async fn test_full_dispute_flow_to_claims() {
         .await;
     let msg_bytes = compute_escrow_message(&contract.engage_message());
     let sig = Secp256k1::new().sign_schnorr(&Message::from_digest(msg_bytes), &funder_kp);
-    let engage_input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterEngaged {
+    let engage_input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterEngaged {
             disputant_pubkey: funder_kp.public_key(),
             disputant_signature: sig,
         },
-    };
-
+    );
     escrow
         .process_input(&mut module_dbtx, &engage_input, dummy_in_point())
         .await
@@ -2709,26 +2672,26 @@ async fn test_full_dispute_flow_to_claims() {
     module_dbtx
         .insert_entry(&UnixTimeVoteKey(PeerId::from(0u16)), &3_000)
         .await;
-    let ruling_input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ArbiterOutcome {
+    let ruling_input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ArbiterOutcome {
             arbiter_signature: sign_arbiter(&arbiter_kp, &contract, Outcome::Refund),
             outcome: Outcome::Refund,
             submitter_pubkey: funder_kp.public_key(),
         },
-    };
+    );
     escrow
         .process_input(&mut module_dbtx, &ruling_input, dummy_in_point())
         .await
         .unwrap();
 
     // a release signature can no longer move the funds
-    let release_input = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::FunderRelease {
+    let release_input = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::FunderRelease {
             funder_signature: sign_release(&funder_kp, &contract),
         },
-    };
+    );
     let release_result = escrow
         .process_input(&mut module_dbtx, &release_input, dummy_in_point())
         .await;
@@ -2737,12 +2700,12 @@ async fn test_full_dispute_flow_to_claims() {
         Err(EscrowInputError::ContractAlreadyResolved)
     );
 
-    let funder_claim = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ClaimPayout {
+    let funder_claim = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ClaimPayout {
             claimer_pubkey: funder_kp.public_key(),
         },
-    };
+    );
     let meta = escrow
         .process_input(&mut module_dbtx, &funder_claim, dummy_in_point())
         .await
@@ -2752,12 +2715,12 @@ async fn test_full_dispute_flow_to_claims() {
         Amounts::new_bitcoin(Amount::from_sats(980))
     );
 
-    let fee_claim = EscrowInput {
-        escrow_id: contract.escrow_id,
-        resolution: Resolution::ClaimPayout {
+    let fee_claim = EscrowInput::new_v0(
+        contract.escrow_id,
+        Resolution::ClaimPayout {
             claimer_pubkey: fee_kp.public_key(),
         },
-    };
+    );
     let meta = escrow
         .process_input(&mut module_dbtx, &fee_claim, dummy_in_point())
         .await

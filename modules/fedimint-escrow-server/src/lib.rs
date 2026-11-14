@@ -237,7 +237,9 @@ impl ServerModule for Escrow {
         input: &'b EscrowInput,
         _in_point: InPoint,
     ) -> Result<InputMeta, EscrowInputError> {
+        let input = input.ensure_v0_ref()?;
         info!(target: LOG_MODULE_ESCROW, "Resolving the escrow contract");
+
         match &input.resolution {
             Resolution::ClaimPayout { claimer_pubkey } => {
                 self.handle_claim(dbtx, input.escrow_id, claimer_pubkey)
@@ -257,6 +259,7 @@ impl ServerModule for Escrow {
         output: &'a EscrowOutput,
         out_point: OutPoint,
     ) -> Result<TransactionItemAmounts, EscrowOutputError> {
+        let output = output.ensure_v0_ref()?;
         let contract = &output.contract;
 
         let now = self.consensus_unix_time(dbtx).await;
@@ -291,8 +294,11 @@ impl ServerModule for Escrow {
             .await;
         }
 
-        dbtx.insert_entry(&EscrowOutputOutcomeKey(out_point), &EscrowOutputOutcome)
-            .await;
+        dbtx.insert_entry(
+            &EscrowOutputOutcomeKey(out_point),
+            &EscrowOutputOutcome::new_v0(),
+        )
+        .await;
 
         debug!(target: LOG_MODULE_ESCROW, "Escrow contract stored successfully for escrow_id: {:?}",contract.escrow_id);
 

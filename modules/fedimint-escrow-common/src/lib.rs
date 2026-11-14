@@ -520,18 +520,88 @@ impl fmt::Display for EscrowStatus {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct EscrowOutput {
-    pub contract: EscrowContract,
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub enum EscrowInput {
+    V0(EscrowInputV0),
+    #[encodable_default]
+    Default {
+        variant: u64,
+        bytes: Vec<u8>,
+    },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct EscrowOutputOutcome;
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-pub struct EscrowInput {
+pub struct EscrowInputV0 {
     pub escrow_id: EscrowId,
     pub resolution: Resolution,
+}
+
+impl EscrowInput {
+    pub fn new_v0(escrow_id: EscrowId, resolution: Resolution) -> Self {
+        Self::V0(EscrowInputV0 {
+            escrow_id,
+            resolution,
+        })
+    }
+
+    pub fn ensure_v0_ref(&self) -> Result<&EscrowInputV0, EscrowInputError> {
+        match self {
+            Self::V0(input) => Ok(input),
+            Self::Default { variant, .. } => {
+                Err(EscrowInputError::UnknownInputVariant { variant: *variant })
+            }
+        }
+    }
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub enum EscrowOutput {
+    V0(EscrowOutputV0),
+    #[encodable_default]
+    Default {
+        variant: u64,
+        bytes: Vec<u8>,
+    },
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct EscrowOutputV0 {
+    pub contract: EscrowContract,
+}
+
+impl EscrowOutput {
+    pub fn new_v0(contract: EscrowContract) -> Self {
+        Self::V0(EscrowOutputV0 { contract })
+    }
+
+    pub fn ensure_v0_ref(&self) -> Result<&EscrowOutputV0, EscrowOutputError> {
+        match self {
+            Self::V0(output) => Ok(output),
+            Self::Default { variant, .. } => {
+                Err(EscrowOutputError::UnknownOutputVariant { variant: *variant })
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub enum EscrowOutputOutcome {
+    V0(EscrowOutputOutcomeV0),
+    #[encodable_default]
+    Default {
+        variant: u64,
+        bytes: Vec<u8>,
+    },
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct EscrowOutputOutcomeV0;
+
+impl EscrowOutputOutcome {
+    pub fn new_v0() -> Self {
+        Self::V0(EscrowOutputOutcomeV0)
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -547,7 +617,7 @@ pub enum Outcome {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub struct ClaimPool {
     pub escrow_id: EscrowId,
-    pub claimer: Vec<(PublicKey, Amount)>, // Split case can have two claimers
+    pub claimer: Vec<(PublicKey, Amount)>,
 }
 
 impl ClaimPool {
@@ -640,6 +710,8 @@ pub enum EscrowInputError {
     NotAParticipant,
     #[error("The resolution deadline has passed")]
     ResolutionDeadlinePassed,
+    #[error("Unknown input version {variant}")]
+    UnknownInputVariant { variant: u64 },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, thiserror::Error, Encodable, Decodable)]
@@ -652,6 +724,8 @@ pub enum EscrowOutputError {
     InvalidInputs(#[from] EscrowContractValidationError),
     #[error("Internal error: {0}")]
     InternalError(String),
+    #[error("Unknown output version {variant}")]
+    UnknownOutputVariant { variant: u64 },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, thiserror::Error, Encodable, Decodable)]
@@ -693,23 +767,43 @@ impl Resolution {
     }
 }
 
-impl std::fmt::Display for EscrowInput {
+impl fmt::Display for EscrowInput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "EscrowInput({} on {})",
-            self.resolution.kind(),
-            self.escrow_id
-        )
+        match self {
+            EscrowInput::V0(input) => write!(
+                f,
+                "EscrowInput({} on {})",
+                input.resolution.kind(),
+                input.escrow_id
+            ),
+            EscrowInput::Default { variant, .. } => {
+                write!(f, "EscrowInput(unknown version {variant})")
+            }
+        }
     }
 }
 
-impl std::fmt::Display for EscrowOutput {
+impl fmt::Display for EscrowOutput {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "EscrowOutput({})", self.contract.escrow_id)
+        match self {
+            EscrowOutput::V0(output) => write!(f, "EscrowOutput({})", output.contract.escrow_id),
+            EscrowOutput::Default { variant, .. } => {
+                write!(f, "EscrowOutput(unknown version {variant})")
+            }
+        }
     }
 }
 
+impl fmt::Display for EscrowOutputOutcome {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EscrowOutputOutcome::V0(_) => write!(f, "EscrowOutputOutcome"),
+            EscrowOutputOutcome::Default { variant, .. } => {
+                write!(f, "EscrowOutputOutcome(unknown version {variant})")
+            }
+        }
+    }
+}
 pub struct EscrowModuleTypes;
 
 plugin_types_trait_impl_common!(
@@ -733,12 +827,6 @@ impl CommonModuleInit for EscrowCommonInit {
     type ClientConfig = EscrowClientConfig;
     fn decoder() -> fedimint_core::core::Decoder {
         EscrowModuleTypes::decoder_builder().build()
-    }
-}
-
-impl std::fmt::Display for EscrowOutputOutcome {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "EscrowOutputOutcome")
     }
 }
 

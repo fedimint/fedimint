@@ -689,7 +689,7 @@ impl EscrowClientModule {
         };
 
         let output = ClientOutput {
-            output: EscrowOutput { contract },
+            output: EscrowOutput::new_v0(contract),
             amounts: Amounts::new_bitcoin(amount),
         };
 
@@ -761,10 +761,7 @@ impl EscrowClientModule {
         let input = ClientInput {
             amounts: Amounts::new_bitcoin(contract.amount),
             keys: vec![self.escrow_key],
-            input: EscrowInput {
-                escrow_id,
-                resolution: resolution.clone(),
-            },
+            input: EscrowInput::new_v0(escrow_id, resolution.clone()),
         };
 
         let input_sm = ClientInputSM {
@@ -847,10 +844,7 @@ impl EscrowClientModule {
         let input = ClientInput {
             amounts: Amounts::ZERO,
             keys: vec![self.escrow_key],
-            input: EscrowInput {
-                escrow_id,
-                resolution: resolution.clone(),
-            },
+            input: EscrowInput::new_v0(escrow_id, resolution.clone()),
         };
 
         let input_sm = ClientInputSM {
@@ -951,10 +945,7 @@ impl EscrowClientModule {
         let input = ClientInput {
             amounts: Amounts::ZERO,
             keys: vec![signing_key],
-            input: EscrowInput {
-                escrow_id,
-                resolution: resolution.clone(),
-            },
+            input: EscrowInput::new_v0(escrow_id, resolution.clone()),
         };
 
         let input_sm = ClientInputSM {
@@ -1047,12 +1038,12 @@ impl EscrowClientModule {
         let input = ClientInput {
             amounts: Amounts::new_bitcoin(amount),
             keys: vec![signing_key],
-            input: EscrowInput {
+            input: EscrowInput::new_v0(
                 escrow_id,
-                resolution: Resolution::ClaimPayout {
+                Resolution::ClaimPayout {
                     claimer_pubkey: signing_key.public_key(),
                 },
-            },
+            ),
         };
 
         let input_sm = ClientInputSM {
@@ -1140,10 +1131,7 @@ impl EscrowClientModule {
         let input = ClientInput {
             amounts: Amounts::ZERO,
             keys: vec![self.escrow_key],
-            input: EscrowInput {
-                escrow_id,
-                resolution: resolution.clone(),
-            },
+            input: EscrowInput::new_v0(escrow_id, resolution.clone()),
         };
 
         let input_sm = ClientInputSM {
@@ -1651,7 +1639,7 @@ impl EscrowClientModule {
 
     /// Signs an escrow protocol message using the client's escrow identity.
     ///
-    /// This method can be used by integrators to generate signatures
+    /// This method can be used to generate signatures
     /// required by escrow protocol operations, such as arbiter engagement
     pub fn sign_message(&self, message: EscrowMessage) -> anyhow::Result<Signature> {
         let msg_bytes = compute_escrow_message(&message);
