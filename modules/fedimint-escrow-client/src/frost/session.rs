@@ -270,7 +270,7 @@ impl FrostDkgSessionRecord {
         let mut identities = std::collections::BTreeSet::new();
 
         let max_signers = participants.len() as u16;
-        anyhow::ensure!(max_signers > 2, "participant length must be greater than 2");
+        anyhow::ensure!(max_signers > 3, "participant length must be greater than 3");
 
         for participant in &participants {
             anyhow::ensure!(

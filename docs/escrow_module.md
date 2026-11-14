@@ -1,5 +1,5 @@
 # Escrow Module
-The escrow module lets two people trade with ecash when they don't trust each other. The funder locks ecash in a contract, the recipient does their part, and the funder signs a release so the recipient can take the ecash. If they disagree, an arbiter decides. The federation only checks keys, signatures and time. It doesn't know who the people are and it can't see what the deal is about.
+The escrow module lets two people trade with ecash when they don't trust each other. The funder locks ecash in a contract, the recipient does their part, and the funder signs a release so the recipient can claim the ecash. If they disagree, an arbiter decides. The federation only enforces the contract rules and verify signatures. It doesn't know who the people are and it can't see what the deal is about.
 
 The module can't know if goods were delivered or a service was done. It only enforces what the contract and the signatures say.
 
@@ -12,7 +12,7 @@ The module can't know if goods were delivered or a service was done. It only enf
 ### The contract
 `EscrowContract` is created by the funder and stored by the federation under its `escrow_id`.
 
-- `escrow_id` - random id picked by the funder, `sha256("escrow_id" || contract_hash || random nonce)`.
+- `escrow_id` - `sha256("escrow_id" || contract_hash || random nonce)`.
 - `funder_key`, `recipient_key`, `arbiter_key` - schnorr public keys. They are compared by their x-only form, because that is all a schnorr signature uses.
 - `arbiter_fee_key` - list of keys that share the arbiter fee, at most 32.
 - `amount` - the locked amount.
@@ -32,10 +32,10 @@ Timeouts need a clock that every guardian agrees on. Each guardian votes with it
 
 - [Escrow::consensus_unix_time](../modules/fedimint-escrow-server/src/lib.rs) - computes the federation time from the votes.
 
-This means time moves in steps of one minute and a timeout is never exact. Clients read the time with the `consensus_unix_time` endpoint from one guardian, so the checks a client does before it submits can be a bit off. The federation always decides with its own time.
+This means time moves in steps of one minute and a timeout is never exact. Clients read the time with the `consensus_unix_time` endpoint, so the checks a client does before it submits can be a bit off. The federation always decides with its own time.
 
 ### Creating an escrow - User Client
-- [EscrowClientModule::create_escrow](../modules/fedimint-escrow-client/src/lib.rs) - sets the `timeout` to the federation time plus the requested duration, computes the contract hash, picks a random `escrow_id`, validates the contract and submits a transaction with the contract as an output. The output takes `amount` from the funder's ecash.
+- [EscrowClientModule::create_escrow](../modules/fedimint-escrow-client/src/lib.rs) - sets the `timeout` to the federation time plus the requested duration, computes the contract hash, picks a `escrow_id`, validates the contract and submits a transaction with the contract as an output. The output takes `amount` from the funder's ecash.
 - The funder gives the `escrow_id` to the recipient outside of the federation. The recipient can fetch the contract and check that everything matches the deal (keys, amount, arbiter, timeout and fallback) before they do any work.
 
 ### Creating an escrow - Federation
@@ -50,7 +50,7 @@ A contract is rejected if:
 - timeout plus two resolution periods must fit in 64 bits
 
 ### Resolving
-After creation everything is an `EscrowInput { escrow_id, resolution }`. Every input has a key that has to sign the transaction, the last column below says which one.
+After creation everything is an `EscrowInput { escrow_id, resolution }`.
 
 | Resolution | Works when | Result | Signs the tx |
 |---|---|---|---|
@@ -76,11 +76,11 @@ sequenceDiagram;
 
     f->>fed: Create escrow (locks ecash)
     fed->>f:
-    f->>r: escrow_id (outside of the federation)
+    f->>r: escrow_id (offchain)
     r->>fed: get_contract(escrow_id)
     fed->>r: Contract
     r->>r: Check the terms, do the work
-    f->>r: Release signature (outside of the federation)
+    f->>r: Release signature (offchain)
     r->>fed: FunderRelease
     fed->>r: E-Cash
 ```
@@ -98,8 +98,8 @@ sequenceDiagram;
     Note over p,fed: the timeout has passed
     p->>fed: ArbiterEngaged
     fed->>p: Contract is Disputed, resolve_by is set
-    p->>a: Evidence (outside of the federation)
-    a->>a: Decide Release, Refund or Split
+    p->>a: Evidence (offchain)
+    a->>a: Decide Outcome
     a->>p: Signed outcome
     p->>fed: ArbiterOutcome
     fed->>p: Contract is resolved, claim pool is written
@@ -120,7 +120,7 @@ A ruling or a fallback doesn't pay anyone in the same transaction. It writes a c
 - `Release` - the recipient gets `amount - arbiter_fee`.
 - `Refund` - the funder gets `amount - arbiter_fee`.
 - `Split` - the funder and the recipient split `amount - arbiter_fee`. The funder share is rounded down in msats and the recipient gets the rest.
-- The fee is split equally between the fee keys and the first key gets the remainder.
+- The fee is split equally between the fee keys.
 - A fallback has no fee, the whole amount goes to the parties.
 
 The entries always add up to `amount` and entries with zero are dropped. Every key claims its own entry with `ClaimPayout`, in any order, and when the last entry is gone the pool is deleted. A funder release is the only case that pays directly and has no pool.
@@ -153,7 +153,7 @@ It never touches the database. The federation calls it in `handle_resolution` an
 
 ### Signed messages
 Every signature is a schnorr signature over a sha256 digest, see [compute_escrow_message](../modules/fedimint-escrow-common/src/lib.rs):
-- resolution message - `escrow_resolution_message`, federation id, escrow id, outcome, contract hash. The funder always signs it with the outcome `Release`. The arbiter signs it with the outcome it chose, and if someone changes the outcome in the input the signature doesn't match anymore.
+- resolution message - `escrow_resolution_message`, federation id, escrow id, outcome, contract hash. The funder always signs it with the outcome `Release`. The arbiter signs it with the outcome it chose
 - engage message - `arbiter_engaged`, escrow id, federation id, contract hash. Signed by the funder or recipient.
 
 ### Client keys
@@ -161,23 +161,23 @@ The client derives its keys from the module root secret:
 - child 0, `escrow_key` - the key a user has as funder, recipient or disputant. It signs messages and transaction inputs.
 - child 1, `arbiter_fee_key` - the key used to receive and claim arbiter fees. It can also submit rulings.
 - child 3, iroh key - the identity used for the arbiter consortium network. Child 2 is not used.
+- child 4, DkgStateKey - to encrypt and decrypt the client side dkg state and packages.
 
 The public keys are available with the `get_client_escrow_pubkey` and `get_arbiter_fee_pubkey` client calls. [EscrowClientModule::list_contracts](../modules/fedimint-escrow-client/src/lib.rs) finds every contract that has one of the two keys in it.
 
 ### Arbiter consortium
 The federation checks one signature against `arbiter_key`. That key can belong to a group of arbiters who made it together with FROST, then any `t` of the `n` arbiters can sign and nobody ever holds the whole private key. The federation can't tell the difference. The code is in [frost](../modules/fedimint-escrow-client/src/frost/).
 
-A group has 3 to 32 arbiters and needs `n - f` of them to sign, where `f = (n - 1) / 3`:
+A group has 4 to 32 arbiters and needs `n - f` of them to sign, where `f = (n - 1) / 3`:
 
 | arbiters | needed to sign |
 |---|---|
-| 3 | 3 |
 | 4 | 3 |
 | 5 | 4 |
 | 7 | 5 |
 | 10 | 7 |
 
-The funder puts the group key in the contract as `arbiter_key` and the fee key of every arbiter in `arbiter_fee_key`. Each arbiter then claims its own share of the fee. Nobody holds the private key of the arbiter key, so the signed ruling is submitted by a party or by a fee key holder.
+The funder puts the group key in the contract as `arbiter_key` and the fee key of every arbiter in `arbiter_fee_key`. Each arbiter then claims its own share of the fee. Nobody holds the full private key of the arbiter_key, so the signed ruling is submitted by a party or by a fee key holder.
 
 #### Setting up the key (DKG)
 - [FrostDkgSessionRecord](../modules/fedimint-escrow-client/src/frost/session.rs) - the group and the saved progress of the DKG. The `session_id` is a hash of the federation id and the sorted arbiter ids, so every arbiter gets the same one. An arbiter id (`FrostParticipant`) is derived from its `escrow_key`.
@@ -223,20 +223,11 @@ The arbiters have to finish in time. If no ruling reaches the federation before 
 #### Transport
 The arbiters talk through a transport ([transport](../modules/fedimint-escrow-client/src/frost/transport/)). It has two parts, one for the DKG rounds and one for the signing messages.
 - Iroh - the real one. Arbiters connect to each other with iroh, a connection is tied to the iroh node id of the arbiter, and every message carries the session id. Messages from unknown nodes or other sessions are dropped.
-- File - writes files in a temp directory. For tests only.
+- File - writes files in a temp directory. For testing purpose only.
 
 ### API
-The server has four public endpoints, no guardian authentication needed. They are listed in [api.md](./api.md#escrow-module-api-endpoints).
+The server has four public endpoints. They are listed in [api.md](./api.md#escrow-module-api-endpoints).
 - `get_contract` - a contract by `escrow_id`
 - `get_claim_amount` - the claim pool of an escrow
 - `list_contract_by_key` - the contracts that have a key in them
 - `consensus_unix_time` - the federation time
-
-### Known limits
-- The `escrow_id` is not checked by the federation, the nonce behind it is not stored. Whoever sees a creation transaction first could create a contract with the same id and the real one fails with `AlreadyExists`. They have to lock their own funds to do it.
-- Time moves in steps of one minute, and a client reads it from one guardian.
-- Arbiters in a consortium don't keep a record of what they signed. Nothing stops an arbiter from signing two different outcomes for the same escrow, and both signatures would be valid.
-- Key shares are stored unencrypted in the client database.
-- `list_contract_by_key` goes over every contract of the federation.
-- The `fallback` field of `ResolveFallbackPolicy` is not used. Removing it changes the encoding, so it needs a versioned change.
-- A claim pool entry stays in the federation until its owner claims it.
