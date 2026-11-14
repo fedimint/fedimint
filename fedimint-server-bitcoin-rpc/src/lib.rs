@@ -3,6 +3,9 @@ pub mod esplora;
 pub mod metrics;
 pub mod tracked;
 
+#[cfg(test)]
+mod tests;
+
 use anyhow::Result;
 use bitcoin::{BlockHash, Transaction};
 use fedimint_core::envs::BitcoinRpcConfig;
@@ -98,16 +101,44 @@ impl IServerBitcoinRpc for BitcoindClientWithFallback {
         }
     }
 
+    // Missing Core estimates also use the existing Esplora policy (including its
+    // 1 sat/vB floor for an empty successful response). If Esplora fails, retain
+    // Core's original absence or error.
     async fn get_feerate(&self) -> Result<Option<Feerate>> {
         match self.bitcoind_client.get_feerate().await {
-            Ok(feerate) => Ok(feerate),
-            Err(e) => {
+            Ok(Some(feerate)) => Ok(Some(feerate)),
+            Ok(None) => {
                 warn!(
                     target: LOG_SERVER,
-                    error = %e.fmt_compact_anyhow(),
-                    "BitcoindClient failed for get_feerate, falling back to EsploraClient"
+                    "Bitcoind fee estimate unavailable; trying Esplora"
                 );
-                self.esplora_client.get_feerate().await
+                match self.esplora_client.get_feerate().await {
+                    Ok(feerate) => Ok(feerate),
+                    Err(_) => {
+                        warn!(
+                            target: LOG_SERVER,
+                            "Esplora fee-estimate fallback failed; retaining the unavailable bitcoind estimate"
+                        );
+                        Ok(None)
+                    }
+                }
+            }
+            Err(primary) => {
+                warn!(
+                    target: LOG_SERVER,
+                    error = %primary.fmt_compact_anyhow(),
+                    "Bitcoind fee-estimate request failed; trying Esplora"
+                );
+                match self.esplora_client.get_feerate().await {
+                    Ok(feerate) => Ok(feerate),
+                    Err(_) => {
+                        warn!(
+                            target: LOG_SERVER,
+                            "Esplora fee-estimate fallback also failed; returning the bitcoind error"
+                        );
+                        Err(primary)
+                    }
+                }
             }
         }
     }
