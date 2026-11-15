@@ -442,7 +442,7 @@ Use [GitHub search to find more details about every API](https://github.com/sear
 - **Endpoint**: `list_contract_by_key`
 - **Arguments**: [`ListContractParams`](https://docs.fedimint.org/?search=ListContractParams) - A public key and a federation id (the federation id is not used by the server)
 - **Returns**: `Vec<`[`EscrowContract`](https://docs.fedimint.org/?search=EscrowContract)`>` - Contracts that have the key in them
-- **Purpose**: Finds the contracts where the key is the funder, recipient, arbiter, a fee key or a key of the swap arbiter. Keys are compared by their x-only form.
+- **Purpose**: Lists the contracts that contain one key: the escrow key by default, or the key you pass (pass the arbiter fee key to list the contracts where you are a fee key). Results are ordered by escrow_id. To page, pass limit and the last escrow_id of the previous page as last_seen.
 
 ### Consensus Unix Time Endpoint
 - **Endpoint**: `consensus_unix_time`

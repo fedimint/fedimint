@@ -32,6 +32,7 @@ const MAX_ATTEMPTS: u32 = 3;
 
 // retry delay after a transient failures in dkg
 const RETRY_DELAY: Duration = Duration::from_secs(3);
+const DKG_CONSORTIUM_TAG_V1: &[u8] = b"fedimint_escrow_dkg_consortium";
 
 #[derive(Debug, Clone, Copy, Hash, Encodable, Decodable, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SessionId(pub [u8; 32]);
@@ -199,7 +200,7 @@ fn create_session_id(participants: &[FrostParticipant], federation_id: &Federati
     identifiers.sort();
     let mut engine = sha256::HashEngine::default();
 
-    engine.input(b"fedimint_escrow_dkg_consortium");
+    engine.input(DKG_CONSORTIUM_TAG_V1);
     engine.input(&federation_id.0.to_byte_array());
 
     for identifier in identifiers {

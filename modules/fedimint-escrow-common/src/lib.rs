@@ -33,7 +33,11 @@ const MIN_PERIOD: u64 = 10 * 60;
 /// A contract has room for 32 fee keys, so a consortium cannot be bigger
 pub const MAX_FEE_PARTICIPANTS: usize = 32;
 
-pub const DEFAULT_PAGE_LIMIT: u32 = 50;
+// tags
+const CONTRACT_HASH_TAG_V1: &[u8] = b"fedimint_escrow_contract_hash_v1";
+const RESOLUTION_MESSAGE_TAG_V1: &[u8] = b"fedimint_escrow_resolution_message_v1";
+const ENGAGE_MESSAGE_TAG_V1: &[u8] = b"fedimint_escrow_engage_message_v1";
+const ESCROW_ID_TAG_V1: &[u8] = b"fedimint_escrow_id_v1";
 
 /// Unique identifier for an escrow contract.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Encodable, Decodable)]
@@ -89,7 +93,7 @@ impl EscrowId {
 
         let escrow_id = {
             let mut engine = sha256::HashEngine::default();
-            engine.input(b"escrow_id");
+            engine.input(ESCROW_ID_TAG_V1);
             engine.input(&contract_hash.0);
             engine.input(&nonce);
             EscrowId(sha256::Hash::from_engine(engine).to_byte_array())
@@ -869,7 +873,7 @@ pub fn compute_contract_hash(
     default_fallback: &FallbackPolicy,
 ) -> ContractHash {
     let mut engine = sha256::HashEngine::default();
-    engine.input(b"escrow_contract_hash");
+    engine.input(CONTRACT_HASH_TAG_V1);
     engine.input(&funder_key.serialize());
     engine.input(&recipient_key.serialize());
     engine.input(&arbiter_key.serialize());
@@ -881,9 +885,11 @@ pub fn compute_contract_hash(
     default_fallback
         .consensus_encode(&mut engine)
         .expect("hash engine writes can't fail");
+    engine.input(&(arbiter_fee_key.len() as u64).to_le_bytes());
     for arbiter in arbiter_fee_key {
         engine.input(&arbiter.serialize());
     }
+
     ContractHash(sha256::Hash::from_engine(engine).to_byte_array())
 }
 
@@ -894,7 +900,7 @@ fn compute_resolution_message(
     contract_hash: &ContractHash,
     engine: &mut sha256::HashEngine,
 ) {
-    engine.input(b"escrow_resolution_message");
+    engine.input(RESOLUTION_MESSAGE_TAG_V1);
     engine.input(&federation_id.0.to_byte_array());
     engine.input(&escrow_id.0);
     match outcome {
@@ -934,7 +940,7 @@ pub fn compute_escrow_message(message: &EscrowMessage) -> [u8; 32] {
             federation_id,
             contract_hash,
         } => {
-            engine.input(b"arbiter_engaged");
+            engine.input(ENGAGE_MESSAGE_TAG_V1);
             engine.input(&escrow_id.0);
             engine.input(&federation_id.0.to_byte_array());
             engine.input(&contract_hash.0);

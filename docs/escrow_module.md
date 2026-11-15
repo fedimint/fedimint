@@ -36,7 +36,7 @@ This means time moves in steps of one minute and a timeout is never exact. Clien
 
 ### Creating an escrow - User Client
 - [EscrowClientModule::create_escrow](../modules/fedimint-escrow-client/src/lib.rs) - sets the `timeout` to the federation time plus the requested duration, computes the contract hash, picks a `escrow_id`, validates the contract and submits a transaction with the contract as an output. The output takes `amount` from the funder's ecash.
-- The funder gives the `escrow_id` to the recipient outside of the federation. The recipient can fetch the contract and check that everything matches the deal (keys, amount, arbiter, timeout and fallback) before they do any work.
+- The funder gives the `escrow_id` to the recipient outside of the federation. Before doing any work, the recipient checks every term: the keys, amount, arbiter_fee, arbiter_fee_key, timeout, resolution_period and default_fallback. The funder chooses all of them and the federation can’t know what was agreed.
 
 ### Creating an escrow - Federation
 - [Escrow::process_output](../modules/fedimint-escrow-server/src/lib.rs) - validates the contract with [validate_contract_fields](../modules/fedimint-escrow-common/src/lib.rs), recomputes the contract hash, rejects an `escrow_id` that already exists and stores the contract.
@@ -123,7 +123,7 @@ A ruling or a fallback doesn't pay anyone in the same transaction. It writes a c
 - The fee is split equally between the fee keys.
 - A fallback has no fee, the whole amount goes to the parties.
 
-The entries always add up to `amount` and entries with zero are dropped. Every key claims its own entry with `ClaimPayout`, in any order, and when the last entry is gone the pool is deleted. A funder release is the only case that pays directly and has no pool.
+The entries always add up to `amount` and entries with zero are dropped. Every key claims its own entry with `ClaimPayout`, in any order, and when the last entry is gone the pool is deleted. A funder release is the only case that pays directly and has no pool. Although a claim pool never expires, claimer can claim their sats as they want.
 
 - [EscrowClientModule::claim_payout](../modules/fedimint-escrow-client/src/lib.rs) - claims the entry of the first client key that is in the pool.
 - [Escrow::handle_claim](../modules/fedimint-escrow-server/src/lib.rs) - removes the entry (keys are compared x-only) and returns its amount.
@@ -163,7 +163,7 @@ The client derives its keys from the module root secret:
 - child 3, iroh key - the identity used for the arbiter consortium network. Child 2 is not used.
 - child 4, DkgStateKey - to encrypt and decrypt the client side dkg state and packages.
 
-The public keys are available with the `get_client_escrow_pubkey` and `get_arbiter_fee_pubkey` client calls. [EscrowClientModule::list_contracts](../modules/fedimint-escrow-client/src/lib.rs) finds every contract that has one of the two keys in it.
+The public keys are available with the `get_client_escrow_pubkey` and `get_arbiter_fee_pubkey` client calls. [EscrowClientModule::list_contracts](../modules/fedimint-escrow-client/src/lib.rs) lists the contracts that contain one key: the escrow key by default, or the key you pass (pass the arbiter fee key to list the contracts where client are a fee key). Results are ordered by escrow_id. To page, pass limit and the last escrow_id of the previous page as last_seen.
 
 ### Arbiter consortium
 The federation checks one signature against `arbiter_key`. That key can belong to a group of arbiters who made it together with FROST, then any `t` of the `n` arbiters can sign and nobody ever holds the whole private key. The federation can't tell the difference. The code is in [frost](../modules/fedimint-escrow-client/src/frost/).
