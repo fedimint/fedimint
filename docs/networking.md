@@ -8,6 +8,9 @@ Default ports:
 
 To be expanded.
 
+For the guardian P2P delivery and reconnection contract, see
+[SPEC-guardian-p2p-delivery](../specs/SPEC-guardian-p2p-delivery.md).
+
 ## Guardian Iroh P2P upgrades
 
 In Iroh-enabled federations, guardian-to-guardian P2P uses Iroh 1.x while the

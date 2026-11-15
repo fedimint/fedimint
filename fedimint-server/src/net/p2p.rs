@@ -254,11 +254,12 @@ struct P2PConnectionSMCommon<M> {
     connector: DynP2PConnector<M>,
     incoming_connections: Receiver<DynP2PConnection<M>>,
     status_sender: watch::Sender<P2PConnectionState>,
-    /// Drop a connection once it exceeds this age so it is re-established;
-    /// disabled if `None`.
+    /// Request connection retirement after this age so it is re-established.
+    ///
+    /// The send loop checks the deadline between sends; disabled if `None`.
     max_connection_age: Option<Duration>,
-    /// Point in time at which the current connection exceeds the maximum
-    /// age; set whenever a new connection is established.
+    /// Deadline after which the send loop requests max-age retirement; set when
+    /// a new connection is established.
     connection_deadline: Option<Instant>,
 }
 
@@ -343,21 +344,27 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
         connection: DynP2PConnection<M>,
         mut status_updates: Option<DynConnectionStatusUpdates>,
     ) -> Option<P2PConnectionSMState<M>> {
-        // The send and receive halves are driven as two long-lived futures that
-        // are never cancelled part-way through a message. Multiplexing a single
-        // send and a single receive in one `select!` meant that a send parked on
-        // transport flow control could no longer poll `receive`, so two peers
-        // that both started writing a message larger than the transport window
-        // deadlocked permanently and silently.
+        // The send and receive halves are driven as two long-lived futures during
+        // ordinary operation. Multiplexing a single send and a single receive in
+        // one `select!` meant that a send parked on transport flow control could
+        // no longer poll `receive`, so two peers that both started writing a
+        // message larger than the transport window deadlocked permanently and
+        // silently.
         //
         // Interleaving reads inside the parked send is *not* sufficient: it just
         // turns a write/write deadlock into a read/read one. The halves have to
         // be genuinely concurrent.
         //
-        // Replacement connections and the max-age deadline are observed inside
-        // the send half, between messages, so they can never cancel a send that
-        // is already in flight. A send half that halts stops the receive half
-        // between frames for the same reason.
+        // The send half checks for replacement and max-age retirement between
+        // messages, so neither event cancels an active non-cancel-safe send.
+        // A pending send defers retirement until it completes, fails, or exceeds
+        // SEND_TIMEOUT; a send timeout fails the connection.
+        //
+        // When the send half halts, allow the receive half up to
+        // RECEIVE_DRAIN_TIMEOUT to finish its current frame and stop between
+        // frames. Shutdown skips this grace. A timeout or connection failure can
+        // still discard in-flight traffic; this is not a delivery guarantee.
+        // See `SPEC-guardian-p2p-delivery`.
         let send_loop = Self::send_loop(
             &connection,
             &self.outgoing_receiver,
@@ -382,9 +389,10 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
             tokio::select! {
                 halt = &mut send_loop => {
                     // A frame may be part way through `read_to_end`, which is not
-                    // cancel-safe, so the receive half is stopped between frames
-                    // rather than dropped here. Shutdown is the exception: nothing
-                    // reads the incoming queue after it.
+                    // cancel-safe, so give the receive half bounded time to stop
+                    // between frames rather than dropping it immediately.
+                    // Shutdown skips the grace: nothing reads the incoming queue
+                    // after it.
                     if !matches!(halt, SendHalt::Shutdown) {
                         stop_receiving.notify_one();
 
@@ -432,12 +440,14 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
         }
     }
 
-    /// Drains the outgoing queue onto the connection. Replacement connections
-    /// and the max-age deadline are observed here, between sends, so they can
-    /// never cancel the non-cancel-safe `send` and silently drop a message
-    /// that the DKG would not resend. Only a failure of the connection itself,
-    /// including a send exceeding [`SEND_TIMEOUT`], can still lose the message
-    /// in flight; the networking layer is unreliable by design.
+    /// Drains the outgoing queue onto the connection.
+    ///
+    /// Checks for replacement and max-age retirement between sends, so neither
+    /// event cancels an active non-cancel-safe `send`. Each send has a
+    /// [`SEND_TIMEOUT`] limit; exceeding it fails the connection and can lose
+    /// the message in flight. This loop does not acknowledge delivery or
+    /// recover messages after reconnecting. See
+    /// `SPEC-guardian-p2p-delivery`.
     async fn send_loop(
         connection: &DynP2PConnection<M>,
         outgoing_receiver: &Receiver<M>,
@@ -487,8 +497,8 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
         }
     }
 
-    /// Drains the connection into the incoming queue. Only returns when the
-    /// connection fails.
+    /// Drains the connection into the incoming queue until the connection fails
+    /// or the send half requests a stop between frames.
     async fn receive_loop(
         connection: &DynP2PConnection<M>,
         incoming_sender: &Sender<M>,
@@ -498,7 +508,8 @@ impl<M: Send + 'static> P2PConnectionSMCommon<M> {
     ) -> ReceiveHalt {
         loop {
             // `receive` is cancel-safe, `read_to_end` below is not, so this is
-            // the only point at which the halted send half may stop us.
+            // the point at which we honor the stop request. The caller can still
+            // cancel this loop on drain timeout or shutdown.
             let mut frame = tokio::select! {
                 biased;
                 () = stop.notified() => return ReceiveHalt::Stopped,
