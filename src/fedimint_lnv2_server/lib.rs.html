@@ -826,12 +826,12 @@
 <a href=#826 id=826 data-nosnippet>826</a>        expiration: u64,
 <a href=#827 id=827 data-nosnippet>827</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;OutPoint&gt; {
 <a href=#828 id=828 data-nosnippet>828</a>        <span class="kw">loop </span>{
-<a href=#829 id=829 data-nosnippet>829</a>            timeout(
-<a href=#830 id=830 data-nosnippet>830</a>                Duration::from_secs(<span class="number">10</span>),
-<a href=#831 id=831 data-nosnippet>831</a>                db.wait_key_exists(<span class="kw-2">&amp;</span>IncomingContractOutpointKey(contract_id)),
-<a href=#832 id=832 data-nosnippet>832</a>            )
-<a href=#833 id=833 data-nosnippet>833</a>            .<span class="kw">await
-<a href=#834 id=834 data-nosnippet>834</a>            </span>.ok();
+<a href=#829 id=829 data-nosnippet>829</a>            <span class="comment">// A timeout just wakes the loop to recheck the contract and its expiration.
+<a href=#830 id=830 data-nosnippet>830</a>            </span><span class="kw">let _ </span>= timeout(
+<a href=#831 id=831 data-nosnippet>831</a>                Duration::from_secs(<span class="number">10</span>),
+<a href=#832 id=832 data-nosnippet>832</a>                db.wait_key_exists(<span class="kw-2">&amp;</span>IncomingContractOutpointKey(contract_id)),
+<a href=#833 id=833 data-nosnippet>833</a>            )
+<a href=#834 id=834 data-nosnippet>834</a>            .<span class="kw">await</span>;
 <a href=#835 id=835 data-nosnippet>835</a>
 <a href=#836 id=836 data-nosnippet>836</a>            <span class="comment">// to avoid race conditions we have to check for the contract and
 <a href=#837 id=837 data-nosnippet>837</a>            // its expiration in the same database transaction
@@ -857,12 +857,12 @@
 <a href=#857 id=857 data-nosnippet>857</a>        expiration: u64,
 <a href=#858 id=858 data-nosnippet>858</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;[u8; <span class="number">32</span>]&gt; {
 <a href=#859 id=859 data-nosnippet>859</a>        <span class="kw">loop </span>{
-<a href=#860 id=860 data-nosnippet>860</a>            timeout(
-<a href=#861 id=861 data-nosnippet>861</a>                Duration::from_secs(<span class="number">10</span>),
-<a href=#862 id=862 data-nosnippet>862</a>                db.wait_key_exists(<span class="kw-2">&amp;</span>PreimageKey(outpoint)),
-<a href=#863 id=863 data-nosnippet>863</a>            )
-<a href=#864 id=864 data-nosnippet>864</a>            .<span class="kw">await
-<a href=#865 id=865 data-nosnippet>865</a>            </span>.ok();
+<a href=#860 id=860 data-nosnippet>860</a>            <span class="comment">// A timeout just wakes the loop to recheck the preimage and expiration.
+<a href=#861 id=861 data-nosnippet>861</a>            </span><span class="kw">let _ </span>= timeout(
+<a href=#862 id=862 data-nosnippet>862</a>                Duration::from_secs(<span class="number">10</span>),
+<a href=#863 id=863 data-nosnippet>863</a>                db.wait_key_exists(<span class="kw-2">&amp;</span>PreimageKey(outpoint)),
+<a href=#864 id=864 data-nosnippet>864</a>            )
+<a href=#865 id=865 data-nosnippet>865</a>            .<span class="kw">await</span>;
 <a href=#866 id=866 data-nosnippet>866</a>
 <a href=#867 id=867 data-nosnippet>867</a>            <span class="comment">// to avoid race conditions we have to check for the preimage and
 <a href=#868 id=868 data-nosnippet>868</a>            // the contracts expiration in the same database transaction
