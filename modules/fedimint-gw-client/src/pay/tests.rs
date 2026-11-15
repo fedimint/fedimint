@@ -1,14 +1,21 @@
 use bitcoin::hashes::{Hash as _, sha256};
 use bitcoin::key::Keypair;
 use fedimint_core::Amount;
+use fedimint_core::module::serde_json;
 use fedimint_core::secp256k1::{self, SecretKey};
+use fedimint_lightning::LightningRpcError;
+use fedimint_lightning::payment_failure::PaymentFailureDiagnostics;
 use fedimint_ln_client::pay::PaymentData;
 use fedimint_ln_common::PrunedInvoice;
 use fedimint_ln_common::contracts::IdentifiableContract as _;
 use fedimint_ln_common::contracts::outgoing::{OutgoingContract, OutgoingContractAccount};
 use lightning_invoice::RoutingFees;
 
-use super::{GatewayPayInvoice, OutgoingContractError, TIMELOCK_DELTA};
+use super::{
+    GatewayPayInvoice, OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
+    TIMELOCK_DELTA,
+};
+use crate::events::OutgoingPaymentFailed;
 
 const CONSENSUS_BLOCK_COUNT: u64 = 1;
 const INVOICE_AMOUNT: Amount = Amount::from_msats(1000);
@@ -240,4 +247,75 @@ fn rejects_invoice_amount_that_would_overflow_the_underfunding_check() {
         validate_amount(Amount::from_msats(u64::MAX), largest_representable),
         Ok(())
     );
+}
+
+fn lightning_pay_error(
+    account: &OutgoingContractAccount,
+    lightning_error: LightningRpcError,
+) -> OutgoingPaymentError {
+    OutgoingPaymentError {
+        error_type: OutgoingPaymentErrorType::LightningPayError { lightning_error },
+        contract_id: account.contract.contract_id(),
+        contract: Some(account.clone()),
+    }
+}
+
+#[test]
+fn lightning_failure_diagnostics_come_from_the_lightning_error() {
+    let account = contract_account(sha256::Hash::all_zeros());
+    let diagnostics =
+        PaymentFailureDiagnostics::new(Some("FAILURE_REASON_NO_ROUTE".to_string()), vec![]);
+
+    let with_diagnostics = lightning_pay_error(
+        &account,
+        LightningRpcError::FailedPaymentWithDiagnostics {
+            failure_reason: "FailureReasonNoRoute".to_string(),
+            diagnostics: diagnostics.clone(),
+        },
+    );
+    assert_eq!(
+        with_diagnostics.lightning_failure_diagnostics(),
+        Some(&diagnostics)
+    );
+
+    let without_diagnostics = lightning_pay_error(
+        &account,
+        LightningRpcError::FailedPayment {
+            failure_reason: "FailureReasonNoRoute".to_string(),
+        },
+    );
+    assert_eq!(without_diagnostics.lightning_failure_diagnostics(), None);
+
+    let not_a_lightning_failure = OutgoingPaymentError {
+        error_type: OutgoingPaymentErrorType::InvoiceAlreadyPaid,
+        ..without_diagnostics
+    };
+    assert_eq!(
+        not_a_lightning_failure.lightning_failure_diagnostics(),
+        None
+    );
+}
+
+/// Failure events logged before diagnostics were recorded must still parse.
+#[test]
+fn failure_event_without_diagnostics_still_parses() {
+    let account = contract_account(sha256::Hash::all_zeros());
+    let event = OutgoingPaymentFailed {
+        outgoing_contract: account.clone(),
+        contract_id: account.contract.contract_id(),
+        error: lightning_pay_error(
+            &account,
+            LightningRpcError::FailedPayment {
+                failure_reason: "FailureReasonNoRoute".to_string(),
+            },
+        ),
+        lightning_failure_diagnostics: None,
+    };
+
+    let json = serde_json::to_value(&event).expect("Failed to serialize event");
+    assert!(json.get("lightning_failure_diagnostics").is_none());
+
+    let parsed: OutgoingPaymentFailed =
+        serde_json::from_value(json).expect("Failed to parse event without diagnostics");
+    assert_eq!(parsed.lightning_failure_diagnostics, None);
 }

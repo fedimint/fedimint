@@ -927,6 +927,7 @@ impl MintClientModule {
                         operation_id,
                         txid: range.txid(),
                         spendable_notes: notes.clone(),
+                        refund_txid: None,
                     },
                     state: InputSMState::Pending,
                 })];
