@@ -22,7 +22,7 @@ use fedimint_core::core::{Account, IntoDynInstance, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::task::{TaskGroup, sleep_in_test, timeout};
-use fedimint_core::time::now;
+use fedimint_core::time::{duration_since_epoch, now};
 use fedimint_core::util::{NextOrPending, SafeUrl, backoff_util, retry};
 use fedimint_core::{
     Amount, OutPoint, TransactionId, apply, async_trait_maybe_send, msats, sats, secp256k1,
@@ -1255,7 +1255,7 @@ async fn lnv1_pay_resumes_expired_invoice_already_dispatched() -> anyhow::Result
             .await;
             // Guards against the invoice fixture outliving the wait, which
             // would make this test pass without exercising the gate at all.
-            assert!(invoice.is_expired());
+            assert!(invoice.would_expire(duration_since_epoch()));
 
             let gw_pay_op = gateway_client
                 .get_first_module::<GatewayClientModule>()?
@@ -1299,7 +1299,7 @@ async fn lnv1_pay_cancels_expired_invoice_never_dispatched() -> anyhow::Result<(
                 Duration::from_secs(6),
             )
             .await;
-            assert!(invoice.is_expired());
+            assert!(invoice.would_expire(duration_since_epoch()));
 
             let gw_pay_op = gateway_client
                 .get_first_module::<GatewayClientModule>()?
@@ -3440,7 +3440,7 @@ async fn lnv2_send_resumes_expired_invoice_already_dispatched() -> anyhow::Resul
     .await;
     // Guards against the invoice fixture outliving the wait, which would
     // make this test pass without exercising the expiry gate at all.
-    assert!(invoice.is_expired());
+    assert!(invoice.would_expire(duration_since_epoch()));
 
     let preimage = gateway
         .send_payment_v2(payload)
@@ -3472,7 +3472,7 @@ async fn lnv2_send_cancels_expired_invoice_never_dispatched() -> anyhow::Result<
         Duration::from_secs(6),
     )
     .await;
-    assert!(invoice.is_expired());
+    assert!(invoice.would_expire(duration_since_epoch()));
 
     let signature = gateway
         .send_payment_v2(payload.clone())
