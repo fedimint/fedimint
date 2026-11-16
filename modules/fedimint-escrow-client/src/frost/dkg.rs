@@ -54,7 +54,7 @@ pub fn key_digest(
     pubkey_package: &PublicKeyPackage,
 ) -> Result<[u8; 32], DkgError> {
     let mut engine = sha256::HashEngine::default();
-    engine.input(b"fedimint_escrow_dkg_key_confirmation");
+    engine.input(b"fedimint_escrow_dkg_key_confirmation_v1");
     engine.input(&session_id.0);
     engine.input(
         &pubkey_package

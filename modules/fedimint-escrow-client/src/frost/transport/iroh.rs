@@ -21,7 +21,7 @@ const SIGNING_TAG: u8 = 3;
 const CONFIRM_TAG: u8 = 4;
 const REQUEST_TAG: u8 = 5;
 
-pub const DKG_ALPN: &[u8] = b"fedimint_escrow_iroh_dkg_consortium";
+pub const DKG_ALPN: &[u8] = b"fedimint_escrow_iroh_dkg_consortium/1";
 const MAX_MESSAGE_BYTES: usize = 128 * 1024;
 const MAX_QUEUED_SIGNING_FRAMES: usize = 1024;
 const PULL_INTERVAL: Duration = Duration::from_secs(3);

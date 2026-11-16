@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use anyhow::{Error, anyhow, bail};
 use async_stream::{stream, try_stream};
+use fedimint_client_module::db::ClientModuleMigrationFn;
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{
@@ -21,7 +22,7 @@ use fedimint_client_module::{
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{Amounts, ApiVersion, ModuleInit, MultiApiVersion};
 use fedimint_core::runtime::{sleep, spawn};
@@ -268,6 +269,10 @@ impl ClientModuleInit for EscrowClientInit {
             notifier: args.notifier().clone(),
             dkg_transports: Default::default(),
         })
+    }
+
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn> {
+        BTreeMap::new()
     }
 }
 
@@ -527,7 +532,7 @@ pub struct ConsortiumSession {
 }
 
 /// Public result of a finished consortium DKG. The key share stays sealed in
-/// the client db, use `get_consortium_signing_keys` when you need to sign.
+/// the client db.
 #[derive(Debug, Clone)]
 pub struct ConsortiumInfo {
     pub session_id: SessionId,
