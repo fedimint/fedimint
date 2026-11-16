@@ -299,6 +299,7 @@ pub(crate) async fn handle_cli_command(
                 match &state {
                     EscrowInputSMState::Refunded
                     | EscrowInputSMState::Released
+                    | EscrowInputSMState::Disputed
                     | EscrowInputSMState::Split => {
                         break;
                     }

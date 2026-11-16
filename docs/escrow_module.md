@@ -14,7 +14,7 @@ The module can't know if goods were delivered or a service was done. It only enf
 
 - `escrow_id` - `sha256("escrow_id" || contract_hash || random nonce)`.
 - `funder_key`, `recipient_key`, `arbiter_key` - schnorr public keys. They are compared by their x-only form, because that is all a schnorr signature uses.
-- `arbiter_fee_key` - list of keys that share the arbiter fee, at most 32.
+- `arbiter_fee_key` - list of keys that share the arbiter fee, at most 24.
 - `amount` - the locked amount.
 - `arbiter_fee` - the part of `amount` that goes to the fee keys if the arbiter rules.
 - `timeout` - unix time. Before it only the funder's release works, after it a party can bring in the arbiter.
@@ -46,7 +46,7 @@ A contract is rejected if:
 - the timeout is not in the future, or the resolution period is shorter than 10 minutes
 - a split doesn't add up to 10,000
 - funder, recipient, arbiter and fee keys are not all different from each other (also counting the keys in `SwapArbiter`)
-- there is a fee but no fee key, or more than 32 fee keys
+- there is a fee but no fee key, or more than 24 fee keys
 - timeout plus two resolution periods must fit in 64 bits
 
 ### Resolving
@@ -153,8 +153,8 @@ It never touches the database. The federation calls it in `handle_resolution` an
 
 ### Signed messages
 Every signature is a schnorr signature over a sha256 digest, see [compute_escrow_message](../modules/fedimint-escrow-common/src/lib.rs):
-- resolution message - `escrow_resolution_message`, federation id, escrow id, outcome, contract hash. The funder always signs it with the outcome `Release`. The arbiter signs it with the outcome it chose
-- engage message - `arbiter_engaged`, escrow id, federation id, contract hash. Signed by the funder or recipient.
+- resolution message - `fedimint_escrow_resolution_message_v1`, federation id, escrow id, outcome, contract hash. The funder always signs it with the outcome `Release`. The arbiter signs it with the outcome it chose
+- engage message - `fedimint_escrow_engage_message_v1`, escrow id, federation id, contract hash. Signed by the funder or recipient.
 
 ### Client keys
 The client derives its keys from the module root secret:
@@ -168,7 +168,7 @@ The public keys are available with the `get_client_escrow_pubkey` and `get_arbit
 ### Arbiter consortium
 The federation checks one signature against `arbiter_key`. That key can belong to a group of arbiters who made it together with FROST, then any `t` of the `n` arbiters can sign and nobody ever holds the whole private key. The federation can't tell the difference. The code is in [frost](../modules/fedimint-escrow-client/src/frost/).
 
-A group has 4 to 32 arbiters and needs `n - f` of them to sign, where `f = (n - 1) / 3`:
+A group has 4 to 24 arbiters and needs `n - f` of them to sign, where `f = (n - 1) / 3`:
 
 | arbiters | needed to sign |
 |---|---|

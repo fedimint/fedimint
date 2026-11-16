@@ -414,9 +414,14 @@ impl ClientModule for EscrowClientModule {
                     let req: GetClaimPoolRequest = serde_json::from_value(request)?;
                     yield serde_json::to_value(self.get_claim_pool(req.escrow_id).await?)?;
                 }
-                "sign_message"=>{
-                    let req:SignClientMessageRequest=serde_json::from_value(request)?;
-                    let result=self.sign_message(req.message)?;
+                "sign_engage_message" => {
+                    let req: SignEngageMessageRequest = serde_json::from_value(request)?;
+                    let result = self.sign_engage_message(req.escrow_id).await?;
+                    yield serde_json::to_value(result)?;
+                }
+                "sign_resolution_message" => {
+                    let req: SignResolutionMessageRequest =serde_json::from_value(request)?;
+                    let result = self.sign_resolution_message(req.escrow_id,req.outcome).await?;
                     yield serde_json::to_value(result)?;
                 }
                 _ => {
@@ -495,8 +500,14 @@ struct SubscribeClaimPayoutRequest {
 }
 
 #[derive(Deserialize)]
-struct SignClientMessageRequest {
-    message: EscrowMessage,
+struct SignEngageMessageRequest {
+    escrow_id: EscrowId,
+}
+
+#[derive(Deserialize)]
+struct SignResolutionMessageRequest {
+    escrow_id: EscrowId,
+    outcome: Outcome,
 }
 
 #[derive(Default, Deserialize)]
@@ -1642,14 +1653,40 @@ impl EscrowClientModule {
         ))
     }
 
-    /// Signs an escrow protocol message using the client's escrow identity.
-    ///
-    /// This method can be used to generate signatures
-    /// required by escrow protocol operations, such as arbiter engagement
     pub fn sign_message(&self, message: EscrowMessage) -> anyhow::Result<Signature> {
         let msg_bytes = compute_escrow_message(&message);
         let msg = Message::from_digest(msg_bytes);
 
         Ok(self.secp.sign_schnorr(&msg, &self.escrow_key))
+    }
+
+    /// Signs an arbiter engagement message for an escrow contract.
+    pub async fn sign_engage_message(&self, escrow_id: EscrowId) -> anyhow::Result<Signature> {
+        let contract = self
+            .get_contract(escrow_id)
+            .await?
+            .ok_or_else(|| anyhow!("Escrow contract not found"))?;
+
+        let message = contract.engage_message();
+
+        self.sign_message(message)
+    }
+
+    /// Signs an arbiter resolution message for an escrow contract.
+    pub async fn sign_resolution_message(
+        &self,
+        escrow_id: EscrowId,
+        outcome: Outcome,
+    ) -> anyhow::Result<Signature> {
+        anyhow::ensure!(outcome.is_valid(), "Invalid resolution outcome");
+
+        let contract = self
+            .get_contract(escrow_id)
+            .await?
+            .ok_or_else(|| anyhow!("Escrow contract not found"))?;
+
+        let message = contract.resolution_message(outcome);
+
+        self.sign_message(message)
     }
 }

@@ -30,8 +30,8 @@ pub const SPLIT_BPS_DENOMINATOR: u16 = 10_000;
 
 const MIN_PERIOD: u64 = 10 * 60;
 
-/// A contract has room for 32 fee keys, so a consortium cannot be bigger
-pub const MAX_FEE_PARTICIPANTS: usize = 32;
+/// A contract has room for 24 fee keys, so a consortium cannot be bigger
+pub const MAX_FEE_PARTICIPANTS: usize = 24;
 
 // tags
 const CONTRACT_HASH_TAG_V1: &[u8] = b"fedimint_escrow_contract_hash_v1";
@@ -476,7 +476,7 @@ impl FromStr for FallbackPolicy {
                         .next()
                         .ok_or_else(|| anyhow::anyhow!("missing arbiter key"))?,
                 )?;
-                let fee_msats: u64 = parts
+                let fee_sats: u64 = parts
                     .next()
                     .ok_or_else(|| anyhow::anyhow!("missing arbiter fee"))?
                     .parse()?;
@@ -490,7 +490,7 @@ impl FromStr for FallbackPolicy {
                 FallbackPolicy::SwapArbiter {
                     arbiter_key,
                     arbiter_fee_key,
-                    arbiter_fee: Amount::from_msats(fee_msats),
+                    arbiter_fee: Amount::from_sats(fee_sats),
                 }
             }
             other => {
@@ -941,8 +941,8 @@ pub fn compute_escrow_message(message: &EscrowMessage) -> [u8; 32] {
             contract_hash,
         } => {
             engine.input(ENGAGE_MESSAGE_TAG_V1);
-            engine.input(&escrow_id.0);
             engine.input(&federation_id.0.to_byte_array());
+            engine.input(&escrow_id.0);
             engine.input(&contract_hash.0);
         }
     }
