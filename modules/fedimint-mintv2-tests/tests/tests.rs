@@ -539,7 +539,7 @@ async fn double_spend_is_rejected() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> {
+async fn receive_rejects_invalid_signatures_before_starting_an_operation() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_not_degraded().await;
 
@@ -564,36 +564,44 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
     };
     assert_eq!(send.operation_id, operation_id);
 
-    let mut invalid_notes = ecash.notes();
-
-    for note in &mut invalid_notes {
+    let notes = ecash.notes();
+    assert!(notes.len() > 1, "exercise mixed valid and invalid notes");
+    let mut all_invalid = notes.clone();
+    for note in &mut all_invalid {
         note.signature = tbs::Signature(bls12_381::G1Affine::generator());
     }
+    let mut invalid_batches = vec![all_invalid];
+    // Check every position so a valid first note cannot hide an invalid later one.
+    for index in 0..notes.len() {
+        let mut mixed = notes.clone();
+        mixed[index].signature = tbs::Signature(bls12_381::G1Affine::generator());
+        invalid_batches.push(mixed);
+    }
+    // Even a real signature is invalid if it authenticates a different nonce.
+    let mut wrong_nonce = notes.clone();
+    wrong_nonce[0].keypair = Keypair::from_seckey_slice(SECP256K1, &[1u8; 32])?;
+    invalid_batches.push(wrong_nonce);
 
-    let invalid_ecash = ECash::new(ecash.mint().unwrap(), invalid_notes);
-
-    let operation_id = client
-        .get_first_module::<MintClientModule>()?
-        .receive(Account::Primary, invalid_ecash, Value::Null)
-        .await?;
-
-    let state = client
-        .get_first_module::<MintClientModule>()?
-        .await_final_receive_operation_state(operation_id)
-        .await?;
-
-    assert_eq!(state, FinalReceiveOperationState::Rejected);
-
-    let Some(MintEvent::Receive(receive)) = events.next().await else {
-        panic!("Expected Receive event");
-    };
-    assert_eq!(receive.operation_id, operation_id);
-
-    let Some(MintEvent::ReceiveUpdate(update)) = events.next().await else {
-        panic!("Expected ReceiveUpdate event");
-    };
-    assert_eq!(update.operation_id, receive.operation_id);
-    assert_eq!(update.status, ReceivePaymentStatus::Rejected);
+    let balance_before = client.get_balance_for_btc(Account::Primary).await?;
+    for invalid_notes in invalid_batches {
+        let invalid_ecash = ECash::new(ecash.mint().unwrap(), invalid_notes);
+        let operation_id = OperationId::from_encodable(&invalid_ecash);
+        assert_matches!(
+            client
+                .get_first_module::<MintClientModule>()?
+                .receive(Account::Primary, invalid_ecash, Value::Null)
+                .await,
+            Err(ReceiveECashError::InvalidSignature)
+        );
+        assert!(
+            client
+                .operation_log()
+                .get_operation(operation_id)
+                .await
+                .is_none()
+        );
+        assert_eq!(client.get_balance_for_btc(Account::Primary).await?, balance_before);
+    }
 
     let valid_ecash = ECash::new(ecash.mint().unwrap(), ecash.notes());
 
@@ -609,6 +617,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
 
     assert_eq!(state, FinalReceiveOperationState::Success);
 
+    // Invalid batches emitted no receive events; the next event is for valid ecash.
     let Some(MintEvent::Receive(receive)) = events.next().await else {
         panic!("Expected Receive event");
     };

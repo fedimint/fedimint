@@ -71,6 +71,7 @@ use fedimint_derive_secret::DerivableSecret;
 use fedimint_mintv2_common::config::{FeeConsensus, MintClientConfig, client_denominations};
 use fedimint_mintv2_common::{
     Denomination, KIND, MintCommonInit, MintInput, MintModuleTypes, MintOutput, Note, RecoveryItem,
+    verify_note,
 };
 use futures::{StreamExt, pin_mut};
 use itertools::Itertools;
@@ -1339,6 +1340,17 @@ impl MintClientModule {
             return Err(ReceiveECashError::UneconomicalDenomination);
         }
 
+        for note in ecash.notes() {
+            let pk = self
+                .cfg
+                .tbs_agg_pks
+                .get(&note.denomination)
+                .expect("denominations were checked above");
+            if !verify_note(note.note(), *pk) {
+                return Err(ReceiveECashError::InvalidSignature);
+            }
+        }
+
         let input =
             Self::create_input_bundle(operation_id, ecash.notes(), true, self.cfg.amount_unit);
         let input = self.client_ctx.make_client_inputs(input);
@@ -1720,6 +1732,10 @@ pub enum ReceiveECashError {
     /// One of the notes has a denomination the federation does not issue.
     #[error("ECash contains a denomination the federation does not issue")]
     InvalidDenomination,
+
+    /// One of the notes has an invalid signature.
+    #[error("ECash contains a note with an invalid signature")]
+    InvalidSignature,
 
     /// The client cannot cover the fee the reissue costs.
     #[error("Receiving ecash requires additional funds")]
