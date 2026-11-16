@@ -1,7 +1,6 @@
 use std::time::{Duration, UNIX_EPOCH};
 
 use fedimint_api_client::api::DynGlobalApi;
-use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::is_running_in_test_env;
@@ -18,7 +17,7 @@ use tracing::{debug, info};
 use crate::IrohNextApiSettings;
 use crate::config::ServerConfig;
 use crate::db::DbKeyPrefix;
-use crate::net::iroh::derive_iroh_v1_api_secret_key;
+use crate::net::iroh::{derive_iroh_v1_api_secret_key, guardian_connector_registry_builder};
 
 fn ensure_iroh_next_remains_available(
     existing_endpoint: Option<&str>,
@@ -73,7 +72,10 @@ pub async fn prepare_guardian_metadata_service(
     api_secret: Option<String>,
 ) -> anyhow::Result<DynGlobalApi> {
     Ok(DynGlobalApi::new(
-        ConnectorRegistry::build_from_server_env().bind().await,
+        guardian_connector_registry_builder()
+            .with_env_var_overrides()
+            .bind()
+            .await,
         super::announcement::get_api_urls(db, &cfg.consensus).await,
         api_secret.as_deref(),
     ))

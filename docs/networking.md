@@ -11,6 +11,35 @@ To be expanded.
 For the guardian P2P delivery and reconnection contract, see
 [SPEC-guardian-p2p-delivery](../specs/SPEC-guardian-p2p-delivery.md).
 
+## Guardian relay-only Iroh connections
+
+Set `FM_IROH_P2P_ENABLE=false` (or `0`) before starting `fedimintd` to disable
+direct IP transports for guardian P2P, the transitional Iroh 1.x API listener,
+and guardian-origin Iroh 1.x API connections. Leave the variable unset or set it
+to `true` or `1` to keep
+the default direct-and-relay behavior. This local runtime option does not change
+federation configuration, identities, or protocols and does not require another DKG.
+
+In relay-only mode, the 1.x endpoints do not bind UDP sockets, advertise direct
+IP addresses, or connect directly to peers. They ignore their configured IP bind
+addresses. Direct-only connection overrides such as
+`FM_IROH_CONNECT_OVERRIDES_PLAIN` cannot supply a usable path in this mode;
+remove those overrides to use normal relay discovery.
+
+Keep relays enabled (`FM_IROH_RELAYS_ENABLE` defaults to enabled), reachable,
+and compatible with Iroh 1.x. Guardian P2P honors `FM_IROH_P2P_RELAY`; the
+transitional API uses Iroh's default 1.x relays. Disabling both IP transports and
+relays prevents guardian startup because the endpoints cannot bind. Relay outages
+or poor relay connectivity can interrupt P2P, stall consensus or setup/DKG, and prevent API
+access; relay-only operation also adds relay bandwidth and latency costs.
+
+This is not a guardian-wide or process-wide IP privacy guarantee. It does not
+change inbound or outbound Iroh 0.35 connections, TLS/WebSocket listeners, or
+other network traffic. The legacy Iroh 0.35 API remains enabled for compatibility;
+both inbound and outbound Iroh 0.35 connections can still use direct IP
+transports. Relays and discovery services still receive network traffic from the
+guardian. This option does not affect library clients or gateways.
+
 ## Guardian Iroh P2P upgrades
 
 In Iroh-enabled federations, guardian-to-guardian P2P uses Iroh 1.x while the

@@ -34,7 +34,6 @@ use config::ServerConfig;
 use config::io::read_server_config;
 pub use connection_limits::ConnectionLimits;
 pub use consensus::engine::{ConsensusStop, ShutdownRequest};
-use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::P2PMessage;
 use fedimint_core::db::{Database, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _};
 use fedimint_core::module::ApiAuth;
@@ -294,7 +293,9 @@ pub async fn run_with_iroh_p2p_relays_and_next_api(
 
     info!(target: LOG_CONSENSUS, "Starting consensus...");
 
-    let connectors = ConnectorRegistry::build_from_server_defaults().bind().await;
+    let connectors = net::iroh::guardian_connector_registry_builder()
+        .bind()
+        .await;
 
     let stop = Box::pin(consensus::run(
         connectors,
