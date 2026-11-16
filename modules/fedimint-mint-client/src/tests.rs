@@ -485,3 +485,47 @@ fn slice_recovery_extends_gap_window_from_latest_used_index() {
     assert_eq!(finalized.pending_notes.len(), 3);
     assert_eq!(finalized.next_note_idx.get(&amount), Some(&NoteIndex(201)));
 }
+
+#[test]
+fn backup_recovery_resumes_at_the_backed_up_next_note_index() {
+    use std::collections::BTreeMap;
+
+    use fedimint_derive_secret::{ChildId, DerivableSecret};
+
+    use crate::NoteIndex;
+    use crate::backup::EcashBackup;
+    use crate::backup::recovery::MintRecoveryStateV2;
+
+    let secret = DerivableSecret::new_root(&[0; 32], &[0; 32])
+        .child_key(ChildId(0))
+        .child_key(ChildId(0));
+    let used = Amount::from_msats(1024);
+    let unused = Amount::from_msats(2048);
+
+    // The backup says index 5 of `used` is the next one to hand out, so 0..=4
+    // were used, while nothing of `unused` was ever used.
+    let next_note_idx = [(used, NoteIndex(5)), (unused, NoteIndex(0))]
+        .into_iter()
+        .collect();
+    let EcashBackup::V0(backup) =
+        EcashBackup::new_v0(TieredMulti::default(), vec![], 0, next_note_idx)
+    else {
+        unreachable!("new_v0 always creates a V0 backup");
+    };
+
+    let state = MintRecoveryStateV2::from_backup(
+        backup,
+        10,
+        Tiered::default(),
+        BTreeMap::from([(PeerId::from(0), Tiered::default())]),
+        &secret,
+    );
+
+    // With no history to replay, recovery must resume exactly where the backup
+    // left off, without skipping an index or marking an unused tier as used.
+    let finalized = state.finalize();
+    assert_eq!(
+        finalized.next_note_idx.iter().collect::<Vec<_>>(),
+        vec![(used, &NoteIndex(5))]
+    );
+}
