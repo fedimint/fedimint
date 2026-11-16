@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
@@ -11,10 +12,10 @@ use devimint::federation::{Client, Federation};
 use devimint::util::{ProcessManager, almost_equal, poll_simple};
 use devimint::version_constants::{
     VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA, VERSION_0_12_0_ALPHA, VERSION_0_12_2_ALPHA,
-    VERSION_0_13_0_ALPHA,
+    VERSION_0_13_0_ALPHA, VERSION_0_14_0_ALPHA,
 };
 use devimint::{Gatewayd, cmd, util};
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::secp256k1::rand::rngs::OsRng;
 use fedimint_core::secp256k1::{SECP256K1, SecretKey};
@@ -75,6 +76,9 @@ enum Commands {
     FederationOutage,
     /// Run direct HTLC tests between two clients without a gateway
     DirectHtlc,
+    /// Funds bound to a non-primary account stay there through Lightning,
+    /// on-chain and recovery from seed; needs mintv2 and walletv2
+    Accounts,
 }
 
 #[tokio::main]
@@ -119,6 +123,9 @@ async fn main() -> anyhow::Result<()> {
                 Some(Commands::DirectHtlc) => {
                     test_direct_htlc(&dev_fed).await?;
                 }
+                Some(Commands::Accounts) => {
+                    test_accounts(&dev_fed).await?;
+                }
                 Some(Commands::FederationOutage) => {
                     pegin_gateways(&dev_fed).await?;
                     let dev_fed = dev_fed.to_dev_fed(&process_mgr).await?;
@@ -127,6 +134,9 @@ async fn main() -> anyhow::Result<()> {
                 None => {
                     // Run all tests if no subcommand is specified
                     test_gateway_registration(&dev_fed).await?;
+                    // Before the payments test funds the gateways, as it
+                    // relies on an unfunded gateway to refund a payment.
+                    test_accounts(&dev_fed).await?;
                     test_payments(&dev_fed).await?;
                     test_duplicate_payment(&dev_fed, &process_mgr).await?;
                     test_lnurl_pay(&dev_fed).await?;
@@ -1688,4 +1698,427 @@ fn json_string(value: &Value) -> anyhow::Result<String> {
         .as_str()
         .map(str::to_owned)
         .with_context(|| format!("Expected a JSON string, got {value}"))
+}
+
+/// The balance of every account, so a step can show it moved only the
+/// accounts it was meant to.
+async fn account_balances(client: &Client) -> anyhow::Result<BTreeMap<Account, u64>> {
+    let mut balances = BTreeMap::new();
+
+    for account in Account::ALL {
+        balances.insert(account, client.balance_for(account).await?);
+    }
+
+    Ok(balances)
+}
+
+/// The fees of the steps below are not quoted up front, so a balance that
+/// moved is checked against its expected value with this much slack. The
+/// balances that must not move are checked exactly.
+const FEE_TOLERANCE_MSAT: u64 = 500_000;
+
+fn ensure_close(actual: u64, expected: u64, what: &str) -> anyhow::Result<()> {
+    almost_equal(actual, expected, FEE_TOLERANCE_MSAT)
+        .map_err(|error| anyhow::anyhow!("{what}: {error}"))
+}
+
+/// Every account outside `touched` holds exactly what it held before.
+fn ensure_untouched(
+    before: &BTreeMap<Account, u64>,
+    after: &BTreeMap<Account, u64>,
+    touched: &[Account],
+) -> anyhow::Result<()> {
+    for account in Account::ALL {
+        if touched.contains(&account) {
+            continue;
+        }
+
+        ensure!(
+            before[&account] == after[&account],
+            "{account} moved from {} to {} msats without being involved",
+            before[&account],
+            after[&account]
+        );
+    }
+
+    Ok(())
+}
+
+async fn lnv2_receive_into(
+    client: &Client,
+    gateway: &str,
+    amount: u64,
+    account: Account,
+) -> anyhow::Result<(Bolt11Invoice, OperationId)> {
+    Ok(serde_json::from_value(
+        cmd!(
+            client,
+            "module",
+            "lnv2",
+            "receive",
+            amount,
+            "--gateway",
+            gateway,
+            "--account",
+            account.to_string()
+        )
+        .out_json()
+        .await?,
+    )?)
+}
+
+async fn lnv2_send_from(
+    client: &Client,
+    gateway: &str,
+    invoice: &str,
+    account: Account,
+) -> anyhow::Result<FinalSendOperationState> {
+    let send_op = serde_json::from_value::<OperationId>(
+        cmd!(
+            client,
+            "module",
+            "lnv2",
+            "send",
+            invoice,
+            "--gateway",
+            gateway,
+            "--account",
+            account.to_string()
+        )
+        .out_json()
+        .await?,
+    )?;
+
+    common::await_send(client, send_op).await
+}
+
+/// Every module runs against the real mintv2 here, so money bound to a
+/// non-primary account has to stay in it across a Lightning refund and claim,
+/// an on-chain deposit and withdrawal, and a recovery from seed. The gateways
+/// must not be funded when this starts: the refund relies on it.
+async fn test_accounts(dev_fed: &DevJitFed) -> anyhow::Result<()> {
+    if util::FedimintCli::version_or_default().await < *VERSION_0_14_0_ALPHA {
+        info!("fedimint-cli predates accounts, skipping");
+        return Ok(());
+    }
+
+    let federation = dev_fed.fed().await?;
+    let bitcoind = dev_fed.bitcoind().await?;
+    let gw_lnd = dev_fed.gw_lnd().await?;
+    let gw_ldk = dev_fed.gw_ldk().await?;
+
+    let client = federation
+        .new_joined_client("lnv2-test-accounts-client")
+        .await?;
+
+    if !module_is_present(&client, "mintv2").await?
+        || !module_is_present(&client, "walletv2").await?
+    {
+        info!("mintv2 and walletv2 are not both enabled, skipping");
+        return Ok(());
+    }
+
+    const SECONDARY_FUNDING_MSAT: u64 = 10_000_000;
+    const LIGHTNING_AMOUNT_MSAT: u64 = 1_000_000;
+    const DEPOSIT_SAT: u64 = 50_000;
+    const WITHDRAW_SAT: u64 = 20_000;
+
+    federation.pegin_client(20_000, &client).await?;
+
+    info!("Moving funds from primary into secondary...");
+
+    let before = account_balances(&client).await?;
+
+    let ecash = cmd!(client, "module", "mintv2", "send", SECONDARY_FUNDING_MSAT)
+        .out_json()
+        .await?;
+
+    let ecash = ecash.as_str().context("ecash is a string")?;
+
+    let state = cmd!(
+        client,
+        "module",
+        "mintv2",
+        "receive",
+        ecash,
+        "--account",
+        "secondary"
+    )
+    .out_json()
+    .await?;
+
+    ensure!(state == "Success", "receive failed: {state}");
+
+    cmd!(client, "dev", "wait-complete").run().await?;
+
+    let after = account_balances(&client).await?;
+
+    ensure_untouched(&before, &after, &[Account::Primary, Account::Secondary])?;
+    ensure_close(
+        after[&Account::Primary] + SECONDARY_FUNDING_MSAT,
+        before[&Account::Primary],
+        "primary did not pay for the funding of secondary",
+    )?;
+    ensure_close(
+        after[&Account::Secondary],
+        SECONDARY_FUNDING_MSAT,
+        "secondary did not receive its funding",
+    )?;
+
+    info!("Testing a refunded payment lands back in the paying account...");
+
+    let before = after;
+
+    // The invoice belongs to a throwaway client: its receive never settles
+    // and would otherwise keep `wait-complete` on the client below from
+    // returning until the invoice expires.
+    let sink = federation
+        .new_joined_client("lnv2-test-accounts-sink")
+        .await?;
+
+    let invoice = common::receive(&sink, &gw_ldk.addr, LIGHTNING_AMOUNT_MSAT)
+        .await?
+        .0;
+
+    let state = lnv2_send_from(
+        &client,
+        &gw_lnd.addr,
+        &invoice.to_string(),
+        Account::Secondary,
+    )
+    .await?;
+
+    ensure!(
+        matches!(state, FinalSendOperationState::Refunded),
+        "payment through an unfunded gateway must be refunded, got {state:?}"
+    );
+
+    cmd!(client, "dev", "wait-complete").run().await?;
+
+    let after = account_balances(&client).await?;
+
+    ensure_untouched(&before, &after, &[Account::Secondary])?;
+    ensure_close(
+        after[&Account::Secondary],
+        before[&Account::Secondary],
+        "the refund did not return to secondary",
+    )?;
+
+    pegin_gateways(dev_fed).await?;
+
+    info!("Testing a payment between two accounts of one client...");
+
+    let before = after;
+
+    let (invoice, receive_op) = lnv2_receive_into(
+        &client,
+        &gw_ldk.addr,
+        LIGHTNING_AMOUNT_MSAT,
+        Account::Tertiary,
+    )
+    .await?;
+
+    let state = lnv2_send_from(
+        &client,
+        &gw_lnd.addr,
+        &invoice.to_string(),
+        Account::Secondary,
+    )
+    .await?;
+
+    ensure!(
+        matches!(state, FinalSendOperationState::Success(_)),
+        "payment through a funded gateway must succeed, got {state:?}"
+    );
+
+    common::await_receive_claimed(&client, receive_op).await?;
+
+    cmd!(client, "dev", "wait-complete").run().await?;
+
+    let after = account_balances(&client).await?;
+
+    ensure_untouched(&before, &after, &[Account::Secondary, Account::Tertiary])?;
+    ensure_close(
+        after[&Account::Secondary] + LIGHTNING_AMOUNT_MSAT,
+        before[&Account::Secondary],
+        "secondary did not pay the invoice",
+    )?;
+    ensure_close(
+        after[&Account::Tertiary],
+        LIGHTNING_AMOUNT_MSAT,
+        "tertiary did not claim the invoice",
+    )?;
+
+    info!("Testing an on-chain deposit into secondary...");
+
+    let before = after;
+
+    // The position is read before the address is handed out so the receive
+    // cannot be missed.
+    let position = cmd!(client, "dev", "next-event-log-id").out_json().await?;
+
+    let address = cmd!(
+        client,
+        "module",
+        "walletv2",
+        "receive",
+        "--account",
+        "secondary"
+    )
+    .out_json()
+    .await?;
+
+    let address = address.as_str().context("address is a string")?;
+
+    bitcoind.send_to(address.to_owned(), DEPOSIT_SAT).await?;
+    bitcoind.mine_blocks(21).await?;
+
+    let output = cmd!(
+        client,
+        "module",
+        "walletv2",
+        "await-receive",
+        position.to_string(),
+        "--account",
+        "secondary"
+    )
+    .out_json()
+    .await?;
+
+    ensure!(output[0] == "Success", "deposit was not claimed: {output}");
+
+    cmd!(client, "dev", "wait-complete").run().await?;
+
+    let after = account_balances(&client).await?;
+
+    ensure_untouched(&before, &after, &[Account::Secondary])?;
+    ensure!(
+        after[&Account::Secondary] > before[&Account::Secondary],
+        "the deposit did not reach secondary"
+    );
+
+    info!("Testing an on-chain withdrawal from secondary...");
+
+    let before = after;
+
+    let withdraw_address = bitcoind.get_new_address().await?;
+
+    let output = cmd!(
+        client,
+        "module",
+        "walletv2",
+        "send",
+        withdraw_address.to_string(),
+        format!("{WITHDRAW_SAT} sat"),
+        "--account",
+        "secondary"
+    )
+    .out_json()
+    .await?;
+
+    let txid = output["Success"]
+        .as_str()
+        .with_context(|| format!("withdrawal did not succeed: {output}"))?;
+
+    bitcoind
+        .poll_get_transaction(bitcoin::Txid::from_str(txid)?)
+        .await?;
+
+    cmd!(client, "dev", "wait-complete").run().await?;
+
+    let after = account_balances(&client).await?;
+
+    ensure_untouched(&before, &after, &[Account::Secondary])?;
+    ensure!(
+        after[&Account::Secondary] + WITHDRAW_SAT * 1000 <= before[&Account::Secondary],
+        "the withdrawal did not leave secondary"
+    );
+
+    info!("Recovering every account from the seed...");
+
+    let expected = after;
+
+    ensure!(
+        expected[&Account::Primary] > 0
+            && expected[&Account::Secondary] > 0
+            && expected[&Account::Tertiary] > 0,
+        "the recovery needs three funded accounts to tell apart, got {expected:?}"
+    );
+
+    let mnemonic = cmd!(client, "print-secret").out_json().await?["secret"]
+        .as_str()
+        .context("secret is a string")?
+        .to_owned();
+
+    let restored = Client::create("lnv2-test-accounts-restored").await?;
+
+    cmd!(
+        restored,
+        "restore",
+        "--invite-code",
+        federation.invite_code()?,
+        "--mnemonic",
+        &mnemonic
+    )
+    .run()
+    .await?;
+
+    // Wait on the total so notes restored into the wrong account still end
+    // the wait and fail the per-account check below instead of hanging.
+    let expected_total = expected.values().sum::<u64>();
+
+    while account_balances(&restored).await?.values().sum::<u64>() < expected_total {
+        info!("Waiting for the recovery to complete...");
+        cmd!(restored, "dev", "wait", "1").out_json().await?;
+    }
+
+    let recovered = account_balances(&restored).await?;
+
+    ensure!(
+        recovered == expected,
+        "the recovered balances differ from the original ones: {recovered:?} vs {expected:?}"
+    );
+
+    info!("Spending the recovered secondary balance...");
+
+    let ecash = cmd!(
+        restored,
+        "module",
+        "mintv2",
+        "send-max",
+        "--account",
+        "secondary"
+    )
+    .out_json()
+    .await?;
+
+    let ecash = ecash
+        .as_str()
+        .context("send-max must hand out the recovered secondary notes")?;
+
+    let state = cmd!(restored, "module", "mintv2", "receive", ecash)
+        .out_json()
+        .await?;
+
+    ensure!(state == "Success", "receive failed: {state}");
+
+    cmd!(restored, "dev", "wait-complete").run().await?;
+
+    let after = account_balances(&restored).await?;
+
+    ensure_untouched(&expected, &after, &[Account::Primary, Account::Secondary])?;
+    ensure!(
+        after[&Account::Secondary] == 0,
+        "send-max left {} msats in secondary",
+        after[&Account::Secondary]
+    );
+    ensure_close(
+        after[&Account::Primary],
+        expected[&Account::Primary] + expected[&Account::Secondary],
+        "primary did not receive the recovered secondary notes",
+    )?;
+
+    info!("Accounts test passed");
+
+    Ok(())
 }
