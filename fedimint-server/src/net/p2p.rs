@@ -97,6 +97,12 @@ impl<M: Send + 'static> ReconnectP2PConnections<M> {
             connections.insert(peer_id, connection);
         }
 
+        let connector_shutdown = connector.clone();
+        task_group.spawn("p2p-connector-shutdown", |handle| async move {
+            handle.make_shutdown_rx().await;
+            connector_shutdown.shutdown().await;
+        });
+
         task_group.spawn_cancellable("handle-incoming-p2p-connections", async move {
             info!(target: LOG_NET_PEER, "Starting listening task for p2p connections");
 

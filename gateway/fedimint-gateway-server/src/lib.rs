@@ -931,7 +931,7 @@ impl Gateway {
     /// to service requests.
     pub async fn run(
         self,
-        runtime: Arc<tokio::runtime::Runtime>,
+        runtime: tokio::runtime::Handle,
         mnemonic_receiver: tokio::sync::broadcast::Receiver<MnemonicSource>,
     ) -> anyhow::Result<TaskShutdownToken> {
         install_crypto_provider().await;
@@ -1047,7 +1047,7 @@ impl Gateway {
     /// lightning node.
     fn start_gateway(
         &self,
-        runtime: Arc<tokio::runtime::Runtime>,
+        runtime: tokio::runtime::Handle,
         mut mnemonic_receiver: tokio::sync::broadcast::Receiver<MnemonicSource>,
     ) {
         const PAYMENT_STREAM_RETRY_SECONDS: u64 = 60;
@@ -2347,7 +2347,7 @@ impl Gateway {
 
     async fn create_lightning_client(
         &self,
-        runtime: Arc<tokio::runtime::Runtime>,
+        runtime: tokio::runtime::Handle,
         mnemonic_source: MnemonicSource,
     ) -> Box<dyn ILnRpcClient> {
         match self.lightning_mode.clone() {
@@ -3213,7 +3213,7 @@ impl IAdminGateway for Gateway {
         Ok(())
     }
 
-    fn get_task_group(&self) -> TaskGroup {
+    pub fn task_group(&self) -> TaskGroup {
         self.task_group.clone()
     }
 
