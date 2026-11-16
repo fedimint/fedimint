@@ -49,7 +49,6 @@ use crate::consensus::engine::{ConsensusEngine, ConsensusStop};
 use crate::consensus::iroh_api::{IrohApiState, run_iroh_api, run_iroh_api_next};
 use crate::db::verify_server_db_integrity_dbtx;
 use crate::net::api::ApiSecrets;
-use crate::net::api::announcement::get_api_urls;
 use crate::net::api::guardian_metadata::{
     prepare_guardian_metadata_service, reconcile_guardian_metadata, start_guardian_metadata_service,
 };
@@ -268,7 +267,7 @@ pub async fn run(
 
     // TODO: make it work with all transports and federation secrets
     let global_api = DynGlobalApi::new(
-        connectors.clone(),
+        connectors,
         cfg.consensus
             .api_endpoints()
             .iter()
@@ -486,22 +485,13 @@ pub async fn run(
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Engine...");
 
-    let api_urls = get_api_urls(&db, &cfg.consensus).await;
-
     task_group.spawn_cancellable(
         "peer-availability",
         peer_availability::persist_peer_availability(db.clone(), availability.clone()),
     );
 
-    // FIXME: (@leonardo) How should this be handled ?
-    // Using the `Connector::default()` for now!
     let stop = ConsensusEngine {
         db,
-        federation_api: DynGlobalApi::new(
-            connectors,
-            api_urls,
-            force_api_secrets.get_active().as_deref(),
-        ),
         cfg: cfg.clone(),
         connections,
         ord_latency_sender,
