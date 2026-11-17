@@ -8,11 +8,6 @@ readme = { workspace = true }
 repository = { workspace = true }
 version = { workspace = true }
 
-[package.metadata.cargo-udeps.ignore]
-development = ["tokio-test"]
-# Intentionally constrain the transitive modern TLS verifier's security minimum.
-normal = ["rustls-webpki"]
-
 [lib]
 name = "fedimint_core"
 path = "src/lib.rs"

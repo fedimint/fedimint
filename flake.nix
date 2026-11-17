@@ -374,7 +374,6 @@
                 nativeBuildInputs =
                   craneMultiBuild.commonArgs.nativeBuildInputs
                   ++ [
-                    pkgs.cargo-udeps
                     pkgs.cargo-audit
                     pkgs.cargo-deny
                     pkgs.cargo-sort
@@ -418,7 +417,7 @@
                   ${linkProjectSkills}/bin/link-project-skills "$REPO_ROOT" || exit $?
 
                   # workaround https://github.com/rust-lang/cargo/issues/11020
-                  cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
+                  cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,llvm-cov} 2>/dev/null) )
                   if (( ''${#cargo_cmd_bins[@]} != 0 )); then
                     >&2 echo "⚠️  Detected binaries that might conflict with reproducible environment: ''${cargo_cmd_bins[@]}" 1>&2
                     >&2 echo "   Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2

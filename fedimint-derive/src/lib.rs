@@ -1,5 +1,4 @@
 #![deny(clippy::pedantic)]
-#![cfg_attr(feature = "diagnostics", feature(proc_macro_diagnostic))]
 
 use itertools::Itertools;
 use proc_macro::TokenStream;
@@ -56,7 +55,7 @@ pub fn derive_encodable(input: TokenStream) -> TokenStream {
     let encode_inner = match data {
         Data::Struct(DataStruct { fields, .. }) => derive_struct_encode(&fields),
         Data::Enum(DataEnum { variants, .. }) => derive_enum_encode(&ident, &variants),
-        Data::Union(_) => error(&ident, "Encodable can't be derived for unions"),
+        Data::Union(_) => error("Encodable can't be derived for unions"),
     };
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
@@ -244,7 +243,7 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
     let decode_inner = match data {
         Data::Struct(DataStruct { fields, .. }) => derive_struct_decode(&ident, &fields),
         syn::Data::Enum(DataEnum { variants, .. }) => derive_enum_decode(&ident, &variants),
-        syn::Data::Union(_) => error(&ident, "Encodable can't be derived for unions"),
+        syn::Data::Union(_) => error("Encodable can't be derived for unions"),
     };
 
     let output = quote! {
@@ -259,14 +258,8 @@ pub fn derive_decodable(input: TokenStream) -> TokenStream {
     output.into()
 }
 
-#[allow(unused_variables, unreachable_code)]
-fn error(ident: &Ident, message: &str) -> TokenStream2 {
-    #[cfg(feature = "diagnostics")]
-    ident.span().unstable().error(message).emit();
-    #[cfg(not(feature = "diagnostics"))]
-    panic!("{message}");
-
-    TokenStream2::new()
+fn error(message: &str) -> TokenStream2 {
+    panic!("{message}")
 }
 
 fn derive_struct_decode(ident: &Ident, fields: &Fields) -> TokenStream2 {
