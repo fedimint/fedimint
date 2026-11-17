@@ -54,7 +54,7 @@ enum Opts {
         #[clap(long, visible_alias = "id")]
         escrow_id: EscrowId,
         #[clap(long, short = 's')]
-        funder_signature: Signature,
+        signature: Signature,
     },
 
     /// Resolve the escrow with the arbiter outcome
@@ -204,9 +204,9 @@ pub(crate) async fn handle_cli_command(
         }
         Opts::ResolveEscrow {
             escrow_id,
-            funder_signature,
+            signature,
         } => {
-            let operation_id = client.resolve_escrow(escrow_id, funder_signature).await?;
+            let operation_id = client.resolve_escrow(escrow_id, signature).await?;
 
             let mut stream = client
                 .subscribe_escrow_resolution(operation_id)
@@ -215,7 +215,7 @@ pub(crate) async fn handle_cli_command(
 
             while let Some(state) = stream.next().await {
                 match &state {
-                    EscrowInputSMState::Released => {
+                    EscrowInputSMState::Released | EscrowInputSMState::Refunded => {
                         break;
                     }
                     EscrowInputSMState::Failed { reason } => {

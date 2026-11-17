@@ -521,7 +521,9 @@ impl Escrow {
 
         let amounts = match accepted.settlement {
             Settlement::None => Amounts::ZERO,
-            Settlement::PayRecipient(amount) => Amounts::new_bitcoin(amount),
+            Settlement::PayRecipient(amount) | Settlement::PayFunder(amount) => {
+                Amounts::new_bitcoin(amount)
+            }
             Settlement::WriteClaims(claimer) => {
                 // A contract that is not resolved yet never has a pool.
                 if dbtx.get_value(&ClaimPoolKey(escrow_id)).await.is_some() {

@@ -1,5 +1,5 @@
 # Escrow Module
-The escrow module lets two people trade with ecash when they don't trust each other. The funder locks ecash in a contract, the recipient does their part, and the funder signs a release so the recipient can claim the ecash. If they disagree, an arbiter decides. The federation only enforces the contract rules and verify signatures. It doesn't know who the people are and it can't see what the deal is about.
+The escrow module lets two people trade with ecash when they don't trust each other. The funder locks ecash in a contract, the recipient does their part, and the funder signs a release so the recipient can claim the ecash. If they cancel instead, the recipient can sign a refund so the funder gets the ecash back. If they disagree, an arbiter decides.The federation only enforces the contract rules and verify signatures. It doesn't know who the people are and it can't see what the deal is about.
 
 The module can't know if goods were delivered or a service was done. It only enforces what the contract and the signatures say.
 
@@ -12,7 +12,7 @@ The module can't know if goods were delivered or a service was done. It only enf
 ### The contract
 `EscrowContract` is created by the funder and stored by the federation under its `escrow_id`.
 
-- `escrow_id` - `sha256("escrow_id" || contract_hash || random nonce)`.
+- `escrow_id` - `sha256("fedimint_escrow_id_v1" || contract_hash || random nonce)`.
 - `funder_key`, `recipient_key`, `arbiter_key` - schnorr public keys. They are compared by their x-only form, because that is all a schnorr signature uses.
 - `arbiter_fee_key` - list of keys that share the arbiter fee, at most 24.
 - `amount` - the locked amount.
@@ -54,15 +54,17 @@ After creation everything is an `EscrowInput { escrow_id, resolution }`.
 
 | Resolution | Works when | Result | Signs the tx |
 |---|---|---|---|
-| `FunderRelease` | contract is `Active`, the funder signed the Release message | `Released`, recipient gets the full amount in this same transaction | recipient |
+| `FunderRelease` | contract is `Active`, the funder signed the Release message | `Released`, recipient gets the full amount in the same tx | recipient |
+| `RecipientRefund` | contract is `Active`, the recipient signed the Refund message | `Refunded`, funder gets the full amount in the same tx | funder |
 | `ArbiterEngaged` | `Active`, time >= `timeout`, a party signed the engage message | `Disputed { resolve_by = now + resolution_period }` | the party |
 | `ArbiterOutcome` | `Disputed`, time <= `resolve_by`, the current arbiter signed the outcome | `Released`, `Refunded` or `Split`, a claim pool is written | the submitter |
 | `ResolveFallbackPolicy` | `Disputed`, time > `resolve_by`, claimer is a party | the arbiter is swapped (once) or the contract is `Refunded` / `Split`, a claim pool is written | the claimer |
 | `ClaimPayout` | the claim pool has an entry for the key | the entry is paid and removed | the key in the pool |
 
 
-- The funder release is not limited by time. It works before and after the timeout until someone brings in the arbiter. After that it is rejected, so a release signature that is still around can't beat the arbiter.
-- Only the recipient can submit a release, because the transaction has to be signed with the recipient's key.
+- The funder release and the recipient refund are not limited by time. They work before and after the timeout until someone brings in the arbiter. After that they are rejected, so a signature that is still around can’t beat the arbiter.
+- Only the recipient can submit a release and only the funder can submit a refund, because the transaction has to be signed with the key that receives the ecash. The client’s resolve_escrow picks the right one from the caller’s role.
+- Both signatures are bearer authorisations, valid until the contract leaves Active. A recipient should submit a release as soon as they receive it, and never rely on it after the timeout, because the funder can then bring in the arbiter and invalidate it. A recipient should only sign a refund when they really want to cancel.
 - An arbiter ruling can be submitted by any key of the contract: funder, recipient, arbiter, a fee key or the keys of the swap arbiter. The submitter only signs the transaction. What matters is the arbiter signature inside the input.
 - At exactly `resolve_by` the arbiter can still rule and the fallback is not available yet.
 - The `fallback` field in `ResolveFallbackPolicy` is not looked at by the federation. It always uses `default_fallback` from the contract.
@@ -85,7 +87,7 @@ sequenceDiagram;
     fed->>r: E-Cash
 ```
 
-- [EscrowClientModule::resolve_escrow](../modules/fedimint-escrow-client/src/lib.rs) - the recipient submits the funder's release signature.
+- [EscrowClientModule::resolve_escrow](../modules/fedimint-escrow-client/src/lib.rs) - recipient submits the funder’s release, or the funder submits the recipient’s refund.
 - [Escrow::handle_resolution](../modules/fedimint-escrow-server/src/lib.rs) - checks the release, marks the contract `Released` and returns the full `amount` as the input amount, which the client turns into ecash. No arbiter fee is taken, the arbiter did no work.
 
 ### Disputes
@@ -123,7 +125,7 @@ A ruling or a fallback doesn't pay anyone in the same transaction. It writes a c
 - The fee is split equally between the fee keys.
 - A fallback has no fee, the whole amount goes to the parties.
 
-The entries always add up to `amount` and entries with zero are dropped. Every key claims its own entry with `ClaimPayout`, in any order, and when the last entry is gone the pool is deleted. A funder release is the only case that pays directly and has no pool. Although a claim pool never expires, claimer can claim their sats as they want.
+The entries always add up to `amount` and entries with zero are dropped. Every key claims its own entry with `ClaimPayout`, in any order, and when the last entry is gone the pool is deleted. A funder release and a recipient refund are the only cases that pay directly and have no pool. Although a claim pool never expires, claimer can claim their sats as they want.
 
 - [EscrowClientModule::claim_payout](../modules/fedimint-escrow-client/src/lib.rs) - claims the entry of the first client key that is in the pool.
 - [Escrow::handle_claim](../modules/fedimint-escrow-server/src/lib.rs) - removes the entry (keys are compared x-only) and returns its amount.

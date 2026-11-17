@@ -14,6 +14,8 @@ pub enum Settlement {
     None,
     /// Pay the recipient in the same transaction (funder release).
     PayRecipient(Amount),
+    /// Pay the funder in the same transaction (recipient signed refund).
+    PayFunder(Amount),
     /// Write a claim pool; nobody is paid in this transaction.
     WriteClaims(Vec<(PublicKey, Amount)>),
 }
@@ -39,6 +41,9 @@ pub fn check_resolution(
         Resolution::FunderRelease { funder_signature } => {
             funder_release(contract, funder_signature)
         }
+        Resolution::RecipientRefund {
+            recipient_signature,
+        } => recipient_refund(contract, recipient_signature),
         Resolution::ArbiterEngaged {
             disputant_pubkey,
             disputant_signature,
@@ -70,6 +75,24 @@ fn funder_release(
         transition: EscrowTransition::FunderRelease,
         settlement: Settlement::PayRecipient(contract.amount),
         input_key: contract.recipient_key,
+    })
+}
+
+fn recipient_refund(
+    contract: &EscrowContract,
+    recipient_signature: &Signature,
+) -> Result<AcceptedResolution, EscrowInputError> {
+    contract.ensure_active()?;
+    ensure_signed(
+        &contract.recipient_key,
+        &contract.resolution_message(Outcome::Refund),
+        recipient_signature,
+    )?;
+
+    Ok(AcceptedResolution {
+        transition: EscrowTransition::RecipientRefund,
+        settlement: Settlement::PayFunder(contract.amount),
+        input_key: contract.funder_key,
     })
 }
 

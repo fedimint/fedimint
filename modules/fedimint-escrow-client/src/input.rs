@@ -67,6 +67,9 @@ impl State for EscrowInputStateMachine {
                                     Resolution::FunderRelease { .. } => {
                                         EscrowInputSMState::Released
                                     }
+                                    Resolution::RecipientRefund { .. } => {
+                                        EscrowInputSMState::Refunded
+                                    }
                                     Resolution::ArbiterEngaged { .. } => {
                                         EscrowInputSMState::Disputed
                                     }

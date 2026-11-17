@@ -163,6 +163,7 @@ pub enum FallbackPolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EscrowTransition {
     FunderRelease,
+    RecipientRefund,
     ArbiterEngaged { resolve_by: u64 },
     ArbiterOutcome(Outcome),
     SwapArbiter { resolve_by: u64 },
@@ -267,6 +268,7 @@ impl EscrowContract {
 
         let new_status = match (&self.status, transition) {
             (EscrowStatus::Active, EscrowTransition::FunderRelease) => EscrowStatus::Released,
+            (EscrowStatus::Active, EscrowTransition::RecipientRefund) => EscrowStatus::Refunded,
             (EscrowStatus::Active, EscrowTransition::ArbiterEngaged { resolve_by }) => {
                 EscrowStatus::Disputed {
                     resolve_by,
@@ -640,6 +642,9 @@ pub enum Resolution {
     FunderRelease {
         funder_signature: Signature,
     },
+    RecipientRefund {
+        recipient_signature: Signature,
+    },
     ArbiterEngaged {
         disputant_pubkey: PublicKey,
         disputant_signature: Signature,
@@ -763,6 +768,7 @@ impl Resolution {
     pub fn kind(&self) -> &'static str {
         match self {
             Resolution::FunderRelease { .. } => "funder_release",
+            Resolution::RecipientRefund { .. } => "recipient_refund",
             Resolution::ArbiterEngaged { .. } => "arbiter_engaged",
             Resolution::ArbiterOutcome { .. } => "arbiter_outcome",
             Resolution::ClaimPayout { .. } => "claim_payout",

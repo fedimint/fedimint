@@ -368,7 +368,7 @@ impl ClientModule for EscrowClientModule {
                     let req:ResolveEscrowRequest=serde_json::from_value(request)?;
                     let result=self.resolve_escrow(
                         req.escrow_id,
-                        req.funder_signature
+                        req.signature
                     ).await?;
                     yield serde_json::to_value(result)?;
                 }
@@ -459,7 +459,7 @@ struct SubscribeCreationRequest {
 #[derive(Deserialize)]
 struct ResolveEscrowRequest {
     escrow_id: EscrowId,
-    funder_signature: schnorr::Signature,
+    signature: schnorr::Signature,
 }
 
 #[derive(Deserialize)]
@@ -743,20 +743,22 @@ impl EscrowClientModule {
         Ok(result)
     }
 
-    /// Initiates the funder authorized release of an escrow contract.
+    /// Resolves an escrow contract.
     ///
-    /// This method allows the recipient to submit a release transaction
-    /// using a Schnorr signature provided by the funder. On successful
-    /// resolution, the settlement pays the recipient in
-    /// the same transaction rather than creating a claim pool.
+    /// The recipient can release the funds using the funder's signature,
+    /// or the funder can refund the funds using the recipient's signature.
+    /// Only the funder or recipient can initiate this operation.
+    ///
+    /// The funds are transferred directly to the appropriate party without
+    /// creating a claim pool.
     ///
     /// Use [`Self::subscribe_escrow_resolution`] to monitor the operation.
     ///
-    /// Returns an operation ID that can be used to track the resolution.
+    /// Returns an operation ID for tracking the resolution.
     pub async fn resolve_escrow(
         &self,
         escrow_id: EscrowId,
-        funder_signature: schnorr::Signature,
+        signature: schnorr::Signature,
     ) -> Result<OperationId, anyhow::Error> {
         let operation_id = OperationId::new_random();
         let contract = self
@@ -764,14 +766,27 @@ impl EscrowClientModule {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
-        anyhow::ensure!(
-            x_only_eq(&contract.recipient_key, &self.escrow_key.public_key()),
-            "only the recipient can submit the release"
-        );
+        let caller = self.escrow_key.public_key();
+
+        let (resolution, action) = if x_only_eq(&contract.recipient_key, &caller) {
+            (
+                Resolution::FunderRelease {
+                    funder_signature: signature,
+                },
+                EscrowAction::Released,
+            )
+        } else if x_only_eq(&contract.funder_key, &caller) {
+            (
+                Resolution::RecipientRefund {
+                    recipient_signature: signature,
+                },
+                EscrowAction::Refunded,
+            )
+        } else {
+            bail!("only the recipient or the funder can resolve by agreement");
+        };
 
         let now = self.federation_unix_time().await?;
-
-        let resolution = Resolution::FunderRelease { funder_signature };
         check_resolution(&contract, &resolution, now)?;
 
         let input = ClientInput {
@@ -815,7 +830,7 @@ impl EscrowClientModule {
             EscrowOperationMeta {
                 escrow_id,
                 amount: contract.amount,
-                action: EscrowAction::Released,
+                action: action.clone(),
                 txid,
                 out_point_indices,
             }
