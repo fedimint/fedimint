@@ -96,16 +96,28 @@ impl BackupWriter {
 #[async_trait]
 impl aleph_bft::BackupWriter for BackupWriter {
     async fn append(&mut self, data: &[u8]) -> std::io::Result<()> {
-        if !self.stored.insert(unit_digest(data)) {
+        self.append_batch(&[data.to_owned()]).await
+    }
+
+    /// Stores the new units of the batch in one synced commit. AlephBFT
+    /// passes every unit it adds to its DAG through here, so committing each
+    /// unit alone costs one disk sync per unit, many per round.
+    async fn append_batch(&mut self, items: &[Vec<u8>]) -> std::io::Result<()> {
+        let new_units: Vec<&Vec<u8>> = items
+            .iter()
+            .filter(|unit| self.stored.insert(unit_digest(unit)))
+            .collect();
+        if new_units.is_empty() {
             return Ok(());
         }
 
         let mut dbtx = self.db.begin_transaction().await;
 
-        dbtx.insert_new_entry(&AlephUnitsKey(self.units_index), &data.to_owned())
-            .await;
-
-        self.units_index += 1;
+        for unit in new_units {
+            dbtx.insert_new_entry(&AlephUnitsKey(self.units_index), unit)
+                .await;
+            self.units_index += 1;
+        }
 
         dbtx.commit_tx_result()
             .await
