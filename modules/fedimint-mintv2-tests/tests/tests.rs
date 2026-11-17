@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::pin::pin;
 use std::time::Duration;
 
@@ -920,25 +921,34 @@ async fn accounts_hold_separate_balances() -> anyhow::Result<()> {
         primary_before + expected_secondary - fee
     );
 
-    // Fund secondary again so the recovery has two accounts to tell apart.
-    let (_, ecash) = mint
-        .send(
-            Account::Primary,
-            Amount::from_sats(2_000),
-            Value::Null,
-            false,
-        )
-        .await?;
+    // Fund secondary again, and the last account for the first time, so the
+    // recovery has three accounts to tell apart, one of them at the far end
+    // of the derivation.
+    for (account, amount) in [
+        (Account::Secondary, Amount::from_sats(2_000)),
+        (Account::Quinary, Amount::from_sats(1_000)),
+    ] {
+        let (_, ecash) = mint
+            .send(Account::Primary, amount, Value::Null, false)
+            .await?;
 
-    receive_settled(&client, Account::Secondary, ecash).await?;
+        receive_settled(&client, account, ecash).await?;
+    }
 
     client.wait_for_all_active_state_machines().await;
 
-    let primary_balance = client.get_balance_for_btc(Account::Primary).await?;
-    let secondary_balance = client.get_balance_for_btc(Account::Secondary).await?;
+    let mut balances = BTreeMap::new();
 
-    assert_ne!(primary_balance, Amount::ZERO);
-    assert_ne!(secondary_balance, Amount::ZERO);
+    for account in Account::ALL {
+        balances.insert(account, client.get_balance_for_btc(account).await?);
+    }
+
+    for account in [Account::Primary, Account::Secondary, Account::Quinary] {
+        assert_ne!(balances[&account], Amount::ZERO);
+    }
+    for account in [Account::Tertiary, Account::Quaternary] {
+        assert_eq!(balances[&account], Amount::ZERO);
+    }
 
     // One seed restores every account; the notes come back in the account
     // they were in, not pooled into primary.
@@ -950,27 +960,32 @@ async fn accounts_hold_separate_balances() -> anyhow::Result<()> {
 
     assert_eq!(
         mintv2_recovery_completed_amount(&recovering_client).await,
-        Some(primary_balance + secondary_balance)
+        Some(balances.values().copied().sum())
     );
 
     recovering_client.wait_for_all_active_state_machines().await;
 
-    assert_eq!(
-        recovering_client
-            .get_balance_for_btc(Account::Primary)
-            .await?,
-        primary_balance
-    );
-    assert_eq!(
-        recovering_client
-            .get_balance_for_btc(Account::Secondary)
-            .await?,
-        secondary_balance
-    );
-    for account in Account::ALL.into_iter().skip(2) {
+    for account in Account::ALL {
         assert_eq!(
             recovering_client.get_balance_for_btc(account).await?,
-            Amount::ZERO
+            balances[&account],
+            "{account} was not restored to its balance"
+        );
+    }
+
+    // Reopening must neither restart the recovery nor credit any account
+    // twice.
+    let reopened_client = fed
+        .open_client_with_db(recovering_client.db().clone(), root_secret(&SEND_SK))
+        .await;
+
+    reopened_client.wait_for_all_active_state_machines().await;
+
+    for account in Account::ALL {
+        assert_eq!(
+            reopened_client.get_balance_for_btc(account).await?,
+            balances[&account],
+            "{account} changed on reopen"
         );
     }
 

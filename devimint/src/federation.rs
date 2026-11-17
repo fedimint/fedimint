@@ -13,7 +13,7 @@ use fedimint_client_module::module::ClientModule;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::admin_client::SetupStatus;
 use fedimint_core::config::{ClientConfig, load_from_file};
-use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::core::{Account, ModuleInstanceId, ModuleKind};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ModuleCommon;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -260,6 +260,16 @@ impl Client {
         Ok(cmd!(self, "info").out_json().await?["total_amount_msat"]
             .as_u64()
             .unwrap())
+    }
+
+    /// The balance of one of the client's accounts in msats. Requires a
+    /// `fedimint-cli` of 0.14.0-alpha or later, which added accounts.
+    pub async fn balance_for(&self, account: Account) -> Result<u64> {
+        cmd!(self, "info", "--account", account.to_string())
+            .out_json()
+            .await?["total_amount_msat"]
+            .as_u64()
+            .with_context(|| format!("info --account {account} has no total_amount_msat"))
     }
 
     /// Waits for the client balance to reach at least `min_balance_msat`.

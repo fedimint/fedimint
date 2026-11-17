@@ -83,7 +83,11 @@ impl FromStr for ModuleSelector {
 #[derive(Debug, Clone, Subcommand)]
 pub enum ClientCmd {
     /// Display wallet info (holdings, tiers)
-    Info,
+    Info {
+        /// The account whose holdings to display
+        #[arg(long, default_value_t = Account::Primary)]
+        account: Account,
+    },
     /// Reissue notes received from a third party to avoid double spends
     #[clap(hide = true)]
     Reissue {
@@ -445,7 +449,7 @@ async fn await_invoice(
     while let Some(update) = updates.next().await {
         match update {
             LnReceiveState::Claimed => {
-                return get_note_summary(client).await;
+                return get_note_summary(client, Account::Primary).await;
             }
             LnReceiveState::Canceled { reason } => {
                 return Err(reason.into());
@@ -579,7 +583,7 @@ pub async fn handle_command(
 ) -> anyhow::Result<serde_json::Value> {
     command.validate_notes_sources()?;
     match command {
-        ClientCmd::Info => get_note_summary(&client).await,
+        ClientCmd::Info { account } => get_note_summary(&client, account).await,
         ClientCmd::Reissue {
             oob_notes,
             notes_file,
@@ -856,7 +860,10 @@ async fn withdraw(
     unreachable!("Update stream ended without outcome");
 }
 
-async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json::Value> {
+async fn get_note_summary(
+    client: &ClientHandleArc,
+    account: Account,
+) -> anyhow::Result<serde_json::Value> {
     // Try wallet v1 first, then walletv2
     let network = if let Ok(wallet_client) = client.get_first_module::<WalletClientModule>() {
         wallet_client.get_network()
@@ -869,6 +876,12 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
     };
 
     let summary = if let Ok(mint_client) = client.get_first_module::<MintClientModule>() {
+        // The legacy mint holds a single balance, so only primary exists.
+        anyhow::ensure!(
+            account == Account::Primary,
+            "The mint module only supports the primary account"
+        );
+
         let mint_module_id = client
             .get_first_instance(&fedimint_mint_client::KIND)
             .context("Mint module not found")?;
@@ -885,9 +898,7 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
     } else if let Ok(mintv2_client) =
         client.get_first_module::<fedimint_mintv2_client::MintClientModule>()
     {
-        let counts = mintv2_client
-            .get_count_by_denomination(Account::Primary)
-            .await;
+        let counts = mintv2_client.get_count_by_denomination(account).await;
         let mut summary = TieredCounts::default();
         #[allow(clippy::cast_possible_truncation)]
         for (denomination, count) in counts {
