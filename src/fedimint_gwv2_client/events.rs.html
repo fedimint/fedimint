@@ -75,7 +75,7 @@
 <a href=#75 id=75 data-nosnippet>75</a>
 <a href=#76 id=76 data-nosnippet>76</a><span class="doccomment">/// Event that is emitted when an incoming payment attempt has started. Includes
 <a href=#77 id=77 data-nosnippet>77</a>/// both internal swaps and outside LN payments.
-<a href=#78 id=78 data-nosnippet>78</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug)]
+<a href=#78 id=78 data-nosnippet>78</a></span><span class="attr">#[derive(Serialize, Deserialize, Debug, Clone)]
 <a href=#79 id=79 data-nosnippet>79</a></span><span class="kw">pub struct </span>IncomingPaymentStarted {
 <a href=#80 id=80 data-nosnippet>80</a>    <span class="doccomment">/// The timestamp that the operation begins, including any metadata checks
 <a href=#81 id=81 data-nosnippet>81</a>    /// before the state machine has spawned.
