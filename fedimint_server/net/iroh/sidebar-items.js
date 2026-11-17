@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"constant":["IROH_V1_API_CHILD_ID"],"fn":["build_iroh_v1_endpoint","derive_iroh_v1_api_secret_key"]};
+window.SIDEBAR_ITEMS = {"constant":["IROH_V1_API_CHILD_ID"],"fn":["build_iroh_v1_endpoint","configure_iroh_ip_transports","derive_iroh_v1_api_secret_key","direct_ip_transports_enabled","guardian_connector_registry_builder"]};

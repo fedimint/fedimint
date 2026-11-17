@@ -190,216 +190,223 @@
 <a href=#190 id=190 data-nosnippet>190</a><span class="doccomment">/// Env var to disable Iroh's use of relays
 <a href=#191 id=191 data-nosnippet>191</a></span><span class="kw">pub const </span>FM_IROH_RELAYS_ENABLE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_IROH_RELAYS_ENABLE"</span>;
 <a href=#192 id=192 data-nosnippet>192</a>
-<a href=#193 id=193 data-nosnippet>193</a><span class="doccomment">/// Env var to disable all pkarr publishing (enabled by default)
-<a href=#194 id=194 data-nosnippet>194</a></span><span class="kw">pub const </span>FM_PKARR_ENABLE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_PKARR_ENABLE"</span>;
-<a href=#195 id=195 data-nosnippet>195</a>
-<a href=#196 id=196 data-nosnippet>196</a><span class="doccomment">/// Env var to enable pkarr DHT publishing (disabled by default)
-<a href=#197 id=197 data-nosnippet>197</a></span><span class="kw">pub const </span>FM_PKARR_DHT_ENABLE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_PKARR_DHT_ENABLE"</span>;
-<a href=#198 id=198 data-nosnippet>198</a>
-<a href=#199 id=199 data-nosnippet>199</a><span class="doccomment">/// Env var to disable pkarr relay publishing (enabled by default)
-<a href=#200 id=200 data-nosnippet>200</a></span><span class="kw">pub const </span>FM_PKARR_RELAYS_ENABLE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_PKARR_RELAYS_ENABLE"</span>;
-<a href=#201 id=201 data-nosnippet>201</a>
-<a href=#202 id=202 data-nosnippet>202</a><span class="doccomment">/// Env var to override tcp api connectivity
-<a href=#203 id=203 data-nosnippet>203</a>///
-<a href=#204 id=204 data-nosnippet>204</a>/// Comma separated key-value list (`peer_id=url,peer_id=url`)
-<a href=#205 id=205 data-nosnippet>205</a></span><span class="kw">pub const </span>FM_WS_API_CONNECT_OVERRIDES_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_WS_API_CONNECT_OVERRIDES"</span>;
-<a href=#206 id=206 data-nosnippet>206</a>
-<a href=#207 id=207 data-nosnippet>207</a><span class="kw">pub const </span>FM_IROH_API_SECRET_KEY_OVERRIDE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_IROH_API_SECRET_KEY_OVERRIDE"</span>;
-<a href=#208 id=208 data-nosnippet>208</a><span class="kw">pub const </span>FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_IROH_P2P_SECRET_KEY_OVERRIDE"</span>;
-<a href=#209 id=209 data-nosnippet>209</a>
-<a href=#210 id=210 data-nosnippet>210</a><span class="doccomment">/// List of json api endpoint sources to use as a source of
-<a href=#211 id=211 data-nosnippet>211</a>/// fee rate estimation.
-<a href=#212 id=212 data-nosnippet>212</a>///
-<a href=#213 id=213 data-nosnippet>213</a>/// `;`-separated list of urls with part after `#`
-<a href=#214 id=214 data-nosnippet>214</a>/// ("fragment") specifying jq filter to extract sats/vB fee rate.
-<a href=#215 id=215 data-nosnippet>215</a>/// Eg. `https://mempool.space/api/v1/fees/recommended#.halfHourFee`
-<a href=#216 id=216 data-nosnippet>216</a>///
-<a href=#217 id=217 data-nosnippet>217</a>/// Note that `#` is a standalone separator and *not* parsed as a part of the
-<a href=#218 id=218 data-nosnippet>218</a>/// Url. Which means there's no need to escape it.
-<a href=#219 id=219 data-nosnippet>219</a></span><span class="kw">pub const </span>FM_WALLET_FEERATE_SOURCES_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_WALLET_FEERATE_SOURCES"</span>;
-<a href=#220 id=220 data-nosnippet>220</a>
-<a href=#221 id=221 data-nosnippet>221</a><span class="doccomment">/// `devimint` will set when code is running inside `devimint`
-<a href=#222 id=222 data-nosnippet>222</a></span><span class="kw">pub const </span>FM_IN_DEVIMINT_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_IN_DEVIMINT"</span>;
-<a href=#223 id=223 data-nosnippet>223</a>
-<a href=#224 id=224 data-nosnippet>224</a><span class="doccomment">/// Configuration for the bitcoin RPC
-<a href=#225 id=225 data-nosnippet>225</a></span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
-<a href=#226 id=226 data-nosnippet>226</a></span><span class="kw">pub struct </span>BitcoinRpcConfig {
-<a href=#227 id=227 data-nosnippet>227</a>    <span class="kw">pub </span>kind: String,
-<a href=#228 id=228 data-nosnippet>228</a>    <span class="kw">pub </span>url: SafeUrl,
-<a href=#229 id=229 data-nosnippet>229</a>}
+<a href=#193 id=193 data-nosnippet>193</a><span class="doccomment">/// Enable direct IP transports on guardian Iroh 1.x endpoints (default: true).
+<a href=#194 id=194 data-nosnippet>194</a>///
+<a href=#195 id=195 data-nosnippet>195</a>/// Set to `false` or `0` for relay-only guardian P2P, transitional API
+<a href=#196 id=196 data-nosnippet>196</a>/// listeners, and guardian-origin API connections on Iroh 1.x. Does not affect
+<a href=#197 id=197 data-nosnippet>197</a>/// legacy Iroh 0.35 connections or TLS transports.
+<a href=#198 id=198 data-nosnippet>198</a></span><span class="kw">pub const </span>FM_IROH_P2P_ENABLE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_IROH_P2P_ENABLE"</span>;
+<a href=#199 id=199 data-nosnippet>199</a>
+<a href=#200 id=200 data-nosnippet>200</a><span class="doccomment">/// Env var to disable all pkarr publishing (enabled by default)
+<a href=#201 id=201 data-nosnippet>201</a></span><span class="kw">pub const </span>FM_PKARR_ENABLE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_PKARR_ENABLE"</span>;
+<a href=#202 id=202 data-nosnippet>202</a>
+<a href=#203 id=203 data-nosnippet>203</a><span class="doccomment">/// Env var to enable pkarr DHT publishing (disabled by default)
+<a href=#204 id=204 data-nosnippet>204</a></span><span class="kw">pub const </span>FM_PKARR_DHT_ENABLE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_PKARR_DHT_ENABLE"</span>;
+<a href=#205 id=205 data-nosnippet>205</a>
+<a href=#206 id=206 data-nosnippet>206</a><span class="doccomment">/// Env var to disable pkarr relay publishing (enabled by default)
+<a href=#207 id=207 data-nosnippet>207</a></span><span class="kw">pub const </span>FM_PKARR_RELAYS_ENABLE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_PKARR_RELAYS_ENABLE"</span>;
+<a href=#208 id=208 data-nosnippet>208</a>
+<a href=#209 id=209 data-nosnippet>209</a><span class="doccomment">/// Env var to override tcp api connectivity
+<a href=#210 id=210 data-nosnippet>210</a>///
+<a href=#211 id=211 data-nosnippet>211</a>/// Comma separated key-value list (`peer_id=url,peer_id=url`)
+<a href=#212 id=212 data-nosnippet>212</a></span><span class="kw">pub const </span>FM_WS_API_CONNECT_OVERRIDES_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_WS_API_CONNECT_OVERRIDES"</span>;
+<a href=#213 id=213 data-nosnippet>213</a>
+<a href=#214 id=214 data-nosnippet>214</a><span class="kw">pub const </span>FM_IROH_API_SECRET_KEY_OVERRIDE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_IROH_API_SECRET_KEY_OVERRIDE"</span>;
+<a href=#215 id=215 data-nosnippet>215</a><span class="kw">pub const </span>FM_IROH_P2P_SECRET_KEY_OVERRIDE_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_IROH_P2P_SECRET_KEY_OVERRIDE"</span>;
+<a href=#216 id=216 data-nosnippet>216</a>
+<a href=#217 id=217 data-nosnippet>217</a><span class="doccomment">/// List of json api endpoint sources to use as a source of
+<a href=#218 id=218 data-nosnippet>218</a>/// fee rate estimation.
+<a href=#219 id=219 data-nosnippet>219</a>///
+<a href=#220 id=220 data-nosnippet>220</a>/// `;`-separated list of urls with part after `#`
+<a href=#221 id=221 data-nosnippet>221</a>/// ("fragment") specifying jq filter to extract sats/vB fee rate.
+<a href=#222 id=222 data-nosnippet>222</a>/// Eg. `https://mempool.space/api/v1/fees/recommended#.halfHourFee`
+<a href=#223 id=223 data-nosnippet>223</a>///
+<a href=#224 id=224 data-nosnippet>224</a>/// Note that `#` is a standalone separator and *not* parsed as a part of the
+<a href=#225 id=225 data-nosnippet>225</a>/// Url. Which means there's no need to escape it.
+<a href=#226 id=226 data-nosnippet>226</a></span><span class="kw">pub const </span>FM_WALLET_FEERATE_SOURCES_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_WALLET_FEERATE_SOURCES"</span>;
+<a href=#227 id=227 data-nosnippet>227</a>
+<a href=#228 id=228 data-nosnippet>228</a><span class="doccomment">/// `devimint` will set when code is running inside `devimint`
+<a href=#229 id=229 data-nosnippet>229</a></span><span class="kw">pub const </span>FM_IN_DEVIMINT_ENV: <span class="kw-2">&amp;</span>str = <span class="string">"FM_IN_DEVIMINT"</span>;
 <a href=#230 id=230 data-nosnippet>230</a>
-<a href=#231 id=231 data-nosnippet>231</a><span class="kw">impl </span>BitcoinRpcConfig {
-<a href=#232 id=232 data-nosnippet>232</a>    <span class="kw">pub fn </span>get_defaults_from_env_vars() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, EnvParseError&gt; {
-<a href=#233 id=233 data-nosnippet>233</a>        <span class="self">Self</span>::defaults_from_lookup(<span class="kw-2">&amp;</span>|var: <span class="kw-2">&amp;</span>str| env::var_os(var))
-<a href=#234 id=234 data-nosnippet>234</a>    }
-<a href=#235 id=235 data-nosnippet>235</a>
-<a href=#236 id=236 data-nosnippet>236</a>    <span class="doccomment">/// The defaults, reading the variables through `lookup` rather than from
-<a href=#237 id=237 data-nosnippet>237</a>    /// the process environment.
-<a href=#238 id=238 data-nosnippet>238</a>    </span><span class="kw">fn </span>defaults_from_lookup&lt;L&gt;(lookup: <span class="kw-2">&amp;</span>L) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, EnvParseError&gt;
-<a href=#239 id=239 data-nosnippet>239</a>    <span class="kw">where
-<a href=#240 id=240 data-nosnippet>240</a>        </span>L: Fn(<span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;OsString&gt;,
-<a href=#241 id=241 data-nosnippet>241</a>    {
-<a href=#242 id=242 data-nosnippet>242</a>        <span class="kw">let </span>(<span class="kw">_</span>, kind) = first_env_var_set(
-<a href=#243 id=243 data-nosnippet>243</a>            BITCOIN_RPC_KIND_ENVS,
-<a href=#244 id=244 data-nosnippet>244</a>            FM_DEFAULT_BITCOIN_RPC_KIND_ENV,
-<a href=#245 id=245 data-nosnippet>245</a>            lookup,
-<a href=#246 id=246 data-nosnippet>246</a>        )<span class="question-mark">?</span>;
-<a href=#247 id=247 data-nosnippet>247</a>        <span class="kw">let </span>(url_var, url) =
-<a href=#248 id=248 data-nosnippet>248</a>            first_env_var_set(BITCOIN_RPC_URL_ENVS, FM_DEFAULT_BITCOIN_RPC_URL_ENV, lookup)<span class="question-mark">?</span>;
-<a href=#249 id=249 data-nosnippet>249</a>
-<a href=#250 id=250 data-nosnippet>250</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-<a href=#251 id=251 data-nosnippet>251</a>            kind,
-<a href=#252 id=252 data-nosnippet>252</a>            url: url.parse().map_err(|source| EnvParseError::InvalidUrl {
-<a href=#253 id=253 data-nosnippet>253</a>                var: url_var,
-<a href=#254 id=254 data-nosnippet>254</a>                source,
-<a href=#255 id=255 data-nosnippet>255</a>            })<span class="question-mark">?</span>,
-<a href=#256 id=256 data-nosnippet>256</a>        })
-<a href=#257 id=257 data-nosnippet>257</a>    }
-<a href=#258 id=258 data-nosnippet>258</a>}
-<a href=#259 id=259 data-nosnippet>259</a>
-<a href=#260 id=260 data-nosnippet>260</a><span class="doccomment">/// The environment variables holding the Bitcoin RPC kind, in lookup order,
-<a href=#261 id=261 data-nosnippet>261</a>/// each paired with the variable that replaces it if it is deprecated.
-<a href=#262 id=262 data-nosnippet>262</a></span><span class="kw">const </span>BITCOIN_RPC_KIND_ENVS: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>str, <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;)] = <span class="kw-2">&amp;</span>[
-<a href=#263 id=263 data-nosnippet>263</a>    (FM_FORCE_BITCOIN_RPC_KIND_ENV, <span class="prelude-val">None</span>),
-<a href=#264 id=264 data-nosnippet>264</a>    (FM_DEFAULT_BITCOIN_RPC_KIND_ENV, <span class="prelude-val">None</span>),
-<a href=#265 id=265 data-nosnippet>265</a>    (
-<a href=#266 id=266 data-nosnippet>266</a>        FM_BITCOIN_RPC_KIND_ENV,
-<a href=#267 id=267 data-nosnippet>267</a>        <span class="prelude-val">Some</span>(FM_DEFAULT_BITCOIN_RPC_KIND_ENV),
-<a href=#268 id=268 data-nosnippet>268</a>    ),
-<a href=#269 id=269 data-nosnippet>269</a>    (
-<a href=#270 id=270 data-nosnippet>270</a>        FM_FORCE_BITCOIN_RPC_KIND_BAD_ENV,
-<a href=#271 id=271 data-nosnippet>271</a>        <span class="prelude-val">Some</span>(FM_FORCE_BITCOIN_RPC_KIND_ENV),
-<a href=#272 id=272 data-nosnippet>272</a>    ),
-<a href=#273 id=273 data-nosnippet>273</a>    (
-<a href=#274 id=274 data-nosnippet>274</a>        FM_DEFAULT_BITCOIN_RPC_KIND_BAD_ENV,
-<a href=#275 id=275 data-nosnippet>275</a>        <span class="prelude-val">Some</span>(FM_DEFAULT_BITCOIN_RPC_KIND_ENV),
-<a href=#276 id=276 data-nosnippet>276</a>    ),
-<a href=#277 id=277 data-nosnippet>277</a>];
-<a href=#278 id=278 data-nosnippet>278</a>
-<a href=#279 id=279 data-nosnippet>279</a><span class="doccomment">/// The environment variables holding the Bitcoin RPC URL, in lookup order,
-<a href=#280 id=280 data-nosnippet>280</a>/// each paired with the variable that replaces it if it is deprecated.
-<a href=#281 id=281 data-nosnippet>281</a></span><span class="kw">const </span>BITCOIN_RPC_URL_ENVS: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>str, <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;)] = <span class="kw-2">&amp;</span>[
-<a href=#282 id=282 data-nosnippet>282</a>    (FM_FORCE_BITCOIN_RPC_URL_ENV, <span class="prelude-val">None</span>),
-<a href=#283 id=283 data-nosnippet>283</a>    (FM_DEFAULT_BITCOIN_RPC_URL_ENV, <span class="prelude-val">None</span>),
-<a href=#284 id=284 data-nosnippet>284</a>    (FM_BITCOIN_RPC_URL_ENV, <span class="prelude-val">Some</span>(FM_DEFAULT_BITCOIN_RPC_URL_ENV)),
-<a href=#285 id=285 data-nosnippet>285</a>    (
-<a href=#286 id=286 data-nosnippet>286</a>        FM_FORCE_BITCOIN_RPC_URL_BAD_ENV,
-<a href=#287 id=287 data-nosnippet>287</a>        <span class="prelude-val">Some</span>(FM_FORCE_BITCOIN_RPC_URL_ENV),
-<a href=#288 id=288 data-nosnippet>288</a>    ),
-<a href=#289 id=289 data-nosnippet>289</a>    (
-<a href=#290 id=290 data-nosnippet>290</a>        FM_DEFAULT_BITCOIN_RPC_URL_BAD_ENV,
-<a href=#291 id=291 data-nosnippet>291</a>        <span class="prelude-val">Some</span>(FM_DEFAULT_BITCOIN_RPC_URL_ENV),
-<a href=#292 id=292 data-nosnippet>292</a>    ),
-<a href=#293 id=293 data-nosnippet>293</a>];
-<a href=#294 id=294 data-nosnippet>294</a>
-<a href=#295 id=295 data-nosnippet>295</a><span class="doccomment">/// The value of the first variable of `vars` that `lookup` finds, together
-<a href=#296 id=296 data-nosnippet>296</a>/// with the name of that variable, warning about the deprecated ones on the
-<a href=#297 id=297 data-nosnippet>297</a>/// way.
-<a href=#298 id=298 data-nosnippet>298</a>///
-<a href=#299 id=299 data-nosnippet>299</a>/// `canonical` is the variable a user should set, reported when none of them
-<a href=#300 id=300 data-nosnippet>300</a>/// is.
-<a href=#301 id=301 data-nosnippet>301</a>///
-<a href=#302 id=302 data-nosnippet>302</a>/// A variable that is set but does not hold valid Unicode fails even when a
-<a href=#303 id=303 data-nosnippet>303</a>/// lower-priority variable holds a usable value, because silently ignoring a
-<a href=#304 id=304 data-nosnippet>304</a>/// variable the user did set would surprise them.
-<a href=#305 id=305 data-nosnippet>305</a></span><span class="kw">fn </span>first_env_var_set&lt;L&gt;(
-<a href=#306 id=306 data-nosnippet>306</a>    vars: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt;)],
-<a href=#307 id=307 data-nosnippet>307</a>    canonical: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
-<a href=#308 id=308 data-nosnippet>308</a>    lookup: <span class="kw-2">&amp;</span>L,
-<a href=#309 id=309 data-nosnippet>309</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, String), EnvParseError&gt;
-<a href=#310 id=310 data-nosnippet>310</a><span class="kw">where
-<a href=#311 id=311 data-nosnippet>311</a>    </span>L: Fn(<span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;OsString&gt;,
-<a href=#312 id=312 data-nosnippet>312</a>{
-<a href=#313 id=313 data-nosnippet>313</a>    <span class="kw">for </span><span class="kw-2">&amp;</span>(var, replacement) <span class="kw">in </span>vars {
-<a href=#314 id=314 data-nosnippet>314</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(value) = lookup(var) <span class="kw">else </span>{
-<a href=#315 id=315 data-nosnippet>315</a>            <span class="kw">continue</span>;
-<a href=#316 id=316 data-nosnippet>316</a>        };
-<a href=#317 id=317 data-nosnippet>317</a>        <span class="kw">let </span><span class="prelude-val">Ok</span>(value) = value.into_string() <span class="kw">else </span>{
-<a href=#318 id=318 data-nosnippet>318</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(EnvParseError::NotUnicode { var });
-<a href=#319 id=319 data-nosnippet>319</a>        };
-<a href=#320 id=320 data-nosnippet>320</a>
-<a href=#321 id=321 data-nosnippet>321</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(replacement) = replacement {
-<a href=#322 id=322 data-nosnippet>322</a>            <span class="macro">warn!</span>(target: LOG_CORE, <span class="string">"{var} is obsolete, use {replacement} instead"</span>);
-<a href=#323 id=323 data-nosnippet>323</a>        }
-<a href=#324 id=324 data-nosnippet>324</a>
-<a href=#325 id=325 data-nosnippet>325</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>((var, value));
-<a href=#326 id=326 data-nosnippet>326</a>    }
+<a href=#231 id=231 data-nosnippet>231</a><span class="doccomment">/// Configuration for the bitcoin RPC
+<a href=#232 id=232 data-nosnippet>232</a></span><span class="attr">#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+<a href=#233 id=233 data-nosnippet>233</a></span><span class="kw">pub struct </span>BitcoinRpcConfig {
+<a href=#234 id=234 data-nosnippet>234</a>    <span class="kw">pub </span>kind: String,
+<a href=#235 id=235 data-nosnippet>235</a>    <span class="kw">pub </span>url: SafeUrl,
+<a href=#236 id=236 data-nosnippet>236</a>}
+<a href=#237 id=237 data-nosnippet>237</a>
+<a href=#238 id=238 data-nosnippet>238</a><span class="kw">impl </span>BitcoinRpcConfig {
+<a href=#239 id=239 data-nosnippet>239</a>    <span class="kw">pub fn </span>get_defaults_from_env_vars() -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, EnvParseError&gt; {
+<a href=#240 id=240 data-nosnippet>240</a>        <span class="self">Self</span>::defaults_from_lookup(<span class="kw-2">&amp;</span>|var: <span class="kw-2">&amp;</span>str| env::var_os(var))
+<a href=#241 id=241 data-nosnippet>241</a>    }
+<a href=#242 id=242 data-nosnippet>242</a>
+<a href=#243 id=243 data-nosnippet>243</a>    <span class="doccomment">/// The defaults, reading the variables through `lookup` rather than from
+<a href=#244 id=244 data-nosnippet>244</a>    /// the process environment.
+<a href=#245 id=245 data-nosnippet>245</a>    </span><span class="kw">fn </span>defaults_from_lookup&lt;L&gt;(lookup: <span class="kw-2">&amp;</span>L) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>, EnvParseError&gt;
+<a href=#246 id=246 data-nosnippet>246</a>    <span class="kw">where
+<a href=#247 id=247 data-nosnippet>247</a>        </span>L: Fn(<span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;OsString&gt;,
+<a href=#248 id=248 data-nosnippet>248</a>    {
+<a href=#249 id=249 data-nosnippet>249</a>        <span class="kw">let </span>(<span class="kw">_</span>, kind) = first_env_var_set(
+<a href=#250 id=250 data-nosnippet>250</a>            BITCOIN_RPC_KIND_ENVS,
+<a href=#251 id=251 data-nosnippet>251</a>            FM_DEFAULT_BITCOIN_RPC_KIND_ENV,
+<a href=#252 id=252 data-nosnippet>252</a>            lookup,
+<a href=#253 id=253 data-nosnippet>253</a>        )<span class="question-mark">?</span>;
+<a href=#254 id=254 data-nosnippet>254</a>        <span class="kw">let </span>(url_var, url) =
+<a href=#255 id=255 data-nosnippet>255</a>            first_env_var_set(BITCOIN_RPC_URL_ENVS, FM_DEFAULT_BITCOIN_RPC_URL_ENV, lookup)<span class="question-mark">?</span>;
+<a href=#256 id=256 data-nosnippet>256</a>
+<a href=#257 id=257 data-nosnippet>257</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#258 id=258 data-nosnippet>258</a>            kind,
+<a href=#259 id=259 data-nosnippet>259</a>            url: url.parse().map_err(|source| EnvParseError::InvalidUrl {
+<a href=#260 id=260 data-nosnippet>260</a>                var: url_var,
+<a href=#261 id=261 data-nosnippet>261</a>                source,
+<a href=#262 id=262 data-nosnippet>262</a>            })<span class="question-mark">?</span>,
+<a href=#263 id=263 data-nosnippet>263</a>        })
+<a href=#264 id=264 data-nosnippet>264</a>    }
+<a href=#265 id=265 data-nosnippet>265</a>}
+<a href=#266 id=266 data-nosnippet>266</a>
+<a href=#267 id=267 data-nosnippet>267</a><span class="doccomment">/// The environment variables holding the Bitcoin RPC kind, in lookup order,
+<a href=#268 id=268 data-nosnippet>268</a>/// each paired with the variable that replaces it if it is deprecated.
+<a href=#269 id=269 data-nosnippet>269</a></span><span class="kw">const </span>BITCOIN_RPC_KIND_ENVS: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>str, <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;)] = <span class="kw-2">&amp;</span>[
+<a href=#270 id=270 data-nosnippet>270</a>    (FM_FORCE_BITCOIN_RPC_KIND_ENV, <span class="prelude-val">None</span>),
+<a href=#271 id=271 data-nosnippet>271</a>    (FM_DEFAULT_BITCOIN_RPC_KIND_ENV, <span class="prelude-val">None</span>),
+<a href=#272 id=272 data-nosnippet>272</a>    (
+<a href=#273 id=273 data-nosnippet>273</a>        FM_BITCOIN_RPC_KIND_ENV,
+<a href=#274 id=274 data-nosnippet>274</a>        <span class="prelude-val">Some</span>(FM_DEFAULT_BITCOIN_RPC_KIND_ENV),
+<a href=#275 id=275 data-nosnippet>275</a>    ),
+<a href=#276 id=276 data-nosnippet>276</a>    (
+<a href=#277 id=277 data-nosnippet>277</a>        FM_FORCE_BITCOIN_RPC_KIND_BAD_ENV,
+<a href=#278 id=278 data-nosnippet>278</a>        <span class="prelude-val">Some</span>(FM_FORCE_BITCOIN_RPC_KIND_ENV),
+<a href=#279 id=279 data-nosnippet>279</a>    ),
+<a href=#280 id=280 data-nosnippet>280</a>    (
+<a href=#281 id=281 data-nosnippet>281</a>        FM_DEFAULT_BITCOIN_RPC_KIND_BAD_ENV,
+<a href=#282 id=282 data-nosnippet>282</a>        <span class="prelude-val">Some</span>(FM_DEFAULT_BITCOIN_RPC_KIND_ENV),
+<a href=#283 id=283 data-nosnippet>283</a>    ),
+<a href=#284 id=284 data-nosnippet>284</a>];
+<a href=#285 id=285 data-nosnippet>285</a>
+<a href=#286 id=286 data-nosnippet>286</a><span class="doccomment">/// The environment variables holding the Bitcoin RPC URL, in lookup order,
+<a href=#287 id=287 data-nosnippet>287</a>/// each paired with the variable that replaces it if it is deprecated.
+<a href=#288 id=288 data-nosnippet>288</a></span><span class="kw">const </span>BITCOIN_RPC_URL_ENVS: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span>str, <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt;)] = <span class="kw-2">&amp;</span>[
+<a href=#289 id=289 data-nosnippet>289</a>    (FM_FORCE_BITCOIN_RPC_URL_ENV, <span class="prelude-val">None</span>),
+<a href=#290 id=290 data-nosnippet>290</a>    (FM_DEFAULT_BITCOIN_RPC_URL_ENV, <span class="prelude-val">None</span>),
+<a href=#291 id=291 data-nosnippet>291</a>    (FM_BITCOIN_RPC_URL_ENV, <span class="prelude-val">Some</span>(FM_DEFAULT_BITCOIN_RPC_URL_ENV)),
+<a href=#292 id=292 data-nosnippet>292</a>    (
+<a href=#293 id=293 data-nosnippet>293</a>        FM_FORCE_BITCOIN_RPC_URL_BAD_ENV,
+<a href=#294 id=294 data-nosnippet>294</a>        <span class="prelude-val">Some</span>(FM_FORCE_BITCOIN_RPC_URL_ENV),
+<a href=#295 id=295 data-nosnippet>295</a>    ),
+<a href=#296 id=296 data-nosnippet>296</a>    (
+<a href=#297 id=297 data-nosnippet>297</a>        FM_DEFAULT_BITCOIN_RPC_URL_BAD_ENV,
+<a href=#298 id=298 data-nosnippet>298</a>        <span class="prelude-val">Some</span>(FM_DEFAULT_BITCOIN_RPC_URL_ENV),
+<a href=#299 id=299 data-nosnippet>299</a>    ),
+<a href=#300 id=300 data-nosnippet>300</a>];
+<a href=#301 id=301 data-nosnippet>301</a>
+<a href=#302 id=302 data-nosnippet>302</a><span class="doccomment">/// The value of the first variable of `vars` that `lookup` finds, together
+<a href=#303 id=303 data-nosnippet>303</a>/// with the name of that variable, warning about the deprecated ones on the
+<a href=#304 id=304 data-nosnippet>304</a>/// way.
+<a href=#305 id=305 data-nosnippet>305</a>///
+<a href=#306 id=306 data-nosnippet>306</a>/// `canonical` is the variable a user should set, reported when none of them
+<a href=#307 id=307 data-nosnippet>307</a>/// is.
+<a href=#308 id=308 data-nosnippet>308</a>///
+<a href=#309 id=309 data-nosnippet>309</a>/// A variable that is set but does not hold valid Unicode fails even when a
+<a href=#310 id=310 data-nosnippet>310</a>/// lower-priority variable holds a usable value, because silently ignoring a
+<a href=#311 id=311 data-nosnippet>311</a>/// variable the user did set would surprise them.
+<a href=#312 id=312 data-nosnippet>312</a></span><span class="kw">fn </span>first_env_var_set&lt;L&gt;(
+<a href=#313 id=313 data-nosnippet>313</a>    vars: <span class="kw-2">&amp;</span>[(<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str&gt;)],
+<a href=#314 id=314 data-nosnippet>314</a>    canonical: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+<a href=#315 id=315 data-nosnippet>315</a>    lookup: <span class="kw-2">&amp;</span>L,
+<a href=#316 id=316 data-nosnippet>316</a>) -&gt; <span class="prelude-ty">Result</span>&lt;(<span class="kw-2">&amp;</span><span class="lifetime">'static </span>str, String), EnvParseError&gt;
+<a href=#317 id=317 data-nosnippet>317</a><span class="kw">where
+<a href=#318 id=318 data-nosnippet>318</a>    </span>L: Fn(<span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;OsString&gt;,
+<a href=#319 id=319 data-nosnippet>319</a>{
+<a href=#320 id=320 data-nosnippet>320</a>    <span class="kw">for </span><span class="kw-2">&amp;</span>(var, replacement) <span class="kw">in </span>vars {
+<a href=#321 id=321 data-nosnippet>321</a>        <span class="kw">let </span><span class="prelude-val">Some</span>(value) = lookup(var) <span class="kw">else </span>{
+<a href=#322 id=322 data-nosnippet>322</a>            <span class="kw">continue</span>;
+<a href=#323 id=323 data-nosnippet>323</a>        };
+<a href=#324 id=324 data-nosnippet>324</a>        <span class="kw">let </span><span class="prelude-val">Ok</span>(value) = value.into_string() <span class="kw">else </span>{
+<a href=#325 id=325 data-nosnippet>325</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(EnvParseError::NotUnicode { var });
+<a href=#326 id=326 data-nosnippet>326</a>        };
 <a href=#327 id=327 data-nosnippet>327</a>
-<a href=#328 id=328 data-nosnippet>328</a>    <span class="prelude-val">Err</span>(EnvParseError::NotSet { var: canonical })
-<a href=#329 id=329 data-nosnippet>329</a>}
-<a href=#330 id=330 data-nosnippet>330</a>
-<a href=#331 id=331 data-nosnippet>331</a><span class="doccomment">/// Failure to build a configuration value from environment variables.
-<a href=#332 id=332 data-nosnippet>332</a></span><span class="attr">#[derive(Debug, Error)]
-<a href=#333 id=333 data-nosnippet>333</a>#[non_exhaustive]
-<a href=#334 id=334 data-nosnippet>334</a></span><span class="kw">pub enum </span>EnvParseError {
-<a href=#335 id=335 data-nosnippet>335</a>    <span class="doccomment">/// None of the accepted variables is set; `var` is the canonical one to
-<a href=#336 id=336 data-nosnippet>336</a>    /// set.
-<a href=#337 id=337 data-nosnippet>337</a>    </span><span class="attr">#[error(<span class="string">"Environment variable {var} (or one of its aliases) is not set"</span>)]
-<a href=#338 id=338 data-nosnippet>338</a>    </span>NotSet { var: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str },
-<a href=#339 id=339 data-nosnippet>339</a>    <span class="doccomment">/// The variable is set but its value is not valid Unicode. A lower-priority
-<a href=#340 id=340 data-nosnippet>340</a>    /// alias is not consulted once a variable is set.
-<a href=#341 id=341 data-nosnippet>341</a>    </span><span class="attr">#[error(<span class="string">"Environment variable {var} is not valid Unicode"</span>)]
-<a href=#342 id=342 data-nosnippet>342</a>    </span>NotUnicode { var: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str },
-<a href=#343 id=343 data-nosnippet>343</a>    <span class="doccomment">/// The variable is set but is not a valid URL.
-<a href=#344 id=344 data-nosnippet>344</a>    </span><span class="attr">#[error(<span class="string">"Environment variable {var} is not a valid URL"</span>)]
-<a href=#345 id=345 data-nosnippet>345</a>    </span>InvalidUrl {
-<a href=#346 id=346 data-nosnippet>346</a>        var: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
-<a href=#347 id=347 data-nosnippet>347</a>        <span class="attr">#[source]
-<a href=#348 id=348 data-nosnippet>348</a>        </span>source: url::ParseError,
-<a href=#349 id=349 data-nosnippet>349</a>    },
-<a href=#350 id=350 data-nosnippet>350</a>}
-<a href=#351 id=351 data-nosnippet>351</a>
-<a href=#352 id=352 data-nosnippet>352</a><span class="kw">pub fn </span>parse_kv_list_from_env&lt;K, V&gt;(env: <span class="kw-2">&amp;</span>str) -&gt; BTreeMap&lt;K, V&gt;
-<a href=#353 id=353 data-nosnippet>353</a><span class="kw">where
-<a href=#354 id=354 data-nosnippet>354</a>    </span>K: FromStr + cmp::Ord,
-<a href=#355 id=355 data-nosnippet>355</a>    &lt;K <span class="kw">as </span>FromStr&gt;::Err: std::error::Error,
-<a href=#356 id=356 data-nosnippet>356</a>    V: FromStr,
-<a href=#357 id=357 data-nosnippet>357</a>    &lt;V <span class="kw">as </span>FromStr&gt;::Err: std::error::Error,
-<a href=#358 id=358 data-nosnippet>358</a>{
-<a href=#359 id=359 data-nosnippet>359</a>    <span class="kw">let </span><span class="kw-2">mut </span>map = BTreeMap::new();
-<a href=#360 id=360 data-nosnippet>360</a>    <span class="kw">let </span><span class="prelude-val">Ok</span>(env_value) = std::env::var(env) <span class="kw">else </span>{
-<a href=#361 id=361 data-nosnippet>361</a>        <span class="kw">return </span>BTreeMap::new();
-<a href=#362 id=362 data-nosnippet>362</a>    };
-<a href=#363 id=363 data-nosnippet>363</a>    <span class="kw">for </span>kv <span class="kw">in </span>env_value.split(<span class="string">','</span>) {
-<a href=#364 id=364 data-nosnippet>364</a>        <span class="kw">let </span>kv = kv.trim();
-<a href=#365 id=365 data-nosnippet>365</a>
-<a href=#366 id=366 data-nosnippet>366</a>        <span class="kw">if </span>kv.is_empty() {
-<a href=#367 id=367 data-nosnippet>367</a>            <span class="kw">continue</span>;
-<a href=#368 id=368 data-nosnippet>368</a>        }
-<a href=#369 id=369 data-nosnippet>369</a>
-<a href=#370 id=370 data-nosnippet>370</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>((k, v)) = kv.split_once(<span class="string">'='</span>) {
-<a href=#371 id=371 data-nosnippet>371</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(k) = K::from_str(k)
-<a href=#372 id=372 data-nosnippet>372</a>                .inspect_err(|err| {
-<a href=#373 id=373 data-nosnippet>373</a>                    <span class="macro">warn!</span>(
-<a href=#374 id=374 data-nosnippet>374</a>                        target: LOG_CORE,
-<a href=#375 id=375 data-nosnippet>375</a>                        err = %err.fmt_compact(),
-<a href=#376 id=376 data-nosnippet>376</a>                        <span class="string">"Error parsing value"
-<a href=#377 id=377 data-nosnippet>377</a>                    </span>);
-<a href=#378 id=378 data-nosnippet>378</a>                })
-<a href=#379 id=379 data-nosnippet>379</a>                .ok()
-<a href=#380 id=380 data-nosnippet>380</a>            <span class="kw">else </span>{
-<a href=#381 id=381 data-nosnippet>381</a>                <span class="kw">continue</span>;
-<a href=#382 id=382 data-nosnippet>382</a>            };
-<a href=#383 id=383 data-nosnippet>383</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(v) = V::from_str(v)
-<a href=#384 id=384 data-nosnippet>384</a>                .inspect_err(|err| {
-<a href=#385 id=385 data-nosnippet>385</a>                    <span class="macro">warn!</span>(
-<a href=#386 id=386 data-nosnippet>386</a>                        target: LOG_CORE,
-<a href=#387 id=387 data-nosnippet>387</a>                        err = %err.fmt_compact(),
-<a href=#388 id=388 data-nosnippet>388</a>                        <span class="string">"Error parsing value"
-<a href=#389 id=389 data-nosnippet>389</a>                    </span>);
-<a href=#390 id=390 data-nosnippet>390</a>                })
-<a href=#391 id=391 data-nosnippet>391</a>                .ok()
-<a href=#392 id=392 data-nosnippet>392</a>            <span class="kw">else </span>{
-<a href=#393 id=393 data-nosnippet>393</a>                <span class="kw">continue</span>;
-<a href=#394 id=394 data-nosnippet>394</a>            };
-<a href=#395 id=395 data-nosnippet>395</a>
-<a href=#396 id=396 data-nosnippet>396</a>            map.insert(k, v);
-<a href=#397 id=397 data-nosnippet>397</a>        }
-<a href=#398 id=398 data-nosnippet>398</a>    }
-<a href=#399 id=399 data-nosnippet>399</a>
-<a href=#400 id=400 data-nosnippet>400</a>    map
-<a href=#401 id=401 data-nosnippet>401</a>}
+<a href=#328 id=328 data-nosnippet>328</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(replacement) = replacement {
+<a href=#329 id=329 data-nosnippet>329</a>            <span class="macro">warn!</span>(target: LOG_CORE, <span class="string">"{var} is obsolete, use {replacement} instead"</span>);
+<a href=#330 id=330 data-nosnippet>330</a>        }
+<a href=#331 id=331 data-nosnippet>331</a>
+<a href=#332 id=332 data-nosnippet>332</a>        <span class="kw">return </span><span class="prelude-val">Ok</span>((var, value));
+<a href=#333 id=333 data-nosnippet>333</a>    }
+<a href=#334 id=334 data-nosnippet>334</a>
+<a href=#335 id=335 data-nosnippet>335</a>    <span class="prelude-val">Err</span>(EnvParseError::NotSet { var: canonical })
+<a href=#336 id=336 data-nosnippet>336</a>}
+<a href=#337 id=337 data-nosnippet>337</a>
+<a href=#338 id=338 data-nosnippet>338</a><span class="doccomment">/// Failure to build a configuration value from environment variables.
+<a href=#339 id=339 data-nosnippet>339</a></span><span class="attr">#[derive(Debug, Error)]
+<a href=#340 id=340 data-nosnippet>340</a>#[non_exhaustive]
+<a href=#341 id=341 data-nosnippet>341</a></span><span class="kw">pub enum </span>EnvParseError {
+<a href=#342 id=342 data-nosnippet>342</a>    <span class="doccomment">/// None of the accepted variables is set; `var` is the canonical one to
+<a href=#343 id=343 data-nosnippet>343</a>    /// set.
+<a href=#344 id=344 data-nosnippet>344</a>    </span><span class="attr">#[error(<span class="string">"Environment variable {var} (or one of its aliases) is not set"</span>)]
+<a href=#345 id=345 data-nosnippet>345</a>    </span>NotSet { var: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str },
+<a href=#346 id=346 data-nosnippet>346</a>    <span class="doccomment">/// The variable is set but its value is not valid Unicode. A lower-priority
+<a href=#347 id=347 data-nosnippet>347</a>    /// alias is not consulted once a variable is set.
+<a href=#348 id=348 data-nosnippet>348</a>    </span><span class="attr">#[error(<span class="string">"Environment variable {var} is not valid Unicode"</span>)]
+<a href=#349 id=349 data-nosnippet>349</a>    </span>NotUnicode { var: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str },
+<a href=#350 id=350 data-nosnippet>350</a>    <span class="doccomment">/// The variable is set but is not a valid URL.
+<a href=#351 id=351 data-nosnippet>351</a>    </span><span class="attr">#[error(<span class="string">"Environment variable {var} is not a valid URL"</span>)]
+<a href=#352 id=352 data-nosnippet>352</a>    </span>InvalidUrl {
+<a href=#353 id=353 data-nosnippet>353</a>        var: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
+<a href=#354 id=354 data-nosnippet>354</a>        <span class="attr">#[source]
+<a href=#355 id=355 data-nosnippet>355</a>        </span>source: url::ParseError,
+<a href=#356 id=356 data-nosnippet>356</a>    },
+<a href=#357 id=357 data-nosnippet>357</a>}
+<a href=#358 id=358 data-nosnippet>358</a>
+<a href=#359 id=359 data-nosnippet>359</a><span class="kw">pub fn </span>parse_kv_list_from_env&lt;K, V&gt;(env: <span class="kw-2">&amp;</span>str) -&gt; BTreeMap&lt;K, V&gt;
+<a href=#360 id=360 data-nosnippet>360</a><span class="kw">where
+<a href=#361 id=361 data-nosnippet>361</a>    </span>K: FromStr + cmp::Ord,
+<a href=#362 id=362 data-nosnippet>362</a>    &lt;K <span class="kw">as </span>FromStr&gt;::Err: std::error::Error,
+<a href=#363 id=363 data-nosnippet>363</a>    V: FromStr,
+<a href=#364 id=364 data-nosnippet>364</a>    &lt;V <span class="kw">as </span>FromStr&gt;::Err: std::error::Error,
+<a href=#365 id=365 data-nosnippet>365</a>{
+<a href=#366 id=366 data-nosnippet>366</a>    <span class="kw">let </span><span class="kw-2">mut </span>map = BTreeMap::new();
+<a href=#367 id=367 data-nosnippet>367</a>    <span class="kw">let </span><span class="prelude-val">Ok</span>(env_value) = std::env::var(env) <span class="kw">else </span>{
+<a href=#368 id=368 data-nosnippet>368</a>        <span class="kw">return </span>BTreeMap::new();
+<a href=#369 id=369 data-nosnippet>369</a>    };
+<a href=#370 id=370 data-nosnippet>370</a>    <span class="kw">for </span>kv <span class="kw">in </span>env_value.split(<span class="string">','</span>) {
+<a href=#371 id=371 data-nosnippet>371</a>        <span class="kw">let </span>kv = kv.trim();
+<a href=#372 id=372 data-nosnippet>372</a>
+<a href=#373 id=373 data-nosnippet>373</a>        <span class="kw">if </span>kv.is_empty() {
+<a href=#374 id=374 data-nosnippet>374</a>            <span class="kw">continue</span>;
+<a href=#375 id=375 data-nosnippet>375</a>        }
+<a href=#376 id=376 data-nosnippet>376</a>
+<a href=#377 id=377 data-nosnippet>377</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>((k, v)) = kv.split_once(<span class="string">'='</span>) {
+<a href=#378 id=378 data-nosnippet>378</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(k) = K::from_str(k)
+<a href=#379 id=379 data-nosnippet>379</a>                .inspect_err(|err| {
+<a href=#380 id=380 data-nosnippet>380</a>                    <span class="macro">warn!</span>(
+<a href=#381 id=381 data-nosnippet>381</a>                        target: LOG_CORE,
+<a href=#382 id=382 data-nosnippet>382</a>                        err = %err.fmt_compact(),
+<a href=#383 id=383 data-nosnippet>383</a>                        <span class="string">"Error parsing value"
+<a href=#384 id=384 data-nosnippet>384</a>                    </span>);
+<a href=#385 id=385 data-nosnippet>385</a>                })
+<a href=#386 id=386 data-nosnippet>386</a>                .ok()
+<a href=#387 id=387 data-nosnippet>387</a>            <span class="kw">else </span>{
+<a href=#388 id=388 data-nosnippet>388</a>                <span class="kw">continue</span>;
+<a href=#389 id=389 data-nosnippet>389</a>            };
+<a href=#390 id=390 data-nosnippet>390</a>            <span class="kw">let </span><span class="prelude-val">Some</span>(v) = V::from_str(v)
+<a href=#391 id=391 data-nosnippet>391</a>                .inspect_err(|err| {
+<a href=#392 id=392 data-nosnippet>392</a>                    <span class="macro">warn!</span>(
+<a href=#393 id=393 data-nosnippet>393</a>                        target: LOG_CORE,
+<a href=#394 id=394 data-nosnippet>394</a>                        err = %err.fmt_compact(),
+<a href=#395 id=395 data-nosnippet>395</a>                        <span class="string">"Error parsing value"
+<a href=#396 id=396 data-nosnippet>396</a>                    </span>);
+<a href=#397 id=397 data-nosnippet>397</a>                })
+<a href=#398 id=398 data-nosnippet>398</a>                .ok()
+<a href=#399 id=399 data-nosnippet>399</a>            <span class="kw">else </span>{
+<a href=#400 id=400 data-nosnippet>400</a>                <span class="kw">continue</span>;
+<a href=#401 id=401 data-nosnippet>401</a>            };
 <a href=#402 id=402 data-nosnippet>402</a>
-<a href=#403 id=403 data-nosnippet>403</a><span class="attr">#[cfg(test)]
-<a href=#404 id=404 data-nosnippet>404</a></span><span class="kw">mod </span>tests;
+<a href=#403 id=403 data-nosnippet>403</a>            map.insert(k, v);
+<a href=#404 id=404 data-nosnippet>404</a>        }
+<a href=#405 id=405 data-nosnippet>405</a>    }
+<a href=#406 id=406 data-nosnippet>406</a>
+<a href=#407 id=407 data-nosnippet>407</a>    map
+<a href=#408 id=408 data-nosnippet>408</a>}
+<a href=#409 id=409 data-nosnippet>409</a>
+<a href=#410 id=410 data-nosnippet>410</a><span class="attr">#[cfg(test)]
+<a href=#411 id=411 data-nosnippet>411</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
