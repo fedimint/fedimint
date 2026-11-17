@@ -40,6 +40,8 @@ use secp256k1::Keypair;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
+mod reissue_events;
+
 const EXPECTED_MAXIMUM_FEE: Amount = Amount::from_sats(20);
 
 fn fixtures() -> Fixtures {

@@ -13,7 +13,9 @@ use fedimint_core::core::{
     Account, Decoder, DynInput, DynOutput, IInput, IntoDynInstance, ModuleInstanceId, ModuleKind,
     OperationId,
 };
-use fedimint_core::db::{Database, DatabaseTransaction, GlobalDBTxAccessToken, NonCommittable};
+use fedimint_core::db::{
+    AutocommitError, Database, DatabaseTransaction, GlobalDBTxAccessToken, NonCommittable,
+};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::registry::{ModuleDecoderRegistry, ModuleRegistry};
 use fedimint_core::module::{AmountUnit, Amounts, CommonModuleInit, ModuleCommon, ModuleInit};
@@ -50,6 +52,18 @@ pub mod init;
 pub mod recovery;
 
 pub type ClientModuleRegistry = ModuleRegistry<DynClientModule>;
+
+/// A serialized module event prepared for atomic transaction submission.
+///
+/// Created with [`ClientContext::make_event`]. The submitting context supplies
+/// the module instance ID, just as it does for [`ClientContext::log_event`].
+#[derive(Clone)]
+pub struct ClientModuleEvent {
+    module_kind: Option<ModuleKind>,
+    kind: EventKind,
+    payload: serde_json::Value,
+    persistence: EventPersistence,
+}
 
 /// A fedimint-client interface exposed to client modules
 ///
@@ -426,6 +440,55 @@ where
                 tx_builder,
             )
             .await
+    }
+
+    /// Submits a new operation and logs its announcing events in one commit.
+    ///
+    /// Finalization errors roll back both the operation and the events. Commit
+    /// conflicts retry the entire transaction, including event logging.
+    pub async fn finalize_and_submit_transaction_with_events<F, Meta>(
+        &self,
+        operation_id: OperationId,
+        operation_type: &str,
+        operation_meta_gen: F,
+        tx_builder: TransactionBuilder,
+        events: Vec<ClientModuleEvent>,
+    ) -> Result<OutPointRange, TransactionSubmitError>
+    where
+        F: Fn(OutPointRange) -> Meta + Clone + MaybeSend + MaybeSync + 'static,
+        Meta: serde::Serialize + MaybeSend,
+    {
+        self.module_db()
+            .autocommit(
+                |dbtx, _| {
+                    let operation_meta_gen = operation_meta_gen.clone();
+                    let tx_builder = tx_builder.clone();
+                    let events = &events;
+                    Box::pin(async move {
+                        let range = self
+                            .finalize_and_submit_transaction_dbtx(
+                                dbtx,
+                                operation_id,
+                                operation_type,
+                                operation_meta_gen,
+                                tx_builder,
+                            )
+                            .await?;
+                        for event in events {
+                            self.log_serialized_event(dbtx, event.clone()).await;
+                        }
+                        Ok(range)
+                    })
+                },
+                Some(100),
+            )
+            .await
+            .map_err(|error| match error {
+                AutocommitError::ClosureError { error, .. } => error,
+                AutocommitError::CommitFailed { last_error, .. } => {
+                    TransactionSubmitError::Database(last_error)
+                }
+            })
     }
 
     pub async fn finalize_and_submit_transaction_dbtx<F, Meta>(
@@ -962,11 +1025,9 @@ where
             .await;
     }
 
-    pub async fn log_event<E, Cap>(&self, dbtx: &mut DatabaseTransaction<'_, Cap>, event: E)
-    where
-        E: Event + Send,
-        Cap: Send,
-    {
+    /// Prepares an event for
+    /// [`Self::finalize_and_submit_transaction_with_events`].
+    pub fn make_event<E: Event>(&self, event: E) -> ClientModuleEvent {
         if <E as Event>::MODULE != Some(<M as ClientModule>::kind()) {
             warn!(
                 target: LOG_CLIENT,
@@ -975,15 +1036,37 @@ where
                 "Client module logging events of different module than its own. This might become an error in the future."
             );
         }
+        ClientModuleEvent {
+            module_kind: E::MODULE,
+            kind: E::KIND,
+            payload: serde_json::to_value(event).expect("Can't fail"),
+            persistence: E::PERSISTENCE,
+        }
+    }
+
+    pub async fn log_event<E, Cap>(&self, dbtx: &mut DatabaseTransaction<'_, Cap>, event: E)
+    where
+        E: Event + Send,
+        Cap: Send,
+    {
+        self.log_serialized_event(dbtx, self.make_event(event))
+            .await;
+    }
+
+    async fn log_serialized_event<Cap: Send>(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_, Cap>,
+        event: ClientModuleEvent,
+    ) {
         self.client
             .get()
             .log_event_json(
                 &mut dbtx.global_dbtx(self.global_dbtx_access_token).to_ref_nc(),
-                <E as Event>::MODULE,
+                event.module_kind,
                 self.module_instance_id,
-                <E as Event>::KIND,
-                serde_json::to_value(event).expect("Can't fail"),
-                <E as Event>::PERSISTENCE,
+                event.kind,
+                event.payload,
+                event.persistence,
             )
             .await;
     }
