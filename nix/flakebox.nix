@@ -593,24 +593,6 @@ in
       }
     );
 
-    workspaceCargoUdepsDeps = craneLib.buildDepsOnly {
-      pname = "${commonArgs.pname}-udeps-deps";
-      nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ pkgs.cargo-udeps ];
-      # since we filtered all the actual project source, everything will definitely fail
-      # but we only run this step to cache the build artifacts, so we ignore failure with `|| true`
-      buildPhaseCargoCommand = "cargo udeps --workspace --all-targets --profile $CARGO_PROFILE || true";
-      doCheck = false;
-    };
-
-    workspaceCargoUdeps = craneLib.mkCargoDerivation {
-      pname = "fedimint-udeps";
-      cargoArtifacts = workspaceCargoUdepsDeps;
-      nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ pkgs.cargo-udeps ];
-      buildPhaseCargoCommand = "cargo udeps --workspace --all-targets --profile $CARGO_PROFILE";
-      doInstallCargoArtifacts = false;
-      doCheck = false;
-    };
-
     cargoWorkspacesCommand =
       { cmd, pnameSuffix }:
       let

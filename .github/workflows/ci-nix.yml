@@ -64,9 +64,6 @@ jobs:
           nix develop --ignore-environment .#lint --command ast-grep test --config sgconfig.yml
           nix develop --ignore-environment .#lint --command ./misc/git-hooks/pre-commit
 
-      - name: Check udeps
-        run: nix build -L .#nightly.test.workspaceCargoUdeps
-
       - name: Check `nix flake show`
         run: nix flake show .#
 
@@ -246,7 +243,7 @@ jobs:
         run: |
           nix build -L .#wasm32-unknown.ci.cargoCheckWasmNoDefaultFeatures
           nix build -L .#ci.cargoWorkspacesCheckNoDefaultFeatures
-          nix build -L .#nightly.ci.cargoWorkspacesCheckAllFeatures
+          nix build -L .#ci.cargoWorkspacesCheckAllFeatures
           nix build -L .#ci.cargoWorkspacesCheckDefaultFeatures
 
   audit:
