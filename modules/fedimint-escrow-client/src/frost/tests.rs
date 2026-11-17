@@ -2235,7 +2235,7 @@ async fn test_consortium_decision_is_accepted_by_the_escrow_rules() {
         federation_id: dummy_federation_id(),
         status: EscrowStatus::Disputed {
             resolve_by: 5_000,
-            swapped: false,
+            swaps_used: 0,
         },
         resolution_period: 3_600,
         default_fallback: FallbackPolicy::Refund,

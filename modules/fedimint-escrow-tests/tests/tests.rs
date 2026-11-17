@@ -487,7 +487,7 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
     let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
     assert!(matches!(
         contract.status,
-        EscrowStatus::Disputed { swapped: false, .. }
+        EscrowStatus::Disputed { swaps_used: 0, .. }
     ));
     assert!(disputed_until(&contract) >= contract.timeout + contract.resolution_period);
 
@@ -647,7 +647,7 @@ async fn test_arbiter_signature_with_invalid_inputs() -> anyhow::Result<()> {
     let still_disputed = funder_escrow.get_contract(escrow_id).await?.unwrap();
     assert!(matches!(
         still_disputed.status,
-        EscrowStatus::Disputed { swapped: false, .. }
+        EscrowStatus::Disputed { swaps_used: 0, .. }
     ));
     assert!(funder_escrow.get_claim_pool(escrow_id).await?.is_none());
 

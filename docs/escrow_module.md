@@ -14,12 +14,12 @@ The module can't know if goods were delivered or a service was done. It only enf
 
 - `escrow_id` - `sha256("fedimint_escrow_id_v1" || contract_hash || random nonce)`.
 - `funder_key`, `recipient_key`, `arbiter_key` - schnorr public keys. They are compared by their x-only form, because that is all a schnorr signature uses.
-- `arbiter_fee_key` - list of keys that share the arbiter fee, at most 24.
+- `arbiter_fee_key` - list of keys that share the arbiter fee, at most 16.
 - `amount` - the locked amount.
 - `arbiter_fee` - the part of `amount` that goes to the fee keys if the arbiter rules.
 - `timeout` - unix time. Before it only the funder's release works, after it a party can bring in the arbiter.
 - `resolution_period` - seconds the arbiter has to rule after it was brought in. At least 10 minutes.
-- `default_fallback` - what happens if the arbiter is silent: `Refund`, `Split { funder_split_bps, recipient_split_bps }` or `SwapArbiter { arbiter_key, arbiter_fee_key, arbiter_fee }`.
+- `default_fallback` - what happens if the arbiter is silent: `Refund`, `Split { funder_split_bps, recipient_split_bps }` or `SwapArbiter { successors }`  Each successor contains an arbiter_key, arbiter_fee_key and arbiter_fee. A contract can configure up to 3 successor arbiters.
 - `federation_id` and `contract_hash`.
 - `status` - `Active`, `Disputed { resolve_by, swapped }`, `Released`, `Refunded` or `Split`.
 
@@ -46,7 +46,9 @@ A contract is rejected if:
 - the timeout is not in the future, or the resolution period is shorter than 10 minutes
 - a split doesn't add up to 10,000
 - funder, recipient, arbiter and fee keys are not all different from each other (also counting the keys in `SwapArbiter`)
-- there is a fee but no fee key, or more than 24 fee keys
+- Each successor's arbiter fee must be smaller than the escrow amount.
+- A successor with a non-zero arbiter fee must have at least one fee key. Each successor can have at most 24 fee keys.
+- there is a fee but no fee key, or more than 16 fee keys
 - timeout plus two resolution periods must fit in 64 bits
 
 ### Resolving
@@ -58,7 +60,7 @@ After creation everything is an `EscrowInput { escrow_id, resolution }`.
 | `RecipientRefund` | contract is `Active`, the recipient signed the Refund message | `Refunded`, funder gets the full amount in the same tx | funder |
 | `ArbiterEngaged` | `Active`, time >= `timeout`, a party signed the engage message | `Disputed { resolve_by = now + resolution_period }` | the party |
 | `ArbiterOutcome` | `Disputed`, time <= `resolve_by`, the current arbiter signed the outcome | `Released`, `Refunded` or `Split`, a claim pool is written | the submitter |
-| `ResolveFallbackPolicy` | `Disputed`, time > `resolve_by`, claimer is a party | the arbiter is swapped (once) or the contract is `Refunded` / `Split`, a claim pool is written | the claimer |
+| `ResolveFallbackPolicy` | `Disputed`, time > `resolve_by`, claimer is a party | switches to the next configured successor arbiter, or applies the final fallback (Refund) when all successors have been used | the claimer |
 | `ClaimPayout` | the claim pool has an entry for the key | the entry is paid and removed | the key in the pool |
 
 
@@ -115,7 +117,9 @@ sequenceDiagram;
 
 If the arbiter stays silent past `resolve_by`, its signature is not accepted anymore and a party can trigger the fallback. `Refund` and `Split` resolve the contract with no arbiter fee, since nobody did any work.
 
-With `SwapArbiter` the first trigger doesn't pay anyone. It sets `swapped: true` and a new `resolve_by`. From then on the swap arbiter key, fee keys and fee are the active ones, and a ruling signed by the old arbiter fails with `InvalidSignature`. If the new arbiter is silent too, the next trigger refunds. A second swap is not possible.
+With SwapArbiter, each fallback trigger advances the contract to the next configured successor arbiter without paying anyone(upto 3 times). The contract increments swaps_used and sets a new resolve_by based on the current federation time plus resolution_period.
+
+The successor at the current position becomes the active arbiter. Its arbiter_key, arbiter_fee_key and arbiter_fee replace those of the previous arbiter for resolution purposes. A ruling signed by a previous arbiter is rejected with InvalidSignature.
 
 ### Claim pool
 A ruling or a fallback doesn't pay anyone in the same transaction. It writes a claim pool for the `escrow_id`, a list of `(key, amount)` entries:
@@ -170,7 +174,7 @@ The public keys are available with the `get_client_escrow_pubkey` and `get_arbit
 ### Arbiter consortium
 The federation checks one signature against `arbiter_key`. That key can belong to a group of arbiters who made it together with FROST, then any `t` of the `n` arbiters can sign and nobody ever holds the whole private key. The federation can't tell the difference. The code is in [frost](../modules/fedimint-escrow-client/src/frost/).
 
-A group has 4 to 24 arbiters and needs `n - f` of them to sign, where `f = (n - 1) / 3`:
+A group has 4 to 16 arbiters and needs `n - f` of them to sign, where `f = (n - 1) / 3`:
 
 | arbiters | needed to sign |
 |---|---|

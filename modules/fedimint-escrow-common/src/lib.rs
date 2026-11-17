@@ -30,8 +30,10 @@ pub const SPLIT_BPS_DENOMINATOR: u16 = 10_000;
 
 const MIN_PERIOD: u64 = 10 * 60;
 
-/// A contract has room for 24 fee keys, so a consortium cannot be bigger
-pub const MAX_FEE_PARTICIPANTS: usize = 24;
+/// A contract has room for 16 fee keys, so a consortium cannot be bigger
+pub const MAX_FEE_PARTICIPANTS: usize = 16;
+
+pub const MAX_SWAPS: usize = 3;
 
 // tags
 const CONTRACT_HASH_TAG_V1: &[u8] = b"fedimint_escrow_contract_hash_v1";
@@ -154,10 +156,15 @@ pub enum FallbackPolicy {
         recipient_split_bps: u16,
     },
     SwapArbiter {
-        arbiter_key: PublicKey,
-        arbiter_fee_key: Vec<PublicKey>,
-        arbiter_fee: Amount,
+        successors: Vec<SuccessorArbiter>,
     },
+}
+
+#[derive(Debug, Clone, Serialize, Hash, Eq, PartialEq, Deserialize, Encodable, Decodable)]
+pub struct SuccessorArbiter {
+    pub arbiter_key: PublicKey,
+    pub arbiter_fee_key: Vec<PublicKey>,
+    pub arbiter_fee: Amount,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -207,45 +214,49 @@ impl EscrowContract {
         Ok(contract)
     }
 
+    fn successors(&self) -> &[SuccessorArbiter] {
+        match &self.default_fallback {
+            FallbackPolicy::SwapArbiter { successors } => successors,
+            _ => &[],
+        }
+    }
+
+    pub fn swaps_used(&self) -> u8 {
+        match self.status {
+            EscrowStatus::Disputed { swaps_used, .. } => swaps_used,
+            _ => 0,
+        }
+    }
+
+    /// The successor that is currently the arbiter, none while the original one
+    /// is ruling
+    fn active_successor(&self) -> Option<&SuccessorArbiter> {
+        match self.status {
+            EscrowStatus::Disputed { swaps_used, .. } if swaps_used > 0 => {
+                self.successors().get(swaps_used as usize - 1)
+            }
+            _ => None,
+        }
+    }
+
     pub fn can_swap_arbiter(&self) -> bool {
-        matches!(self.status, EscrowStatus::Disputed { swapped: false, .. })
-            && matches!(self.default_fallback, FallbackPolicy::SwapArbiter { .. })
+        matches!(self.status, EscrowStatus::Disputed { swaps_used, .. }
+        if (swaps_used as usize) < self.successors().len())
     }
 
-    /// The arbiter key that will sign the resolution
     pub fn current_arbiter_key(&self) -> &PublicKey {
-        match (&self.status, &self.default_fallback) {
-            (
-                EscrowStatus::Disputed { swapped: true, .. },
-                FallbackPolicy::SwapArbiter { arbiter_key, .. },
-            ) => arbiter_key,
-            _ => &self.arbiter_key,
-        }
+        self.active_successor()
+            .map_or(&self.arbiter_key, |s| &s.arbiter_key)
     }
 
-    /// The current arbiter fee keys that will used to submit tx and claim
-    /// fees.
     pub fn current_fee_keys(&self) -> &[PublicKey] {
-        match (&self.status, &self.default_fallback) {
-            (
-                EscrowStatus::Disputed { swapped: true, .. },
-                FallbackPolicy::SwapArbiter {
-                    arbiter_fee_key, ..
-                },
-            ) => arbiter_fee_key,
-            _ => &self.arbiter_fee_key,
-        }
+        self.active_successor()
+            .map_or(&self.arbiter_fee_key[..], |s| &s.arbiter_fee_key[..])
     }
 
-    /// Gives current arbiter fee amount
     pub fn current_arbiter_fee(&self) -> Amount {
-        match (&self.status, &self.default_fallback) {
-            (
-                EscrowStatus::Disputed { swapped: true, .. },
-                FallbackPolicy::SwapArbiter { arbiter_fee, .. },
-            ) => *arbiter_fee,
-            _ => self.arbiter_fee,
-        }
+        self.active_successor()
+            .map_or(self.arbiter_fee, |s| s.arbiter_fee)
     }
 
     /// Returns the effective fallback policy that will be applied
@@ -272,17 +283,16 @@ impl EscrowContract {
             (EscrowStatus::Active, EscrowTransition::ArbiterEngaged { resolve_by }) => {
                 EscrowStatus::Disputed {
                     resolve_by,
-                    swapped: false,
+                    swaps_used: 0,
                 }
             }
-            (EscrowStatus::Disputed { .. }, EscrowTransition::SwapArbiter { resolve_by })
-                if self.can_swap_arbiter() =>
-            {
-                EscrowStatus::Disputed {
-                    resolve_by,
-                    swapped: true,
-                }
-            }
+            (
+                EscrowStatus::Disputed { swaps_used, .. },
+                EscrowTransition::SwapArbiter { resolve_by },
+            ) if self.can_swap_arbiter() => EscrowStatus::Disputed {
+                resolve_by,
+                swaps_used: *swaps_used + 1,
+            },
             (EscrowStatus::Disputed { .. }, EscrowTransition::ArbiterOutcome(outcome)) => {
                 EscrowStatus::from(outcome)
             }
@@ -317,39 +327,19 @@ impl EscrowContract {
         )
     }
 
-    pub fn contains_key(&self, pubkey: &PublicKey) -> bool {
-        x_only_eq(&self.funder_key, pubkey)
-            || x_only_eq(&self.recipient_key, pubkey)
-            || x_only_eq(&self.arbiter_key, pubkey)
-            || self.arbiter_fee_key.iter().any(|k| x_only_eq(k, pubkey))
-            || match &self.default_fallback {
-                FallbackPolicy::SwapArbiter {
-                    arbiter_key,
-                    arbiter_fee_key,
-                    ..
-                } => {
-                    x_only_eq(arbiter_key, pubkey)
-                        || arbiter_fee_key.iter().any(|k| x_only_eq(k, pubkey))
-                }
-                _ => false,
-            }
-    }
-
     pub fn all_keys(&self) -> Vec<PublicKey> {
         let mut keys = vec![self.funder_key, self.recipient_key, self.arbiter_key];
         keys.extend(self.arbiter_fee_key.iter().copied());
-        if let FallbackPolicy::SwapArbiter {
-            arbiter_key,
-            arbiter_fee_key,
-            ..
-        } = &self.default_fallback
-        {
-            keys.push(*arbiter_key);
-            keys.extend(arbiter_fee_key.iter().copied());
+        for s in self.successors() {
+            keys.push(s.arbiter_key);
+            keys.extend(s.arbiter_fee_key.iter().copied());
         }
         keys
     }
 
+    pub fn contains_key(&self, pubkey: &PublicKey) -> bool {
+        self.all_keys().iter().any(|k| x_only_eq(k, pubkey))
+    }
     pub fn engage_message(&self) -> EscrowMessage {
         EscrowMessage::ArbiterEngaged {
             escrow_id: self.escrow_id,
@@ -373,7 +363,7 @@ pub enum EscrowStatus {
     Active,
     Released,
     Refunded,
-    Disputed { resolve_by: u64, swapped: bool },
+    Disputed { resolve_by: u64, swaps_used: u8 },
     Split,
 }
 
@@ -466,50 +456,31 @@ impl FromStr for Outcome {
 
 impl FromStr for FallbackPolicy {
     type Err = anyhow::Error;
+
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let lower = s.trim().to_ascii_lowercase();
         let policy = match lower.as_str() {
             "refund" => FallbackPolicy::Refund,
             other if other.starts_with("swap:") => {
-                let rest = &other["swap:".len()..];
-                let mut parts = rest.splitn(3, ':');
-                let arbiter_key = PublicKey::from_str(
-                    parts
-                        .next()
-                        .ok_or_else(|| anyhow::anyhow!("missing arbiter key"))?,
-                )?;
-                let fee_sats: u64 = parts
-                    .next()
-                    .ok_or_else(|| anyhow::anyhow!("missing arbiter fee"))?
-                    .parse()?;
-                let arbiter_fee_key = parts
-                    .next()
-                    .unwrap_or("")
-                    .split(',')
-                    .filter(|k| !k.is_empty())
-                    .map(PublicKey::from_str)
+                let successors = other["swap:".len()..]
+                    .split(';')
+                    .filter(|s| !s.is_empty())
+                    .map(parse_successor)
                     .collect::<Result<Vec<_>, _>>()?;
-                FallbackPolicy::SwapArbiter {
-                    arbiter_key,
-                    arbiter_fee_key,
-                    arbiter_fee: Amount::from_sats(fee_sats),
-                }
+
+                FallbackPolicy::SwapArbiter { successors }
             }
             other => {
-                let rest = other.strip_prefix("split:").ok_or_else(|| {
-                    anyhow::anyhow!("invalid fallback '{s}', expected refund or split:<funder_bps>:<recipient_bps>")
-                })?;
-                let (funder_split_bps, recipient_split_bps) = parse_split(rest)?;
-                FallbackPolicy::Split {
-                    funder_split_bps,
-                    recipient_split_bps,
-                }
+                anyhow::bail!(
+                    "invalid fallback policy '{other}', expected refund or swap:<arbiter_key>:<fee>:<fee_keys>"
+                );
             }
         };
         anyhow::ensure!(
             policy.is_valid(),
             "split must add up to {SPLIT_BPS_DENOMINATOR} basis points"
         );
+
         Ok(policy)
     }
 }
@@ -524,6 +495,31 @@ impl fmt::Display for EscrowStatus {
             EscrowStatus::Split => "split",
         })
     }
+}
+
+fn parse_successor(s: &str) -> anyhow::Result<SuccessorArbiter> {
+    let mut parts = s.splitn(3, ':');
+    let arbiter_key = PublicKey::from_str(
+        parts
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("missing arbiter key"))?,
+    )?;
+    let fee_msats: u64 = parts
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("missing arbiter fee"))?
+        .parse()?;
+    let arbiter_fee_key = parts
+        .next()
+        .unwrap_or("")
+        .split(',')
+        .filter(|k| !k.is_empty())
+        .map(PublicKey::from_str)
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(SuccessorArbiter {
+        arbiter_key,
+        arbiter_fee_key,
+        arbiter_fee: Amount::from_msats(fee_msats),
+    })
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
@@ -1009,24 +1005,24 @@ pub fn validate_contract_fields(
         return Err(EscrowContractValidationError::InvalidInput);
     }
 
-    if let FallbackPolicy::SwapArbiter {
-        arbiter_key,
-        arbiter_fee_key,
-        arbiter_fee,
-    } = &contract.default_fallback
-    {
-        if *arbiter_fee >= contract.amount {
-            return Err(EscrowContractValidationError::InvalidArbiterFee);
-        }
-        if *arbiter_fee > Amount::ZERO && arbiter_fee_key.is_empty() {
-            return Err(EscrowContractValidationError::MissingArbiterFeeKeys);
-        }
-        if arbiter_fee_key.len() > MAX_FEE_PARTICIPANTS {
+    if let FallbackPolicy::SwapArbiter { successors } = &contract.default_fallback {
+        if successors.is_empty() || successors.len() > MAX_SWAPS {
             return Err(EscrowContractValidationError::InvalidInput);
         }
-        for key in std::iter::once(arbiter_key).chain(arbiter_fee_key.iter()) {
-            if !seen.insert(x_only(key)) {
-                return Err(EscrowContractValidationError::DuplicateKeys);
+        for s in successors {
+            if s.arbiter_fee >= contract.amount {
+                return Err(EscrowContractValidationError::InvalidArbiterFee);
+            }
+            if s.arbiter_fee > Amount::ZERO && s.arbiter_fee_key.is_empty() {
+                return Err(EscrowContractValidationError::MissingArbiterFeeKeys);
+            }
+            if s.arbiter_fee_key.len() > MAX_FEE_PARTICIPANTS {
+                return Err(EscrowContractValidationError::InvalidInput);
+            }
+            for key in std::iter::once(&s.arbiter_key).chain(s.arbiter_fee_key.iter()) {
+                if !seen.insert(x_only(key)) {
+                    return Err(EscrowContractValidationError::DuplicateKeys);
+                }
             }
         }
     }
@@ -1035,16 +1031,20 @@ pub fn validate_contract_fields(
         return Err(EscrowContractValidationError::InvalidResolutionTimeout);
     }
 
-    // A contract can produce deadlines up to timeout plus two windows (the
-    // ruling window and one more after a swap). If that doesn't fit in a u64,
-    // opening a dispute would fail later with an internal error
-    let two_windows = contract
+    // A contract can produce deadlines up to timeout plus number of swaps windows
+    // (the ruling window and one more after a swap). If that doesn't fit in a
+    // u64, opening a dispute would fail later with an internal error
+    let windows = match &contract.default_fallback {
+        FallbackPolicy::SwapArbiter { successors } => successors.len() as u64 + 1,
+        _ => 1,
+    };
+    let total = contract
         .resolution_period
-        .checked_mul(2)
+        .checked_mul(windows)
         .ok_or(EscrowContractValidationError::InvalidResolutionTimeout)?;
     contract
         .timeout
-        .checked_add(two_windows)
+        .checked_add(total)
         .ok_or(EscrowContractValidationError::InvalidTimeout)?;
 
     Ok(())

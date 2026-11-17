@@ -11,7 +11,8 @@ use fedimint_escrow_common::config::{EscrowConfig, EscrowConfigConsensus, Escrow
 use fedimint_escrow_common::{
     ClaimPool, ContractHash, EscrowConsensusItem, EscrowContract, EscrowContractValidationError,
     EscrowId, EscrowInput, EscrowInputError, EscrowOutput, EscrowOutputError, EscrowStatus,
-    FallbackPolicy, Outcome, Resolution, compute_contract_hash, compute_escrow_message,
+    FallbackPolicy, Outcome, Resolution, SuccessorArbiter, compute_contract_hash,
+    compute_escrow_message,
 };
 use fedimint_server_core::ServerModule;
 use rand::rngs::OsRng;
@@ -184,9 +185,11 @@ async fn test_process_output_swap_arbiter_contract_stored() {
         10_000,
         3_600,
         FallbackPolicy::SwapArbiter {
-            arbiter_key: swap_arbiter_kp.public_key(),
-            arbiter_fee_key: vec![swap_fee_kp.public_key()],
-            arbiter_fee: Amount::from_sats(30),
+            successors: vec![SuccessorArbiter {
+                arbiter_key: swap_arbiter_kp.public_key(),
+                arbiter_fee_key: vec![swap_fee_kp.public_key()],
+                arbiter_fee: Amount::from_sats(30),
+            }],
         },
     );
 
@@ -391,9 +394,11 @@ async fn test_process_output_swap_key_reusing_contract_key_rejected() {
         10_000,
         3_600,
         FallbackPolicy::SwapArbiter {
-            arbiter_key: arbiter_kp.public_key(),
-            arbiter_fee_key: vec![swap_fee_kp.public_key()],
-            arbiter_fee: Amount::from_sats(30),
+            successors: vec![SuccessorArbiter {
+                arbiter_key: arbiter_kp.public_key(),
+                arbiter_fee_key: vec![swap_fee_kp.public_key()],
+                arbiter_fee: Amount::from_sats(30),
+            }],
         },
     );
     let output = EscrowOutput::new_v0(contract);
@@ -773,7 +778,7 @@ async fn test_funder_release_after_dispute_rejected() {
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -890,7 +895,7 @@ async fn test_engage_arbiter_valid_at_exact_timeout() {
         stored.status,
         EscrowStatus::Disputed {
             resolve_by: 4_600,
-            swapped: false
+            swaps_used: 0
         }
     );
 }
@@ -1115,7 +1120,7 @@ async fn test_arbiter_release_valid() {
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -1188,7 +1193,7 @@ async fn test_arbiter_refund_valid() {
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -1256,7 +1261,7 @@ async fn test_arbiter_split_valid() {
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -1326,7 +1331,7 @@ async fn test_arbiter_ruling_at_resolve_by_valid() {
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -1375,7 +1380,7 @@ async fn test_arbiter_ruling_after_resolve_by_rejected() {
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -1424,7 +1429,7 @@ async fn test_arbiter_wrong_signature_rejected() {
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -1460,7 +1465,7 @@ async fn test_arbiter_wrong_signature_rejected() {
         stored.status,
         EscrowStatus::Disputed {
             resolve_by: 5_000,
-            swapped: false
+            swaps_used: 0
         }
     );
     let pool = module_dbtx
@@ -1491,7 +1496,7 @@ async fn test_arbiter_outcome_mismatch_rejected() {
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -1586,7 +1591,7 @@ async fn test_arbiter_ruling_twice_rejected() {
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -1646,7 +1651,7 @@ async fn test_arbiter_ruling_by_stranger_rejected() {
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -1695,7 +1700,7 @@ async fn test_arbiter_ruling_with_existing_claim_pool_rejected() {
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
     // a pool that should never exist for an unresolved contract
     let existing_pool = ClaimPool {
@@ -1738,7 +1743,7 @@ async fn test_arbiter_ruling_with_existing_claim_pool_rejected() {
         stored.status,
         EscrowStatus::Disputed {
             resolve_by: 5_000,
-            swapped: false
+            swaps_used: 0
         }
     );
     let pool = module_dbtx
@@ -1769,7 +1774,7 @@ async fn test_fallback_refund_valid() {
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -1834,7 +1839,7 @@ async fn test_fallback_before_resolve_by_rejected() {
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -1882,7 +1887,7 @@ async fn test_fallback_by_arbiter_rejected() {
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -1974,7 +1979,7 @@ async fn test_fallback_ignores_policy_sent_in_input() {
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -2037,14 +2042,16 @@ async fn test_fallback_swaps_arbiter() {
         1_000,
         3_600,
         FallbackPolicy::SwapArbiter {
-            arbiter_key: swap_arbiter_kp.public_key(),
-            arbiter_fee_key: vec![swap_fee_kp.public_key()],
-            arbiter_fee: Amount::from_sats(30),
+            successors: vec![SuccessorArbiter {
+                arbiter_key: swap_arbiter_kp.public_key(),
+                arbiter_fee_key: vec![swap_fee_kp.public_key()],
+                arbiter_fee: Amount::from_sats(30),
+            }],
         },
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -2080,7 +2087,7 @@ async fn test_fallback_swaps_arbiter() {
         stored.status,
         EscrowStatus::Disputed {
             resolve_by: 8_601,
-            swapped: true
+            swaps_used: 1
         }
     );
     let pool = module_dbtx
@@ -2109,14 +2116,16 @@ async fn test_swapped_arbiter_replaces_old_arbiter() {
         1_000,
         3_600,
         FallbackPolicy::SwapArbiter {
-            arbiter_key: swap_arbiter_kp.public_key(),
-            arbiter_fee_key: vec![swap_fee_kp.public_key()],
-            arbiter_fee: Amount::from_sats(30),
+            successors: vec![SuccessorArbiter {
+                arbiter_key: swap_arbiter_kp.public_key(),
+                arbiter_fee_key: vec![swap_fee_kp.public_key()],
+                arbiter_fee: Amount::from_sats(30),
+            }],
         },
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -2207,14 +2216,16 @@ async fn test_second_fallback_after_swap_refunds() {
         1_000,
         3_600,
         FallbackPolicy::SwapArbiter {
-            arbiter_key: swap_arbiter_kp.public_key(),
-            arbiter_fee_key: vec![swap_fee_kp.public_key()],
-            arbiter_fee: Amount::from_sats(30),
+            successors: vec![SuccessorArbiter {
+                arbiter_key: swap_arbiter_kp.public_key(),
+                arbiter_fee_key: vec![swap_fee_kp.public_key()],
+                arbiter_fee: Amount::from_sats(30),
+            }],
         },
     );
     contract.status = EscrowStatus::Disputed {
         resolve_by: 5_000,
-        swapped: false,
+        swaps_used: 0,
     };
 
     let mut dbtx = db.begin_transaction_nc().await;
@@ -2664,7 +2675,7 @@ async fn test_full_dispute_flow_to_claims() {
         stored.status,
         EscrowStatus::Disputed {
             resolve_by: 5_600,
-            swapped: false
+            swaps_used: 0
         }
     );
 
