@@ -367,7 +367,9 @@ dbg_macro = "deny"
 literal_string_with_formatting_args = "deny"
 
 [profile.dev]
-debug = "line-tables-only"
+# Line tables only add file:line to backtrace frames in tests; they cost build
+# time and target size. A panic still reports its own location.
+debug = false
 
 # in dev mode optimize crates that are perf-critical (usually just crypto crates)
 [profile.dev.package]
@@ -401,7 +403,6 @@ tikv-jemalloc-sys = { opt-level = 3 }
 zeroize = { opt-level = 3 }
 
 [profile.ci]
-debug = "line-tables-only"
 incremental = false
 inherits = "dev"
 
