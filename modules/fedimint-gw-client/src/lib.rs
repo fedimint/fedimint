@@ -673,23 +673,21 @@ impl GatewayClientModule {
             .ok_or(HandleInterceptedHtlcError::ReceiveDisabled { federation_id })?;
 
         self.client_ctx
-            .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
-            .await?;
-        debug!(?operation_id, "Submitted transaction for HTLC {htlc:?}");
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                IncomingPaymentStarted {
+            .finalize_and_submit_transaction_with_events(
+                operation_id,
+                KIND.as_str(),
+                operation_meta_gen,
+                tx,
+                vec![self.client_ctx.make_event(IncomingPaymentStarted {
                     contract_id,
                     payment_hash: htlc.payment_hash,
                     invoice_amount: htlc.incoming_amount_msat,
                     contract_amount: amount,
                     operation_id,
-                },
+                })],
             )
-            .await;
-        dbtx.commit_tx().await;
+            .await?;
+        debug!(?operation_id, "Submitted transaction for HTLC {htlc:?}");
         Ok(operation_id)
     }
 

@@ -40,7 +40,7 @@ use fedimint_client_module::transaction::{
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Account, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::{AutocommitError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
+use fedimint_core::db::{DatabaseTransaction, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiAuth, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit,
@@ -819,48 +819,20 @@ impl LightningClientModule {
             })
         };
 
-        // The operation and the event announcing it must survive a restart together.
         self.client_ctx
-            .module_db()
-            .autocommit(
-                |dbtx, _| {
-                    let operation_meta_gen = operation_meta_gen.clone();
-                    let transaction = transaction.clone();
-                    Box::pin(async move {
-                        self.client_ctx
-                            .finalize_and_submit_transaction_dbtx(
-                                dbtx,
-                                operation_id,
-                                LightningCommonInit::KIND.as_str(),
-                                operation_meta_gen,
-                                transaction,
-                            )
-                            .await?;
-
-                        self.client_ctx
-                            .log_event(
-                                dbtx,
-                                SendPaymentEvent {
-                                    operation_id,
-                                    amount: Amount::from_msats(amount),
-                                    fee: send_fee.fee(amount),
-                                    account,
-                                },
-                            )
-                            .await;
-
-                        Ok::<_, TransactionSubmitError>(())
-                    })
-                },
-                Some(100),
+            .finalize_and_submit_transaction_with_events(
+                operation_id,
+                LightningCommonInit::KIND.as_str(),
+                operation_meta_gen,
+                transaction,
+                vec![self.client_ctx.make_event(SendPaymentEvent {
+                    operation_id,
+                    amount: Amount::from_msats(amount),
+                    fee: send_fee.fee(amount),
+                    account,
+                })],
             )
             .await
-            .map_err(|error| match error {
-                AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    TransactionSubmitError::Database(last_error)
-                }
-            })
             .map_err(|e| match e {
                 TransactionSubmitError::InsufficientFunds(e) => {
                     SendPaymentError::InsufficientFunds(e)

@@ -1543,28 +1543,18 @@ impl LightningClientModule {
         dbtx.commit_tx_result().await?;
 
         self.client_ctx
-            .finalize_and_submit_transaction(
+            .finalize_and_submit_transaction_with_events(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
                 operation_meta_gen,
                 tx,
-            )
-            .await?;
-
-        let mut event_dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        self.client_ctx
-            .log_event(
-                &mut event_dbtx,
-                events::SendPaymentEvent {
+                vec![self.client_ctx.make_event(events::SendPaymentEvent {
                     operation_id,
                     amount: Amount::from_msats(amount_msat),
                     fee,
-                },
+                })],
             )
-            .await;
-
-        event_dbtx.commit_tx().await;
+            .await?;
 
         Ok(OutgoingLightningPayment {
             payment_type: pay_type,

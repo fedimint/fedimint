@@ -2175,11 +2175,18 @@ impl MintClientModule {
         };
 
         self.client_ctx
-            .finalize_and_submit_transaction(
+            .finalize_and_submit_transaction_with_events(
                 operation_id,
                 MintCommonInit::KIND.as_str(),
                 operation_meta_gen,
                 tx,
+                vec![
+                    self.client_ctx.make_event(OOBNotesReissued { amount }),
+                    self.client_ctx.make_event(ReceivePaymentEvent {
+                        operation_id,
+                        amount,
+                    }),
+                ],
             )
             .await
             .map_err(|error| match error {
@@ -2188,24 +2195,6 @@ impl MintClientModule {
                 }
                 error => ReissueExternalNotesError::Transaction(error),
             })?;
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        self.client_ctx
-            .log_event(&mut dbtx, OOBNotesReissued { amount })
-            .await;
-
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                ReceivePaymentEvent {
-                    operation_id,
-                    amount,
-                },
-            )
-            .await;
-
-        dbtx.commit_tx().await;
 
         Ok(operation_id)
     }

@@ -4405,6 +4405,7 @@ dependencies = [
  "fedimint-dummy-client",
  "fedimint-dummy-common",
  "fedimint-dummy-server",
+ "fedimint-eventlog",
  "fedimint-logging",
  "fedimint-mint-client",
  "fedimint-mint-common",

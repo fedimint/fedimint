@@ -54,9 +54,7 @@ use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation
 use fedimint_core::base32::{self, FEDIMINT_PREFIX};
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Account, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
-use fedimint_core::db::{
-    AutocommitError, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
-};
+use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::module::{
@@ -1335,53 +1333,23 @@ impl MintClientModule {
         let amount = ecash.amount();
         let tx_builder = TransactionBuilder::new(account).with_inputs(input);
 
-        // The operation, its state machines and the event announcing it must
-        // commit together, including when finalization needs to be retried.
         self.client_ctx
-            .module_db()
-            .autocommit(
-                |dbtx, _| {
-                    let tx_builder = tx_builder.clone();
-                    let ec = ec.clone();
-                    let custom_meta = custom_meta.clone();
-                    Box::pin(async move {
-                        self.client_ctx
-                            .finalize_and_submit_transaction_dbtx(
-                                dbtx,
-                                operation_id,
-                                MintCommonInit::KIND.as_str(),
-                                move |change_outpoint_range| MintOperationMeta::Receive {
-                                    change_outpoint_range,
-                                    ecash: ec.clone(),
-                                    custom_meta: custom_meta.clone(),
-                                },
-                                tx_builder,
-                            )
-                            .await?;
-
-                        self.client_ctx
-                            .log_event(
-                                dbtx,
-                                ReceivePaymentEvent {
-                                    operation_id,
-                                    amount,
-                                    account,
-                                },
-                            )
-                            .await;
-
-                        Ok::<_, TransactionSubmitError>(())
-                    })
+            .finalize_and_submit_transaction_with_events(
+                operation_id,
+                MintCommonInit::KIND.as_str(),
+                move |change_outpoint_range| MintOperationMeta::Receive {
+                    change_outpoint_range,
+                    ecash: ec.clone(),
+                    custom_meta: custom_meta.clone(),
                 },
-                Some(100),
+                tx_builder,
+                vec![self.client_ctx.make_event(ReceivePaymentEvent {
+                    operation_id,
+                    amount,
+                    account,
+                })],
             )
             .await
-            .map_err(|error| match error {
-                AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    TransactionSubmitError::Database(last_error)
-                }
-            })
             .map_err(|error| match error {
                 TransactionSubmitError::OperationAlreadyExists(_) => {
                     ReceiveECashError::AlreadyReceived
