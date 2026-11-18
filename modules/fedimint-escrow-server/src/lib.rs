@@ -334,7 +334,9 @@ impl ServerModule for Escrow {
                     EscrowStatus::Active | EscrowStatus::Disputed { .. } => {
                         -(contract.amount.msats as i64)
                     }
-                    EscrowStatus::Released | EscrowStatus::Refunded | EscrowStatus::Split => 0,
+                    EscrowStatus::Released(_)
+                    | EscrowStatus::Refunded(_)
+                    | EscrowStatus::Split(_) => 0,
                 },
             )
             .await;
@@ -517,7 +519,7 @@ impl Escrow {
         let now = self.consensus_unix_time(dbtx).await;
 
         let accepted = check_resolution(&contract, resolution, now)?;
-        contract.transition(accepted.transition)?;
+        contract.transition(accepted.transition, now)?;
 
         let amounts = match accepted.settlement {
             Settlement::None => Amounts::ZERO,

@@ -9,7 +9,8 @@ use crate::rules::{AcceptedResolution, Settlement, check_resolution};
 use crate::{
     ContractHash, EscrowContract, EscrowContractValidationError, EscrowId, EscrowInputError,
     EscrowMessage, EscrowStatus, EscrowTransition, FallbackPolicy, MAX_SWAPS, Outcome, Resolution,
-    SuccessorArbiter, compute_contract_hash, compute_escrow_message, validate_contract_fields,
+    ResolutionRecord, ResolvedBy, SuccessorArbiter, compute_contract_hash, compute_escrow_message,
+    validate_contract_fields,
 };
 
 const TIMEOUT: u64 = 1_000;
@@ -88,6 +89,20 @@ fn disputed(c: EscrowContract, swapped: bool) -> EscrowContract {
     disputed_with_swaps(c, u8::from(swapped))
 }
 
+fn record(by: ResolvedBy, at: u64) -> ResolutionRecord {
+    ResolutionRecord { by, at }
+}
+
+// one terminal status of each kind, with a made up record
+fn resolved_statuses() -> [EscrowStatus; 3] {
+    let r = record(ResolvedBy::FunderRelease, 0);
+    [
+        EscrowStatus::Released(r),
+        EscrowStatus::Refunded(r),
+        EscrowStatus::Split(r),
+    ]
+}
+
 fn release(c: &EscrowContract, signer: u8) -> Resolution {
     Resolution::FunderRelease {
         funder_signature: sign(signer, &c.resolution_message(Outcome::Release)),
@@ -129,14 +144,14 @@ fn fallback(c: &EscrowContract, claimer: u8) -> Resolution {
 
 fn accept(c: &EscrowContract, resolution: &Resolution, now: u64) -> AcceptedResolution {
     let accepted = check_resolution(c, resolution, now).unwrap();
-    c.clone().transition(accepted.transition).unwrap();
+    c.clone().transition(accepted.transition, now).unwrap();
     accepted
 }
 
 // like `accept`, but really changes the contract, the way the federation does
 fn apply(c: &mut EscrowContract, resolution: &Resolution, now: u64) -> AcceptedResolution {
     let accepted = check_resolution(c, resolution, now).unwrap();
-    c.transition(accepted.transition).unwrap();
+    c.transition(accepted.transition, now).unwrap();
     accepted
 }
 
@@ -225,11 +240,7 @@ fn funder_release_rejected_once_disputed() {
 
 #[test]
 fn funder_release_rejected_once_resolved() {
-    for status in [
-        EscrowStatus::Released,
-        EscrowStatus::Refunded,
-        EscrowStatus::Split,
-    ] {
+    for status in resolved_statuses() {
         let mut c = contract();
         c.status = status;
 
@@ -293,11 +304,7 @@ fn recipient_refund_rejected_once_disputed() {
 
 #[test]
 fn recipient_refund_rejected_once_resolved() {
-    for status in [
-        EscrowStatus::Released,
-        EscrowStatus::Refunded,
-        EscrowStatus::Split,
-    ] {
+    for status in resolved_statuses() {
         let mut c = contract();
         c.status = status;
 
@@ -315,7 +322,6 @@ fn recipient_refund_marks_refunded_and_blocks_a_release() {
     let resolution = refund(&c, 2);
     apply(&mut c, &resolution, 0);
 
-    assert_eq!(c.status, EscrowStatus::Refunded);
     assert_eq!(
         check_resolution(&c, &release(&c, 1), 0),
         Err(EscrowInputError::ContractAlreadyResolved)
@@ -345,20 +351,18 @@ fn recipient_refund_signature_is_not_an_arbiter_ruling() {
 
 #[test]
 fn recipient_refund_transition_only_from_active() {
-    for status in [
-        EscrowStatus::Released,
-        EscrowStatus::Refunded,
-        EscrowStatus::Split,
-        EscrowStatus::Disputed {
-            resolve_by: RESOLVE_BY,
-            swaps_used: 0,
-        },
-    ] {
+    let mut statuses = resolved_statuses().to_vec();
+    statuses.push(EscrowStatus::Disputed {
+        resolve_by: RESOLVE_BY,
+        swaps_used: 0,
+    });
+
+    for status in statuses {
         let mut c = contract();
         c.status = status;
 
         assert_eq!(
-            c.transition(EscrowTransition::RecipientRefund),
+            c.transition(EscrowTransition::RecipientRefund, 0),
             Err(EscrowInputError::InvalidStateTransition)
         );
     }
@@ -549,13 +553,15 @@ fn ruling_on_active_contract_rejected() {
 
 #[test]
 fn ruling_on_resolved_contract_rejected() {
-    let mut c = contract();
-    c.status = EscrowStatus::Refunded;
+    for status in resolved_statuses() {
+        let mut c = contract();
+        c.status = status;
 
-    assert_eq!(
-        check_resolution(&c, &ruling(&c, 3, Outcome::Refund), TIMEOUT),
-        Err(EscrowInputError::ContractAlreadyResolved)
-    );
+        assert_eq!(
+            check_resolution(&c, &ruling(&c, 3, Outcome::Refund), TIMEOUT),
+            Err(EscrowInputError::ContractAlreadyResolved)
+        );
+    }
 }
 
 #[test]
@@ -644,7 +650,7 @@ fn swapped_arbiter_and_fee_replace_the_old_ones() {
     let mut c = disputed(swap_contract(), false);
     let now = RESOLVE_BY + 1;
     let swap = accept(&c, &fallback(&c, 1), now);
-    c.transition(swap.transition).unwrap();
+    c.transition(swap.transition, now).unwrap();
     let new_resolve_by = now + PERIOD;
 
     assert_eq!(
@@ -664,7 +670,7 @@ fn no_second_swap_the_next_fallback_refunds() {
     let mut c = disputed(swap_contract(), false);
     let now = RESOLVE_BY + 1;
     let swap = accept(&c, &fallback(&c, 1), now);
-    c.transition(swap.transition).unwrap();
+    c.transition(swap.transition, now).unwrap();
 
     let accepted = accept(&c, &fallback(&c, 2), now + PERIOD + 1);
 
@@ -785,7 +791,6 @@ fn fallback_after_the_last_swap_refunds_without_fee() {
 
     assert_eq!(accepted.transition, EscrowTransition::Fallback);
     assert_eq!(claims(accepted), vec![(pk(1), msats(100_000))]);
-    assert_eq!(c.status, EscrowStatus::Refunded);
 }
 
 #[test]
@@ -815,6 +820,203 @@ fn all_keys_include_every_successor() {
     }
     assert!(!c.contains_key(&pk(8)));
     assert_eq!(c.all_keys().len(), 8);
+}
+
+#[test]
+fn arbiter_position_tells_the_original_from_the_successors() {
+    let c = two_swap_contract();
+
+    assert_eq!(c.arbiter_position(&pk(3)), Some(0));
+    assert_eq!(c.arbiter_position(&pk(5)), Some(1));
+    assert_eq!(c.arbiter_position(&pk(7)), Some(2));
+    // a party or a fee key is not an arbiter
+    assert_eq!(c.arbiter_position(&pk(1)), None);
+    assert_eq!(c.arbiter_position(&pk(4)), None);
+}
+
+#[test]
+fn release_records_when_it_happened() {
+    let mut c = contract();
+    let resolution = release(&c, 1);
+
+    apply(&mut c, &resolution, 4_321);
+
+    assert_eq!(
+        c.status,
+        EscrowStatus::Released(record(ResolvedBy::FunderRelease, 4_321))
+    );
+}
+
+#[test]
+fn recipient_refund_records_when_it_happened() {
+    let mut c = contract();
+    let resolution = refund(&c, 2);
+
+    apply(&mut c, &resolution, 4_321);
+
+    assert_eq!(
+        c.status,
+        EscrowStatus::Refunded(record(ResolvedBy::RecipientRefund, 4_321))
+    );
+}
+
+#[test]
+fn ruling_records_the_arbiter_key_and_time() {
+    let mut c = disputed(contract(), false);
+    let resolution = ruling(&c, 3, Outcome::Release);
+
+    apply(&mut c, &resolution, RESOLVE_BY);
+
+    assert_eq!(
+        c.status,
+        EscrowStatus::Released(record(
+            ResolvedBy::ArbiterRuling { arbiter: pk(3) },
+            RESOLVE_BY
+        ))
+    );
+}
+
+#[test]
+fn ruling_records_the_arbiter_not_the_submitter() {
+    let mut c = disputed(contract(), false);
+    // the arbiter signed, the recipient sent it
+    let resolution = ruling_by(&c, 3, Outcome::Refund, 2);
+
+    apply(&mut c, &resolution, RESOLVE_BY);
+
+    assert_eq!(
+        c.status,
+        EscrowStatus::Refunded(record(
+            ResolvedBy::ArbiterRuling { arbiter: pk(3) },
+            RESOLVE_BY
+        ))
+    );
+}
+
+#[test]
+fn ruling_by_a_swap_arbiter_records_the_swap_arbiter() {
+    let mut c = disputed(swap_contract(), false);
+    let now = RESOLVE_BY + 1;
+    swap(&mut c, 1, now);
+    let deadline = now + PERIOD;
+    let resolution = ruling(&c, 5, Outcome::Refund);
+
+    apply(&mut c, &resolution, deadline);
+
+    assert_eq!(
+        c.status,
+        EscrowStatus::Refunded(record(
+            ResolvedBy::ArbiterRuling { arbiter: pk(5) },
+            deadline
+        ))
+    );
+}
+
+#[test]
+fn split_ruling_keeps_the_ratio_and_the_record() {
+    let mut c = disputed(contract(), false);
+    let split = Outcome::Split {
+        funder_split_bps: 3_000,
+        recipient_split_bps: 7_000,
+    };
+    let resolution = ruling(&c, 3, split);
+
+    apply(&mut c, &resolution, RESOLVE_BY);
+
+    assert_eq!(
+        c.status,
+        EscrowStatus::Split(record(
+            ResolvedBy::ArbiterRuling { arbiter: pk(3) },
+            RESOLVE_BY
+        )),
+    );
+}
+
+#[test]
+fn fallback_records_the_silent_arbiter() {
+    let mut c = disputed(contract(), false);
+    let now = RESOLVE_BY + 1;
+    let resolution = fallback(&c, 1);
+
+    apply(&mut c, &resolution, now);
+
+    assert_eq!(
+        c.status,
+        EscrowStatus::Refunded(record(
+            ResolvedBy::Fallback {
+                silent_arbiter: pk(3)
+            },
+            now
+        ))
+    );
+}
+
+#[test]
+fn fallback_after_swaps_records_the_last_silent_arbiter() {
+    let mut c = disputed(two_swap_contract(), false);
+    let mut now = RESOLVE_BY + 1;
+    swap(&mut c, 1, now);
+    now += PERIOD + 1;
+    swap(&mut c, 2, now);
+    now += PERIOD + 1;
+    let resolution = fallback(&c, 1);
+
+    apply(&mut c, &resolution, now);
+
+    // arbiters 3 and 5 were swapped out, 7 was the last one and stayed silent
+    assert_eq!(
+        c.status,
+        EscrowStatus::Refunded(record(
+            ResolvedBy::Fallback {
+                silent_arbiter: pk(7)
+            },
+            now
+        ))
+    );
+}
+
+#[test]
+fn split_fallback_keeps_the_ratio_and_the_record() {
+    let mut c = disputed(contract(), false);
+    c.default_fallback = FallbackPolicy::Split {
+        funder_split_bps: 2_500,
+        recipient_split_bps: 7_500,
+    };
+    let now = RESOLVE_BY + 1;
+    let resolution = fallback(&c, 1);
+
+    apply(&mut c, &resolution, now);
+
+    assert_eq!(
+        c.status,
+        EscrowStatus::Split(record(
+            ResolvedBy::Fallback {
+                silent_arbiter: pk(3)
+            },
+            now
+        ),)
+    );
+}
+
+#[test]
+fn status_helpers_answer_only_once_resolved() {
+    let mut c = contract();
+    assert_eq!(c.status.record(), None);
+    let resolution = release(&c, 1);
+    apply(&mut c, &resolution, 7);
+    assert_eq!(c.status.record().unwrap().at, 7);
+    assert!(c.is_terminal());
+}
+
+#[test]
+fn status_names_do_not_change() {
+    let [released, refunded, split] = resolved_statuses();
+
+    assert_eq!(EscrowStatus::Active.to_string(), "active");
+    assert_eq!(released.to_string(), "released");
+    assert_eq!(refunded.to_string(), "refunded");
+    assert_eq!(split.to_string(), "split");
+    assert_eq!(disputed(contract(), false).status.to_string(), "disputed");
 }
 
 #[test]
@@ -932,7 +1134,7 @@ fn contract_hash_covers_the_successor_list_and_its_order() {
     assert_ne!(hash_of(&two), hash_of(&reordered));
 }
 
-// these two need the sats parsing and the `split:` arm from the lib.rs notes
+// needs the sats parsing in `parse_successor`
 #[test]
 fn swap_fallback_string_parses_every_successor() {
     let text = format!("swap:{}:2:{};{}:3:{}", pk(5), pk(6), pk(7), pk(9));
@@ -958,6 +1160,7 @@ fn swap_fallback_string_parses_every_successor() {
     );
 }
 
+// needs the `split:` arm back in `FallbackPolicy::from_str`
 #[test]
 fn refund_and_split_fallback_strings_still_parse() {
     assert_eq!(
@@ -993,7 +1196,7 @@ fn dispute_flow_ends_in_a_resolved_contract() {
     let mut c = contract();
 
     let engaged = accept(&c, &engage(&c, 2, 2), TIMEOUT);
-    c.transition(engaged.transition).unwrap();
+    c.transition(engaged.transition, TIMEOUT).unwrap();
     assert_eq!(
         c.status,
         EscrowStatus::Disputed {
@@ -1008,8 +1211,7 @@ fn dispute_flow_ends_in_a_resolved_contract() {
     );
 
     let ruled = accept(&c, &ruling(&c, 3, Outcome::Release), TIMEOUT + PERIOD);
-    c.transition(ruled.transition).unwrap();
-    assert_eq!(c.status, EscrowStatus::Released);
+    c.transition(ruled.transition, TIMEOUT + PERIOD).unwrap();
 
     // nothing else works afterwards
     assert_eq!(
@@ -1027,7 +1229,7 @@ fn active_contract_cannot_jump_to_a_ruling() {
     let mut c = contract();
 
     assert_eq!(
-        c.transition(EscrowTransition::ArbiterOutcome(Outcome::Refund)),
+        c.transition(EscrowTransition::ArbiterOutcome(Outcome::Refund), 0),
         Err(EscrowInputError::InvalidStateTransition)
     );
     assert_eq!(c.status, EscrowStatus::Active);
@@ -1035,20 +1237,16 @@ fn active_contract_cannot_jump_to_a_ruling() {
 
 #[test]
 fn resolved_contract_cannot_transition_again() {
-    for status in [
-        EscrowStatus::Released,
-        EscrowStatus::Refunded,
-        EscrowStatus::Split,
-    ] {
+    for status in resolved_statuses() {
         let mut c = contract();
         c.status = status;
 
         assert_eq!(
-            c.transition(EscrowTransition::FunderRelease),
+            c.transition(EscrowTransition::FunderRelease, 0),
             Err(EscrowInputError::InvalidStateTransition)
         );
         assert_eq!(
-            c.transition(EscrowTransition::Fallback),
+            c.transition(EscrowTransition::Fallback, 0),
             Err(EscrowInputError::InvalidStateTransition)
         );
     }

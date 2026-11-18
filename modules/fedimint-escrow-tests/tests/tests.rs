@@ -373,7 +373,7 @@ async fn test_contract_status_updated_after_funder_release() -> anyhow::Result<(
     assert_eq!(stream.ok().await?, EscrowInputSMState::Released);
 
     let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
-    assert_eq!(contract.status, EscrowStatus::Released);
+    assert!(matches!(contract.status, EscrowStatus::Released(_)));
 
     assert_rejected(
         recipient_escrow.resolve_escrow(escrow_id, funder_sig).await,
@@ -512,7 +512,7 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
     assert_eq!(stream.ok().await?, EscrowInputSMState::Refunded);
 
     let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
-    assert_eq!(contract.status, EscrowStatus::Refunded);
+    assert!(matches!(contract.status, EscrowStatus::Refunded(_)));
 
     // nobody is paid yet: the funder gets amount - fee, each fee key half the fee
     let pool = funder_escrow.get_claim_pool(escrow_id).await?.unwrap();
@@ -560,7 +560,7 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
 
     assert!(funder_escrow.get_claim_pool(escrow_id).await?.is_none());
     let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
-    assert_eq!(contract.status, EscrowStatus::Refunded);
+    assert!(matches!(contract.status, EscrowStatus::Refunded(_)));
 
     Ok(())
 }
@@ -667,7 +667,7 @@ async fn test_arbiter_signature_with_invalid_inputs() -> anyhow::Result<()> {
     assert_eq!(stream.ok().await?, EscrowInputSMState::Split);
 
     let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
-    assert_eq!(contract.status, EscrowStatus::Split);
+    assert!(matches!(contract.status, EscrowStatus::Split(_)));
 
     let pool = funder_escrow.get_claim_pool(escrow_id).await?.unwrap();
     assert_eq!(

@@ -11,8 +11,8 @@ use fedimint_escrow_common::config::{EscrowConfig, EscrowConfigConsensus, Escrow
 use fedimint_escrow_common::{
     ClaimPool, ContractHash, EscrowConsensusItem, EscrowContract, EscrowContractValidationError,
     EscrowId, EscrowInput, EscrowInputError, EscrowOutput, EscrowOutputError, EscrowStatus,
-    FallbackPolicy, Outcome, Resolution, SuccessorArbiter, compute_contract_hash,
-    compute_escrow_message,
+    FallbackPolicy, Outcome, Resolution, ResolutionRecord, ResolvedBy, SuccessorArbiter,
+    compute_contract_hash, compute_escrow_message,
 };
 use fedimint_server_core::ServerModule;
 use rand::rngs::OsRng;
@@ -621,7 +621,7 @@ async fn test_funder_release_valid() {
         .get_value(&EscrowContractKey(contract.escrow_id))
         .await
         .unwrap();
-    assert_eq!(stored.status, EscrowStatus::Released);
+    assert!(matches!(stored.status, EscrowStatus::Released(_)));
 
     // a funder release should never creates a claim pool
     let pool = module_dbtx
@@ -736,7 +736,10 @@ async fn test_funder_release_already_released_rejected() {
         3_600,
         FallbackPolicy::Refund,
     );
-    contract.status = EscrowStatus::Released;
+    contract.status = EscrowStatus::Released(ResolutionRecord {
+        by: ResolvedBy::FunderRelease,
+        at: 1000,
+    });
 
     let mut dbtx = db.begin_transaction_nc().await;
     let mut module_dbtx = dbtx.to_ref_with_prefix_module_id(42).0.into_nc();
@@ -1153,7 +1156,7 @@ async fn test_arbiter_release_valid() {
         .get_value(&EscrowContractKey(contract.escrow_id))
         .await
         .unwrap();
-    assert_eq!(stored.status, EscrowStatus::Released);
+    assert!(matches!(stored.status, EscrowStatus::Released(_)));
 
     // recipient gets amount - fee, the fee key gets the fee
     let pool = module_dbtx
@@ -1225,7 +1228,7 @@ async fn test_arbiter_refund_valid() {
         .get_value(&EscrowContractKey(contract.escrow_id))
         .await
         .unwrap();
-    assert_eq!(stored.status, EscrowStatus::Refunded);
+    assert!(matches!(stored.status, EscrowStatus::Refunded(_)));
 
     let pool = module_dbtx
         .get_value(&ClaimPoolKey(contract.escrow_id))
@@ -1294,7 +1297,7 @@ async fn test_arbiter_split_valid() {
         .get_value(&EscrowContractKey(contract.escrow_id))
         .await
         .unwrap();
-    assert_eq!(stored.status, EscrowStatus::Split);
+    assert!(matches!(stored.status, EscrowStatus::Split(_)));
 
     let pool = module_dbtx
         .get_value(&ClaimPoolKey(contract.escrow_id))
@@ -1805,7 +1808,7 @@ async fn test_fallback_refund_valid() {
         .get_value(&EscrowContractKey(contract.escrow_id))
         .await
         .unwrap();
-    assert_eq!(stored.status, EscrowStatus::Refunded);
+    assert!(matches!(stored.status, EscrowStatus::Refunded(_)));
 
     // the arbiter did no work, so the funder gets the whole amount
     let pool = module_dbtx
@@ -2011,7 +2014,7 @@ async fn test_fallback_ignores_policy_sent_in_input() {
         .get_value(&EscrowContractKey(contract.escrow_id))
         .await
         .unwrap();
-    assert_eq!(stored.status, EscrowStatus::Refunded);
+    assert!(matches!(stored.status, EscrowStatus::Refunded(_)));
     let pool = module_dbtx
         .get_value(&ClaimPoolKey(contract.escrow_id))
         .await
@@ -2182,7 +2185,7 @@ async fn test_swapped_arbiter_replaces_old_arbiter() {
         .get_value(&EscrowContractKey(contract.escrow_id))
         .await
         .unwrap();
-    assert_eq!(stored.status, EscrowStatus::Released);
+    assert!(matches!(stored.status, EscrowStatus::Released(_)));
     let pool = module_dbtx
         .get_value(&ClaimPoolKey(contract.escrow_id))
         .await
@@ -2264,7 +2267,7 @@ async fn test_second_fallback_after_swap_refunds() {
         .get_value(&EscrowContractKey(contract.escrow_id))
         .await
         .unwrap();
-    assert_eq!(stored.status, EscrowStatus::Refunded);
+    assert!(matches!(stored.status, EscrowStatus::Refunded(_)));
     let pool = module_dbtx
         .get_value(&ClaimPoolKey(contract.escrow_id))
         .await
@@ -2294,7 +2297,10 @@ async fn test_claim_payout_valid() {
         3_600,
         FallbackPolicy::Refund,
     );
-    contract.status = EscrowStatus::Released;
+    contract.status = EscrowStatus::Released(ResolutionRecord {
+        by: ResolvedBy::FunderRelease,
+        at: 1000,
+    });
     let pool = ClaimPool {
         escrow_id: contract.escrow_id,
         claimer: vec![
@@ -2380,7 +2386,10 @@ async fn test_claim_payout_twice_rejected() {
         3_600,
         FallbackPolicy::Refund,
     );
-    contract.status = EscrowStatus::Released;
+    contract.status = EscrowStatus::Released(ResolutionRecord {
+        by: ResolvedBy::FunderRelease,
+        at: 1000,
+    });
     let pool = ClaimPool {
         escrow_id: contract.escrow_id,
         claimer: vec![
@@ -2436,7 +2445,10 @@ async fn test_claim_payout_by_party_not_in_pool_rejected() {
         3_600,
         FallbackPolicy::Refund,
     );
-    contract.status = EscrowStatus::Released;
+    contract.status = EscrowStatus::Released(ResolutionRecord {
+        by: ResolvedBy::FunderRelease,
+        at: 1000,
+    });
     // the recipient won, the funder has nothing to claim
     let pool = ClaimPool {
         escrow_id: contract.escrow_id,
@@ -2495,7 +2507,10 @@ async fn test_claim_payout_by_third_party_rejected() {
         3_600,
         FallbackPolicy::Refund,
     );
-    contract.status = EscrowStatus::Released;
+    contract.status = EscrowStatus::Released(ResolutionRecord {
+        by: ResolvedBy::FunderRelease,
+        at: 1000,
+    });
     let pool = ClaimPool {
         escrow_id: contract.escrow_id,
         claimer: vec![(recipient_kp.public_key(), Amount::from_sats(1000))],
@@ -2582,7 +2597,10 @@ async fn test_claim_payout_matches_key_by_x_only() {
         3_600,
         FallbackPolicy::Refund,
     );
-    contract.status = EscrowStatus::Released;
+    contract.status = EscrowStatus::Released(ResolutionRecord {
+        by: ResolvedBy::FunderRelease,
+        at: 1000,
+    });
     let pool = ClaimPool {
         escrow_id: contract.escrow_id,
         claimer: vec![(recipient_kp.public_key(), Amount::from_sats(1000))],
@@ -2749,7 +2767,7 @@ async fn test_full_dispute_flow_to_claims() {
         .get_value(&EscrowContractKey(contract.escrow_id))
         .await
         .unwrap();
-    assert_eq!(stored.status, EscrowStatus::Refunded);
+    assert!(matches!(stored.status, EscrowStatus::Refunded(_)));
 }
 
 #[test_log::test(tokio::test)]

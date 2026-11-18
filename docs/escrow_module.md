@@ -21,7 +21,7 @@ The module can't know if goods were delivered or a service was done. It only enf
 - `resolution_period` - seconds the arbiter has to rule after it was brought in. At least 10 minutes.
 - `default_fallback` - what happens if the arbiter is silent: `Refund`, `Split { funder_split_bps, recipient_split_bps }` or `SwapArbiter { successors }`  Each successor contains an arbiter_key, arbiter_fee_key and arbiter_fee. A contract can configure up to 3 successor arbiters.
 - `federation_id` and `contract_hash`.
-- `status` - `Active`, `Disputed { resolve_by, swapped }`, `Released`, `Refunded` or `Split`.
+- `status` - `Active`, `Disputed { resolve_by, swaps_used }`, `Released(ResolutionRecord)`, `Refunded(ResolutionRecord)` or `Split(ResolutionRecord)`. Terminal statuses contain metadata describing how and when the contract was resolved.
 
 [compute_contract_hash](../modules/fedimint-escrow-common/src/lib.rs) hashes funder, recipient, arbiter, arbiter fee, amount, timeout, federation id, resolution period, fee keys and the default fallback. It does not cover `status` or `escrow_id`.
 
@@ -70,6 +70,19 @@ After creation everything is an `EscrowInput { escrow_id, resolution }`.
 - An arbiter ruling can be submitted by any key of the contract: funder, recipient, arbiter, a fee key or the keys of the swap arbiter. The submitter only signs the transaction. What matters is the arbiter signature inside the input.
 - At exactly `resolve_by` the arbiter can still rule and the fallback is not available yet.
 - The `fallback` field in `ResolveFallbackPolicy` is not looked at by the federation. It always uses `default_fallback` from the contract.
+
+### ResolutionRecord
+When a contract reaches a terminal state, its status stores a ResolutionRecord:
+
+```
+pub struct ResolutionRecord {
+    pub by: ResolvedBy,
+    pub at: u64,
+}
+```
+
+- by - identifies how the contract was resolved. FunderRelease, RecipientRefund, ArbiterRuling { arbiter } or Fallback { silent_arbiter }. arbiter is the key that signed the ruling, so it can be the original arbiter or a swap arbiter. For a fallback, silent_arbiter is the arbiter that was active and did not rule.
+- at - Unix timestamp (in seconds) when the contract was resolved, using federation consensus time.
 
 ### Releasing - the happy path
 ```mermaid

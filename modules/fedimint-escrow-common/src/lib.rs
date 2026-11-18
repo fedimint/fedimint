@@ -167,6 +167,26 @@ pub struct SuccessorArbiter {
     pub arbiter_fee: Amount,
 }
 
+/// How and when a contract ended. Written only by `EscrowContract::transition`.
+#[derive(Debug, Clone, Copy, Serialize, Hash, Eq, PartialEq, Deserialize, Encodable, Decodable)]
+pub struct ResolutionRecord {
+    pub by: ResolvedBy,
+    pub at: u64,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Hash, Eq, PartialEq, Deserialize, Encodable, Decodable)]
+pub enum ResolvedBy {
+    /// The funder's release signature was used.
+    FunderRelease,
+    /// The recipient's refund signature was used.
+    RecipientRefund,
+    /// This arbiter key signed the ruling (the original arbiter or a
+    /// successor).
+    ArbiterRuling { arbiter: PublicKey },
+    /// Resolved by Fallback trigger
+    Fallback { silent_arbiter: PublicKey },
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EscrowTransition {
     FunderRelease,
@@ -270,16 +290,28 @@ impl EscrowContract {
         }
     }
 
-    pub fn transition(&mut self, transition: EscrowTransition) -> Result<(), EscrowInputError> {
+    pub fn transition(
+        &mut self,
+        transition: EscrowTransition,
+        now: u64,
+    ) -> Result<(), EscrowInputError> {
         if let EscrowTransition::ArbiterOutcome(outcome) = transition
             && !outcome.is_valid()
         {
             return Err(EscrowInputError::InvalidSplitRatio);
         }
 
+        // the arbiter that is active right now, before the status changes
+        let arbiter = *self.current_arbiter_key();
+        let record = |by| ResolutionRecord { by, at: now };
+
         let new_status = match (&self.status, transition) {
-            (EscrowStatus::Active, EscrowTransition::FunderRelease) => EscrowStatus::Released,
-            (EscrowStatus::Active, EscrowTransition::RecipientRefund) => EscrowStatus::Refunded,
+            (EscrowStatus::Active, EscrowTransition::FunderRelease) => {
+                EscrowStatus::Released(record(ResolvedBy::FunderRelease))
+            }
+            (EscrowStatus::Active, EscrowTransition::RecipientRefund) => {
+                EscrowStatus::Refunded(record(ResolvedBy::RecipientRefund))
+            }
             (EscrowStatus::Active, EscrowTransition::ArbiterEngaged { resolve_by }) => {
                 EscrowStatus::Disputed {
                     resolve_by,
@@ -294,15 +326,21 @@ impl EscrowContract {
                 swaps_used: *swaps_used + 1,
             },
             (EscrowStatus::Disputed { .. }, EscrowTransition::ArbiterOutcome(outcome)) => {
-                EscrowStatus::from(outcome)
+                EscrowStatus::resolved(outcome, record(ResolvedBy::ArbiterRuling { arbiter }))
             }
             (EscrowStatus::Disputed { .. }, EscrowTransition::Fallback)
                 if !self.can_swap_arbiter() =>
             {
-                EscrowStatus::from(Outcome::from(&self.default_fallback))
+                EscrowStatus::resolved(
+                    Outcome::from(&self.default_fallback),
+                    record(ResolvedBy::Fallback {
+                        silent_arbiter: arbiter,
+                    }),
+                )
             }
             _ => return Err(EscrowInputError::InvalidStateTransition),
         };
+
         self.status = new_status;
         Ok(())
     }
@@ -323,8 +361,19 @@ impl EscrowContract {
     pub fn is_terminal(&self) -> bool {
         matches!(
             self.status,
-            EscrowStatus::Released | EscrowStatus::Refunded | EscrowStatus::Split
+            EscrowStatus::Released(_) | EscrowStatus::Refunded(_) | EscrowStatus::Split(_)
         )
+    }
+
+    /// 0 is the original arbiter, n is the n-th successor.
+    pub fn arbiter_position(&self, key: &PublicKey) -> Option<usize> {
+        if x_only_eq(&self.arbiter_key, key) {
+            return Some(0);
+        }
+        self.successors()
+            .iter()
+            .position(|s| x_only_eq(&s.arbiter_key, key))
+            .map(|i| i + 1)
     }
 
     pub fn all_keys(&self) -> Vec<PublicKey> {
@@ -361,18 +410,27 @@ impl EscrowContract {
 #[derive(Debug, Clone, Serialize, Hash, Eq, PartialEq, Deserialize, Encodable, Decodable)]
 pub enum EscrowStatus {
     Active,
-    Released,
-    Refunded,
+    Released(ResolutionRecord),
+    Refunded(ResolutionRecord),
     Disputed { resolve_by: u64, swaps_used: u8 },
-    Split,
+    Split(ResolutionRecord),
 }
 
-impl From<Outcome> for EscrowStatus {
-    fn from(outcome: Outcome) -> Self {
+impl EscrowStatus {
+    /// The terminal status for an outcome.
+    pub fn resolved(outcome: Outcome, record: ResolutionRecord) -> Self {
         match outcome {
-            Outcome::Release => EscrowStatus::Released,
-            Outcome::Refund => EscrowStatus::Refunded,
-            Outcome::Split { .. } => EscrowStatus::Split,
+            Outcome::Release => EscrowStatus::Released(record),
+            Outcome::Refund => EscrowStatus::Refunded(record),
+            Outcome::Split { .. } => EscrowStatus::Split(record),
+        }
+    }
+
+    pub fn record(&self) -> Option<&ResolutionRecord> {
+        match self {
+            EscrowStatus::Released(r) | EscrowStatus::Refunded(r) => Some(r),
+            EscrowStatus::Split(record) => Some(record),
+            EscrowStatus::Active | EscrowStatus::Disputed { .. } => None,
         }
     }
 }
@@ -489,10 +547,10 @@ impl fmt::Display for EscrowStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             EscrowStatus::Active => "active",
-            EscrowStatus::Released => "released",
-            EscrowStatus::Refunded => "refunded",
+            EscrowStatus::Released(_) => "released",
+            EscrowStatus::Refunded(_) => "refunded",
             EscrowStatus::Disputed { .. } => "disputed",
-            EscrowStatus::Split => "split",
+            EscrowStatus::Split(_) => "split",
         })
     }
 }
