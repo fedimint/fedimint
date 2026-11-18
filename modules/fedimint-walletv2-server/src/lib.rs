@@ -63,7 +63,7 @@ use fedimint_logging::LOG_MODULE_WALLETV2;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::config::{PeerHandleOps, PeerHandleOpsExt};
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
-use fedimint_server_core::volume::{counted_whole_window, volume_buckets, volume_day};
+use fedimint_server_core::volume::{counted_whole_window, volume_bucket, volume_buckets};
 use fedimint_server_core::{
     ConfigGenModuleArgs, EnvVarDoc, ServerModule, ServerModuleInit, ServerModuleInitArgs,
 };
@@ -98,7 +98,7 @@ use tracing::{debug, info};
 use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, FeeRateVoteKey, FeeRateVotePrefix, TxInfoKey,
     TxInfoPrefix, UnconfirmedTxKey, UnconfirmedTxPrefix, UnsignedTxKey, UnsignedTxPrefix,
-    VolumeDay, VolumeDayKey, VolumeDayPrefix, VolumeStartKey, VolumeStartPrefix,
+    VolumeBucket, VolumeBucketKey, VolumeBucketPrefix, VolumeStartKey, VolumeStartPrefix,
 };
 use crate::metrics::{
     WALLET_BLOCK_COUNT, WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS,
@@ -268,14 +268,14 @@ impl ModuleInit for WalletInit {
                         "Federation Wallet"
                     );
                 }
-                DbKeyPrefix::VolumeDay => {
+                DbKeyPrefix::VolumeBucket => {
                     push_db_pair_items!(
                         dbtx,
-                        VolumeDayPrefix,
-                        VolumeDayKey,
-                        VolumeDay,
+                        VolumeBucketPrefix,
+                        VolumeBucketKey,
+                        VolumeBucket,
                         wallet,
-                        "Wallet Volume Days"
+                        "Wallet Volume Buckets"
                     );
                 }
                 DbKeyPrefix::VolumeStart => {
@@ -520,8 +520,8 @@ impl ServerModule for Wallet {
         // Consensus items arrive every session, so this marks the start of
         // counting no later than the first session that counts. A deposit or
         // withdrawal can still be processed earlier in that session, at the
-        // same block count, which is why the day counting started on is never
-        // complete.
+        // same block count, which is why the bucket counting started in is
+        // never complete.
         if dbtx.get_value(&VolumeStartKey).await.is_none() {
             let now = self.consensus_block_count(dbtx).await;
             dbtx.insert_new_entry(&VolumeStartKey, &now).await;
@@ -700,7 +700,7 @@ impl ServerModule for Wallet {
         Self::count_volume(
             dbtx,
             block_count,
-            VolumeDay {
+            VolumeBucket {
                 deposited: tracked_output.value,
                 withdrawn: Amount::ZERO,
             },
@@ -847,7 +847,7 @@ impl ServerModule for Wallet {
         Self::count_volume(
             dbtx,
             block_count,
-            VolumeDay {
+            VolumeBucket {
                 deposited: Amount::ZERO,
                 withdrawn: output.value,
             },
@@ -1274,39 +1274,44 @@ impl Wallet {
         }
     }
 
-    /// Add a processed flow to the current volume day.
-    async fn count_volume(dbtx: &mut DatabaseTransaction<'_>, block_count: u64, delta: VolumeDay) {
-        let key = VolumeDayKey(volume_day(block_count));
-        let mut day = dbtx.get_value(&key).await.unwrap_or_default();
-        day.accumulate(delta);
-        dbtx.insert_entry(&key, &day).await;
+    /// Add a processed flow to the current volume bucket.
+    async fn count_volume(
+        dbtx: &mut DatabaseTransaction<'_>,
+        block_count: u64,
+        delta: VolumeBucket,
+    ) {
+        let key = VolumeBucketKey(volume_bucket(block_count));
+        let mut bucket = dbtx.get_value(&key).await.unwrap_or_default();
+        bucket.accumulate(delta);
+        dbtx.insert_entry(&key, &bucket).await;
     }
 
     async fn volume_stats(&self, dbtx: &mut DatabaseTransaction<'_>) -> WalletVolumeStats {
         let block_count = self.consensus_block_count(dbtx).await;
         let start = dbtx.get_value(&VolumeStartKey).await;
-        let week = volume_buckets(block_count, 7);
-        let month = volume_buckets(block_count, 30);
-        let mut last_7_days = VolumeDay::default();
-        let mut last_30_days = VolumeDay::default();
+        // 7 and 30 buckets of 144 blocks.
+        let short = volume_buckets(block_count, 7);
+        let long = volume_buckets(block_count, 30);
+        let mut last_1008_blocks = VolumeBucket::default();
+        let mut last_4320_blocks = VolumeBucket::default();
         let mut stream = dbtx
-            .find_by_range(VolumeDayKey(month.start)..VolumeDayKey(month.end))
+            .find_by_range(VolumeBucketKey(long.start)..VolumeBucketKey(long.end))
             .await;
-        while let Some((key, day)) = stream.next().await {
-            last_30_days.accumulate(day);
-            if key.0 >= week.start {
-                last_7_days.accumulate(day);
+        while let Some((key, bucket)) = stream.next().await {
+            last_4320_blocks.accumulate(bucket);
+            if key.0 >= short.start {
+                last_1008_blocks.accumulate(bucket);
             }
         }
-        let report = |total: VolumeDay, first_bucket: u64| WalletVolume {
+        let report = |total: VolumeBucket, first_bucket: u64| WalletVolume {
             deposited: total.deposited,
             withdrawn: total.withdrawn,
             complete: counted_whole_window(start, first_bucket),
         };
         WalletVolumeStats {
             block_count,
-            last_7_days: report(last_7_days, week.start),
-            last_30_days: report(last_30_days, month.start),
+            last_1008_blocks: report(last_1008_blocks, short.start),
+            last_4320_blocks: report(last_4320_blocks, long.start),
         }
     }
 

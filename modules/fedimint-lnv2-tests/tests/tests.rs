@@ -1288,44 +1288,53 @@ async fn volume_stats_count_only_settled_payments() -> anyhow::Result<()> {
         denied.to_string().contains("Invalid authorization"),
         "{denied}"
     );
-    let stats: LightningVolumeStats = api
-        .request_admin(
-            VOLUME_STATS_ENDPOINT,
-            ApiRequestErased::default(),
-            API_AUTH.clone(),
-        )
-        .await?;
-    assert_eq!(stats.last_7_days, expected);
-    assert_eq!(stats.last_30_days, expected);
-
-    // No wall time elapses on the consensus clock comparable to a week.
-    // Advancing seven block buckets must move both flows out of only the week.
-    fixtures.bitcoin().mine_blocks(7 * 144).await;
-    let later = retry(
-        "waiting for the guardian's block count",
-        backoff_util::aggressive_backoff(),
-        || async {
-            let later: LightningVolumeStats = api
-                .request_admin(
-                    VOLUME_STATS_ENDPOINT,
-                    ApiRequestErased::default(),
-                    API_AUTH.clone(),
-                )
-                .await?;
-            anyhow::ensure!(later.block_count >= stats.block_count + 7 * 144);
-            Ok::<_, anyhow::Error>(later)
-        },
-    )
-    .await?;
-    assert_eq!(
-        later.last_7_days,
-        LightningVolume {
-            sent: Amount::ZERO,
-            received: Amount::ZERO,
-            complete: true,
+    let stats_at = |min_block_count: u64| {
+        let api = api.clone();
+        async move {
+            retry(
+                "waiting for the guardian's block count",
+                backoff_util::aggressive_backoff(),
+                || async {
+                    let stats: LightningVolumeStats = api
+                        .request_admin(
+                            VOLUME_STATS_ENDPOINT,
+                            ApiRequestErased::default(),
+                            API_AUTH.clone(),
+                        )
+                        .await?;
+                    anyhow::ensure!(stats.block_count >= min_block_count);
+                    Ok::<_, anyhow::Error>(stats)
+                },
+            )
+            .await
         }
-    );
-    assert_eq!(later.last_30_days, expected);
+    };
+    let none = LightningVolume {
+        sent: Amount::ZERO,
+        received: Amount::ZERO,
+        complete: true,
+    };
+
+    // Both flows settled in the current bucket, which no window includes yet.
+    let stats = stats_at(0).await?;
+    assert_eq!(stats.last_1008_blocks, none);
+    assert_eq!(stats.last_4320_blocks, none);
+
+    // Once that bucket ends, both windows include it.
+    let bucket_end = (stats.block_count / 144 + 1) * 144;
+    fixtures
+        .bitcoin()
+        .mine_blocks(bucket_end - stats.block_count)
+        .await;
+    let ended = stats_at(bucket_end).await?;
+    assert_eq!(ended.last_1008_blocks, expected);
+    assert_eq!(ended.last_4320_blocks, expected);
+
+    // Seven more buckets move the flows out of only the 1008-block window.
+    fixtures.bitcoin().mine_blocks(7 * 144).await;
+    let later = stats_at(bucket_end + 7 * 144).await?;
+    assert_eq!(later.last_1008_blocks, none);
+    assert_eq!(later.last_4320_blocks, expected);
 
     Ok(())
 }

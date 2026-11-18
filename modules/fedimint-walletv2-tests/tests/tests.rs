@@ -809,22 +809,39 @@ async fn volume_stats_count_deposits_and_withdrawals() -> anyhow::Result<()> {
         denied.to_string().contains("Invalid authorization"),
         "{denied}"
     );
-    let stats: WalletVolumeStats = api
-        .request_admin(
+    let request_stats = || async {
+        api.request_admin::<WalletVolumeStats>(
             VOLUME_STATS_ENDPOINT,
             ApiRequestErased::default(),
             API_AUTH.clone(),
         )
-        .await?;
+        .await
+    };
+    let none = WalletVolume {
+        deposited: Amount::ZERO,
+        withdrawn: Amount::ZERO,
+        complete: true,
+    };
+
+    // Both flows were processed in the current bucket, which no window
+    // includes yet.
+    let stats = request_stats().await?;
+    assert_eq!(stats.last_1008_blocks, none);
+    assert_eq!(stats.last_4320_blocks, none);
+
+    // Once that bucket ends, both windows include it.
+    let bucket_end = (stats.block_count / 144 + 1) * 144;
+    bitcoin.mine_blocks(bucket_end - stats.block_count).await;
+    await_consensus_block_count(&client, bucket_end).await?;
+    let stats = request_stats().await?;
     let expected = WalletVolume {
         deposited: Amount::from_int_btc(1),
         withdrawn: Amount::from_sat(10_000),
         // The federation formed with the counting code.
         complete: true,
     };
-
-    assert_eq!(stats.last_7_days, expected);
-    assert_eq!(stats.last_30_days, expected);
+    assert_eq!(stats.last_1008_blocks, expected);
+    assert_eq!(stats.last_4320_blocks, expected);
 
     Ok(())
 }

@@ -31,7 +31,7 @@ pub enum DbKeyPrefix {
     IncomingContractStream = 0x10,
     IncomingContractIndex = 0x11,
     // Leave the draft Unix-time counters (0x12, 0x13) untouched.
-    VolumeDay = 0x14,
+    VolumeBucket = 0x14,
     VolumeStart = 0x15,
 }
 
@@ -232,19 +232,19 @@ impl_db_lookup!(
 
 /// One 144-block bucket of the module consensus block count.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize, Encodable, Decodable)]
-pub struct VolumeDayKey(pub u64);
+pub struct VolumeBucketKey(pub u64);
 
 #[derive(Debug, Encodable, Decodable)]
-pub struct VolumeDayPrefix;
+pub struct VolumeBucketPrefix;
 
-/// The payments this guardian settled on one consensus day.
+/// The payments this guardian settled in one volume bucket.
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Serialize, Encodable, Decodable)]
-pub struct VolumeDay {
+pub struct VolumeBucket {
     pub received: Amount,
     pub sent: Amount,
 }
 
-impl VolumeDay {
+impl VolumeBucket {
     /// Saturate each direction independently so local totals cannot overflow.
     pub(crate) fn accumulate(&mut self, other: Self) {
         self.received.msats = self.received.msats.saturating_add(other.received.msats);
@@ -253,12 +253,12 @@ impl VolumeDay {
 }
 
 impl_db_record!(
-    key = VolumeDayKey,
-    value = VolumeDay,
-    db_prefix = DbKeyPrefix::VolumeDay,
+    key = VolumeBucketKey,
+    value = VolumeBucket,
+    db_prefix = DbKeyPrefix::VolumeBucket,
 );
 
-impl_db_lookup!(key = VolumeDayKey, query_prefix = VolumeDayPrefix);
+impl_db_lookup!(key = VolumeBucketKey, query_prefix = VolumeBucketPrefix);
 
 /// The consensus block count when this guardian started counting volume. The
 /// value is 0 if the consensus clock had not started yet, which means the

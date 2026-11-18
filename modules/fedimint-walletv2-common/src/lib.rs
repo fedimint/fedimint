@@ -144,15 +144,18 @@ pub struct OutputInfo {
 /// The on-chain flows one guardian counted, as returned by
 /// [`endpoint_constants::VOLUME_STATS_ENDPOINT`].
 ///
-/// The guardian admin endpoint reports 144-block buckets of this module's
-/// consensus block count. Each window includes the current unfinished bucket.
+/// The guardian admin endpoint sums 144-block buckets of this module's
+/// consensus block count. Each window holds the complete buckets before the
+/// current one, so it covers exactly its number of blocks and leaves out flows
+/// in the current bucket until that bucket ends.
 /// An amount of `u64::MAX` satoshis means at least that much.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct WalletVolumeStats {
-    /// The block count at this snapshot. Divide by 144 for the current bucket.
+    /// The block count at this snapshot. Both windows end at the last multiple
+    /// of 144 at or below it.
     pub block_count: u64,
-    pub last_7_days: WalletVolume,
-    pub last_30_days: WalletVolume,
+    pub last_1008_blocks: WalletVolume,
+    pub last_4320_blocks: WalletVolume,
 }
 
 /// The on-chain flows in one window.

@@ -21,7 +21,7 @@ pub enum DbKeyPrefix {
     Signatures = 0x37,
     UnconfirmedTx = 0x38,
     FederationWallet = 0x39,
-    VolumeDay = 0x3a,
+    VolumeBucket = 0x3a,
     VolumeStart = 0x3b,
 }
 
@@ -184,19 +184,19 @@ impl_db_lookup!(key = FeeRateVoteKey, query_prefix = FeeRateVotePrefix);
 
 /// One 144-block bucket of the module consensus block count.
 #[derive(Clone, Debug, Eq, PartialEq, Encodable, Decodable, Serialize)]
-pub struct VolumeDayKey(pub u64);
+pub struct VolumeBucketKey(pub u64);
 
 #[derive(Clone, Debug, Encodable, Decodable)]
-pub struct VolumeDayPrefix;
+pub struct VolumeBucketPrefix;
 
-/// The on-chain flows this guardian processed in one volume day.
+/// The on-chain flows this guardian processed in one volume bucket.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Encodable, Decodable, Serialize)]
-pub struct VolumeDay {
+pub struct VolumeBucket {
     pub deposited: bitcoin::Amount,
     pub withdrawn: bitcoin::Amount,
 }
 
-impl VolumeDay {
+impl VolumeBucket {
     /// Saturate each direction independently so local totals cannot overflow.
     pub(crate) fn accumulate(&mut self, other: Self) {
         self.deposited = self
@@ -211,12 +211,12 @@ impl VolumeDay {
 }
 
 impl_db_record!(
-    key = VolumeDayKey,
-    value = VolumeDay,
-    db_prefix = DbKeyPrefix::VolumeDay
+    key = VolumeBucketKey,
+    value = VolumeBucket,
+    db_prefix = DbKeyPrefix::VolumeBucket
 );
 
-impl_db_lookup!(key = VolumeDayKey, query_prefix = VolumeDayPrefix);
+impl_db_lookup!(key = VolumeBucketKey, query_prefix = VolumeBucketPrefix);
 
 /// The consensus block count when this guardian started counting volume. The
 /// value is 0 if the consensus block count had not started yet, which means the

@@ -55,7 +55,7 @@ use fedimint_logging::LOG_MODULE_LNV2;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::config::{PeerHandleOps, eval_poly_g1};
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
-use fedimint_server_core::volume::{counted_whole_window, volume_buckets, volume_day};
+use fedimint_server_core::volume::{counted_whole_window, volume_bucket, volume_buckets};
 use fedimint_server_core::{
     ConfigGenModuleArgs, EnvVarDoc, ServerModule, ServerModuleInit, ServerModuleInitArgs,
 };
@@ -76,7 +76,7 @@ use crate::db::{
     IncomingContractOutpointPrefix, IncomingContractPrefix, IncomingContractStreamIndexKey,
     IncomingContractStreamKey, IncomingContractStreamPrefix, OutgoingContractKey,
     OutgoingContractPrefix, PreimageKey, PreimagePrefix, UnixTimeVoteKey, UnixTimeVotePrefix,
-    VolumeDay, VolumeDayKey, VolumeDayPrefix, VolumeStartKey, VolumeStartPrefix,
+    VolumeBucket, VolumeBucketKey, VolumeBucketPrefix, VolumeStartKey, VolumeStartPrefix,
 };
 use crate::metrics::{LN_FUNDED_CONTRACT_SATS, LN_OUTGOING_CONTRACT_SETTLED};
 
@@ -219,14 +219,14 @@ impl ModuleInit for LightningInit {
                         "Lightning Incoming Contract Index"
                     );
                 }
-                DbKeyPrefix::VolumeDay => {
+                DbKeyPrefix::VolumeBucket => {
                     push_db_pair_items!(
                         dbtx,
-                        VolumeDayPrefix,
-                        VolumeDayKey,
-                        VolumeDay,
+                        VolumeBucketPrefix,
+                        VolumeBucketKey,
+                        VolumeBucket,
                         lightning,
-                        "Lightning Volume Days"
+                        "Lightning Volume Buckets"
                     );
                 }
                 DbKeyPrefix::VolumeStart => {
@@ -470,7 +470,7 @@ impl ServerModule for Lightning {
         // Consensus items arrive every session, so this marks the start of
         // counting no later than the first session that counts. A payment can
         // still settle earlier in that session, at the same clock value, which
-        // is why the day counting started on is never complete.
+        // is why the bucket counting started in is never complete.
         if dbtx.get_value(&VolumeStartKey).await.is_none() {
             let now = self.consensus_block_count(dbtx).await;
             dbtx.insert_new_entry(&VolumeStartKey, &now).await;
@@ -532,7 +532,7 @@ impl ServerModule for Lightning {
                         Self::count_volume(
                             dbtx,
                             block_count,
-                            VolumeDay {
+                            VolumeBucket {
                                 sent: contract.amount,
                                 received: Amount::ZERO,
                             },
@@ -596,7 +596,7 @@ impl ServerModule for Lightning {
                         Self::count_volume(
                             dbtx,
                             block_count,
-                            VolumeDay {
+                            VolumeBucket {
                                 sent: Amount::ZERO,
                                 received: contract.commitment.amount,
                             },
@@ -886,39 +886,44 @@ impl Lightning {
         times.get(num_peers.threshold() - 1).copied().unwrap_or(0)
     }
 
-    /// Add a settled payment to the current consensus day.
-    async fn count_volume(dbtx: &mut DatabaseTransaction<'_>, block_count: u64, delta: VolumeDay) {
-        let key = VolumeDayKey(volume_day(block_count));
-        let mut day = dbtx.get_value(&key).await.unwrap_or_default();
-        day.accumulate(delta);
-        dbtx.insert_entry(&key, &day).await;
+    /// Add a settled payment to the current volume bucket.
+    async fn count_volume(
+        dbtx: &mut DatabaseTransaction<'_>,
+        block_count: u64,
+        delta: VolumeBucket,
+    ) {
+        let key = VolumeBucketKey(volume_bucket(block_count));
+        let mut bucket = dbtx.get_value(&key).await.unwrap_or_default();
+        bucket.accumulate(delta);
+        dbtx.insert_entry(&key, &bucket).await;
     }
 
     async fn volume_stats(&self, dbtx: &mut DatabaseTransaction<'_>) -> LightningVolumeStats {
         let block_count = self.consensus_block_count(dbtx).await;
         let start = dbtx.get_value(&VolumeStartKey).await;
-        let week = volume_buckets(block_count, 7);
-        let month = volume_buckets(block_count, 30);
-        let mut last_7_days = VolumeDay::default();
-        let mut last_30_days = VolumeDay::default();
+        // 7 and 30 buckets of 144 blocks.
+        let short = volume_buckets(block_count, 7);
+        let long = volume_buckets(block_count, 30);
+        let mut last_1008_blocks = VolumeBucket::default();
+        let mut last_4320_blocks = VolumeBucket::default();
         let mut stream = dbtx
-            .find_by_range(VolumeDayKey(month.start)..VolumeDayKey(month.end))
+            .find_by_range(VolumeBucketKey(long.start)..VolumeBucketKey(long.end))
             .await;
-        while let Some((key, day)) = stream.next().await {
-            last_30_days.accumulate(day);
-            if key.0 >= week.start {
-                last_7_days.accumulate(day);
+        while let Some((key, bucket)) = stream.next().await {
+            last_4320_blocks.accumulate(bucket);
+            if key.0 >= short.start {
+                last_1008_blocks.accumulate(bucket);
             }
         }
-        let report = |total: VolumeDay, first_bucket: u64| LightningVolume {
+        let report = |total: VolumeBucket, first_bucket: u64| LightningVolume {
             received: total.received,
             sent: total.sent,
             complete: counted_whole_window(start, first_bucket),
         };
         LightningVolumeStats {
             block_count,
-            last_7_days: report(last_7_days, week.start),
-            last_30_days: report(last_30_days, month.start),
+            last_1008_blocks: report(last_1008_blocks, short.start),
+            last_4320_blocks: report(last_4320_blocks, long.start),
         }
     }
 
