@@ -1,2 +1,5 @@
 # Note: this file symlinked from multiple crates
 disallowed-types = ["std::collections::HashMap", "std::collections::HashSet"]
+disallowed-methods = [
+  { path = "lightning_invoice::Bolt11Invoice::is_expired", reason = "uses the system clock, which panics on WASM; use would_expire(fedimint_core::time::duration_since_epoch()) instead" },
+]

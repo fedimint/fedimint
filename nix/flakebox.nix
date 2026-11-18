@@ -58,6 +58,7 @@ let
     ".*\\.rs"
     ".*\\.html"
     ".*/proto/.*"
+    "\\.clippy\\.toml"
     ".*/clippy\\.toml"
     "db/migrations/.*"
     "devimint/src/cfg/.*"
