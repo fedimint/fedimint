@@ -809,13 +809,29 @@ async fn volume_stats_count_deposits_and_withdrawals() -> anyhow::Result<()> {
         denied.to_string().contains("Invalid authorization"),
         "{denied}"
     );
-    let request_stats = || async {
-        api.request_admin::<WalletVolumeStats>(
-            VOLUME_STATS_ENDPOINT,
-            ApiRequestErased::default(),
-            API_AUTH.clone(),
-        )
-        .await
+    // The federation can reach a block count before this guardian does, so
+    // wait for this guardian's own count.
+    let stats_at = |min_block_count: u64| {
+        let api = api.clone();
+        async move {
+            loop {
+                let stats: WalletVolumeStats = api
+                    .request_admin(
+                        VOLUME_STATS_ENDPOINT,
+                        ApiRequestErased::default(),
+                        API_AUTH.clone(),
+                    )
+                    .await?;
+                if stats.block_count >= min_block_count {
+                    return Ok::<_, anyhow::Error>(stats);
+                }
+                sleep_in_test(
+                    format!("Waiting for the guardian to reach block count {min_block_count}"),
+                    Duration::from_millis(100),
+                )
+                .await;
+            }
+        }
     };
     let none = WalletVolume {
         deposited: Amount::ZERO,
@@ -825,15 +841,14 @@ async fn volume_stats_count_deposits_and_withdrawals() -> anyhow::Result<()> {
 
     // Both flows were processed in the current bucket, which no window
     // includes yet.
-    let stats = request_stats().await?;
+    let stats = stats_at(0).await?;
     assert_eq!(stats.last_1008_blocks, none);
     assert_eq!(stats.last_4320_blocks, none);
 
     // Once that bucket ends, both windows include it.
     let bucket_end = (stats.block_count / 144 + 1) * 144;
     bitcoin.mine_blocks(bucket_end - stats.block_count).await;
-    await_consensus_block_count(&client, bucket_end).await?;
-    let stats = request_stats().await?;
+    let stats = stats_at(bucket_end).await?;
     let expected = WalletVolume {
         deposited: Amount::from_int_btc(1),
         withdrawn: Amount::from_sat(10_000),
