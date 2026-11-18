@@ -373,6 +373,10 @@ pub async fn run(
 
     tracing_builder.init().map_err(anyhow::Error::from).unwrap();
 
+    // Install the provider before constructing the hybrid backend, which
+    // checks the Esplora chain identity over HTTPS during initialization.
+    install_crypto_provider().await;
+
     info!("Starting fedimintd (version: {fedimint_version} version_hash: {code_version_hash})");
 
     #[cfg(all(
@@ -484,8 +488,6 @@ pub async fn run(
         ServerBitcoinRpcTracked::new(dyn_server_bitcoin_rpc, "server").into_dyn();
 
     root_task_group.install_kill_handler();
-
-    install_crypto_provider().await;
 
     // The UI password falls back to the legacy password.private file on disk
     // if its env var is not set, since the UI defaults to a loopback bind.
