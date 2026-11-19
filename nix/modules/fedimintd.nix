@@ -15,9 +15,17 @@ let
     mkOption
     mkPackageOption
     nameValuePair
-    recursiveUpdate
     types
     ;
+
+  nginxVhostOptions =
+    (import "${pkgs.path}/nixos/modules/services/web-servers/nginx/vhost-options.nix" {
+      inherit config lib pkgs;
+    }).options;
+  nginxCertificateOptions = [
+    "sslCertificate"
+    "sslCertificateKey"
+  ];
 
   fedimintdOpts =
     {
@@ -264,14 +272,19 @@ let
             description = "Path to host the API on and forward to the daemon's api port";
           };
           config = mkOption {
-            type = types.submodule (
-              # in nixpkgs we used to do it like this:
-              # recursiveUpdate (import ../web-servers/nginx/vhost-options.nix {
-              # in the flake this works:
-              recursiveUpdate (import "${pkgs.path}/nixos/modules/services/web-servers/nginx/vhost-options.nix" {
-                inherit config lib;
-              }) { }
-            );
+            type = types.submodule {
+              options =
+                nginxVhostOptions
+                // lib.genAttrs nginxCertificateOptions (
+                  name:
+                  # nginx can supply these from ACME; they're optional in our overrides.
+                  nginxVhostOptions.${name}
+                  // {
+                    type = types.nullOr nginxVhostOptions.${name}.type;
+                    default = null;
+                  }
+                );
+            };
             default = { };
             description = "Overrides to the nginx vhost section for api";
           };
@@ -349,12 +362,15 @@ in
                 FM_DATA_DIR = cfg.dataDir;
                 FM_IROH_NEXT_ENABLE = lib.boolToString cfg.api_iroh_next.enable;
                 FM_BITCOIN_NETWORK = cfg.bitcoin.network;
+              }
+
+              (filterAttrs (_: value: value != null) {
                 FM_BITCOIND_URL = cfg.bitcoin.bitcoindUrl;
                 FM_ESPLORA_URL = cfg.bitcoin.esploraUrl;
                 FM_BITCOIND_URL_PASSWORD_FILE = cfg.bitcoin.bitcoindSecretFile;
                 FM_BITCOIND_USERNAME = cfg.bitcoin.bitcoindUser;
                 FM_BITCOIND_PASSWORD = cfg.bitcoin.bitcoindPassword;
-              }
+              })
 
               (lib.optionalAttrs (cfg.p2p.url != null) {
                 FM_P2P_URL = cfg.p2p.url;
@@ -425,7 +441,11 @@ in
         fedimintdName: cfg:
         (nameValuePair cfg.nginx.fqdn (
           lib.mkMerge [
-            (lib.mapAttrsRecursive (_: lib.mkDefault) cfg.nginx.config)
+            (lib.mapAttrsRecursive (_: lib.mkDefault) (
+              filterAttrs (
+                name: value: !(builtins.elem name nginxCertificateOptions) || value != null
+              ) cfg.nginx.config
+            ))
 
             {
               enableACME = true;
