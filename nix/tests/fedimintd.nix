@@ -26,20 +26,50 @@ let
     environment = { };
   };
 
-  disabledConfig =
+  evaluatedConfig =
     (import "${pkgs.path}/nixos/lib/eval-config.nix" {
       system = pkgs.stdenv.hostPlatform.system;
       modules = [
         fedimintdModule
-        {
+        ({ lib, ... }: {
           disabledModules = [ "services/networking/fedimintd.nix" ];
-          services.fedimintd."mainnet" = fedimintdInstance // {
-            api_iroh_next.enable = false;
+          system.stateVersion = "26.05";
+          services.nginx = {
+            enable = true;
+            enableReload = true;
+            virtualHosts."manual.example.com".enableACME = lib.mkForce false;
           };
-        }
+          security.acme.acceptTerms = true;
+          security.acme.defaults.email = "admin@example.com";
+          services.fedimintd = {
+            mainnet = fedimintdInstance // {
+              api_iroh_next.enable = false;
+              bitcoin = {
+                bitcoindUrl = "http://127.0.0.1:38332";
+              };
+              environment.FM_ESPLORA_URL = "https://mutinynet.com/api";
+              nginx = {
+                enable = true;
+                fqdn = "example.com";
+              };
+            };
+            manual = fedimintdInstance // {
+              nginx = {
+                enable = true;
+                fqdn = "manual.example.com";
+                config = {
+                  sslCertificate = "/var/lib/certs/manual.crt";
+                  sslCertificateKey = "/var/lib/certs/manual.key";
+                };
+              };
+            };
+          };
+        })
       ];
     }).config;
-  disabledEnvironment = disabledConfig.systemd.services."fedimintd-mainnet".environment;
+  disabledEnvironment = evaluatedConfig.systemd.services."fedimintd-mainnet".environment;
+  acmeOverrides = evaluatedConfig.services.fedimintd.mainnet.nginx.config;
+  manualVhost = evaluatedConfig.services.nginx.virtualHosts."manual.example.com";
 in
 pkgs.testers.runNixOSTest {
   name = "fedimintd";
@@ -61,6 +91,14 @@ pkgs.testers.runNixOSTest {
       nodes.machine.networking.firewall.allowedUDPPorts;
     assert disabledEnvironment.FM_IROH_NEXT_ENABLE == "false";
     assert !(disabledEnvironment ? FM_BIND_API_NEXT);
+    assert disabledEnvironment.FM_BITCOIND_URL == "http://127.0.0.1:38332";
+    assert disabledEnvironment.FM_ESPLORA_URL == "https://mutinynet.com/api";
+    assert !(disabledEnvironment ? FM_BITCOIND_PASSWORD);
+    assert acmeOverrides.sslCertificate == null;
+    assert acmeOverrides.sslCertificateKey == null;
+    assert manualVhost.sslCertificate == "/var/lib/certs/manual.crt";
+    assert manualVhost.sslCertificateKey == "/var/lib/certs/manual.key";
+    assert evaluatedConfig.environment.etc."nginx/nginx.conf".source.drvPath != "";
     ''
       start_all()
 
