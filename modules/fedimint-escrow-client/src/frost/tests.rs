@@ -237,7 +237,7 @@ fn sign(signers: &[&DkgResult], message: &[u8]) -> Result<Signature, frost_secp2
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_dkg_converges_to_same_aggregate_key() {
-    let consortium = Consortium::new(3).await.expect("consortium failed");
+    let consortium = Consortium::new(4).await.expect("consortium failed");
     let results = consortium.run().await;
     let first = results[0].pubkey_package.verifying_key().serialize();
 
@@ -297,7 +297,7 @@ async fn test_dkg_for_multiple_sizes() {
     for size in [2, 3, 4, 5, 7] {
         let consortium = Consortium::new(size).await;
 
-        if size == 2 {
+        if size < 4 {
             assert!(
                 consortium.is_err(),
                 "DKG setup should fail for {size} participants"
@@ -371,7 +371,7 @@ async fn test_invalid_participant_lists_rejected() {
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
     let federation_id = dummy_federation_id();
 
-    for size in [1, 2] {
+    for size in [1, 2, 3] {
         let participants = create_frost_participant(size);
         let result =
             FrostDkgSessionRecord::new(participants[0].clone(), participants, federation_id, &db)
@@ -380,14 +380,14 @@ async fn test_invalid_participant_lists_rejected() {
     }
 
     // duplicate participant
-    let mut participants = create_frost_participant(3);
+    let mut participants = create_frost_participant(4);
     participants.push(participants[0].clone());
     let result =
         FrostDkgSessionRecord::new(participants[0].clone(), participants, federation_id, &db).await;
     assert!(result.is_err(), "duplicates must be rejected");
 
     // local participant is not in the list
-    let participants = create_frost_participant(3);
+    let participants = create_frost_participant(4);
     let outsider = create_frost_participant(1).remove(0);
     let result = FrostDkgSessionRecord::new(outsider, participants, federation_id, &db).await;
     assert!(result.is_err(), "outsider must be rejected");
@@ -398,8 +398,8 @@ async fn test_consortium_size_limits() {
     let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
     let federation_id = dummy_federation_id();
 
-    // a contract has room for 32 fee keys
-    for (size, allowed) in [(2, false), (3, true), (32, true), (33, false)] {
+    // at least 4 arbiters, and a contract has room for 16 fee keys
+    for (size, allowed) in [(3, false), (4, true), (16, true), (17, false)] {
         let participants = create_frost_participant(size);
         let result =
             FrostDkgSessionRecord::new(participants[0].clone(), participants, federation_id, &db)
@@ -439,7 +439,7 @@ async fn test_session_id_ignores_participant_order() {
 
 #[tokio::test]
 async fn test_threshold_values() {
-    for (size, expected_min) in [(3, 3), (4, 3), (5, 4), (7, 5), (10, 7)] {
+    for (size, expected_min) in [(4, 3), (5, 4), (7, 5), (10, 7), (16, 11)] {
         let consortium = Consortium::new(size).await.unwrap();
         assert_eq!(
             consortium.sessions[0].1.min_signers, expected_min,
@@ -485,7 +485,7 @@ fn test_participant_and_session_id_survive_serialization() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_run_after_finish_returns_same_key() {
-    let consortium = Consortium::new(3).await.unwrap();
+    let consortium = Consortium::new(4).await.unwrap();
     let (db, record) = consortium.sessions[0].clone();
     let session_id = consortium.session_id;
     let results = consortium.run().await;
@@ -537,7 +537,7 @@ async fn test_dkg_completes_when_a_member_joins_late() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_interrupted_run_keeps_its_state_and_reset_clears_it() {
-    let consortium = Consortium::new(3).await.expect("consortium failed");
+    let consortium = Consortium::new(4).await.expect("consortium failed");
     let session_id = consortium.session_id;
     let (db, record) = consortium.sessions[0].clone();
 
@@ -562,7 +562,7 @@ async fn test_interrupted_run_keeps_its_state_and_reset_clears_it() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_reset_never_destroys_a_finished_key() {
-    let consortium = Consortium::new(3).await.expect("consortium failed");
+    let consortium = Consortium::new(4).await.expect("consortium failed");
     let session_id = consortium.session_id;
     let (db, record) = consortium.sessions[0].clone();
     let results = consortium.run().await;
@@ -584,7 +584,7 @@ async fn test_reset_never_destroys_a_finished_key() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_member_resumes_after_a_restart() {
-    let consortium = Consortium::new(3).await.expect("consortium failed");
+    let consortium = Consortium::new(4).await.expect("consortium failed");
     let session_id = consortium.session_id;
     let (db, record) = consortium.sessions[0].clone();
 
@@ -802,7 +802,7 @@ async fn test_bad_round2_share_aborts_the_dkg() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_dkg_over_iroh() {
-    for size in [3, 4] {
+    for size in [4, 5] {
         let consortium = Consortium::new(size).await.expect("consortium failed");
         let min_signers = consortium.sessions[0].1.min_signers as usize;
         let results = consortium.run_iroh().await;
@@ -898,7 +898,7 @@ async fn test_dkg_runner_steps_over_iroh() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_early_round2_package_survives_timed_out_attempt() {
-    let consortium = Consortium::new(3).await.expect("consortium failed");
+    let consortium = Consortium::new(4).await.expect("consortium failed");
     let net = consortium.iroh_net().await;
     let session_id = consortium.session_id;
     let participants = consortium.participants.clone();
@@ -911,7 +911,7 @@ async fn test_early_round2_package_survives_timed_out_attempt() {
     let (_, record) = consortium.sessions[0].clone();
 
     let transport = Arc::new(net.transport(0, session_id));
-    let other_transports: Vec<IrohDkgTransport> = (1..3)
+    let other_transports: Vec<IrohDkgTransport> = (1..4)
         .map(|index| net.transport(index, session_id))
         .collect();
     let other_sessions = consortium.sessions[1..].to_vec();
@@ -972,6 +972,16 @@ async fn test_early_round2_package_survives_timed_out_attempt() {
         )
         .expect("finalize failed");
 
+    runner
+        .confirm_key(
+            &session_id,
+            &local_member,
+            &participants,
+            &local_result.pubkey_package,
+        )
+        .await
+        .expect("confirm failed");
+
     let group_key = local_result.pubkey_package.verifying_key().serialize();
     for handle in handles {
         let result = handle.await.expect("task panicked");
@@ -981,13 +991,13 @@ async fn test_early_round2_package_survives_timed_out_attempt() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_session_restarts_after_failed_run() {
-    let consortium = Consortium::new(3).await.expect("consortium failed");
+    let consortium = Consortium::new(4).await.expect("consortium failed");
     let net = consortium.iroh_net().await;
     let session_id = consortium.session_id;
 
     let (db, record) = consortium.sessions[0].clone();
     let transport = Arc::new(net.transport(0, session_id));
-    let other_transports: Vec<IrohDkgTransport> = (1..3)
+    let other_transports: Vec<IrohDkgTransport> = (1..4)
         .map(|index| net.transport(index, session_id))
         .collect();
     let other_sessions = consortium.sessions[1..].to_vec();

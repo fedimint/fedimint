@@ -660,7 +660,7 @@ async fn test_funder_release_wrong_signature_rejected() {
     let input = EscrowInput::new_v0(
         contract.escrow_id,
         Resolution::FunderRelease {
-            funder_signature: sign_release(&funder_kp, &contract),
+            funder_signature: sign_release(&recipient_kp, &contract),
         },
     );
 

@@ -17,9 +17,10 @@ use fedimint_escrow_client::frost::transport::file::FileTransport;
 use fedimint_escrow_client::frost::transport::iroh::{DKG_ALPN, IrohDkgTransport};
 use fedimint_escrow_client::input::EscrowInputSMState;
 use fedimint_escrow_client::output::EscrowOutputSMState;
-use fedimint_escrow_client::{EscrowClientInit, EscrowClientModule};
+use fedimint_escrow_client::{EscrowClientInit, EscrowClientModule, ExternalKey, SigningKind};
 use fedimint_escrow_common::{
-    EscrowContract, EscrowId, EscrowStatus, FallbackPolicy, Outcome, compute_escrow_message,
+    DelegationAction, EscrowContract, EscrowId, EscrowStatus, FallbackPolicy, Outcome,
+    compute_escrow_message,
 };
 use fedimint_escrow_server::EscrowInit;
 use fedimint_testing::fixtures::Fixtures;
@@ -125,6 +126,77 @@ async fn wait_for_balance(
     }
 
     anyhow::bail!("balance did not reach {min:?}")
+}
+
+/// What the app does with a digest: sign it as it is, no hashing
+fn sign_digest(key: &Keypair, digest: &str) -> Signature {
+    let digest: [u8; 32] = fedimint_core::hex::decode(digest)
+        .expect("digest is hex")
+        .try_into()
+        .expect("digest is 32 bytes");
+    Secp256k1::new().sign_schnorr(&Message::from_digest(digest), key)
+}
+
+/// Ask the client what to sign and sign it with a key the client doesn't hold
+async fn sign_kind(
+    escrow: &EscrowClientModule,
+    escrow_id: EscrowId,
+    kind: SigningKind,
+    key: &Keypair,
+) -> anyhow::Result<Signature> {
+    let request = escrow.digest_to_sign(escrow_id, kind).await?;
+    Ok(sign_digest(key, &request.digest))
+}
+
+/// The key of the app, with a delegation made for the client that will submit
+async fn external_key(
+    submitting: &EscrowClientModule,
+    escrow_id: EscrowId,
+    key: &Keypair,
+    action: DelegationAction,
+) -> anyhow::Result<ExternalKey> {
+    let kind = SigningKind::Delegation {
+        action,
+        actor: key.public_key(),
+    };
+    Ok(ExternalKey {
+        pubkey: key.public_key(),
+        delegation: sign_kind(submitting, escrow_id, kind, key).await?,
+        engage_message: None,
+    })
+}
+
+async fn create_app_key_escrow(
+    creator: &EscrowClientModule,
+    funder_key: PublicKey,
+    recipient_key: PublicKey,
+    arbiter_key: PublicKey,
+    fee_key: PublicKey,
+    timeout: Duration,
+) -> anyhow::Result<EscrowId> {
+    wait_for_federation_time(creator, 1, Duration::from_secs(60)).await?;
+
+    let result = creator
+        .create_escrow(
+            Some(funder_key),
+            recipient_key,
+            arbiter_key,
+            Amount::from_sats(20),
+            Amount::from_sats(1000),
+            timeout,
+            vec![fee_key],
+            RESOLUTION_PERIOD,
+            FallbackPolicy::Refund,
+        )
+        .await?;
+    let mut stream = creator
+        .subscribe_escrow_creation(result.operation_id)
+        .await?
+        .into_stream();
+    assert_eq!(stream.ok().await?, EscrowOutputSMState::Creating);
+    assert_eq!(stream.ok().await?, EscrowOutputSMState::Active);
+
+    Ok(result.escrow_id)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -267,12 +339,13 @@ async fn test_only_recipient_can_submit_release() -> anyhow::Result<()> {
     let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
     let funder_sig = funder_escrow.sign_message(contract.resolution_message(Outcome::Release))?;
 
-    // the funder cannot collect its own release
+    // the funder cannot collect its own release: the call is taken as a refund by
+    // the funder, and the funder's release signature is not the recipient's refund
     assert_rejected(
         funder_escrow
             .resolve_escrow(escrow_id, funder_sig, None)
             .await,
-        "only the recipient can submit the release",
+        "Invalid signature",
     );
     let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
     assert_eq!(contract.status, EscrowStatus::Active);
@@ -636,7 +709,7 @@ async fn test_arbiter_signature_with_invalid_inputs() -> anyhow::Result<()> {
         stranger_escrow
             .submit_arbiter_decision(escrow_id, Outcome::Release, sig, None)
             .await,
-        "No matching key found in contract",
+        "Key is not part of this escrow",
     );
 
     let bad_split = Outcome::Split {
@@ -717,12 +790,18 @@ async fn test_contract_is_listed_for_every_key_in_it() -> anyhow::Result<()> {
     )
     .await?;
 
-    for escrow in [&funder_escrow, &recipient_escrow, &arbiter_escrow] {
-        let listed = escrow.list_contracts(None, None, None).await?;
+    for (escrow, key) in [
+        (&funder_escrow, funder_escrow.escrow_pubkey()),
+        (&recipient_escrow, recipient_escrow.escrow_pubkey()),
+        (&arbiter_escrow, arbiter_escrow.arbiter_fee_pubkey()),
+    ] {
+        let listed = escrow.list_contracts(Some(key), None, None).await?;
         assert!(listed.iter().any(|c| c.escrow_id == escrow_id));
     }
 
     let listed = stranger_escrow.list_contracts(None, None, None).await?;
+    assert!(!listed.iter().any(|c| c.escrow_id == escrow_id));
+    let listed = arbiter_escrow.list_contracts(None, None, None).await?;
     assert!(!listed.iter().any(|c| c.escrow_id == escrow_id));
 
     Ok(())
@@ -796,7 +875,7 @@ async fn test_arbiter_consortium_dkg_then_escrow() -> anyhow::Result<()> {
 
     for arbiter in &arbiters {
         let state = serde_json::to_value(arbiter.get_consortium_state(session_id).await?)?;
-        assert!(state["session"]["state"]["Finalized"].is_object());
+        assert_eq!(state["stage"], "Finalized");
         assert_eq!(state["record"]["min_signers"], 3);
     }
 
@@ -854,8 +933,15 @@ async fn test_arbiter_consortium_dkg_then_escrow() -> anyhow::Result<()> {
         assert!(group_key.verify(&msg, &sig).is_err());
     }
 
-    let sig_bytes = sig.serialize().expect("serialize");
-    assert!(Signature::from_slice(&sig_bytes).is_err());
+    let schnorr_sig = Signature::from_slice(&sig.serialize().expect("serialize"))
+        .expect("a taproot FROST signature is 64 bytes");
+    fedimint_core::secp256k1::global::SECP256K1
+        .verify_schnorr(
+            &schnorr_sig,
+            &Message::from_digest(msg),
+            &arbiter_pubkey.x_only_public_key().0,
+        )
+        .expect("the federation would accept this signature");
 
     Ok(())
 }
@@ -888,6 +974,380 @@ async fn test_arbiter_consortium_rejects_invalid_participants() -> anyhow::Resul
         .create_arbiter_consortium_with_custom_transport(others, transport)
         .await;
     assert!(result.is_err(), "I must be in the participant list");
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_delegated_release_by_a_new_client() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let funder_client = fed.new_client().await;
+    let new_client = fed.new_client().await;
+    let funder_escrow = funder_client.get_first_module::<EscrowClientModule>()?;
+    let new_escrow = new_client.get_first_module::<EscrowClientModule>()?;
+    fund_client(&funder_client, Amount::from_sats(2000)).await?;
+
+    // the keys live in the app, no client has them
+    let secp = Secp256k1::new();
+    let funder_key = Keypair::new(&secp, &mut OsRng);
+    let recipient_key = Keypair::new(&secp, &mut OsRng);
+    let arbiter_key = Keypair::new(&secp, &mut OsRng);
+
+    let escrow_id = create_app_key_escrow(
+        funder_escrow.module,
+        funder_key.public_key(),
+        recipient_key.public_key(),
+        arbiter_key.public_key(),
+        random_pubkey(),
+        Duration::from_secs(3600),
+    )
+    .await?;
+
+    let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
+    assert_eq!(contract.funder_key, funder_key.public_key());
+
+    // the app of the funder signs the release
+    let release_sig = sign_kind(
+        new_escrow.module,
+        escrow_id,
+        SigningKind::Resolution(Outcome::Release),
+        &funder_key,
+    )
+    .await?;
+
+    // a client that never saw the escrow submits it for the recipient's key
+    let external = external_key(
+        new_escrow.module,
+        escrow_id,
+        &recipient_key,
+        DelegationAction::FunderRelease,
+    )
+    .await?;
+    let op = new_escrow
+        .resolve_escrow(escrow_id, release_sig, Some(external))
+        .await?;
+    let mut stream = new_escrow
+        .subscribe_escrow_resolution(op)
+        .await?
+        .into_stream();
+    assert_eq!(stream.ok().await?, EscrowInputSMState::Pending);
+    assert_eq!(stream.ok().await?, EscrowInputSMState::Released);
+
+    // the ecash goes to the client that submitted
+    wait_for_balance(&new_client, Amount::from_msats(1)).await?;
+
+    let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
+    assert!(matches!(contract.status, EscrowStatus::Released(_)));
+    assert!(funder_escrow.get_claim_pool(escrow_id).await?.is_none());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_delegated_dispute_and_claim() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let funder_client = fed.new_client().await;
+    let engage_client = fed.new_client().await;
+    let ruling_client = fed.new_client().await;
+    let claim_client = fed.new_client().await;
+    let funder_escrow = funder_client.get_first_module::<EscrowClientModule>()?;
+    let engage_escrow = engage_client.get_first_module::<EscrowClientModule>()?;
+    let ruling_escrow = ruling_client.get_first_module::<EscrowClientModule>()?;
+    let claim_escrow = claim_client.get_first_module::<EscrowClientModule>()?;
+    fund_client(&funder_client, Amount::from_sats(2000)).await?;
+
+    let secp = Secp256k1::new();
+    let funder_key = Keypair::new(&secp, &mut OsRng);
+    let recipient_key = Keypair::new(&secp, &mut OsRng);
+    let arbiter_key = Keypair::new(&secp, &mut OsRng);
+    let fee_key = Keypair::new(&secp, &mut OsRng);
+
+    let escrow_id = create_app_key_escrow(
+        funder_escrow.module,
+        funder_key.public_key(),
+        recipient_key.public_key(),
+        arbiter_key.public_key(),
+        fee_key.public_key(),
+        DISPUTE_TIMEOUT,
+    )
+    .await?;
+
+    let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
+    wait_for_federation_time(funder_escrow.module, contract.timeout, WAIT_FOR_TIMEOUT).await?;
+
+    let mut external = external_key(
+        engage_escrow.module,
+        escrow_id,
+        &funder_key,
+        DelegationAction::ArbiterEngaged,
+    )
+    .await?;
+    external.engage_message = Some(
+        sign_kind(
+            engage_escrow.module,
+            escrow_id,
+            SigningKind::Engage,
+            &funder_key,
+        )
+        .await?,
+    );
+    let op = engage_escrow
+        .engage_arbiter(escrow_id, Some(external))
+        .await?;
+    let mut stream = engage_escrow
+        .subscribe_escrow_resolution(op)
+        .await?
+        .into_stream();
+    assert_eq!(stream.ok().await?, EscrowInputSMState::Pending);
+    assert_eq!(stream.ok().await?, EscrowInputSMState::Disputed);
+
+    // the arbiter rules for the funder and the app of the recipient submits it
+    let arbiter_sig = sign_arbiter_decision(&secp, &contract, Outcome::Refund, &arbiter_key);
+    let external = external_key(
+        ruling_escrow.module,
+        escrow_id,
+        &recipient_key,
+        DelegationAction::ArbiterOutcome,
+    )
+    .await?;
+    let op = ruling_escrow
+        .submit_arbiter_decision(escrow_id, Outcome::Refund, arbiter_sig, Some(external))
+        .await?;
+    let mut stream = ruling_escrow
+        .subscribe_escrow_resolution(op)
+        .await?
+        .into_stream();
+    assert_eq!(stream.ok().await?, EscrowInputSMState::Pending);
+    assert_eq!(stream.ok().await?, EscrowInputSMState::Refunded);
+
+    let pool = funder_escrow.get_claim_pool(escrow_id).await?.unwrap();
+    assert_eq!(
+        pool.claimer,
+        vec![
+            (funder_key.public_key(), Amount::from_sats(980)),
+            (fee_key.public_key(), Amount::from_sats(20)),
+        ]
+    );
+
+    // one client claims for both keys, each key signs its own delegation
+    for key in [&funder_key, &fee_key] {
+        let external = external_key(
+            claim_escrow.module,
+            escrow_id,
+            key,
+            DelegationAction::ClaimPayout,
+        )
+        .await?;
+        let op = claim_escrow.claim_payout(escrow_id, Some(external)).await?;
+        let mut stream = claim_escrow.subscribe_claim_payout(op).await?.into_stream();
+        assert_eq!(stream.ok().await?, EscrowInputSMState::Pending);
+        assert_eq!(stream.ok().await?, EscrowInputSMState::Claimed);
+    }
+    wait_for_balance(&claim_client, Amount::from_msats(1)).await?;
+
+    assert!(funder_escrow.get_claim_pool(escrow_id).await?.is_none());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_delegation_only_works_for_its_own_client_key_and_action() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let funder_client = fed.new_client().await;
+    let client_a = fed.new_client().await;
+    let client_b = fed.new_client().await;
+    let funder_escrow = funder_client.get_first_module::<EscrowClientModule>()?;
+    let escrow_a = client_a.get_first_module::<EscrowClientModule>()?;
+    let escrow_b = client_b.get_first_module::<EscrowClientModule>()?;
+    fund_client(&funder_client, Amount::from_sats(2000)).await?;
+
+    let secp = Secp256k1::new();
+    let funder_key = Keypair::new(&secp, &mut OsRng);
+    let recipient_key = Keypair::new(&secp, &mut OsRng);
+    let stranger_key = Keypair::new(&secp, &mut OsRng);
+
+    let escrow_id = create_app_key_escrow(
+        funder_escrow.module,
+        funder_key.public_key(),
+        recipient_key.public_key(),
+        random_pubkey(),
+        random_pubkey(),
+        Duration::from_secs(3600),
+    )
+    .await?;
+
+    let release_sig = sign_kind(
+        escrow_a.module,
+        escrow_id,
+        SigningKind::Resolution(Outcome::Release),
+        &funder_key,
+    )
+    .await?;
+
+    // made for the submitter key of client a
+    let for_a = external_key(
+        escrow_a.module,
+        escrow_id,
+        &recipient_key,
+        DelegationAction::FunderRelease,
+    )
+    .await?;
+
+    // client b has another submitter key, the delegation doesn't name it
+    assert_rejected(
+        escrow_b
+            .resolve_escrow(escrow_id, release_sig, Some(for_a.clone()))
+            .await,
+        "Invalid delegation",
+    );
+
+    // the delegation is signed by a key that is not the recipient
+    let by_stranger = ExternalKey {
+        delegation: sign_kind(
+            escrow_a.module,
+            escrow_id,
+            SigningKind::Delegation {
+                action: DelegationAction::FunderRelease,
+                actor: recipient_key.public_key(),
+            },
+            &stranger_key,
+        )
+        .await?,
+        ..for_a.clone()
+    };
+    assert_rejected(
+        escrow_a
+            .resolve_escrow(escrow_id, release_sig, Some(by_stranger))
+            .await,
+        "Invalid delegation",
+    );
+
+    // a delegation for another action
+    let wrong_action = external_key(
+        escrow_a.module,
+        escrow_id,
+        &recipient_key,
+        DelegationAction::ClaimPayout,
+    )
+    .await?;
+    assert_rejected(
+        escrow_a
+            .resolve_escrow(escrow_id, release_sig, Some(wrong_action))
+            .await,
+        "Invalid delegation",
+    );
+
+    let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
+    assert_eq!(contract.status, EscrowStatus::Active);
+
+    // the right delegation still works for the client it was made for
+    let op = escrow_a
+        .resolve_escrow(escrow_id, release_sig, Some(for_a))
+        .await?;
+    let mut stream = escrow_a
+        .subscribe_escrow_resolution(op)
+        .await?
+        .into_stream();
+    assert_eq!(stream.ok().await?, EscrowInputSMState::Pending);
+    assert_eq!(stream.ok().await?, EscrowInputSMState::Released);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_external_key_must_be_part_of_the_contract() -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let funder_client = fed.new_client().await;
+    let client = fed.new_client().await;
+    let funder_escrow = funder_client.get_first_module::<EscrowClientModule>()?;
+    let escrow = client.get_first_module::<EscrowClientModule>()?;
+    fund_client(&funder_client, Amount::from_sats(2000)).await?;
+
+    let secp = Secp256k1::new();
+    let funder_key = Keypair::new(&secp, &mut OsRng);
+    let recipient_key = Keypair::new(&secp, &mut OsRng);
+    let stranger_key = Keypair::new(&secp, &mut OsRng);
+
+    let escrow_id = create_app_key_escrow(
+        funder_escrow.module,
+        funder_key.public_key(),
+        recipient_key.public_key(),
+        random_pubkey(),
+        random_pubkey(),
+        Duration::from_secs(3600),
+    )
+    .await?;
+
+    // the client only gives out a digest for keys of the escrow
+    let err = escrow
+        .digest_to_sign(
+            escrow_id,
+            SigningKind::Delegation {
+                action: DelegationAction::FunderRelease,
+                actor: stranger_key.public_key(),
+            },
+        )
+        .await
+        .expect_err("a stranger has no digest");
+    assert!(
+        err.to_string()
+            .contains("actor is not a key of this escrow")
+    );
+
+    let bad_split = Outcome::Split {
+        funder_split_bps: 6_000,
+        recipient_split_bps: 3_000,
+    };
+    let err = escrow
+        .digest_to_sign(escrow_id, SigningKind::Resolution(bad_split))
+        .await
+        .expect_err("a split must add up");
+    assert!(err.to_string().contains("Invalid resolution outcome"));
+
+    // a stranger can't resolve, even with a delegation of its own
+    let release_sig = sign_kind(
+        escrow.module,
+        escrow_id,
+        SigningKind::Resolution(Outcome::Release),
+        &funder_key,
+    )
+    .await?;
+    let stranger = ExternalKey {
+        pubkey: stranger_key.public_key(),
+        delegation: sign_kind(
+            escrow.module,
+            escrow_id,
+            SigningKind::Delegation {
+                action: DelegationAction::FunderRelease,
+                actor: recipient_key.public_key(),
+            },
+            &stranger_key,
+        )
+        .await?,
+        engage_message: None,
+    };
+    assert_rejected(
+        escrow
+            .resolve_escrow(escrow_id, release_sig, Some(stranger))
+            .await,
+        "only the recipient or the funder",
+    );
+
+    // engaging the arbiter needs the engage signature as well
+    let without_engage = external_key(
+        escrow.module,
+        escrow_id,
+        &recipient_key,
+        DelegationAction::ArbiterEngaged,
+    )
+    .await?;
+    assert_rejected(
+        escrow.engage_arbiter(escrow_id, Some(without_engage)).await,
+        "the engage signature is missing",
+    );
+
+    let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
+    assert_eq!(contract.status, EscrowStatus::Active);
 
     Ok(())
 }
