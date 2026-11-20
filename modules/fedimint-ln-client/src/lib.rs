@@ -861,7 +861,7 @@ impl LightningClientModule {
         let timelock_delta = invoice
             .min_final_cltv_expiry_delta()
             .saturating_add(OUTGOING_LN_CONTRACT_TIMELOCK - 1);
-        if timelock_delta > MAX_OUTGOING_CONTRACT_TIMELOCK_DELTA {
+        if MAX_OUTGOING_CONTRACT_TIMELOCK_DELTA < timelock_delta {
             return Err(PayBolt11InvoiceError::TimelockDeltaTooLarge {
                 found: timelock_delta,
                 max: MAX_OUTGOING_CONTRACT_TIMELOCK_DELTA,

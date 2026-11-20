@@ -370,7 +370,7 @@ impl LightningClientModule {
             .funded_contract_expiration(outpoint, &spend.contract)
             .await?;
 
-        if remaining_blocks > 0 {
+        if 0 < remaining_blocks {
             return Err(HtlcError::NotExpired(remaining_blocks));
         }
 
