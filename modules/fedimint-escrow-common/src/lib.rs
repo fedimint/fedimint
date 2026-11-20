@@ -40,6 +40,7 @@ const CONTRACT_HASH_TAG_V1: &[u8] = b"fedimint_escrow_contract_hash_v1";
 const RESOLUTION_MESSAGE_TAG_V1: &[u8] = b"fedimint_escrow_resolution_message_v1";
 const ENGAGE_MESSAGE_TAG_V1: &[u8] = b"fedimint_escrow_engage_message_v1";
 const ESCROW_ID_TAG_V1: &[u8] = b"fedimint_escrow_id_v1";
+const DELEGATION_MESSAGE_TAG_V1: &[u8] = b"fedimint_escrow_delegation_message_v1";
 
 /// Unique identifier for an escrow contract.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Encodable, Decodable)]
@@ -405,6 +406,22 @@ impl EscrowContract {
             contract_hash: self.contract_hash,
         }
     }
+
+    pub fn delegation_message(
+        &self,
+        actor: &PublicKey,
+        action: DelegationAction,
+        submitter: &PublicKey,
+    ) -> EscrowMessage {
+        EscrowMessage::Delegation {
+            escrow_id: self.escrow_id,
+            federation_id: self.federation_id,
+            contract_hash: self.contract_hash,
+            actor: *actor,
+            action,
+            submitter: *submitter,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Hash, Eq, PartialEq, Deserialize, Encodable, Decodable)]
@@ -580,6 +597,7 @@ fn parse_successor(s: &str) -> anyhow::Result<SuccessorArbiter> {
     })
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub enum EscrowInput {
     V0(EscrowInputV0),
@@ -594,6 +612,7 @@ pub enum EscrowInput {
 pub struct EscrowInputV0 {
     pub escrow_id: EscrowId,
     pub resolution: Resolution,
+    pub delegation: Option<Delegation>,
 }
 
 impl EscrowInput {
@@ -601,6 +620,19 @@ impl EscrowInput {
         Self::V0(EscrowInputV0 {
             escrow_id,
             resolution,
+            delegation: None,
+        })
+    }
+
+    pub fn new_v0_delegated(
+        escrow_id: EscrowId,
+        resolution: Resolution,
+        delegation: Delegation,
+    ) -> Self {
+        Self::V0(EscrowInputV0 {
+            escrow_id,
+            resolution,
+            delegation: Some(delegation),
         })
     }
 
@@ -717,6 +749,46 @@ pub enum Resolution {
     },
 }
 
+/// What a delegation allows. One per `Resolution` variant.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub enum DelegationAction {
+    FunderRelease,
+    RecipientRefund,
+    ArbiterEngaged,
+    ArbiterOutcome,
+    ClaimPayout,
+    ResolveFallbackPolicy,
+}
+
+impl DelegationAction {
+    pub fn tag(self) -> u8 {
+        self as u8
+    }
+}
+
+impl From<&Resolution> for DelegationAction {
+    fn from(resolution: &Resolution) -> Self {
+        match resolution {
+            Resolution::FunderRelease { .. } => Self::FunderRelease,
+            Resolution::RecipientRefund { .. } => Self::RecipientRefund,
+            Resolution::ArbiterEngaged { .. } => Self::ArbiterEngaged,
+            Resolution::ArbiterOutcome { .. } => Self::ArbiterOutcome,
+            Resolution::ClaimPayout { .. } => Self::ClaimPayout,
+            Resolution::ResolveFallbackPolicy { .. } => Self::ResolveFallbackPolicy,
+        }
+    }
+}
+
+/// The "permission slip". `actor` is the contract key that acts (K),
+/// `submitter` is the key that will sign the transaction (S), and `signature`
+/// is the actor's signature over `EscrowMessage::Delegation`, which names S.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
+pub struct Delegation {
+    pub actor: PublicKey,
+    pub submitter: PublicKey,
+    pub signature: Signature,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub enum EscrowMessage {
     Resolution {
@@ -730,6 +802,14 @@ pub enum EscrowMessage {
         escrow_id: EscrowId,
         federation_id: FederationId,
         contract_hash: ContractHash,
+    },
+    Delegation {
+        escrow_id: EscrowId,
+        federation_id: FederationId,
+        contract_hash: ContractHash,
+        actor: PublicKey,
+        action: DelegationAction,
+        submitter: PublicKey,
     },
 }
 
@@ -767,6 +847,8 @@ pub enum EscrowInputError {
     InvalidSplitRatio,
     #[error("Fallback resolution is not yet available")]
     FallbackNotAvailable,
+    #[error("Invalid delegation")]
+    InvalidDelegation,
     #[error("Internal error: {0}")]
     InternalError(String),
     #[error("Key is not part of this escrow")]
@@ -994,7 +1076,6 @@ pub fn compute_escrow_message(message: &EscrowMessage) -> [u8; 32] {
             contract_hash,
             &mut engine,
         ),
-
         EscrowMessage::ArbiterEngaged {
             escrow_id,
             federation_id,
@@ -1004,6 +1085,22 @@ pub fn compute_escrow_message(message: &EscrowMessage) -> [u8; 32] {
             engine.input(&federation_id.0.to_byte_array());
             engine.input(&escrow_id.0);
             engine.input(&contract_hash.0);
+        }
+        EscrowMessage::Delegation {
+            escrow_id,
+            federation_id,
+            contract_hash,
+            actor,
+            action,
+            submitter,
+        } => {
+            engine.input(DELEGATION_MESSAGE_TAG_V1);
+            engine.input(&federation_id.0.to_byte_array());
+            engine.input(&escrow_id.0);
+            engine.input(&contract_hash.0);
+            engine.input(&actor.serialize());
+            engine.input(&[action.tag()]);
+            engine.input(&submitter.serialize());
         }
     }
 

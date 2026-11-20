@@ -1,4 +1,6 @@
+#[cfg(not(target_arch = "wasm32"))]
 pub mod file;
+
 pub mod iroh;
 
 use std::collections::BTreeMap;

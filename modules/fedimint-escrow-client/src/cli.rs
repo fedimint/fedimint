@@ -131,6 +131,7 @@ pub(crate) async fn handle_cli_command(
         } => {
             let result = client
                 .create_escrow(
+                    None,
                     recipient_key,
                     arbiter_key,
                     Amount::from_sats(arbiter_fee),
@@ -179,7 +180,7 @@ pub(crate) async fn handle_cli_command(
             Ok(serde_json::to_value(contracts)?)
         }
         Opts::EngageArbiter { escrow_id } => {
-            let operation_id = client.engage_arbiter(escrow_id).await?;
+            let operation_id = client.engage_arbiter(escrow_id, None).await?;
 
             let mut stream = client
                 .subscribe_escrow_resolution(operation_id)
@@ -206,7 +207,7 @@ pub(crate) async fn handle_cli_command(
             escrow_id,
             signature,
         } => {
-            let operation_id = client.resolve_escrow(escrow_id, signature).await?;
+            let operation_id = client.resolve_escrow(escrow_id, signature, None).await?;
 
             let mut stream = client
                 .subscribe_escrow_resolution(operation_id)
@@ -235,7 +236,7 @@ pub(crate) async fn handle_cli_command(
             arbiter_signature,
         } => {
             let operation_id = client
-                .submit_arbiter_decision(escrow_id, outcome, arbiter_signature)
+                .submit_arbiter_decision(escrow_id, outcome, arbiter_signature, None)
                 .await?;
 
             let mut stream = client
@@ -264,7 +265,7 @@ pub(crate) async fn handle_cli_command(
             }))
         }
         Opts::ClaimPayout { escrow_id } => {
-            let operation_id = client.claim_payout(escrow_id).await?;
+            let operation_id = client.claim_payout(escrow_id, None).await?;
 
             let mut stream = client
                 .subscribe_claim_payout(operation_id)
@@ -288,7 +289,7 @@ pub(crate) async fn handle_cli_command(
             }))
         }
         Opts::TriggerFallback { escrow_id } => {
-            let operation_id = client.trigger_fallback(escrow_id).await?;
+            let operation_id = client.trigger_fallback(escrow_id, None).await?;
 
             let mut stream = client
                 .subscribe_escrow_resolution(operation_id)

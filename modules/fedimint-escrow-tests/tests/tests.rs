@@ -144,6 +144,7 @@ async fn create_test_escrow(
 
     let result = funder_escrow
         .create_escrow(
+            None,
             recipient_key,
             arbiter_key,
             arbiter_fee,
@@ -223,7 +224,7 @@ async fn test_funder_resolution() -> anyhow::Result<()> {
     let funder_sig = funder_escrow.sign_message(contract.resolution_message(Outcome::Release))?;
 
     let resolve_op = recipient_escrow
-        .resolve_escrow(escrow_id, funder_sig)
+        .resolve_escrow(escrow_id, funder_sig, None)
         .await?;
     let mut resolve_stream = recipient_escrow
         .subscribe_escrow_resolution(resolve_op)
@@ -268,14 +269,16 @@ async fn test_only_recipient_can_submit_release() -> anyhow::Result<()> {
 
     // the funder cannot collect its own release
     assert_rejected(
-        funder_escrow.resolve_escrow(escrow_id, funder_sig).await,
+        funder_escrow
+            .resolve_escrow(escrow_id, funder_sig, None)
+            .await,
         "only the recipient can submit the release",
     );
     let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
     assert_eq!(contract.status, EscrowStatus::Active);
 
     let resolve_op = recipient_escrow
-        .resolve_escrow(escrow_id, funder_sig)
+        .resolve_escrow(escrow_id, funder_sig, None)
         .await?;
     let mut resolve_stream = recipient_escrow
         .subscribe_escrow_resolution(resolve_op)
@@ -315,7 +318,9 @@ async fn test_funder_signature_with_invalid_inputs() -> anyhow::Result<()> {
     // the funder signed Refund, which is not a release
     let refund_sig = funder_escrow.sign_message(contract.resolution_message(Outcome::Refund))?;
     assert_rejected(
-        recipient_escrow.resolve_escrow(escrow_id, refund_sig).await,
+        recipient_escrow
+            .resolve_escrow(escrow_id, refund_sig, None)
+            .await,
         "Invalid signature",
     );
 
@@ -324,7 +329,7 @@ async fn test_funder_signature_with_invalid_inputs() -> anyhow::Result<()> {
         recipient_escrow.sign_message(contract.resolution_message(Outcome::Release))?;
     assert_rejected(
         recipient_escrow
-            .resolve_escrow(escrow_id, recipient_sig)
+            .resolve_escrow(escrow_id, recipient_sig, None)
             .await,
         "Invalid signature",
     );
@@ -363,7 +368,7 @@ async fn test_contract_status_updated_after_funder_release() -> anyhow::Result<(
 
     let funder_sig = funder_escrow.sign_message(contract.resolution_message(Outcome::Release))?;
     let resolve_op = recipient_escrow
-        .resolve_escrow(escrow_id, funder_sig)
+        .resolve_escrow(escrow_id, funder_sig, None)
         .await?;
     let mut stream = recipient_escrow
         .subscribe_escrow_resolution(resolve_op)
@@ -376,7 +381,9 @@ async fn test_contract_status_updated_after_funder_release() -> anyhow::Result<(
     assert!(matches!(contract.status, EscrowStatus::Released(_)));
 
     assert_rejected(
-        recipient_escrow.resolve_escrow(escrow_id, funder_sig).await,
+        recipient_escrow
+            .resolve_escrow(escrow_id, funder_sig, None)
+            .await,
         "already resolved",
     );
 
@@ -409,11 +416,11 @@ async fn test_arbiter_should_not_act_before_timeout() -> anyhow::Result<()> {
 
     // nobody can bring in the arbiter before the timeout
     assert_rejected(
-        funder_escrow.engage_arbiter(escrow_id).await,
+        funder_escrow.engage_arbiter(escrow_id, None).await,
         "Timeout not reached",
     );
     assert_rejected(
-        recipient_escrow.engage_arbiter(escrow_id).await,
+        recipient_escrow.engage_arbiter(escrow_id, None).await,
         "Timeout not reached",
     );
 
@@ -422,12 +429,12 @@ async fn test_arbiter_should_not_act_before_timeout() -> anyhow::Result<()> {
     let arbiter_sig = sign_arbiter_decision(&secp, &contract, Outcome::Refund, &arbiter_keypair);
     assert_rejected(
         funder_escrow
-            .submit_arbiter_decision(escrow_id, Outcome::Refund, arbiter_sig)
+            .submit_arbiter_decision(escrow_id, Outcome::Refund, arbiter_sig, None)
             .await,
         "Contract not disputed",
     );
     assert_rejected(
-        funder_escrow.trigger_fallback(escrow_id).await,
+        funder_escrow.trigger_fallback(escrow_id, None).await,
         "Contract not disputed",
     );
 
@@ -476,7 +483,7 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
 
     wait_for_federation_time(funder_escrow.module, contract.timeout, WAIT_FOR_TIMEOUT).await?;
 
-    let engage_op = funder_escrow.engage_arbiter(escrow_id).await?;
+    let engage_op = funder_escrow.engage_arbiter(escrow_id, None).await?;
     let mut stream = funder_escrow
         .subscribe_escrow_resolution(engage_op)
         .await?
@@ -495,14 +502,14 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
     let release_sig = funder_escrow.sign_message(contract.resolution_message(Outcome::Release))?;
     assert_rejected(
         recipient_escrow
-            .resolve_escrow(escrow_id, release_sig)
+            .resolve_escrow(escrow_id, release_sig, None)
             .await,
         "under dispute",
     );
 
     let arbiter_sig = sign_arbiter_decision(&secp, &contract, Outcome::Refund, &arbiter_keypair);
     let ruling_op = recipient_escrow
-        .submit_arbiter_decision(escrow_id, Outcome::Refund, arbiter_sig)
+        .submit_arbiter_decision(escrow_id, Outcome::Refund, arbiter_sig, None)
         .await?;
     let mut stream = recipient_escrow
         .subscribe_escrow_resolution(ruling_op)
@@ -528,13 +535,13 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
     // the same ruling cannot be applied twice
     assert_rejected(
         funder_escrow
-            .submit_arbiter_decision(escrow_id, Outcome::Refund, arbiter_sig)
+            .submit_arbiter_decision(escrow_id, Outcome::Refund, arbiter_sig, None)
             .await,
         "already resolved",
     );
 
     let balance_before = funder_client.get_balance_for_btc().await?;
-    let claim_op = funder_escrow.claim_payout(escrow_id).await?;
+    let claim_op = funder_escrow.claim_payout(escrow_id, None).await?;
     let mut stream = funder_escrow
         .subscribe_claim_payout(claim_op)
         .await?
@@ -551,7 +558,7 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
         (&arbiter_a_client, &arbiter_a_escrow),
         (&arbiter_b_client, &arbiter_b_escrow),
     ] {
-        let claim_op = escrow.claim_payout(escrow_id).await?;
+        let claim_op = escrow.claim_payout(escrow_id, None).await?;
         let mut stream = escrow.subscribe_claim_payout(claim_op).await?.into_stream();
         assert_eq!(stream.ok().await?, EscrowInputSMState::Pending);
         assert_eq!(stream.ok().await?, EscrowInputSMState::Claimed);
@@ -597,7 +604,7 @@ async fn test_arbiter_signature_with_invalid_inputs() -> anyhow::Result<()> {
     let contract = funder_escrow.get_contract(escrow_id).await?.unwrap();
     wait_for_federation_time(funder_escrow.module, contract.timeout, WAIT_FOR_TIMEOUT).await?;
 
-    let engage_op = recipient_escrow.engage_arbiter(escrow_id).await?;
+    let engage_op = recipient_escrow.engage_arbiter(escrow_id, None).await?;
     let mut stream = recipient_escrow
         .subscribe_escrow_resolution(engage_op)
         .await?
@@ -609,7 +616,7 @@ async fn test_arbiter_signature_with_invalid_inputs() -> anyhow::Result<()> {
     let sig = sign_arbiter_decision(&secp, &contract, Outcome::Refund, &arbiter_keypair);
     assert_rejected(
         recipient_escrow
-            .submit_arbiter_decision(escrow_id, Outcome::Release, sig)
+            .submit_arbiter_decision(escrow_id, Outcome::Release, sig, None)
             .await,
         "Invalid signature",
     );
@@ -619,7 +626,7 @@ async fn test_arbiter_signature_with_invalid_inputs() -> anyhow::Result<()> {
     let sig = sign_arbiter_decision(&secp, &contract, Outcome::Release, &impostor);
     assert_rejected(
         recipient_escrow
-            .submit_arbiter_decision(escrow_id, Outcome::Release, sig)
+            .submit_arbiter_decision(escrow_id, Outcome::Release, sig, None)
             .await,
         "Invalid signature",
     );
@@ -627,7 +634,7 @@ async fn test_arbiter_signature_with_invalid_inputs() -> anyhow::Result<()> {
     let sig = sign_arbiter_decision(&secp, &contract, Outcome::Release, &arbiter_keypair);
     assert_rejected(
         stranger_escrow
-            .submit_arbiter_decision(escrow_id, Outcome::Release, sig)
+            .submit_arbiter_decision(escrow_id, Outcome::Release, sig, None)
             .await,
         "No matching key found in contract",
     );
@@ -639,7 +646,7 @@ async fn test_arbiter_signature_with_invalid_inputs() -> anyhow::Result<()> {
     let sig = sign_arbiter_decision(&secp, &contract, bad_split, &arbiter_keypair);
     assert_rejected(
         recipient_escrow
-            .submit_arbiter_decision(escrow_id, bad_split, sig)
+            .submit_arbiter_decision(escrow_id, bad_split, sig, None)
             .await,
         "Invalid split ratio",
     );
@@ -657,7 +664,7 @@ async fn test_arbiter_signature_with_invalid_inputs() -> anyhow::Result<()> {
     };
     let sig = sign_arbiter_decision(&secp, &contract, split, &arbiter_keypair);
     let ruling_op = arbiter_escrow
-        .submit_arbiter_decision(escrow_id, split, sig)
+        .submit_arbiter_decision(escrow_id, split, sig, None)
         .await?;
     let mut stream = arbiter_escrow
         .subscribe_escrow_resolution(ruling_op)

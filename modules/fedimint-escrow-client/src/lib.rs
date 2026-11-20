@@ -35,11 +35,11 @@ use fedimint_escrow_common::config::EscrowClientConfig;
 use fedimint_escrow_common::endpoint_constants::{
     GetClaimAmount, GetContractParams, ListContractParams,
 };
-use fedimint_escrow_common::rules::check_resolution;
+use fedimint_escrow_common::rules::{check_resolution, resolve_input_key};
 use fedimint_escrow_common::{
-    ClaimPool, ContractHash, EscrowCommonInit, EscrowContract, EscrowId, EscrowInput,
-    EscrowMessage, EscrowModuleTypes, EscrowOutput, FallbackPolicy, KIND, Outcome, Resolution,
-    compute_contract_hash, compute_escrow_message, x_only_eq,
+    ClaimPool, ContractHash, Delegation, DelegationAction, EscrowCommonInit, EscrowContract,
+    EscrowId, EscrowInput, EscrowMessage, EscrowModuleTypes, EscrowOutput, FallbackPolicy, KIND,
+    Outcome, Resolution, compute_contract_hash, compute_escrow_message, x_only_eq,
 };
 use futures::lock::Mutex;
 use futures::{StreamExt, TryStreamExt};
@@ -145,6 +145,7 @@ enum EscrowChildKeys {
     ArbiterFee = 1,
     IrohKey = 3,
     DkgStateKey = 4,
+    SubmitterKey = 5,
 }
 
 #[derive(Clone)]
@@ -346,6 +347,7 @@ impl ClientModule for EscrowClientModule {
                 "create_contract"=>{
                     let req:CreateContractRequest= serde_json::from_value(request)?;
                     let result=self.create_escrow(
+                        req.funder_key,
                         req.recipient_key,
                         req.arbiter_key,
                         req.arbiter_fee,
@@ -368,13 +370,14 @@ impl ClientModule for EscrowClientModule {
                     let req:ResolveEscrowRequest=serde_json::from_value(request)?;
                     let result=self.resolve_escrow(
                         req.escrow_id,
-                        req.signature
+                        req.signature,
+                        req.external
                     ).await?;
                     yield serde_json::to_value(result)?;
                 }
                 "engage_arbiter"=>{
                     let req:EngageArbiterRequest=serde_json::from_value(request)?;
-                    let result=self.engage_arbiter(req.escrow_id).await?;
+                    let result=self.engage_arbiter(req.escrow_id,req.external).await?;
                     yield serde_json::to_value(result)?;
                 }
                 "submit_arbiter_decision"=>{
@@ -382,7 +385,8 @@ impl ClientModule for EscrowClientModule {
                     let result=self.submit_arbiter_decision(
                         req.escrow_id,
                         req.outcome,
-                        req.arbiter_signature
+                        req.arbiter_signature,
+                        req.external,
                     ).await?;
                     yield serde_json::to_value(result)?;
                 }
@@ -402,12 +406,12 @@ impl ClientModule for EscrowClientModule {
                 }
                 "claim_payout"=>{
                     let req:ClaimPayoutRequest=serde_json::from_value(request)?;
-                    let result=self.claim_payout(req.escrow_id).await?;
+                    let result=self.claim_payout(req.escrow_id,req.external).await?;
                     yield serde_json::to_value(result)?;
                 }
                 "trigger_fallback"=>{
                     let req:FallbackRequest=serde_json::from_value(request)?;
-                    let result=self.trigger_fallback(req.escrow_id).await?;
+                    let result=self.trigger_fallback(req.escrow_id,req.external).await?;
                     yield serde_json::to_value(result)?;
                 }
                 "get_claim_pool" => {
@@ -422,6 +426,11 @@ impl ClientModule for EscrowClientModule {
                 "sign_resolution_message" => {
                     let req: SignResolutionMessageRequest =serde_json::from_value(request)?;
                     let result = self.sign_resolution_message(req.escrow_id,req.outcome).await?;
+                    yield serde_json::to_value(result)?;
+                }
+                "digest_to_sign" => {
+                    let req: DigestRequest = serde_json::from_value(request)?;
+                    let result = self.digest_to_sign(req.escrow_id, req.kind).await?;
                     yield serde_json::to_value(result)?;
                 }
                 _ => {
@@ -441,6 +450,8 @@ struct GetContractRequest {
 
 #[derive(Deserialize)]
 struct CreateContractRequest {
+    #[serde(default)]
+    funder_key: Option<PublicKey>,
     recipient_key: PublicKey,
     arbiter_key: PublicKey,
     arbiter_fee: Amount,
@@ -449,6 +460,58 @@ struct CreateContractRequest {
     arbiter_fee_key: Vec<PublicKey>,
     resolution_period: Duration,
     default_fallback: FallbackPolicy,
+}
+
+/// A key that acts in the contract but isn't held by this client, for example
+/// a key the app keeps itself.
+///
+/// The client still has to sign the transaction, so it does that with a key of
+/// its own, and the real key only signs a delegation that names it. Ask
+/// [`EscrowClientModule::digest_to_sign`] what to sign, sign the digest with
+/// the key and fill in the signatures here.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ExternalKey {
+    /// The key that acts in the contract: the funder, the recipient, a party
+    /// that engages the arbiter, the owner of a claim pool entry and so on.
+    pub pubkey: PublicKey,
+    /// The key's signature over the digest of [`SigningKind::Delegation`].
+    /// Every action needs it.
+    pub delegation: schnorr::Signature,
+    /// The key's signature over the digest of [`SigningKind::Engage`]. Only
+    /// `engage_arbiter` needs it, leave it out for the other actions.
+    #[serde(default)]
+    pub engage_message: Option<schnorr::Signature>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub enum SigningKind {
+    /// what a party signs to engage the arbiter
+    Engage,
+    /// the resolution message: the funder signs `Release`, the recipient
+    /// `Refund`, the arbiter its ruling
+    Resolution(Outcome),
+    /// the slip that lets this client submit for `actor`
+    Delegation {
+        action: DelegationAction,
+        actor: PublicKey,
+    },
+}
+
+/// What an external key has to sign.
+#[derive(Debug, Clone, Serialize)]
+pub struct SigningRequest {
+    /// 32 bytes as hex. Sign them as they are with BIP-340 schnorr, without
+    /// hashing them again.
+    pub digest: String,
+    /// Only set for [`SigningKind::Delegation`]: the key this client will sign
+    /// the transaction with.
+    pub submitter: Option<PublicKey>,
+}
+
+#[derive(Deserialize)]
+struct DigestRequest {
+    escrow_id: EscrowId,
+    kind: SigningKind,
 }
 
 #[derive(Deserialize)]
@@ -460,16 +523,22 @@ struct SubscribeCreationRequest {
 struct ResolveEscrowRequest {
     escrow_id: EscrowId,
     signature: schnorr::Signature,
+    #[serde(default)]
+    external: Option<ExternalKey>,
 }
 
 #[derive(Deserialize)]
 struct EngageArbiterRequest {
     escrow_id: EscrowId,
+    #[serde(default)]
+    external: Option<ExternalKey>,
 }
 
 #[derive(Deserialize)]
 struct FallbackRequest {
     escrow_id: EscrowId,
+    #[serde(default)]
+    external: Option<ExternalKey>,
 }
 
 #[derive(Deserialize)]
@@ -477,11 +546,15 @@ struct SubmitArbiterDecisionRequest {
     escrow_id: EscrowId,
     outcome: Outcome,
     arbiter_signature: schnorr::Signature,
+    #[serde(default)]
+    external: Option<ExternalKey>,
 }
 
 #[derive(Deserialize)]
 struct ClaimPayoutRequest {
     escrow_id: EscrowId,
+    #[serde(default)]
+    external: Option<ExternalKey>,
 }
 
 #[derive(Deserialize)]
@@ -620,6 +693,58 @@ impl EscrowClientModule {
         PeerBinding::sign(&session_id, &self.escrow_key, node_addr)
     }
 
+    /// The key that signs the transaction of an externally authorized action.
+    /// Derived per (escrow, action) so nothing has to be stored.
+    fn submitter_keypair(&self, escrow_id: EscrowId, action: DelegationAction) -> Keypair {
+        let word = |i: usize| {
+            u64::from_le_bytes(escrow_id.0[i * 8..i * 8 + 8].try_into().expect("8 bytes"))
+        };
+        self.secret
+            .child_key(ChildId(EscrowChildKeys::SubmitterKey as u64))
+            .child_key(ChildId(word(0)))
+            .child_key(ChildId(word(1)))
+            .child_key(ChildId(word(2)))
+            .child_key(ChildId(word(3)))
+            .child_key(ChildId(u64::from(action.tag())))
+            .to_secp_key(&self.secp)
+    }
+
+    /// What an external key has to sign, for any action. One method for the
+    /// engage message, the resolution message and the delegation.
+    pub async fn digest_to_sign(
+        &self,
+        escrow_id: EscrowId,
+        kind: SigningKind,
+    ) -> anyhow::Result<SigningRequest> {
+        let contract = self
+            .get_contract(escrow_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
+
+        let (message, submitter) = match kind {
+            SigningKind::Engage => (contract.engage_message(), None),
+            SigningKind::Resolution(outcome) => {
+                anyhow::ensure!(outcome.is_valid(), "Invalid resolution outcome");
+                (contract.resolution_message(outcome), None)
+            }
+            SigningKind::Delegation { action, actor } => {
+                anyhow::ensure!(
+                    contract.contains_key(&actor),
+                    "actor is not a key of this escrow"
+                );
+                let submitter = self.submitter_keypair(escrow_id, action).public_key();
+                (
+                    contract.delegation_message(&actor, action, &submitter),
+                    Some(submitter),
+                )
+            }
+        };
+        Ok(SigningRequest {
+            digest: hex::encode(compute_escrow_message(&message)),
+            submitter,
+        })
+    }
+
     /// Creates a new escrow contract and submits a transaction locking
     /// the client's e-cash in the federation
     ///
@@ -632,6 +757,7 @@ impl EscrowClientModule {
     #[allow(clippy::too_many_arguments)]
     pub async fn create_escrow(
         &self,
+        funder_key: Option<PublicKey>,
         recipient_key: PublicKey,
         arbiter_key: PublicKey,
         arbiter_fee: Amount,
@@ -641,8 +767,7 @@ impl EscrowClientModule {
         resolution_period: Duration,
         default_fallback: FallbackPolicy,
     ) -> Result<CreateContractResponse, anyhow::Error> {
-        let funder_key = self.escrow_key.public_key();
-
+        let funder_key = funder_key.unwrap_or_else(|| self.escrow_key.public_key());
         let now = self.federation_unix_time().await?;
         let timeout_deadline = now
             .checked_add(timeout.as_secs())
@@ -759,14 +884,16 @@ impl EscrowClientModule {
         &self,
         escrow_id: EscrowId,
         signature: schnorr::Signature,
+        external: Option<ExternalKey>,
     ) -> Result<OperationId, anyhow::Error> {
-        let operation_id = OperationId::new_random();
         let contract = self
             .get_contract(escrow_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
-        let caller = self.escrow_key.public_key();
+        let caller = external
+            .as_ref()
+            .map_or(self.escrow_key.public_key(), |e| e.pubkey);
 
         let (resolution, action) = if x_only_eq(&contract.recipient_key, &caller) {
             (
@@ -787,12 +914,68 @@ impl EscrowClientModule {
         };
 
         let now = self.federation_unix_time().await?;
-        check_resolution(&contract, &resolution, now)?;
+        let accepted = check_resolution(&contract, &resolution, now)?;
+        self.submit_input(
+            &contract,
+            resolution,
+            accepted.input_key,
+            self.escrow_key,
+            external,
+            contract.amount,
+            action,
+        )
+        .await
+    }
+
+    /// Builds the input for `resolution` and submits it.
+    ///
+    /// Without `external` the transaction is signed by `client_key`, as before.
+    /// With it, the external key only signs a delegation and the transaction is
+    /// signed by this client's submitter key. `acting_key` is the key the rules
+    /// require for this resolution.
+    #[allow(clippy::too_many_arguments)]
+    async fn submit_input(
+        &self,
+        contract: &EscrowContract,
+        resolution: Resolution,
+        acting_key: PublicKey,
+        client_key: Keypair,
+        external: Option<ExternalKey>,
+        amount: Amount,
+        action: EscrowAction,
+    ) -> anyhow::Result<OperationId> {
+        let escrow_id = contract.escrow_id;
+        let operation_id = OperationId::new_random();
+
+        let (input, signer) = match external {
+            None => (
+                EscrowInput::new_v0(escrow_id, resolution.clone()),
+                client_key,
+            ),
+            Some(ext) => {
+                let signer = self.submitter_keypair(escrow_id, DelegationAction::from(&resolution));
+                let delegation = Delegation {
+                    actor: ext.pubkey,
+                    submitter: signer.public_key(),
+                    signature: ext.delegation,
+                };
+
+                resolve_input_key(contract, &resolution, &acting_key, Some(&delegation))?;
+                (
+                    EscrowInput::new_v0_delegated(escrow_id, resolution.clone(), delegation),
+                    signer,
+                )
+            }
+        };
 
         let input = ClientInput {
-            amounts: Amounts::new_bitcoin(contract.amount),
-            keys: vec![self.escrow_key],
-            input: EscrowInput::new_v0(escrow_id, resolution.clone()),
+            amounts: if amount == Amount::ZERO {
+                Amounts::ZERO
+            } else {
+                Amounts::new_bitcoin(amount)
+            },
+            keys: vec![signer],
+            input,
         };
 
         let input_sm = ClientInputSM {
@@ -805,7 +988,7 @@ impl EscrowClientModule {
                                 operation_id,
                                 out_point,
                                 escrow_id,
-                                amount: contract.amount,
+                                amount,
                                 resolution: resolution.clone(),
                             },
                             state: EscrowInputSMState::Pending,
@@ -820,20 +1003,12 @@ impl EscrowClientModule {
                 .make_dyn(ClientInputBundle::new(vec![input], vec![input_sm])),
         );
 
-        let operation_meta_gen = move |out_point_range: OutPointRange| {
-            let txid = out_point_range.txid();
-            let out_point_indices = out_point_range
-                .into_iter()
-                .map(|out_point| out_point.out_idx)
-                .collect();
-
-            EscrowOperationMeta {
-                escrow_id,
-                amount: contract.amount,
-                action: action.clone(),
-                txid,
-                out_point_indices,
-            }
+        let operation_meta_gen = move |out_point_range: OutPointRange| EscrowOperationMeta {
+            escrow_id,
+            amount,
+            action: action.clone(),
+            txid: out_point_range.txid(),
+            out_point_indices: out_point_range.into_iter().map(|op| op.out_idx).collect(),
         };
 
         self.client_ctx
@@ -852,78 +1027,44 @@ impl EscrowClientModule {
     /// Use [`Self::subscribe_escrow_resolution`] to monitor the operation.
     ///
     /// Returns an operation ID for tracking the arbiter engagement.
-    pub async fn engage_arbiter(&self, escrow_id: EscrowId) -> anyhow::Result<OperationId> {
-        let operation_id = OperationId::new_random();
+    pub async fn engage_arbiter(
+        &self,
+        escrow_id: EscrowId,
+        external: Option<ExternalKey>,
+    ) -> anyhow::Result<OperationId> {
         let contract = self
             .get_contract(escrow_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
-        let now = self.federation_unix_time().await?;
-
-        let message = contract.engage_message();
-        let disputant_signature = self.sign_message(message)?;
-
-        let disputant_pubkey = self.escrow_key.public_key();
+        let (disputant_pubkey, disputant_signature) = match &external {
+            Some(ext) => (
+                ext.pubkey,
+                ext.engage_message
+                    .ok_or_else(|| anyhow!("the engage signature is missing"))?,
+            ),
+            None => (
+                self.escrow_key.public_key(),
+                self.sign_message(contract.engage_message())?,
+            ),
+        };
 
         let resolution = Resolution::ArbiterEngaged {
             disputant_pubkey,
             disputant_signature,
         };
-        check_resolution(&contract, &resolution, now)?;
-
-        let input = ClientInput {
-            amounts: Amounts::ZERO,
-            keys: vec![self.escrow_key],
-            input: EscrowInput::new_v0(escrow_id, resolution.clone()),
-        };
-
-        let input_sm = ClientInputSM {
-            state_machines: Arc::new(move |out_point_range: OutPointRange| {
-                out_point_range
-                    .into_iter()
-                    .map(|out_point| {
-                        EscrowStateMachine::Input(EscrowInputStateMachine {
-                            common: EscrowInputSMCommon {
-                                operation_id,
-                                out_point,
-                                escrow_id,
-                                amount: Amount::ZERO,
-                                resolution: resolution.clone(),
-                            },
-                            state: EscrowInputSMState::Pending,
-                        })
-                    })
-                    .collect()
-            }),
-        };
-
-        let tx = TransactionBuilder::new().with_inputs(
-            self.client_ctx
-                .make_dyn(ClientInputBundle::new(vec![input], vec![input_sm])),
-        );
-
-        let operation_meta_gen = move |out_point_range: OutPointRange| {
-            let txid = out_point_range.txid();
-            let out_point_indices = out_point_range
-                .into_iter()
-                .map(|out_point| out_point.out_idx)
-                .collect();
-
-            EscrowOperationMeta {
-                escrow_id,
-                amount: Amount::ZERO,
-                action: EscrowAction::ArbiterEngaged,
-                txid,
-                out_point_indices,
-            }
-        };
-
-        self.client_ctx
-            .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
-            .await?;
-
-        Ok(operation_id)
+        let now = self.federation_unix_time().await?;
+        let accepted = check_resolution(&contract, &resolution, now)?;
+        self.submit_input(
+            &contract,
+            resolution,
+            accepted.input_key,
+            self.escrow_key,
+            external,
+            Amount::ZERO,
+            EscrowAction::ArbiterEngaged,
+        )
+        .await
     }
 
     /// Submits an arbiter decision for a disputed escrow contract.
@@ -950,85 +1091,43 @@ impl EscrowClientModule {
         escrow_id: EscrowId,
         outcome: Outcome,
         arbiter_signature: schnorr::Signature,
+        external: Option<ExternalKey>,
     ) -> anyhow::Result<OperationId> {
-        let operation_id = OperationId::new_random();
         let contract = self
             .get_contract(escrow_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
-        let now = self.federation_unix_time().await?;
-
-        let signing_key = [self.escrow_key, self.arbiter_fee_key]
+        // the key that submits: the external one, or one of our own keys that is in the
+        // contract
+        let own_key = [self.escrow_key, self.arbiter_fee_key]
             .into_iter()
             .find(|key| contract.contains_key(&key.public_key()))
-            .ok_or_else(|| anyhow!("No matching key found in contract"))?;
-
-        let submitter_pubkey = signing_key.public_key();
+            .unwrap_or(self.escrow_key);
+        let submitter_pubkey = external.as_ref().map_or(own_key.public_key(), |e| e.pubkey);
 
         let resolution = Resolution::ArbiterOutcome {
             arbiter_signature,
             outcome,
             submitter_pubkey,
         };
-        check_resolution(&contract, &resolution, now)?;
-
-        let input = ClientInput {
-            amounts: Amounts::ZERO,
-            keys: vec![signing_key],
-            input: EscrowInput::new_v0(escrow_id, resolution.clone()),
+        let now = self.federation_unix_time().await?;
+        let accepted = check_resolution(&contract, &resolution, now)?;
+        let action = match outcome {
+            Outcome::Release => EscrowAction::Released,
+            Outcome::Refund => EscrowAction::Refunded,
+            Outcome::Split { .. } => EscrowAction::Split,
         };
-
-        let input_sm = ClientInputSM {
-            state_machines: Arc::new(move |out_point_range: OutPointRange| {
-                out_point_range
-                    .into_iter()
-                    .map(|out_point| {
-                        EscrowStateMachine::Input(EscrowInputStateMachine {
-                            common: EscrowInputSMCommon {
-                                operation_id,
-                                out_point,
-                                escrow_id,
-                                amount: Amount::ZERO,
-                                resolution: resolution.clone(),
-                            },
-                            state: EscrowInputSMState::Pending,
-                        })
-                    })
-                    .collect()
-            }),
-        };
-
-        let tx = TransactionBuilder::new().with_inputs(
-            self.client_ctx
-                .make_dyn(ClientInputBundle::new(vec![input], vec![input_sm])),
-        );
-
-        let operation_meta_gen = move |out_point_range: OutPointRange| {
-            let txid = out_point_range.txid();
-            let out_point_indices = out_point_range
-                .into_iter()
-                .map(|out_point| out_point.out_idx)
-                .collect();
-
-            EscrowOperationMeta {
-                escrow_id,
-                amount: Amount::ZERO,
-                action: match outcome {
-                    Outcome::Release => EscrowAction::Released,
-                    Outcome::Refund => EscrowAction::Refunded,
-                    Outcome::Split { .. } => EscrowAction::Split,
-                },
-                txid,
-                out_point_indices,
-            }
-        };
-
-        self.client_ctx
-            .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
-            .await?;
-
-        Ok(operation_id)
+        self.submit_input(
+            &contract,
+            resolution,
+            accepted.input_key,
+            own_key,
+            external,
+            Amount::ZERO,
+            action,
+        )
+        .await
     }
 
     /// The key stored in the pool is the key that must sign the claim.
@@ -1048,75 +1147,46 @@ impl EscrowClientModule {
     /// have been received.
     ///
     /// Returns an operation ID for tracking the payout claim.
-    pub async fn claim_payout(&self, escrow_id: EscrowId) -> anyhow::Result<OperationId> {
-        let operation_id = OperationId::new_random();
+    pub async fn claim_payout(
+        &self,
+        escrow_id: EscrowId,
+        external: Option<ExternalKey>,
+    ) -> anyhow::Result<OperationId> {
+        let contract = self
+            .get_contract(escrow_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
+
         let pool = self
-            .client_ctx
-            .module_api()
-            .get_claim_amount(GetClaimAmount { escrow_id })
+            .get_claim_pool(escrow_id)
             .await?
             .ok_or_else(|| anyhow!("No claim pool exists for escrow {escrow_id:?}"))?;
 
-        let (signing_key, amount) = pool
+        // the entry to claim: the external key's, or the first one of our own keys
+        let (stored_key, amount) = pool
             .claimer
             .iter()
-            .find_map(|(key, amount)| {
-                self.keypair_for(key)
-                    .map(|signing_key| (signing_key, *amount))
+            .find(|(key, _)| match &external {
+                Some(ext) => x_only_eq(key, &ext.pubkey),
+                None => self.keypair_for(key).is_some(),
             })
-            .ok_or_else(|| anyhow::anyhow!("No matching signing key found"))?;
+            .map(|(key, amount)| (*key, *amount))
+            .ok_or_else(|| anyhow!("No pending claim for this key"))?;
+        let own_key = self.keypair_for(&stored_key).unwrap_or(self.escrow_key);
 
-        let input = ClientInput {
-            amounts: Amounts::new_bitcoin(amount),
-            keys: vec![signing_key],
-            input: EscrowInput::new_v0(
-                escrow_id,
-                Resolution::ClaimPayout {
-                    claimer_pubkey: signing_key.public_key(),
-                },
-            ),
+        let resolution = Resolution::ClaimPayout {
+            claimer_pubkey: stored_key,
         };
-
-        let input_sm = ClientInputSM {
-            state_machines: Arc::new(move |out_point_range: OutPointRange| {
-                out_point_range
-                    .into_iter()
-                    .map(|out_point| {
-                        EscrowStateMachine::Input(EscrowInputStateMachine {
-                            common: EscrowInputSMCommon {
-                                operation_id,
-                                out_point,
-                                escrow_id,
-                                amount,
-                                resolution: Resolution::ClaimPayout {
-                                    claimer_pubkey: signing_key.public_key(),
-                                },
-                            },
-                            state: EscrowInputSMState::Pending,
-                        })
-                    })
-                    .collect()
-            }),
-        };
-
-        let tx = TransactionBuilder::new().with_inputs(
-            self.client_ctx
-                .make_dyn(ClientInputBundle::new(vec![input], vec![input_sm])),
-        );
-
-        let operation_meta_gen = move |out_point_range: OutPointRange| EscrowOperationMeta {
-            escrow_id,
+        self.submit_input(
+            &contract,
+            resolution,
+            stored_key,
+            own_key,
+            external,
             amount,
-            action: EscrowAction::Claimed,
-            txid: out_point_range.txid(),
-            out_point_indices: out_point_range.into_iter().map(|op| op.out_idx).collect(),
-        };
-
-        self.client_ctx
-            .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
-            .await?;
-
-        Ok(operation_id)
+            EscrowAction::Claimed,
+        )
+        .await
     }
 
     /// Triggers the configured fallback policy for a disputed escrow contract.
@@ -1130,25 +1200,27 @@ impl EscrowClientModule {
     /// locally controlled allocations.
     ///
     /// Returns an operation ID for tracking the fallback operation.
-    pub async fn trigger_fallback(&self, escrow_id: EscrowId) -> anyhow::Result<OperationId> {
-        let operation_id = OperationId::new_random();
-
+    pub async fn trigger_fallback(
+        &self,
+        escrow_id: EscrowId,
+        external: Option<ExternalKey>,
+    ) -> anyhow::Result<OperationId> {
         let contract = self
             .get_contract(escrow_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Escrow contract not found"))?;
 
-        let now = self.federation_unix_time().await?;
-
-        let claimer_pubkey = self.escrow_key.public_key();
         let fallback = contract.effective_fallback();
+        let claimer_pubkey = external
+            .as_ref()
+            .map_or(self.escrow_key.public_key(), |e| e.pubkey);
 
         let resolution = Resolution::ResolveFallbackPolicy {
             claimer_pubkey,
             fallback: fallback.clone(),
         };
-        check_resolution(&contract, &resolution, now)?;
-
+        let now = self.federation_unix_time().await?;
+        let accepted = check_resolution(&contract, &resolution, now)?;
         let action = if contract.can_swap_arbiter() {
             EscrowAction::ArbiterSwapped
         } else {
@@ -1158,61 +1230,17 @@ impl EscrowClientModule {
                 Outcome::Split { .. } => EscrowAction::Split,
             }
         };
-
-        let input = ClientInput {
-            amounts: Amounts::ZERO,
-            keys: vec![self.escrow_key],
-            input: EscrowInput::new_v0(escrow_id, resolution.clone()),
-        };
-
-        let input_sm = ClientInputSM {
-            state_machines: Arc::new(move |out_point_range: OutPointRange| {
-                out_point_range
-                    .into_iter()
-                    .map(|out_point| {
-                        EscrowStateMachine::Input(EscrowInputStateMachine {
-                            common: EscrowInputSMCommon {
-                                operation_id,
-                                out_point,
-                                escrow_id,
-                                amount: Amount::ZERO,
-                                resolution: resolution.clone(),
-                            },
-                            state: EscrowInputSMState::Pending,
-                        })
-                    })
-                    .collect()
-            }),
-        };
-
-        let tx = TransactionBuilder::new().with_inputs(
-            self.client_ctx
-                .make_dyn(ClientInputBundle::new(vec![input], vec![input_sm])),
-        );
-
-        let operation_meta_gen = move |out_point_range: OutPointRange| {
-            let txid = out_point_range.txid();
-            let out_point_indices = out_point_range
-                .into_iter()
-                .map(|out_point| out_point.out_idx)
-                .collect();
-
-            EscrowOperationMeta {
-                escrow_id,
-                amount: Amount::ZERO,
-                action: action.clone(),
-                txid,
-                out_point_indices,
-            }
-        };
-
-        self.client_ctx
-            .finalize_and_submit_transaction(operation_id, KIND.as_str(), operation_meta_gen, tx)
-            .await?;
-
-        Ok(operation_id)
+        self.submit_input(
+            &contract,
+            resolution,
+            accepted.input_key,
+            self.escrow_key,
+            external,
+            Amount::ZERO,
+            action,
+        )
+        .await
     }
-
     /// Returns the FROST participant identity derived from the client's
     /// escrow public key.
     ///

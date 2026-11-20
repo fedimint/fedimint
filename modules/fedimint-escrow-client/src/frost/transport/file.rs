@@ -173,9 +173,9 @@ impl SigningTransport for FileTransport {
 
         loop {
             if let Ok(mut entries) = fs::read_dir(&dir).await {
-                let mut names = Vec::new();
+                let mut names: Vec<String> = Vec::new();
                 while let Some(entry) = entries.next_entry().await? {
-                    let name = entry.file_name().to_string_lossy().to_string();
+                    let name: String = entry.file_name().to_string_lossy().to_string();
                     // ignore half written files (.tmp)
                     if name.ends_with(".msg") {
                         names.push(name);

@@ -37,6 +37,7 @@ This means time moves in steps of one minute and a timeout is never exact. Clien
 ### Creating an escrow - User Client
 - [EscrowClientModule::create_escrow](../modules/fedimint-escrow-client/src/lib.rs) - sets the `timeout` to the federation time plus the requested duration, computes the contract hash, picks a `escrow_id`, validates the contract and submits a transaction with the contract as an output. The output takes `amount` from the funder's ecash.
 - The funder gives the `escrow_id` to the recipient outside of the federation. Before doing any work, the recipient checks every term: the keys, amount, arbiter_fee, arbiter_fee_key, timeout, resolution_period and default_fallback. The funder chooses all of them and the federation can’t know what was agreed.
+- `funder_key` is optional. If it is given, that key is the funder. It doesn't have to sign anything to create the escrow, the ecash comes from the client that submits.
 
 ### Creating an escrow - Federation
 - [Escrow::process_output](../modules/fedimint-escrow-server/src/lib.rs) - validates the contract with [validate_contract_fields](../modules/fedimint-escrow-common/src/lib.rs), recomputes the contract hash, rejects an `escrow_id` that already exists and stores the contract.
@@ -47,12 +48,11 @@ A contract is rejected if:
 - a split doesn't add up to 10,000
 - funder, recipient, arbiter and fee keys are not all different from each other (also counting the keys in `SwapArbiter`)
 - Each successor's arbiter fee must be smaller than the escrow amount.
-- A successor with a non-zero arbiter fee must have at least one fee key. Each successor can have at most 24 fee keys.
-- there is a fee but no fee key, or more than 16 fee keys
-- timeout plus two resolution periods must fit in 64 bits
+- A successor with a non-zero arbiter fee must have at least one fee key. Each successor can have at most 16 fee keys (the same limit as the original arbiter)
+- timeout plus one resolution period for the original arbiter and each successor must fit in 64 bits”
 
 ### Resolving
-After creation everything is an `EscrowInput { escrow_id, resolution }`.
+After creation everything is an `EscrowInput { escrow_id, resolution, delegation(Optional) }`.
 
 | Resolution | Works when | Result | Signs the tx |
 |---|---|---|---|
@@ -70,6 +70,58 @@ After creation everything is an `EscrowInput { escrow_id, resolution }`.
 - An arbiter ruling can be submitted by any key of the contract: funder, recipient, arbiter, a fee key or the keys of the swap arbiter. The submitter only signs the transaction. What matters is the arbiter signature inside the input.
 - At exactly `resolve_by` the arbiter can still rule and the fallback is not available yet.
 - The `fallback` field in `ResolveFallbackPolicy` is not looked at by the federation. It always uses `default_fallback` from the contract.
+
+### Delegated authorization
+Every action in a contract is done by a key: the recipient collects a release, the funder collects a refund, a party brings in the arbiter, and so on. Normally that key also signs the Fedimint transaction, so it has to be a key the client can sign with.
+
+A delegation lets the key stay outside the client. The key signs one small message instead of the transaction. The message says "this key lets that submitter key do this action on this escrow". The client signs the transaction with the submitter key, which it derives itself, and the federation checks both. Use it when the keys live in an app and the client can be thrown away, for example a browser client whose storage may get lost.
+
+You only need this for keys the client doesn't hold. Keys derived by the client keep working without it. Think of a delegation as a permission slip. Only a signature goes to the client, the private key stays in the app. So the client doesn't have to be the one that created the escrow. A new client, set up from nothing, can release, refund, engage, submit a ruling, trigger the fallback and claim.
+
+The submitter is named in the message because a release, a refund and a claim pay whoever sends the transaction. Without it, anyone who saw the delegation could send the same action with their own outputs.
+
+#### What the app signs
+The delegation is always signed by the key that does the action. The other signatures are the same ones as without a delegation: the funder's release, the recipient's refund, the engage signature of a party and the ruling of the arbiter.
+
+| What you want to do | What the app signs | Where it goes |
+|---|---|---|
+| Recipient collects a release | the funder signs `Resolution(Release)`, the recipient key signs `Delegation(FunderRelease, recipient)` | `signature`, `external.delegation` of `resolve_escrow` |
+| Funder collects a refund | the recipient signs `Resolution(Refund)`, the funder key signs `Delegation(RecipientRefund, funder)` | `signature`, `external.delegation` of `resolve_escrow` |
+| A party brings in the arbiter | the party signs `Engage` and `Delegation(ArbiterEngaged, party)` | `external.engage_message`, `external.delegation` of `engage_arbiter` |
+| Someone submits the arbiter's ruling | the arbiter (or the consortium) signs `Resolution(outcome)`, the submitting key signs `Delegation(ArbiterOutcome, key)` | `arbiter_signature`, `external.delegation` of `submit_arbiter_decision` |
+| A party triggers the fallback | the party signs `Delegation(ResolveFallbackPolicy, party)` | `external.delegation` of `trigger_fallback` |
+| A key claims its payout | the key signs `Delegation(ClaimPayout, key)` | `external.delegation` of `claim_payout` |
+| Create an escrow | nothing | pass the funder's public key to `create_escrow` |
+
+Each digest comes from [digest_to_sign](../modules/fedimint-escrow-client/src/lib.rs). It takes the escrow id and what you want to sign (`Engage`, `Resolution(outcome)` or `Delegation { action, actor }`) and returns a 32 byte digest. Sign it as it is with BIP-340, without hashing it again. For a delegation it also returns the submitter key, which is the key this client will use for the transaction.
+
+```mermaid
+sequenceDiagram;
+    participant app as App (holds the key)
+    participant c as Fedimint client
+    participant fed as Federation
+
+    app->>c: digest_to_sign(escrow_id, Delegation { action, actor })
+    c->>app: digest and submitter key
+    app->>app: sign the digest with the actor's key
+    app->>c: the action with external { pubkey, delegation }
+    c->>fed: input with the delegation, transaction signed by the submitter key
+    fed->>fed: check the delegation and the transaction signature
+    fed->>c: e-cash, or the state change
+```
+
+#### Which client submits
+- The submitter key is derived from the module root secret of the client, for each escrow and action. So `digest_to_sign` and the action have to go to the same client. If the client is replaced in between, ask for the digest again and sign again.
+- A delegation is good for one escrow, one action, one actor and one submitter. Somebody who sees it can't use it, because the transaction also needs the submitter key and that never leaves the client.
+- The ecash of a release, a refund or a claim goes to the client that submits, not to the key that acted. That client has to keep it, or the app has to move it out. The key in the contract only decides who is allowed.
+- A client only tracks the operations it submitted. A new client can't follow the `operation_id` of another one. To see how things stand use `get_contract` and `get_claim_pool`.
+
+Example, the recipient collects a release with a new client:
+1. The funder's app asks `digest_to_sign` for `Resolution(Release)` and signs it. This is the release signature.
+2. The recipient's app asks `digest_to_sign` for `Delegation { FunderRelease, recipient key }` and gets the digest and the submitter key.
+3. The recipient's app signs the digest with the recipient key.
+4. The recipient's app calls `resolve_escrow` with the release signature and `external { pubkey, delegation }`.
+5. The ecash arrives in that client.
 
 ### ResolutionRecord
 When a contract reaches a terminal state, its status stores a ResolutionRecord:
@@ -144,7 +196,7 @@ A ruling or a fallback doesn't pay anyone in the same transaction. It writes a c
 
 The entries always add up to `amount` and entries with zero are dropped. Every key claims its own entry with `ClaimPayout`, in any order, and when the last entry is gone the pool is deleted. A funder release and a recipient refund are the only cases that pay directly and have no pool. Although a claim pool never expires, claimer can claim their sats as they want.
 
-- [EscrowClientModule::claim_payout](../modules/fedimint-escrow-client/src/lib.rs) - claims the entry of the first client key that is in the pool.
+- [EscrowClientModule::claim_payout](../modules/fedimint-escrow-client/src/lib.rs) - claims the entry of the first client key that is in the pool, or the entry of the external key if one is given.
 - [Escrow::handle_claim](../modules/fedimint-escrow-server/src/lib.rs) - removes the entry (keys are compared x-only) and returns its amount.
 - [Escrow::audit](../modules/fedimint-escrow-server/src/lib.rs) - an `Active` or `Disputed` contract counts its `amount` as a liability. A resolved contract counts nothing, the pool counts whatever is not claimed yet.
 
@@ -157,7 +209,7 @@ stateDiagram-v2
     Disputed --> Released: arbiter ruling
     Disputed --> Refunded: arbiter ruling / fallback
     Disputed --> Split: arbiter ruling / fallback
-    Disputed --> Disputed: swap arbiter (once)
+    Disputed --> Disputed: swap arbiter (up to 3 times)
 ```
 
 `Released`, `Refunded` and `Split` are final. The money in them is only paid once the claim pool is claimed, except for the funder release.
@@ -181,6 +233,13 @@ The client derives its keys from the module root secret:
 - child 1, `arbiter_fee_key` - the key used to receive and claim arbiter fees. It can also submit rulings.
 - child 3, iroh key - the identity used for the arbiter consortium network. Child 2 is not used.
 - child 4, DkgStateKey - to encrypt and decrypt the client side dkg state and packages.
+- child 5, SubmitterKey - only used for delegated actions, see [Delegated authorization](#delegated-authorization). It is derived again for every escrow and action, so nothing has to be stored.
+
+These keys are only the default. An app that has its own keys (for example keys derived from a nostr identity) doesn't have to use them. It passes any key to `create_escrow` and uses a delegation for everything after that. Then the client holds nothing the app can't get back.
+
+Use a new key for every escrow. The federation keeps a list of the contracts of every key (`list_contract_by_key`) and `get_contract` works for anybody who knows the `escrow_id`, so a key that is used twice links the two escrows. An app that finds its escrows some other way doesn't need `list_contract_by_key`.
+
+Keys are compared x-only, so a key that only has an x coordinate (nostr) can be given with a `02` prefix. Use the same bytes everywhere, because the contract hash and the delegation digest cover all 33 bytes.
 
 The public keys are available with the `get_client_escrow_pubkey` and `get_arbiter_fee_pubkey` client calls. [EscrowClientModule::list_contracts](../modules/fedimint-escrow-client/src/lib.rs) lists the contracts that contain one key: the escrow key by default, or the key you pass (pass the arbiter fee key to list the contracts where client are a fee key). Results are ordered by escrow_id. To page, pass limit and the last escrow_id of the previous page as last_seen.
 

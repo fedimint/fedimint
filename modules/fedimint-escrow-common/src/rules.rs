@@ -3,8 +3,9 @@ use fedimint_core::secp256k1::schnorr::Signature;
 use fedimint_core::{Amount, secp256k1};
 
 use crate::{
-    EscrowContract, EscrowInputError, EscrowMessage, EscrowStatus, EscrowTransition, Outcome,
-    Resolution, SPLIT_BPS_DENOMINATOR, compute_escrow_message,
+    Delegation, DelegationAction, EscrowContract, EscrowInputError, EscrowMessage, EscrowStatus,
+    EscrowTransition, Outcome, Resolution, SPLIT_BPS_DENOMINATOR, compute_escrow_message,
+    x_only_eq,
 };
 
 /// What the federation must do with the funds once a resolution is accepted.
@@ -58,6 +59,31 @@ pub fn check_resolution(
         }
         Resolution::ClaimPayout { .. } => Err(EscrowInputError::InvalidStateTransition),
     }
+}
+
+/// The key that must sign the transaction input.
+///
+/// No delegation: it is `actor` itself (`input_key` from `check_resolution`,
+/// or the claim pool key for `ClaimPayout`).
+/// With a delegation: the actor must have signed the slip, the slip must be
+/// for this action, and the key becomes the slip's `submitter`.
+pub fn resolve_input_key(
+    contract: &EscrowContract,
+    resolution: &Resolution,
+    actor: &PublicKey,
+    delegation: Option<&Delegation>,
+) -> Result<PublicKey, EscrowInputError> {
+    let Some(d) = delegation else {
+        return Ok(*actor);
+    };
+    if !x_only_eq(&d.actor, actor) {
+        return Err(EscrowInputError::InvalidDelegation);
+    }
+    let message =
+        contract.delegation_message(&d.actor, DelegationAction::from(resolution), &d.submitter);
+    ensure_signed(&d.actor, &message, &d.signature)
+        .map_err(|_| EscrowInputError::InvalidDelegation)?;
+    Ok(d.submitter)
 }
 
 fn funder_release(

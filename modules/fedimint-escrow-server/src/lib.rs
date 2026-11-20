@@ -23,10 +23,10 @@ use fedimint_escrow_common::endpoint_constants::{
     CONSENSUS_UNIX_TIME_ENDPOINT, GET_CLAIM_AMOUNT_ENDPOINT, GET_CONTRACT_ENDPOINT, GetClaimAmount,
     GetContractParams, LIST_CONTRACT_BY_KEY_ENDPOINT, ListContractParams,
 };
-use fedimint_escrow_common::rules::{Settlement, check_resolution};
+use fedimint_escrow_common::rules::{Settlement, check_resolution, resolve_input_key};
 use fedimint_escrow_common::{
-    ClaimPool, ContractHash, EscrowCommonInit, EscrowConsensusItem, EscrowContract, EscrowId,
-    EscrowInput, EscrowInputError, EscrowModuleTypes, EscrowOutput, EscrowOutputError,
+    ClaimPool, ContractHash, Delegation, EscrowCommonInit, EscrowConsensusItem, EscrowContract,
+    EscrowId, EscrowInput, EscrowInputError, EscrowModuleTypes, EscrowOutput, EscrowOutputError,
     EscrowOutputOutcome, EscrowStatus, KIND, MODULE_CONSENSUS_VERSION, Resolution,
     compute_contract_hash, validate_contract_fields, x_only,
 };
@@ -242,11 +242,17 @@ impl ServerModule for Escrow {
 
         match &input.resolution {
             Resolution::ClaimPayout { claimer_pubkey } => {
-                self.handle_claim(dbtx, input.escrow_id, claimer_pubkey)
-                    .await
+                self.handle_claim(
+                    dbtx,
+                    input.escrow_id,
+                    &input.resolution,
+                    claimer_pubkey,
+                    input.delegation.as_ref(),
+                )
+                .await
             }
             resolution => {
-                self.handle_resolution(dbtx, input.escrow_id, resolution)
+                self.handle_resolution(dbtx, input.escrow_id, resolution, input.delegation.as_ref())
                     .await
             }
         }
@@ -514,11 +520,13 @@ impl Escrow {
         dbtx: &mut DatabaseTransaction<'_>,
         escrow_id: EscrowId,
         resolution: &Resolution,
+        delegation: Option<&Delegation>,
     ) -> Result<InputMeta, EscrowInputError> {
         let mut contract = self.load_contract(escrow_id, dbtx).await?;
         let now = self.consensus_unix_time(dbtx).await;
 
         let accepted = check_resolution(&contract, resolution, now)?;
+        let pub_key = resolve_input_key(&contract, resolution, &accepted.input_key, delegation)?;
         contract.transition(accepted.transition, now)?;
 
         let amounts = match accepted.settlement {
@@ -545,7 +553,7 @@ impl Escrow {
                 amounts,
                 fees: Amounts::ZERO,
             },
-            pub_key: accepted.input_key,
+            pub_key,
         })
     }
 
@@ -553,7 +561,9 @@ impl Escrow {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         escrow_id: EscrowId,
+        resolution: &Resolution,
         claimer: &PublicKey,
+        delegation: Option<&Delegation>,
     ) -> Result<InputMeta, EscrowInputError> {
         let contract = self.load_contract(escrow_id, dbtx).await?;
         if !contract.contains_key(claimer) {
@@ -569,6 +579,8 @@ impl Escrow {
             .take_claim(claimer)
             .ok_or(EscrowInputError::NoPendingClaim)?;
 
+        let pub_key = resolve_input_key(&contract, resolution, &stored_key, delegation)?;
+
         if pool.claimer.is_empty() {
             dbtx.remove_entry(&ClaimPoolKey(escrow_id)).await;
         } else {
@@ -580,7 +592,7 @@ impl Escrow {
                 amounts: Amounts::new_bitcoin(amount),
                 fees: Amounts::ZERO,
             },
-            pub_key: stored_key,
+            pub_key,
         })
     }
 }
