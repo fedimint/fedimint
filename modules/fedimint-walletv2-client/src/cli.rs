@@ -11,7 +11,7 @@ use fedimint_eventlog::EventLogId;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::{AwaitReceiveError, ReceiveError, SendError, WalletClientModule};
+use crate::{AdminAuthNotSetError, AwaitReceiveError, ReceiveError, SendError, WalletClientModule};
 
 #[derive(Parser, Serialize)]
 enum Opts {
@@ -51,6 +51,11 @@ enum Opts {
         #[arg(long, default_value_t = Account::Primary)]
         account: Account,
     },
+    /// Query this client's own guardian (selected via `--our-id`) for its local
+    /// FROST finalization stat for `txid`. Returns `null` if that guardian is
+    /// offline or hasn't recorded a stat for `txid`. Requires admin auth
+    /// (`--our-id` + `--password`).
+    FrostFinalizationStats { txid: bitcoin::Txid },
 }
 
 #[derive(Clone, Subcommand, Serialize)]
@@ -123,6 +128,7 @@ pub(crate) async fn handle_cli_command(
         Opts::AwaitReceive { position, account } => {
             json(wallet.await_receive(account, position).await?)
         }
+        Opts::FrostFinalizationStats { txid } => json(wallet.frost_finalization_stats(txid).await?),
     };
 
     Ok(value)
@@ -158,4 +164,8 @@ pub(crate) enum CliCommandError {
     /// The next receive could not be awaited.
     #[error(transparent)]
     AwaitReceive(#[from] AwaitReceiveError),
+
+    /// An admin-only command was run without admin auth.
+    #[error(transparent)]
+    AdminAuth(#[from] AdminAuthNotSetError),
 }

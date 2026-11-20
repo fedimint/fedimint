@@ -3129,6 +3129,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "fedimint-bip445"
+version = "0.14.0-alpha"
+dependencies = [
+ "bitcoin",
+ "fedimint-core",
+ "hex",
+ "rand 0.8.5",
+ "rand_chacha 0.3.1",
+ "secp256k1",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "fedimint-bitcoind"
 version = "0.14.0-alpha"
 dependencies = [
@@ -4698,6 +4712,7 @@ dependencies = [
  "rayon",
  "rcgen 0.14.10",
  "scopeguard",
+ "secp256k1",
  "serde",
  "serde_json",
  "sha3",
@@ -5104,6 +5119,7 @@ name = "fedimint-walletv2-common"
 version = "0.14.0-alpha"
 dependencies = [
  "bitcoin",
+ "fedimint-bip445",
  "fedimint-core",
  "miniscript",
  "secp256k1",
@@ -5120,16 +5136,20 @@ dependencies = [
  "async-trait",
  "bitcoin",
  "erased-serde",
+ "fedimint-bip445",
  "fedimint-core",
  "fedimint-logging",
  "fedimint-metrics",
  "fedimint-server-core",
  "fedimint-walletv2-common",
  "futures",
+ "itertools 0.14.0",
  "miniscript",
  "rand 0.8.5",
+ "rand_chacha 0.3.1",
  "secp256k1",
  "serde",
+ "serde_json",
  "strum 0.27.1",
  "strum_macros 0.28.0",
  "tokio",
@@ -5145,6 +5165,7 @@ dependencies = [
  "async-stream",
  "bitcoin",
  "bitcoincore-rpc",
+ "clap",
  "devimint",
  "fedimint-bitcoind",
  "fedimint-client",
