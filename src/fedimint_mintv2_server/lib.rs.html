@@ -587,7 +587,7 @@
 <a href=#587 id=587 data-nosnippet>587</a>    range: fedimint_core::OutPointRange,
 <a href=#588 id=588 data-nosnippet>588</a>) -&gt; Vec&lt;BlindedSignatureShare&gt; {
 <a href=#589 id=589 data-nosnippet>589</a>    <span class="kw">let </span>last = <span class="kw">match </span>range.checked_count() {
-<a href=#590 id=590 data-nosnippet>590</a>        <span class="prelude-val">Some</span>(count) <span class="kw">if </span>count &gt; <span class="number">0 </span>=&gt; OutPoint {
+<a href=#590 id=590 data-nosnippet>590</a>        <span class="prelude-val">Some</span>(count) <span class="kw">if </span><span class="number">0 </span>&lt; count =&gt; OutPoint {
 <a href=#591 id=591 data-nosnippet>591</a>            txid: range.txid(),
 <a href=#592 id=592 data-nosnippet>592</a>            out_idx: range.end_out_point().out_idx - <span class="number">1</span>,
 <a href=#593 id=593 data-nosnippet>593</a>        },

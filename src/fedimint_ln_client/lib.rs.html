@@ -861,7 +861,7 @@
 <a href=#861 id=861 data-nosnippet>861</a>        <span class="kw">let </span>timelock_delta = invoice
 <a href=#862 id=862 data-nosnippet>862</a>            .min_final_cltv_expiry_delta()
 <a href=#863 id=863 data-nosnippet>863</a>            .saturating_add(OUTGOING_LN_CONTRACT_TIMELOCK - <span class="number">1</span>);
-<a href=#864 id=864 data-nosnippet>864</a>        <span class="kw">if </span>timelock_delta &gt; MAX_OUTGOING_CONTRACT_TIMELOCK_DELTA {
+<a href=#864 id=864 data-nosnippet>864</a>        <span class="kw">if </span>MAX_OUTGOING_CONTRACT_TIMELOCK_DELTA &lt; timelock_delta {
 <a href=#865 id=865 data-nosnippet>865</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(PayBolt11InvoiceError::TimelockDeltaTooLarge {
 <a href=#866 id=866 data-nosnippet>866</a>                found: timelock_delta,
 <a href=#867 id=867 data-nosnippet>867</a>                max: MAX_OUTGOING_CONTRACT_TIMELOCK_DELTA,
