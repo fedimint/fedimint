@@ -48,6 +48,7 @@ use bitcoin::address::NetworkUnchecked;
 pub use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::{Address, Network};
 use envs::BitcoinRpcConfig;
+use hex_conservative::DisplayHex;
 use lightning::util::ser::Writeable;
 use lightning_types::features::Bolt11InvoiceFeatures;
 pub use macro_rules_attribute::apply;
@@ -148,16 +149,16 @@ impl TransactionId {
 impl std::fmt::Display for TransactionIdShortFmt<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let bytes = &self.0[..];
-        format_hex(&bytes[..4], f)?;
+        fmt::Display::fmt(&bytes[..4].as_hex(), f)?;
         f.write_str("_")?;
-        format_hex(&bytes[28..], f)
+        fmt::Display::fmt(&bytes[28..].as_hex(), f)
     }
 }
 
 impl std::fmt::Display for TransactionIdFullFmt<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let bytes = &self.0[..];
-        format_hex(bytes, f)
+        fmt::Display::fmt(&bytes.as_hex(), f)
     }
 }
 
@@ -636,25 +637,6 @@ pub fn encode_bolt11_invoice_features_without_length(features: &Bolt11InvoiceFea
             .expect("Writing to byte vec can't fail");
     }
     feature_bytes
-}
-
-/// Outputs hex into an object implementing `fmt::Write`.
-///
-/// Vendored from `bitcoin_hashes` v0.11.0:
-/// <https://docs.rs/bitcoin_hashes/0.11.0/src/bitcoin_hashes/hex.rs.html#173-189>
-pub fn format_hex(data: &[u8], f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    let prec = f.precision().unwrap_or(2 * data.len());
-    let width = f.width().unwrap_or(2 * data.len());
-    for _ in (2 * data.len())..width {
-        f.write_str("0")?;
-    }
-    for ch in data.iter().take(prec / 2) {
-        write!(f, "{:02x}", *ch)?;
-    }
-    if prec < 2 * data.len() && prec % 2 == 1 {
-        write!(f, "{:x}", data[prec / 2] / 16)?;
-    }
-    Ok(())
 }
 
 /// Gets the (approximate) network from a bitcoin address.

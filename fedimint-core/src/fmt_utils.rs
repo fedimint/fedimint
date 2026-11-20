@@ -1,5 +1,6 @@
 use std::{cmp, fmt, ops, thread_local};
 
+use hex_conservative::DisplayHex;
 use serde_json::Value;
 
 pub fn rust_log_full_enabled() -> bool {
@@ -40,9 +41,9 @@ pub struct AbbreviateHexBytes<'a>(pub &'a [u8]);
 impl fmt::Display for AbbreviateHexBytes<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.0.len() <= 64 || rust_log_full_enabled() {
-            fedimint_core::format_hex(self.0, f)?;
+            fmt::Display::fmt(&self.0.as_hex(), f)?;
         } else {
-            fedimint_core::format_hex(&self.0[..64], f)?;
+            fmt::Display::fmt(&self.0[..64].as_hex(), f)?;
             f.write_fmt(format_args!("-{}", self.0.len()))?;
         }
         Ok(())

@@ -7,13 +7,14 @@ use std::str::FromStr;
 use bitcoin::hashes::sha256::HashEngine;
 use bitcoin::hashes::{Hash as BitcoinHash, hex, sha256};
 use bls12_381::Scalar;
+use fedimint_core::ModuleDecoderRegistry;
 use fedimint_core::core::{ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{DynRawFallback, Encodable};
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::util::SafeUrl;
-use fedimint_core::{ModuleDecoderRegistry, format_hex};
 use fedimint_logging::LOG_CORE;
 use hex::FromHex;
+use hex_conservative::DisplayHex;
 use secp256k1::PublicKey;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -353,13 +354,13 @@ pub struct FederationIdPrefix([u8; 4]);
 
 impl Display for FederationIdPrefix {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        format_hex(&self.0, f)
+        Display::fmt(&self.0.as_hex(), f)
     }
 }
 
 impl Display for FederationId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        format_hex(&self.0.to_byte_array(), f)
+        Display::fmt(&self.0.to_byte_array().as_hex(), f)
     }
 }
 

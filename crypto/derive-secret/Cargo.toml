@@ -19,6 +19,7 @@ path = "src/lib.rs"
 bitcoin_hashes = { workspace = true }
 bls12_381 = { workspace = true }
 fedimint-core = { workspace = true }
+hex-conservative = { workspace = true }
 hkdf = { workspace = true }
 ring = { workspace = true }
 
