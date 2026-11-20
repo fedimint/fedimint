@@ -1,6 +1,13 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 
-use super::ensure_wallet_loaded;
+use bitcoin::Txid;
+use bitcoin::hashes::Hash as _;
+
+use super::{
+    LIST_TRANSACTIONS_PAGE_SIZE, MAX_SCRIPT_HISTORY, collect_script_history_txids,
+    ensure_wallet_loaded,
+};
+use crate::BitcoinRpcError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WalletError {
@@ -210,4 +217,93 @@ fn repeated_construction_reuses_wallet_after_loading_it() {
 
     assert_eq!(wallet.load_calls.get(), 1);
     assert_eq!(wallet.create_calls.get(), 0);
+}
+
+fn txid(n: u64) -> Txid {
+    let mut bytes = [0; 32];
+    bytes[..8].copy_from_slice(&n.to_le_bytes());
+    Txid::from_byte_array(bytes)
+}
+
+/// The `(count, skip)` of every `listtransactions` page requested.
+type PageRequests = Vec<(usize, usize)>;
+
+/// Pages through `entries`, oldest first, the way `listtransactions` does.
+fn collect_from(entries: &[Txid]) -> (Result<Vec<Txid>, BitcoinRpcError>, PageRequests) {
+    let calls = RefCell::new(vec![]);
+
+    let result = collect_script_history_txids(|count, skip| {
+        calls.borrow_mut().push((count, skip));
+
+        let end = entries.len().saturating_sub(skip);
+        let start = end.saturating_sub(count);
+
+        Ok(entries[start..end].to_vec())
+    });
+
+    (result, calls.into_inner())
+}
+
+#[test]
+fn script_history_includes_entries_beyond_the_first_page() {
+    let entries = (0..250).map(txid).collect::<Vec<_>>();
+
+    let (txids, calls) = collect_from(&entries);
+
+    assert_eq!(txids.expect("history is short enough"), entries);
+    assert_eq!(
+        calls,
+        vec![
+            (LIST_TRANSACTIONS_PAGE_SIZE, 0),
+            (LIST_TRANSACTIONS_PAGE_SIZE, 100),
+            (LIST_TRANSACTIONS_PAGE_SIZE, 200),
+        ]
+    );
+}
+
+#[test]
+fn script_history_reads_one_more_page_after_a_full_one() {
+    let entries = (0..100).map(txid).collect::<Vec<_>>();
+
+    let (txids, calls) = collect_from(&entries);
+
+    assert_eq!(txids.expect("history is short enough"), entries);
+    assert_eq!(calls.len(), 2);
+}
+
+#[test]
+fn script_history_lists_each_transaction_once() {
+    // A transaction is listed once per output and category, e.g. a deposit
+    // that pays the script twice, and these can straddle a page boundary.
+    let mut entries = (0..150).map(txid).collect::<Vec<_>>();
+    entries.insert(50, txid(49));
+    entries.insert(100, txid(98));
+
+    let (txids, _) = collect_from(&entries);
+
+    assert_eq!(
+        txids.expect("history is short enough"),
+        (0..150).map(txid).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn script_history_is_limited_like_the_esplora_backend() {
+    let entries = (0..MAX_SCRIPT_HISTORY as u64).map(txid).collect::<Vec<_>>();
+
+    let (txids, _) = collect_from(&entries);
+
+    assert!(matches!(
+        txids,
+        Err(BitcoinRpcError::ScriptHistoryTooLong {
+            max: MAX_SCRIPT_HISTORY
+        })
+    ));
+
+    let (txids, _) = collect_from(&entries[1..]);
+
+    assert_eq!(
+        txids.expect("history is short enough").len(),
+        MAX_SCRIPT_HISTORY - 1
+    );
 }
