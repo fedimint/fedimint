@@ -64,6 +64,9 @@ jobs:
           nix develop --ignore-environment .#lint --command ast-grep test --config sgconfig.yml
           nix develop --ignore-environment .#lint --command ./misc/git-hooks/pre-commit
 
+      - name: cargo-crap
+        run: nix build -L .#ci.crap
+
       - name: Check `nix flake show`
         run: nix flake show .#
 
