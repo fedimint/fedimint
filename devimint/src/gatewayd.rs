@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::future::Future;
 use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -11,6 +12,7 @@ use chrono::{DateTime, Utc};
 use esplora_client::Txid;
 use fedimint_core::config::FederationId;
 use fedimint_core::envs::is_env_var_set;
+use fedimint_core::runtime::{sleep, timeout};
 use fedimint_core::secp256k1::PublicKey;
 use fedimint_core::util::{backoff_util, retry};
 use fedimint_core::{Amount, BitcoinAmountOrAll, BitcoinHash};
@@ -25,6 +27,7 @@ use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing_core::node_type::LightningNodeType;
 use semver::Version;
+use serde_json::Value;
 use tracing::info;
 
 use crate::cmd;
@@ -38,6 +41,57 @@ use crate::federation::Federation;
 use crate::util::{Command, ProcessHandle, ProcessManager, poll, poll_with_timeout};
 use crate::vars::utf8;
 use crate::version_constants::{VERSION_0_10_0_ALPHA, VERSION_0_11_0_ALPHA};
+
+#[cfg(test)]
+mod tests;
+
+fn parse_lightning_pubkey(info: &Value) -> Result<Option<PublicKey>> {
+    // Inspect the response rather than inferring its shape from the CLI binary:
+    // mixed-version tests can use a CLI and a gateway from different releases.
+    let (key, field) = match info.get("lightning_info") {
+        Some(state) if state.as_str() == Some("not_connected") => return Ok(None),
+        Some(state) => (
+            state
+                .get("connected")
+                .and_then(|info| info.get("public_key")),
+            "lightning_info.connected.public_key",
+        ),
+        None => match info.get("lightning_pub_key") {
+            Some(Value::Null) => return Ok(None),
+            key => (key, "lightning_pub_key"),
+        },
+    };
+    let key = key
+        .and_then(Value::as_str)
+        .with_context(|| format!("Gateway info must contain a string at {field}"))?;
+    let key = key
+        .parse()
+        .map_err(|_| anyhow!("Gateway info contains an invalid public key at {field}"))?;
+    Ok(Some(key))
+}
+
+async fn wait_for_lightning_pubkey<Fut>(
+    readiness_timeout: Duration,
+    get_info: impl Fn() -> Fut,
+) -> Result<PublicKey>
+where
+    Fut: Future<Output = Result<Value>>,
+{
+    timeout(readiness_timeout, async {
+        loop {
+            if let Some(key) = parse_lightning_pubkey(&get_info().await?)? {
+                return Ok(key);
+            }
+            sleep(Duration::from_millis(250)).await;
+        }
+    })
+    .await
+    .map_err(|_| {
+        anyhow!(
+            "Timed out after {readiness_timeout:?} waiting for the gateway Lightning public key"
+        )
+    })?
+}
 
 #[derive(Debug, Clone)]
 pub struct GatewayClient {
@@ -119,21 +173,23 @@ impl<'a> GatewayClient {
     }
 
     pub async fn lightning_pubkey(&self) -> Result<PublicKey> {
-        let info = self.get_info().await?;
-        let gateway_cli_version = crate::util::GatewayCli::version_or_default().await;
-        let lightning_pub_key = if gateway_cli_version < *VERSION_0_10_0_ALPHA {
-            info["lightning_pub_key"]
-                .as_str()
-                .context("lightning_pub_key must be a string")?
-                .to_owned()
-        } else {
-            info["lightning_info"]["connected"]["public_key"]
-                .as_str()
-                .context("lightning_pub_key must be a string")?
-                .to_owned()
-        };
-
-        Ok(lightning_pub_key.parse()?)
+        wait_for_lightning_pubkey(Duration::from_secs(60), || async {
+            // The readiness deadline covers each command as well as the sleeps.
+            // `cmd!` kills the child on cancellation. Capture output directly
+            // so readiness errors never include command arguments or output.
+            let output =
+                cmd!(self, "info").cmd.output().await.map_err(|_| {
+                    anyhow!("Could not run gateway-cli info for Lightning readiness")
+                })?;
+            anyhow::ensure!(
+                output.status.success(),
+                "gateway-cli info exited with {} during Lightning readiness",
+                output.status
+            );
+            serde_json::from_slice(&output.stdout)
+                .map_err(|_| anyhow!("Gateway CLI returned invalid JSON for Lightning readiness"))
+        })
+        .await
     }
 
     pub async fn connect_fed(&self, invite_code: String) -> Result<serde_json::Value> {
