@@ -8,6 +8,7 @@ use bitcoin::hashes::{Hash, sha256};
 use clap::{Parser, Subcommand};
 use devimint::devfed::{DevFed, DevJitFed};
 use devimint::envs::FM_CLIENT_DIR_ENV;
+use devimint::external::Bitcoind;
 use devimint::federation::{Client, Federation};
 use devimint::util::{ProcessManager, almost_equal, poll_simple};
 use devimint::version_constants::{
@@ -1792,6 +1793,100 @@ async fn lnv2_send_from(
     common::await_send(client, send_op).await
 }
 
+async fn test_walletv2_account(
+    client: &Client,
+    bitcoind: &Bitcoind,
+    before: BTreeMap<Account, u64>,
+) -> anyhow::Result<BTreeMap<Account, u64>> {
+    const DEPOSIT_SAT: u64 = 50_000;
+    const WITHDRAW_SAT: u64 = 20_000;
+
+    info!("Testing an on-chain deposit into secondary...");
+
+    // The position is read before the address is handed out so the receive
+    // cannot be missed.
+    let position = cmd!(client, "dev", "next-event-log-id").out_json().await?;
+
+    let address = cmd!(
+        client,
+        "module",
+        "walletv2",
+        "receive",
+        "--account",
+        "secondary"
+    )
+    .out_json()
+    .await?;
+
+    let address = address.as_str().context("address is a string")?;
+
+    bitcoind.send_to(address.to_owned(), DEPOSIT_SAT).await?;
+    bitcoind.mine_blocks(21).await?;
+
+    let output = cmd!(
+        client,
+        "module",
+        "walletv2",
+        "await-receive",
+        position.to_string(),
+        "--account",
+        "secondary"
+    )
+    .out_json()
+    .await?;
+
+    ensure!(output[0] == "Success", "deposit was not claimed: {output}");
+
+    cmd!(client, "dev", "wait-complete").run().await?;
+
+    let after = account_balances(client).await?;
+
+    ensure_untouched(&before, &after, &[Account::Secondary])?;
+    ensure!(
+        after[&Account::Secondary] > before[&Account::Secondary],
+        "the deposit did not reach secondary"
+    );
+
+    info!("Testing an on-chain withdrawal from secondary...");
+
+    let before = after;
+
+    let withdraw_address = bitcoind.get_new_address().await?;
+
+    let output = cmd!(
+        client,
+        "module",
+        "walletv2",
+        "send",
+        withdraw_address.to_string(),
+        format!("{WITHDRAW_SAT} sat"),
+        "--account",
+        "secondary"
+    )
+    .out_json()
+    .await?;
+
+    let txid = output["Success"]
+        .as_str()
+        .with_context(|| format!("withdrawal did not succeed: {output}"))?;
+
+    bitcoind
+        .poll_get_transaction(bitcoin::Txid::from_str(txid)?)
+        .await?;
+
+    cmd!(client, "dev", "wait-complete").run().await?;
+
+    let after = account_balances(client).await?;
+
+    ensure_untouched(&before, &after, &[Account::Secondary])?;
+    ensure!(
+        after[&Account::Secondary] + WITHDRAW_SAT * 1000 <= before[&Account::Secondary],
+        "the withdrawal did not leave secondary"
+    );
+
+    Ok(after)
+}
+
 /// Every module runs against the real mintv2 here, so money bound to a
 /// non-primary account has to stay in it across a Lightning refund and claim,
 /// an on-chain deposit and withdrawal, and a recovery from seed. The gateways
@@ -1820,8 +1915,6 @@ async fn test_accounts(dev_fed: &DevJitFed) -> anyhow::Result<()> {
 
     const SECONDARY_FUNDING_MSAT: u64 = 10_000_000;
     const LIGHTNING_AMOUNT_MSAT: u64 = 1_000_000;
-    const DEPOSIT_SAT: u64 = 50_000;
-    const WITHDRAW_SAT: u64 = 20_000;
 
     federation.pegin_client(20_000, &client).await?;
 
@@ -1949,90 +2042,7 @@ async fn test_accounts(dev_fed: &DevJitFed) -> anyhow::Result<()> {
         "tertiary did not claim the invoice",
     )?;
 
-    info!("Testing an on-chain deposit into secondary...");
-
-    let before = after;
-
-    // The position is read before the address is handed out so the receive
-    // cannot be missed.
-    let position = cmd!(client, "dev", "next-event-log-id").out_json().await?;
-
-    let address = cmd!(
-        client,
-        "module",
-        "walletv2",
-        "receive",
-        "--account",
-        "secondary"
-    )
-    .out_json()
-    .await?;
-
-    let address = address.as_str().context("address is a string")?;
-
-    bitcoind.send_to(address.to_owned(), DEPOSIT_SAT).await?;
-    bitcoind.mine_blocks(21).await?;
-
-    let output = cmd!(
-        client,
-        "module",
-        "walletv2",
-        "await-receive",
-        position.to_string(),
-        "--account",
-        "secondary"
-    )
-    .out_json()
-    .await?;
-
-    ensure!(output[0] == "Success", "deposit was not claimed: {output}");
-
-    cmd!(client, "dev", "wait-complete").run().await?;
-
-    let after = account_balances(&client).await?;
-
-    ensure_untouched(&before, &after, &[Account::Secondary])?;
-    ensure!(
-        after[&Account::Secondary] > before[&Account::Secondary],
-        "the deposit did not reach secondary"
-    );
-
-    info!("Testing an on-chain withdrawal from secondary...");
-
-    let before = after;
-
-    let withdraw_address = bitcoind.get_new_address().await?;
-
-    let output = cmd!(
-        client,
-        "module",
-        "walletv2",
-        "send",
-        withdraw_address.to_string(),
-        format!("{WITHDRAW_SAT} sat"),
-        "--account",
-        "secondary"
-    )
-    .out_json()
-    .await?;
-
-    let txid = output["Success"]
-        .as_str()
-        .with_context(|| format!("withdrawal did not succeed: {output}"))?;
-
-    bitcoind
-        .poll_get_transaction(bitcoin::Txid::from_str(txid)?)
-        .await?;
-
-    cmd!(client, "dev", "wait-complete").run().await?;
-
-    let after = account_balances(&client).await?;
-
-    ensure_untouched(&before, &after, &[Account::Secondary])?;
-    ensure!(
-        after[&Account::Secondary] + WITHDRAW_SAT * 1000 <= before[&Account::Secondary],
-        "the withdrawal did not leave secondary"
-    );
+    let after = test_walletv2_account(&client, bitcoind, after).await?;
 
     info!("Recovering every account from the seed...");
 
