@@ -213,9 +213,14 @@
             git.pre-commit.trailing_newline = false;
             git.pre-commit.hooks = {
               check_forbidden_dependencies = builtins.readFile ./nix/check-forbidden-deps.sh;
-            };
-            git.pre-commit.hooks = {
               cargo-sort = builtins.readFile ./nix/check-cargo-sort.sh;
+              repository_yaml = ''
+                git ls-files -z -- '*.yml' '*.yaml' \
+                  | xargs -0 yamllint -d '{rules: {key-duplicates: enable}}' --
+                actionlint
+                docker-compose -f docker/fedimintd/docker-compose.yaml config --quiet
+                docker-compose -f docker/gatewayd/docker-compose.yaml config --quiet
+              '';
             };
           };
         };
@@ -397,6 +402,8 @@
                     # Nix
                     pkgs.nixfmt
                     pkgs.shellcheck
+                    pkgs.actionlint
+                    pkgs.yamllint
                     pkgs.nil
                     pkgs.convco
                     pkgs.bash-language-server
@@ -491,8 +498,11 @@
 
             lint = flakeboxLib.mkLintShell {
               nativeBuildInputs = [
+                pkgs.actionlint
                 pkgs.cargo-sort
+                pkgs.docker-compose
                 pkgs.taplo
+                pkgs.yamllint
               ];
               env = {
                 FLAKEBOX_GIT_LS_IGNORE = "fedimint-ui-common/assets/";
