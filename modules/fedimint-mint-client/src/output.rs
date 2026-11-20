@@ -290,7 +290,10 @@ impl MintOutputStatesCreated {
         ]
     }
 
-    async fn await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
+    pub(crate) async fn await_tx_rejected(
+        global_context: DynGlobalClientContext,
+        common: MintOutputCommon,
+    ) {
         let txid = common.txid();
         debug!(target: LOG_CLIENT_MODULE_MINT, %txid, "Awaiting tx rejection");
         let accept_fut = global_context.await_tx_accepted(common.txid());
@@ -303,7 +306,7 @@ impl MintOutputStatesCreated {
                     %txid,
                     "Transaction not accepted or rejected after 5 minutes, possibly stuck or never submitted",
                 );
-                accept_fut.await
+                return;
             }
         };
         if result.is_err() {
@@ -498,7 +501,10 @@ impl MintOutputStatesCreatedMulti {
         ]
     }
 
-    async fn await_tx_rejected(global_context: DynGlobalClientContext, common: MintOutputCommon) {
+    pub(crate) async fn await_tx_rejected(
+        global_context: DynGlobalClientContext,
+        common: MintOutputCommon,
+    ) {
         let txid = common.txid();
         debug!(target: LOG_CLIENT_MODULE_MINT, %txid, "Awaiting tx rejection");
         let accept_fut = global_context.await_tx_accepted(common.txid());
@@ -511,7 +517,7 @@ impl MintOutputStatesCreatedMulti {
                     %txid,
                     "Transaction not accepted or rejected after 5 minutes, possibly stuck or never submitted",
                 );
-                accept_fut.await
+                return;
             }
         };
         if result.is_err() {
