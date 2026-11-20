@@ -46,35 +46,44 @@ pub(super) async fn run_iroh_api(
     endpoint: Endpoint,
     task_group: TaskGroup,
 ) {
+    let mut shutdown_rx = task_group.make_handle().make_shutdown_rx();
     loop {
-        match endpoint.accept().await {
-            Some(incoming) => {
-                let permit = acquire_iroh_api_permit(
-                    &api.parallel_connections_limit,
-                    api.limits.max_connections,
-                    "0.35",
-                    "connection",
-                )
-                .await;
-                task_group.spawn_cancellable_silent(
-                    "handle-iroh-connection",
-                    handle_incoming(
-                        api.clone(),
-                        task_group.clone(),
-                        incoming,
-                        permit,
-                        api.limits.max_requests_per_connection,
-                    )
-                    .then(|result| async {
-                        if let Err(err) = result {
-                            warn!(target: LOG_NET_API, err = %err.fmt_compact(), "Failed to handle iroh connection");
-                        }
-                    }),
-                );
+        tokio::select! {
+            incoming_opt = endpoint.accept() => {
+                match incoming_opt {
+                    Some(incoming) => {
+                        let permit = acquire_iroh_api_permit(
+                            &api.parallel_connections_limit,
+                            api.limits.max_connections,
+                            "0.35",
+                            "connection",
+                        )
+                        .await;
+                        task_group.spawn_cancellable_silent(
+                            "handle-iroh-connection",
+                            handle_incoming(
+                                api.clone(),
+                                task_group.clone(),
+                                incoming,
+                                permit,
+                                api.limits.max_requests_per_connection,
+                            )
+                            .then(|result| async {
+                                if let Err(err) = result {
+                                    warn!(target: LOG_NET_API, err = %err.fmt_compact(), "Failed to handle iroh connection");
+                                }
+                            }),
+                        );
+                    }
+                    None => break,
+                }
             }
-            None => return,
+            () = &mut shutdown_rx => {
+                break;
+            }
         }
     }
+    endpoint.close().await;
 }
 
 type CoreApi = BTreeMap<String, ApiEndpoint<ConsensusApi>>;
@@ -489,35 +498,44 @@ pub(super) async fn run_iroh_api_next(
     endpoint: iroh_next::Endpoint,
     task_group: TaskGroup,
 ) {
+    let mut shutdown_rx = task_group.make_handle().make_shutdown_rx();
     loop {
-        match endpoint.accept().await {
-            Some(incoming) => {
-                let permit = acquire_iroh_api_permit(
-                    &api.parallel_connections_limit,
-                    api.limits.max_connections,
-                    "1.0",
-                    "connection",
-                )
-                .await;
-                task_group.spawn_cancellable_silent(
-                    "handle-iroh-next-connection",
-                    handle_incoming_next(
-                        api.clone(),
-                        task_group.clone(),
-                        incoming,
-                        permit,
-                        api.limits.max_requests_per_connection,
-                    )
-                    .then(|result| async {
-                        if let Err(err) = result {
-                            warn!(target: LOG_NET_API, err = %err.fmt_compact(), "Failed to handle iroh-next connection");
-                        }
-                    }),
-                );
+        tokio::select! {
+            incoming_opt = endpoint.accept() => {
+                match incoming_opt {
+                    Some(incoming) => {
+                        let permit = acquire_iroh_api_permit(
+                            &api.parallel_connections_limit,
+                            api.limits.max_connections,
+                            "1.0",
+                            "connection",
+                        )
+                        .await;
+                        task_group.spawn_cancellable_silent(
+                            "handle-iroh-next-connection",
+                            handle_incoming_next(
+                                api.clone(),
+                                task_group.clone(),
+                                incoming,
+                                permit,
+                                api.limits.max_requests_per_connection,
+                            )
+                            .then(|result| async {
+                                if let Err(err) = result {
+                                    warn!(target: LOG_NET_API, err = %err.fmt_compact(), "Failed to handle iroh-next connection");
+                                }
+                            }),
+                        );
+                    }
+                    None => break,
+                }
             }
-            None => return,
+            () = &mut shutdown_rx => {
+                break;
+            }
         }
     }
+    endpoint.close().await;
 }
 
 async fn handle_incoming_next(

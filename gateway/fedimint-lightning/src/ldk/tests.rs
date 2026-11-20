@@ -102,7 +102,7 @@ fn a_non_utf8_data_dir_is_rejected_before_the_node_is_built() {
     use fedimint_bip39::Mnemonic;
     use fedimint_gateway_common::ChainSource;
 
-    let runtime = Arc::new(tokio::runtime::Runtime::new().expect("A tokio runtime can be built"));
+    let handle = tokio::runtime::Handle::current();
     let result = GatewayLdkClient::new(
         Path::new(OsStr::from_bytes(b"\xff")),
         ChainSource::Esplora {
@@ -113,7 +113,7 @@ fn a_non_utf8_data_dir_is_rejected_before_the_node_is_built() {
         String::new(),
         Mnemonic::from_entropy(&[0; 16]).expect("16 bytes of entropy form a mnemonic"),
         MnemonicSource::Generated,
-        runtime,
+        handle,
     );
 
     assert!(matches!(result, Err(LdkClientInitError::InvalidDataDir)));

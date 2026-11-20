@@ -188,7 +188,7 @@ impl GatewayLdkClient {
         alias: String,
         mnemonic: Mnemonic,
         mnemonic_source: MnemonicSource,
-        runtime: Arc<tokio::runtime::Runtime>,
+        runtime: tokio::runtime::Handle,
     ) -> Result<Self, LdkClientInitError> {
         let mut bytes = [0u8; 32];
         let alias = if alias.is_empty() {
@@ -246,7 +246,7 @@ impl GatewayLdkClient {
             return Err(LdkClientInitError::InvalidDataDir);
         };
         node_builder.set_storage_dir_path(data_dir_str.to_string());
-        node_builder.set_runtime(runtime.handle().clone());
+        node_builder.set_runtime(runtime);
         if mnemonic_source == MnemonicSource::Existing {
             info!(
                 target: LOG_LIGHTNING,
