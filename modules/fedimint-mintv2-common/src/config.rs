@@ -136,13 +136,12 @@ impl FeeConsensus {
         base: Amount,
         parts_per_million: u64,
     ) -> Result<FeeConsensus, &'static str> {
-        // Preserve the legacy static-config invariant. The dynamic-fee design in
-        // #8758 moves broader policy to separate FeeConsensus/FeeRate types.
-        if !((base == Amount::ZERO && parts_per_million == 0)
-            || (base == Amount::from_msats(100) && parts_per_million <= 1_000))
-        {
+        const MAX_BASE_FEE: Amount = Amount::from_msats(100);
+        const MAX_PARTS_PER_MILLION: u64 = 1_000;
+
+        if MAX_BASE_FEE < base || MAX_PARTS_PER_MILLION < parts_per_million {
             return Err(
-                "Mint fees must be zero or use the 100 msat base fee and at most one thousand parts per million",
+                "Mint fees must have a base fee of at most 100 msats and a relative fee of at most one thousand parts per million",
             );
         }
 
