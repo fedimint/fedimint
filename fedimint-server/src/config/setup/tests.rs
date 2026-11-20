@@ -297,3 +297,101 @@ async fn rejects_different_fedimint_vendor_during_dkg() {
         );
     }
 }
+
+#[tokio::test]
+async fn rejects_peer_setup_code_matching_local_name() {
+    let api = setup_api(Network::Regtest);
+    let peer_api = setup_api(Network::Regtest);
+
+    setup_code(&api, "guardian-1").await;
+    let peer_code = setup_code(&peer_api, "guardian-1").await;
+
+    let err = api
+        .add_peer_setup_code(peer_code)
+        .await
+        .expect_err("peer setup code with our guardian name should be rejected");
+
+    assert!(
+        err.to_string()
+            .contains("Guardian name \"guardian-1\" matches our own name"),
+        "unexpected error: {err:#}"
+    );
+}
+
+#[tokio::test]
+async fn rejects_duplicate_peer_setup_code_name() {
+    let api = setup_api(Network::Regtest);
+    let peer_api_1 = setup_api(Network::Regtest);
+    let peer_api_2 = setup_api(Network::Regtest);
+
+    setup_code(&api, "local").await;
+    let peer_code_1 = setup_code(&peer_api_1, "bob").await;
+    let peer_code_2 = setup_code(&peer_api_2, "bob").await;
+
+    let added = api
+        .add_peer_setup_code(peer_code_1)
+        .await
+        .expect("first peer setup code should be added");
+    assert_eq!(added, "bob");
+
+    let err = api
+        .add_peer_setup_code(peer_code_2)
+        .await
+        .expect_err("peer setup code with duplicate name should be rejected");
+
+    assert!(
+        err.to_string()
+            .contains("A guardian with name \"bob\" has already been added"),
+        "unexpected error: {err:#}"
+    );
+}
+
+#[tokio::test]
+async fn accepts_identical_peer_setup_code_idempotently() {
+    let api = setup_api(Network::Regtest);
+    let peer_api = setup_api(Network::Regtest);
+
+    setup_code(&api, "local").await;
+    let peer_code = setup_code(&peer_api, "bob").await;
+
+    let added_first = api
+        .add_peer_setup_code(peer_code.clone())
+        .await
+        .expect("initial addition should succeed");
+    assert_eq!(added_first, "bob");
+
+    let added_second = api
+        .add_peer_setup_code(peer_code)
+        .await
+        .expect("re-adding identical setup code should succeed idempotently");
+    assert_eq!(added_second, "bob");
+    assert_eq!(api.state.lock().await.setup_codes.len(), 1);
+}
+
+#[tokio::test]
+async fn start_dkg_rejects_duplicate_guardian_names() {
+    let api = setup_api(Network::Regtest);
+    let peer_api_1 = setup_api(Network::Regtest);
+    let peer_api_2 = setup_api(Network::Regtest);
+
+    setup_code(&api, "local").await;
+    let peer_1 = decode_setup_code(&setup_code(&peer_api_1, "bob").await);
+    let peer_2 = decode_setup_code(&setup_code(&peer_api_2, "bob").await);
+
+    {
+        let mut state = api.state.lock().await;
+        state.setup_codes.insert(peer_1);
+        state.setup_codes.insert(peer_2);
+    }
+
+    let err = api
+        .start_dkg()
+        .await
+        .expect_err("start_dkg should reject duplicate guardian names");
+
+    assert!(
+        err.to_string()
+            .contains("All guardians must have unique names"),
+        "unexpected error: {err:#}"
+    );
+}
