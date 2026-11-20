@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 use anyhow::Context as _;
+use fedimint_connectors::iroh::default_iroh_v1_relay_mode;
 use fedimint_connectors::{ConnectorRegistry, ConnectorRegistryBuilder};
 use fedimint_core::envs::{
     FM_IROH_DHT_ENABLE_ENV, FM_IROH_N0_DISCOVERY_ENABLE_ENV, FM_IROH_P2P_ENABLE_ENV,
@@ -63,7 +64,7 @@ pub(crate) async fn build_iroh_v1_endpoint(
     alpn: &[u8],
 ) -> anyhow::Result<Endpoint> {
     let relay_mode = if is_env_var_set_opt(FM_IROH_RELAYS_ENABLE_ENV).unwrap_or(true) {
-        RelayMode::Default
+        default_iroh_v1_relay_mode()
     } else {
         warn!(target: LOG_NET_IROH, "Iroh 1.0 relays are disabled");
         RelayMode::Disabled
