@@ -77,13 +77,12 @@ dependencies = [
 
 [[package]]
 name = "aleph-bft-crypto"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e99189e0c434af4bb0f4238925df15091962ae843f509561def48ecf36c163d"
+version = "0.9.0"
+source = "git+https://github.com/fedibtc/AlephBFT?branch=roboman%2Fbackup-batch#e00e318b7e59434dbe5e35afb15c1a3ff3fccf53"
 dependencies = [
  "async-trait",
- "bit-vec 0.8.0",
- "derive_more 1.0.0",
+ "bit-vec 0.6.3",
+ "derive_more 0.99.20",
  "log",
  "parity-scale-codec",
 ]
@@ -91,11 +90,10 @@ dependencies = [
 [[package]]
 name = "aleph-bft-rmc"
 version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e9a4418a90817c8c4929d55019eeb2bdf1d4a6030d557f17b3f580723ab40f8"
+source = "git+https://github.com/fedibtc/AlephBFT?branch=roboman%2Fbackup-batch#e00e318b7e59434dbe5e35afb15c1a3ff3fccf53"
 dependencies = [
  "aleph-bft-crypto",
- "aleph-bft-types 0.12.0",
+ "aleph-bft-types",
  "async-trait",
  "futures",
  "futures-timer",
@@ -105,21 +103,8 @@ dependencies = [
 
 [[package]]
 name = "aleph-bft-types"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7afbf87383e06ccfe9386cda59e57ac9d899267cc765fee654d921e4ba779f92"
-dependencies = [
- "aleph-bft-crypto",
- "async-trait",
- "futures",
- "parity-scale-codec",
-]
-
-[[package]]
-name = "aleph-bft-types"
 version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bca9d19f587215da2b6c50b5e71f9addbf2305153f850dad3f9496ed67e28bb"
+source = "git+https://github.com/fedibtc/AlephBFT?branch=roboman%2Fbackup-batch#e00e318b7e59434dbe5e35afb15c1a3ff3fccf53"
 dependencies = [
  "aleph-bft-crypto",
  "async-trait",
@@ -1022,9 +1007,9 @@ dependencies = [
 
 [[package]]
 name = "bit-vec"
-version = "0.8.0"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
+checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
 
 [[package]]
 name = "bit-vec"
@@ -1753,12 +1738,9 @@ checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
 
 [[package]]
 name = "convert_case"
-version = "0.6.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec182b0ca2f35d8fc196cf3404988fd8b8c739a4d270ff118a398feb0cbec1ca"
-dependencies = [
- "unicode-segmentation",
-]
+checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
 
 [[package]]
 name = "convert_case"
@@ -2260,7 +2242,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccc2776f0c61eca1ca32528f85548abd1a4be8fb53d1b21c013e4f18da1e7090"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -2404,7 +2386,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "357422a457ccb850dc8f1c1680e0670079560feaad6c2e247e3f345c4fab8a3f"
 dependencies = [
  "heck 0.5.0",
- "indexmap 2.14.2",
+ "indexmap 1.9.3",
  "itertools 0.14.0",
  "proc-macro-crate",
  "proc-macro2",
@@ -2422,7 +2404,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "caef6056a5788d05d173cdc3c562ac28ae093828f851f69378b74e4e3d578e41"
 dependencies = [
  "heck 0.5.0",
- "indexmap 2.14.2",
+ "indexmap 1.9.3",
  "itertools 0.14.0",
  "proc-macro-crate",
  "proc-macro2",
@@ -2466,6 +2448,19 @@ dependencies = [
 
 [[package]]
 name = "derive_more"
+version = "0.99.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6edb4b64a43d977b8e99788fe3a04d483834fba1215a7e02caa415b626497f7f"
+dependencies = [
+ "convert_case 0.4.0",
+ "proc-macro2",
+ "quote",
+ "rustc_version",
+ "syn 2.0.104",
+]
+
+[[package]]
+name = "derive_more"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a9b99b9cbbe49445b21764dc0625032a89b145a2642e67603e1c936f5458d05"
@@ -2488,7 +2483,6 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
 dependencies = [
- "convert_case 0.6.0",
  "proc-macro2",
  "quote",
  "syn 2.0.104",
@@ -3074,11 +3068,10 @@ dependencies = [
 [[package]]
 name = "fedimint-aleph-bft"
 version = "0.36.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b21015ab681cdddedd866fe4af9169901012e9a8bd4745da8423131cccae025"
+source = "git+https://github.com/fedibtc/AlephBFT?branch=roboman%2Fbackup-batch#e00e318b7e59434dbe5e35afb15c1a3ff3fccf53"
 dependencies = [
  "aleph-bft-rmc",
- "aleph-bft-types 0.13.0",
+ "aleph-bft-types",
  "anyhow",
  "async-trait",
  "derivative",

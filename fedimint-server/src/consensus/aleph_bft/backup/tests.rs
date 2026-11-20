@@ -82,3 +82,28 @@ async fn units_stored_more_than_once_are_loaded_once() {
     assert_eq!(rows.len(), 9);
     assert_eq!(rows.last(), Some(&(8, unit(4))));
 }
+
+/// The saver hands over every unit queued at once, replayed ones included.
+#[tokio::test]
+async fn a_batch_stores_its_new_units_once_and_in_order() {
+    let db: Database = MemDatabase::new().into();
+
+    let mut writer = BackupWriter::new(db.clone()).await;
+    writer.append(&unit(1)).await.unwrap();
+    writer
+        .append_batch(&[unit(3), unit(1), unit(2), unit(3), unit(4)])
+        .await
+        .unwrap();
+    // A batch of units that are all stored already writes nothing.
+    writer.append_batch(&[unit(2), unit(4)]).await.unwrap();
+
+    assert_eq!(
+        stored_rows(&db).await,
+        vec![(0, unit(1)), (1, unit(3)), (2, unit(2)), (3, unit(4))]
+    );
+
+    // A writer opened after a restart continues after the last key.
+    let mut writer = BackupWriter::new(db.clone()).await;
+    writer.append_batch(&[unit(4), unit(5)]).await.unwrap();
+    assert_eq!(stored_rows(&db).await.last(), Some(&(4, unit(5))));
+}
