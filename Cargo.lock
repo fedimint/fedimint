@@ -1168,7 +1168,7 @@ checksum = "b65c2e1ab98050c93cc9ada070d5070e014329c65196d03f6f8f1f75c2666f37"
 dependencies = [
  "base64 0.22.1",
  "rustls",
- "rustls-webpki 0.103.16",
+ "rustls-webpki 0.103.17",
  "serde",
  "serde_json",
  "tokio",
@@ -3385,7 +3385,7 @@ dependencies = [
  "miniscript",
  "n0-future 0.1.3",
  "rand 0.8.5",
- "rustls-webpki 0.103.16",
+ "rustls-webpki 0.103.17",
  "scopeguard",
  "secp256k1",
  "semver",
@@ -10405,7 +10405,7 @@ dependencies = [
  "once_cell",
  "ring",
  "rustls-pki-types",
- "rustls-webpki 0.103.16",
+ "rustls-webpki 0.103.17",
  "subtle",
  "zeroize",
 ]
@@ -10455,7 +10455,7 @@ dependencies = [
  "rustls",
  "rustls-native-certs",
  "rustls-platform-verifier-android",
- "rustls-webpki 0.103.16",
+ "rustls-webpki 0.103.17",
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
@@ -10481,9 +10481,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.16"
+version = "0.103.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4443b1b6d39d7c663139942cc4558262562d2c84123bb6282ef177009ca8b281"
+checksum = "e3a0760a887c14823fca5a1c970b01d47c328c696c0c64829d1df50e8f853fd5"
 dependencies = [
  "aws-lc-rs",
  "ring",
@@ -12938,7 +12938,7 @@ dependencies = [
  "paste",
  "pin-project",
  "rustls-pki-types",
- "rustls-webpki 0.103.16",
+ "rustls-webpki 0.103.17",
  "socket2 0.6.5",
  "thiserror 2.0.21",
  "tokio",
