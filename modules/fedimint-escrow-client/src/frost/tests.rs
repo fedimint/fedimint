@@ -1487,6 +1487,7 @@ async fn coordinate<T: TestTransport>(
         outcome,
         hash_for(escrow_id),
         time_limit,
+        0,
     )
     .await
 }
@@ -1929,6 +1930,7 @@ async fn test_signer_does_not_sign_what_it_did_not_vote_for() {
         Outcome::Release,
         |_| [0xEE; 32],
         Duration::from_secs(3),
+        0,
     )
     .await;
     assert!(matches!(result, Err(SigningError::MissingShares(_))));

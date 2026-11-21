@@ -413,6 +413,7 @@ pub async fn sign_as_signer<T: SigningTransport + 'static>(
 ///
 /// Returns the outcome with a BIP340 signature, which the funder or recipient
 /// submits with `submit_arbiter_decision`.
+#[allow(clippy::too_many_arguments)]
 pub async fn sign_as_coordinator<T: SigningTransport + 'static>(
     mux: &SigningMux<T>,
     key_package: &KeyPackage,
@@ -421,6 +422,7 @@ pub async fn sign_as_coordinator<T: SigningTransport + 'static>(
     caller_outcome: Outcome,
     decision_hash_for: impl Fn(Outcome) -> [u8; 32],
     timeout: Duration,
+    rotation: u64,
 ) -> Result<(Outcome, schnorr::Signature), SigningError> {
     if !caller_outcome.is_valid() {
         return Err(SigningError::InvalidOutcome);
@@ -464,11 +466,17 @@ pub async fn sign_as_coordinator<T: SigningTransport + 'static>(
         }
     };
 
-    let mut signers: Vec<Identifier> = votes
+    let mut others: Vec<Identifier> = votes
         .iter()
         .filter(|(id, (outcome, _))| **id != mux.caller && *outcome == winner)
         .map(|(id, _)| *id)
         .collect();
+
+    if !others.is_empty() {
+        let shift = (rotation % others.len() as u64) as usize;
+        others.rotate_left(shift);
+    }
+    let mut signers = others;
     if caller_outcome == winner {
         signers.insert(0, mux.caller);
     }
@@ -620,6 +628,7 @@ pub async fn sign_with_failover<T: SigningTransport + 'static>(
                     caller_outcome,
                     &decision_hash_for,
                     time_left,
+                    slot_number,
                 )
                 .await
                 .map(Some)
