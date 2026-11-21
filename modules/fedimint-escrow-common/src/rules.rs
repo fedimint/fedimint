@@ -135,9 +135,6 @@ fn engage_arbiter(
     if !contract.is_party(disputant) {
         return Err(EscrowInputError::NotAParticipant);
     }
-    if contract.is_terminal() {
-        return Err(EscrowInputError::ContractAlreadyResolved);
-    }
 
     ensure_signed(disputant, &contract.engage_message(), disputant_signature)?;
 

@@ -200,7 +200,7 @@ pub enum EscrowTransition {
 
 impl EscrowContract {
     #[allow(clippy::too_many_arguments)]
-    pub async fn new(
+    pub fn new(
         escrow_id: EscrowId,
         funder_key: PublicKey,
         recipient_key: PublicKey,
@@ -510,6 +510,14 @@ impl FromStr for Outcome {
         let outcome = match lower.as_str() {
             "release" => Outcome::Release,
             "refund" => Outcome::Refund,
+            other if other.starts_with("split:") => {
+                let (funder_split_bps, recipient_split_bps) =
+                    parse_split(&other["split:".len()..])?;
+                FallbackPolicy::Split {
+                    funder_split_bps,
+                    recipient_split_bps,
+                }
+            }
             other => {
                 let rest = other.strip_prefix("split:").ok_or_else(|| {
                     anyhow::anyhow!("invalid outcome '{s}', expected release, refund or split:<funder_bps>:<recipient_bps>")
@@ -579,7 +587,7 @@ fn parse_successor(s: &str) -> anyhow::Result<SuccessorArbiter> {
             .next()
             .ok_or_else(|| anyhow::anyhow!("missing arbiter key"))?,
     )?;
-    let fee_msats: u64 = parts
+    let fee_sats: u64 = parts
         .next()
         .ok_or_else(|| anyhow::anyhow!("missing arbiter fee"))?
         .parse()?;
@@ -593,7 +601,7 @@ fn parse_successor(s: &str) -> anyhow::Result<SuccessorArbiter> {
     Ok(SuccessorArbiter {
         arbiter_key,
         arbiter_fee_key,
-        arbiter_fee: Amount::from_msats(fee_msats),
+        arbiter_fee: Amount::from_sats(fee_sats),
     })
 }
 
@@ -752,12 +760,12 @@ pub enum Resolution {
 /// What a delegation allows. One per `Resolution` variant.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, Encodable, Decodable)]
 pub enum DelegationAction {
-    FunderRelease,
-    RecipientRefund,
-    ArbiterEngaged,
-    ArbiterOutcome,
-    ClaimPayout,
-    ResolveFallbackPolicy,
+    FunderRelease = 0,
+    RecipientRefund = 1,
+    ArbiterEngaged = 2,
+    ArbiterOutcome = 3,
+    ClaimPayout = 4,
+    ResolveFallbackPolicy = 5,
 }
 
 impl DelegationAction {

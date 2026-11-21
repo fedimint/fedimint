@@ -44,6 +44,11 @@ impl StateKey {
         plain.push(field.len() as u8);
         plain.extend_from_slice(field.as_bytes());
         plain.extend_from_slice(secret);
+        if field.len() > u8::MAX as usize {
+            return Err(DkgError::Other(anyhow::anyhow!(
+                "dkg state field name is too long"
+            )));
+        }
 
         encrypt(plain, &self.0)
             .map(EncryptedPackage)

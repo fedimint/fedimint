@@ -238,7 +238,7 @@ impl ServerModule for Escrow {
         _in_point: InPoint,
     ) -> Result<InputMeta, EscrowInputError> {
         let input = input.ensure_v0_ref()?;
-        info!(target: LOG_MODULE_ESCROW, "Resolving the escrow contract");
+        debug!(target: LOG_MODULE_ESCROW, "Resolving the escrow contract");
 
         match &input.resolution {
             Resolution::ClaimPayout { claimer_pubkey } => {

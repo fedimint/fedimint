@@ -807,8 +807,7 @@ impl EscrowClientModule {
             resolution_period,
             default_fallback,
             now,
-        )
-        .await?;
+        )?;
 
         let output_sm = ClientOutputSM {
             state_machines: Arc::new(move |out_point_range: OutPointRange| {
