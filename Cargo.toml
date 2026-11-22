@@ -200,7 +200,6 @@ fedimint-empty-common = { path = "./modules/fedimint-empty-common", version = "=
 fedimint-escrow-client = { path = "./modules/fedimint-escrow-client", version = "=0.14.0-alpha" }
 fedimint-escrow-common = { path = "./modules/fedimint-escrow-common", version = "=0.14.0-alpha" }
 fedimint-escrow-server = { path = "./modules/fedimint-escrow-server", version = "=0.14.0-alpha" }
-fedimint-escrow-tests = { path = "./modules/fedimint-escrow-integration_tests", version = "=0.14.0-alpha" }
 fedimint-eventlog = { path = "./fedimint-eventlog", version = "=0.14.0-alpha" }
 fedimint-gateway-common = { package = "fedimint-gateway-common", path = "./gateway/fedimint-gateway-common", version = "=0.14.0-alpha" }
 fedimint-gateway-server = { package = "fedimint-gateway-server", path = "./gateway/fedimint-gateway-server", version = "=0.14.0-alpha" }
@@ -248,6 +247,7 @@ fedimint-walletv2-server = { path = "./modules/fedimint-walletv2-server", versio
 fedimintd = { path = "./fedimintd", version = "=0.14.0-alpha" }
 fedimintd-envs = { path = "./fedimintd-envs", version = "=0.14.0-alpha" }
 ff = "0.13.1"
+frost-secp256k1-tr = { version = "3.0.0", features = ["serde"] }
 fs-lock = "=0.1.10"
 fs2 = "0.4.3"
 futures = "0.3.32"

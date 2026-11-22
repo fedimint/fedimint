@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use fedimint_core::config::{
     ServerModuleConfig, ServerModuleConsensusConfig, TypedServerModuleConfig,
@@ -178,6 +178,10 @@ impl ServerModuleInit for EscrowInit {
         _config: ServerModuleConfig,
     ) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
+        Some(DbKeyPrefix::iter().map(|p| p as u8).collect())
     }
 
     fn get_database_migrations(

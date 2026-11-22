@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
@@ -260,16 +260,28 @@ impl ClientModuleInit for EscrowClientInit {
             .to_secp_key(&secp);
 
         Ok(EscrowClientModule {
-            federation_id: args.federation_id,
-            cfg: args.cfg.clone(),
-            client_ctx: args.context.clone(),
+            federation_id: *args.federation_id(),
+            cfg: args.cfg().clone(),
+            client_ctx: args.context(),
             secp,
             escrow_key,
             arbiter_fee_key,
-            secret: args.module_root_secret.clone(),
+            secret: args.module_root_secret().clone(),
             notifier: args.notifier().clone(),
             dkg_transports: Default::default(),
         })
+    }
+
+    fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
+        Some(
+            DbKeyPrefix::iter()
+                .map(|p| p as u8)
+                .chain(
+                    DbKeyPrefix::ExternalReservedStart as u8
+                        ..=DbKeyPrefix::CoreInternalReservedEnd as u8,
+                )
+                .collect(),
+        )
     }
 
     fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn> {

@@ -7,11 +7,11 @@ use strum_macros::EnumIter;
 #[repr(u8)]
 #[derive(Clone, EnumIter, Debug, strum_macros::Display)]
 pub enum DbKeyPrefix {
-    EscrowContract = 0x01,
-    ClaimPool = 0x02,
-    UnixTimeVote = 0x03,
-    OutputOutcome = 0x04,
-    ContractByKey = 0x05,
+    EscrowContract = 0x30,
+    ClaimPool = 0x31,
+    UnixTimeVote = 0x32,
+    OutputOutcome = 0x33,
+    ContractByKey = 0x34,
 }
 
 #[derive(Debug, Clone, Encodable, Decodable, Eq, PartialEq, Hash, Serialize)]

@@ -9,8 +9,8 @@ use crate::frost::session::{FrostDkgSession, FrostDkgSessionRecord, SessionId};
 #[repr(u8)]
 #[derive(Debug, Clone, EnumIter, strum_macros::Display)]
 pub enum DbKeyPrefix {
-    FrostDkgSession = 0xb1,
-    FrostDkgSessionRecord = 0xb2,
+    FrostDkgSession = 0x30,
+    FrostDkgSessionRecord = 0x31,
     ExternalReservedStart = 0xb0,
     CoreInternalReservedStart = 0xd0,
     CoreInternalReservedEnd = 0xff,
