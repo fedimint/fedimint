@@ -223,9 +223,68 @@ The checks for a resolution (state, time, who is allowed, signatures) are in [ch
 It never touches the database. The federation calls it in `handle_resolution` and then applies the transition with [EscrowContract::transition](../modules/fedimint-escrow-common/src/lib.rs), which is the only place that changes `status`. The client calls the same function before it submits, so a client can't disagree with the federation about the rules (it can still be wrong about the time). `ClaimPayout` is not part of this, it goes through `ClaimPool::take_claim`.
 
 ### Signed messages
-Every signature is a schnorr signature over a sha256 digest, see [compute_escrow_message](../modules/fedimint-escrow-common/src/lib.rs):
-- resolution message - `fedimint_escrow_resolution_message_v1`, federation id, escrow id, outcome, contract hash. The funder always signs it with the outcome `Release`. The arbiter signs it with the outcome it chose
-- engage message - `fedimint_escrow_engage_message_v1`, escrow id, federation id, contract hash. Signed by the funder or recipient.
+Every signature is a BIP-340 schnorr signature over a 32 byte sha256 digest. Sign the digest as it is, without hashing it again. The digest is the sha256 of the bytes below, put one after the other with no length prefixes, see [compute_escrow_message](../modules/fedimint-escrow-common/src/lib.rs).
+
+How the parts are written:
+- ids and hashes (`federation id`, `escrow id`, `contract hash`) are their raw 32 bytes
+- keys are 33 byte compressed keys, the same bytes as in the contract. The parity prefix is part of the digest, so use the same bytes everywhere.
+- numbers are little endian
+
+**Resolution message** - signed by the funder with `Release`, by the recipient with `Refund`, and by the arbiter with the outcome it chose:
+
+| part | bytes |
+|---|---|
+| tag `fedimint_escrow_resolution_message_v1` | 37 |
+| federation id | 32 |
+| escrow id | 32 |
+| outcome | 1 or 5 |
+| contract hash | 32 |
+
+The outcome is `00` for `Release`, `01` for `Refund`, and `02` followed by `funder_split_bps` and `recipient_split_bps` as two u16 for `Split` (5 bytes).
+
+**Engage message** - signed by the funder or the recipient to bring in the arbiter:
+
+| part | bytes |
+|---|---|
+| tag `fedimint_escrow_engage_message_v1` | 33 |
+| federation id | 32 |
+| escrow id | 32 |
+| contract hash | 32 |
+
+**Delegation message** - signed by the actor, see [Delegated authorization](#delegated-authorization):
+
+| part | bytes |
+|---|---|
+| tag `fedimint_escrow_delegation_message_v1` | 37 |
+| federation id | 32 |
+| escrow id | 32 |
+| contract hash | 32 |
+| actor | 33 |
+| action | 1 |
+| submitter | 33 |
+
+The action is one byte: `FunderRelease` 0, `RecipientRefund` 1, `ArbiterEngaged` 2, `ArbiterOutcome` 3, `ClaimPayout` 4, `ResolveFallbackPolicy` 5.
+
+#### Check a digest before you sign it
+An app doesn't have to sign what the client hands it. It can work out every digest itself and refuse to sign if it doesn't match. A funder's release pays out, so this is the one to check.
+1. Read the contract with `get_contract` and check every term against what was agreed: the keys, `amount`, `arbiter_fee`, `arbiter_fee_key`, `timeout`, `resolution_period` and `default_fallback`.
+2. Take the federation id from your own setup, not from the client. Take `escrow_id` and `contract_hash` from the contract. Check that `contract_hash` is the hash of those terms, see [compute_contract_hash](../modules/fedimint-escrow-common/src/lib.rs).
+3. Build the preimage above for what you want to sign and hash it.
+4. Compare it with the digest of `digest_to_sign`. Sign only if they are the same.
+
+The submitter in a delegation is the one part an app can't check. It is the key the client signs the transaction with, and the release, the refund and the claim pay whoever holds it. Only ask for a delegation from a client you run yourself.
+
+#### Test vectors
+Inputs: federation id is `11` repeated 32 times, escrow id is `22` repeated 32 times, contract hash is `33` repeated 32 times, actor is `02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5` (the key of secret 2) and submitter is `02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9` (the key of secret 3).
+
+| message | preimage length | digest |
+|---|---|---|
+| engage | 129 | `55a48e0860db686e536d446f4f4fadb8a20e6bcc92065f3bb2540e80db8f2e4e` |
+| resolution, `Release` | 134 | `5f71112ab659a6212f33ac565ee2f97532ad0f5c0142268e30b33f997ce3e2e2` |
+| resolution, `Refund` | 134 | `d20a3c04e9631df3ce93f357b9e99dc3d78216301f7e14f76e12ec505d29c4a8` |
+| resolution, `Split` 2500 / 7500 | 138 | `a35db741d9b13daedf71d1e2eb1d738d3400472d7501b3dbfe408f49e17d4910` |
+| delegation, `FunderRelease` | 200 | `9ba97dba337c248d000cb1da224c685dd73d961d540be70dbc32a1f30af9f65b` |
+| delegation, `ClaimPayout` | 200 | `d25f411da221ad65be13743c31e2090c15448f72b5fe81b272b6e7746f54e529` |
 
 ### Client keys
 The client derives its keys from the module root secret:

@@ -510,14 +510,6 @@ impl FromStr for Outcome {
         let outcome = match lower.as_str() {
             "release" => Outcome::Release,
             "refund" => Outcome::Refund,
-            other if other.starts_with("split:") => {
-                let (funder_split_bps, recipient_split_bps) =
-                    parse_split(&other["split:".len()..])?;
-                FallbackPolicy::Split {
-                    funder_split_bps,
-                    recipient_split_bps,
-                }
-            }
             other => {
                 let rest = other.strip_prefix("split:").ok_or_else(|| {
                     anyhow::anyhow!("invalid outcome '{s}', expected release, refund or split:<funder_bps>:<recipient_bps>")
@@ -544,6 +536,14 @@ impl FromStr for FallbackPolicy {
         let lower = s.trim().to_ascii_lowercase();
         let policy = match lower.as_str() {
             "refund" => FallbackPolicy::Refund,
+            other if other.starts_with("split:") => {
+                let (funder_split_bps, recipient_split_bps) =
+                    parse_split(&other["split:".len()..])?;
+                FallbackPolicy::Split {
+                    funder_split_bps,
+                    recipient_split_bps,
+                }
+            }
             other if other.starts_with("swap:") => {
                 let successors = other["swap:".len()..]
                     .split(';')
@@ -555,7 +555,7 @@ impl FromStr for FallbackPolicy {
             }
             other => {
                 anyhow::bail!(
-                    "invalid fallback policy '{other}', expected refund or swap:<arbiter_key>:<fee>:<fee_keys>"
+                    "invalid fallback policy '{other}', expected refund, split:<funder_bps>:<recipient_bps> or swap:<arbiter_key>:<fee_sats>:<fee_keys>"
                 );
             }
         };
