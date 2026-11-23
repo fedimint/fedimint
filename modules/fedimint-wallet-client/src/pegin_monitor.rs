@@ -1,4 +1,5 @@
 use std::cmp;
+use std::collections::BTreeSet;
 use std::convert::Infallible;
 use std::time::{Duration, SystemTime};
 
@@ -397,13 +398,7 @@ pub(crate) async fn deposit_progress(
     let history = btc_rpc.get_script_history(&script).await?;
 
     let mut deposits = vec![];
-    for (transaction, out_idx) in filter_onchain_deposit_outputs(history.into_iter(), &script) {
-        let txid = transaction.compute_txid();
-        let outpoint = bitcoin::OutPoint {
-            txid,
-            vout: out_idx,
-        };
-
+    for (transaction, outpoint) in unique_deposit_outputs(history, &script) {
         let claimed_peg_in_key = ClaimedPegInKey {
             peg_in_index: tweak_idx,
             btc_out_point: outpoint,
@@ -418,7 +413,7 @@ pub(crate) async fn deposit_progress(
             continue;
         }
 
-        let confirmations = match btc_rpc.get_tx_block_height(&txid).await? {
+        let confirmations = match btc_rpc.get_tx_block_height(&outpoint.txid).await? {
             Some(tx_block_height) => deposit_confirmations(
                 tx_block_height.saturating_add(1),
                 consensus_block_count,
@@ -429,12 +424,31 @@ pub(crate) async fn deposit_progress(
 
         deposits.push(DepositProgress {
             outpoint,
-            value: transaction.output[out_idx as usize].value,
+            value: transaction.output[outpoint.vout as usize].value,
             confirmations,
             required: required_confirmations(data.cfg.finality_delay),
         });
     }
     Ok(deposits)
+}
+
+/// Each output in `history` that pays `script`, once, even when the backend
+/// lists its transaction more than once.
+fn unique_deposit_outputs(
+    history: Vec<bitcoin::Transaction>,
+    script: &ScriptBuf,
+) -> Vec<(bitcoin::Transaction, bitcoin::OutPoint)> {
+    let mut seen = BTreeSet::new();
+    filter_onchain_deposit_outputs(history.into_iter(), script)
+        .map(|(transaction, out_idx)| {
+            let outpoint = bitcoin::OutPoint {
+                txid: transaction.compute_txid(),
+                vout: out_idx,
+            };
+            (transaction, outpoint)
+        })
+        .filter(|(_, outpoint)| seen.insert(*outpoint))
+        .collect()
 }
 
 /// Query via btc rpc for a history of an address derived with `tweak_idx` and
