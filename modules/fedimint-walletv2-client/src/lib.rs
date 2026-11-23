@@ -210,10 +210,8 @@ pub struct AllReceiveProgress {
     /// One entry per deposit the guardians can see to an address of this
     /// client, ordered by outpoint.
     pub deposits: Vec<(Address, bitcoin::OutPoint, ReceiveProgress)>,
-    /// The best mempool view any guardian had for this query, with the same
-    /// meaning as [`AddressReceiveProgress::mempool_visibility`]. Empty
-    /// `deposits` without [`MempoolVisibility::Complete`] can hide unmined
-    /// deposits the guardians could not see.
+    /// Best mempool view any guardian had for this query. See
+    /// [`AddressReceiveProgress::mempool_visibility`].
     pub mempool_visibility: MempoolVisibility,
 }
 

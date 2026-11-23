@@ -128,8 +128,7 @@ pub struct DepositProgress {
     /// Zero while unmined. Reaches `required` exactly when the deposit can be
     /// claimed and stays there.
     pub confirmations: u64,
-    /// The confirmation threshold at which the peg-in monitor tries to claim
-    /// the deposit. Reaching it does not guarantee a credit: a deposit that
+    /// Confirmations at which the deposit becomes claimable. A deposit that
     /// does not cover the peg-in fee is never claimed.
     pub required: u64,
 }
