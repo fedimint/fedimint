@@ -200,8 +200,7 @@ pub struct AddressReceiveProgress {
     pub mempool_visibility: MempoolVisibility,
 }
 
-/// What the federation currently reports about the deposits to every receive
-/// address of this client.
+/// Deposits to this client's receive addresses, as the federation reports them.
 ///
 /// Returned by [`WalletClientModule::all_receive_progress`]. Like
 /// [`AddressReceiveProgress`], both fields come from a single query.
@@ -210,8 +209,7 @@ pub struct AllReceiveProgress {
     /// One entry per deposit the guardians can see to an address of this
     /// client, ordered by outpoint.
     pub deposits: Vec<(Address, bitcoin::OutPoint, ReceiveProgress)>,
-    /// Best mempool view any guardian had for this query. See
-    /// [`AddressReceiveProgress::mempool_visibility`].
+    /// Best mempool view any guardian had for this query.
     pub mempool_visibility: MempoolVisibility,
 }
 
