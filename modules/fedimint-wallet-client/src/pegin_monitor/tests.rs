@@ -1,4 +1,4 @@
-use super::*;
+use super::{blocks_until_claimable, deposit_confirmations, required_confirmations};
 
 #[test]
 fn confirmations_reach_required_exactly_when_claimable() {
