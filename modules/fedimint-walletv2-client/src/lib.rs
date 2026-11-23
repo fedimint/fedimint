@@ -201,9 +201,9 @@ pub struct AddressReceiveProgress {
 }
 
 /// Deposits to this client's receive addresses, as the federation reports them.
+/// Both fields come from one query.
 ///
-/// Returned by [`WalletClientModule::all_receive_progress`]. Like
-/// [`AddressReceiveProgress`], both fields come from a single query.
+/// Returned by [`WalletClientModule::all_receive_progress`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AllReceiveProgress {
     /// One entry per deposit the guardians can see to an address of this
