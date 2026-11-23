@@ -128,6 +128,9 @@ pub struct DepositProgress {
     /// Zero while unmined. Reaches `required` exactly when the deposit can be
     /// claimed and stays there.
     pub confirmations: u64,
+    /// The confirmation threshold at which the peg-in monitor tries to claim
+    /// the deposit. Reaching it does not guarantee a credit: a deposit that
+    /// does not cover the peg-in fee is never claimed.
     pub required: u64,
 }
 
@@ -1703,10 +1706,12 @@ impl WalletClientModule {
         }}))
     }
 
-    /// The progress of every unclaimed deposit to the address of this deposit
-    /// operation, re-read from the bitcoin backend and the federation on each
-    /// call, so poll it sparingly. A deposit that was reorged out without
-    /// returning to the mempool, or replaced, is no longer listed.
+    /// The progress of every output the bitcoin backend reports paying the
+    /// address of this deposit operation that this client has no claim record
+    /// for, re-read from the backend and the federation on each call, so poll
+    /// it sparingly. An entry with no confirmations is not proof that its
+    /// transaction is in a mempool, and a reorged or replaced deposit stays
+    /// listed for as long as the backend keeps reporting it.
     ///
     /// Only for display: claiming stays with the peg-in monitor.
     pub async fn deposit_progress(

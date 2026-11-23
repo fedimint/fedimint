@@ -382,8 +382,9 @@ fn deposit_confirmations(
     ))
 }
 
-/// The progress of every deposit to the address of `tweak_idx` that has not
-/// been claimed yet, from the same sources [`check_idx_pegins`] claims with.
+/// The progress of every output the bitcoin backend reports paying the address
+/// of `tweak_idx` that this client has no claim record for, from the same
+/// sources [`check_idx_pegins`] claims with.
 pub(crate) async fn deposit_progress(
     data: &WalletClientModuleData,
     tweak_idx: TweakIdx,
