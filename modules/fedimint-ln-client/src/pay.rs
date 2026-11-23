@@ -15,7 +15,8 @@ use fedimint_core::module::Amounts;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::sleep;
 use fedimint_core::time::duration_since_epoch;
-use fedimint_core::util::FmtCompact as _;
+use fedimint_core::util::backoff_util::api_networking_backoff;
+use fedimint_core::util::{self, FmtCompact as _};
 use fedimint_core::{Amount, OutPoint, TransactionId, crit, secp256k1};
 use fedimint_ln_common::contracts::outgoing::OutgoingContractData;
 use fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract};
@@ -266,6 +267,13 @@ impl LightningPayFunded {
         let timeout_global_context = global_context.clone();
         let cancel_context = context.clone();
         let timeout_context = context.clone();
+        let timelock_outcome = Self::await_timelock_outcome(
+            gateway.clone(),
+            payload.clone(),
+            context.clone(),
+            global_context.clone(),
+            timelock,
+        );
         vec![
             StateTransition::new(
                 Self::gateway_pay_invoice(gateway, payload, context, self.funding_time),
@@ -296,21 +304,84 @@ impl LightningPayFunded {
                     ))
                 },
             ),
-            StateTransition::new(
-                await_contract_timeout(timeout_global_context.clone(), timelock),
-                move |dbtx, (), old_state| {
-                    let timeout_context = timeout_context.clone();
-                    Box::pin(try_refund_outgoing_contract(
-                        old_state,
-                        timeout_common.clone(),
-                        dbtx,
-                        timeout_global_context.clone(),
-                        format!("Outgoing contract timed out, BlockHeight: {timelock}"),
-                        timeout_context,
-                    ))
-                },
-            ),
+            StateTransition::new(timelock_outcome, move |dbtx, outcome, old_state| {
+                let timeout_context = timeout_context.clone();
+                let timeout_common = timeout_common.clone();
+                let timeout_global_context = timeout_global_context.clone();
+                Box::pin(async move {
+                    match outcome {
+                        TimelockOutcome::Refundable => {
+                            try_refund_outgoing_contract(
+                                old_state,
+                                timeout_common,
+                                dbtx,
+                                timeout_global_context,
+                                format!("Outgoing contract timed out, BlockHeight: {timelock}"),
+                                timeout_context,
+                            )
+                            .await
+                        }
+                        TimelockOutcome::PaidByGateway(preimage) => {
+                            Self::transition_outgoing_contract_execution(
+                                Ok(preimage),
+                                old_state,
+                                contract_id,
+                                dbtx,
+                                payment_hash,
+                                timeout_common,
+                                timeout_context,
+                            )
+                            .await
+                        }
+                    }
+                })
+            }),
         ]
+    }
+
+    /// Waits for the timelock of the outgoing contract to pass, then finds out
+    /// whether the client can still refund it.
+    ///
+    /// After the timelock only the client can spend the contract, so its
+    /// balance shows for good whether the gateway claimed it before then. The
+    /// gateway can only claim it with the preimage, so a claimed contract means
+    /// the invoice was paid and a refund would be rejected. The client then
+    /// asks the gateway for the preimage until it gets it, instead of
+    /// refunding.
+    async fn await_timelock_outcome(
+        gateway: LightningGateway,
+        payload: PayInvoicePayload,
+        context: LightningClientContext,
+        global_context: DynGlobalClientContext,
+        timelock: u32,
+    ) -> TimelockOutcome {
+        await_contract_timeout(global_context.clone(), timelock).await;
+
+        if !outgoing_contract_claimed(&global_context, payload.contract_id).await {
+            return TimelockOutcome::Refundable;
+        }
+
+        info!(
+            target: LOG_CLIENT_MODULE_LN,
+            contract_id = %payload.contract_id,
+            "Gateway claimed the outgoing contract before its timelock, asking it for the preimage"
+        );
+        let preimage = util::retry(
+            "gateway-preimage-after-claim",
+            api_networking_backoff(),
+            || async {
+                let preimage = context
+                    .gateway_conn
+                    .pay_invoice(gateway.clone(), payload.clone())
+                    .await?;
+                verify_gateway_preimage(&preimage, payload.payment_data.payment_hash())?;
+                Ok::<_, GatewayPayError>(preimage)
+            },
+        )
+        .await
+        .expect("Number of retries has no limit");
+
+        TimelockOutcome::PaidByGateway(preimage)
     }
 
     async fn gateway_pay_invoice(
@@ -527,6 +598,54 @@ async fn await_contract_cancelled(contract_id: ContractId, global_context: DynGl
             Ok(_) => return,
             Err(error) => {
                 info!(target: LOG_CLIENT_MODULE_LN, err = %error.fmt_compact(), "Error waiting for outgoing contract to be cancelled");
+            }
+        }
+
+        sleep(RETRY_DELAY).await;
+    }
+}
+
+/// What the client finds once the timelock of its outgoing contract has passed.
+#[derive(Debug, Serialize, Deserialize)]
+enum TimelockOutcome {
+    /// The contract still holds the funds, so the client refunds them.
+    Refundable,
+    /// The gateway claimed the contract, so it paid the invoice. Holds the
+    /// preimage the gateway returned.
+    PaidByGateway(String),
+}
+
+/// Returns whether the gateway has claimed the outgoing contract `contract_id`,
+/// which leaves it without funds.
+///
+/// A contract the federation does not know is treated as not claimed, so the
+/// client falls back to refunding it.
+async fn outgoing_contract_claimed(
+    global_context: &DynGlobalClientContext,
+    contract_id: ContractId,
+) -> bool {
+    loop {
+        match global_context
+            .module_api()
+            .fetch_contract(contract_id)
+            .await
+        {
+            Ok(Some(account)) => return account.amount == Amount::ZERO,
+            Ok(None) => {
+                warn!(
+                    target: LOG_CLIENT_MODULE_LN,
+                    %contract_id,
+                    "Federation does not know the outgoing contract, refunding it"
+                );
+                return false;
+            }
+            Err(error) => {
+                info!(
+                    target: LOG_CLIENT_MODULE_LN,
+                    err = %error.fmt_compact(),
+                    %contract_id,
+                    "Error fetching the outgoing contract"
+                );
             }
         }
 
