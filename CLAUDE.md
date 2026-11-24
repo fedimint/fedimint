@@ -16,6 +16,3 @@ Load these project-local skills when their descriptions match the work:
   development-environment workflows.
 - `fedimint-coding-style`: before writing, modifying, or reviewing Rust code.
 - `pr-submissions-checklist`: before creating or updating a pull request.
-
-Additional agent-specific instructions, such as CI-driven code-review guidance,
-live in `.github/agents/`.

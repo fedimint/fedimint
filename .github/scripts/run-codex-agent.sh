@@ -19,12 +19,10 @@ require_env PPQ_KEY
 require_env RUNNER_TEMP
 
 PPQ_MODEL="${PPQ_MODEL:-openai/gpt-5.5}"
-agent_event_name="${CODEX_AGENT_EVENT_NAME:-${GITHUB_EVENT_NAME}}"
-agent_event_path="${CODEX_AGENT_EVENT_PATH:-${GITHUB_EVENT_PATH}}"
 agent_actor="${CODEX_AGENT_ACTOR:-${GITHUB_ACTOR}}"
 
-if [ ! -s "${agent_event_path}" ]; then
-  echo "Codex agent event payload does not exist or is empty: ${agent_event_path}" >&2
+if [ ! -s "${GITHUB_EVENT_PATH}" ]; then
+  echo "Codex agent event payload does not exist or is empty: ${GITHUB_EVENT_PATH}" >&2
   exit 1
 fi
 
@@ -140,19 +138,18 @@ jq '{
   actor: $actor,
   comment: .comment,
   issue: .issue,
-  pull_request: .pull_request,
-  review: .review
+  pull_request: .pull_request
 }' \
-  --arg event_name "${agent_event_name}" \
+  --arg event_name "${GITHUB_EVENT_NAME}" \
   --arg actor "${agent_actor}" \
-  "${agent_event_path}" > "${context_dir}/event.json"
+  "${GITHUB_EVENT_PATH}" > "${context_dir}/event.json"
 
 cat > "${context_dir}/prompt.md" <<'EOF'
 You are fedimint-bot, an automation agent for the Fedimint GitHub repository.
 An organization member invoked you by mentioning @fedimint-bot in a GitHub
-issue, pull request, pull request review body, or pull request review thread;
-by opening an issue that mentions @fedimint-bot; or by assigning an issue to
-fedimint-bot. Decide what action is useful from the context.
+issue or pull request conversation, by opening an issue that mentions
+@fedimint-bot, or by assigning an issue to fedimint-bot. Decide what action is
+useful from the context. Do not conduct or submit pull request reviews.
 
 You may:
 - answer the question directly in the relevant GitHub thread;
@@ -193,27 +190,10 @@ Operational rules:
   preserving local context for common history lookups. If you need older
   history, tags, or PR refs, fetch only the specific refs you need.
 - First inspect the normalized `event_name` field in the event payload to
-  understand whether this is an issue event, issue comment, PR comment,
-  submitted PR review, or inline PR review comment. Submitted PR reviews and
-  inline PR review comments may arrive through a privileged follow-up workflow,
-  but their payloads are normalized to `pull_request_review` or
-  `pull_request_review_comment`.
+  distinguish issue events from issue or pull request conversation comments.
 - Use `gh` to fetch additional context as needed.
 - For issue assignment events, treat the assignment as a request to open a
   small draft PR when the issue is well scoped and implementation is low risk.
-- For inline PR review comments, get the pull request number from the event
-  payload and use `gh api
-  repos/:owner/:repo/pulls/:pull_number/comments/:comment_id/replies
-  -f body=...` to reply directly to the review thread.
-- If replying to an inline PR review comment returns 404, do not immediately
-  fall back to a top-level PR comment. First fetch all review comments for the
-  PR with `gh api --paginate repos/:owner/:repo/pulls/:pull_number/comments`,
-  search for the event comment by `id`, `node_id`, `html_url`, file location,
-  and body text, then retry the reply using the matched comment id if found.
-- If responding to a pull request review comment, prefer replying to that
-  review comment thread when possible. Otherwise comment on the issue or PR.
-- If responding to a submitted pull request review body, prefer a top-level PR
-  comment because GitHub does not expose a review-body reply thread.
 - Before finishing, post a GitHub comment/reply, open a GitHub issue, or open a
   draft PR, unless the safest action is explicitly to do nothing.
 - If you cannot complete the requested action, post a short comment explaining
