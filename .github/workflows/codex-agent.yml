@@ -39,10 +39,57 @@ jobs:
         github.event.workflow_run.conclusion == 'success'))
 
     steps:
+      - name: Fetch review event artifact
+        id: review_event
+        if: github.event_name == 'workflow_run'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          nix --extra-experimental-features 'nix-command flakes' \
+            --accept-flake-config \
+            shell \
+            nixpkgs#jq \
+            nixpkgs#unzip \
+            nixpkgs#gh \
+            -c bash <<'BASH'
+          set -euo pipefail
+
+          run_id=$(jq -r '.workflow_run.id // ""' "${GITHUB_EVENT_PATH}")
+          if ! [[ "${run_id}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid receiver workflow run ID" >&2
+            exit 1
+          fi
+
+          artifact_id=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" |
+            jq -r '.artifacts[] |
+              select(.name == "codex-agent-review-event" or .name == "codex-agent-review-comment-event") |
+              .id')
+          if [ -z "${artifact_id}" ]; then
+            echo "Skipping: receiver uploaded no review event artifact"
+            exit 0
+          fi
+          if ! [[ "${artifact_id}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Expected exactly one valid review event artifact ID" >&2
+            exit 1
+          fi
+
+          artifact_dir=$(mktemp -d "${RUNNER_TEMP}/codex-review-event.XXXXXX")
+          trap 'rm -f "${artifact_dir}/artifact.zip"' EXIT
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
+            > "${artifact_dir}/artifact.zip"
+          unzip -p "${artifact_dir}/artifact.zip" event.json |
+            jq -es 'select(length == 1) | .[0] | objects' > "${artifact_dir}/event.json"
+          echo "path=${artifact_dir}/event.json" >> "${GITHUB_OUTPUT}"
+          BASH
+
       - name: Validate agent mention
         id: validate
+        if: github.event_name != 'workflow_run' || steps.review_event.outputs.path != ''
         env:
           EVENT_NAME: ${{ github.event_name }}
+          REVIEW_EVENT_PATH: ${{ steps.review_event.outputs.path }}
+          # The private team check needs visibility into the team and Members: read.
           GH_TOKEN: ${{ secrets.BACKPORT_TOKEN }}
         run: |
           set -euo pipefail
@@ -51,8 +98,6 @@ jobs:
             shell \
             nixpkgs#jq \
             nixpkgs#curl \
-            nixpkgs#unzip \
-            nixpkgs#gh \
             -c bash <<'BASH'
           set -euo pipefail
 
@@ -65,43 +110,12 @@ jobs:
           issue_number=""
           request_kind="${event_name}"
           body=""
-          artifact_dir=""
 
           if [ "${event_name}" = "workflow_run" ]; then
             # The receiver may have run without secrets on a fork PR. Treat its
             # artifact as untrusted and use it only to find the live review
             # object, then re-check the mention and reviewer membership here.
-            artifacts_url=$(jq -r '.workflow_run.artifacts_url // ""' "${GITHUB_EVENT_PATH}")
-            if [ -z "${artifacts_url}" ]; then
-              echo "run=false" >> "${GITHUB_OUTPUT}"
-              echo "Skipping: workflow_run event has no artifacts URL"
-              exit 0
-            fi
-
-            artifact_id=$(gh api "${artifacts_url}" \
-              --jq '.artifacts[] | select(.name == "codex-agent-review-event" or .name == "codex-agent-review-comment-event") | .id' \
-              | head -n1)
-
-            if [ -z "${artifact_id}" ]; then
-              echo "run=false" >> "${GITHUB_OUTPUT}"
-              echo "Skipping: receiver uploaded no review event artifact"
-              exit 0
-            fi
-
-            artifact_dir="${RUNNER_TEMP}/codex-agent-review-artifact"
-            rm -rf "${artifact_dir}"
-            mkdir -p "${artifact_dir}"
-            gh api \
-              "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
-              > "${artifact_dir}/artifact.zip"
-            unzip -q "${artifact_dir}/artifact.zip" -d "${artifact_dir}"
-
-            event_payload="${artifact_dir}/event.json"
-            if [ ! -s "${event_payload}" ]; then
-              echo "run=false" >> "${GITHUB_OUTPUT}"
-              echo "Skipping: review event artifact is missing event.json"
-              exit 0
-            fi
+            event_payload="${REVIEW_EVENT_PATH}"
 
             request_kind=$(jq -r '.event_name // ""' "${event_payload}")
             if [ -z "${request_kind}" ]; then
@@ -110,6 +124,11 @@ jobs:
               elif jq -e '.review.id?' "${event_payload}" >/dev/null; then
                 request_kind="pull_request_review"
               fi
+            fi
+            if [ "${request_kind}" != "$(jq -r '.workflow_run.event' "${GITHUB_EVENT_PATH}")" ]; then
+              echo "run=false" >> "${GITHUB_OUTPUT}"
+              echo "Skipping: artifact event kind does not match the receiver run"
+              exit 0
             fi
 
             if [ "${request_kind}" = "pull_request_review_comment" ]; then
