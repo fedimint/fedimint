@@ -55,7 +55,7 @@
 <a href=#55 id=55 data-nosnippet>55</a>/// production. Used for polling intervals where faster feedback is needed
 <a href=#56 id=56 data-nosnippet>56</a>/// during testing.
 <a href=#57 id=57 data-nosnippet>57</a></span><span class="kw">pub fn </span>sleep_duration() -&gt; Duration {
-<a href=#58 id=58 data-nosnippet>58</a>    <span class="kw">if </span>fedimint_core::envs::is_running_in_test_env() {
+<a href=#58 id=58 data-nosnippet>58</a>    <span class="kw">if </span><span class="macro">fedimint_core::envs::is_running_in_test_env!</span>() {
 <a href=#59 id=59 data-nosnippet>59</a>        Duration::from_secs(<span class="number">1</span>)
 <a href=#60 id=60 data-nosnippet>60</a>    } <span class="kw">else </span>{
 <a href=#61 id=61 data-nosnippet>61</a>        Duration::from_mins(<span class="number">1</span>)

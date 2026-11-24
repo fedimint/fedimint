@@ -130,7 +130,7 @@
 <a href=#130 id=130 data-nosnippet>130</a>/// every transaction had been fetched. Kept short under test so that a test can
 <a href=#131 id=131 data-nosnippet>131</a>/// observe a pass running out of budget without a large mempool.
 <a href=#132 id=132 data-nosnippet>132</a></span><span class="kw">fn </span>mempool_scan_budget() -&gt; Duration {
-<a href=#133 id=133 data-nosnippet>133</a>    <span class="kw">if </span>is_running_in_test_env() {
+<a href=#133 id=133 data-nosnippet>133</a>    <span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#134 id=134 data-nosnippet>134</a>        Duration::from_millis(<span class="number">100</span>)
 <a href=#135 id=135 data-nosnippet>135</a>    } <span class="kw">else </span>{
 <a href=#136 id=136 data-nosnippet>136</a>        Duration::from_secs(<span class="number">5</span>)

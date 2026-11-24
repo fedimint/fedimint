@@ -544,7 +544,7 @@
 <a href=#544 id=544 data-nosnippet>544</a>                    block_count_vote = min(
 <a href=#545 id=545 data-nosnippet>545</a>                        block_count_vote,
 <a href=#546 id=546 data-nosnippet>546</a>                        current_consensus_block_count
-<a href=#547 id=547 data-nosnippet>547</a>                            + <span class="kw">if </span>is_running_in_test_env() {
+<a href=#547 id=547 data-nosnippet>547</a>                            + <span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#548 id=548 data-nosnippet>548</a>                                <span class="comment">// We have some tests that mine *a lot* of blocks (empty)
 <a href=#549 id=549 data-nosnippet>549</a>                                // and need them processed fast, so we raise the max.
 <a href=#550 id=550 data-nosnippet>550</a>                                </span><span class="number">100
@@ -1945,7 +1945,7 @@
 <a href=#1945 id=1945 data-nosnippet>1945</a>    /// since we can no longer participate in consensus if our bitcoin backend
 <a href=#1946 id=1946 data-nosnippet>1946</a>    /// is unable to observe the same chain tip as our peers.
 <a href=#1947 id=1947 data-nosnippet>1947</a>    </span><span class="kw">async fn </span>wait_for_finality_confs_or_shutdown(<span class="kw-2">&amp;</span><span class="self">self</span>, consensus_block_count: u32) {
-<a href=#1948 id=1948 data-nosnippet>1948</a>        <span class="kw">let </span>backoff = <span class="kw">if </span>is_running_in_test_env() {
+<a href=#1948 id=1948 data-nosnippet>1948</a>        <span class="kw">let </span>backoff = <span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#1949 id=1949 data-nosnippet>1949</a>            <span class="comment">// every 100ms for 60s
 <a href=#1950 id=1950 data-nosnippet>1950</a>            </span>backoff_util::custom_backoff(
 <a href=#1951 id=1951 data-nosnippet>1951</a>                Duration::from_millis(<span class="number">100</span>),
@@ -2059,7 +2059,7 @@
 <a href=#2059 id=2059 data-nosnippet>2059</a>                    <span class="kw">break</span>;
 <a href=#2060 id=2060 data-nosnippet>2060</a>                }
 <a href=#2061 id=2061 data-nosnippet>2061</a>
-<a href=#2062 id=2062 data-nosnippet>2062</a>                sleep(next_poll_delay(all_peers_supported_version.is_some())).<span class="kw">await</span>;
+<a href=#2062 id=2062 data-nosnippet>2062</a>                sleep(<span class="macro">next_poll_delay!</span>(all_peers_supported_version.is_some())).<span class="kw">await</span>;
 <a href=#2063 id=2063 data-nosnippet>2063</a>            }
 <a href=#2064 id=2064 data-nosnippet>2064</a>        });
 <a href=#2065 id=2065 data-nosnippet>2065</a>        receiver

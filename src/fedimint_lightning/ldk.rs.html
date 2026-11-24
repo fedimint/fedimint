@@ -215,7 +215,7 @@
 <a href=#215 id=215 data-nosnippet>215</a>        // the same place (stderr / log file) and honor `RUST_LOG`, instead of LDK's
 <a href=#216 id=216 data-nosnippet>216</a>        // default append-only `ldk_node/ldk_node.log` file.
 <a href=#217 id=217 data-nosnippet>217</a>        </span>node_builder.set_custom_logger(Arc::new(LdkTracingLogger {
-<a href=#218 id=218 data-nosnippet>218</a>            in_test_env: is_running_in_test_env(),
+<a href=#218 id=218 data-nosnippet>218</a>            in_test_env: <span class="macro">is_running_in_test_env!</span>(),
 <a href=#219 id=219 data-nosnippet>219</a>        }));
 <a href=#220 id=220 data-nosnippet>220</a>
 <a href=#221 id=221 data-nosnippet>221</a>        node_builder.set_entropy_bip39_mnemonic(mnemonic, <span class="prelude-val">None</span>);

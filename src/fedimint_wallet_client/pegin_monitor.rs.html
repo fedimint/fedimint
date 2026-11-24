@@ -99,7 +99,7 @@
 <a href=#99 id=99 data-nosnippet>99</a>    pegin_claimed_sender: watch::Sender&lt;()&gt;,
 <a href=#100 id=100 data-nosnippet>100</a>    <span class="kw-2">mut </span>wakeup_receiver: watch::Receiver&lt;()&gt;,
 <a href=#101 id=101 data-nosnippet>101</a>) {
-<a href=#102 id=102 data-nosnippet>102</a>    <span class="kw">let </span>min_sleep: Duration = <span class="kw">if </span>is_running_in_test_env() {
+<a href=#102 id=102 data-nosnippet>102</a>    <span class="kw">let </span>min_sleep: Duration = <span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#103 id=103 data-nosnippet>103</a>        Duration::from_millis(<span class="number">100</span>)
 <a href=#104 id=104 data-nosnippet>104</a>    } <span class="kw">else </span>{
 <a href=#105 id=105 data-nosnippet>105</a>        Duration::from_secs(<span class="number">30</span>)
@@ -296,7 +296,7 @@
 <a href=#296 id=296 data-nosnippet>296</a>        <span class="kw">match </span><span class="self">self </span>{
 <a href=#297 id=297 data-nosnippet>297</a>            <span class="comment">// Check again in time proportional to the expected block confirmation time
 <a href=#298 id=298 data-nosnippet>298</a>            </span>CheckOutcome::Pending { num_blocks_needed } =&gt; {
-<a href=#299 id=299 data-nosnippet>299</a>                <span class="kw">if </span>is_running_in_test_env() {
+<a href=#299 id=299 data-nosnippet>299</a>                <span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#300 id=300 data-nosnippet>300</a>                    <span class="comment">// In tests, we basically mine all blocks right away
 <a href=#301 id=301 data-nosnippet>301</a>                    </span><span class="prelude-val">Some</span>(Duration::from_millis(<span class="number">1</span>))
 <a href=#302 id=302 data-nosnippet>302</a>                } <span class="kw">else </span>{
@@ -321,7 +321,7 @@
 <a href=#321 id=321 data-nosnippet>321</a>        // on it yet, check again in time proportional to the age of the
 <a href=#322 id=322 data-nosnippet>322</a>        // address.
 <a href=#323 id=323 data-nosnippet>323</a>        </span><span class="kw">if </span>outcomes.is_empty() {
-<a href=#324 id=324 data-nosnippet>324</a>            <span class="kw">if </span>is_running_in_test_env() {
+<a href=#324 id=324 data-nosnippet>324</a>            <span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#325 id=325 data-nosnippet>325</a>                <span class="comment">// When testing we usually send deposits right away, so check more aggressively.
 <a href=#326 id=326 data-nosnippet>326</a>                </span><span class="kw">return </span><span class="prelude-val">Some</span>(Duration::from_millis(<span class="number">100</span>));
 <a href=#327 id=327 data-nosnippet>327</a>            }

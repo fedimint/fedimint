@@ -344,7 +344,7 @@
 <a href=#344 id=344 data-nosnippet>344</a>            ),
 <a href=#345 id=345 data-nosnippet>345</a>            version: CORE_CONSENSUS_VERSION,
 <a href=#346 id=346 data-nosnippet>346</a>            broadcast_public_keys,
-<a href=#347 id=347 data-nosnippet>347</a>            broadcast_rounds_per_session: <span class="kw">if </span>is_running_in_test_env() {
+<a href=#347 id=347 data-nosnippet>347</a>            broadcast_rounds_per_session: <span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#348 id=348 data-nosnippet>348</a>                DEFAULT_TEST_BROADCAST_ROUNDS_PER_SESSION
 <a href=#349 id=349 data-nosnippet>349</a>            } <span class="kw">else </span>{
 <a href=#350 id=350 data-nosnippet>350</a>                DEFAULT_BROADCAST_ROUNDS_PER_SESSION
@@ -363,7 +363,7 @@
 <a href=#363 id=363 data-nosnippet>363</a>            p2p_endpoints: params.p2p_urls(),
 <a href=#364 id=364 data-nosnippet>364</a>            identity,
 <a href=#365 id=365 data-nosnippet>365</a>            max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
-<a href=#366 id=366 data-nosnippet>366</a>            broadcast_round_delay_ms: <span class="kw">if </span>is_running_in_test_env() {
+<a href=#366 id=366 data-nosnippet>366</a>            broadcast_round_delay_ms: <span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#367 id=367 data-nosnippet>367</a>                DEFAULT_TEST_BROADCAST_ROUND_DELAY_MS
 <a href=#368 id=368 data-nosnippet>368</a>            } <span class="kw">else </span>{
 <a href=#369 id=369 data-nosnippet>369</a>                DEFAULT_BROADCAST_ROUND_DELAY_MS

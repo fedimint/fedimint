@@ -299,7 +299,7 @@
 <a href=#299 id=299 data-nosnippet>299</a>
 <a href=#300 id=300 data-nosnippet>300</a>        <span class="comment">// Disable iroh-next endpoint preference in test/devimint environments
 <a href=#301 id=301 data-nosnippet>301</a>        // where iroh-next server endpoints are not running.
-<a href=#302 id=302 data-nosnippet>302</a>        </span><span class="kw">if </span>is_running_in_test_env() {
+<a href=#302 id=302 data-nosnippet>302</a>        </span><span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#303 id=303 data-nosnippet>303</a>            <span class="self">self</span>.iroh_next = <span class="bool-val">false</span>;
 <a href=#304 id=304 data-nosnippet>304</a>        }
 <a href=#305 id=305 data-nosnippet>305</a>

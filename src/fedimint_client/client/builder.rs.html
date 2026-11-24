@@ -301,7 +301,7 @@
 <a href=#301 id=301 data-nosnippet>301</a>            )
 <a href=#302 id=302 data-nosnippet>302</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#303 id=303 data-nosnippet>303</a>            <span class="kw">if let </span><span class="prelude-val">Some</span>(used_db_prefixes) = init.used_db_prefixes()
-<a href=#304 id=304 data-nosnippet>304</a>                &amp;&amp; is_running_in_test_env()
+<a href=#304 id=304 data-nosnippet>304</a>                &amp;&amp; <span class="macro">is_running_in_test_env!</span>()
 <a href=#305 id=305 data-nosnippet>305</a>            {
 <a href=#306 id=306 data-nosnippet>306</a>                verify_module_db_integrity_dbtx(
 <a href=#307 id=307 data-nosnippet>307</a>                    <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(),

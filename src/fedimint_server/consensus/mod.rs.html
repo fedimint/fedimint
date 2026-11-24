@@ -259,7 +259,7 @@
 <a href=#259 id=259 data-nosnippet>259</a>
 <a href=#260 id=260 data-nosnippet>260</a>    update_server_info_version_dbtx(<span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc(), <span class="kw-2">&amp;</span>code_version_str).<span class="kw">await</span>;
 <a href=#261 id=261 data-nosnippet>261</a>
-<a href=#262 id=262 data-nosnippet>262</a>    <span class="kw">if </span>is_running_in_test_env() {
+<a href=#262 id=262 data-nosnippet>262</a>    <span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#263 id=263 data-nosnippet>263</a>        verify_server_db_integrity_dbtx(<span class="kw-2">&amp;mut </span>global_dbtx.to_ref_nc()).<span class="kw">await</span>;
 <a href=#264 id=264 data-nosnippet>264</a>    }
 <a href=#265 id=265 data-nosnippet>265</a>    global_dbtx.commit_tx_result().<span class="kw">await</span><span class="question-mark">?</span>;
@@ -279,7 +279,7 @@
 <a href=#279 id=279 data-nosnippet>279</a>
 <a href=#280 id=280 data-nosnippet>280</a>    <span class="kw">let </span>bitcoin_rpc_connection = ServerBitcoinRpcMonitor::new(
 <a href=#281 id=281 data-nosnippet>281</a>        dyn_server_bitcoin_rpc,
-<a href=#282 id=282 data-nosnippet>282</a>        <span class="kw">if </span>is_running_in_test_env() {
+<a href=#282 id=282 data-nosnippet>282</a>        <span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#283 id=283 data-nosnippet>283</a>            Duration::from_millis(<span class="number">100</span>)
 <a href=#284 id=284 data-nosnippet>284</a>        } <span class="kw">else </span>{
 <a href=#285 id=285 data-nosnippet>285</a>            Duration::from_mins(<span class="number">1</span>)
@@ -304,7 +304,7 @@
 <a href=#304 id=304 data-nosnippet>304</a>                .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#305 id=305 data-nosnippet>305</a>
 <a href=#306 id=306 data-nosnippet>306</a>                <span class="kw">if let </span><span class="prelude-val">Some</span>(used_db_prefixes) = module_init.used_db_prefixes()
-<a href=#307 id=307 data-nosnippet>307</a>                    &amp;&amp; is_running_in_test_env()
+<a href=#307 id=307 data-nosnippet>307</a>                    &amp;&amp; <span class="macro">is_running_in_test_env!</span>()
 <a href=#308 id=308 data-nosnippet>308</a>                {
 <a href=#309 id=309 data-nosnippet>309</a>                    verify_module_db_integrity_dbtx(
 <a href=#310 id=310 data-nosnippet>310</a>                        <span class="kw-2">&amp;mut </span>dbtx.to_ref_nc(),
@@ -563,7 +563,7 @@
 <a href=#563 id=563 data-nosnippet>563</a>    module: DynServerModule,
 <a href=#564 id=564 data-nosnippet>564</a>    submission_sender: Sender&lt;ConsensusItem&gt;,
 <a href=#565 id=565 data-nosnippet>565</a>) {
-<a href=#566 id=566 data-nosnippet>566</a>    <span class="kw">let </span><span class="kw-2">mut </span>interval = tokio::time::interval(<span class="kw">if </span>is_running_in_test_env() {
+<a href=#566 id=566 data-nosnippet>566</a>    <span class="kw">let </span><span class="kw-2">mut </span>interval = tokio::time::interval(<span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#567 id=567 data-nosnippet>567</a>        Duration::from_millis(<span class="number">100</span>)
 <a href=#568 id=568 data-nosnippet>568</a>    } <span class="kw">else </span>{
 <a href=#569 id=569 data-nosnippet>569</a>        Duration::from_secs(<span class="number">1</span>)

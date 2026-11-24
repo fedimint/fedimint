@@ -54,7 +54,7 @@
 <a href=#54 id=54 data-nosnippet>54</a>            <span class="number">1</span>,
 <a href=#55 id=55 data-nosnippet>55</a>            api,
 <a href=#56 id=56 data-nosnippet>56</a>            <span class="kw-2">&amp;</span>guardian_pub_keys,
-<a href=#57 id=57 data-nosnippet>57</a>            <span class="kw">if </span>is_running_in_test_env() {
+<a href=#57 id=57 data-nosnippet>57</a>            <span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#58 id=58 data-nosnippet>58</a>                Duration::from_millis(<span class="number">1</span>)
 <a href=#59 id=59 data-nosnippet>59</a>            } <span class="kw">else </span>{
 <a href=#60 id=60 data-nosnippet>60</a>                Duration::from_secs(<span class="number">30</span>)
@@ -63,7 +63,7 @@
 <a href=#63 id=63 data-nosnippet>63</a>        .<span class="kw">await</span>;
 <a href=#64 id=64 data-nosnippet>64</a>        store_api_announcements_updates_from_peers(client_inner.db(), <span class="kw-2">&amp;</span>results).<span class="kw">await</span>;
 <a href=#65 id=65 data-nosnippet>65</a>
-<a href=#66 id=66 data-nosnippet>66</a>        <span class="kw">let </span>duration = <span class="kw">if </span>is_running_in_test_env() {
+<a href=#66 id=66 data-nosnippet>66</a>        <span class="kw">let </span>duration = <span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#67 id=67 data-nosnippet>67</a>            Duration::from_secs(<span class="number">1</span>)
 <a href=#68 id=68 data-nosnippet>68</a>        } <span class="kw">else </span>{
 <a href=#69 id=69 data-nosnippet>69</a>            <span class="comment">// Check once an hour if there are new announcements

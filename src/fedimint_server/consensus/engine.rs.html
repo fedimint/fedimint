@@ -290,7 +290,7 @@
 <a href=#290 id=290 data-nosnippet>290</a>            <span class="comment">// In a test environment all peers are started in lockstep, so we
 <a href=#291 id=291 data-nosnippet>291</a>            // add jitter to the unit creation delay to break it; in production
 <a href=#292 id=292 data-nosnippet>292</a>            // the peers' timing drifts naturally.
-<a href=#293 id=293 data-nosnippet>293</a>            </span><span class="kw">let </span>jitter = <span class="kw">if </span>is_running_in_test_env() {
+<a href=#293 id=293 data-nosnippet>293</a>            </span><span class="kw">let </span>jitter = <span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#294 id=294 data-nosnippet>294</a>                rand::thread_rng().gen_range(<span class="number">0.5</span>..=<span class="number">1.5</span>)
 <a href=#295 id=295 data-nosnippet>295</a>            } <span class="kw">else </span>{
 <a href=#296 id=296 data-nosnippet>296</a>                <span class="number">1.0

@@ -39,7 +39,7 @@
 <a href=#39 id=39 data-nosnippet>39</a>/// every 10 minutes, or every 10 seconds in tests. A restart loses at most one
 <a href=#40 id=40 data-nosnippet>40</a>/// interval of activity.
 <a href=#41 id=41 data-nosnippet>41</a></span><span class="kw">pub async fn </span>persist_peer_availability(db: Database, tracker: Arc&lt;AvailabilityTracker&gt;) {
-<a href=#42 id=42 data-nosnippet>42</a>    <span class="kw">let </span>interval = <span class="kw">if </span>is_running_in_test_env() {
+<a href=#42 id=42 data-nosnippet>42</a>    <span class="kw">let </span>interval = <span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#43 id=43 data-nosnippet>43</a>        Duration::from_secs(<span class="number">10</span>)
 <a href=#44 id=44 data-nosnippet>44</a>    } <span class="kw">else </span>{
 <a href=#45 id=45 data-nosnippet>45</a>        Duration::from_secs(<span class="number">600</span>)

@@ -28,7 +28,7 @@
 <a href=#28 id=28 data-nosnippet>28</a><span class="doccomment">/// Retry config downloads without making test fixtures wait through production
 <a href=#29 id=29 data-nosnippet>29</a>/// backoffs. Only delays change: both policies allow fourteen retries.
 <a href=#30 id=30 data-nosnippet>30</a></span><span class="kw">fn </span>client_config_download_backoff() -&gt; backoff_util::FibonacciBackoff {
-<a href=#31 id=31 data-nosnippet>31</a>    <span class="kw">if </span>is_running_in_test_env() {
+<a href=#31 id=31 data-nosnippet>31</a>    <span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#32 id=32 data-nosnippet>32</a>        backoff_util::custom_backoff(
 <a href=#33 id=33 data-nosnippet>33</a>            std::time::Duration::from_millis(<span class="number">20</span>),
 <a href=#34 id=34 data-nosnippet>34</a>            std::time::Duration::from_millis(<span class="number">100</span>),

@@ -2114,7 +2114,7 @@
 <a href=#2114 id=2114 data-nosnippet>2114</a>            <span class="kw">break</span>;
 <a href=#2115 id=2115 data-nosnippet>2115</a>        }
 <a href=#2116 id=2116 data-nosnippet>2116</a>
-<a href=#2117 id=2117 data-nosnippet>2117</a>        <span class="kw">if </span>is_running_in_test_env() {
+<a href=#2117 id=2117 data-nosnippet>2117</a>        <span class="kw">if </span><span class="macro">is_running_in_test_env!</span>() {
 <a href=#2118 id=2118 data-nosnippet>2118</a>            <span class="comment">// Even in tests we don't want to spam the federation with requests about it
 <a href=#2119 id=2119 data-nosnippet>2119</a>            </span>sleep(Duration::from_secs(<span class="number">10</span>)).<span class="kw">await</span>;
 <a href=#2120 id=2120 data-nosnippet>2120</a>        } <span class="kw">else </span>{
