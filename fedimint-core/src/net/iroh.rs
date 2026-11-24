@@ -27,7 +27,7 @@ const DEFAULT_IROH_RELAYS: [&str; 2] = [
 /// Fedimint-operated relays running the Iroh 1.0 relay protocol.
 ///
 /// The relay wire protocol changed incompatibly between 0.35 and 1.0, so these
-/// are separate deployments from [`DEFAULT_IROH_RELAYS`] and the two lists must
+/// are separate deployments from `DEFAULT_IROH_RELAYS` and the two lists must
 /// never be mixed. Kept here next to the 0.35 list so both are maintained in
 /// one place; the `RelayMode` is built by callers that have the `iroh_next`
 /// types in scope.
