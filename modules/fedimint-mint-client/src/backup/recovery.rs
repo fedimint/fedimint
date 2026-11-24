@@ -665,11 +665,9 @@ impl RecoveryStateV2 {
         let last_used_nonce_idx = self
             .last_used_nonce_idx
             .get(&amount)
-            .copied()
-            .unwrap_or(idx);
+            .map_or(idx, |&last| max(last, idx));
 
-        self.last_used_nonce_idx
-            .insert(amount, max(last_used_nonce_idx, idx));
+        self.last_used_nonce_idx.insert(amount, last_used_nonce_idx);
 
         let next_pending_note_idx = self
             .next_pending_note_idx
