@@ -61,12 +61,7 @@ use fedimintd_envs::{
     FM_P2P_URL_ENV, FM_PASSWORD_API_ENV, FM_PASSWORD_UI_ENV, FM_SESSION_TIMEOUT_SECS_ENV,
 };
 use futures::FutureExt as _;
-#[cfg(all(
-    not(feature = "jemalloc"),
-    not(any(target_env = "msvc", target_os = "ios", target_os = "android"))
-))]
-use tracing::warn;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::metrics::APP_START_TS;
 
@@ -222,8 +217,9 @@ struct ServerOpts {
     #[arg(long, env = FM_IROH_DNS_ENV, requires = "enable_iroh")]
     iroh_dns: Option<SafeUrl>,
 
-    /// Optional URLs of the Iroh relays to use for registering
-    #[arg(long, env = FM_IROH_RELAY_ENV, requires = "enable_iroh", value_delimiter = ',')]
+    /// Ignored. The Iroh 0.35 API listener these relays were for has been
+    /// replaced by Iroh 1.x, which uses the default relays.
+    #[arg(long, env = FM_IROH_RELAY_ENV, value_delimiter = ',', hide = true)]
     iroh_relays: Vec<SafeUrl>,
 
     /// Optional Iroh 1.0 relay URLs to use for guardian P2P
@@ -284,12 +280,15 @@ struct ServerOpts {
     #[arg(long = "iroh-api-max-requests-per-connection", env = FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, default_value = "50")]
     iroh_api_max_requests_per_connection: usize,
 
-    /// Enable the transitional Iroh 1.0 API endpoint alongside Iroh 0.35.
+    /// Keep serving the separate Iroh API identity that earlier releases
+    /// advertised to clients.
     ///
-    /// For a federation configured with the legacy Iroh API, this is a runtime
-    /// setting independent of the DKG-only `--enable-iroh` option. It is
-    /// enabled by default. Once the endpoint is advertised, it must remain
-    /// enabled.
+    /// Clients that stored it keep connecting to it until they reopen and
+    /// learn that it is no longer advertised. For a federation configured
+    /// with the Iroh API, this is a runtime setting independent of the
+    /// DKG-only `--enable-iroh` option. It is enabled by default and can be
+    /// disabled once the `next` series of the Iroh API request metrics stays
+    /// at zero.
     #[arg(
         long,
         env = FM_IROH_NEXT_ENABLE_ENV,
@@ -300,7 +299,7 @@ struct ServerOpts {
     )]
     enable_iroh_next: bool,
 
-    /// Bind address for the transitional Iroh 1.0 API endpoint
+    /// Bind address for the transitional Iroh API endpoint
     #[arg(long, env = FM_BIND_API_NEXT_ENV)]
     bind_api_next: Option<SocketAddr>,
 }
@@ -443,6 +442,13 @@ pub async fn run(
         None
     };
 
+    if !server_opts.iroh_relays.is_empty() {
+        warn!(
+            target: LOG_SERVER,
+            "Ignoring the configured Iroh relays: the Iroh API uses the default relays now"
+        );
+    }
+
     let settings = ConfigGenSettings {
         p2p_bind: server_opts.bind_p2p,
         api_bind: server_opts.bind_api,
@@ -451,7 +457,6 @@ pub async fn run(
         api_url: server_opts.api_url.clone(),
         enable_iroh,
         iroh_dns: server_opts.iroh_dns.clone(),
-        iroh_relays: server_opts.iroh_relays.clone(),
         network: server_opts.bitcoin_network,
         available_modules: module_init_registry.kinds(),
         default_modules: module_init_registry.default_modules(),

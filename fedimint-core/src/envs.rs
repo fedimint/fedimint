@@ -234,9 +234,9 @@ pub const FM_IROH_RELAYS_ENABLE_ENV: &str = "FM_IROH_RELAYS_ENABLE";
 
 /// Enable direct IP transports on guardian Iroh 1.x endpoints (default: true).
 ///
-/// Set to `false` or `0` for relay-only guardian P2P, transitional API
-/// listeners, and guardian-origin API connections on Iroh 1.x. Does not affect
-/// legacy Iroh 0.35 connections or TLS transports.
+/// Set to `false` or `0` for relay-only guardian P2P, API listeners, and
+/// guardian-origin API connections on Iroh 1.x. Does not affect TLS
+/// transports.
 pub const FM_IROH_P2P_ENABLE_ENV: &str = "FM_IROH_P2P_ENABLE";
 
 /// Env var to disable all pkarr publishing (enabled by default)

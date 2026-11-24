@@ -65,20 +65,15 @@ so other guardians can discover it by endpoint ID. This fallback is required for
 relay-disabled deployments, but discloses the guardian's direct P2P addresses to
 the configured Pkarr service.
 
-## Transitional Iroh 1.0 client API
+## Iroh 1.x client API
 
-The client-facing API keeps its original identity and Iroh 0.35 listener for
-deployed clients. It also starts an Iroh 1.0 listener with a separately derived
-identity by default. Set `FM_IROH_NEXT_ENABLE=false` to disable it before it is
-advertised. Its bind address is configured by `FM_BIND_API_NEXT` and defaults
-to the original API bind port plus 10. The Iroh 1.0 listener and capable clients
-use the Fedimint-operated Iroh 1.x relay set. `FM_IROH_RELAYS_ENABLE=0` disables
-relays for the listener; `FM_IROH_RELAY` remains exclusive to the Iroh 0.35 API
-and `FM_IROH_P2P_RELAY` only overrides guardian P2P relays. This
-migration endpoint is only supported for a federation configured with the
-legacy Iroh API. Its runtime default is independent of the DKG-only
-`FM_ENABLE_IROH` option. Existing federations configured without the legacy
-Iroh API continue without either Iroh listener and log a warning.
+The client-facing API serves Iroh 1.x under the API identity from the
+federation config, on the API bind address. Clients from 0.12.0 on try Iroh
+0.35 and Iroh 1.x against that identity concurrently and keep whichever
+connects, so they need no change. Older clients ship a pre-release Iroh 1.x
+with an incompatible wire protocol and can no longer connect over Iroh. The
+listener uses the Fedimint-operated Iroh 1.x relay set; `FM_IROH_RELAY` is
+ignored.
 
 The Iroh 1.x default relay set selects Fedimint-operated home relays rather than
 n0's public relays. It is not an egress allowlist: clients and guardians can still
@@ -88,13 +83,18 @@ do not resolve yet and are reserved for a later move to Fedimint-owned domains.
 Iroh never selects an unreachable relay as home, so they are inert until they
 serve an Iroh 1.x relay. Keep them unresolvable until then.
 
-Guardian metadata advertises the new identity in an optional field ignored by
-older clients. Capable clients use the advertised identity without falling back
-to the original identity. A client that learns the metadata while already
-running applies it when reopened.
+### Transitional identity
 
-This rollout is forward-only. Once a guardian advertises its Iroh 1.0 API
-identity, that listener must remain enabled and reachable. Disabling it or
-downgrading to a binary without the listener is unsupported. After
-advertisement, setting `FM_IROH_NEXT_ENABLE=false` makes startup fail while the
-persisted advertisement exists. Omitting the setting keeps the listener enabled.
+Releases 0.12.0 through 0.13.0 advertised a separately derived Iroh 1.x
+identity in guardian metadata, and clients that learned it use it without
+falling back to the original identity. The guardian clears the advertisement on
+startup but keeps serving that identity by default so those clients stay
+connected. A client that learns the cleared metadata while running returns to
+the original identity when reopened. The transitional listener binds to
+`FM_BIND_API_NEXT`, which defaults to the API bind port plus 10, and only runs
+for a federation configured with the Iroh API.
+
+Requests on the transitional identity are counted under the `next` series of
+the Iroh API request metrics. Once that series stays at zero, set
+`FM_IROH_NEXT_ENABLE=false` to stop the listener. It will be removed in a later
+release.

@@ -13,8 +13,8 @@ use fedimint_logging::LOG_NET_API;
 use fedimint_metrics::prometheus::HistogramTimer;
 use fedimint_server_core::DynServerModule;
 use futures::FutureExt as _;
-use iroh::Endpoint;
-use iroh::endpoint::{Incoming, RecvStream, SendStream, VarInt};
+use iroh_next::Endpoint;
+use iroh_next::endpoint::{Connection, Incoming, VarInt};
 use serde_json::Value;
 use tokio::sync::Semaphore;
 use tracing::{error, warn};
@@ -41,9 +41,31 @@ const IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_REASON: &[u8] = b"idle timeout";
 /// endpoint.
 const UNKNOWN_METHOD: &str = "unknown";
 
+/// The Iroh API listener a connection arrived on. Both listeners speak Iroh
+/// 1.x and serve the same API; they differ only in identity.
+#[derive(Clone, Copy)]
+pub(super) enum IrohApiListener {
+    /// The API identity from the federation config.
+    Default,
+    /// The identity earlier releases advertised in guardian metadata, kept
+    /// for clients that stored it. Its metric label shows when it goes
+    /// unused.
+    Transitional,
+}
+
+impl IrohApiListener {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Default => "default",
+            Self::Transitional => "next",
+        }
+    }
+}
+
 pub(super) async fn run_iroh_api(
     api: Arc<IrohApiState>,
     endpoint: Endpoint,
+    listener: IrohApiListener,
     task_group: TaskGroup,
 ) {
     loop {
@@ -52,7 +74,7 @@ pub(super) async fn run_iroh_api(
                 let permit = acquire_iroh_api_permit(
                     &api.parallel_connections_limit,
                     api.limits.max_connections,
-                    "0.35",
+                    listener.label(),
                     "connection",
                 )
                 .await;
@@ -64,6 +86,7 @@ pub(super) async fn run_iroh_api(
                         incoming,
                         permit,
                         api.limits.max_requests_per_connection,
+                        listener,
                     )
                     .then(|result| async {
                         if let Err(err) = result {
@@ -122,14 +145,14 @@ impl IrohApiState {
 async fn acquire_iroh_api_permit(
     limit: &Arc<Semaphore>,
     max: usize,
-    version: &'static str,
+    listener: &'static str,
     resource: &'static str,
 ) -> tokio::sync::OwnedSemaphorePermit {
     if limit.available_permits() == 0 {
         warn!(
             target: LOG_NET_API,
             limit = max,
-            version,
+            listener,
             resource,
             "Iroh API limit reached, blocking"
         );
@@ -166,129 +189,27 @@ async fn handle_incoming(
     incoming: Incoming,
     connection_permit: tokio::sync::OwnedSemaphorePermit,
     iroh_api_max_requests_per_connection: usize,
+    listener: IrohApiListener,
 ) -> anyhow::Result<()> {
     let connection = incoming.accept()?.await?;
     handle_iroh_api_connection(
         api,
         task_group,
-        VersionedIrohConnection::Legacy(connection),
+        connection,
         connection_permit,
         iroh_api_max_requests_per_connection,
-        IrohApiVersion::Legacy,
+        listener,
     )
     .await
-}
-
-#[derive(Clone, Copy)]
-enum IrohApiVersion {
-    Legacy,
-    Next,
-}
-
-impl IrohApiVersion {
-    fn log_label(self) -> &'static str {
-        match self {
-            Self::Legacy => "0.35",
-            Self::Next => "1.0",
-        }
-    }
-
-    fn metric_label(self) -> &'static str {
-        match self {
-            Self::Legacy => "default",
-            Self::Next => "next",
-        }
-    }
-
-    fn request_task_name(self) -> &'static str {
-        match self {
-            Self::Legacy => "handle-iroh-request",
-            Self::Next => "handle-iroh-next-request",
-        }
-    }
-}
-
-enum VersionedIrohConnection {
-    Legacy(iroh::endpoint::Connection),
-    Next(iroh_next::endpoint::Connection),
-}
-
-impl VersionedIrohConnection {
-    async fn accept_bi(&self) -> anyhow::Result<(VersionedSendStream, VersionedRecvStream)> {
-        Ok(match self {
-            Self::Legacy(connection) => {
-                let (send, recv) = connection.accept_bi().await?;
-                (
-                    VersionedSendStream::Legacy(send),
-                    VersionedRecvStream::Legacy(recv),
-                )
-            }
-            Self::Next(connection) => {
-                let (send, recv) = connection.accept_bi().await?;
-                (
-                    VersionedSendStream::Next(send),
-                    VersionedRecvStream::Next(recv),
-                )
-            }
-        })
-    }
-
-    fn close_for_idle_timeout(&self) {
-        match self {
-            Self::Legacy(connection) => connection.close(
-                VarInt::from_u32(IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_CODE),
-                IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_REASON,
-            ),
-            Self::Next(connection) => connection.close(
-                iroh_next::endpoint::VarInt::from_u32(IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_CODE),
-                IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_REASON,
-            ),
-        }
-    }
-}
-
-enum VersionedSendStream {
-    Legacy(SendStream),
-    Next(iroh_next::endpoint::SendStream),
-}
-
-impl VersionedSendStream {
-    async fn write_response(mut self, response: &[u8]) -> anyhow::Result<()> {
-        match &mut self {
-            Self::Legacy(send) => {
-                send.write_all(response).await?;
-                send.finish()?;
-            }
-            Self::Next(send) => {
-                send.write_all(response).await?;
-                send.finish()?;
-            }
-        }
-        Ok(())
-    }
-}
-
-enum VersionedRecvStream {
-    Legacy(RecvStream),
-    Next(iroh_next::endpoint::RecvStream),
-}
-
-impl VersionedRecvStream {
-    async fn read_request(&mut self) -> anyhow::Result<Vec<u8>> {
-        Ok(match self {
-            Self::Legacy(recv) => recv.read_to_end(100_000).await?,
-            Self::Next(recv) => recv.read_to_end(100_000).await?,
-        })
-    }
 }
 
 async fn handle_iroh_api_connection(
     api: Arc<IrohApiState>,
     task_group: TaskGroup,
-    connection: VersionedIrohConnection,
+    connection: Connection,
     _connection_permit: tokio::sync::OwnedSemaphorePermit,
     max_requests: usize,
-    version: IrohApiVersion,
+    listener: IrohApiListener,
 ) -> anyhow::Result<()> {
     let parallel_requests_limit = Arc::new(Semaphore::new(max_requests));
     let _metrics = ActiveIrohApiConnection::new();
@@ -307,11 +228,14 @@ async fn handle_iroh_api_connection(
                 IROH_API_CONNECTION_IDLE_TIMEOUT_TOTAL.inc();
                 tracing::debug!(
                     target: LOG_NET_API,
-                    version = version.log_label(),
+                    listener = listener.label(),
                     idle_timeout_secs = IROH_API_CONNECTION_IDLE_TIMEOUT.as_secs(),
                     "Closing idle Iroh API connection"
                 );
-                connection.close_for_idle_timeout();
+                connection.close(
+                    VarInt::from_u32(IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_CODE),
+                    IROH_API_CONNECTION_IDLE_TIMEOUT_ERROR_REASON,
+                );
                 return Ok(());
             }
         };
@@ -319,18 +243,18 @@ async fn handle_iroh_api_connection(
         let permit = acquire_iroh_api_permit(
             &parallel_requests_limit,
             max_requests,
-            version.log_label(),
+            listener.label(),
             "request",
         )
         .await;
         task_group.spawn_cancellable_silent(
-            version.request_task_name(),
+            "handle-iroh-request",
             handle_iroh_api_stream(
                 api.clone(),
                 send_stream,
                 recv_stream,
                 permit,
-                version.metric_label(),
+                listener.label(),
             )
             .then(|result| async {
                 if let Err(err) = result {
@@ -343,20 +267,22 @@ async fn handle_iroh_api_connection(
 
 async fn handle_iroh_api_stream(
     api: Arc<IrohApiState>,
-    send_stream: VersionedSendStream,
-    mut recv_stream: VersionedRecvStream,
+    mut send_stream: iroh_next::endpoint::SendStream,
+    mut recv_stream: iroh_next::endpoint::RecvStream,
     _request_permit: tokio::sync::OwnedSemaphorePermit,
-    metric_label: &'static str,
+    listener_label: &'static str,
 ) -> anyhow::Result<()> {
-    let request = recv_stream.read_request().await?;
-    let response = handle_iroh_api_request(&api, &request, metric_label).await?;
-    send_stream.write_response(&response).await
+    let request = recv_stream.read_to_end(100_000).await?;
+    let response = handle_iroh_api_request(&api, &request, listener_label).await?;
+    send_stream.write_all(&response).await?;
+    send_stream.finish()?;
+    Ok(())
 }
 
 async fn handle_iroh_api_request(
     api: &IrohApiState,
     request: &[u8],
-    version_label: &'static str,
+    listener_label: &'static str,
 ) -> anyhow::Result<Vec<u8>> {
     let request = serde_json::from_slice::<IrohApiRequest>(request)?;
     let request_method = request.method.clone();
@@ -364,7 +290,7 @@ async fn handle_iroh_api_request(
         &api.core,
         &api.modules,
         &request_method,
-        version_label,
+        listener_label,
         await_response(api, request),
     )
     .await;
@@ -398,7 +324,7 @@ async fn record_request_metrics<T, C, M>(
     core: &BTreeMap<String, C>,
     modules: &BTreeMap<ModuleInstanceId, BTreeMap<String, M>>,
     request_method: &ApiMethod,
-    version_label: &'static str,
+    listener_label: &'static str,
     response: impl Future<Output = Result<T, ApiError>>,
 ) -> Result<T, ApiError> {
     let method = metric_method(core, modules, request_method);
@@ -412,7 +338,7 @@ async fn record_request_metrics<T, C, M>(
         .as_ref()
         .map_or_else(|err| err.code.to_string(), |_| "0".to_string());
     IROH_API_REQUEST_RESPONSE_CODE
-        .with_label_values(&[method.as_ref(), response_code.as_str(), version_label])
+        .with_label_values(&[method.as_ref(), response_code.as_str(), listener_label])
         .inc();
 
     response
@@ -480,63 +406,6 @@ async fn run_handler(
 
             Err(ApiError::server_error("API handler panicked".to_string()))
         })
-}
-
-// --- iroh-next API endpoint functions ---
-
-pub(super) async fn run_iroh_api_next(
-    api: Arc<IrohApiState>,
-    endpoint: iroh_next::Endpoint,
-    task_group: TaskGroup,
-) {
-    loop {
-        match endpoint.accept().await {
-            Some(incoming) => {
-                let permit = acquire_iroh_api_permit(
-                    &api.parallel_connections_limit,
-                    api.limits.max_connections,
-                    "1.0",
-                    "connection",
-                )
-                .await;
-                task_group.spawn_cancellable_silent(
-                    "handle-iroh-next-connection",
-                    handle_incoming_next(
-                        api.clone(),
-                        task_group.clone(),
-                        incoming,
-                        permit,
-                        api.limits.max_requests_per_connection,
-                    )
-                    .then(|result| async {
-                        if let Err(err) = result {
-                            warn!(target: LOG_NET_API, err = %err.fmt_compact(), "Failed to handle iroh-next connection");
-                        }
-                    }),
-                );
-            }
-            None => return,
-        }
-    }
-}
-
-async fn handle_incoming_next(
-    api: Arc<IrohApiState>,
-    task_group: TaskGroup,
-    incoming: iroh_next::endpoint::Incoming,
-    connection_permit: tokio::sync::OwnedSemaphorePermit,
-    iroh_api_max_requests_per_connection: usize,
-) -> anyhow::Result<()> {
-    let connection = incoming.accept()?.await?;
-    handle_iroh_api_connection(
-        api,
-        task_group,
-        VersionedIrohConnection::Next(connection),
-        connection_permit,
-        iroh_api_max_requests_per_connection,
-        IrohApiVersion::Next,
-    )
-    .await
 }
 
 #[cfg(test)]

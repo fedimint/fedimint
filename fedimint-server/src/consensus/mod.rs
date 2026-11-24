@@ -27,7 +27,6 @@ use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::module::registry::ModuleRegistry;
 use fedimint_core::module::{ApiAuth, FEDIMINT_API_ALPN};
 use fedimint_core::net::DynP2PConnections;
-use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::session_outcome::ConsensusItem;
 use fedimint_core::task::{TaskGroup, sleep};
 use fedimint_core::util::SafeUrl;
@@ -46,7 +45,7 @@ use crate::config::{ServerConfig, ServerConfigLocal};
 use crate::connection_limits::ConnectionLimits;
 use crate::consensus::api::ConsensusApi;
 use crate::consensus::engine::{ConsensusEngine, ConsensusStop};
-use crate::consensus::iroh_api::{IrohApiState, run_iroh_api, run_iroh_api_next};
+use crate::consensus::iroh_api::{IrohApiListener, IrohApiState, run_iroh_api};
 use crate::db::verify_server_db_integrity_dbtx;
 use crate::net::api::ApiSecrets;
 use crate::net::api::announcement::get_api_urls;
@@ -61,19 +60,24 @@ use crate::{DashboardUiRouter, IrohNextApiSettings, net, update_server_info_vers
 const TRANSACTION_BUFFER: usize = 1000;
 
 struct IrohApiEndpoints {
-    legacy: Option<iroh::Endpoint>,
-    next: Option<iroh_next::Endpoint>,
+    /// The API identity from the federation config, served over Iroh 1.x on
+    /// the API bind address.
+    default: Option<iroh_next::Endpoint>,
+    /// The identity earlier releases advertised in guardian metadata, kept
+    /// for clients that stored it until they reopen with the cleared
+    /// advertisement.
+    transitional: Option<iroh_next::Endpoint>,
 }
 
 fn eligible_iroh_next_api_settings(
-    has_legacy_iroh_api: bool,
+    has_iroh_api: bool,
     iroh_next_api_settings: Option<&IrohNextApiSettings>,
 ) -> Option<&IrohNextApiSettings> {
-    if iroh_next_api_settings.is_some() && !has_legacy_iroh_api {
+    if iroh_next_api_settings.is_some() && !has_iroh_api {
         warn!(
             target: LOG_CONSENSUS,
-            "Not starting the transitional Iroh 1.0 API because this federation was configured \
-             without the legacy Iroh API"
+            "Not starting the transitional Iroh API because this federation was configured \
+             without the Iroh API"
         );
         None
     } else {
@@ -160,33 +164,29 @@ async fn prepare_iroh_api_endpoints(
     cfg: &ServerConfig,
     api_bind: SocketAddr,
     iroh_dns: Option<SafeUrl>,
-    iroh_relays: Vec<SafeUrl>,
     iroh_next_api_settings: Option<&IrohNextApiSettings>,
 ) -> anyhow::Result<IrohApiEndpoints> {
-    let legacy = if let Some(iroh_api_sk) = cfg.private.iroh_api_sk.clone() {
-        Some(
-            build_iroh_endpoint(
-                iroh_api_sk,
-                api_bind,
-                iroh_dns.clone(),
-                iroh_relays,
-                FEDIMINT_API_ALPN,
-            )
-            .await?,
-        )
+    let default = if let Some(iroh_api_sk) = &cfg.private.iroh_api_sk {
+        // The config stores the key with the Iroh 0.35 types; both versions
+        // use the same ed25519 keys, so the identity is unchanged.
+        let api_sk = iroh_next::SecretKey::from_bytes(&iroh_api_sk.to_bytes());
+        Some(build_iroh_v1_endpoint(api_sk, api_bind, iroh_dns.clone(), FEDIMINT_API_ALPN).await?)
     } else {
         None
     };
 
-    let next_bind = resolve_iroh_next_api_bind(api_bind, iroh_next_api_settings)?;
-    let next = if let Some(bind) = next_bind {
-        let next_api_sk = derive_iroh_v1_api_secret_key(&cfg.private.broadcast_secret_key);
-        Some(build_iroh_v1_endpoint(next_api_sk, bind, iroh_dns, FEDIMINT_API_ALPN).await?)
+    let transitional_bind = resolve_iroh_next_api_bind(api_bind, iroh_next_api_settings)?;
+    let transitional = if let Some(bind) = transitional_bind {
+        let transitional_sk = derive_iroh_v1_api_secret_key(&cfg.private.broadcast_secret_key);
+        Some(build_iroh_v1_endpoint(transitional_sk, bind, iroh_dns, FEDIMINT_API_ALPN).await?)
     } else {
         None
     };
 
-    Ok(IrohApiEndpoints { legacy, next })
+    Ok(IrohApiEndpoints {
+        default,
+        transitional,
+    })
 }
 
 fn spawn_iroh_api_tasks(
@@ -197,17 +197,27 @@ fn spawn_iroh_api_tasks(
 ) {
     let iroh_api = IrohApiState::new(consensus_api, iroh_api_limits);
 
-    if let Some(endpoint) = endpoints.legacy {
+    if let Some(endpoint) = endpoints.default {
         task_group.spawn_cancellable(
             "iroh-api",
-            run_iroh_api(iroh_api.clone(), endpoint, task_group.clone()),
+            run_iroh_api(
+                iroh_api.clone(),
+                endpoint,
+                IrohApiListener::Default,
+                task_group.clone(),
+            ),
         );
     }
 
-    if let Some(endpoint) = endpoints.next {
+    if let Some(endpoint) = endpoints.transitional {
         task_group.spawn_cancellable(
-            "iroh-next-api",
-            run_iroh_api_next(iroh_api, endpoint, task_group.clone()),
+            "iroh-transitional-api",
+            run_iroh_api(
+                iroh_api,
+                endpoint,
+                IrohApiListener::Transitional,
+                task_group.clone(),
+            ),
         );
     }
 }
@@ -221,7 +231,6 @@ pub async fn run(
     p2p_status_receivers: P2PStatusReceivers,
     api_bind: SocketAddr,
     iroh_dns: Option<SafeUrl>,
-    iroh_relays: Vec<SafeUrl>,
     cfg: ServerConfig,
     db: Database,
     module_init_registry: ServerModuleInitRegistry,
@@ -243,10 +252,7 @@ pub async fn run(
     let iroh_next_api_settings =
         eligible_iroh_next_api_settings(cfg.private.iroh_api_sk.is_some(), iroh_next_api_settings);
 
-    ensure_api_secrets_enforceable(
-        cfg.private.iroh_api_sk.is_some() || iroh_next_api_settings.is_some(),
-        &force_api_secrets,
-    )?;
+    ensure_api_secrets_enforceable(cfg.private.iroh_api_sk.is_some(), &force_api_secrets)?;
 
     let mut global_dbtx = db.begin_transaction().await;
     apply_migrations_server_dbtx(
@@ -394,17 +400,10 @@ pub async fn run(
     let guardian_metadata_api =
         prepare_guardian_metadata_service(&db, &cfg, force_api_secrets.get_active()).await?;
 
-    let iroh_api_endpoints = prepare_iroh_api_endpoints(
-        &cfg,
-        api_bind,
-        iroh_dns,
-        iroh_relays,
-        iroh_next_api_settings,
-    )
-    .await?;
+    let iroh_api_endpoints =
+        prepare_iroh_api_endpoints(&cfg, api_bind, iroh_dns, iroh_next_api_settings).await?;
 
-    let guardian_metadata_updated =
-        reconcile_guardian_metadata(&db, &cfg, iroh_next_api_settings).await?;
+    let guardian_metadata_updated = reconcile_guardian_metadata(&db, &cfg).await;
 
     info!(target: LOG_CONSENSUS, "Starting Consensus Api...");
 

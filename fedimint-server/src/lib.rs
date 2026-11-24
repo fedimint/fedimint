@@ -77,10 +77,11 @@ pub mod net;
 /// Fedimint toplevel config
 pub mod config;
 
-/// Requested settings for the transitional Iroh 1.0 API listener.
+/// Requested settings for the transitional Iroh API listener, which keeps
+/// serving the separate identity earlier releases advertised to clients.
 #[derive(Debug, Clone)]
 pub struct IrohNextApiSettings {
-    /// Optional explicit socket address on which to bind the Iroh 1.0 API
+    /// Optional explicit socket address on which to bind the transitional
     /// endpoint.
     bind: Option<SocketAddr>,
 }
@@ -305,7 +306,6 @@ pub async fn run_with_iroh_p2p_relays_and_next_api(
         p2p_status_receivers,
         settings.api_bind,
         settings.iroh_dns,
-        settings.iroh_relays,
         cfg,
         db,
         module_init_registry.clone(),

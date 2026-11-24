@@ -137,28 +137,27 @@ let
             type = types.bool;
             default = true;
             description = ''
-              Enable the transitional Iroh 1.0 client API for federations
-              configured with the legacy Iroh API.
-
-              WARNING: Once this endpoint is advertised, setting this option to
-              false makes fedimintd startup fail. The endpoint must remain
-              enabled and reachable.
+              Keep serving the separate Iroh API identity that fedimintd
+              0.12.0 through 0.13.0 advertised to clients. Clients that stored
+              it keep connecting to it until they reopen and learn that it is
+              no longer advertised. Disable once the `next` series of the Iroh
+              API request metrics stays at zero.
             '';
           };
           openFirewall = mkOption {
             type = types.bool;
             default = true;
-            description = "Opens the UDP port for fedimintd's transitional Iroh 1.0 API endpoint";
+            description = "Opens the UDP port for fedimintd's transitional Iroh API endpoint";
           };
           port = mkOption {
             type = types.port;
             default = 8184;
-            description = "UDP port to bind the transitional Iroh 1.0 API endpoint";
+            description = "UDP port to bind the transitional Iroh API endpoint";
           };
           bind = mkOption {
             type = types.str;
             default = "0.0.0.0";
-            description = "Address to bind the transitional Iroh 1.0 API endpoint";
+            description = "Address to bind the transitional Iroh API endpoint";
           };
         };
         ui = {

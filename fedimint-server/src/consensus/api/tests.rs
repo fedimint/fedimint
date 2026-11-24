@@ -14,7 +14,7 @@ use super::{
     MAX_OUTPUTS_OUTCOMES_BATCH, OutPointRange, P2PConnectionState, P2PConnectionStatus, PeerId,
     ScheduledShutdown, ShutdownRequest, SystemTime, backup_timestamp_is_too_far_in_future,
     checked_outputs_outcomes_count, legacy_peer_status, schedule_shutdown_after, secp256k1,
-    sign_guardian_metadata_preserving_iroh_endpoint, watch,
+    sign_and_store_guardian_metadata, watch,
 };
 use crate::net::api::guardian_metadata::GuardianMetadataKey;
 
@@ -236,41 +236,21 @@ fn backup_timestamp_future_limit_is_strict() {
 }
 
 #[tokio::test]
-async fn admin_metadata_update_preserves_persisted_iroh_endpoint() {
+async fn admin_metadata_update_clears_the_iroh_next_endpoint() {
     let db: Database = MemDatabase::new().into_database();
     let identity = PeerId::from(0);
     let broadcast_secret_key = secp256k1::SecretKey::from_slice(&[42; 32]).expect("valid test key");
-    let ctx = secp256k1::Secp256k1::new();
-
-    let existing = GuardianMetadata::new(
-        vec!["wss://old.example".parse().expect("valid URL")],
-        "old-pkarr".to_owned(),
-        1,
-    )
-    .with_iroh_next_endpoint("persisted-iroh-id".to_owned())
-    .sign(&ctx, &broadcast_secret_key.keypair(&ctx));
-    let mut dbtx = db.begin_transaction().await;
-    dbtx.insert_entry(&GuardianMetadataKey(identity), &existing)
-        .await;
-    dbtx.commit_tx().await;
 
     let updated = GuardianMetadata::new(
         vec!["wss://new.example".parse().expect("valid URL")],
         "new-pkarr".to_owned(),
         2,
-    );
-    let signed = sign_guardian_metadata_preserving_iroh_endpoint(
-        &db,
-        identity,
-        &broadcast_secret_key,
-        updated,
     )
-    .await;
+    .with_iroh_next_endpoint("stale-iroh-id".to_owned());
+    let signed =
+        sign_and_store_guardian_metadata(&db, identity, &broadcast_secret_key, updated).await;
 
-    assert_eq!(
-        signed.guardian_metadata().iroh_next_endpoint.as_deref(),
-        Some("persisted-iroh-id")
-    );
+    assert_eq!(signed.guardian_metadata().iroh_next_endpoint, None);
     assert_eq!(
         signed.guardian_metadata().api_urls,
         vec!["wss://new.example".parse().expect("valid URL")]
