@@ -12,6 +12,7 @@ use thiserror::Error;
 use tracing::warn;
 
 use crate::util::FmtCompact as _;
+pub use crate::{is_running_in_test_env, next_poll_delay};
 
 /// In tests we want to routinely enable an extra unknown module to ensure
 /// all client code handles correct modules that client doesn't know about.
@@ -76,31 +77,72 @@ pub fn is_env_var_set_opt(var: &str) -> Option<bool> {
     }
 }
 
-/// Use to detect if running in a test environment, either `cargo test` or
-/// `devimint`.
-pub fn is_running_in_test_env() -> bool {
-    let unit_test = cfg!(test);
-
-    unit_test || is_env_var_set("NEXTEST") || is_env_var_set(FM_IN_DEVIMINT_ENV)
+/// Detect unit tests in the calling crate, nextest, or devimint.
+///
+/// The macro evaluates `cfg!(test)` in the calling crate. Inside a dependency's
+/// function, `cfg!(test)` describes that dependency's build and cannot detect
+/// the consuming crate's unit tests. Code compiled without `cfg(test)` still
+/// needs the runtime signal `NEXTEST` or `FM_IN_DEVIMINT`.
+///
+/// ```
+/// use fedimint_core::envs::{FM_IN_DEVIMINT_ENV, is_env_var_set, is_running_in_test_env};
+///
+/// // Doctests compile without cfg(test), like normal applications.
+/// assert!(!cfg!(test));
+/// assert_eq!(
+///     is_running_in_test_env!(),
+///     is_env_var_set("NEXTEST") || is_env_var_set(FM_IN_DEVIMINT_ENV),
+/// );
+/// ```
+#[macro_export]
+macro_rules! is_running_in_test_env {
+    () => {
+        cfg!(test)
+            || $crate::envs::is_env_var_set("NEXTEST")
+            || $crate::envs::is_env_var_set($crate::envs::FM_IN_DEVIMINT_ENV)
+    };
 }
 
-/// How long to wait before polling peers for their supported module consensus
-/// version again.
+/// Return the delay before polling peers again for their supported module
+/// consensus versions.
 ///
-/// The first poll of a freshly started process races the peers' API servers
-/// binding and normally loses, so a round that failed to reach everyone is
-/// retried soon rather than after the full interval -- otherwise activation is
-/// dead for that interval after every restart. A peer that stays unreachable is
-/// then polled at the short interval indefinitely, which is a few requests per
-/// minute.
-pub fn next_poll_delay(reached_all_peers: bool) -> std::time::Duration {
-    if is_running_in_test_env() {
-        std::time::Duration::from_secs(5)
-    } else if reached_all_peers {
-        std::time::Duration::from_secs(600)
-    } else {
-        std::time::Duration::from_secs(30)
-    }
+/// After a restart, the first poll can run before peers' API servers bind.
+/// Retry soon if a round fails to reach all peers, so activation need not wait
+/// for the full interval. Keep polling unreachable peers at the short interval,
+/// a few requests per minute.
+///
+/// Like [`is_running_in_test_env!`], this macro checks for unit tests in the
+/// calling crate. It evaluates its argument exactly once, including in test
+/// mode.
+///
+/// ```
+/// use std::time::Duration;
+///
+/// use fedimint_core::envs::{is_running_in_test_env, next_poll_delay};
+///
+/// assert!(!cfg!(test));
+/// let in_test_env = is_running_in_test_env!();
+/// assert_eq!(
+///     next_poll_delay!(true),
+///     Duration::from_secs(if in_test_env { 5 } else { 600 }),
+/// );
+/// assert_eq!(
+///     next_poll_delay!(false),
+///     Duration::from_secs(if in_test_env { 5 } else { 30 }),
+/// );
+/// ```
+#[macro_export]
+macro_rules! next_poll_delay {
+    ($reached_all_peers:expr $(,)?) => {{
+        let reached_all_peers = $reached_all_peers;
+        if $crate::envs::is_running_in_test_env!() {
+            ::std::time::Duration::from_secs(5)
+        } else if reached_all_peers {
+            ::std::time::Duration::from_secs(600)
+        } else {
+            ::std::time::Duration::from_secs(30)
+        }
+    }};
 }
 
 /// Use to disable automatic consensus version voting for testing and

@@ -47,7 +47,7 @@ pub(crate) async fn run_guardian_metadata_refresh_task(client_inner: Arc<Client>
             1,
             api,
             &guardian_pub_keys,
-            if is_running_in_test_env() {
+            if is_running_in_test_env!() {
                 Duration::from_millis(1)
             } else {
                 Duration::from_secs(30)
@@ -57,7 +57,7 @@ pub(crate) async fn run_guardian_metadata_refresh_task(client_inner: Arc<Client>
         store_guardian_metadata_updates_from_peers(client_inner.db(), &guardian_pub_keys, &results)
             .await;
 
-        let duration = if is_running_in_test_env() {
+        let duration = if is_running_in_test_env!() {
             Duration::from_secs(1)
         } else {
             // Check once an hour if there are new metadata

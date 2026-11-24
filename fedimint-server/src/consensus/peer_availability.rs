@@ -20,14 +20,13 @@ use std::time::Duration;
 
 use fedimint_core::db::{AutocommitResultExt, Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
-use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::peer_availability::{
     PEER_AVAILABILITY_WINDOWS_SECS, PeerAvailability, WindowAvailability,
 };
 use fedimint_core::task::sleep;
 use fedimint_core::time::duration_since_epoch;
-use fedimint_core::{NumPeers, PeerId};
+use fedimint_core::{NumPeers, PeerId, is_running_in_test_env};
 use fedimint_logging::LOG_CONSENSUS;
 use tracing::debug;
 
@@ -59,7 +58,7 @@ impl AvailabilityTiming {
 /// every 10 minutes, or every 10 seconds in tests. A restart loses at most one
 /// interval of activity.
 pub async fn persist_peer_availability(db: Database, tracker: Arc<AvailabilityTracker>) {
-    let interval = AvailabilityTiming::for_test_env(is_running_in_test_env()).persist_interval;
+    let interval = AvailabilityTiming::for_test_env(is_running_in_test_env!()).persist_interval;
 
     loop {
         sleep(interval).await;
@@ -233,7 +232,7 @@ impl PeerActivity {
         Self::with_timing(
             identity,
             num_peers,
-            AvailabilityTiming::for_test_env(is_running_in_test_env()),
+            AvailabilityTiming::for_test_env(is_running_in_test_env!()),
         )
     }
 

@@ -290,7 +290,7 @@ impl ConsensusEngine {
             // In a test environment all peers are started in lockstep, so we
             // add jitter to the unit creation delay to break it; in production
             // the peers' timing drifts naturally.
-            let jitter = if is_running_in_test_env() {
+            let jitter = if is_running_in_test_env!() {
                 rand::thread_rng().gen_range(0.5..=1.5)
             } else {
                 1.0

@@ -244,7 +244,7 @@ fs-lock = "=0.1.10"
 fs2 = "0.4.3"
 futures = "0.3.32"
 futures-util = "0.3.30"
-getrandom = "0.3.3"
+getrandom = "0.4.2"
 gloo-net = "0.6.0"
 gloo-timers = "0.3.0"
 group = "0.13.0"
@@ -348,7 +348,7 @@ tonic_lnd = { version = "0.4.0", package = "fedimint-tonic-lnd", features = [
 ] }
 tor-rtcompat = { version = "0.38.0", features = ["tokio", "rustls"] }
 tower = { version = "0.4.13", default-features = false }
-tower-http = { version = "0.6.8", features = ["cors"] }
+tower-http = { version = "0.7.1", features = ["cors"] }
 tpe = { package = "fedimint-tpe", path = "./crypto/tpe", version = "=0.14.0-alpha" }
 tracing = "0.1.44"
 tracing-opentelemetry = "0.34.0"

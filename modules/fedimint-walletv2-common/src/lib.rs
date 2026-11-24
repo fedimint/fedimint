@@ -55,7 +55,7 @@ pub const BLOCK_COUNT_VOTE_DELAY: u64 = CONFIRMATION_FINALITY_DELAY + 1;
 /// production. Used for polling intervals where faster feedback is needed
 /// during testing.
 pub fn sleep_duration() -> Duration {
-    if fedimint_core::envs::is_running_in_test_env() {
+    if fedimint_core::envs::is_running_in_test_env!() {
         Duration::from_secs(1)
     } else {
         Duration::from_mins(1)
