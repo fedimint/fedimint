@@ -450,3 +450,38 @@ fn a_share_from_a_peer_we_have_no_key_for_names_the_peer() {
 
     assert_matches!(err, VerifyBlindShareError::UnknownPeer { peer: p } if p == peer);
 }
+
+#[test]
+fn slice_recovery_extends_gap_window_from_latest_used_index() {
+    use fedimint_core::bitcoin::hashes::hash160;
+    use fedimint_core::encoding::Encodable as _;
+    use fedimint_core::secp256k1::SECP256K1;
+    use fedimint_derive_secret::{ChildId, DerivableSecret};
+
+    use crate::backup::recovery::RecoveryStateV2;
+    use crate::output::NoteIssuanceRequest;
+    use crate::{MintClientModule, NoteIndex};
+
+    let secret = DerivableSecret::new_root(&[0; 32], &[0; 32])
+        .child_key(ChildId(0))
+        .child_key(ChildId(0));
+    let amount = Amount::from_msats(1024);
+
+    let blind_nonce_hash = |idx: u64| {
+        let note_secret = MintClientModule::new_note_secret_static(&secret, amount, NoteIndex(idx));
+        NoteIssuanceRequest::new(SECP256K1, &note_secret)
+            .1
+            .consensus_hash::<hash160::Hash>()
+    };
+
+    let mut state = RecoveryStateV2::new(0, vec![amount], &secret);
+
+    // Each used index is within the gap limit (100) of the previous one.
+    for idx in [50, 149, 200] {
+        state.handle_output(amount, blind_nonce_hash(idx), &secret);
+    }
+
+    let finalized = state.finalize();
+    assert_eq!(finalized.pending_notes.len(), 3);
+    assert_eq!(finalized.next_note_idx.get(&amount), Some(&NoteIndex(201)));
+}

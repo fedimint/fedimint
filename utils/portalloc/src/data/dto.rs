@@ -65,7 +65,7 @@ impl RootData {
         let mut base_port: u16 = self.next;
         'retry: loop {
             trace!(target: LOG_PORT_ALLOC, base_port, range_size, "Checking a port");
-            if base_port > HIGH {
+            if HIGH < base_port {
                 self.reclaim();
                 base_port = LOW;
             }

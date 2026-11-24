@@ -851,7 +851,12 @@ impl Esplora {
             "--jsonrpc-import", // Workaround for incompatible on-disk format
             "--cors=*",         // Allow CORS for WASM recovery tool
         );
-        let process = process_mgr.spawn_daemon("esplora", cmd).await?;
+        // Esplora's RPC iterator can run on Rayon's global pool despite its
+        // daemon-parallelism setting. Bound that pool for small regtest workloads
+        // so CPU-rich hosts don't exhaust Bitcoin Core's RPC connection limit.
+        let process = process_mgr
+            .spawn_daemon("esplora", cmd.env("RAYON_NUM_THREADS", "4"))
+            .await?;
 
         Self::wait_for_ready(process_mgr).await?;
         debug!(target: LOG_DEVIMINT, "Esplora ready");

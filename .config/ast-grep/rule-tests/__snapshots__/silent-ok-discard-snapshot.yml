@@ -1,0 +1,22 @@
+id: silent-ok-discard
+snapshots:
+  operation().ok();:
+    labels:
+    - source: operation().ok()
+      style: primary
+      start: 0
+      end: 16
+    - source: operation().ok();
+      style: secondary
+      start: 0
+      end: 17
+  parse(input).ok();:
+    labels:
+    - source: parse(input).ok()
+      style: primary
+      start: 0
+      end: 17
+    - source: parse(input).ok();
+      style: secondary
+      start: 0
+      end: 18

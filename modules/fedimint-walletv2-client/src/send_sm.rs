@@ -48,6 +48,7 @@ impl State for SendStateMachine {
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         let ctx = context.clone();
+        let global_context = global_context.clone();
 
         match &self.state {
             SendSMState::Funding => {
@@ -56,6 +57,7 @@ impl State for SendStateMachine {
                     move |dbtx, result, old_state| {
                         Box::pin(Self::transition_funding(
                             ctx.clone(),
+                            global_context.clone(),
                             dbtx,
                             result,
                             old_state,
@@ -96,10 +98,13 @@ impl SendStateMachine {
 
     async fn transition_funding(
         context: WalletClientContext,
+        global_context: DynGlobalClientContext,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         result: AwaitFundingResult,
         old_state: SendStateMachine,
     ) -> SendStateMachine {
+        let account = global_context.account(dbtx).await;
+
         match result {
             AwaitFundingResult::Success(txid) => {
                 context
@@ -109,6 +114,7 @@ impl SendStateMachine {
                         SendPaymentUpdateEvent {
                             operation_id: old_state.common.operation_id,
                             status: SendPaymentStatus::Success(txid),
+                            account,
                         },
                     )
                     .await;
@@ -123,6 +129,7 @@ impl SendStateMachine {
                         SendPaymentUpdateEvent {
                             operation_id: old_state.common.operation_id,
                             status: SendPaymentStatus::Aborted,
+                            account,
                         },
                     )
                     .await;

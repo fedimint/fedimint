@@ -249,6 +249,7 @@ pub struct ConfigGenParams {
     pub iroh_p2p_sk: Option<iroh::SecretKey>,
     /// Endpoints of all servers
     pub peers: BTreeMap<PeerId, PeerSetupCode>,
+    /// (Retired, see <https://github.com/fedimint/fedimint/issues/7889>)
     /// Guardian-defined key-value pairs that will be passed to the client
     pub meta: BTreeMap<String, String>,
     /// Whether to disable base fees for this federation
@@ -318,7 +319,7 @@ impl ServerConfig {
             core_consensus: CORE_CONSENSUS_VERSION,
             api: MultiApiVersion::try_from_iter([ApiVersion {
                 major: 0,
-                minor: 10,
+                minor: 11,
             }])
             .expect("not version conflicts"),
         }

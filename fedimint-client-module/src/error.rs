@@ -7,7 +7,7 @@
 
 use fedimint_core::Amount;
 use fedimint_core::config::{FederationId, ModuleConfigError};
-use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{Account, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::DatabaseError;
 use fedimint_core::module::AmountUnit;
 use thiserror::Error;
@@ -124,6 +124,16 @@ pub enum TransactionSubmitError {
     NoPrimaryModule {
         /// The unit that could not be balanced.
         unit: AmountUnit,
+    },
+
+    /// The primary module for this unit holds a balance for the primary
+    /// account only, so a transaction on another account cannot be balanced.
+    #[error("The primary module for unit {unit} only holds a balance for the primary account")]
+    AccountNotSupported {
+        /// The unit that could not be balanced.
+        unit: AmountUnit,
+        /// The account the transaction acts on.
+        account: Account,
     },
 
     /// The primary module failed to balance the transaction or to complete

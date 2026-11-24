@@ -8,9 +8,6 @@ readme = { workspace = true }
 repository = { workspace = true }
 version = { workspace = true }
 
-[features]
-diagnostics = []
-
 [lib]
 name = "fedimint_derive"
 path = "src/lib.rs"

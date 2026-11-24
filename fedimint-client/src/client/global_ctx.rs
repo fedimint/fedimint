@@ -10,7 +10,7 @@ use fedimint_client_module::{
     InstancelessDynClientOutputBundle,
 };
 use fedimint_core::config::ClientConfig;
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{Account, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::util::BoxStream;
 use fedimint_core::{apply, async_trait_maybe_send, maybe_add_send_sync};
@@ -46,13 +46,18 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         self.client.config().await
     }
 
+    async fn account(&self, dbtx: &mut ClientSMDatabaseTransaction<'_, '_>) -> Account {
+        Client::operation_account_dbtx(dbtx.global_tx(), self.operation).await
+    }
+
     async fn claim_inputs_dyn(
         &self,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         inputs: InstancelessDynClientInputBundle,
     ) -> Result<OutPointRange, TransactionSubmitError> {
+        let account = self.account(dbtx).await;
         let tx_builder =
-            TransactionBuilder::new().with_inputs(inputs.into_dyn(self.module_instance_id));
+            TransactionBuilder::new(account).with_inputs(inputs.into_dyn(self.module_instance_id));
 
         self.client
             .finalize_and_submit_transaction_inner(
@@ -68,8 +73,10 @@ impl IGlobalClientContext for ModuleGlobalClientContext {
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         outputs: InstancelessDynClientOutputBundle,
     ) -> Result<OutPointRange, TransactionSubmitError> {
-        let tx_builder =
-            TransactionBuilder::new().with_outputs(outputs.into_dyn(self.module_instance_id));
+        let account = self.account(dbtx).await;
+
+        let tx_builder = TransactionBuilder::new(account)
+            .with_outputs(outputs.into_dyn(self.module_instance_id));
 
         self.client
             .finalize_and_submit_transaction_inner(

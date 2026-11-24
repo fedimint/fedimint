@@ -12,6 +12,7 @@ mod api;
 mod cli;
 pub mod db;
 pub mod events;
+mod migrations;
 mod receive_sm;
 mod send_sm;
 
@@ -22,7 +23,10 @@ use std::time::Duration;
 use api::WalletFederationApi;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::{Address, ScriptBuf};
-use db::{NextOutputIndexKey, ValidAddressIndexKey, ValidAddressIndexPrefix};
+use db::{
+    NextOutputIndexKey, ValidAddressIndexAccountPrefix, ValidAddressIndexKey,
+    ValidAddressIndexPrefix,
+};
 use events::{ReceivePaymentEvent, SendPaymentEvent};
 use fedimint_api_client::api::{DynModuleApi, FederationError, FederationResult};
 use fedimint_client::DynGlobalClientContext;
@@ -37,18 +41,18 @@ use fedimint_client_module::error::{
 use fedimint_client_module::module::init::{ClientModuleInit, ClientModuleInitArgs};
 use fedimint_client_module::module::recovery::NoModuleBackup;
 use fedimint_client_module::module::{ClientContext, ClientModule, OutPointRange};
+use fedimint_client_module::secret::DeriveableSecretClientExt;
 use fedimint_client_module::sm::{Context, DynState, ModuleNotifier, State, StateTransition};
 use fedimint_client_module::sm_enum_variant_translation;
-use fedimint_core::core::{IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{Account, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::db::{
-    AutocommitError, Database, DatabaseError, DatabaseTransaction, DatabaseVersion,
-    IDatabaseTransactionOpsCoreTyped,
+    Database, DatabaseError, DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped,
 };
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
     AmountUnit, Amounts, ApiVersion, CommonModuleInit, ModuleCommon, ModuleInit, MultiApiVersion,
 };
-use fedimint_core::task::{MaybeSend, MaybeSync, TaskGroup, TaskHandle, sleep};
+use fedimint_core::task::{TaskGroup, TaskHandle, sleep};
 use fedimint_core::{Amount, OutPoint, TransactionId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_eventlog::{Event, EventLogId};
@@ -198,7 +202,9 @@ pub struct AddressReceiveProgress {
 
 #[derive(Debug, Clone)]
 pub struct WalletClientModule {
-    root_secret: DerivableSecret,
+    /// Every account's derivation root, derived once so the address grind
+    /// pays a single child derivation per index.
+    account_secrets: [DerivableSecret; Account::ALL.len()],
     cfg: WalletClientConfig,
     notifier: ModuleNotifier<WalletClientStateMachines>,
     client_ctx: ClientContext<Self>,
@@ -284,12 +290,23 @@ impl ClientModuleInit for WalletClientInit {
             .expect("no version conflicts")
     }
 
+    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn> {
+        let mut migrations: BTreeMap<DatabaseVersion, ClientModuleMigrationFn> = BTreeMap::new();
+
+        migrations.insert(DatabaseVersion(0), |dbtx, active, inactive| {
+            Box::pin(migrations::migrate_to_accounts_v1(dbtx, active, inactive))
+        });
+
+        migrations
+    }
+
     async fn init(
         &self,
         args: &ClientModuleInitArgs<Self>,
     ) -> Result<Self::Module, ClientModuleError> {
         let module = WalletClientModule {
-            root_secret: args.module_root_secret().clone(),
+            account_secrets: Account::ALL
+                .map(|account| args.module_root_secret().derive_account_secret(account)),
             cfg: args.cfg().clone(),
             notifier: args.notifier().clone(),
             client_ctx: args.context(),
@@ -300,10 +317,6 @@ impl ClientModuleInit for WalletClientInit {
         module.spawn_output_scanner(args.task_group(), args.client_span());
 
         Ok(module)
-    }
-
-    fn get_database_migrations(&self) -> BTreeMap<DatabaseVersion, ClientModuleMigrationFn> {
-        BTreeMap::new()
     }
 
     fn used_db_prefixes(&self) -> Option<BTreeSet<u8>> {
@@ -370,6 +383,7 @@ impl WalletClientModule {
     /// transaction fee.
     pub async fn send_fee_quote(
         &self,
+        account: Account,
         amount: bitcoin::Amount,
     ) -> Result<FeeQuote, TransactionSubmitError> {
         let amount = Amount::from_sats(amount.to_sat());
@@ -381,6 +395,7 @@ impl WalletClientModule {
                     output_amount: Amounts::new_bitcoin(amount),
                     input_fee: Amounts::ZERO,
                     output_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.fee(amount)),
+                    account,
                 },
             )
             .await
@@ -423,6 +438,7 @@ impl WalletClientModule {
     /// itself failed.
     pub async fn max_sendable_amount(
         &self,
+        account: Account,
         balance: Amount,
         fee: bitcoin::Amount,
     ) -> Result<bitcoin::Amount, SendError> {
@@ -437,7 +453,9 @@ impl WalletClientModule {
             // keeps the predicate conservative and makes the value handed to
             // the quote below an exact satoshi multiple.
             |value: Amount| Amount::from_sats(value.msats.div_ceil(1000)) + fee_msats,
-            |funded: Amount| self.send_fee_quote(bitcoin::Amount::from_sat(funded.msats / 1000)),
+            |funded: Amount| {
+                self.send_fee_quote(account, bitcoin::Amount::from_sat(funded.msats / 1000))
+            },
         )
         .await
         .map_err(SendError::Failed)?
@@ -460,11 +478,19 @@ impl WalletClientModule {
     /// Send an onchain payment with the given fee.
     pub async fn send(
         &self,
+        account: Account,
         address: Address<NetworkUnchecked>,
         value: bitcoin::Amount,
         fee: Option<bitcoin::Amount>,
         custom_meta: serde_json::Value,
     ) -> Result<OperationId, SendError> {
+        if !self
+            .client_ctx
+            .supports_account(AmountUnit::BITCOIN, account)
+        {
+            return Err(SendError::AccountNotSupported);
+        }
+
         if !address.is_valid_for_network(self.cfg.network) {
             return Err(SendError::WrongNetwork);
         }
@@ -521,30 +547,33 @@ impl WalletClientModule {
 
         let address_clone = address.clone();
 
-        self.submit_with_event(
-            operation_id,
-            move |change_outpoint_range| {
-                WalletOperationMeta::Send(SendMeta {
-                    change_outpoint_range,
-                    address: address_clone.clone(),
+        self.client_ctx
+            .finalize_and_submit_transaction_with_events(
+                operation_id,
+                WalletCommonInit::KIND.as_str(),
+                move |change_outpoint_range| {
+                    WalletOperationMeta::Send(SendMeta {
+                        change_outpoint_range,
+                        address: address_clone.clone(),
+                        value,
+                        fee,
+                        custom_meta: custom_meta.clone(),
+                    })
+                },
+                TransactionBuilder::new(account).with_outputs(client_output_bundle),
+                vec![self.client_ctx.make_event(SendPaymentEvent {
+                    operation_id,
+                    address,
                     value,
                     fee,
-                    custom_meta: custom_meta.clone(),
-                })
-            },
-            TransactionBuilder::new().with_outputs(client_output_bundle),
-            SendPaymentEvent {
-                operation_id,
-                address,
-                value,
-                fee,
-            },
-        )
-        .await
-        .map_err(|error| match error {
-            TransactionSubmitError::InsufficientFunds(_) => SendError::InsufficientFunds,
-            error => SendError::Failed(error),
-        })?;
+                    account,
+                })],
+            )
+            .await
+            .map_err(|error| match error {
+                TransactionSubmitError::InsufficientFunds(_) => SendError::InsufficientFunds,
+                error => SendError::Failed(error),
+            })?;
 
         Ok(operation_id)
     }
@@ -639,22 +668,22 @@ impl WalletClientModule {
     /// Only addresses handed out by [`Self::receive`] resolve; the set of valid
     /// indices is small, so this is a short scan rather than a stored reverse
     /// index.
-    async fn address_index(&self, address: &Address) -> Option<u64> {
+    async fn address_index(&self, address: &Address) -> Option<(Account, u64)> {
         let script = address.script_pubkey();
 
-        let indices: Vec<u64> = self
+        let indices: Vec<(Account, u64)> = self
             .db
             .begin_transaction_nc()
             .await
             .find_by_prefix(&ValidAddressIndexPrefix)
             .await
-            .map(|entry| entry.0.0)
+            .map(|entry| (entry.0.0, entry.0.1))
             .collect()
             .await;
 
-        indices
-            .into_iter()
-            .find(|index| self.derive_address(*index).script_pubkey() == script)
+        indices.into_iter().find(|(account, index)| {
+            self.derive_address(*account, *index).script_pubkey() == script
+        })
     }
 
     /// The current progress of the deposit at `outpoint`.
@@ -735,20 +764,26 @@ impl WalletClientModule {
         }
     }
 
-    /// The scripts of every receive address derived so far, by index.
-    async fn address_map(&self) -> BTreeMap<ScriptBuf, u64> {
+    /// The scripts of every receive address derived so far, by account and
+    /// index.
+    async fn address_map(&self) -> BTreeMap<ScriptBuf, (Account, u64)> {
         self.db
             .begin_transaction_nc()
             .await
             .find_by_prefix(&ValidAddressIndexPrefix)
             .await
-            .map(|entry| entry.0.0)
-            .map(|index| (self.derive_address(index).script_pubkey(), index))
+            .map(|entry| (entry.0.0, entry.0.1))
+            .map(|(account, index)| {
+                (
+                    self.derive_address(account, index).script_pubkey(),
+                    (account, index),
+                )
+            })
             .collect()
             .await
     }
 
-    fn pending_progress(output: &PendingOutput, block_count: u64) -> ReceiveProgress {
+    fn pending_progress(output: &PendingOutput, block_count: Option<u64>) -> ReceiveProgress {
         // Block count votes trail the chain tip by the vote delay, and an output
         // is only recorded once the consensus block count is past the block that
         // mined it, so a peg-in is claimable one standard confirmation later than
@@ -766,7 +801,9 @@ impl WalletClientModule {
                 // final, so that progress does not blank out before the claim
                 // begins. Clamp so a progress display cannot run past its own
                 // target during that overlap.
-                confirmations: block_count.saturating_sub(height).min(required),
+                confirmations: block_count
+                    .map_or(0, |count| count.saturating_sub(height))
+                    .min(required),
                 required,
             },
             None => ReceiveProgress::Mempool {
@@ -777,15 +814,17 @@ impl WalletClientModule {
 
     /// Returns the highest valid receive address index that the background
     /// scanner has derived so far, or `None` if it has not derived one yet.
-    async fn valid_index(&self) -> Option<u64> {
+    /// All accounts share one table, so this reads the tail of the account's
+    /// own key prefix rather than the table's.
+    async fn valid_index(&self, account: Account) -> Option<u64> {
         self.db
             .begin_transaction_nc()
             .await
-            .find_by_prefix_sorted_descending(&ValidAddressIndexPrefix)
+            .find_by_prefix_sorted_descending(&ValidAddressIndexAccountPrefix(account))
             .await
             .next()
             .await
-            .map(|entry| entry.0.0)
+            .map(|entry| entry.0.1)
     }
 
     /// Returns the next unused receive address.
@@ -800,10 +839,20 @@ impl WalletClientModule {
     /// returns immediately. Otherwise it blocks, letting the scanner grind
     /// until it finds the next valid index, and returns once one is
     /// available.
-    pub async fn receive(&self) -> Address {
+    ///
+    /// Refuses an account the primary module cannot hold a balance for before
+    /// handing out an address, since a deposit to it could never be claimed.
+    pub async fn receive(&self, account: Account) -> Result<Address, ReceiveError> {
+        if !self
+            .client_ctx
+            .supports_account(AmountUnit::BITCOIN, account)
+        {
+            return Err(ReceiveError::AccountNotSupported);
+        }
+
         loop {
-            if let Some(index) = self.valid_index().await {
-                return self.derive_address(index);
+            if let Some(index) = self.valid_index(account).await {
+                return Ok(self.derive_address(account, index));
             }
 
             sleep(Duration::from_secs(1)).await;
@@ -822,12 +871,14 @@ impl WalletClientModule {
     /// operation; this keeps waiting until one succeeds.
     pub async fn await_receive(
         &self,
+        account: Account,
         position: EventLogId,
     ) -> Result<(FinalReceiveOperationState, EventLogId), AwaitReceiveError> {
         let mut position = position;
 
         loop {
-            let (operation_id, next_position) = self.next_receive_operation(position).await;
+            let (operation_id, next_position) =
+                self.next_receive_operation(account, position).await;
 
             position = next_position;
 
@@ -863,10 +914,18 @@ impl WalletClientModule {
         }
     }
 
-    /// Scan the event log from `position` for the next [`ReceivePaymentEvent`],
-    /// blocking until one is found, and return its operation id together with
-    /// the event log position just past it.
-    async fn next_receive_operation(&self, position: EventLogId) -> (OperationId, EventLogId) {
+    /// Scan the event log from `position` for the next [`ReceivePaymentEvent`]
+    /// crediting `account`, blocking until one is found, and return its
+    /// operation id together with the event log position just past it.
+    ///
+    /// Every account's deposits land in the same log, so a waiter has to skip
+    /// the other accounts' receives rather than report the first one it sees
+    /// as its own.
+    async fn next_receive_operation(
+        &self,
+        account: Account,
+        position: EventLogId,
+    ) -> (OperationId, EventLogId) {
         let mut position = position;
 
         loop {
@@ -881,6 +940,7 @@ impl WalletClientModule {
                 if entry.module_kind() == Some(&KIND)
                     && entry.kind == ReceivePaymentEvent::KIND
                     && let Some(event) = entry.to_event::<ReceivePaymentEvent>()
+                    && event.account == account
                 {
                     return (event.operation_id, position);
                 }
@@ -893,16 +953,19 @@ impl WalletClientModule {
         }
     }
 
-    fn derive_address(&self, index: u64) -> Address {
+    fn derive_address(&self, account: Account, index: u64) -> Address {
         descriptor(
             &self.cfg.bitcoin_pks,
-            &self.derive_tweak(index).public_key().consensus_hash(),
+            &self
+                .derive_tweak(account, index)
+                .public_key()
+                .consensus_hash(),
         )
         .address(self.cfg.network)
     }
 
-    fn derive_tweak(&self, index: u64) -> Keypair {
-        self.root_secret
+    fn derive_tweak(&self, account: Account, index: u64) -> Keypair {
+        self.account_secrets[usize::from(account.index())]
             .child_key(ChildId(index))
             .to_secp_key(secp256k1::SECP256K1)
     }
@@ -914,7 +977,12 @@ impl WalletClientModule {
     /// yields to the executor between them, so it does not stall the runtime —
     /// important on wasm, which is single-threaded. It stops and returns `None`
     /// once the task group begins shutting down.
-    async fn next_valid_index(&self, start_index: u64, handle: &TaskHandle) -> Option<u64> {
+    async fn next_valid_index(
+        &self,
+        account: Account,
+        start_index: u64,
+        handle: &TaskHandle,
+    ) -> Option<u64> {
         /// Indices to scan per batch before yielding to the executor.
         const SCAN_BATCH: u64 = 256;
 
@@ -924,7 +992,10 @@ impl WalletClientModule {
 
         while !handle.is_shutting_down() {
             for _ in 0..SCAN_BATCH {
-                if is_potential_receive(&self.derive_address(index).script_pubkey(), &pks_hash) {
+                if is_potential_receive(
+                    &self.derive_address(account, index).script_pubkey(),
+                    &pks_hash,
+                ) {
                     return Some(index);
                 }
 
@@ -944,6 +1015,7 @@ impl WalletClientModule {
     /// remainder is too small to fund the claim transaction's fees.
     async fn receive_output(
         &self,
+        account: Account,
         output_index: u64,
         value: bitcoin::Amount,
         address_index: u64,
@@ -956,9 +1028,9 @@ impl WalletClientModule {
             input: WalletInput::V0(WalletInputV0 {
                 output_index,
                 fee,
-                tweak: self.derive_tweak(address_index).public_key(),
+                tweak: self.derive_tweak(account, address_index).public_key(),
             }),
-            keys: vec![self.derive_tweak(address_index)],
+            keys: vec![self.derive_tweak(account, address_index)],
             amounts: Amounts::new_bitcoin(Amount::from_sats(value.checked_sub(fee)?.to_sat())),
         };
 
@@ -981,12 +1053,17 @@ impl WalletClientModule {
             vec![client_input_sm],
         ));
 
-        let address = self.derive_address(address_index).as_unchecked().clone();
+        let address = self
+            .derive_address(account, address_index)
+            .as_unchecked()
+            .clone();
 
         let meta_address = address.clone();
         let range = self
-            .submit_with_event(
+            .client_ctx
+            .finalize_and_submit_transaction_with_events(
                 operation_id,
+                WalletCommonInit::KIND.as_str(),
                 move |change_outpoint_range| {
                     WalletOperationMeta::Receive(ReceiveMeta {
                         change_outpoint_range,
@@ -996,14 +1073,15 @@ impl WalletClientModule {
                         outpoint,
                     })
                 },
-                TransactionBuilder::new().with_inputs(client_input_bundle),
-                ReceivePaymentEvent {
+                TransactionBuilder::new(account).with_inputs(client_input_bundle),
+                vec![self.client_ctx.make_event(ReceivePaymentEvent {
                     operation_id,
                     value,
                     fee,
                     address,
                     outpoint,
-                },
+                    account,
+                })],
             )
             .await
             .ok()?;
@@ -1011,85 +1089,43 @@ impl WalletClientModule {
         Some((operation_id, range.txid()))
     }
 
-    /// Submits a transaction as a new operation and logs the event that
-    /// announces the operation, in one database transaction.
-    ///
-    /// Committing the two together is what lets a reader of the event log rely
-    /// on it: an operation that exists has its event, also after the client
-    /// stopped at any point in between.
-    async fn submit_with_event<F, E>(
-        &self,
-        operation_id: OperationId,
-        operation_meta_gen: F,
-        tx_builder: TransactionBuilder,
-        event: E,
-    ) -> Result<OutPointRange, TransactionSubmitError>
-    where
-        F: Fn(OutPointRange) -> WalletOperationMeta + Clone + MaybeSend + MaybeSync + 'static,
-        E: Event + Clone + Send + MaybeSync,
-    {
-        self.client_ctx
-            .module_db()
-            .autocommit(
-                |dbtx, _| {
-                    let operation_meta_gen = operation_meta_gen.clone();
-                    let tx_builder = tx_builder.clone();
-                    let event = event.clone();
-                    Box::pin(async move {
-                        let range = self
-                            .client_ctx
-                            .finalize_and_submit_transaction_dbtx(
-                                dbtx,
-                                operation_id,
-                                WalletCommonInit::KIND.as_str(),
-                                operation_meta_gen,
-                                tx_builder,
-                            )
-                            .await?;
-
-                        self.client_ctx.log_event(dbtx, event).await;
-
-                        Ok::<_, TransactionSubmitError>(range)
-                    })
-                },
-                Some(100),
-            )
-            .await
-            .map_err(|error| match error {
-                AutocommitError::ClosureError { error, .. } => error,
-                AutocommitError::CommitFailed { last_error, .. } => {
-                    TransactionSubmitError::Database(last_error)
-                }
-            })
-    }
-
     fn spawn_output_scanner(&self, task_group: &TaskGroup, client_span: &tracing::Span) {
         let module = self.clone();
         let handle = task_group.make_handle();
 
         task_group.spawn_cancellable_with_span(client_span.clone(), "output-scanner", async move {
-            // Read the stored index with a short-lived transaction, runs the search
-            // with no transaction open, and inserts the result in its own short
-            // transaction. This avoids holding a transaction snapshot across a
-            // long-running CPU-bound search that might outlive RocksDB's retained
-            // write history, causing a SnapshotTooOld error and panic on commit.
-            // See: https://github.com/fedimint/fedimint/issues/9202
-            let address_index_exists = {
-                let mut dbtx = module.db.begin_transaction().await;
-                dbtx.find_by_prefix(&ValidAddressIndexPrefix)
-                    .await
-                    .next()
-                    .await
-                    .is_some()
-            };
+            // Every account is seeded, not just the ones the user has opened:
+            // a restored seed may have been paid into any of them, and an
+            // account whose frontier was never derived would never be scanned
+            // for. Not filtered by what the primary module supports: this runs
+            // from `init`, before the client handle the query needs is set.
+            //
+            // Each account reads its stored index with a short-lived transaction,
+            // runs the search with no transaction open, and inserts the result in
+            // its own short transaction. This avoids holding a transaction snapshot
+            // across a long-running CPU-bound search that might outlive RocksDB's
+            // retained write history, causing a SnapshotTooOld error and panic on
+            // commit. See: https://github.com/fedimint/fedimint/issues/9202
+            for account in Account::ALL {
+                let address_index_exists = {
+                    let mut dbtx = module.db.begin_transaction().await;
+                    dbtx.find_by_prefix(&ValidAddressIndexAccountPrefix(account))
+                        .await
+                        .next()
+                        .await
+                        .is_some()
+                };
 
-            if !address_index_exists {
-                let Some(index) = module.next_valid_index(0, &handle).await else {
+                if address_index_exists {
+                    continue;
+                }
+
+                let Some(index) = module.next_valid_index(account, 0, &handle).await else {
                     return;
                 };
 
                 let mut dbtx = module.db.begin_transaction().await;
-                dbtx.insert_new_entry(&ValidAddressIndexKey(index), &())
+                dbtx.insert_new_entry(&ValidAddressIndexKey(account, index), &())
                     .await;
                 dbtx.commit_tx().await;
             }
@@ -1116,17 +1152,35 @@ impl WalletClientModule {
 
         let next_output_index = dbtx.get_value(&NextOutputIndexKey).await.unwrap_or(0);
 
-        let mut valid_indices: Vec<u64> = dbtx
+        // Every account's indices come out of one prefix scan, already tagged
+        // with the account they belong to.
+        let valid_indices: Vec<(Account, u64)> = dbtx
             .find_by_prefix(&ValidAddressIndexPrefix)
             .await
-            .map(|entry| entry.0.0)
+            .map(|entry| (entry.0.0, entry.0.1))
             .collect()
             .await;
 
-        let mut address_map: BTreeMap<ScriptBuf, u64> = valid_indices
+        let mut address_map: BTreeMap<ScriptBuf, (Account, u64)> = valid_indices
             .iter()
-            .map(|&i| (self.derive_address(i).script_pubkey(), i))
+            .map(|&(account, i)| {
+                (
+                    self.derive_address(account, i).script_pubkey(),
+                    (account, i),
+                )
+            })
             .collect();
+
+        // Highest index reached per account, so a match on one account's
+        // frontier extends that account rather than the whole table's.
+        let mut frontier: BTreeMap<Account, u64> = BTreeMap::new();
+
+        for &(account, i) in &valid_indices {
+            frontier
+                .entry(account)
+                .and_modify(|highest| *highest = (*highest).max(i))
+                .or_insert(i);
+        }
 
         let outputs = self
             .module_api
@@ -1137,38 +1191,47 @@ impl WalletClientModule {
         let mut matched_num: usize = 0;
 
         for output in &outputs {
-            if let Some(&address_index) = address_map.get(&output.script) {
+            if let Some(&(account, address_index)) = address_map.get(&output.script) {
                 matched_num += 1;
 
                 // Claim before extending the valid index list: the index search
                 // below is CPU-bound and can take longer than a short-lived
                 // client process (e.g. a cli invocation) lives. The claim is
                 // quick and the extension can be retried on the next scan.
-                if !output.spent && !self.process_unspent_output(output, address_index).await? {
+                if !output.spent
+                    && !self
+                        .process_unspent_output(account, output, address_index)
+                        .await?
+                {
                     return Ok(false);
                 }
 
-                let next_address_index = valid_indices
-                    .last()
-                    .copied()
-                    .expect("we have at least one address index");
+                let next_address_index = *frontier
+                    .get(&account)
+                    .expect("every account in the map has a frontier");
 
-                // If we used the highest valid index, add the next valid one
+                // If we used this account's highest valid index, add its next
                 if address_index == next_address_index {
-                    let Some(index) = self.next_valid_index(next_address_index + 1, handle).await
+                    let Some(index) = self
+                        .next_valid_index(account, next_address_index + 1, handle)
+                        .await
                     else {
                         return Ok(false);
                     };
 
                     let mut dbtx = self.db.begin_transaction().await;
 
-                    dbtx.insert_entry(&ValidAddressIndexKey(index), &()).await;
+                    dbtx.insert_entry(&ValidAddressIndexKey(account, index), &())
+                        .await;
 
                     dbtx.commit_tx_result().await?;
 
-                    valid_indices.push(index);
+                    frontier.insert(account, index);
 
-                    address_map.insert(self.derive_address(index).script_pubkey(), index);
+                    address_map.insert(
+                        self.derive_address(account, index).script_pubkey(),
+                        (account, index),
+                    );
                 }
             }
 
@@ -1194,6 +1257,7 @@ impl WalletClientModule {
 
     async fn process_unspent_output(
         &self,
+        account: Account,
         output: &OutputInfo,
         address_index: u64,
     ) -> Result<bool, ProcessOutputError> {
@@ -1227,6 +1291,7 @@ impl WalletClientModule {
 
         if let Some((operation_id, txid)) = self
             .receive_output(
+                account,
                 output.index,
                 output.value,
                 address_index,
@@ -1273,6 +1338,8 @@ impl WalletClientModule {
 #[derive(Error, Debug)]
 #[non_exhaustive]
 pub enum SendError {
+    #[error("The primary module only holds a balance for the primary account")]
+    AccountNotSupported,
     /// The destination address is not valid on the federation's network.
     #[error("Address is from a different network than the federation")]
     WrongNetwork,
@@ -1308,6 +1375,8 @@ pub enum SendError {
 #[derive(Error, Debug)]
 #[non_exhaustive]
 pub enum ReceiveError {
+    #[error("The primary module only holds a balance for the primary account")]
+    AccountNotSupported,
     /// The federation could not be asked for the current claim fee.
     #[error("The federation returned an error")]
     Federation(#[source] Box<FederationError>),

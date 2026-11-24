@@ -8,6 +8,7 @@ use fedimint_core::core::OperationId;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::Amounts;
 use fedimint_core::secp256k1::Keypair;
+use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, OutPoint};
 use fedimint_lnv2_common::contracts::OutgoingContract;
@@ -195,7 +196,10 @@ impl SendStateMachine {
         // in-flight payment can still claim. Each rail below therefore resumes
         // anything it already started unconditionally and consults this
         // verdict only before dispatching fresh.
-        let fresh_dispatch_refusal = fresh_dispatch_refusal(invoice.is_expired(), fresh_max_delay);
+        let fresh_dispatch_refusal = fresh_dispatch_refusal(
+            invoice.would_expire(duration_since_epoch()),
+            fresh_max_delay,
+        );
 
         // To make gateway operation easier, we check if the invoice was created using
         // the LNv1 protocol and if the gateway supports the target federation.

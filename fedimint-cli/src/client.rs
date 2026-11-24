@@ -3,6 +3,7 @@ mod tests;
 
 use std::collections::BTreeMap;
 use std::ffi;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -14,7 +15,7 @@ use fedimint_bip39::Mnemonic;
 use fedimint_client::backup::Metadata;
 use fedimint_client::{Client, ClientHandleArc};
 use fedimint_core::config::{ClientModuleConfig, FederationId};
-use fedimint_core::core::{ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{Account, ModuleInstanceId, ModuleKind, OperationId};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::{Amount, BitcoinAmountOrAll, TieredCounts, TieredMulti};
 use fedimint_ln_client::cli::LnInvoiceResponse;
@@ -82,11 +83,18 @@ impl FromStr for ModuleSelector {
 #[derive(Debug, Clone, Subcommand)]
 pub enum ClientCmd {
     /// Display wallet info (holdings, tiers)
-    Info,
+    Info {
+        /// The account whose holdings to display
+        #[arg(long, default_value_t = Account::Primary)]
+        account: Account,
+    },
     /// Reissue notes received from a third party to avoid double spends
     #[clap(hide = true)]
     Reissue {
-        oob_notes: OOBNotes,
+        oob_notes: Option<OOBNotes>,
+        /// Read serialized notes from a file, or '-' for stdin.
+        #[arg(long)]
+        notes_file: Option<PathBuf>,
         #[arg(long = "no-wait", action = clap::ArgAction::SetFalse)]
         wait: bool,
     },
@@ -111,12 +119,20 @@ pub enum ClientCmd {
     /// Splits a string containing multiple e-cash notes (e.g. from the `spend`
     /// command) into ones that contain exactly one.
     #[clap(hide = true)]
-    Split { oob_notes: OOBNotes },
+    Split {
+        oob_notes: Option<OOBNotes>,
+        /// Read serialized notes from a file, or '-' for stdin.
+        #[arg(long)]
+        notes_file: Option<PathBuf>,
+    },
     /// Combines two or more serialized e-cash notes strings
     #[clap(hide = true)]
     Combine {
-        #[clap(required = true)]
         oob_notes: Vec<OOBNotes>,
+        /// Read one serialized notes string per file. May be repeated; '-'
+        /// reads stdin once. Cannot be combined with positional notes.
+        #[arg(long)]
+        notes_file: Vec<PathBuf>,
     },
     /// Create a lightning invoice to receive payment via gateway
     #[clap(hide = true)]
@@ -194,8 +210,14 @@ pub enum ClientCmd {
         /// If omitted, use global `--federation-secret-hex` instead.
         #[clap(long)]
         mnemonic: Option<String>,
+        /// Read the mnemonic from a protected UTF-8 file (`-` for stdin).
         #[clap(long)]
-        invite_code: String,
+        mnemonic_file: Option<std::path::PathBuf>,
+        #[clap(long)]
+        invite_code: Option<String>,
+        /// Read an invite code from a file (`-` for stdin).
+        #[clap(long)]
+        invite_code_file: Option<std::path::PathBuf>,
     },
     /// Print the secret key of the client
     PrintSecret,
@@ -427,7 +449,7 @@ async fn await_invoice(
     while let Some(update) = updates.next().await {
         match update {
             LnReceiveState::Claimed => {
-                return get_note_summary(client).await;
+                return get_note_summary(client, Account::Primary).await;
             }
             LnReceiveState::Canceled { reason } => {
                 return Err(reason.into());
@@ -483,21 +505,104 @@ async fn pay_invoice(
 }
 
 /// Dispatch client commands using the already-open client.
+impl ClientCmd {
+    /// Secret note files to include in preflight stdin checks.
+    pub fn notes_file_paths(&self) -> Vec<&Path> {
+        match self {
+            Self::Reissue { notes_file, .. } | Self::Split { notes_file, .. } => {
+                notes_file.iter().map(PathBuf::as_path).collect()
+            }
+            Self::Combine { notes_file, .. } => notes_file.iter().map(PathBuf::as_path).collect(),
+            _ => vec![],
+        }
+    }
+
+    /// Check sources before any global credential consumes stdin.
+    pub fn validate_notes_sources(&self) -> anyhow::Result<()> {
+        match self {
+            Self::Reissue {
+                oob_notes,
+                notes_file,
+                ..
+            }
+            | Self::Split {
+                oob_notes,
+                notes_file,
+            } => {
+                validate_notes_sources(oob_notes.is_some(), notes_file.is_some())?;
+            }
+            Self::Combine {
+                oob_notes,
+                notes_file,
+            } => {
+                validate_notes_sources(!oob_notes.is_empty(), !notes_file.is_empty())?;
+            }
+            _ => {}
+        }
+        fedimint_core::util::ensure_single_stdin(self.notes_file_paths())?;
+        Ok(())
+    }
+}
+
+fn validate_notes_sources(has_notes: bool, has_file: bool) -> anyhow::Result<()> {
+    match (has_notes, has_file) {
+        (true, true) => bail!("Provide either positional notes or --notes-file, not both"),
+        (false, false) => bail!("Provide positional notes or --notes-file"),
+        _ => Ok(()),
+    }
+}
+
+fn read_notes_file(path: &Path) -> anyhow::Result<OOBNotes> {
+    fedimint_core::util::read_secret_file(path, 16 * 1024 * 1024)?
+        .parse()
+        .map_err(|_| anyhow::anyhow!("Invalid e-cash notes in secret input"))
+}
+
+fn resolve_notes(notes: Option<OOBNotes>, file: Option<PathBuf>) -> anyhow::Result<OOBNotes> {
+    validate_notes_sources(notes.is_some(), file.is_some())?;
+    match (notes, file) {
+        (Some(notes), None) => Ok(notes),
+        (None, Some(file)) => read_notes_file(&file),
+        _ => unreachable!("Sources validated"),
+    }
+}
+
+fn resolve_notes_list(notes: Vec<OOBNotes>, files: &[PathBuf]) -> anyhow::Result<Vec<OOBNotes>> {
+    validate_notes_sources(!notes.is_empty(), !files.is_empty())?;
+    fedimint_core::util::ensure_single_stdin(files.iter().map(PathBuf::as_path))?;
+    if notes.is_empty() {
+        files.iter().map(|file| read_notes_file(file)).collect()
+    } else {
+        Ok(notes)
+    }
+}
+
 pub async fn handle_command(
     command: ClientCmd,
     client: ClientHandleArc,
 ) -> anyhow::Result<serde_json::Value> {
+    command.validate_notes_sources()?;
     match command {
-        ClientCmd::Info => get_note_summary(&client).await,
-        ClientCmd::Reissue { oob_notes, wait } => reissue_notes(&client, oob_notes, wait).await,
+        ClientCmd::Info { account } => get_note_summary(&client, account).await,
+        ClientCmd::Reissue {
+            oob_notes,
+            notes_file,
+            wait,
+        } => reissue_notes(&client, resolve_notes(oob_notes, notes_file)?, wait).await,
         ClientCmd::Spend {
             amount,
             allow_overpay,
             timeout,
             include_invite,
         } => spend_notes(&client, amount, allow_overpay, timeout, include_invite).await,
-        ClientCmd::Split { oob_notes } => Ok(split_notes(&oob_notes)),
-        ClientCmd::Combine { oob_notes } => combine_notes(&oob_notes),
+        ClientCmd::Split {
+            oob_notes,
+            notes_file,
+        } => Ok(split_notes(&resolve_notes(oob_notes, notes_file)?)),
+        ClientCmd::Combine {
+            oob_notes,
+            notes_file,
+        } => combine_notes(&resolve_notes_list(oob_notes, &notes_file)?),
         ClientCmd::LnInvoice {
             amount,
             description,
@@ -719,7 +824,7 @@ async fn withdraw(
         // federation's per-note fees. The returned fees are quoted at
         // the returned amount, so they must be used together.
         BitcoinAmountOrAll::All => {
-            let balance = client.get_balance_for_btc().await?;
+            let balance = client.get_balance_for_btc(Account::Primary).await?;
             wallet_module
                 .max_withdrawable_amount(&address, balance)
                 .await?
@@ -755,7 +860,10 @@ async fn withdraw(
     unreachable!("Update stream ended without outcome");
 }
 
-async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json::Value> {
+async fn get_note_summary(
+    client: &ClientHandleArc,
+    account: Account,
+) -> anyhow::Result<serde_json::Value> {
     // Try wallet v1 first, then walletv2
     let network = if let Ok(wallet_client) = client.get_first_module::<WalletClientModule>() {
         wallet_client.get_network()
@@ -768,6 +876,12 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
     };
 
     let summary = if let Ok(mint_client) = client.get_first_module::<MintClientModule>() {
+        // The legacy mint holds a single balance, so only primary exists.
+        anyhow::ensure!(
+            account == Account::Primary,
+            "The mint module only supports the primary account"
+        );
+
         let mint_module_id = client
             .get_first_instance(&fedimint_mint_client::KIND)
             .context("Mint module not found")?;
@@ -784,7 +898,7 @@ async fn get_note_summary(client: &ClientHandleArc) -> anyhow::Result<serde_json
     } else if let Ok(mintv2_client) =
         client.get_first_module::<fedimint_mintv2_client::MintClientModule>()
     {
-        let counts = mintv2_client.get_count_by_denomination().await;
+        let counts = mintv2_client.get_count_by_denomination(account).await;
         let mut summary = TieredCounts::default();
         #[allow(clippy::cast_possible_truncation)]
         for (denomination, count) in counts {

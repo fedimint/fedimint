@@ -28,7 +28,9 @@ use fedimint_client_module::{
     DynGlobalClientContext, TransactionSubmitError, sm_enum_variant_translation,
 };
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{
+    Account, Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
+};
 use fedimint_core::db::DatabaseTransaction;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -517,16 +519,18 @@ impl GatewayClientModuleV2 {
         });
 
         let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-        self.client_ctx
+        // If the operation already exists, join it instead of starting another payment.
+        let _ = self
+            .client_ctx
             .manual_operation_start_dbtx(
                 &mut dbtx.to_ref_nc(),
                 operation_id,
+                Account::Primary,
                 LightningCommonInit::KIND.as_str(),
                 GatewayOperationMetaV2::role(GatewayOperationRoleV2::Send),
                 vec![self.client_ctx.make_dyn_state(send_sm)],
             )
-            .await
-            .ok();
+            .await;
 
         self.client_ctx
             .log_event(
@@ -749,15 +753,20 @@ impl GatewayClientModuleV2 {
                 vec![client_output],
                 vec![client_output_sm],
             ));
-            let transaction = TransactionBuilder::new().with_outputs(client_output);
+            let transaction = TransactionBuilder::new(Account::Primary).with_outputs(client_output);
 
             let creation_result = self
                 .client_ctx
-                .finalize_and_submit_transaction(
+                .finalize_and_submit_transaction_with_events(
                     receive_operation_id,
                     LightningCommonInit::KIND.as_str(),
                     |_| GatewayOperationMetaV2::role(GatewayOperationRoleV2::Receive),
                     transaction,
+                    vec![self.client_ctx.make_event(IncomingPaymentStarted {
+                        operation_start,
+                        incoming_contract_commitment: commitment,
+                        invoice_amount: Amount::from_msats(amount_msat),
+                    })],
                 )
                 .await;
             if let Err(error) = creation_result {
@@ -765,19 +774,6 @@ impl GatewayClientModuleV2 {
                 if operation_creation_failed_permanently(true, operation_exists) {
                     return Err(error.into());
                 }
-            } else {
-                let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-                self.client_ctx
-                    .log_event(
-                        &mut dbtx,
-                        IncomingPaymentStarted {
-                            operation_start,
-                            incoming_contract_commitment: commitment,
-                            invoice_amount: Amount::from_msats(amount_msat),
-                        },
-                    )
-                    .await;
-                dbtx.commit_tx().await;
             }
         }
 
@@ -795,6 +791,7 @@ impl GatewayClientModuleV2 {
             .client_ctx
             .manual_operation_start(
                 completion_operation_id,
+                Account::Primary,
                 LightningCommonInit::KIND.as_str(),
                 GatewayOperationMetaV2::role(GatewayOperationRoleV2::CircuitCompletion),
                 vec![self.client_ctx.make_dyn_state(completion)],
@@ -887,33 +884,25 @@ impl GatewayClientModuleV2 {
             vec![client_output_sm],
         ));
 
-        let transaction = TransactionBuilder::new().with_outputs(client_output);
+        let transaction = TransactionBuilder::new(Account::Primary).with_outputs(client_output);
 
         self.client_ctx
-            .finalize_and_submit_transaction(
+            .finalize_and_submit_transaction_with_events(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
                 |_| GatewayOperationMetaV2::role(GatewayOperationRoleV2::Receive),
                 transaction,
+                vec![self.client_ctx.make_event(IncomingPaymentStarted {
+                    operation_start,
+                    incoming_contract_commitment: commitment,
+                    invoice_amount: Amount::from_msats(amount_msat),
+                })],
             )
             .await?;
 
         // The operation exists, so the policy may change again: what follows
         // waits for the swap to finish and must not block an operator.
         drop(policy_guard);
-
-        let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-        self.client_ctx
-            .log_event(
-                &mut dbtx,
-                IncomingPaymentStarted {
-                    operation_start,
-                    incoming_contract_commitment: commitment,
-                    invoice_amount: Amount::from_msats(amount_msat),
-                },
-            )
-            .await;
-        dbtx.commit_tx().await;
 
         Ok(Some(self.await_receive(operation_id).await))
     }

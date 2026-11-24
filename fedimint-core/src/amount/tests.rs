@@ -63,6 +63,14 @@ fn test_amount_parsing() {
 }
 
 #[test]
+fn amount_parsing_rejects_unknown_denomination() {
+    assert!(matches!(
+        Amount::from_str("123unknown"),
+        Err(ParseAmountError::WrongBitcoinDenomination(_))
+    ));
+}
+
+#[test]
 fn amount_parsing_rejects_values_above_max_money() {
     assert_eq!(
         Amount::from_bitcoins(21_000_000),

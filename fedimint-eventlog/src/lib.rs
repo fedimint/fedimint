@@ -76,6 +76,7 @@ const TRIMABLE_EVENTLOG_MAX_TRIMMED_EVENTS: usize = 100_000;
 /// and emitted only at runtime.
 ///
 /// Consult [`Event::PERSISTENCE`] to know which event uses which persistence.
+#[derive(Clone, Copy)]
 pub enum EventPersistence {
     /// Not written anywhere, just broadcasted as notification at runtime
     Transient,
@@ -588,7 +589,10 @@ where
                 &UnorderedEventLogEntry {
                     flags: match persist {
                         EventPersistence::Transient => 0,
-                        EventPersistence::Trimable => UnorderedEventLogEntry::FLAG_TRIMABLE,
+                        EventPersistence::Trimable => {
+                            UnorderedEventLogEntry::FLAG_PERSIST
+                                | UnorderedEventLogEntry::FLAG_TRIMABLE
+                        }
                         EventPersistence::Persistent => UnorderedEventLogEntry::FLAG_PERSIST,
                     },
                     inner: EventLogEntry {

@@ -1897,6 +1897,11 @@ impl<'tx, Cap> DatabaseTransaction<'tx, Cap> {
         self
     }
 
+    /// Returns whether this transaction has performed any write operations
+    pub fn has_writes(&self) -> bool {
+        self.commit_tracker.has_writes
+    }
+
     /// Register a hook that will be run after commit succeeds.
     #[instrument(target = LOG_DB, level = "trace", skip_all)]
     pub fn on_commit(&mut self, f: maybe_add_send!(impl FnOnce() + 'static)) {
@@ -2000,6 +2005,7 @@ where
     }
 
     async fn raw_remove_entry_no_previous(&mut self, key: &[u8]) -> DatabaseResult<()> {
+        self.commit_tracker.has_writes = true;
         self.tx.raw_remove_entry_no_previous(key).await
     }
 
@@ -2017,6 +2023,7 @@ where
     }
 
     async fn raw_remove_entry(&mut self, key: &[u8]) -> DatabaseResult<Option<Vec<u8>>> {
+        self.commit_tracker.has_writes = true;
         self.tx.raw_remove_entry(key).await
     }
 
@@ -2593,7 +2600,7 @@ where
     let db_version = if let Some(disk_version) = disk_version {
         let mut current_db_version = disk_version;
 
-        if current_db_version > target_db_version {
+        if target_db_version < current_db_version {
             return Err(DbMigrationError::VersionTooHigh {
                 kind,
                 on_disk: current_db_version,

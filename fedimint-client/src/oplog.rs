@@ -7,7 +7,7 @@ use std::time::{Duration, SystemTime};
 use fedimint_client_module::oplog::{
     IOperationLog, JsonStringed, OperationLogEntry, OperationOutcome, UpdateStreamOrOutcome,
 };
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::db::{
     Database, DatabaseError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped as _,
 };
@@ -68,12 +68,14 @@ impl OperationLog {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
+        account: Account,
         operation_type: &str,
         operation_meta: impl serde::Serialize,
     ) {
         self.add_operation_log_entry_dbtx_with_creation_time(
             dbtx,
             operation_id,
+            account,
             operation_type,
             operation_meta,
             now(),
@@ -85,10 +87,13 @@ impl OperationLog {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
+        account: Account,
         operation_type: &str,
         operation_meta: impl serde::Serialize,
         creation_time: SystemTime,
     ) {
+        crate::Client::set_operation_account_dbtx(dbtx, operation_id, account).await;
+
         dbtx.insert_new_entry(
             &OperationLogKey { operation_id },
             &OperationLogEntry::new(
@@ -327,6 +332,7 @@ impl IOperationLog for OperationLog {
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         operation_id: OperationId,
+        account: Account,
         operation_type: &str,
         operation_meta: serde_json::Value,
     ) {
@@ -334,6 +340,7 @@ impl IOperationLog for OperationLog {
             self,
             dbtx,
             operation_id,
+            account,
             operation_type,
             operation_meta,
         )
