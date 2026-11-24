@@ -83,6 +83,10 @@ Iroh API continue without either Iroh listener and log a warning.
 The Iroh 1.x default relay set selects Fedimint-operated home relays rather than
 n0's public relays. It is not an egress allowlist: clients and guardians can still
 dial peers through other relay URLs advertised in those peers' address records.
+The set also lists `eu01.iroh.fedimint.org` and `us01.iroh.fedimint.org`, which
+do not resolve yet and are reserved for a later move to Fedimint-owned domains.
+Iroh never selects an unreachable relay as home, so they are inert until they
+serve an Iroh 1.x relay. Keep them unresolvable until then.
 
 Guardian metadata advertises the new identity in an optional field ignored by
 older clients. Capable clients use the advertised identity without falling back

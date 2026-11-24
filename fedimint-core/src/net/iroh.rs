@@ -31,9 +31,19 @@ const DEFAULT_IROH_RELAYS: [&str; 2] = [
 /// never be mixed. Kept here next to the 0.35 list so both are maintained in
 /// one place; the `RelayMode` is built by callers that have the `iroh_next`
 /// types in scope.
-pub const DEFAULT_IROH_V1_RELAYS: [&str; 2] = [
+///
+/// The `iroh.fedimint.org` entries are placeholders for a later migration to
+/// Fedimint-owned domains and do not resolve yet. Iroh only selects a home
+/// relay that answered the current round of probes, which run in parallel, so
+/// an unresolvable entry is never selected and costs one DNS lookup per round.
+/// Until a working Iroh 1.x relay serves them, these names must stay
+/// unresolvable: any server answering `/ping` with a 2xx status would be
+/// selected as a home relay.
+pub const DEFAULT_IROH_V1_RELAYS: [&str; 4] = [
     "https://euc1-2.relay.elsirion.fedimint.iroh.link/",
     "https://use1-2.relay.elsirion.fedimint.iroh.link/",
+    "https://eu01.iroh.fedimint.org/",
+    "https://us01.iroh.fedimint.org/",
 ];
 
 /// QUIC idle timeout for every iroh endpoint.
