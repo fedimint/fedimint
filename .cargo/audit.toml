@@ -112,11 +112,14 @@ ignore = [
   # (iroh 0.35.0 chain).
   "RUSTSEC-2026-0253",
   # `chrono` unmaintained; no replacement release exists to upgrade to.
+  # Migration to `jiff` tracked in fedimint/fedimint#9579.
   "RUSTSEC-2026-0543",
   # `humantime` unmaintained (wraps chrono); no replacement release exists.
+  # Pulled in transitively, not used directly by any fedimint crate: via
+  # fedimint-connectors -> arti-client and the tor-* crate family (Tor
+  # connectivity support), and via fedimint-logging -> console-subscriber
+  # (tokio-console instrumentation).
   "RUSTSEC-2026-0542",
-  # `proc-macro-error2` unmaintained; transitive via getset, no fix upstream.
-  "RUSTSEC-2026-0173",
 ]
 
 [output]
