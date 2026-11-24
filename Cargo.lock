@@ -2248,7 +2248,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccc2776f0c61eca1ca32528f85548abd1a4be8fb53d1b21c013e4f18da1e7090"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -2546,7 +2546,7 @@ dependencies = [
  "tar",
  "tokio",
  "tokio-rustls",
- "tower-http",
+ "tower-http 0.7.1",
  "tracing",
 ]
 
@@ -3740,7 +3740,7 @@ dependencies = [
  "tokio-stream",
  "tonic 0.14.9",
  "tower 0.4.13",
- "tower-http",
+ "tower-http 0.7.1",
  "tracing",
  "url",
 ]
@@ -4588,7 +4588,7 @@ dependencies = [
  "serde_json",
  "tikv-jemallocator",
  "tokio",
- "tower-http",
+ "tower-http 0.7.1",
  "tracing",
 ]
 
@@ -4623,7 +4623,7 @@ dependencies = [
  "lightning-invoice",
  "serde",
  "tokio",
- "tower-http",
+ "tower-http 0.7.1",
  "tracing",
 ]
 
@@ -6484,16 +6484,6 @@ name = "ipnet"
 version = "2.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d98f6fed1fde3f8c21bc40a1abb88dd75e67924f9cffc3ef95607bad8017f8e2"
-
-[[package]]
-name = "iri-string"
-version = "0.7.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbc5ebe9c3a1a7a5127f920a418f7585e9e758e911d0466ed004f393b0e380b2"
-dependencies = [
- "memchr",
- "serde",
-]
 
 [[package]]
 name = "iroh"
@@ -10101,7 +10091,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-util",
  "tower 0.5.2",
- "tower-http",
+ "tower-http 0.6.11",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -10140,7 +10130,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-util",
  "tower 0.5.2",
- "tower-http",
+ "tower-http 0.6.11",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -12951,20 +12941,35 @@ dependencies = [
 
 [[package]]
 name = "tower-http"
-version = "0.6.8"
+version = "0.6.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4e6559d53cc268e5031cd8429d05415bc4cb4aefc4aa5d6cc35fbf5b924a1f8"
+checksum = "4cfcf7e2740e6fc6d4d688b4ef00650406bb94adf4731e43c096c3a19fe40840"
 dependencies = [
- "base64 0.22.1",
  "bitflags 2.11.1",
  "bytes",
  "futures-util",
  "http 1.3.1",
  "http-body",
- "iri-string",
- "mime",
  "pin-project-lite",
  "tower 0.5.2",
+ "tower-layer",
+ "tower-service",
+ "url",
+]
+
+[[package]]
+name = "tower-http"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08a05a66a4fdd61cbbe0a1d755ffe0ca6aba159dd4820936a0ff8a8278245b9c"
+dependencies = [
+ "base64 0.22.1",
+ "bitflags 2.11.1",
+ "bytes",
+ "http 1.3.1",
+ "mime",
+ "percent-encoding",
+ "pin-project-lite",
  "tower-layer",
  "tower-service",
 ]
