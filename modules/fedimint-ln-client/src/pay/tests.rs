@@ -6,6 +6,7 @@ use fedimint_api_client::api::ServerError;
 use fedimint_client_module::DynGlobalClientContext;
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, OperationId};
+use fedimint_core::runtime::timeout;
 use fedimint_core::secp256k1::{Keypair, SECP256K1, Secp256k1, SecretKey};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, apply, async_trait_maybe_send};
@@ -154,7 +155,7 @@ async fn run_gateway_transition(
         .into_iter()
         .next()
         .expect("Funded state has a gateway transition");
-    let output = tokio::time::timeout(Duration::from_secs(10), gateway_transition.trigger)
+    let output = timeout(Duration::from_secs(10), gateway_transition.trigger)
         .await
         .expect("the gateway transition should resolve");
     serde_json::from_value(output).expect("trigger output should decode")
