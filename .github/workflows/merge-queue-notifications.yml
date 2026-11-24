@@ -1,0 +1,61 @@
+name: Merge Queue Notifications
+
+on:
+  workflow_run:
+    workflows: ["CI (nix)"]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  notify:
+    if: >-
+      github.repository == 'fedimint/fedimint' &&
+      github.event.workflow_run.event == 'merge_group' &&
+      github.event.workflow_run.conclusion == 'failure'
+    permissions:
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      # Use the gate's result, not unrelated failures such as Audit.
+      - name: Find failed merge queue gate
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          [[ "$RUN_ID" =~ ^[1-9][0-9]*$ && "$RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ]] || exit 1
+          job_id=$(gh api --paginate \
+            "repos/fedimint/fedimint/actions/runs/$RUN_ID/attempts/$RUN_ATTEMPT/jobs?per_page=100" \
+            --jq '.jobs[] | select(.name == "Status (MQ)" and .conclusion == "failure") | .id')
+          if [[ -n "$job_id" ]]; then
+            [[ "$job_id" =~ ^[1-9][0-9]*$ ]] || exit 1
+            echo "job_id=$job_id" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Notify Discord of merge queue failure
+        if: steps.gate.outputs.job_id != ''
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          JOB_ID: ${{ steps.gate.outputs.job_id }}
+        run: |
+          if [[ -z "$DISCORD_WEBHOOK" ]]; then
+            echo "::error::DISCORD_WEBHOOK is not configured"
+            exit 1
+          fi
+          job_url="https://github.com/fedimint/fedimint/actions/runs/$RUN_ID/job/$JOB_ID"
+          payload=$(jq -cn --arg content \
+            "fedimint/fedimint merge queue failed: CI (nix) / Status (MQ), attempt $RUN_ATTEMPT. <$job_url>" \
+            '{content: $content, allowed_mentions: {parse: []}}')
+          if ! status=$(curl --disable --silent --globoff --proto '=https' --max-time 20 \
+            --output /dev/null --write-out '%{http_code}' \
+            --url-query 'wait=true' \
+            --header 'Content-Type: application/json' --data "$payload" --url "$DISCORD_WEBHOOK") ||
+            [[ "$status" != 2[0-9][0-9] ]]; then
+            echo "::error::Discord webhook delivery failed"
+            exit 1
+          fi

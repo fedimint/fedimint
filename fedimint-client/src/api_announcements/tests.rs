@@ -1,5 +1,8 @@
 use std::collections::BTreeMap;
+use std::time::Duration;
 
+use fedimint_api_client::api::DynGlobalApi;
+use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::config::{ClientConfig, GlobalClientConfig, PeerUrl};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
@@ -16,6 +19,50 @@ use crate::guardian_metadata::GuardianMetadataKey;
 
 const STABLE_ENDPOINT_ID: &str = "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a";
 const NEXT_ENDPOINT_ID: &str = "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c";
+
+#[tokio::test]
+async fn empty_broadcast_keys_return_empty_refresh_results() {
+    let mut config = test_config(
+        PeerId::from(0),
+        SafeUrl::parse("wss://example.com/ws/").expect("valid URL"),
+    );
+    config.global.broadcast_public_keys = Some(BTreeMap::new());
+    let config: ClientConfig =
+        serde_json::from_value(serde_json::to_value(config).expect("serializable config"))
+            .expect("Some(empty) broadcast keys are deserializable");
+    let keys = config
+        .global
+        .broadcast_public_keys
+        .expect("keys are present");
+    let connectors = ConnectorRegistry::build_from_testing_defaults()
+        .bind()
+        .await;
+    let api = DynGlobalApi::new(connectors, BTreeMap::new(), None);
+
+    // Both background tasks must keep polling rather than panic on this config.
+    for required in [0, 1] {
+        assert!(
+            super::fetch_api_announcements_from_at_least_num_of_peers(
+                required,
+                &api,
+                &keys,
+                Duration::ZERO,
+            )
+            .await
+            .is_empty()
+        );
+        assert!(
+            crate::guardian_metadata::fetch_guardian_metadata_from_at_least_num_of_peers(
+                required,
+                &api,
+                &keys,
+                Duration::ZERO,
+            )
+            .await
+            .is_empty()
+        );
+    }
+}
 
 fn test_config(peer_id: PeerId, url: SafeUrl) -> ClientConfig {
     ClientConfig {

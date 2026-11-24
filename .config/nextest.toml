@@ -9,7 +9,10 @@ slow-timeout = { period = "30s", terminate-after = 4 }
 [profile.dev]
 
 [profile.ci]
-slow-timeout = { period = "30s", terminate-after = 3 }
+# One period longer than it was, and level with every other profile: the
+# walletv2 module tests spin up a federation and a bitcoind and were landing
+# just under the old 90s ceiling, so a busy runner tipped them over.
+slow-timeout = { period = "30s", terminate-after = 4 }
 
 # This integration test still needs enough observed real time for positive
 # weekly coverage, persistence, and an offline API query, in addition to fixture

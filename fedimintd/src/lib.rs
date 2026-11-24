@@ -240,9 +240,10 @@ struct ServerOpts {
     #[arg(long, env = FM_SESSION_TIMEOUT_SECS_ENV, default_value = "3600")]
     session_timeout_secs: u64,
 
-    /// Drop a p2p connection to a peer once it exceeds this age in seconds,
-    /// relying on the reconnection logic to re-establish it. Unset by
-    /// default, in which case connections are never dropped due to their age.
+    /// Request P2P connection retirement after this many seconds. The manager
+    /// checks the limit between sends, so it is not a timeout for stalled I/O.
+    /// Individual sends have a separate timeout. Unset by default, which
+    /// disables age-based retirement. See `SPEC-guardian-p2p-delivery`.
     #[arg(long, env = FM_P2P_MAX_CONNECTION_AGE_SECS_ENV)]
     p2p_max_connection_age_secs: Option<u64>,
 
@@ -389,6 +390,12 @@ pub async fn run(
 
     tracing_builder.init().map_err(anyhow::Error::from).unwrap();
 
+    // Must run before anything that may open a TLS connection (e.g. the
+    // hybrid bitcoind/Esplora backend checks chain IDs over HTTPS during
+    // construction). Without a process-level provider rustls panics, since
+    // both `ring` and `aws-lc-rs` are present in the dependency graph.
+    install_crypto_provider().await;
+
     info!("Starting fedimintd (version: {fedimint_version} version_hash: {code_version_hash})");
 
     #[cfg(all(
@@ -500,8 +507,6 @@ pub async fn run(
         ServerBitcoinRpcTracked::new(dyn_server_bitcoin_rpc, "server").into_dyn();
 
     root_task_group.install_kill_handler();
-
-    install_crypto_provider().await;
 
     // The UI password falls back to the legacy password.private file on disk
     // if its env var is not set, since the UI defaults to a loopback bind.

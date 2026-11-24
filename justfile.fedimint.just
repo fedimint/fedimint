@@ -22,18 +22,14 @@ test-ci-all:
 test-count:
   ./scripts/tests/test-cov.sh
 
-test-compatibility *VERSIONS="v0.10.1 v0.11.2 v0.12.0":
+test-compatibility *VERSIONS="v0.11.4 v0.12.2 v0.13.0":
   ./scripts/tests/test-ci-all-backcompat.sh {{VERSIONS}}
 
 test-full-compatibility *VERSIONS="v0.4.4":
   env FM_FULL_VERSION_MATRIX=1 ./scripts/tests/test-ci-all-backcompat.sh {{VERSIONS}}
 
-test-upgrades *VERSIONS="v0.10.1 current, v0.11.2 current, v0.12.0 current":
+test-upgrades *VERSIONS="v0.11.4 current, v0.12.2 current, v0.13.0 current":
   ./scripts/tests/upgrade-test.sh {{VERSIONS}}
-
-# `cargo udeps` check
-udeps:
-  nix build -L .#nightly.test.workspaceCargoUdeps
 
 bench:
   cargo bench
@@ -76,7 +72,6 @@ final-check-ci:
   @just run-quietly just check-wasm
   @just run-quietly ./scripts/tests/test-ci-all.sh
   @just run-quietly just test-compatibility
-  @just run-quietly just udeps
 
 # check before making a release
 final-check-release:
@@ -90,14 +85,13 @@ check-packages-features:
   # just check-wasm --features iroh
   @just run-quietly cargo workspaces exec cargo check
   @just run-quietly cargo workspaces exec cargo check --no-default-features
-  # there are some features that require nightly
-  @just run-quietly nix shell github:nix-community/fenix#latest.toolchain -c cargo workspaces exec cargo check --all-features
+  @just run-quietly cargo workspaces exec cargo check --all-features
 
 # like `check-packages-features` but using nix
 check-packages-features-using-nix:
   @just run-quietly nix build -L .#wasm32-unknown.ci.cargoCheckWasmNoDefaultFeatures
   @just run-quietly nix build -L .#ci.cargoWorkspacesCheckNoDefaultFeatures
-  @just run-quietly nix build -L .#nightly.ci.cargoWorkspacesCheckAllFeatures
+  @just run-quietly nix build -L .#ci.cargoWorkspacesCheckAllFeatures
   @just run-quietly nix build -L .#ci.cargoWorkspacesCheckDefaultFeatures
 
 check-wasm *EXTRA_ARGS:

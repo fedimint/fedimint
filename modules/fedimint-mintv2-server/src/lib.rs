@@ -587,7 +587,7 @@ async fn await_signature_shares(
     range: fedimint_core::OutPointRange,
 ) -> Vec<BlindedSignatureShare> {
     let last = match range.checked_count() {
-        Some(count) if count > 0 => OutPoint {
+        Some(count) if 0 < count => OutPoint {
             txid: range.txid(),
             out_idx: range.end_out_point().out_idx - 1,
         },

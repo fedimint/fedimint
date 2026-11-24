@@ -424,7 +424,7 @@ where
             SET_LOCAL_PARAMS_ENDPOINT,
             ApiRequestErased::new(SetLocalParamsRequest {
                 name,
-                federation_name,
+                _federation_name: federation_name,
                 disable_base_fees,
                 enabled_modules,
                 federation_size,
@@ -675,6 +675,19 @@ where
             PEER_AVAILABILITY_ENDPOINT.to_owned(),
             ApiRequestErased::default(),
             peer_id,
+        )
+        .await
+    }
+
+    async fn reset_peer_availability(
+        &self,
+        request: fedimint_core::peer_availability::ResetPeerAvailabilityRequest,
+        auth: ApiAuth,
+    ) -> FederationResult<()> {
+        self.request_admin(
+            fedimint_core::endpoint_constants::RESET_PEER_AVAILABILITY_ENDPOINT,
+            ApiRequestErased::new(request),
+            auth,
         )
         .await
     }

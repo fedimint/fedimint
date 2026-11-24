@@ -1266,6 +1266,19 @@ impl Wallet {
 
         let pending_txs = pending_txs_unordered(dbtx).await;
 
+        // A defensive backstop, not a liveness bound a user hits under the
+        // generated configuration. The feerate floor below is
+        // `feerate_base << pending_txs.len()`, which doubles with each pending
+        // transaction, and the feerate the next tx is charged is the max of that
+        // floor and the consensus feerate. With the default `feerate_base` (set
+        // below the 1 sat/vB vote floor) the floor only overtakes the consensus
+        // feerate past the first few pending txs; from there it doubles each step.
+        // By depth 32 the floor is `feerate_base << 32`, ~1.07e9 sat/vByte (~10.7
+        // BTC/vByte) for the default 250 sat/kvB, so under those parameters driving
+        // the stack to 33 costs tens of thousands of BTC in fees and it stays far
+        // below the cap. The cap also bounds the shift amount `pending_txs.len()`
+        // below u64's width, keeping `feerate_base << n` well-defined, and bounds
+        // the `stack_vbytes` fold the `expect` below relies on.
         assert!(pending_txs.len() <= 32);
 
         let feerate = self

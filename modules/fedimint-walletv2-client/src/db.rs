@@ -1,3 +1,4 @@
+use fedimint_core::core::Account;
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::{impl_db_lookup, impl_db_record};
 use serde::Serialize;
@@ -16,6 +17,9 @@ impl std::fmt::Display for DbKeyPrefix {
     }
 }
 
+/// How far the scanner has walked the federation's output stream. The stream is
+/// federation-wide and one sweep serves every account, so this is a single
+/// cursor rather than one per account.
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct NextOutputIndexKey;
 
@@ -25,8 +29,11 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::NextOutputIndex
 );
 
+/// Address indices whose derived script the federation can pay, split by the
+/// key's leading [`Account`]. Iterating a federation's whole prefix yields
+/// `(account, index)` pairs — exactly what the scanner's address map wants.
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
-pub struct ValidAddressIndexKey(pub u64);
+pub struct ValidAddressIndexKey(pub Account, pub u64);
 
 impl_db_record!(
     key = ValidAddressIndexKey,
@@ -34,10 +41,19 @@ impl_db_record!(
     db_prefix = DbKeyPrefix::ValidAddressIndex
 );
 
+/// Every account's indices, in account order.
 #[derive(Clone, Debug, Encodable, Decodable, Serialize)]
 pub struct ValidAddressIndexPrefix;
 
 impl_db_lookup!(
     key = ValidAddressIndexKey,
     query_prefix = ValidAddressIndexPrefix
+);
+
+#[derive(Clone, Debug, Encodable, Decodable, Serialize)]
+pub struct ValidAddressIndexAccountPrefix(pub Account);
+
+impl_db_lookup!(
+    key = ValidAddressIndexKey,
+    query_prefix = ValidAddressIndexAccountPrefix
 );

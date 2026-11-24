@@ -21,12 +21,15 @@ use fedimint_core::{
 };
 use miniscript::descriptor::Wsh;
 use secp256k1::ecdsa::Signature;
-use secp256k1::{PublicKey, Scalar, XOnlyPublicKey};
+use secp256k1::{PublicKey, Scalar, SecretKey, XOnlyPublicKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub mod config;
 pub mod endpoint_constants;
+
+#[cfg(test)]
+mod tests;
 
 pub const KIND: ModuleKind = ModuleKind::from_static_str("walletv2");
 
@@ -60,10 +63,27 @@ pub fn sleep_duration() -> Duration {
 }
 
 pub fn descriptor(pks: &BTreeMap<PeerId, PublicKey>, tweak: &sha256::Hash) -> Wsh<PublicKey> {
+    let scalar = Scalar::from_be_bytes(tweak.to_byte_array()).expect("Hash is within field order");
+    // Every guardian key is tweaked by the same point t*G. Compute it once
+    // instead of repeating the scalar multiplication for each guardian on every
+    // candidate in the client's probabilistic address search.
+    // Zero is a valid additive tweak, but cannot be represented as a public key.
+    let tweak_pk = (scalar != Scalar::ZERO).then(|| {
+        PublicKey::from_secret_key(
+            secp256k1::SECP256K1,
+            &SecretKey::from_slice(&tweak.to_byte_array()).expect("Nonzero scalar is a valid key"),
+        )
+    });
+
     Wsh::new_sortedmulti(
         pks.to_num_peers().threshold(),
         pks.values()
-            .map(|pk| tweak_public_key(pk, tweak))
+            .map(|pk| {
+                tweak_pk.map_or(*pk, |tweak_pk| {
+                    pk.combine(&tweak_pk)
+                        .expect("Failed to tweak bitcoin public key")
+                })
+            })
             .collect::<Vec<PublicKey>>(),
     )
     .expect("Failed to construct Descriptor")
@@ -161,15 +181,24 @@ pub struct PendingOutput {
 /// from one guardian with a chain tip from another.
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PendingOutputs {
-    /// The responding guardian's local block count, or `0` if its bitcoin
-    /// backend is unavailable.
+    /// The responding guardian's local block count, or `None` before the first
+    /// successful scan or while its bitcoin backend is unavailable.
+    ///
+    /// The API retains its numeric wire format: `None` is encoded as `0` and
+    /// nonzero counts as numbers. This is not a freshness or finality
+    /// guarantee.
+    /// A `Some(0)` also encodes as `0` and decodes as `None`.
     ///
     /// A mined output's confirmations are `block_count - height`, which counts
     /// the block that mined it as the first confirmation. Note this is offset
     /// by one from [`BLOCK_COUNT_VOTE_DELAY`], which does not count the mining
     /// block, so a peg-in becomes claimable at `BLOCK_COUNT_VOTE_DELAY + 1`
     /// confirmations.
-    pub block_count: u64,
+    #[serde(
+        serialize_with = "serialize_pending_block_count",
+        deserialize_with = "deserialize_pending_block_count"
+    )]
+    pub block_count: Option<u64>,
     pub outputs: Vec<PendingOutput>,
     /// How much of its mempool this guardian inspected for these outputs.
     ///
@@ -177,6 +206,21 @@ pub struct PendingOutputs {
     /// which an esplora-backed guardian never can. Without it a client could
     /// not tell an empty mempool from a blind guardian.
     pub mempool_visibility: MempoolVisibility,
+}
+
+// Serde's field serializer requires a reference to the field.
+#[allow(clippy::ref_option)]
+fn serialize_pending_block_count<S: serde::Serializer>(
+    block_count: &Option<u64>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    block_count.unwrap_or(0).serialize(serializer)
+}
+
+fn deserialize_pending_block_count<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<u64>, D::Error> {
+    u64::deserialize(deserializer).map(|count| (count != 0).then_some(count))
 }
 
 /// How much of a mempool was inspected for unmined peg-ins.

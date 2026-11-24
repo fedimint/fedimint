@@ -44,6 +44,7 @@ assert_matches = { workspace = true }
 fedimint-dummy-client = { workspace = true }
 fedimint-dummy-common = { workspace = true }
 fedimint-dummy-server = { workspace = true }
+fedimint-eventlog = { workspace = true }
 
 [lints]
 workspace = true

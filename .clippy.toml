@@ -1,3 +1,6 @@
+# Keep disallowed-methods in sync with fedimint-server/clippy.toml.
 disallowed-methods = [
   { path = "tokio::sync::watch::Sender::send", reason = "send is error prone", replacement = "tokio::sync::watch::Sender::send_replace" },
+  { path = "lightning_invoice::Bolt11Invoice::is_expired", reason = "uses the system clock, which panics on WASM; use would_expire(fedimint_core::time::duration_since_epoch()) instead" },
+  { path = "lightning_invoice::Bolt11Invoice::duration_until_expiry", reason = "uses the system clock, which panics on WASM; calculate the remaining duration using fedimint_core::time::duration_since_epoch() instead" },
 ]

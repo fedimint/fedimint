@@ -238,7 +238,10 @@ fn merge_pending_outputs(responses: Vec<PendingOutputs>, threshold: usize) -> Pe
     // Falling back to the highest reported tip keeps progress working on a
     // federation where fewer than a threshold of guardians are upgraded far
     // enough to serve this endpoint at all.
-    let mut counts: Vec<u64> = responses.iter().map(|r| r.block_count).collect();
+    // Keep unavailable observations in the vote, ordered below every known
+    // count, just as the legacy zero sentinel was. Do not turn them into missing
+    // responses and thereby activate the below-threshold fallback.
+    let mut counts: Vec<_> = responses.iter().map(|r| r.block_count).collect();
 
     counts.sort_unstable();
     counts.reverse();
@@ -247,7 +250,7 @@ fn merge_pending_outputs(responses: Vec<PendingOutputs>, threshold: usize) -> Pe
         .get(threshold - 1)
         .or_else(|| counts.first())
         .copied()
-        .unwrap_or(0);
+        .flatten();
 
     let mut mempool_visibility = MempoolVisibility::Unavailable;
     let mut outputs: BTreeMap<bitcoin::OutPoint, PendingOutput> = BTreeMap::new();

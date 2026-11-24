@@ -20,7 +20,7 @@ use fedimint_bitcoind::DynBitcoindRpc;
 use fedimint_client_module::module::recovery::RecoveryProgress;
 use fedimint_client_module::module::{
     ClientContextIface, ClientModule, ClientModuleRegistry, DynClientModule, FinalClientIface,
-    IClientModule, IdxRange, OutPointRange, PrimaryModulePriority,
+    IClientModule, IdxRange, OutPointRange, PrimaryModulePriority, PrimaryModuleSupport,
 };
 use fedimint_client_module::oplog::IOperationLog;
 use fedimint_client_module::secret::{PlainRootSecretStrategy, RootSecretStrategy as _};
@@ -38,7 +38,9 @@ use fedimint_connectors::{ConnectorRegistry, PeerStatus};
 use fedimint_core::config::{
     ClientConfig, FederationId, GlobalClientConfig, JsonClientConfig, ModuleInitRegistry,
 };
-use fedimint_core::core::{DynInput, DynOutput, ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{
+    Account, DynInput, DynOutput, ModuleInstanceId, ModuleKind, OperationId,
+};
 use fedimint_core::db::{
     AutocommitError, Database, DatabaseRecord, DatabaseTransaction, DbMigrationError,
     IDatabaseTransactionOpsCore as _, IDatabaseTransactionOpsCoreTyped as _, NonCommittable,
@@ -87,9 +89,9 @@ use crate::client::event_log::DefaultApplicationEventLogKey;
 use crate::db::{
     ApiSecretKey, CachedApiVersionSet, CachedApiVersionSetKey, ChainIdKey,
     ChronologicalOperationLogKey, ClientConfigKey, ClientMetadataKey, ClientModuleRecovery,
-    ClientModuleRecoveryState, EncodedClientSecretKey, OperationLogKey, PeerLastApiVersionsSummary,
-    PeerLastApiVersionsSummaryKey, PendingClientConfigKey, TransactionFeesKey,
-    apply_migrations_core_client_dbtx, verify_client_db_integrity_dbtx,
+    ClientModuleRecoveryState, EncodedClientSecretKey, OperationAccountKey, OperationLogKey,
+    PeerLastApiVersionsSummary, PeerLastApiVersionsSummaryKey, PendingClientConfigKey,
+    TransactionFeesKey, apply_migrations_core_client_dbtx, verify_client_db_integrity_dbtx,
 };
 use crate::error::{
     ApiVersionDiscoveryError, ClientModuleError, ClientSecretError, GlobalRpcError,
@@ -299,10 +301,27 @@ pub struct GetOperationIdRequest {
     operation_id: OperationId,
 }
 
+/// Which balance `get_balance` and `subscribe_balance_changes` are asking
+/// about. Both fields default, so a caller that predates either the multi-unit
+/// or the multi-account world can keep sending what it always sent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GetBalanceChangesRequest {
+pub struct BalanceRequest {
     #[serde(default = "AmountUnit::bitcoin")]
     unit: AmountUnit,
+    #[serde(default = "Account::primary")]
+    account: Account,
+}
+
+/// Spelt out rather than derived, since [`Account`] has no `Default` on
+/// purpose. What is defaulted here is one RPC's legacy wire shape, not an
+/// account-scoped write.
+impl Default for BalanceRequest {
+    fn default() -> Self {
+        Self {
+            unit: AmountUnit::bitcoin(),
+            account: Account::primary(),
+        }
+    }
 }
 
 impl Client {
@@ -813,6 +832,15 @@ impl Client {
                 return Err(TransactionSubmitError::NoPrimaryModule { unit: *unit });
             };
 
+            let account = partial_transaction.account();
+
+            if !Self::module_supports_account(module, account) {
+                return Err(TransactionSubmitError::AccountNotSupported {
+                    unit: *unit,
+                    account,
+                });
+            }
+
             let (added_input_bundle, added_output_bundle) = module
                 .create_final_inputs_and_outputs(
                     module_id,
@@ -821,6 +849,7 @@ impl Client {
                     *unit,
                     input_amount,
                     output_amount,
+                    account,
                 )
                 .await?;
 
@@ -893,9 +922,10 @@ impl Client {
     /// anything.
     ///
     /// This is the read-only twin of `Self::finalize_transaction`: it runs
-    /// the exact same primary-module balancing
-    /// (`create_final_inputs_and_outputs`, including funding selection /
-    /// consolidation / rebalancing) against a non-committable transaction
+    /// primary-module balancing through `quote_final_inputs_and_outputs`,
+    /// using the same funding selection, consolidation, and rebalancing as
+    /// finalization without requiring cryptographic change outputs.
+    /// It uses a non-committable transaction
     /// that is dropped rather than committed, so the client's funds are
     /// read but left untouched. The quote is point-in-time: it depends on
     /// the current inventory and can move as funds change.
@@ -917,6 +947,7 @@ impl Client {
             output_amount,
             input_fee,
             output_fee,
+            account,
         } = request;
 
         // Start the totals from the explicit side; the change the primary
@@ -956,39 +987,29 @@ impl Client {
                 return Err(TransactionSubmitError::NoPrimaryModule { unit: *unit });
             };
 
-            let (change_input, change_output) = module
-                .create_final_inputs_and_outputs(
+            if !Self::module_supports_account(module, account) {
+                return Err(TransactionSubmitError::AccountNotSupported {
+                    unit: *unit,
+                    account,
+                });
+            }
+
+            let change = module
+                .quote_final_inputs_and_outputs(
                     module_id,
                     &mut dbtx.to_ref_nc(),
                     operation_id,
                     *unit,
                     balance_input_amount,
                     balance_output_amount,
+                    account,
                 )
                 .await?;
 
-            // Fold the change into the totals. These are a disjoint set of items
-            // from the explicit ones (the primary module only sees the scalar
-            // amounts to balance, never the explicit items), so this is not
-            // double-counting. Iterate the bundles the way `finalize_transaction`
-            // would, looking each fee up via the module that owns the item.
-            for input in change_input.inputs() {
-                let module = self.get_module(input.input.module_instance_id());
-                let fee = module
-                    .input_fee(&input.amounts, &input.input)
-                    .expect("Primary module must know its own change input fees");
-                gross_input.checked_add_mut(&input.amounts);
-                input_fees.checked_add_mut(&fee);
-            }
-
-            for output in change_output.outputs() {
-                let module = self.get_module(output.output.module_instance_id());
-                let fee = module
-                    .output_fee(&output.amounts, &output.output)
-                    .expect("Primary module must know its own change output fees");
-                gross_output.checked_add_mut(&output.amounts);
-                output_fees.checked_add_mut(&fee);
-            }
+            gross_input.checked_add_mut(&change.input_amount);
+            gross_output.checked_add_mut(&change.output_amount);
+            input_fees.checked_add_mut(&change.input_fee);
+            output_fees.checked_add_mut(&change.output_fee);
         }
 
         // Mark the dropped dbtx as intentionally uncommitted so the commit
@@ -1123,6 +1144,8 @@ impl Client {
             return Err(OperationAlreadyExistsError { operation_id }.into());
         }
 
+        let account = tx_builder.account();
+
         let out_point_range = self
             .finalize_and_submit_transaction_inner(dbtx, operation_id, tx_builder)
             .await?;
@@ -1131,6 +1154,7 @@ impl Client {
             .add_operation_log_entry_dbtx(
                 dbtx,
                 operation_id,
+                account,
                 operation_type,
                 operation_meta_gen(out_point_range),
             )
@@ -1145,6 +1169,7 @@ impl Client {
         operation_id: OperationId,
         tx_builder: TransactionBuilder,
     ) -> Result<OutPointRange, TransactionSubmitError> {
+        let account = tx_builder.account();
         let FinalizedTransaction {
             transaction,
             mut states,
@@ -1203,8 +1228,16 @@ impl Client {
         dbtx.insert_new_entry(&TransactionFeesKey(txid), &fees)
             .await;
 
-        self.log_event_dbtx(dbtx, None, TxCreatedEvent { txid, operation_id })
-            .await;
+        self.log_event_dbtx(
+            dbtx,
+            None,
+            TxCreatedEvent {
+                txid,
+                operation_id,
+                account,
+            },
+        )
+        .await;
 
         Ok(OutPointRange::new(txid, IdxRange::from(change_range)))
     }
@@ -1227,6 +1260,49 @@ impl Client {
         let mut dbtx = self.db().begin_transaction_nc().await;
 
         Client::operation_exists_dbtx(&mut dbtx, operation_id).await
+    }
+
+    /// The account `operation_id` acts on. See [`OperationAccountKey`] for
+    /// why an absent row is primary.
+    pub async fn operation_account_dbtx(
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+    ) -> Account {
+        dbtx.get_value(&OperationAccountKey(operation_id))
+            .await
+            .unwrap_or(Account::Primary)
+    }
+
+    /// Records the account an operation acts on. The operation log calls
+    /// this as it writes an entry; a module that starts state machines
+    /// without one, as a recovery does, calls it directly.
+    ///
+    /// Write-once: the binding is what a state machine's later claims and
+    /// refunds are credited by, so an operation already bound to one account
+    /// cannot be rebound to another. Recording the same account again is a
+    /// no-op, so an operation recorded here and then started through the log
+    /// is fine. Absent reads as primary, see [`OperationAccountKey`].
+    pub async fn set_operation_account_dbtx(
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        account: Account,
+    ) {
+        let key = OperationAccountKey(operation_id);
+
+        if let Some(existing) = dbtx.get_value(&key).await {
+            assert_eq!(
+                existing,
+                account,
+                "operation {} is bound to {existing} and cannot be rebound to {account}",
+                operation_id.fmt_full()
+            );
+
+            return;
+        }
+
+        if account != Account::Primary {
+            dbtx.insert_entry(&key, &account).await;
+        }
     }
 
     pub async fn operation_exists_dbtx(
@@ -1444,30 +1520,45 @@ impl Client {
     #[doc(hidden)]
     /// Like [`Self::get_balance`] but returns an error if primary module is not
     /// available
-    pub async fn get_balance_for_btc(&self) -> Result<Amount, ModuleLookupError> {
-        self.get_balance_for_unit(AmountUnit::BITCOIN).await
+    pub async fn get_balance_for_btc(&self, account: Account) -> Result<Amount, ModuleLookupError> {
+        self.get_balance_for_unit(AmountUnit::BITCOIN, account)
+            .await
     }
 
     pub async fn get_balance_for_unit(
         &self,
         unit: AmountUnit,
+        account: Account,
     ) -> Result<Amount, ModuleLookupError> {
         let (id, module) = self
             .primary_module_for_unit(unit)
             .ok_or(ModuleLookupError::NoPrimaryModule { unit })?;
+
+        if !Self::module_supports_account(module, account) {
+            return Ok(Amount::ZERO);
+        }
         Ok(module
-            .get_balance(id, &mut self.db().begin_transaction_nc().await, unit)
+            .get_balance(
+                id,
+                &mut self.db().begin_transaction_nc().await,
+                unit,
+                account,
+            )
             .await)
     }
 
     /// Returns a stream that yields the current client balance every time it
     /// changes.
-    pub async fn subscribe_balance_changes(&self, unit: AmountUnit) -> BoxStream<'static, Amount> {
+    pub async fn subscribe_balance_changes(
+        &self,
+        unit: AmountUnit,
+        account: Account,
+    ) -> BoxStream<'static, Amount> {
         let primary_module_things =
             if let Some((primary_module_id, primary_module)) = self.primary_module_for_unit(unit) {
                 let balance_changes = primary_module.subscribe_balance_changes().await;
                 let initial_balance = self
-                    .get_balance_for_unit(unit)
+                    .get_balance_for_unit(unit, account)
                     .await
                     .expect("Primary is present");
 
@@ -1495,7 +1586,7 @@ impl Client {
             while let Some(()) = balance_changes.next().await {
                 let mut dbtx = db.begin_transaction_nc().await;
                 let balance = primary_module
-                     .get_balance(primary_module_id, &mut dbtx, unit)
+                     .get_balance(primary_module_id, &mut dbtx, unit, account)
                     .await;
 
                 // Deduplicate in case modules cannot always tell if the balance actually changed
@@ -2575,12 +2666,21 @@ impl Client {
         Box::pin(try_stream! {
             match method.as_str() {
                 "get_balance" => {
-                    let balance = self.get_balance_for_btc().await.unwrap_or_default();
+                    // Callers that predate accounts send no params at all.
+                    let req: BalanceRequest = if params.is_null() {
+                        BalanceRequest::default()
+                    } else {
+                        serde_json::from_value(params)?
+                    };
+                    let balance = self
+                        .get_balance_for_unit(req.unit, req.account)
+                        .await
+                        .unwrap_or_default();
                     yield serde_json::to_value(balance)?;
                 }
                 "subscribe_balance_changes" => {
-                    let req: GetBalanceChangesRequest= serde_json::from_value(params)?;
-                    let mut stream = self.subscribe_balance_changes(req.unit).await;
+                    let req: BalanceRequest = serde_json::from_value(params)?;
+                    let mut stream = self.subscribe_balance_changes(req.unit, req.account).await;
                     while let Some(balance) = stream.next().await {
                         yield serde_json::to_value(balance)?;
                     }
@@ -2924,6 +3024,28 @@ impl Client {
         self.primary_modules_for_unit(unit).next()
     }
 
+    /// Whether the primary module for `unit` can hold a balance for
+    /// `account`. False when there is no primary module for the unit at all.
+    ///
+    /// Enforced here rather than by each primary module: balancing a
+    /// transaction or a fee quote against an unsupported account fails, and
+    /// its balance reads as zero, so a module only ever sees accounts it
+    /// advertised.
+    pub fn supports_account(&self, unit: AmountUnit, account: Account) -> bool {
+        self.primary_module_for_unit(unit)
+            .is_some_and(|(_, module)| Self::module_supports_account(module, account))
+    }
+
+    fn module_supports_account(module: &DynClientModule, account: Account) -> bool {
+        match module.supports_being_primary() {
+            PrimaryModuleSupport::Any { accounts, .. }
+            | PrimaryModuleSupport::Selected { accounts, .. } => accounts.supports(account),
+            PrimaryModuleSupport::None => {
+                unreachable!("a module selected as primary advertises primary support")
+            }
+        }
+    }
+
     /// [`Self::primary_module_for_unit`] for Bitcoin
     pub fn primary_module_for_btc(&self) -> (ModuleInstanceId, &DynClientModule) {
         self.primary_module_for_unit(AmountUnit::BITCOIN)
@@ -3026,8 +3148,33 @@ impl ClientContextIface for Client {
         Client::fee_quote(self, operation_id, request).await
     }
 
-    async fn get_balance_for_unit(&self, unit: AmountUnit) -> Result<Amount, ModuleLookupError> {
-        Client::get_balance_for_unit(self, unit).await
+    async fn get_balance_for_unit(
+        &self,
+        unit: AmountUnit,
+        account: Account,
+    ) -> Result<Amount, ModuleLookupError> {
+        Client::get_balance_for_unit(self, unit, account).await
+    }
+
+    fn supports_account(&self, unit: AmountUnit, account: Account) -> bool {
+        Client::supports_account(self, unit, account)
+    }
+
+    async fn operation_account_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+    ) -> Account {
+        Client::operation_account_dbtx(dbtx, operation_id).await
+    }
+
+    async fn set_operation_account_dbtx(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        account: Account,
+    ) {
+        Client::set_operation_account_dbtx(dbtx, operation_id, account).await;
     }
 
     async fn transaction_updates(&self, operation_id: OperationId) -> TransactionUpdates {

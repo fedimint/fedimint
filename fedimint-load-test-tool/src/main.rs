@@ -25,6 +25,7 @@ use fedimint_api_client::download_from_invite_code;
 use fedimint_client::ClientHandleArc;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::Amount;
+use fedimint_core::core::Account;
 use fedimint_core::endpoint_constants::SESSION_COUNT_ENDPOINT;
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ApiRequestErased;
@@ -407,7 +408,7 @@ async fn main() -> anyhow::Result<()> {
             warn!("Task failed: {:?}", e);
         }
     }
-    if len_failures > 0 {
+    if 0 < len_failures {
         bail!("Finished with failures");
     }
     info!("Finished successfully");
@@ -593,7 +594,7 @@ async fn get_required_notes(
     minimum_amount_required: Amount,
     event_sender: &mpsc::UnboundedSender<MetricEvent>,
 ) -> anyhow::Result<()> {
-    let current_balance = coordinator.get_balance_for_btc().await?;
+    let current_balance = coordinator.get_balance_for_btc(Account::Primary).await?;
 
     if current_balance < minimum_amount_required {
         let diff = minimum_amount_required.saturating_sub(current_balance);
@@ -700,7 +701,7 @@ async fn do_load_test_user_task(
     let mut generated_invoices_per_user_iterator = (0..generated_invoices_per_user).peekable();
     while let Some(_) = generated_invoices_per_user_iterator.next() {
         let total_amount = get_note_summary(&client).await?.total_amount();
-        if invoice_amount > total_amount {
+        if total_amount < invoice_amount {
             warn!("Can't pay invoice, not enough funds: {invoice_amount} > {total_amount}");
         } else {
             match generate_invoice_with {
@@ -738,7 +739,7 @@ async fn do_load_test_user_task(
         let total_amount = get_note_summary(&client).await?.total_amount();
         let invoice_amount =
             Amount::from_msats(invoice.amount_milli_satoshis().unwrap_or_default());
-        if invoice_amount > total_amount {
+        if total_amount < invoice_amount {
             warn!("Can't pay invoice, not enough funds: {invoice_amount} > {total_amount}");
         } else if invoice_amount == Amount::ZERO {
             warn!("Can't pay invoice {invoice}, amount is zero");

@@ -58,6 +58,7 @@ let
     ".*\\.rs"
     ".*\\.html"
     ".*/proto/.*"
+    "\\.clippy\\.toml"
     ".*/clippy\\.toml"
     "db/migrations/.*"
     "devimint/src/cfg/.*"
@@ -71,23 +72,7 @@ let
     name = "fedimint";
   };
 
-  filterSrcWithRegexes =
-    regexes: src:
-    let
-      basePath = toString src + "/";
-    in
-    lib.cleanSourceWith {
-      filter =
-        path: type:
-        let
-          relPath = lib.removePrefix basePath (toString path);
-          includePath = (type == "directory") || lib.any (re: builtins.match re relPath != null) regexes;
-        in
-        # uncomment to debug:
-        # builtins.trace "${relPath}: ${lib.boolToString includePath}"
-        includePath;
-      inherit src;
-    };
+  filterSrcWithRegexes = import ./filter-source.nix { inherit lib; };
 
   # Filter only files needed to build project dependencies
   #
@@ -268,7 +253,14 @@ let
         bc
         bitcoind
         jq
-        lnd
+        (lnd.overrideAttrs (oldAttrs: {
+          postPatch = (oldAttrs.postPatch or "") + ''
+            cp ${./tests/lnd-taproot-check_test.go} chainreg/taproot_check_test.go
+          '';
+          postCheck = (oldAttrs.postCheck or "") + ''
+            go test ./chainreg -run '^TestBackendSupportsTaprootRPCCompatibility$' -count=1
+          '';
+        }))
         netcat
         perl
         esplora-electrs
@@ -315,9 +307,8 @@ let
         )
       ];
 
-    # we carefully optimize our debug symbols on cargo level,
-    # and in case of errors and panics, would like to see the
-    # line numbers etc.
+    # Cargo controls debuginfo stripping. Keep function symbols for backtraces
+    # instead of letting Nix strip them as well.
     dontStrip = true;
 
     postFixup = ''
@@ -603,24 +594,6 @@ in
       }
     );
 
-    workspaceCargoUdepsDeps = craneLib.buildDepsOnly {
-      pname = "${commonArgs.pname}-udeps-deps";
-      nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ pkgs.cargo-udeps ];
-      # since we filtered all the actual project source, everything will definitely fail
-      # but we only run this step to cache the build artifacts, so we ignore failure with `|| true`
-      buildPhaseCargoCommand = "cargo udeps --workspace --all-targets --profile $CARGO_PROFILE || true";
-      doCheck = false;
-    };
-
-    workspaceCargoUdeps = craneLib.mkCargoDerivation {
-      pname = "fedimint-udeps";
-      cargoArtifacts = workspaceCargoUdepsDeps;
-      nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ pkgs.cargo-udeps ];
-      buildPhaseCargoCommand = "cargo udeps --workspace --all-targets --profile $CARGO_PROFILE";
-      doInstallCargoArtifacts = false;
-      doCheck = false;
-    };
-
     cargoWorkspacesCommand =
       { cmd, pnameSuffix }:
       let
@@ -664,6 +637,26 @@ in
     cargoAudit = craneLib.cargoAudit {
       inherit advisory-db;
       src = filterWorkspaceAuditFiles commonSrc;
+      # Preserve Crane's yanked-package handling; suppress only these advisory IDs.
+      cargoAuditExtraArgs = lib.escapeShellArgs [
+        "--ignore"
+        "yanked"
+        # crypto-bigint 0.5.5: inspected Tor/SSH manifests do not enable optional
+        # p256/p384/p521 arithmetic; this does not rule out every affected operation.
+        # Re-verify after 2026-12-10, or sooner if features or targets change.
+        "--ignore"
+        "RUSTSEC-2026-0387"
+        # libsqlite3-sys 0.35.0: acceptable only with trusted database, sibling WAL,
+        # and restore files; crafted files can disclose process memory.
+        # Re-verify after 2026-11-24, or sooner if file-trust assumptions change.
+        "--ignore"
+        "RUSTSEC-2026-0459"
+        # rustls-webpki 0.102.8: inspected legacy Iroh paths use custom peer
+        # verification, not affected public-CA chains; public-CA paths use 0.103.16.
+        # Re-verify after 2026-12-10, or sooner if TLS verifier paths change.
+        "--ignore"
+        "RUSTSEC-2026-0382"
+      ];
     };
 
     cargoDeny = craneLib.cargoDeny {

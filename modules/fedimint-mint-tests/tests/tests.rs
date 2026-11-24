@@ -5,11 +5,13 @@ use assert_matches::assert_matches;
 use bls12_381::G1Affine;
 use fedimint_client::ClientHandleArc;
 use fedimint_client::backup::{ClientBackup, Metadata};
-use fedimint_client::transaction::{ClientInput, ClientInputBundle, TransactionBuilder};
+use fedimint_client::transaction::{
+    ClientInput, ClientInputBundle, ClientOutputBundle, TransactionBuilder,
+};
 use fedimint_client_module::ClientModule;
 use fedimint_client_module::error::{OperationLookupError, TransactionSubmitError};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::Decodable;
 use fedimint_core::module::registry::ModuleRegistry;
@@ -17,25 +19,28 @@ use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::task::sleep_in_test;
 use fedimint_core::util::backoff_util::aggressive_backoff;
 use fedimint_core::util::{FmtCompact as _, NextOrPending, retry};
-use fedimint_core::{Amount, TieredMulti, sats, secp256k1};
+use fedimint_core::{Amount, IdxRange, OutPointRange, TieredMulti, sats, secp256k1};
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
 use fedimint_logging::LOG_TEST;
 use fedimint_mint_client::api::MintFederationApi;
 use fedimint_mint_client::client_db::{NextECashNoteIndexKey, NoteKey};
 use fedimint_mint_client::{
-    MintClientInit, MintClientModule, Note, OOBNotes, ReissueExternalNotesError,
-    ReissueExternalNotesState, SelectNotesWithAtleastAmount, SelectNotesWithExactAmount,
-    SpendOOBError, SpendOOBState, SpendableNote, SpendableNoteUndecoded,
-    SubscribeReissueExternalNotesError, SubscribeSpendNotesError, ValidateNotesError,
+    MintClientInit, MintClientModule, MintClientStateMachines, Note, OOBNotes,
+    ReissueExternalNotesError, ReissueExternalNotesState, SelectNotesWithAtleastAmount,
+    SelectNotesWithExactAmount, SpendOOBError, SpendOOBState, SpendableNote,
+    SpendableNoteUndecoded, SubscribeReissueExternalNotesError, SubscribeSpendNotesError,
+    ValidateNotesError,
 };
-use fedimint_mint_common::{MintInput, MintInputV0, Nonce};
+use fedimint_mint_common::{MintInput, MintInputV0, MintOutput, Nonce};
 use fedimint_mint_server::MintInit;
 use fedimint_testing::fixtures::{Fixtures, TIMEOUT};
 use futures::StreamExt;
 use secp256k1::Keypair;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
+
+mod reissue_events;
 
 const EXPECTED_MAXIMUM_FEE: Amount = Amount::from_sats(20);
 
@@ -60,7 +65,7 @@ async fn issue_ecash(client: &ClientHandleArc, amount: Amount) -> anyhow::Result
             operation_id,
             "Issue e-cash via dummy module",
             |_| (),
-            TransactionBuilder::new().with_inputs(dummy_input),
+            TransactionBuilder::new(Account::Primary).with_inputs(dummy_input),
         )
         .await?;
 
@@ -103,7 +108,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
             operation_id,
             "Claiming Invalid Ecash Note",
             |_| (),
-            TransactionBuilder::new().with_inputs(
+            TransactionBuilder::new(Account::Primary).with_inputs(
                 client
                     .get_first_module::<MintClientModule>()?
                     .client_ctx
@@ -166,7 +171,7 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
     let fees_from_balance = sats(750)
         .checked_sub(
             client2
-                .get_balance_for_btc()
+                .get_balance_for_btc(Account::Primary)
                 .await
                 .expect("Can fetch balance"),
         )
@@ -187,8 +192,14 @@ async fn sends_ecash_out_of_band() -> anyhow::Result<()> {
         "Operation fees differ from actual fees"
     );
 
-    assert!(client1.get_balance_for_btc().await? >= sats(250).saturating_sub(EXPECTED_MAXIMUM_FEE));
-    assert!(client2.get_balance_for_btc().await? >= sats(750).saturating_sub(EXPECTED_MAXIMUM_FEE));
+    assert!(
+        client1.get_balance_for_btc(Account::Primary).await?
+            >= sats(250).saturating_sub(EXPECTED_MAXIMUM_FEE)
+    );
+    assert!(
+        client2.get_balance_for_btc(Account::Primary).await?
+            >= sats(750).saturating_sub(EXPECTED_MAXIMUM_FEE)
+    );
     Ok(())
 }
 
@@ -222,7 +233,7 @@ async fn reissue_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
         let reissued_value = notes.total_amount();
 
         let quote = receive_mint.reissue_fee_quote(&notes).await?;
-        let before = client_receive.get_balance_for_btc().await?;
+        let before = client_receive.get_balance_for_btc(Account::Primary).await?;
 
         let op = receive_mint.reissue_external_notes(notes, ()).await?;
         let mut sub = receive_mint
@@ -236,7 +247,7 @@ async fn reissue_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
         assert_eq!(sub.ok().await?, ReissueExternalNotesState::Done);
         assert_eq!(send_sub.ok().await?, SpendOOBState::Success);
 
-        let after = client_receive.get_balance_for_btc().await?;
+        let after = client_receive.get_balance_for_btc(Account::Primary).await?;
         let actual_fee = reissued_value - (after - before);
 
         assert_eq!(
@@ -266,7 +277,7 @@ async fn send_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
         client.wait_for_all_active_state_machines().await;
 
         let quote = mint.send_fee_quote(sats(1_000)).await?;
-        let before = client.get_balance_for_btc().await?;
+        let before = client.get_balance_for_btc(Account::Primary).await?;
 
         let notes = mint.send_oob_notes(sats(1_000), ()).await?;
         let sent_value = notes.total_amount();
@@ -274,7 +285,7 @@ async fn send_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
         // A send may trigger an internal reissue whose change notes are credited
         // by output state machines; wait for them before reading the balance.
         client.wait_for_all_active_state_machines().await;
-        let after = client.get_balance_for_btc().await?;
+        let after = client.get_balance_for_btc(Account::Primary).await?;
 
         // Value conservation: the wallet loses exactly the sent value plus the fee.
         let actual_fee = before - after - sent_value;
@@ -336,6 +347,137 @@ async fn send_oob_notes_reissue_without_settling() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Adds output state machines for `bundle`'s outputs at `out_points`,
+/// under an operation that has no transaction submission state machine
+///
+/// This is what mint recovery does for the pending notes it restores from a
+/// backup.
+async fn add_restored_output_state_machines(
+    client_mint: &MintClientModule,
+    dbtx: &mut fedimint_core::db::DatabaseTransaction<'_>,
+    bundle: &ClientOutputBundle<MintOutput, MintClientStateMachines>,
+    out_points: OutPointRange,
+) {
+    let state_machines = bundle
+        .sms()
+        .iter()
+        .flat_map(|sm| (sm.state_machines)(out_points))
+        .collect::<Vec<_>>();
+    client_mint
+        .client_ctx
+        .add_state_machines_dbtx(
+            dbtx,
+            client_mint.client_ctx.map_dyn(state_machines).collect(),
+        )
+        .await
+        .expect("Adding state machines can't fail");
+}
+
+/// A note restored by recovery has no transaction submission state machine
+/// to report that its transaction was accepted. It still has to be issued
+/// once the transaction is accepted, whether that happened before the
+/// restore or happens after it.
+async fn restored_output_is_issued(restore_before_tx_accepted: bool) -> anyhow::Result<()> {
+    let fed = fixtures().new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let client_mint = client.get_first_module::<MintClientModule>()?;
+    let dummy_module = client.get_first_module::<DummyClientModule>()?;
+
+    let mut dbtx = client_mint.db.begin_transaction().await;
+    let bundle = client_mint
+        .create_output(
+            &mut dbtx.to_ref_nc(),
+            OperationId::new_random(),
+            1,
+            sats(500),
+        )
+        .await;
+    dbtx.commit_tx().await;
+    let num_outputs = bundle.outputs().len() as u64;
+    let restored_amount = bundle
+        .outputs()
+        .iter()
+        .map(|output| Ok(output.output.ensure_v0_ref()?.amount))
+        .sum::<anyhow::Result<Amount>>()?;
+
+    // Submit the outputs without their state machines, so only the restored
+    // state machines can collect their notes
+    let tx = TransactionBuilder::new(Account::Primary)
+        .with_inputs(dummy_module.create_input(sats(1000)))
+        .with_outputs(client_mint.client_ctx.make_dyn(ClientOutputBundle::<
+            _,
+            MintClientStateMachines,
+        >::new(
+            bundle.outputs().to_vec(), vec![]
+        )));
+    let operation_id = OperationId::new_random();
+    let mut dbtx = client_mint.db.begin_transaction().await;
+    let change_range = client_mint
+        .client_ctx
+        .finalize_and_submit_transaction_dbtx(
+            &mut dbtx.to_ref_nc(),
+            operation_id,
+            "mint",
+            |_| (),
+            tx,
+        )
+        .await?;
+    assert_eq!(change_range.start_idx(), num_outputs);
+    let restored_range = OutPointRange::new(change_range.txid(), IdxRange::from(0..num_outputs));
+    if restore_before_tx_accepted {
+        // Same dbtx, so the state machines exist before the tx is submitted
+        add_restored_output_state_machines(
+            &client_mint,
+            &mut dbtx.to_ref_nc(),
+            &bundle,
+            restored_range,
+        )
+        .await;
+    }
+    dbtx.commit_tx().await;
+    client
+        .await_primary_bitcoin_module_outputs(operation_id, change_range.into_iter().collect())
+        .await?;
+    if !restore_before_tx_accepted {
+        let mut dbtx = client_mint.db.begin_transaction().await;
+        add_restored_output_state_machines(
+            &client_mint,
+            &mut dbtx.to_ref_nc(),
+            &bundle,
+            restored_range,
+        )
+        .await;
+        dbtx.commit_tx().await;
+    }
+
+    // All of the input ends up in the wallet: the change, and the restored
+    // notes
+    let expected_balance = sats(1000) - EXPECTED_MAXIMUM_FEE;
+    assert!(
+        restored_amount > EXPECTED_MAXIMUM_FEE,
+        "The change alone must not reach the expected balance"
+    );
+    let mut balances = client
+        .subscribe_balance_changes(AmountUnit::BITCOIN, Account::Primary)
+        .await;
+    fedimint_core::runtime::timeout(TIMEOUT, async {
+        while balances.next().await.expect("Balance stream never ends") < expected_balance {}
+    })
+    .await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn restored_output_of_accepted_tx_is_issued() -> anyhow::Result<()> {
+    restored_output_is_issued(false).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn restored_output_is_issued_once_its_tx_is_accepted() -> anyhow::Result<()> {
+    restored_output_is_issued(true).await
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn blind_nonce_index() -> anyhow::Result<()> {
     // Give client initial balance
@@ -366,7 +508,8 @@ async fn blind_nonce_index() -> anyhow::Result<()> {
         "Blind nonce should not be used yet"
     );
 
-    let tx = TransactionBuilder::new().with_outputs(client_mint.client_ctx.make_dyn(issuance_req));
+    let tx = TransactionBuilder::new(Account::Primary)
+        .with_outputs(client_mint.client_ctx.make_dyn(issuance_req));
 
     let change_range = client_mint
         .client_ctx
@@ -483,7 +626,8 @@ async fn single_peer_nonce_checks() -> anyhow::Result<()> {
         );
     }
 
-    let tx = TransactionBuilder::new().with_outputs(client1_mint.client_ctx.make_dyn(issuance_req));
+    let tx = TransactionBuilder::new(Account::Primary)
+        .with_outputs(client1_mint.client_ctx.make_dyn(issuance_req));
     let change_range = client1_mint
         .client_ctx
         .finalize_and_submit_transaction(operation_id, "mint", |_| (), tx)
@@ -541,7 +685,7 @@ async fn duplicate_blind_nonce_index_rejected() -> anyhow::Result<()> {
     let duplicate_bundle = fedimint_client_module::transaction::ClientOutputBundle::new_no_sm(
         issuance_req.outputs().to_vec(),
     );
-    let tx = TransactionBuilder::new()
+    let tx = TransactionBuilder::new(Account::Primary)
         .with_outputs(client_mint.client_ctx.make_dyn(issuance_req))
         .with_outputs(client_mint.client_ctx.make_dyn(duplicate_bundle));
 
@@ -622,7 +766,7 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     let total_amount_spent: Amount = note_bags.iter().map(|bag| bag.total_amount()).sum();
 
     assert_eq!(
-        client1.get_balance_for_btc().await?,
+        client1.get_balance_for_btc(Account::Primary).await?,
         sats(1000).saturating_sub(total_amount_spent)
     );
 
@@ -660,7 +804,7 @@ async fn sends_ecash_oob_highly_parallel() -> anyhow::Result<()> {
     }
 
     assert!(
-        client2.get_balance_for_btc().await?
+        client2.get_balance_for_btc(Account::Primary).await?
             >= total_amount_spent.saturating_sub(EXPECTED_MAXIMUM_FEE)
     );
 
@@ -749,7 +893,7 @@ async fn sends_ecash_out_of_band_cancel() -> anyhow::Result<()> {
 
     // FIXME: UserCanceledSuccess should mean the money is in our wallet
     for _ in 0..120 {
-        let balance = client.get_balance_for_btc().await?;
+        let balance = client.get_balance_for_btc(Account::Primary).await?;
         let expected_min_balance = sats(1000).saturating_sub(EXPECTED_MAXIMUM_FEE);
         if expected_min_balance <= balance {
             return Ok(());
@@ -840,7 +984,7 @@ async fn sends_ecash_out_of_band_cancel_partial() -> anyhow::Result<()> {
 
     // FIXME: UserCanceledSuccess should mean the money is in our wallet
     for _ in 0..120 {
-        let balance = client.get_balance_for_btc().await?;
+        let balance = client.get_balance_for_btc(Account::Primary).await?;
         let expected_min_balance = sats(1000)
             .saturating_sub(EXPECTED_MAXIMUM_FEE)
             .saturating_sub(single_note.0);
@@ -958,6 +1102,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
             .get_balance(
                 &mut client_mint.db.begin_transaction_nc().await,
                 AmountUnit::BITCOIN,
+                Account::Primary,
             )
             .await;
         let repair_summary = client_mint
@@ -978,6 +1123,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
             .get_balance(
                 &mut client_mint.db.begin_transaction_nc().await,
                 AmountUnit::BITCOIN,
+                Account::Primary,
             )
             .await;
         assert_eq!(
@@ -1030,6 +1176,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
             .get_balance(
                 &mut client_mint.db.begin_transaction_nc().await,
                 AmountUnit::BITCOIN,
+                Account::Primary,
             )
             .await;
 
@@ -1052,6 +1199,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
             .get_balance(
                 &mut client_mint.db.begin_transaction_nc().await,
                 AmountUnit::BITCOIN,
+                Account::Primary,
             )
             .await;
         assert_eq!(
@@ -1081,6 +1229,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
             .get_balance(
                 &mut client_mint.db.begin_transaction_nc().await,
                 AmountUnit::BITCOIN,
+                Account::Primary,
             )
             .await;
 
@@ -1103,6 +1252,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
             .get_balance(
                 &mut client_mint.db.begin_transaction_nc().await,
                 AmountUnit::BITCOIN,
+                Account::Primary,
             )
             .await;
         assert_eq!(
@@ -1163,6 +1313,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
             .get_balance(
                 &mut client_mint.db.begin_transaction_nc().await,
                 AmountUnit::BITCOIN,
+                Account::Primary,
             )
             .await;
 
@@ -1195,6 +1346,7 @@ async fn repair_wallet() -> anyhow::Result<()> {
             .get_balance(
                 &mut client_mint.db.begin_transaction_nc().await,
                 AmountUnit::BITCOIN,
+                Account::Primary,
             )
             .await;
         assert_eq!(

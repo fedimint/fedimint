@@ -1,6 +1,7 @@
 mod dto;
 
 use std::fs;
+use std::io::BufReader;
 use std::path::PathBuf;
 
 use anyhow::{Result, bail};
@@ -8,6 +9,9 @@ use fs2::FileExt;
 use tracing::{debug, info, warn};
 
 use crate::util;
+
+#[cfg(test)]
+mod tests;
 
 /// Root directory where we keep the lock & data file
 pub struct DataDir {
@@ -100,7 +104,9 @@ impl<'a> LockedRoot<'a> {
         if !path.try_exists()? {
             return Ok(Default::default());
         }
-        Ok(serde_json::from_reader::<_, _>(std::fs::File::open(path)?)?)
+        Ok(serde_json::from_reader(BufReader::new(fs::File::open(
+            path,
+        )?))?)
     }
 
     pub fn store_data(&mut self, data: &dto::RootData) -> Result<()> {

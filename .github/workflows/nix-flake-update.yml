@@ -20,6 +20,13 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
+      # update-flake-lock invokes node from a shell, outside the action runtime.
+      - name: Provide Node.js for update-flake-lock
+        run: |
+          nix build --inputs-from . nixpkgs#nodejs_24 \
+            --out-link "$RUNNER_TEMP/flake-update-node"
+          echo "$RUNNER_TEMP/flake-update-node/bin" >> "$GITHUB_PATH"
+
       - uses: DeterminateSystems/update-flake-lock@da03c0f078bc4b2c37ee4f7e072d34bf8f188bb3 # v29
         with:
           # Only update inputs that are NOT pinned to a specific rev.

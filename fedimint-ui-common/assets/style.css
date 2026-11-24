@@ -139,3 +139,11 @@ body {
   color: #198754 !important;
   border-color: #198754 !important;
 }
+.availability-details > summary {
+  cursor: help;
+  list-style: none;
+}
+
+.availability-details > summary::-webkit-details-marker {
+  display: none;
+}

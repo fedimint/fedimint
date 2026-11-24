@@ -2,6 +2,8 @@
 //!
 //! This crate contains integration tests for the gateway API
 //! and business logic.
+mod federation_name;
+
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,18 +18,19 @@ use fedimint_client::transaction::{
 };
 use fedimint_client_module::module::OutPointRange;
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{IntoDynInstance, OperationId};
+use fedimint_core::core::{Account, IntoDynInstance, OperationId};
+use fedimint_core::db::IDatabaseTransactionOpsCoreTyped;
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::task::{TaskGroup, sleep_in_test, timeout};
-use fedimint_core::time::now;
+use fedimint_core::time::{duration_since_epoch, now};
 use fedimint_core::util::{NextOrPending, SafeUrl, backoff_util, retry};
 use fedimint_core::{
     Amount, OutPoint, TransactionId, apply, async_trait_maybe_send, msats, sats, secp256k1,
 };
 use fedimint_dummy_client::{DummyClientInit, DummyClientModule};
 use fedimint_dummy_server::DummyInit;
-use fedimint_eventlog::Event;
+use fedimint_eventlog::{Event, EventLogIdPrefixAll, UnorderedEventLogIdPrefixAll};
 use fedimint_gateway_common::{PaymentLogPayload, SetFeesPayload, SetPaymentPolicyPayload};
 use fedimint_gateway_server::{Gateway, GatewayState};
 use fedimint_gateway_ui::IAdminGateway;
@@ -77,7 +80,7 @@ use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing::ln::{FakeLightningTest, MOCK_INVOICE_PREIMAGE};
 use fedimint_unknown_server::UnknownInit;
-use futures::Future;
+use futures::{Future, StreamExt};
 use itertools::Itertools;
 use lightning_invoice::{
     Bolt11Invoice, Bolt11InvoiceDescription, Currency, Description, InvoiceBuilder, PaymentSecret,
@@ -249,7 +252,10 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
             dummy_module
                 .mock_receive(sats(1000), AmountUnit::BITCOIN)
                 .await;
-            assert_eq!(user_client.get_balance_for_btc().await?, sats(1000));
+            assert_eq!(
+                user_client.get_balance_for_btc(Account::Primary).await?,
+                sats(1000)
+            );
 
             // Create test invoice
             let invoice = other_lightning_client.invoice(sats(250), None)?;
@@ -272,13 +278,13 @@ async fn test_gateway_client_pay_valid_invoice() -> anyhow::Result<()> {
             .await?;
 
             assert_eq!(
-                user_client.get_balance_for_btc().await?,
+                user_client.get_balance_for_btc(Account::Primary).await?,
                 sats(1000 - 250)
                     .checked_sub(outgoing_fee)
                     .expect("Should not be negative")
             );
             assert_eq!(
-                gateway_client.get_balance_for_btc().await?,
+                gateway_client.get_balance_for_btc(Account::Primary).await?,
                 sats(250)
                     .checked_add(outgoing_fee)
                     .expect("Should not wrap around")
@@ -299,7 +305,10 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
             dummy_module
                 .mock_receive(sats(1000), AmountUnit::BITCOIN)
                 .await;
-            assert_eq!(user_client.get_balance_for_btc().await?, sats(1000));
+            assert_eq!(
+                user_client.get_balance_for_btc(Account::Primary).await?,
+                sats(1000)
+            );
 
             let user_lightning_module = user_client.get_first_module::<LightningClientModule>()?;
             let gateway_id = gateway.http_gateway_id().await;
@@ -389,7 +398,10 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
             dummy_module
                 .mock_receive(sats(1000), AmountUnit::BITCOIN)
                 .await;
-            assert_eq!(user_client.get_balance_for_btc().await?, sats(1000));
+            assert_eq!(
+                user_client.get_balance_for_btc(Account::Primary).await?,
+                sats(1000)
+            );
 
             // Fund outgoing contract that the user client expects the gateway to pay
             let invoice = other_lightning_client.invoice(sats(250), None)?;
@@ -429,7 +441,7 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
                 keys: vec![gateway_module.redeem_key],
             };
 
-            let tx = TransactionBuilder::new().with_inputs(
+            let tx = TransactionBuilder::new(Account::Primary).with_inputs(
                 ClientInputBundle::new_no_sm(vec![client_input]).into_dyn(gateway_module.id),
             );
             let operation_meta_gen = |_: OutPointRange| GatewayMeta::Pay {
@@ -455,7 +467,10 @@ async fn test_gateway_cannot_claim_invalid_preimage() -> anyhow::Result<()> {
                     .await
                     .is_err()
             );
-            assert_eq!(gateway_client.get_balance_for_btc().await?, sats(0));
+            assert_eq!(
+                gateway_client.get_balance_for_btc(Account::Primary).await?,
+                sats(0)
+            );
             Ok::<_, anyhow::Error>(())
         },
     )
@@ -474,7 +489,10 @@ async fn test_gateway_client_pay_unpayable_invoice() -> anyhow::Result<()> {
             dummy_module
                 .mock_receive(sats(1000), AmountUnit::BITCOIN)
                 .await;
-            assert_eq!(user_client.get_balance_for_btc().await?, sats(1000));
+            assert_eq!(
+                user_client.get_balance_for_btc(Account::Primary).await?,
+                sats(1000)
+            );
 
             // Create invoice that cannot be paid
             let invoice = other_lightning_client.unpayable_invoice(sats(250), None);
@@ -536,7 +554,10 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
         dummy_module
             .mock_receive(initial_gateway_balance, AmountUnit::BITCOIN)
             .await;
-        assert_eq!(gateway_client.get_balance_for_btc().await?, sats(1000));
+        assert_eq!(
+            gateway_client.get_balance_for_btc(Account::Primary).await?,
+            sats(1000)
+        );
 
         // User client creates invoice in federation
         let invoice_amount = sats(100);
@@ -579,7 +600,7 @@ async fn test_gateway_client_intercept_valid_htlc() -> anyhow::Result<()> {
         );
         assert_eq!(
             initial_gateway_balance.saturating_sub(invoice_amount),
-            gateway_client.get_balance_for_btc().await?
+            gateway_client.get_balance_for_btc(Account::Primary).await?
         );
 
         Ok(())
@@ -662,7 +683,7 @@ async fn test_gateway_shutdown_completes_in_flight_payment() -> anyhow::Result<(
         );
         assert_eq!(
             initial_gateway_balance.saturating_sub(invoice_amount),
-            gateway_client.get_balance_for_btc().await?
+            gateway_client.get_balance_for_btc(Account::Primary).await?
         );
 
         Ok(())
@@ -722,7 +743,7 @@ async fn test_gateway_client_intercept_enforces_expiry_boundary() -> anyhow::Res
             .expect_err("HTLC at the expiry boundary must be rejected");
         assert_matches!(err, HandleInterceptedHtlcError::UnsafeExpiry(_));
         assert_eq!(
-            gateway_client.get_balance_for_btc().await?,
+            gateway_client.get_balance_for_btc(Account::Primary).await?,
             initial_gateway_balance
         );
 
@@ -746,7 +767,7 @@ async fn test_gateway_client_intercept_enforces_expiry_boundary() -> anyhow::Res
             GatewayExtReceiveStates::Preimage { .. }
         );
         assert_eq!(
-            gateway_client.get_balance_for_btc().await?,
+            gateway_client.get_balance_for_btc(Account::Primary).await?,
             initial_gateway_balance.saturating_sub(invoice_amount)
         );
 
@@ -802,7 +823,7 @@ async fn intercepting_reports_a_failing_block_height() -> anyhow::Result<()> {
             .expect_err("a failing height lookup must not be swallowed or reported wrong");
         assert_matches!(err, HandleInterceptedHtlcError::BlockHeight(_));
         assert_eq!(
-            gateway_client.get_balance_for_btc().await?,
+            gateway_client.get_balance_for_btc(Account::Primary).await?,
             initial_gateway_balance
         );
 
@@ -877,7 +898,7 @@ async fn test_gateway_client_intercept_same_circuit_replay_is_idempotent() -> an
         );
         assert_eq!(
             initial_gateway_balance.saturating_sub(invoice_amount),
-            gateway_client.get_balance_for_btc().await?
+            gateway_client.get_balance_for_btc(Account::Primary).await?
         );
         gateway_ln_module.await_completion(first_op).await;
 
@@ -892,7 +913,7 @@ async fn test_gateway_client_intercept_same_circuit_replay_is_idempotent() -> an
         assert_eq!(first_op, terminal_replay_op);
         assert_eq!(
             initial_gateway_balance.saturating_sub(invoice_amount),
-            gateway_client.get_balance_for_btc().await?
+            gateway_client.get_balance_for_btc(Account::Primary).await?
         );
 
         Ok(())
@@ -910,7 +931,10 @@ async fn test_gateway_client_intercept_offer_does_not_exist() -> anyhow::Result<
         dummy_module
             .mock_receive(initial_gateway_balance, AmountUnit::BITCOIN)
             .await;
-        assert_eq!(gateway_client.get_balance_for_btc().await?, sats(1000));
+        assert_eq!(
+            gateway_client.get_balance_for_btc(Account::Primary).await?,
+            sats(1000)
+        );
 
         // Create HTLC that doesn't correspond to an offer in the federation
         let htlc = Htlc {
@@ -1005,7 +1029,10 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             gateway_dummy_module
                 .mock_receive(initial_gateway_balance, AmountUnit::BITCOIN)
                 .await;
-            assert_eq!(gateway_client.get_balance_for_btc().await?, sats(1000));
+            assert_eq!(
+                gateway_client.get_balance_for_btc(Account::Primary).await?,
+                sats(1000)
+            );
 
             // Create test invoice
             let invoice = other_lightning_client.unpayable_invoice(sats(250), None);
@@ -1031,7 +1058,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
             };
             // The client's receive state machine can be empty because the gateway should
             // not fund this contract
-            let tx = TransactionBuilder::new().with_outputs(
+            let tx = TransactionBuilder::new(Account::Primary).with_outputs(
                 ClientOutputBundle::new_no_sm(vec![client_output])
                     .into_dyn(user_lightning_module.id),
             );
@@ -1096,7 +1123,7 @@ async fn test_gateway_client_intercept_htlc_invalid_offer() -> anyhow::Result<()
                     // With simplified dummy module, balance is automatically restored
                     assert_eq!(
                         initial_gateway_balance,
-                        gateway_client.get_balance_for_btc().await?
+                        gateway_client.get_balance_for_btc(Account::Primary).await?
                     );
                 }
                 unexpected_state => panic!(
@@ -1128,7 +1155,10 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
             dummy_module
                 .mock_receive(sats(2000), AmountUnit::BITCOIN)
                 .await;
-            assert_eq!(user_client.get_balance_for_btc().await?, sats(2000));
+            assert_eq!(
+                user_client.get_balance_for_btc(Account::Primary).await?,
+                sats(2000)
+            );
 
             // User client attempts to pay the expired invoice — should be
             // rejected immediately by the client-side expiry check.
@@ -1142,7 +1172,10 @@ async fn test_gateway_cannot_pay_expired_invoice() -> anyhow::Result<()> {
             );
 
             // Balance should be unchanged since no contract was created
-            assert_eq!(user_client.get_balance_for_btc().await?, sats(2000));
+            assert_eq!(
+                user_client.get_balance_for_btc(Account::Primary).await?,
+                sats(2000)
+            );
 
             Ok(())
         },
@@ -1223,7 +1256,7 @@ async fn lnv1_pay_resumes_expired_invoice_already_dispatched() -> anyhow::Result
             .await;
             // Guards against the invoice fixture outliving the wait, which
             // would make this test pass without exercising the gate at all.
-            assert!(invoice.is_expired());
+            assert!(invoice.would_expire(duration_since_epoch()));
 
             let gw_pay_op = gateway_client
                 .get_first_module::<GatewayClientModule>()?
@@ -1267,7 +1300,7 @@ async fn lnv1_pay_cancels_expired_invoice_never_dispatched() -> anyhow::Result<(
                 Duration::from_secs(6),
             )
             .await;
-            assert!(invoice.is_expired());
+            assert!(invoice.would_expire(duration_since_epoch()));
 
             let gw_pay_op = gateway_client
                 .get_first_module::<GatewayClientModule>()?
@@ -1494,7 +1527,7 @@ async fn test_gateway_note_summary_for_mintv2_federation() -> anyhow::Result<()>
             operation_id,
             "Issue e-cash via dummy module",
             |_| (),
-            TransactionBuilder::new().with_inputs(dummy_input),
+            TransactionBuilder::new(Account::Primary).with_inputs(dummy_input),
         )
         .await?;
     client
@@ -1503,7 +1536,10 @@ async fn test_gateway_note_summary_for_mintv2_federation() -> anyhow::Result<()>
 
     let summary = gateway.handle_get_note_summary_msg(&fed.id()).await?;
     assert!(!summary.is_empty(), "Funded gateway has no notes");
-    assert_eq!(summary.total_amount(), client.get_balance_for_btc().await?);
+    assert_eq!(
+        summary.total_amount(),
+        client.get_balance_for_btc(Account::Primary).await?
+    );
 
     Ok(())
 }
@@ -1652,7 +1688,7 @@ async fn test_gateway_payment_policy_fails_lnv2_payment_of_earlier_invoice() -> 
             "lnv2"
         );
         assert_eq!(
-            gateway_client.get_balance_for_btc().await?,
+            gateway_client.get_balance_for_btc(Account::Primary).await?,
             initial_gateway_balance
         );
 
@@ -1676,7 +1712,7 @@ async fn test_gateway_payment_policy_fails_lnv2_payment_of_earlier_invoice() -> 
             "waiting for the gateway to fund the incoming contract",
             backoff_util::aggressive_backoff(),
             || async {
-                let balance = gateway_client.get_balance_for_btc().await?;
+                let balance = gateway_client.get_balance_for_btc(Account::Primary).await?;
                 anyhow::ensure!(
                     balance < initial_gateway_balance,
                     "The gateway has not funded the incoming contract yet"
@@ -1743,7 +1779,7 @@ async fn test_gateway_payment_policy_disables_lnv1_receives() -> anyhow::Result<
             "cancel"
         );
         assert_eq!(
-            gateway_client.get_balance_for_btc().await?,
+            gateway_client.get_balance_for_btc(Account::Primary).await?,
             initial_gateway_balance
         );
 
@@ -1760,6 +1796,32 @@ async fn test_gateway_payment_policy_disables_lnv1_receives() -> anyhow::Result<
                 .handle_lightning_payment(payment_request, &lightning_context)
                 .await,
             "lnv1"
+        );
+
+        Ok(())
+    })
+    .await
+}
+
+/// A mistyped federation id must not pass for fees that were changed.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_set_fees_requires_a_connected_federation() -> anyhow::Result<()> {
+    single_federation_test(|gateway, _, _, _, _| async move {
+        let error = gateway
+            .handle_set_fees_msg(SetFeesPayload {
+                federation_id: Some(FederationId::dummy()),
+                lightning_base: Some(Amount::from_sats(1)),
+                lightning_parts_per_million: None,
+                transaction_base: None,
+                transaction_parts_per_million: None,
+            })
+            .await
+            .expect_err("The fees of an unknown federation were changed");
+        assert!(
+            error
+                .to_string()
+                .contains("No federation available for prefix"),
+            "Expected the unknown federation to be rejected, got: {error}"
         );
 
         Ok(())
@@ -1946,7 +2008,10 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
         client1_dummy_module
             .mock_receive(deposit_amt, AmountUnit::BITCOIN)
             .await;
-        assert_eq!(client1.get_balance_for_btc().await?, deposit_amt);
+        assert_eq!(
+            client1.get_balance_for_btc(Account::Primary).await?,
+            deposit_amt
+        );
 
         // User creates invoice in federation 2
         let invoice_amt = msats(2_500);
@@ -1987,12 +2052,17 @@ async fn test_gateway_executes_swaps_between_connected_federations() -> anyhow::
         assert_matches!(waiting_funds, LnReceiveState::AwaitingFunds);
         let claimed = receive_sub.ok().await?;
         assert_matches!(claimed, LnReceiveState::Claimed);
-        assert_eq!(client2.get_balance_for_btc().await?, invoice_amt);
+        assert_eq!(
+            client2.get_balance_for_btc(Account::Primary).await?,
+            invoice_amt
+        );
 
         // Check gateway balances after facilitating direct swap between federations
-        let gateway_fed1_balance = gateway_client.get_balance_for_btc().await?;
+        let gateway_fed1_balance = gateway_client.get_balance_for_btc(Account::Primary).await?;
         let gateway_fed2_client = gateway.select_client(id2).await?.into_value();
-        let gateway_fed2_balance = gateway_fed2_client.get_balance_for_btc().await?;
+        let gateway_fed2_balance = gateway_fed2_client
+            .get_balance_for_btc(Account::Primary)
+            .await?;
 
         // Balance in gateway of sending federation is deducted the invoice amount
         assert_eq!(
@@ -2069,7 +2139,7 @@ async fn send_msats_to_gateway(gateway: &Gateway, federation_id: FederationId, m
 
     assert_eq!(
         client
-            .get_balance_for_btc()
+            .get_balance_for_btc(Account::Primary)
             .await
             .expect("Must have primary module"),
         Amount::from_msats(msats)
@@ -2144,6 +2214,7 @@ async fn lnv2_relay_persists_every_distinct_incoming_circuit() -> anyhow::Result
         Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
     );
     let receive_operation_id = OperationId::from_encodable(&contract);
+    let commitment = contract.commitment.clone();
     let completion_id = |circuit: IncomingCircuitKey| {
         OperationId::from_encodable(&(
             "gateway-lnv2-incoming-circuit",
@@ -2234,6 +2305,15 @@ async fn lnv2_relay_persists_every_distinct_incoming_circuit() -> anyhow::Result
                 .all(|state| matches!(state, GatewayClientStateMachinesV2::CircuitComplete(_)))
         );
     }
+
+    let events = incoming_start_events(&client).await;
+    assert_eq!(
+        events.len(),
+        1,
+        "race losers and replays must not log starts"
+    );
+    assert_eq!(events[0].incoming_contract_commitment, commitment);
+    assert_eq!(events[0].invoice_amount, Amount::from_msats(1_000_000));
 
     Ok(())
 }
@@ -2375,7 +2455,7 @@ async fn a_swap_in_flight_when_disabling_completes_cannot_fund() -> anyhow::Resu
     let client = gateway.select_client(fed.id()).await?.into_value();
     let contract = decryptable_incoming_contract(&client)?;
     let operation_id = OperationId::from_encodable(&contract);
-    let balance_before = client.get_balance_for_btc().await?;
+    let balance_before = client.get_balance_for_btc(Account::Primary).await?;
 
     // A payment that passed the check and has yet to fund.
     let admitted = <Gateway as fedimint_gwv2_client::IGatewayClientV2>::begin_fresh_receive(
@@ -2438,7 +2518,7 @@ async fn a_swap_in_flight_when_disabling_completes_cannot_fund() -> anyhow::Resu
     );
 
     assert_eq!(
-        client.get_balance_for_btc().await?,
+        client.get_balance_for_btc(Account::Primary).await?,
         balance_before,
         "the refused swap must not have funded anything"
     );
@@ -2520,7 +2600,7 @@ async fn lnv2_swap_applies_the_receive_policy_only_to_fresh_dispatches() -> anyh
 
     let client = gateway.select_client(fed.id()).await?.into_value();
     let contract = decryptable_incoming_contract(&client)?;
-    let balance_before = client.get_balance_for_btc().await?;
+    let balance_before = client.get_balance_for_btc(Account::Primary).await?;
 
     set_receive_enabled(&gateway, fed.id(), false).await;
 
@@ -2534,7 +2614,7 @@ async fn lnv2_swap_applies_the_receive_policy_only_to_fresh_dispatches() -> anyh
         "Expected the swap to be refused because receives are off, got: {error}"
     );
     assert_eq!(
-        client.get_balance_for_btc().await?,
+        client.get_balance_for_btc(Account::Primary).await?,
         balance_before,
         "a refused swap must not fund anything"
     );
@@ -2548,7 +2628,7 @@ async fn lnv2_swap_applies_the_receive_policy_only_to_fresh_dispatches() -> anyh
             .await?,
         Some(FinalReceiveState::Success([0; 32]))
     );
-    let balance_after_funding = client.get_balance_for_btc().await?;
+    let balance_after_funding = client.get_balance_for_btc(Account::Primary).await?;
     assert!(
         balance_after_funding < balance_before,
         "the swap funds the incoming contract"
@@ -2565,7 +2645,7 @@ async fn lnv2_swap_applies_the_receive_policy_only_to_fresh_dispatches() -> anyh
         "a swap already funded resumes even though receives are off"
     );
     assert_eq!(
-        client.get_balance_for_btc().await?,
+        client.get_balance_for_btc(Account::Primary).await?,
         balance_after_funding,
         "the incoming contract must only be funded once"
     );
@@ -2600,7 +2680,7 @@ async fn lnv2_htlc_applies_the_receive_policy_only_to_fresh_dispatches() -> anyh
         module.keypair.public_key(),
         Keypair::new(secp256k1::SECP256K1, &mut rand::thread_rng()).public_key(),
     );
-    let balance_before = client.get_balance_for_btc().await?;
+    let balance_before = client.get_balance_for_btc(Account::Primary).await?;
 
     set_receive_enabled(&gateway, fed.id(), false).await;
 
@@ -2613,7 +2693,7 @@ async fn lnv2_htlc_applies_the_receive_policy_only_to_fresh_dispatches() -> anyh
         "Expected the receive to be refused because receives are off, got: {error}"
     );
     assert_eq!(
-        client.get_balance_for_btc().await?,
+        client.get_balance_for_btc(Account::Primary).await?,
         balance_before,
         "a refused receive must not fund anything"
     );
@@ -2623,7 +2703,7 @@ async fn lnv2_htlc_applies_the_receive_policy_only_to_fresh_dispatches() -> anyh
     module
         .relay_incoming_htlc(payment_hash, 0, 0, contract.clone(), 1_000_000, u32::MAX)
         .await?;
-    let balance_after_funding = client.get_balance_for_btc().await?;
+    let balance_after_funding = client.get_balance_for_btc(Account::Primary).await?;
     assert!(
         balance_after_funding < balance_before,
         "the relay funds the incoming contract"
@@ -2638,7 +2718,7 @@ async fn lnv2_htlc_applies_the_receive_policy_only_to_fresh_dispatches() -> anyh
         .relay_incoming_htlc(payment_hash, 42, 7, contract, 1_000_000, u32::MAX)
         .await?;
     assert_eq!(
-        client.get_balance_for_btc().await?,
+        client.get_balance_for_btc(Account::Primary).await?,
         balance_after_funding,
         "the incoming contract must only be funded once"
     );
@@ -2695,7 +2775,7 @@ async fn lnv1_intercept_applies_the_receive_policy_only_to_fresh_htlcs() -> anyh
             "Expected the HTLC to be refused because receives are off, got: {error}"
         );
         assert_eq!(
-            gateway_client.get_balance_for_btc().await?,
+            gateway_client.get_balance_for_btc(Account::Primary).await?,
             initial_gateway_balance,
             "a refused HTLC must not fund anything"
         );
@@ -2714,7 +2794,7 @@ async fn lnv1_intercept_applies_the_receive_policy_only_to_fresh_htlcs() -> anyh
             intercept_sub.ok().await?,
             GatewayExtReceiveStates::Preimage { .. }
         );
-        let funded_balance = gateway_client.get_balance_for_btc().await?;
+        let funded_balance = gateway_client.get_balance_for_btc(Account::Primary).await?;
         assert_eq!(
             funded_balance,
             initial_gateway_balance.saturating_sub(invoice_amount)
@@ -2734,7 +2814,7 @@ async fn lnv1_intercept_applies_the_receive_policy_only_to_fresh_htlcs() -> anyh
             "a replayed circuit resolves even though receives are off"
         );
         assert_eq!(
-            gateway_client.get_balance_for_btc().await?,
+            gateway_client.get_balance_for_btc(Account::Primary).await?,
             funded_balance,
             "the replay must not fund anything further"
         );
@@ -2742,6 +2822,35 @@ async fn lnv1_intercept_applies_the_receive_policy_only_to_fresh_htlcs() -> anyh
         Ok(())
     })
     .await
+}
+
+/// Read both queues in one snapshot: ordering moves an event between them
+/// asynchronously, but durable enqueue must already accompany the operation.
+async fn incoming_start_events(client: &ClientHandleArc) -> Vec<IncomingPaymentStarted> {
+    let module_id = client
+        .get_first_instance(&fedimint_lnv2_common::KIND)
+        .expect("lnv2 module not found");
+    let mut dbtx = client.db().begin_transaction_nc().await;
+    let mut entries = dbtx
+        .find_by_prefix(&EventLogIdPrefixAll)
+        .await
+        .map(|(_, entry)| entry)
+        .collect::<Vec<_>>()
+        .await;
+    entries.extend(
+        dbtx.find_by_prefix(&UnorderedEventLogIdPrefixAll)
+            .await
+            .map(|(_, entry)| entry.inner)
+            .collect::<Vec<_>>()
+            .await,
+    );
+    entries
+        .into_iter()
+        .filter(|entry| {
+            entry.kind == IncomingPaymentStarted::KIND && entry.module_id() == Some(module_id)
+        })
+        .map(|entry| entry.to_event().expect("incoming start event must decode"))
+        .collect()
 }
 
 /// When a wall-clock gate forbids a fresh dispatch and no swap operation
@@ -2758,7 +2867,7 @@ async fn lnv2_relay_forbidden_fresh_swap_starts_nothing() -> anyhow::Result<()> 
 
     let client = gateway.select_client(fed.id()).await?.into_value();
     let contract = decryptable_incoming_contract(&client)?;
-    let balance_before = client.get_balance_for_btc().await?;
+    let balance_before = client.get_balance_for_btc(Account::Primary).await?;
 
     assert_eq!(
         client
@@ -2769,9 +2878,13 @@ async fn lnv2_relay_forbidden_fresh_swap_starts_nothing() -> anyhow::Result<()> 
         "no operation exists and fresh dispatch is forbidden, so nothing may start"
     );
     assert_eq!(
-        client.get_balance_for_btc().await?,
+        client.get_balance_for_btc(Account::Primary).await?,
         balance_before,
         "a refused swap must not fund anything"
+    );
+    assert!(
+        incoming_start_events(&client).await.is_empty(),
+        "refusing fresh dispatch must not announce an operation"
     );
 
     assert_eq!(
@@ -2801,7 +2914,7 @@ async fn lnv2_relay_resumes_swap_when_fresh_is_forbidden() -> anyhow::Result<()>
 
     let client = gateway.select_client(fed.id()).await?.into_value();
     let contract = decryptable_incoming_contract(&client)?;
-    let balance_before = client.get_balance_for_btc().await?;
+    let balance_before = client.get_balance_for_btc(Account::Primary).await?;
 
     assert_eq!(
         client
@@ -2810,7 +2923,7 @@ async fn lnv2_relay_resumes_swap_when_fresh_is_forbidden() -> anyhow::Result<()>
             .await?,
         Some(FinalReceiveState::Success([0; 32]))
     );
-    let balance_after_first = client.get_balance_for_btc().await?;
+    let balance_after_first = client.get_balance_for_btc(Account::Primary).await?;
     assert!(
         balance_after_first < balance_before,
         "the first relay funds the incoming contract"
@@ -2826,10 +2939,13 @@ async fn lnv2_relay_resumes_swap_when_fresh_is_forbidden() -> anyhow::Result<()>
     );
 
     assert_eq!(
-        client.get_balance_for_btc().await?,
+        client.get_balance_for_btc(Account::Primary).await?,
         balance_after_first,
         "the incoming contract must only be funded once"
     );
+    let events = incoming_start_events(&client).await;
+    assert_eq!(events.len(), 1, "resuming must not log another start");
+    assert_eq!(events[0].invoice_amount, Amount::from_msats(900));
 
     Ok(())
 }
@@ -3234,6 +3350,7 @@ async fn lnv2_send_payment_join_requires_the_contract_auth() -> anyhow::Result<(
             .get_first_module::<fedimint_lnv2_client::LightningClientModule>()
             .expect("The federation has an LNv2 module")
             .send(
+                Account::Primary,
                 invoice,
                 Some(SafeUrl::parse("http://capturing-gateway.test").expect("Valid url")),
                 serde_json::Value::Null,
@@ -3323,6 +3440,7 @@ async fn captured_lnv2_send_payload(
             .get_first_module::<fedimint_lnv2_client::LightningClientModule>()
             .expect("The federation has an LNv2 module")
             .send(
+                Account::Primary,
                 invoice,
                 Some(SafeUrl::parse("http://capturing-gateway.test").expect("Valid url")),
                 serde_json::Value::Null,
@@ -3369,7 +3487,7 @@ async fn lnv2_send_resumes_expired_invoice_already_dispatched() -> anyhow::Resul
     .await;
     // Guards against the invoice fixture outliving the wait, which would
     // make this test pass without exercising the expiry gate at all.
-    assert!(invoice.is_expired());
+    assert!(invoice.would_expire(duration_since_epoch()));
 
     let preimage = gateway
         .send_payment_v2(payload)
@@ -3401,7 +3519,7 @@ async fn lnv2_send_cancels_expired_invoice_never_dispatched() -> anyhow::Result<
         Duration::from_secs(6),
     )
     .await;
-    assert!(invoice.is_expired());
+    assert!(invoice.would_expire(duration_since_epoch()));
 
     let signature = gateway
         .send_payment_v2(payload.clone())
@@ -3604,7 +3722,7 @@ async fn test_gateway_client_pay_invoice_is_idempotent_per_contract() -> anyhow:
                 .lightning_fee
                 .fee(250_000);
             assert_eq!(
-                gateway_client.get_balance_for_btc().await?,
+                gateway_client.get_balance_for_btc(Account::Primary).await?,
                 sats(250)
                     .checked_add(outgoing_fee)
                     .expect("Should not wrap around")
@@ -3781,7 +3899,7 @@ async fn test_gateway_client_direct_swap_reentry_joins_the_funded_swap() -> anyh
             "the re-entrant swap joins the operation already holding the preimage"
         );
         assert_eq!(
-            gateway_client.get_balance_for_btc().await?,
+            gateway_client.get_balance_for_btc(Account::Primary).await?,
             initial_gateway_balance.saturating_sub(invoice_amount),
             "the incoming contract must only be funded once"
         );
@@ -3810,7 +3928,7 @@ async fn test_gateway_client_direct_swap_reentry_joins_the_funded_swap() -> anyh
             "concurrent requests for one swap must share the single funded operation"
         );
         assert_eq!(
-            gateway_client.get_balance_for_btc().await?,
+            gateway_client.get_balance_for_btc(Account::Primary).await?,
             initial_gateway_balance.saturating_sub(invoice_amount + invoice_amount),
             "the second swap's incoming contract must also only be funded once"
         );
@@ -3839,7 +3957,7 @@ async fn test_gateway_client_direct_swap_reentry_joins_the_funded_swap() -> anyh
             "no operation exists and fresh dispatch is forbidden, so nothing may start"
         );
         assert_eq!(
-            gateway_client.get_balance_for_btc().await?,
+            gateway_client.get_balance_for_btc(Account::Primary).await?,
             initial_gateway_balance.saturating_sub(invoice_amount + invoice_amount),
             "a refused swap must not fund anything"
         );
@@ -3908,7 +4026,7 @@ async fn gateway_client_direct_swap_without_an_offer_is_refused() -> anyhow::Res
             HandleDirectSwapError::IncomingContract(IncomingSmError::TimeoutFetchingOffer { .. })
         );
         assert_eq!(
-            gateway_client.get_balance_for_btc().await?,
+            gateway_client.get_balance_for_btc(Account::Primary).await?,
             initial_gateway_balance
         );
 
@@ -3928,16 +4046,63 @@ async fn lnv2_relay_direct_swap_without_funds_is_refused() -> anyhow::Result<()>
 
     let client = gateway.select_client(fed.id()).await?.into_value();
     let contract = decryptable_incoming_contract(&client)?;
+    let operation_id = OperationId::from_encodable(&contract);
+    let commitment = contract.commitment.clone();
 
     assert_matches!(
         client
             .get_first_module::<GatewayClientModuleV2>()?
-            .relay_direct_swap(contract, 900, true)
+            .relay_direct_swap(contract.clone(), 900, true)
             .await,
         Err(RelayDirectSwapError::Transaction(
             TransactionSubmitError::InsufficientFunds(_)
         ))
     );
+    assert!(
+        client
+            .operation_log()
+            .get_operation(operation_id)
+            .await
+            .is_none()
+    );
+    let module = client.get_first_module::<GatewayClientModuleV2>()?;
+    assert!(
+        module
+            .client_ctx
+            .get_own_operation_active_states(operation_id)
+            .await
+            .is_empty()
+    );
+    assert!(
+        module
+            .client_ctx
+            .get_own_operation_inactive_states(operation_id)
+            .await
+            .is_empty()
+    );
+    assert!(incoming_start_events(&client).await.is_empty());
+
+    // A failed finalization must roll back its writes and leave the same
+    // contract eligible for a later funded attempt.
+    send_msats_to_gateway(&gateway, fed.id(), 1_000_000_000).await;
+    assert_eq!(
+        client
+            .get_first_module::<GatewayClientModuleV2>()?
+            .relay_direct_swap(contract, 900, true)
+            .await?,
+        Some(FinalReceiveState::Success([0; 32]))
+    );
+    assert!(
+        client
+            .operation_log()
+            .get_operation(operation_id)
+            .await
+            .is_some()
+    );
+    let events = incoming_start_events(&client).await;
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].incoming_contract_commitment, commitment);
+    assert_eq!(events[0].invoice_amount, Amount::from_msats(900));
 
     Ok(())
 }
@@ -3964,7 +4129,7 @@ async fn lnv2_payout_refuses_lnv1_payment_of_same_hash() -> anyhow::Result<()> {
         "waiting for the original LNv2 contract claim",
         backoff_util::aggressive_backoff(),
         || async {
-            let balance = gateway_client.get_balance_for_btc().await?;
+            let balance = gateway_client.get_balance_for_btc(Account::Primary).await?;
             anyhow::ensure!(
                 balance > Amount::ZERO,
                 "original claim is not spendable yet"
@@ -4022,7 +4187,10 @@ async fn lnv2_payout_refuses_lnv1_payment_of_same_hash() -> anyhow::Result<()> {
         },
         "the refused LNv1 contract is cancelled without another payout"
     );
-    assert_eq!(gateway_client.get_balance_for_btc().await?, gateway_balance);
+    assert_eq!(
+        gateway_client.get_balance_for_btc(Account::Primary).await?,
+        gateway_balance
+    );
     assert_eq!(
         gateway.send_payment_v2(payload).await?,
         Ok(preimage),

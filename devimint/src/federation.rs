@@ -7,13 +7,13 @@ use std::time::Duration;
 use std::{env, fs};
 
 use anyhow::{Context, Result, bail};
-use fedimint_api_client::api::DynGlobalApi;
-use fedimint_api_client::download_from_invite_code;
+use fedimint_api_client::api::{ClientConfigDownloadError, DynGlobalApi};
+use fedimint_api_client::try_download_client_config;
 use fedimint_client_module::module::ClientModule;
 use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::admin_client::SetupStatus;
 use fedimint_core::config::{ClientConfig, load_from_file};
-use fedimint_core::core::{ModuleInstanceId, ModuleKind};
+use fedimint_core::core::{Account, ModuleInstanceId, ModuleKind};
 use fedimint_core::invite_code::InviteCode;
 use fedimint_core::module::ModuleCommon;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -67,6 +67,34 @@ where
             .with_context(|| format!("peer {peer_id} is not online"))?;
     }
     Ok(())
+}
+
+async fn await_client_config(connectors: &ConnectorRegistry, invite: &InviteCode) -> Result<()> {
+    let api = DynGlobalApi::new(
+        connectors.clone(),
+        invite.peers(),
+        invite.api_secret().as_deref(),
+    );
+    // The invite file is written before module initialization and the consensus
+    // API starts. Fixture readiness must not depend on the short, finite retry
+    // policy used by client-config downloads in tests.
+    poll("awaiting client config API", || async {
+        match try_download_client_config(
+            connectors,
+            &api,
+            invite.federation_id(),
+            invite.api_secret(),
+        )
+        .await
+        {
+            Ok(_) => Ok(()),
+            Err(err @ ClientConfigDownloadError::Federation(_)) => {
+                Err(ControlFlow::Continue(err.into()))
+            }
+            Err(err) => Err(ControlFlow::Break(err.into())),
+        }
+    })
+    .await
 }
 
 #[derive(Clone)]
@@ -234,13 +262,23 @@ impl Client {
             .unwrap())
     }
 
+    /// The balance of one of the client's accounts in msats. Requires a
+    /// `fedimint-cli` of 0.14.0-alpha or later, which added accounts.
+    pub async fn balance_for(&self, account: Account) -> Result<u64> {
+        cmd!(self, "info", "--account", account.to_string())
+            .out_json()
+            .await?["total_amount_msat"]
+            .as_u64()
+            .with_context(|| format!("info --account {account} has no total_amount_msat"))
+    }
+
     /// Waits for the client balance to reach at least `min_balance_msat`.
     pub async fn await_balance(&self, min_balance_msat: u64) -> Result<()> {
         loop {
             cmd!(self, "dev", "wait", "3").out_json().await?;
 
             let balance = self.balance().await?;
-            if balance >= min_balance_msat {
+            if min_balance_msat <= balance {
                 return Ok(());
             }
 
@@ -290,7 +328,9 @@ impl Client {
                 Ok((address.as_str().unwrap().to_string(), String::new()))
             }
         } else {
-            let deposit = cmd!(self, "deposit-address").out_json().await?;
+            let deposit = cmd!(self, "module", "wallet", "new-deposit-address")
+                .out_json()
+                .await?;
             Ok((
                 deposit["address"].as_str().unwrap().to_string(),
                 deposit["operation_id"].as_str().unwrap().to_string(),
@@ -299,7 +339,16 @@ impl Client {
     }
 
     pub async fn await_deposit(&self, operation_id: &str) -> Result<()> {
-        cmd!(self, "await-deposit", operation_id).run().await
+        cmd!(
+            self,
+            "module",
+            "wallet",
+            "await-deposit",
+            "--operation-id",
+            operation_id
+        )
+        .run()
+        .await
     }
 
     pub fn cmd(&self) -> Command {
@@ -372,7 +421,8 @@ impl Federation {
         fed_index: usize,
         federation_name: String,
     ) -> Result<Self> {
-        let num_peers = NumPeers::from(process_mgr.globals.FM_FED_SIZE);
+        let num_peers = NumPeers::new(process_mgr.globals.FM_FED_SIZE)
+            .ok_or_else(|| anyhow::anyhow!("a federation must have at least one guardian"))?;
         let mut members = BTreeMap::new();
         let mut peer_to_env_vars_map = BTreeMap::new();
 
@@ -440,8 +490,7 @@ impl Federation {
                 .await
                 .context("Awaiting invite code file")?;
 
-                download_from_invite_code(&connectors, &InviteCode::from_str(&invite_code)?)
-                    .await?;
+                await_client_config(&connectors, &InviteCode::from_str(&invite_code)?).await?;
             }
 
             // copy over invite-code file to client directory
@@ -847,7 +896,7 @@ impl Federation {
             self.terminate_server(self.num_members() - 1).await?;
         }
 
-        if offline_nodes > 0 {
+        if 0 < offline_nodes {
             info!(fed_size, offline_nodes, "federation is degraded");
         }
         Ok(())
@@ -1234,7 +1283,7 @@ impl Federation {
                     .out_json()
                     .await?;
                 let current: u64 = serde_json::from_value(value)?;
-                if current >= expected {
+                if expected <= current {
                     break;
                 }
                 fedimint_core::task::sleep_in_test(
@@ -1588,3 +1637,6 @@ pub async fn run_cli_dkg_v2(endpoints: BTreeMap<PeerId, String>) -> Result<()> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod client_config_tests;

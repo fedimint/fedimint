@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use std::collections::BTreeMap;
 use std::io::Write as _;
 
@@ -104,7 +107,10 @@ impl SignedSessionOutcome {
             Message::from_digest(sha256::Hash::from_engine(engine).to_byte_array())
         };
 
-        let threshold = broadcast_public_keys.to_num_peers().threshold();
+        let Ok(num_peers) = broadcast_public_keys.try_num_peers() else {
+            return false;
+        };
+        let threshold = num_peers.threshold();
         if self.signatures.len() < threshold {
             return false;
         }

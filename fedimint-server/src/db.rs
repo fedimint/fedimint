@@ -21,6 +21,7 @@ pub enum DbKeyPrefix {
     ServerInfo = 0x07,
     GuardianMetadata = 0x08,
     PeerAvailability = 0x09,
+    PeerAvailabilityResets = 0x0a,
 
     DatabaseVersion = fedimint_core::db::DbKeyPrefix::DatabaseVersion as u8,
     ClientBackup = fedimint_core::db::DbKeyPrefix::ClientBackup as u8,
