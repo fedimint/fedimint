@@ -517,6 +517,68 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn deposit_progress_reaches_required_when_claimed() -> anyhow::Result<()> {
+    skip_if_not_wallet_test_group!("2");
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+    let bitcoin = bitcoin.lock_exclusive().await;
+
+    let finality_delay: u64 = 10;
+    bitcoin.mine_blocks(finality_delay).await;
+    await_consensus_to_catch_up(&client, 1).await?;
+    await_consensus_upgrade(&client, &fed).await?;
+
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
+    let deposit_address = wallet_module
+        .allocate_deposit_address_expert_only(())
+        .await?;
+    let op = deposit_address.operation_id;
+    assert_eq!(wallet_module.deposit_progress(op).await?, vec![]);
+    assert_eq!(wallet_module.required_confirmations(), finality_delay + 1);
+
+    let value = bsats(PEG_IN_AMOUNT_SATS);
+    let (_proof, tx) = bitcoin
+        .send_and_mine_block(&deposit_address.address, value)
+        .await;
+    let tx_height = bitcoin
+        .get_tx_block_height(&tx.compute_txid())
+        .await
+        .context("expected tx to be mined")?;
+
+    // Consensus trails the tip by the finality delay, so the count only moves once
+    // consensus has caught up with the new tip.
+    for confirmations in [1, 2, 3, finality_delay] {
+        let tip_block_count = tx_height + confirmations;
+        let missing = tip_block_count.saturating_sub(bitcoin.get_block_count().await);
+        bitcoin.mine_blocks(missing).await;
+        await_consensus_to_catch_up(&client, tip_block_count - finality_delay).await?;
+
+        let deposits = wallet_module.deposit_progress(op).await?;
+        assert_eq!(deposits.len(), 1);
+        assert_eq!(deposits[0].outpoint.txid, tx.compute_txid());
+        assert_eq!(deposits[0].value, value);
+        assert_eq!(deposits[0].confirmations, confirmations);
+        assert_eq!(deposits[0].required, finality_delay + 1);
+    }
+
+    assert_eq!(
+        client.get_balance_for_btc(Account::Primary).await?,
+        Amount::ZERO,
+        "one confirmation short of the target must not be claimed"
+    );
+
+    bitcoin.mine_blocks(1).await;
+    wallet_module
+        .await_num_deposits_by_operation_id(op, 1)
+        .await?;
+    assert_eq!(wallet_module.deposit_progress(op).await?, vec![]);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_faulty_deposit_proof_is_retried_and_never_marked_claimed() -> anyhow::Result<()> {
     skip_if_not_wallet_test_group!("2");
     // Swapping one transaction's proof for another's needs the in-process

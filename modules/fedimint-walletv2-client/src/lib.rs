@@ -59,9 +59,9 @@ use fedimint_eventlog::{Event, EventLogId};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
 use fedimint_walletv2_common::config::WalletClientConfig;
 use fedimint_walletv2_common::{
-    BLOCK_COUNT_VOTE_DELAY, KIND, OutputInfo, PendingOutput, StandardScript, TxInfo,
-    WalletCommonInit, WalletInput, WalletInputV0, WalletModuleTypes, WalletOutput, WalletOutputV0,
-    descriptor, is_potential_receive,
+    BLOCK_COUNT_VOTE_DELAY, KIND, OutputInfo, PendingOutput, PendingOutputs, StandardScript,
+    TxInfo, WalletCommonInit, WalletInput, WalletInputV0, WalletModuleTypes, WalletOutput,
+    WalletOutputV0, descriptor, is_potential_receive,
 };
 use futures::StreamExt;
 use receive_sm::{ReceiveSMCommon, ReceiveSMState, ReceiveStateMachine};
@@ -197,6 +197,19 @@ pub struct AddressReceiveProgress {
     /// A wallet showing a receive screen wants this to choose between "we have
     /// not seen your payment yet" and "waiting for the first confirmation",
     /// which are very different things to tell a user who has just paid.
+    pub mempool_visibility: MempoolVisibility,
+}
+
+/// Deposits to this client's receive addresses, as the federation reports them.
+/// Both fields come from one query.
+///
+/// Returned by [`WalletClientModule::all_receive_progress`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AllReceiveProgress {
+    /// One entry per deposit the guardians can see to an address of this
+    /// client, ordered by outpoint.
+    pub deposits: Vec<(Address, bitcoin::OutPoint, ReceiveProgress)>,
+    /// Best mempool view any guardian had for this query.
     pub mempool_visibility: MempoolVisibility,
 }
 
@@ -738,6 +751,18 @@ impl WalletClientModule {
             .ok_or(ReceiveProgressError::UnknownAddress)?;
 
         Ok(self.deposits_paying(&address.script_pubkey()).await)
+    }
+
+    /// The progress of every deposit to any address of this client, from a
+    /// single federation query, so that a wallet with many addresses does
+    /// not query the guardians once per address.
+    pub async fn all_receive_progress(&self) -> AllReceiveProgress {
+        let pending = self.module_api.pending_outputs().await;
+        let ours = self.address_map().await;
+
+        owned_receive_progress(&pending, &ours, |(account, index)| {
+            self.derive_address(*account, *index)
+        })
     }
 
     /// Every deposit the federation currently reports against `script`.
@@ -1400,6 +1425,33 @@ pub enum AwaitReceiveError {
     Issuance(#[from] TransactionSubmitError),
 }
 
+/// The deposits in `pending` that pay one of `ours`, ordered by outpoint, with
+/// the mempool visibility of the query that reported them.
+fn owned_receive_progress<A>(
+    pending: &PendingOutputs,
+    ours: &BTreeMap<ScriptBuf, A>,
+    address: impl Fn(&A) -> Address,
+) -> AllReceiveProgress {
+    let mut deposits: Vec<_> = pending
+        .outputs
+        .iter()
+        .filter_map(|output| {
+            Some((
+                address(ours.get(&output.script)?),
+                output.outpoint,
+                WalletClientModule::pending_progress(output, pending.block_count),
+            ))
+        })
+        .collect();
+
+    deposits.sort_by_key(|(_, outpoint, _)| *outpoint);
+
+    AllReceiveProgress {
+        deposits,
+        mempool_visibility: pending.mempool_visibility,
+    }
+}
+
 /// A failure to look up the progress of an incoming peg-in.
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -1490,3 +1542,6 @@ impl IntoDynInstance for WalletClientStateMachines {
         DynState::from_typed(instance_id, self)
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -1,4 +1,5 @@
 use std::cmp;
+use std::collections::BTreeSet;
 use std::convert::Infallible;
 use std::time::{Duration, SystemTime};
 
@@ -31,8 +32,9 @@ use crate::client_db::{
     ClaimedPegInData, ClaimedPegInKey, PegInTweakIndexData, PegInTweakIndexKey,
     PegInTweakIndexPrefix, TweakIdx,
 };
+use crate::error::DepositProgressError;
 use crate::events::{DepositConfirmed, ReceivePaymentEvent};
-use crate::{WalletClientModule, WalletClientModuleData};
+use crate::{DepositProgress, WalletClientModule, WalletClientModuleData};
 
 /// A helper struct meant to combined data from all addresses/records
 /// into a single struct with all actionable data.
@@ -356,6 +358,98 @@ impl CheckOutcome {
     }
 }
 
+/// `tx_block_count` is the deposit's block height plus one.
+fn blocks_until_claimable(tx_block_count: u64, consensus_block_count: u64) -> u64 {
+    tx_block_count.saturating_sub(consensus_block_count)
+}
+
+/// Confirmations a deposit needs before it can be claimed: the block that mined
+/// it, plus the blocks guardians hold their vote back by.
+pub(crate) fn required_confirmations(finality_delay: u32) -> u64 {
+    u64::from(finality_delay) + 1
+}
+
+/// Confirmations shown for a deposit, counted so that they reach
+/// [`required_confirmations`] exactly when [`blocks_until_claimable`] reaches
+/// zero.
+fn deposit_confirmations(
+    tx_block_count: u64,
+    consensus_block_count: u64,
+    finality_delay: u32,
+) -> u64 {
+    required_confirmations(finality_delay).saturating_sub(blocks_until_claimable(
+        tx_block_count,
+        consensus_block_count,
+    ))
+}
+
+/// Progress of each output paying the address of `tweak_idx` that has no local
+/// claim record, read from the same sources as [`check_idx_pegins`].
+pub(crate) async fn deposit_progress(
+    data: &WalletClientModuleData,
+    tweak_idx: TweakIdx,
+    btc_rpc: &DynBitcoindRpc,
+    module_rpc: &DynModuleApi,
+    db: &Database,
+) -> Result<Vec<DepositProgress>, DepositProgressError> {
+    let consensus_block_count = module_rpc.fetch_consensus_block_count().await?;
+    let (script, ..) = data.derive_peg_in_script(tweak_idx);
+    let history = btc_rpc.get_script_history(&script).await?;
+
+    let mut deposits = vec![];
+    for (transaction, outpoint) in unique_deposit_outputs(history, &script) {
+        let claimed_peg_in_key = ClaimedPegInKey {
+            peg_in_index: tweak_idx,
+            btc_out_point: outpoint,
+        };
+        if db
+            .begin_transaction_nc()
+            .await
+            .get_value(&claimed_peg_in_key)
+            .await
+            .is_some()
+        {
+            continue;
+        }
+
+        let confirmations = match btc_rpc.get_tx_block_height(&outpoint.txid).await? {
+            Some(tx_block_height) => deposit_confirmations(
+                tx_block_height.saturating_add(1),
+                consensus_block_count,
+                data.cfg.finality_delay,
+            ),
+            None => 0,
+        };
+
+        deposits.push(DepositProgress {
+            outpoint,
+            value: transaction.output[outpoint.vout as usize].value,
+            confirmations,
+            required: required_confirmations(data.cfg.finality_delay),
+        });
+    }
+    Ok(deposits)
+}
+
+/// Each output in `history` that pays `script`, once, even when the backend
+/// lists its transaction more than once.
+fn unique_deposit_outputs(
+    history: Vec<bitcoin::Transaction>,
+    script: &ScriptBuf,
+) -> Vec<(bitcoin::Transaction, bitcoin::OutPoint)> {
+    let mut seen = BTreeSet::new();
+    filter_onchain_deposit_outputs(history.into_iter(), script)
+        .map(|(transaction, out_idx)| {
+            let outpoint = bitcoin::OutPoint {
+                txid: transaction.compute_txid(),
+                vout: out_idx,
+            };
+            (transaction, outpoint)
+        })
+        .filter(|(_, outpoint)| seen.insert(*outpoint))
+        .collect()
+}
+
 /// Query via btc rpc for a history of an address derived with `tweak_idx` and
 /// claim any peg-ins that are ready.
 ///
@@ -415,7 +509,8 @@ async fn check_idx_pegins(
                 continue;
             };
 
-        let num_blocks_needed = tx_block_count.saturating_sub(current_consensus_block_count);
+        let num_blocks_needed =
+            blocks_until_claimable(tx_block_count, current_consensus_block_count);
 
         if 0 < num_blocks_needed {
             outcomes.push(CheckOutcome::Pending { num_blocks_needed });
@@ -652,3 +747,6 @@ enum CheckPegInsError {
         source: DatabaseError,
     },
 }
+
+#[cfg(test)]
+mod tests;
