@@ -600,7 +600,10 @@ async fn receive_rejects_invalid_signatures_before_starting_an_operation() -> an
                 .await
                 .is_none()
         );
-        assert_eq!(client.get_balance_for_btc(Account::Primary).await?, balance_before);
+        assert_eq!(
+            client.get_balance_for_btc(Account::Primary).await?,
+            balance_before
+        );
     }
 
     let valid_ecash = ECash::new(ecash.mint().unwrap(), ecash.notes());
