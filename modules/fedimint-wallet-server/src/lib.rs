@@ -544,7 +544,7 @@ impl ServerModule for Wallet {
                     block_count_vote = min(
                         block_count_vote,
                         current_consensus_block_count
-                            + if is_running_in_test_env() {
+                            + if is_running_in_test_env!() {
                                 // We have some tests that mine *a lot* of blocks (empty)
                                 // and need them processed fast, so we raise the max.
                                 100
@@ -1945,7 +1945,7 @@ impl Wallet {
     /// since we can no longer participate in consensus if our bitcoin backend
     /// is unable to observe the same chain tip as our peers.
     async fn wait_for_finality_confs_or_shutdown(&self, consensus_block_count: u32) {
-        let backoff = if is_running_in_test_env() {
+        let backoff = if is_running_in_test_env!() {
             // every 100ms for 60s
             backoff_util::custom_backoff(
                 Duration::from_millis(100),
@@ -2059,7 +2059,7 @@ impl Wallet {
                     break;
                 }
 
-                sleep(next_poll_delay(all_peers_supported_version.is_some())).await;
+                sleep(next_poll_delay!(all_peers_supported_version.is_some())).await;
             }
         });
         receiver

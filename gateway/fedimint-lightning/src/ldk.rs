@@ -215,7 +215,7 @@ impl GatewayLdkClient {
         // the same place (stderr / log file) and honor `RUST_LOG`, instead of LDK's
         // default append-only `ldk_node/ldk_node.log` file.
         node_builder.set_custom_logger(Arc::new(LdkTracingLogger {
-            in_test_env: is_running_in_test_env(),
+            in_test_env: is_running_in_test_env!(),
         }));
 
         node_builder.set_entropy_bip39_mnemonic(mnemonic, None);
