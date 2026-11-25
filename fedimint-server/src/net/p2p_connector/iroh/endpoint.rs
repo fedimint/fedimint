@@ -24,6 +24,20 @@ use tracing::{debug, info, warn};
 
 use crate::net::iroh::configure_iroh_ip_transports;
 
+/// Iroh before 1.5 dialed the relay at `/relay` whatever path its URL had,
+/// while 1.5 keeps the path and appends `relay` to it, so a URL with a path
+/// now reaches a different place than it did before the upgrade.
+fn warn_on_relay_path(url: &SafeUrl) {
+    if !matches!(url.path(), "" | "/") {
+        warn!(
+            target: LOG_NET_IROH,
+            %url,
+            "Iroh relay URL has a path, which Iroh 1.5 keeps and appends `relay` to; \
+             configure the relay's origin if it is served at `/relay`"
+        );
+    }
+}
+
 /// Build and bind an Iroh 1.0 endpoint using guardian P2P policy.
 pub(super) async fn build_iroh_endpoint(
     secret_key: SecretKey,
@@ -41,6 +55,7 @@ pub(super) async fn build_iroh_endpoint(
         RelayMode::Custom(
             iroh_relays
                 .into_iter()
+                .inspect(warn_on_relay_path)
                 .map(|url| RelayUrl::from(url.to_unsafe()))
                 .collect(),
         )
