@@ -45,5 +45,9 @@ tokio = { workspace = true }
 tpe = { workspace = true }
 tracing = { workspace = true }
 
+[dev-dependencies]
+fedimint-connectors = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
+
 [lints]
 workspace = true
