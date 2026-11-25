@@ -1,8 +1,33 @@
 use std::io::Write;
+use std::process::{Command, Output};
 
 use clap::{CommandFactory, Parser};
 
 use super::GatewayOpts;
+
+const CHILD_TEST_COMPLETED: &str = "gateway config subprocess assertions passed";
+
+fn run_isolated_test(name: &str, envs: &[(&str, &str)]) -> Output {
+    // Clap reads configuration from the process environment. Give each child
+    // only the inputs the test supplies, without modifying the parent.
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", name, "--nocapture"])
+        .env_clear()
+        .envs(envs.iter().copied())
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{name}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    // Libtest exits successfully even if the exact filter matches no tests.
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains(CHILD_TEST_COMPLETED),
+        "{name}: child did not complete the test"
+    );
+    output
+}
 
 fn opts(extra: &[&str]) -> GatewayOpts {
     opts_with_backend(extra, true)
@@ -33,6 +58,15 @@ fn clap_configuration_is_valid() {
 
 #[test]
 fn files_reach_runtime_parameters() {
+    const MARKER: &str = "FM_TEST_GATEWAY_SECRET_FILES";
+    if std::env::var_os(MARKER).is_none() {
+        run_isolated_test(
+            "config::tests::files_reach_runtime_parameters",
+            &[(MARKER, "1")],
+        );
+        return;
+    }
+
     let hash = bcrypt::hash("test-password", 4).unwrap();
     let mut file = tempfile::NamedTempFile::new().unwrap();
     writeln!(file, "{hash}").unwrap();
@@ -64,6 +98,7 @@ fn files_reach_runtime_parameters() {
             .to_string(),
         hash
     );
+    println!("{CHILD_TEST_COMPLETED}");
 }
 
 #[test]
@@ -119,6 +154,7 @@ fn environment_and_file_conflicts_are_redacted() {
             error,
             "Specify only one value or file source for each secret"
         );
+        println!("{CHILD_TEST_COMPLETED}");
         return;
     }
     for (env, file_option) in [
@@ -135,20 +171,9 @@ fn environment_and_file_conflicts_are_redacted() {
             "--bitcoind-password-file",
         ),
     ] {
-        let output = std::process::Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "config::tests::environment_and_file_conflicts_are_redacted",
-                "--nocapture",
-            ])
-            .env(MARKER, file_option)
-            .env(env, "environment-secret-marker")
-            .output()
-            .unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
+        let output = run_isolated_test(
+            "config::tests::environment_and_file_conflicts_are_redacted",
+            &[(MARKER, file_option), (env, "environment-secret-marker")],
         );
         assert!(!String::from_utf8_lossy(&output.stdout).contains("environment-secret-marker"));
         assert!(!String::from_utf8_lossy(&output.stderr).contains("environment-secret-marker"));
