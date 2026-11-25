@@ -49,6 +49,9 @@ strum = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [build-dependencies]
 fedimint-build = { workspace = true }
 
