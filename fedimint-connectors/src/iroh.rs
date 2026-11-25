@@ -233,6 +233,14 @@ impl IrohConnector {
             // would disable dialing them, not just registration.
             let mut builder = builder.relay_mode(iroh_next::RelayMode::Default);
 
+            // iOS prompts for Local Network access when the port mapper probes
+            // the router, and another crate can turn iroh's `portmapper` on.
+            #[cfg(target_os = "ios")]
+            {
+                builder =
+                    builder.portmapper_config(iroh_next::endpoint::PortmapperConfig::Disabled);
+            }
+
             #[cfg(not(target_family = "wasm"))]
             if iroh_enable_dht {
                 builder = builder
