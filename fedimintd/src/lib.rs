@@ -290,11 +290,12 @@ struct ServerOpts {
     /// advertised to clients.
     ///
     /// Clients that stored it keep connecting to it until they reopen and
-    /// learn that it is no longer advertised. For a federation configured
-    /// with the Iroh API, this is a runtime setting independent of the
-    /// DKG-only `--enable-iroh` option. It is enabled by default and can be
-    /// disabled once the `next` series of the Iroh API request metrics stays
-    /// at zero.
+    /// learn that it is no longer advertised, and a client that stayed offline
+    /// through the migration can only learn that through this listener. For a
+    /// federation configured with the Iroh API, this is a runtime setting
+    /// independent of the DKG-only `--enable-iroh` option. It is enabled by
+    /// default; keep it enabled unless the federation never advertised the
+    /// identity.
     #[arg(
         long,
         env = FM_IROH_NEXT_ENABLE_ENV,

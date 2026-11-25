@@ -140,8 +140,9 @@ let
               Keep serving the separate Iroh API identity that fedimintd
               0.12.0 through 0.13.0 advertised to clients. Clients that stored
               it keep connecting to it until they reopen and learn that it is
-              no longer advertised. Disable once the `next` series of the Iroh
-              API request metrics stays at zero.
+              no longer advertised, and a client that stayed offline through
+              the migration can only learn that through this listener. Keep it
+              enabled unless the federation never advertised the identity.
             '';
           };
           openFirewall = mkOption {

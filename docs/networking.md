@@ -92,7 +92,11 @@ the original identity when reopened. The transitional listener binds to
 `FM_BIND_API_NEXT`, which defaults to the API bind port plus 10, and only runs
 for a federation configured with the Iroh API.
 
-Requests on the transitional identity are counted under the `next` series of
-the Iroh API request metrics. Once that series stays at zero, set
-`FM_IROH_NEXT_ENABLE=false` to stop the listener. It will be removed in a later
-release.
+Keep the transitional listener enabled. A client that stored the transitional
+identity for every guardian and stays offline through the migration sends no
+requests to it, so a quiet `next` series of the Iroh API request metrics does
+not show that such clients are gone. When the client comes back, the
+transitional listener is the only way it can reach a guardian and learn the
+cleared advertisement. A later release will remove the listener after a grace
+period; until then `FM_IROH_NEXT_ENABLE=false` is only for federations that
+never advertised it.
