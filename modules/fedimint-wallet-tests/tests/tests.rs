@@ -1639,6 +1639,10 @@ async fn allocate_deposit_address_pooled_reuse_resets_monitoring_schedule() -> a
     let (original, outcome) = wallet_module.allocate_deposit_address_pooled(0).await?;
     assert_eq!(outcome, AllocateDepositOutcome::Fresh);
 
+    // Stop and join the monitor before seeding the stale schedule so it cannot
+    // race the fixture write or update the schedule before we inspect the reset.
+    client.task_group().clone().shutdown_join_all(None).await?;
+
     let distant_past = fedimint_core::time::now() - Duration::from_secs(24 * 60 * 60);
     {
         let mut dbtx = wallet_module.db.begin_transaction().await;
@@ -1672,8 +1676,7 @@ async fn allocate_deposit_address_pooled_reuse_resets_monitoring_schedule() -> a
         .await?;
     assert!(distant_past < data.creation_time);
     assert_eq!(data.last_check_time, None);
-    assert!(data.next_check_time.is_some());
-    assert!(distant_past < data.next_check_time.expect("next check time must be set"));
+    assert_eq!(data.next_check_time, Some(data.creation_time));
 
     Ok(())
 }
