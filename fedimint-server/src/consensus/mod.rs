@@ -164,13 +164,23 @@ async fn prepare_iroh_api_endpoints(
     cfg: &ServerConfig,
     api_bind: SocketAddr,
     iroh_dns: Option<SafeUrl>,
+    iroh_relays: Vec<SafeUrl>,
     iroh_next_api_settings: Option<&IrohNextApiSettings>,
 ) -> anyhow::Result<IrohApiEndpoints> {
     let default = if let Some(iroh_api_sk) = &cfg.private.iroh_api_sk {
         // The config stores the key with the Iroh 0.35 types; both versions
         // use the same ed25519 keys, so the identity is unchanged.
         let api_sk = iroh_next::SecretKey::from_bytes(&iroh_api_sk.to_bytes());
-        Some(build_iroh_v1_endpoint(api_sk, api_bind, iroh_dns.clone(), FEDIMINT_API_ALPN).await?)
+        Some(
+            build_iroh_v1_endpoint(
+                api_sk,
+                api_bind,
+                iroh_dns.clone(),
+                iroh_relays.clone(),
+                FEDIMINT_API_ALPN,
+            )
+            .await?,
+        )
     } else {
         None
     };
@@ -178,7 +188,16 @@ async fn prepare_iroh_api_endpoints(
     let transitional_bind = resolve_iroh_next_api_bind(api_bind, iroh_next_api_settings)?;
     let transitional = if let Some(bind) = transitional_bind {
         let transitional_sk = derive_iroh_v1_api_secret_key(&cfg.private.broadcast_secret_key);
-        Some(build_iroh_v1_endpoint(transitional_sk, bind, iroh_dns, FEDIMINT_API_ALPN).await?)
+        Some(
+            build_iroh_v1_endpoint(
+                transitional_sk,
+                bind,
+                iroh_dns,
+                iroh_relays,
+                FEDIMINT_API_ALPN,
+            )
+            .await?,
+        )
     } else {
         None
     };
@@ -231,6 +250,7 @@ pub async fn run(
     p2p_status_receivers: P2PStatusReceivers,
     api_bind: SocketAddr,
     iroh_dns: Option<SafeUrl>,
+    iroh_relays: Vec<SafeUrl>,
     cfg: ServerConfig,
     db: Database,
     module_init_registry: ServerModuleInitRegistry,
@@ -400,8 +420,14 @@ pub async fn run(
     let guardian_metadata_api =
         prepare_guardian_metadata_service(&db, &cfg, force_api_secrets.get_active()).await?;
 
-    let iroh_api_endpoints =
-        prepare_iroh_api_endpoints(&cfg, api_bind, iroh_dns, iroh_next_api_settings).await?;
+    let iroh_api_endpoints = prepare_iroh_api_endpoints(
+        &cfg,
+        api_bind,
+        iroh_dns,
+        iroh_relays,
+        iroh_next_api_settings,
+    )
+    .await?;
 
     let guardian_metadata_updated = reconcile_guardian_metadata(&db, &cfg).await;
 

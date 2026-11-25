@@ -306,6 +306,7 @@ pub async fn run_with_iroh_p2p_relays_and_next_api(
         p2p_status_receivers,
         settings.api_bind,
         settings.iroh_dns,
+        settings.iroh_relays,
         cfg,
         db,
         module_init_registry.clone(),

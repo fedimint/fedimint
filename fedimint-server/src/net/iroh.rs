@@ -16,7 +16,7 @@ use fedimint_logging::LOG_NET_IROH;
 use iroh_next::address_lookup::{DnsAddressLookup, PkarrPublisher, PkarrResolver};
 use iroh_next::endpoint::presets::Minimal;
 use iroh_next::endpoint::{Builder, QuicTransportConfig};
-use iroh_next::{Endpoint, RelayMode};
+use iroh_next::{Endpoint, RelayMode, RelayUrl};
 use tracing::{debug, info, warn};
 
 /// Child key of the separate Iroh 1.0 API identity earlier releases
@@ -63,13 +63,21 @@ pub(crate) async fn build_iroh_v1_endpoint(
     secret_key: iroh_next::SecretKey,
     bind_addr: SocketAddr,
     iroh_dns: Option<SafeUrl>,
+    iroh_relays: Vec<SafeUrl>,
     alpn: &[u8],
 ) -> anyhow::Result<Endpoint> {
-    let relay_mode = if is_env_var_set_opt(FM_IROH_RELAYS_ENABLE_ENV).unwrap_or(true) {
-        default_iroh_v1_relay_mode()
-    } else {
+    let relay_mode = if !is_env_var_set_opt(FM_IROH_RELAYS_ENABLE_ENV).unwrap_or(true) {
         warn!(target: LOG_NET_IROH, "Iroh 1.0 relays are disabled");
         RelayMode::Disabled
+    } else if iroh_relays.is_empty() {
+        default_iroh_v1_relay_mode()
+    } else {
+        RelayMode::Custom(
+            iroh_relays
+                .into_iter()
+                .map(|url| RelayUrl::from(url.to_unsafe()))
+                .collect(),
+        )
     };
 
     let mut builder = Endpoint::builder(Minimal);

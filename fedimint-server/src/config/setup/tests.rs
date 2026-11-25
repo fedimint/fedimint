@@ -39,6 +39,7 @@ fn setup_api_with_version_and_receiver(
                 api_url: None,
                 enable_iroh: true,
                 iroh_dns: None,
+                iroh_relays: Vec::new(),
                 network,
                 available_modules: BTreeSet::new(),
                 default_modules: BTreeSet::new(),

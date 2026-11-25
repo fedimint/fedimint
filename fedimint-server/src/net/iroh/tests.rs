@@ -102,6 +102,7 @@ async fn guardian_ip_transport_option() -> anyhow::Result<()> {
         iroh_next::SecretKey::from_bytes(&[43; 32]),
         bind_addr,
         None,
+        Vec::new(),
         b"test-api",
     )
     .await?;

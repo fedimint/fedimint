@@ -61,7 +61,12 @@ use fedimintd_envs::{
     FM_P2P_URL_ENV, FM_PASSWORD_API_ENV, FM_PASSWORD_UI_ENV, FM_SESSION_TIMEOUT_SECS_ENV,
 };
 use futures::FutureExt as _;
-use tracing::{debug, error, info, warn};
+#[cfg(all(
+    not(feature = "jemalloc"),
+    not(any(target_env = "msvc", target_os = "ios", target_os = "android"))
+))]
+use tracing::warn;
+use tracing::{debug, error, info};
 
 use crate::metrics::APP_START_TS;
 
@@ -217,9 +222,10 @@ struct ServerOpts {
     #[arg(long, env = FM_IROH_DNS_ENV, requires = "enable_iroh")]
     iroh_dns: Option<SafeUrl>,
 
-    /// Ignored. The Iroh 0.35 API listener these relays were for has been
-    /// replaced by Iroh 1.x, which uses the default relays.
-    #[arg(long, env = FM_IROH_RELAY_ENV, value_delimiter = ',', hide = true)]
+    /// Optional URLs of the Iroh relays the client API listeners register on.
+    /// They must serve the Iroh 1.x relay protocol; the default relays are
+    /// used when none are set.
+    #[arg(long, env = FM_IROH_RELAY_ENV, requires = "enable_iroh", value_delimiter = ',')]
     iroh_relays: Vec<SafeUrl>,
 
     /// Optional Iroh 1.0 relay URLs to use for guardian P2P
@@ -442,13 +448,6 @@ pub async fn run(
         None
     };
 
-    if !server_opts.iroh_relays.is_empty() {
-        warn!(
-            target: LOG_SERVER,
-            "Ignoring the configured Iroh relays: the Iroh API uses the default relays now"
-        );
-    }
-
     let settings = ConfigGenSettings {
         p2p_bind: server_opts.bind_p2p,
         api_bind: server_opts.bind_api,
@@ -457,6 +456,7 @@ pub async fn run(
         api_url: server_opts.api_url.clone(),
         enable_iroh,
         iroh_dns: server_opts.iroh_dns.clone(),
+        iroh_relays: server_opts.iroh_relays.clone(),
         network: server_opts.bitcoin_network,
         available_modules: module_init_registry.kinds(),
         default_modules: module_init_registry.default_modules(),
