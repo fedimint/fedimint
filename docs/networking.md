@@ -59,6 +59,15 @@ unset, guardian P2P uses the Fedimint-operated Iroh 1.x relays; an explicit list
 overrides that default. `FM_IROH_RELAYS_ENABLE=0` disables relays regardless of
 the list. Do not configure a 0.35-only relay as an Iroh 1.x P2P relay.
 
+Configure relays by their origin, such as `https://relay.example`. Before Iroh
+1.5 a guardian dialed the relay at `/relay` whatever path the configured URL
+had; from 1.5 on it keeps the path and appends `relay`, so
+`https://relay.example/relay` now dials `/relay/relay`. If a configured relay
+URL has a path, change it to the origin and check that the guardians still
+connect **before** upgrading, since a relay that is the guardians' only route
+can otherwise stall consensus or setup. Guardians log a warning at startup for
+every relay URL with a path.
+
 Guardian P2P publishes only its relay address through Pkarr when one is
 available. Without a relay address, it publishes its direct IP addresses instead
 so other guardians can discover it by endpoint ID. This fallback is required for
