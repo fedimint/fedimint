@@ -36,9 +36,19 @@ impl aleph_bft::BackupReader for BackupReader {
     }
 }
 
+/// Writes the AlephBFT backup with one synced database transaction per unit
+/// of ours instead of one per unit.
+///
+/// AlephBFT only needs our own units to be durable before `append` returns,
+/// since it broadcasts them right after. The units of other peers are held in
+/// memory until then and written in the same transaction, which persists them
+/// before the unit of ours that may reference them. A crash therefore loses at
+/// most units of other peers newer than our last unit, which leaves the backup
+/// consistent and which we fetch from our peers again.
 pub struct BackupWriter {
     db: Database,
     units_index: u64,
+    buffer: Vec<Vec<u8>>,
 }
 
 impl BackupWriter {
@@ -52,19 +62,31 @@ impl BackupWriter {
             .await
             .map_or(0, |entry| (entry.0.0) + 1);
 
-        Self { db, units_index }
+        Self {
+            db,
+            units_index,
+            buffer: Vec::new(),
+        }
     }
 }
 
 #[async_trait]
 impl aleph_bft::BackupWriter for BackupWriter {
-    async fn append(&mut self, data: &[u8]) -> std::io::Result<()> {
+    async fn append(&mut self, data: &[u8], flush: bool) -> std::io::Result<()> {
+        self.buffer.push(data.to_owned());
+
+        if !flush {
+            return Ok(());
+        }
+
         let mut dbtx = self.db.begin_transaction().await;
 
-        dbtx.insert_new_entry(&AlephUnitsKey(self.units_index), &data.to_owned())
-            .await;
+        for unit in self.buffer.drain(..) {
+            dbtx.insert_new_entry(&AlephUnitsKey(self.units_index), &unit)
+                .await;
 
-        self.units_index += 1;
+            self.units_index += 1;
+        }
 
         dbtx.commit_tx_result()
             .await
@@ -73,3 +95,6 @@ impl aleph_bft::BackupWriter for BackupWriter {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;
