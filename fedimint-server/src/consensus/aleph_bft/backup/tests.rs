@@ -65,3 +65,28 @@ async fn a_restarted_writer_continues_after_the_stored_units() {
             .is_none()
     );
 }
+
+/// Older versions stored the replayed units again on every restart.
+#[tokio::test]
+async fn units_stored_more_than_once_are_loaded_once() {
+    let db: Database = MemDatabase::new().into();
+
+    let mut dbtx = db.begin_transaction().await;
+    for (index, byte) in [1, 2, 1, 2, 3, 1, 2, 3].into_iter().enumerate() {
+        dbtx.insert_new_entry(&AlephUnitsKey(index as u64), &unit(byte))
+            .await;
+    }
+    dbtx.commit_tx().await;
+
+    assert_eq!(
+        BackupReader::new(db.clone()).read().await.unwrap(),
+        [unit(1), unit(2), unit(3)].concat()
+    );
+
+    let mut writer = BackupWriter::new(db.clone()).await;
+    writer.append(&unit(4), true).await.unwrap();
+
+    let rows = stored_rows(&db).await;
+    assert_eq!(rows.len(), 9);
+    assert_eq!(rows.last(), Some(&(8, unit(4))));
+}
