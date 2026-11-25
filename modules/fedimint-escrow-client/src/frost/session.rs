@@ -454,7 +454,7 @@ impl FrostDkgSessionRecord {
                 Err(e) if e.is_transient() => {
                     failures += 1;
                     warn!("DKG step failed ({failures}/{MAX_ATTEMPTS}): {e}");
-                    if failures >= MAX_ATTEMPTS {
+                    if MAX_ATTEMPTS <= failures {
                         return Err(e);
                     }
                     sleep(RETRY_DELAY).await;

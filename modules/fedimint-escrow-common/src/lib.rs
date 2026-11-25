@@ -253,7 +253,7 @@ impl EscrowContract {
     /// is ruling
     fn active_successor(&self) -> Option<&SuccessorArbiter> {
         match self.status {
-            EscrowStatus::Disputed { swaps_used, .. } if swaps_used > 0 => {
+            EscrowStatus::Disputed { swaps_used, .. } if 0 < swaps_used => {
                 self.successors().get(swaps_used as usize - 1)
             }
             _ => None,

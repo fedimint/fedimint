@@ -3605,7 +3605,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-escrow-client"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -3623,7 +3623,7 @@ dependencies = [
  "frost-secp256k1-tr",
  "futures",
  "hex",
- "iroh 0.35.0",
+ "iroh-fedimint",
  "rand 0.8.5",
  "ring",
  "serde",
@@ -3637,7 +3637,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-escrow-common"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "clap",
@@ -3652,7 +3652,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-escrow-server"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -3677,7 +3677,7 @@ dependencies = [
 
 [[package]]
 name = "fedimint-escrow-tests"
-version = "0.13.0-alpha"
+version = "0.14.0-alpha"
 dependencies = [
  "anyhow",
  "fedimint-client",
@@ -3690,7 +3690,7 @@ dependencies = [
  "fedimint-testing",
  "frost-secp256k1-tr",
  "futures",
- "iroh 0.35.0",
+ "iroh-fedimint",
  "rand 0.8.5",
  "serde",
  "serde_json",

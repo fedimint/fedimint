@@ -164,7 +164,7 @@ fn arbiter_outcome(
             EscrowInputError::ContractNotDisputed
         });
     };
-    if now > resolve_by {
+    if resolve_by < now {
         return Err(EscrowInputError::ResolutionDeadlinePassed);
     }
     ensure_signed(

@@ -18,7 +18,7 @@ use fedimint_client_module::transaction::{
     ClientOutputSM, TransactionBuilder,
 };
 use fedimint_client_module::{
-    ClientModuleError, DynGlobalClientContext, sm_enum_variant_translation,
+    Account, ClientModuleError, DynGlobalClientContext, sm_enum_variant_translation,
 };
 use fedimint_core::config::FederationId;
 use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
@@ -845,7 +845,7 @@ impl EscrowClientModule {
             amounts: Amounts::new_bitcoin(amount),
         };
 
-        let tx = TransactionBuilder::new().with_outputs(
+        let tx = TransactionBuilder::new(Account::Primary).with_outputs(
             self.client_ctx
                 .make_client_outputs(ClientOutputBundle::new(vec![output], vec![output_sm])),
         );
@@ -1009,7 +1009,7 @@ impl EscrowClientModule {
             }),
         };
 
-        let tx = TransactionBuilder::new().with_inputs(
+        let tx = TransactionBuilder::new(Account::Primary).with_inputs(
             self.client_ctx
                 .make_dyn(ClientInputBundle::new(vec![input], vec![input_sm])),
         );

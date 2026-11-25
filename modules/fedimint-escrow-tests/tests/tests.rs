@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use fedimint_client::OperationId;
+use fedimint_client::{Account, OperationId};
 use fedimint_core::Amount;
 use fedimint_core::module::AmountUnit;
 use fedimint_core::runtime::sleep;
@@ -114,7 +114,7 @@ async fn wait_for_balance(
     min: Amount,
 ) -> anyhow::Result<()> {
     for _ in 0..40 {
-        if client.get_balance_for_btc().await? >= min {
+        if client.get_balance_for_btc(Account::Primary).await? >= min {
             return Ok(());
         }
 
@@ -613,7 +613,7 @@ async fn test_arbiter_resolution() -> anyhow::Result<()> {
         "already resolved",
     );
 
-    let balance_before = funder_client.get_balance_for_btc().await?;
+    let balance_before = funder_client.get_balance_for_btc(Account::Primary).await?;
     let claim_op = funder_escrow.claim_payout(escrow_id, None).await?;
     let mut stream = funder_escrow
         .subscribe_claim_payout(claim_op)
