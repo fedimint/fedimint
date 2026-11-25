@@ -1213,14 +1213,13 @@ fn dispute_flow_ends_in_a_resolved_contract() {
     let ruled = accept(&c, &ruling(&c, 3, Outcome::Release), TIMEOUT + PERIOD);
     c.transition(ruled.transition, TIMEOUT + PERIOD).unwrap();
 
-    // nothing else works afterwards
     assert_eq!(
         check_resolution(&c, &ruling(&c, 3, Outcome::Release), TIMEOUT + PERIOD),
         Err(EscrowInputError::ContractAlreadyResolved)
     );
     assert_eq!(
         check_resolution(&c, &fallback(&c, 1), RESOLVE_BY + 1),
-        Err(EscrowInputError::ContractNotDisputed)
+        Err(EscrowInputError::ContractAlreadyResolved)
     );
 }
 
