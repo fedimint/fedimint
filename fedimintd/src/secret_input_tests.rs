@@ -1,8 +1,9 @@
 use std::io::Write as _;
 
 use clap::Parser as _;
+use fedimint_core::util::{write_new, write_overwrite};
 
-use super::ServerOpts;
+use super::{PLAINTEXT_PASSWORD, ServerOpts};
 
 fn opts(extra: &[&str]) -> ServerOpts {
     ServerOpts::try_parse_from(
@@ -23,6 +24,52 @@ fn credential_file(contents: &str) -> tempfile::NamedTempFile {
     let mut file = tempfile::NamedTempFile::new().unwrap();
     file.write_all(contents.as_bytes()).unwrap();
     file
+}
+
+#[test]
+fn legacy_ui_password_distinguishes_missing_empty_and_nonempty_files() -> anyhow::Result<()> {
+    let data_dir = tempfile::tempdir()?;
+    let path = data_dir.path().join(PLAINTEXT_PASSWORD);
+    let mut opts = opts(&[]);
+    opts.data_dir = data_dir.path().to_owned();
+    opts.resolve_secrets()?;
+
+    assert!(opts.resolve_ui_auth()?.is_none());
+
+    for contents in ["", "\r\n", " \t\n"] {
+        write_overwrite(&path, contents)?;
+        let err = opts
+            .resolve_ui_auth()
+            .expect_err("an empty legacy file must stop startup");
+        assert_eq!(
+            err.to_string(),
+            "Guardian UI password file password.private must not be empty or whitespace-only"
+        );
+    }
+
+    write_overwrite(&path, "legacy password\r\n")?;
+    let auth = opts.resolve_ui_auth()?.expect("legacy UI authentication");
+    assert!(auth.verify("legacy password"));
+    Ok(())
+}
+
+#[test]
+fn explicit_ui_password_takes_precedence_over_empty_legacy_file() -> anyhow::Result<()> {
+    let data_dir = tempfile::tempdir()?;
+    write_new(data_dir.path().join(PLAINTEXT_PASSWORD), "\n")?;
+    let file = credential_file(" explicit password \n");
+
+    for args in [
+        ["--password-ui", " explicit password "],
+        ["--password-ui-file", file.path().to_str().unwrap()],
+    ] {
+        let mut opts = opts(&args);
+        opts.data_dir = data_dir.path().to_owned();
+        opts.resolve_secrets()?;
+        let auth = opts.resolve_ui_auth()?.expect("explicit UI authentication");
+        assert!(auth.verify(" explicit password "));
+    }
+    Ok(())
 }
 
 #[test]
