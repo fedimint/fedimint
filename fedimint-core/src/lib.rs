@@ -70,6 +70,8 @@ mod amount;
 pub mod backup;
 /// Legacy serde encoding for `bls12_381`
 pub mod bls12_381_serde;
+/// Mapping between Bitcoin networks and BOLT11 invoice currencies
+pub mod bolt11;
 /// Federation configuration
 pub mod config;
 /// Fundamental types
