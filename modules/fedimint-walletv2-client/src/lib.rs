@@ -1377,9 +1377,8 @@ pub enum SendError {
     #[error("The federation returned an error")]
     Federation(#[source] Box<FederationError>),
 
-    /// The guardians have not agreed a feerate yet, so no on-chain fee can be
-    /// quoted.
-    #[error("No consensus feerate is available at this time")]
+    /// The guardians cannot quote a send fee at this time.
+    #[error("No send fee quote is available at this time")]
     NoConsensusFeerateAvailable,
 
     /// The client cannot fund the wallet output this send needs.
@@ -1406,9 +1405,8 @@ pub enum ReceiveError {
     #[error("The federation returned an error")]
     Federation(#[source] Box<FederationError>),
 
-    /// The guardians have not agreed a feerate yet, so no claim fee can be
-    /// quoted.
-    #[error("No consensus feerate is available at this time")]
+    /// The guardians cannot quote a receive fee at this time.
+    #[error("No receive fee quote is available at this time")]
     NoConsensusFeerateAvailable,
 }
 
@@ -1492,8 +1490,8 @@ enum ProcessOutputError {
     #[error(transparent)]
     Federation(#[from] FederationError),
 
-    /// The federation has no consensus feerate to price the claim with.
-    #[error("No consensus feerate is available")]
+    /// The federation cannot quote a fee for the claim.
+    #[error("No receive fee quote is available")]
     NoFeerate,
 
     /// The claim transaction was rejected.

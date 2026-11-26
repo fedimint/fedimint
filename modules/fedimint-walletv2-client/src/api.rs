@@ -124,11 +124,8 @@ where
             ApiRequestErased::new(()),
             FederationGeneralError::ThresholdFailed {
                 message: format!(
-                    "Guardians disagree on the onchain send fee ({}). The fee is \
-                     consensus state, so a guardian returning a different value has \
-                     diverged - because its Bitcoin backend is lagging, or because its \
-                     view of the pending transaction stack differs. The same fee \
-                     validates the send, so it cannot be accepted until they agree.",
+                    "Too few guardians agree on the onchain send fee ({}). Retry once \
+                     enough guardians can quote the same fee.",
                     describe_fee_quotes(&quotes)
                 ),
             },
@@ -158,11 +155,8 @@ where
             ApiRequestErased::new(()),
             FederationGeneralError::ThresholdFailed {
                 message: format!(
-                    "Guardians disagree on the onchain receive fee ({}). The fee is \
-                     consensus state, so a guardian returning a different value has \
-                     diverged - because its Bitcoin backend is lagging, or because its \
-                     view of the pending transaction stack differs. The same fee \
-                     validates the claim, so it cannot be accepted until they agree.",
+                    "Too few guardians agree on the onchain receive fee ({}). Retry once \
+                     enough guardians can quote the same fee.",
                     describe_fee_quotes(&quotes)
                 ),
             },
