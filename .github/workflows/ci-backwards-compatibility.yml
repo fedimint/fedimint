@@ -53,7 +53,7 @@ jobs:
           # run a slimmed down back-compat test for PR push or each major version for merge queue
           if [[ "${{ github.event_name }}" == "merge_group" ]]; then
             PERFIT_METRIC="90S3yoXDQ-SXB0UbXG4qHQ"
-            VERSIONS_TO_TEST="v0.11.4 v0.12.2 v0.13.0"
+            VERSIONS_TO_TEST="v0.11.4 v0.12.2 v0.13.1"
             # Run only a random sample of tests to keep merge queue fast.
             # With multiple versions x multiple test combos, 25% still
             # gives good coverage for catching version-specific regressions.
