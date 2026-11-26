@@ -60,6 +60,7 @@ use fedimint_core::{
     InPoint, NumPeersExt, OutPoint, PeerId, apply, async_trait_maybe_send, push_db_pair_items, util,
 };
 use fedimint_logging::LOG_MODULE_WALLETV2;
+use fedimint_server_core::api::validate_page_range;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::config::{PeerHandleOps, PeerHandleOpsExt};
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
@@ -72,8 +73,9 @@ use fedimint_walletv2_common::config::{
 };
 use fedimint_walletv2_common::endpoint_constants::{
     CONSENSUS_BLOCK_COUNT_ENDPOINT, CONSENSUS_FEERATE_ENDPOINT, FEDERATION_WALLET_ENDPOINT,
-    OUTPUT_INFO_SLICE_ENDPOINT, PENDING_OUTPUTS_ENDPOINT, PENDING_TRANSACTION_CHAIN_ENDPOINT,
-    RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT, TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
+    OUTPUT_INFO_SLICE_ENDPOINT, OUTPUT_INFO_SLICE_SIZE, PENDING_OUTPUTS_ENDPOINT,
+    PENDING_TRANSACTION_CHAIN_ENDPOINT, RECEIVE_FEE_ENDPOINT, SEND_FEE_ENDPOINT,
+    TRANSACTION_CHAIN_ENDPOINT, TRANSACTION_ID_ENDPOINT,
 };
 /// Re-exported for existing callers; the constants live in the common crate so
 /// that the client can render peg-in confirmation progress against them.
@@ -891,6 +893,7 @@ impl ServerModule for Wallet {
                 OUTPUT_INFO_SLICE_ENDPOINT,
                 ApiVersion::new(0, 0),
                 async |module: &Wallet, context, params: (u64, u64)| -> Vec<OutputInfo> {
+                    validate_page_range(params, OUTPUT_INFO_SLICE_SIZE)?;
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
                     Ok(module.get_outputs(&mut dbtx, params.0, params.1).await)

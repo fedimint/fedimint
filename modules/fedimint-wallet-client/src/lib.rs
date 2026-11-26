@@ -74,6 +74,7 @@ use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 pub use fedimint_wallet_common as common;
 use fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig};
+use fedimint_wallet_common::endpoint_constants::RECOVERY_SLICE_SIZE;
 use fedimint_wallet_common::tweakable::Tweakable;
 pub use fedimint_wallet_common::*;
 use futures::{Stream, StreamExt, TryStreamExt as _};
@@ -219,8 +220,6 @@ where
 // TODO: should probably move to DB
 pub struct WalletClientInit(pub Option<DynBitcoindRpc>);
 
-const SLICE_SIZE: u64 = 1000;
-
 impl WalletClientInit {
     pub fn new(rpc: DynBitcoindRpc) -> Self {
         Self(Some(rpc))
@@ -240,8 +239,8 @@ impl WalletClientInit {
 
         state.refill_pending_pool_up_to(&data, TweakIdx(FEDERATION_RECOVER_MAX_GAP));
 
-        for start in (0..total_items).step_by(SLICE_SIZE as usize) {
-            let end = std::cmp::min(start + SLICE_SIZE, total_items);
+        for start in (0..total_items).step_by(RECOVERY_SLICE_SIZE as usize) {
+            let end = std::cmp::min(start + RECOVERY_SLICE_SIZE, total_items);
 
             let items = args.module_api().fetch_recovery_slice(start, end).await;
 

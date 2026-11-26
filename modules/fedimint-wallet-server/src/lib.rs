@@ -73,6 +73,7 @@ use fedimint_core::{
     get_network_for_address, push_db_key_items, push_db_pair_items, weight_to_vbytes,
 };
 use fedimint_logging::LOG_MODULE_WALLET;
+use fedimint_server_core::api::validate_page_range;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::config::{PeerHandleOps, PeerHandleOpsExt};
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
@@ -84,7 +85,7 @@ use fedimint_wallet_common::config::{FeeConsensus, WalletClientConfig, WalletCon
 use fedimint_wallet_common::endpoint_constants::{
     ACTIVATE_CONSENSUS_VERSION_VOTING_ENDPOINT, BITCOIN_KIND_ENDPOINT, BITCOIN_RPC_CONFIG_ENDPOINT,
     BLOCK_COUNT_ENDPOINT, BLOCK_COUNT_LOCAL_ENDPOINT, MODULE_CONSENSUS_VERSION_ENDPOINT,
-    PEG_OUT_FEES_ENDPOINT, RECOVERY_COUNT_ENDPOINT, RECOVERY_SLICE_ENDPOINT,
+    PEG_OUT_FEES_ENDPOINT, RECOVERY_COUNT_ENDPOINT, RECOVERY_SLICE_ENDPOINT, RECOVERY_SLICE_SIZE,
     SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT, UTXO_CONFIRMED_ENDPOINT, WALLET_SUMMARY_ENDPOINT,
 };
 use fedimint_wallet_common::envs::FM_PORT_ESPLORA_ENV;
@@ -1170,6 +1171,7 @@ impl ServerModule for Wallet {
                 RECOVERY_SLICE_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Wallet, context, range: (u64, u64)| -> Vec<RecoveryItem> {
+                    validate_page_range(range, RECOVERY_SLICE_SIZE)?;
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
                     Ok(get_recovery_slice(&mut dbtx, range).await)

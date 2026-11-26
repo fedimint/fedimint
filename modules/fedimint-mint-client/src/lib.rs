@@ -98,6 +98,7 @@ use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_CLIENT_MODULE_MINT;
 pub use fedimint_mint_common as common;
 use fedimint_mint_common::config::{FeeConsensus, MintClientConfig};
+use fedimint_mint_common::endpoint_constants::RECOVERY_SLICE_SIZE;
 pub use fedimint_mint_common::*;
 use futures::future::try_join_all;
 use futures::{StreamExt, TryStreamExt as _, pin_mut};
@@ -591,7 +592,6 @@ pub enum MintOperationMetaVariant {
 #[derive(Debug, Clone)]
 pub struct MintClientInit;
 
-const SLICE_SIZE: u64 = 10000;
 const PARALLEL_HASH_REQUESTS: usize = 10;
 const PARALLEL_SLICE_REQUESTS: usize = 10;
 
@@ -628,11 +628,11 @@ impl MintClientInit {
         let peer_selector = PeerSelector::new(args.api().all_peers().clone());
 
         let mut recovery_stream = futures::stream::iter(
-            (state.next_index..state.total_items).step_by(SLICE_SIZE as usize),
+            (state.next_index..state.total_items).step_by(RECOVERY_SLICE_SIZE as usize),
         )
         .map(move |start| {
             let api = args.module_api().clone();
-            let end = std::cmp::min(start + SLICE_SIZE, state.total_items);
+            let end = std::cmp::min(start + RECOVERY_SLICE_SIZE, state.total_items);
 
             async move { (start, end, api.fetch_recovery_slice_hash(start, end).await) }
         })

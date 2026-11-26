@@ -67,6 +67,7 @@ use fedimint_core::util::{BoxStream, NextOrPending};
 use fedimint_core::{Amount, OutPoint, PeerId, apply, async_trait_maybe_send};
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_mintv2_common::config::{FeeConsensus, MintClientConfig, client_denominations};
+use fedimint_mintv2_common::endpoint_constants::RECOVERY_SLICE_SIZE;
 use fedimint_mintv2_common::{
     Denomination, KIND, MintCommonInit, MintInput, MintModuleTypes, MintOutput, Note, RecoveryItem,
     verify_note,
@@ -87,7 +88,6 @@ use crate::output::{MintOutputStateMachine, OutputSMCommon, OutputSMState};
 use crate::receive::{ReceiveSMState, ReceiveStateMachine};
 
 const TARGET_PER_DENOMINATION: usize = 3;
-const SLICE_SIZE: u64 = 10000;
 /// How long a guardian sits out after failing to answer a slice request.
 const PEER_READMISSION: Duration = Duration::from_secs(60);
 /// How long a single peer is given to answer a slice request.
@@ -287,11 +287,11 @@ impl ClientModuleInit for MintClientInit {
         let peer_pool = PeerPool::new(args.api().all_peers());
 
         let mut recovery_stream = futures::stream::iter(
-            (state.next_index..state.total_items).step_by(SLICE_SIZE as usize),
+            (state.next_index..state.total_items).step_by(RECOVERY_SLICE_SIZE as usize),
         )
         .map(|start| {
             let api = args.module_api().clone();
-            let end = std::cmp::min(start + SLICE_SIZE, state.total_items);
+            let end = std::cmp::min(start + RECOVERY_SLICE_SIZE, state.total_items);
 
             async move { (start, end, api.fetch_recovery_slice_hash(start, end).await) }
         })
