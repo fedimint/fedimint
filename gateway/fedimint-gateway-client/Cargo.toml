@@ -27,7 +27,6 @@ path = "src/lib.rs"
 [dependencies]
 bcrypt = { workspace = true }
 bitcoin = { workspace = true }
-chrono = { workspace = true }
 clap = { workspace = true }
 clap_complete = { workspace = true }
 fedimint-connectors = { workspace = true }
@@ -36,6 +35,7 @@ fedimint-eventlog = { workspace = true }
 fedimint-gateway-common = { workspace = true }
 fedimint-ln-common = { workspace = true }
 fedimint-logging = { workspace = true }
+jiff = { workspace = true }
 lightning-invoice = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -1,5 +1,4 @@
 use bitcoin::hashes::sha256;
-use chrono::{DateTime, Utc};
 use clap::Subcommand;
 use fedimint_connectors::error::ServerError;
 use fedimint_core::Amount;
@@ -14,6 +13,7 @@ use fedimint_gateway_common::{
     OpenChannelRequest, PayInvoiceForOperatorPayload, PayOfferPayload, SetChannelFeesRequest,
 };
 use fedimint_ln_common::client::GatewayApi;
+use jiff::Timestamp;
 use lightning_invoice::Bolt11Invoice;
 
 use crate::{CliOutput, CliOutputResult, SafeUrl};
@@ -110,12 +110,12 @@ pub enum LightningCommands {
         /// The timestamp to start listing transactions from (e.g.,
         /// "2025-03-14T15:30:00Z")
         #[arg(long, value_parser = parse_datetime)]
-        start_time: DateTime<Utc>,
+        start_time: Timestamp,
 
         /// The timestamp to end listing transactions from (e.g.,
         /// "2025-03-15T15:30:00Z")
         #[arg(long, value_parser = parse_datetime)]
-        end_time: DateTime<Utc>,
+        end_time: Timestamp,
     },
     /// Get details about a specific invoice
     GetInvoice {
@@ -151,8 +151,8 @@ pub enum LightningCommands {
     },
 }
 
-fn parse_datetime(s: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
-    s.parse::<DateTime<Utc>>()
+fn parse_datetime(s: &str) -> Result<Timestamp, jiff::Error> {
+    s.parse::<Timestamp>()
 }
 
 impl LightningCommands {
@@ -260,11 +260,11 @@ impl LightningCommands {
                 end_time,
             } => {
                 let start_secs = start_time
-                    .timestamp()
+                    .as_second()
                     .try_into()
                     .map_err(|e| ServerError::InternalClientError(format!("{e}")))?;
                 let end_secs = end_time
-                    .timestamp()
+                    .as_second()
                     .try_into()
                     .map_err(|e| ServerError::InternalClientError(format!("{e}")))?;
                 let response = list_transactions(

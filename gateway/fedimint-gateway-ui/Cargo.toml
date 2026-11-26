@@ -19,7 +19,6 @@ axum-extra = { workspace = true, features = ["cookie"] }
 bcrypt = { workspace = true }
 bip39 = { workspace = true }
 bitcoin = { workspace = true }
-chrono = { workspace = true }
 fedimint-bitcoind = { workspace = true }
 fedimint-core = { workspace = true }
 fedimint-eventlog = { workspace = true }
@@ -31,6 +30,7 @@ fedimint-mint-client = { workspace = true }
 fedimint-mintv2-client = { workspace = true }
 fedimint-ui-common = { workspace = true }
 fedimint-wallet-client = { workspace = true }
+jiff = { workspace = true }
 lightning = { workspace = true }
 lightning-invoice = { workspace = true }
 maud = { workspace = true }

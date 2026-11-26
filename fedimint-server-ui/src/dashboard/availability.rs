@@ -89,10 +89,10 @@ fn unavailable() -> Markup {
 fn timestamp(secs: u64) -> String {
     i64::try_from(secs)
         .ok()
-        .and_then(|secs| chrono::DateTime::from_timestamp(secs, 0))
+        .and_then(|secs| jiff::Timestamp::from_second(secs).ok())
         .map_or_else(
             || "Unknown timestamp".to_owned(),
-            |time| time.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+            |time| time.strftime("%Y-%m-%d %H:%M:%S UTC").to_string(),
         )
 }
 

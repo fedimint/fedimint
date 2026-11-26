@@ -17,7 +17,6 @@ use axum::http::{StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum_extra::extract::cookie::CookieJar;
-use chrono::{NaiveDate, Utc};
 use consensus_explorer::consensus_explorer_view;
 use fedimint_core::config::META_FEDERATION_NAME_KEY;
 use fedimint_metrics::{Encoder, REGISTRY, TextEncoder};
@@ -29,6 +28,9 @@ use fedimint_ui_common::{
     connectivity_check_handler, dashboard_layout, login_form, login_submit_response,
     single_card_layout_with_version,
 };
+use jiff::Timestamp;
+use jiff::civil::Date;
+use jiff::tz::TimeZone;
 use maud::html;
 use {
     fedimint_lnv2_server, fedimint_meta_server, fedimint_mintv2_server, fedimint_wallet_server,
@@ -87,7 +89,8 @@ async fn download_backup(
         .get(&guardian_id)
         .map(String::as_str)
         .unwrap_or_default();
-    let filename = guardian_backup_filename(Utc::now().date_naive(), guardian_name);
+    let today = Timestamp::now().to_zoned_datetime(TimeZone::UTC).date();
+    let filename = guardian_backup_filename(today, guardian_name);
 
     Response::builder()
         .header(header::CONTENT_TYPE, "application/x-tar")
@@ -100,7 +103,7 @@ async fn download_backup(
 }
 
 /// Keep the peer component portable and safe inside a quoted HTTP filename.
-fn guardian_backup_filename(date: NaiveDate, peer_name: &str) -> String {
+fn guardian_backup_filename(date: Date, peer_name: &str) -> String {
     // Bound the component so the complete filename fits common filesystem limits.
     let sanitized: String = peer_name
         .chars()
@@ -121,7 +124,7 @@ fn guardian_backup_filename(date: NaiveDate, peer_name: &str) -> String {
     };
     format!(
         "{}-{peer_name}-guardian-backup.tar",
-        date.format("%Y-%m-%d")
+        date.strftime("%Y-%m-%d")
     )
 }
 

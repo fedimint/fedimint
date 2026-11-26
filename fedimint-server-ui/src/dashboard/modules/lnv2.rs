@@ -1,6 +1,8 @@
 use axum::extract::{Form, State};
 use axum::response::{IntoResponse, Redirect};
 use fedimint_core::util::SafeUrl;
+use jiff::Timestamp;
+use jiff::tz::TimeZone;
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
 use fedimint_ui_common::auth::UserAuth;
 use fedimint_ui_common::{ROOT_ROUTE, UiState};
@@ -21,8 +23,9 @@ pub async fn render(lightning: &fedimint_lnv2_server::Lightning) -> Markup {
     let gateways = lightning.gateways_ui().await;
     let consensus_block_count = lightning.consensus_block_count_ui().await;
     let consensus_unix_time = lightning.consensus_unix_time_ui().await;
-    let formatted_unix_time = chrono::DateTime::from_timestamp(consensus_unix_time as i64, 0)
-        .map(|dt| dt.to_rfc2822())
+    let formatted_unix_time = Timestamp::from_second(consensus_unix_time as i64)
+        .ok()
+        .and_then(|ts| jiff::fmt::rfc2822::to_string(&ts.to_zoned_datetime(TimeZone::UTC)).ok())
         .unwrap_or("Invalid time".to_string());
 
     html! {

@@ -6,8 +6,6 @@ use std::time::{Duration, UNIX_EPOCH};
 use axum::Form;
 use axum::extract::{Query, State};
 use axum::response::Html;
-use chrono::offset::LocalResult;
-use chrono::{DateTime, TimeZone, Utc};
 use fedimint_core::bitcoin::Network;
 use fedimint_core::time::now;
 use fedimint_gateway_common::{
@@ -20,6 +18,8 @@ use fedimint_gateway_common::{
 use fedimint_logging::LOG_GATEWAY_UI;
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
+use jiff::civil::DateTime as CivilDateTime;
+use jiff::{Timestamp, tz::TimeZone};
 use lightning::offers::offer::{Amount, Offer};
 use lightning_invoice::Bolt11Invoice;
 use maud::{Markup, PreEscaped, html};
@@ -375,14 +375,14 @@ where
     E: std::fmt::Display,
 {
     // Convert timestamps to datetime-local formatted strings
-    let start_dt = match Utc.timestamp_opt(start_secs as i64, 0) {
-        LocalResult::Single(dt) => dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
-        _ => "1970-01-01T00:00:00".to_string(),
+    let start_dt = match Timestamp::from_second(start_secs as i64) {
+        Ok(ts) => ts.strftime("%Y-%m-%dT%H:%M:%S").to_string(),
+        Err(_) => "1970-01-01T00:00:00".to_string(),
     };
 
-    let end_dt = match Utc.timestamp_opt(end_secs as i64, 0) {
-        LocalResult::Single(dt) => dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
-        _ => "1970-01-01T00:00:00".to_string(),
+    let end_dt = match Timestamp::from_second(end_secs as i64) {
+        Ok(ts) => ts.strftime("%Y-%m-%dT%H:%M:%S").to_string(),
+        Err(_) => "1970-01-01T00:00:00".to_string(),
     };
 
     html!(
@@ -495,11 +495,9 @@ where
                                                 (format!("{} sats", tx.amount.msats / 1000))
                                             }
                                             div style="font-size: 0.7rem; color: #6c757d;" {
-                                                @let timestamp = match Utc.timestamp_opt(tx.timestamp_secs as i64, 0) {
-                                                    LocalResult::Single(dt) => dt,
-                                                    _ => Utc.timestamp_opt(0, 0).unwrap(),
-                                                };
-                                                (timestamp.format("%Y-%m-%d %H:%M:%S").to_string())
+                                                @let timestamp = Timestamp::from_second(tx.timestamp_secs as i64)
+                                                    .unwrap_or(Timestamp::UNIX_EPOCH);
+                                                (timestamp.strftime("%Y-%m-%d %H:%M:%S").to_string())
                                             }
                                         }
                                     }
@@ -2076,10 +2074,10 @@ where
                             strong { "Expires At: " }
                             @match expires_at {
                                 Some(unix_ts) => {
-                                    @let datetime: DateTime<Utc> =
-                                        DateTime::<Utc>::from(UNIX_EPOCH + unix_ts);
+                                    @let timestamp = Timestamp::try_from(UNIX_EPOCH + unix_ts)
+                                        .expect("invoice expiry in valid jiff range");
                                     span {
-                                        (datetime.format("%Y-%m-%d %H:%M:%S UTC").to_string())
+                                        (timestamp.strftime("%Y-%m-%d %H:%M:%S UTC").to_string())
                                     }
                                 }
                                 None => {
@@ -2269,12 +2267,10 @@ where
 
     let parse = |key: &str| -> Option<u64> {
         params.get(key).and_then(|s| {
-            chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S")
+            CivilDateTime::strptime("%Y-%m-%dT%H:%M:%S", s)
                 .ok()
-                .map(|dt| {
-                    let dt_utc: chrono::DateTime<Utc> = Utc.from_utc_datetime(&dt);
-                    dt_utc.timestamp() as u64
-                })
+                .and_then(|dt| dt.to_zoned_datetime(TimeZone::UTC).ok())
+                .map(|zdt| zdt.timestamp().as_second() as u64)
         })
     };
 

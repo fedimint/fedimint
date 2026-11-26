@@ -1,12 +1,12 @@
 use axum::http::HeaderValue;
-use chrono::NaiveDate;
+use jiff::civil::date;
 use serde_json::json;
 
 use super::{general, guardian_backup_filename, resolve_federation_name};
 
 #[test]
 fn backup_filename_contains_date_and_peer_name() {
-    let date = NaiveDate::from_ymd_opt(2026, 1, 2).unwrap();
+    let date = date(2026, 1, 2);
     assert_eq!(
         guardian_backup_filename(date, "Alice's Node_2-west"),
         "2026-01-02-Alice_s_Node_2-west-guardian-backup.tar"
@@ -26,7 +26,7 @@ fn meta_name_takes_precedence_over_legacy_name() {
 
 #[test]
 fn backup_filename_sanitizes_unsafe_names() {
-    let date = NaiveDate::from_ymd_opt(2026, 1, 2).unwrap();
+    let date = date(2026, 1, 2);
     for (name, expected) in [
         ("", "guardian"),
         ("../\\\";\r\n\0💾", "guardian"),
@@ -62,7 +62,7 @@ fn missing_or_invalid_meta_name_falls_back_to_legacy_name() {
 
 #[test]
 fn backup_filename_bounds_peer_name_length() {
-    let date = NaiveDate::from_ymd_opt(2026, 1, 2).unwrap();
+    let date = date(2026, 1, 2);
     assert_eq!(
         guardian_backup_filename(date, &"a".repeat(1_000)),
         format!("2026-01-02-{}-guardian-backup.tar", "a".repeat(64))
