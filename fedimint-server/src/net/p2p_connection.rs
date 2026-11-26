@@ -107,6 +107,7 @@ where
             return Ok(message);
         }
 
+        // TODO: remove the bincode fallback in 0.15.0
         Ok(bincode::deserialize_from(Cursor::new(&**self))?)
     }
 }
@@ -144,9 +145,7 @@ where
     M: Encodable + Decodable + Serialize + DeserializeOwned + Send + 'static,
 {
     async fn send(&self, message: M) -> anyhow::Result<()> {
-        let mut bytes = Vec::new();
-
-        bincode::serialize_into(&mut bytes, &message)?;
+        let bytes = message.consensus_encode_to_vec();
 
         // The locks are never contended by contract — see the trait doc — so
         // a second concurrent caller fails loudly instead of queuing behind
@@ -199,6 +198,7 @@ where
             return Ok(message);
         }
 
+        // TODO: remove the bincode fallback in 0.15.0
         Ok(bincode::deserialize_from(Cursor::new(&bytes))?)
     }
 }
@@ -209,9 +209,7 @@ where
     M: Encodable + Decodable + Serialize + DeserializeOwned + Send + 'static,
 {
     async fn send(&self, message: M) -> anyhow::Result<()> {
-        let mut bytes = Vec::new();
-
-        bincode::serialize_into(&mut bytes, &message)?;
+        let bytes = message.consensus_encode_to_vec();
 
         let mut sink = self.open_uni().await?;
 
@@ -244,6 +242,7 @@ where
             return Ok(message);
         }
 
+        // TODO: remove the bincode fallback in 0.15.0
         Ok(bincode::deserialize_from(Cursor::new(&bytes))?)
     }
 }
@@ -254,9 +253,7 @@ where
     M: Encodable + Decodable + Serialize + DeserializeOwned + Send + 'static,
 {
     async fn send(&self, message: M) -> anyhow::Result<()> {
-        let mut bytes = Vec::new();
-
-        bincode::serialize_into(&mut bytes, &message)?;
+        let bytes = message.consensus_encode_to_vec();
 
         let mut sink = self.open_uni().await?;
 
