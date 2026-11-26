@@ -199,6 +199,7 @@ impl ClientModuleInit for GatewayClientInit {
             lightning_manager: self.lightning_manager.clone(),
             connector_registry: args.connector_registry.clone(),
             intercepted_htlc_lock_pool: lockable::LockPool::new(),
+            outgoing_contract_locks: lockable::LockPool::new(),
         })
     }
 }
@@ -246,6 +247,9 @@ pub struct GatewayClientModule {
     pub lightning_manager: Arc<dyn IGatewayClientV1>,
     connector_registry: ConnectorRegistry,
     intercepted_htlc_lock_pool: lockable::LockPool<HtlcCircuitKey>,
+    /// Serializes admission of one outgoing contract through its operation
+    /// commit.
+    outgoing_contract_locks: lockable::LockPool<ContractId>,
 }
 
 impl fmt::Debug for GatewayClientModule {
@@ -939,11 +943,9 @@ impl GatewayClientModule {
     /// Fails with [`GatewayPayInvoiceError::MissingInvoiceAmount`] if the
     /// invoice has no amount, [`GatewayPayInvoiceError::PrunedInvoiceRejected`]
     /// if the gateway cannot pay a pruned invoice,
-    /// [`GatewayPayInvoiceError::PaymentHashAlreadyClaimed`] if another
-    /// operation already claimed the invoice's payment hash and this request
-    /// has no matching funded contract to refund,
-    /// [`GatewayPayInvoiceError::ContractLookup`] if the contract cannot be
-    /// fetched for a refund,
+    /// [`GatewayPayInvoiceError::NoMatchingContract`] if the request does not
+    /// match a funded outgoing contract for this gateway, or a lookup error if
+    /// the gateway cannot check the contract, block count, or routing fees,
     /// [`GatewayPayInvoiceError::Unauthorized`] if a payment of this contract
     /// is already under way and the request does not carry the
     /// authentication it was started with,
@@ -952,107 +954,31 @@ impl GatewayClientModule {
     /// recorded.
     pub async fn gateway_pay_bolt11_invoice(
         &self,
-        pay_invoice_payload: PayInvoicePayload,
+        payload: PayInvoicePayload,
     ) -> Result<OperationId, GatewayPayInvoiceError> {
-        let payload = pay_invoice_payload.clone();
-
-        // `payment_data` is caller-supplied on the unauthenticated `/pay_invoice`
-        // route, so an amountless BOLT11 reaches us here. The state machine
-        // rejects it in `validate_outgoing_account`, but that runs only after
-        // this function has already recorded the invoice amount, so the amount
-        // has to be resolved before any of that work starts.
-        let invoice_amount = pay_invoice_payload
-            .payment_data
-            .amount()
-            .ok_or(GatewayPayInvoiceError::MissingInvoiceAmount)?;
-
-        self.lightning_manager
-            .verify_pruned_invoice(pay_invoice_payload.payment_data)
-            .await
-            .map_err(GatewayPayInvoiceError::PrunedInvoiceRejected)?;
-
-        // Only the first operation to claim a payment image may ever pay it out,
-        // across LNv1, LNv2 and all federations; see the LNv2 `send_payment`.
-        // The claim is taken before the operation is created, and a retry of the
-        // same contract finds its own claim.
-        let initial_state = if self
-            .lightning_manager
-            .claim_payment_image(
-                &fedimint_lnv2_common::contracts::PaymentImage::Hash(
-                    payload.payment_data.payment_hash(),
-                ),
-                OperationId(payload.contract_id.to_byte_array()),
-            )
-            .await
+        let operation_id = OperationId(payload.contract_id.to_byte_array());
+        // Two requests for this contract can disagree on fees or expiry. Keep
+        // the decision to reserve or cancel paired with the operation we commit.
+        // Different contracts still compete in the durable gateway-wide arbiter.
+        let _admission = self
+            .outgoing_contract_locks
+            .async_lock(payload.contract_id)
+            .await;
+        let db = self.client_ctx.module_db();
+        if self
+            .join_outgoing_payment(&mut db.begin_transaction_nc().await, operation_id, &payload)
+            .await?
         {
-            GatewayPayStates::PayInvoice(GatewayPayInvoice {
-                pay_invoice_payload: payload.clone(),
-            })
-        } else {
-            let account = self
-                .module_api
-                .fetch_contract(payload.contract_id)
-                .await
-                .map_err(GatewayPayInvoiceError::ContractLookup)?
-                .ok_or(GatewayPayInvoiceError::PaymentHashAlreadyClaimed)?;
-            let FundedContract::Outgoing(contract) = account.contract else {
-                return Err(GatewayPayInvoiceError::PaymentHashAlreadyClaimed);
-            };
+            return Ok(operation_id);
+        }
 
-            if account.amount == Amount::ZERO
-                || contract.gateway_key != self.redeem_key.public_key()
-                || contract.hash != payload.payment_data.payment_hash()
-            {
-                return Err(GatewayPayInvoiceError::PaymentHashAlreadyClaimed);
-            }
-            GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract::for_claimed_hash(
-                OutgoingContractAccount {
-                    amount: account.amount,
-                    contract,
-                },
-            )))
-        };
-
-        self.client_ctx.module_db()
-            .autocommit(
+        let (invoice_amount, initial_state) = self
+            .prepare_outgoing_payment(&payload, operation_id)
+            .await?;
+        db.autocommit(
                 |dbtx, _| {
                     Box::pin(async {
-                        let operation_id = OperationId(payload.contract_id.to_byte_array());
-
-                        // The operation id is the contract id, so an existing entry means we
-                        // already accepted a request to pay this very contract. The state
-                        // machine's own dedupe key covers the whole payload, so a caller who
-                        // varies any field of it -- `preimage_auth`, say -- slips past that
-                        // and would have us buy the preimage a second time, spending the
-                        // gateway's funds twice against a contract that only pays out once.
-                        // Hand back the operation already under way instead.
-                        if let Some(entry) =
-                            self.client_ctx.get_operation_dbtx(dbtx, operation_id).await
-                        {
-                            // This operation id yields the preimage, so only the
-                            // caller that started the payment may join it. The
-                            // state machine's own check comes too late for a
-                            // request that never reaches one, and it is keyed on
-                            // `payment_data`, which the caller supplies
-                            // independently of `contract_id` -- so it would answer
-                            // for the wrong payment here.
-                            if !matches!(
-                                entry.try_meta::<GatewayMeta>(),
-                                Ok(GatewayMeta::Pay { preimage_auth })
-                                    if PreimageAuth::new(preimage_auth)
-                                        .verifies(payload.preimage_auth)
-                            ) {
-                                return Err(GatewayPayInvoiceError::Unauthorized {
-                                    contract_id: payload.contract_id,
-                                });
-                            }
-
-                            debug!(
-                                operation_id = %operation_id.fmt_short(),
-                                contract_id = %payload.contract_id,
-                                "Duplicate request to pay an outgoing contract, returning the operation already in progress"
-                            );
-
+                        if self.join_outgoing_payment(dbtx, operation_id, &payload).await? {
                             return Ok(operation_id);
                         }
 
@@ -1095,6 +1021,109 @@ impl GatewayClientModule {
             )
             .await
             .map_err(GatewayPayInvoiceError::from)
+    }
+
+    /// Joining yields the preimage, even after the contract has been spent.
+    /// Authenticate against the original operation, not the supplied invoice.
+    async fn join_outgoing_payment(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        operation_id: OperationId,
+        payload: &PayInvoicePayload,
+    ) -> Result<bool, GatewayPayInvoiceError> {
+        let Some(entry) = self.client_ctx.get_operation_dbtx(dbtx, operation_id).await else {
+            return Ok(false);
+        };
+        if !matches!(entry.try_meta::<GatewayMeta>(), Ok(GatewayMeta::Pay { preimage_auth })
+            if PreimageAuth::new(preimage_auth).verifies(payload.preimage_auth))
+        {
+            return Err(GatewayPayInvoiceError::Unauthorized {
+                contract_id: payload.contract_id,
+            });
+        }
+        Ok(true)
+    }
+
+    /// Only reserve a hash for a new operation backed by spendable escrow.
+    async fn prepare_outgoing_payment(
+        &self,
+        payload: &PayInvoicePayload,
+        operation_id: OperationId,
+    ) -> Result<(Amount, GatewayPayStates), GatewayPayInvoiceError> {
+        let invoice_amount = payload
+            .payment_data
+            .amount()
+            .ok_or(GatewayPayInvoiceError::MissingInvoiceAmount)?;
+        self.lightning_manager
+            .verify_pruned_invoice(payload.payment_data.clone())
+            .await
+            .map_err(GatewayPayInvoiceError::PrunedInvoiceRejected)?;
+        let account = self
+            .module_api
+            .fetch_contract(payload.contract_id)
+            .await
+            .map_err(GatewayPayInvoiceError::ContractLookup)?
+            .ok_or(GatewayPayInvoiceError::NoMatchingContract)?;
+        let FundedContract::Outgoing(contract) = account.contract else {
+            return Err(GatewayPayInvoiceError::NoMatchingContract);
+        };
+        if account.amount == Amount::ZERO
+            || contract.cancelled
+            || contract.gateway_key != self.redeem_key.public_key()
+            || contract.hash != payload.payment_data.payment_hash()
+        {
+            return Err(GatewayPayInvoiceError::NoMatchingContract);
+        }
+        let account = OutgoingContractAccount {
+            amount: account.amount,
+            contract,
+        };
+        let block_count = self
+            .module_api
+            .fetch_consensus_block_count()
+            .await
+            .map_err(GatewayPayInvoiceError::ContractLookup)?
+            .ok_or(GatewayPayInvoiceError::MissingBlockCount)?;
+        let fees = self
+            .lightning_manager
+            .get_routing_fees(payload.federation_id)
+            .await
+            .ok_or(GatewayPayInvoiceError::MissingRoutingFees)?;
+        let refusal = match GatewayPayInvoice::validate_fresh_dispatch(
+            &account,
+            self.redeem_key,
+            block_count,
+            &payload.payment_data,
+            fees,
+        ) {
+            Err(error) => pay::OutgoingPaymentErrorType::InvalidOutgoingContract { error },
+            Ok(()) => {
+                // The gateway-wide arbiter serializes claims across both protocols.
+                // A crash before recording the operation leaves the same owner.
+                if self
+                    .lightning_manager
+                    .claim_payment_image(
+                        &fedimint_lnv2_common::contracts::PaymentImage::Hash(account.contract.hash),
+                        operation_id,
+                    )
+                    .await
+                {
+                    return Ok((
+                        invoice_amount,
+                        GatewayPayStates::PayInvoice(GatewayPayInvoice {
+                            pay_invoice_payload: payload.clone(),
+                        }),
+                    ));
+                }
+                pay::OutgoingPaymentErrorType::PaymentHashAlreadyClaimed
+            }
+        };
+        Ok((
+            invoice_amount,
+            GatewayPayStates::CancelContract(Box::new(GatewayPayCancelContract::new(
+                account, refusal,
+            ))),
+        ))
     }
 
     /// Subscribe to updates of a payment started with

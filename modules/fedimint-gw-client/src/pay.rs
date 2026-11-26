@@ -714,6 +714,27 @@ impl GatewayPayInvoice {
         }
     }
 
+    /// Admission requires a fresh dispatch budget. Once admitted, the state
+    /// machine rechecks that budget only before a new dispatch, so it can
+    /// still recover an in-flight payment after a restart.
+    pub(super) fn validate_fresh_dispatch(
+        account: &OutgoingContractAccount,
+        redeem_key: bitcoin::key::Keypair,
+        consensus_block_count: u64,
+        payment_data: &PaymentData,
+        routing_fees: RoutingFees,
+    ) -> Result<(), OutgoingContractError> {
+        Self::validate_outgoing_account(
+            account,
+            redeem_key,
+            consensus_block_count,
+            payment_data,
+            routing_fees,
+        )?
+        .fresh_dispatch
+        .map(|_| ())
+    }
+
     fn validate_outgoing_account(
         account: &OutgoingContractAccount,
         redeem_key: bitcoin::key::Keypair,
@@ -1013,10 +1034,13 @@ pub struct GatewayPayCancelContract {
 }
 
 impl GatewayPayCancelContract {
-    pub(super) fn for_claimed_hash(contract: OutgoingContractAccount) -> Self {
+    pub(super) fn new(
+        contract: OutgoingContractAccount,
+        error_type: OutgoingPaymentErrorType,
+    ) -> Self {
         Self {
             error: OutgoingPaymentError {
-                error_type: OutgoingPaymentErrorType::PaymentHashAlreadyClaimed,
+                error_type,
                 contract_id: contract.contract.contract_id(),
                 contract: Some(contract.clone()),
             },

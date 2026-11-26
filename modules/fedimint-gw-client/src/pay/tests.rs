@@ -87,7 +87,7 @@ fn validate_payment_data(
     account: &OutgoingContractAccount,
     payment_data: &PaymentData,
 ) -> Result<(), OutgoingContractError> {
-    GatewayPayInvoice::validate_outgoing_account(
+    GatewayPayInvoice::validate_fresh_dispatch(
         account,
         gateway_keypair(),
         CONSENSUS_BLOCK_COUNT,
@@ -97,7 +97,6 @@ fn validate_payment_data(
             proportional_millionths: 0,
         },
     )
-    .and_then(|parameters| parameters.fresh_dispatch.map(|_| ()))
 }
 
 /// Payment data whose invoice expired at the unix epoch.
