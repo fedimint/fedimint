@@ -25,9 +25,10 @@ use fedimint_ln_common::contracts::{
     PreimageKey,
 };
 use fedimint_ln_common::{
-    CONTRACT_FUNDED_ONCE_MODULE_CONSENSUS_VERSION, ContractAccount, ContractOutput,
-    GatewayRegistrationAuth, LightningGateway, LightningGatewayAnnouncement, LightningInput,
-    LightningOutput, LightningOutputError, MAX_GATEWAY_REGISTRATION_TTL,
+    BLOCK_COUNT_PEER_COUNT_MODULE_CONSENSUS_VERSION, CONTRACT_FUNDED_ONCE_MODULE_CONSENSUS_VERSION,
+    ContractAccount, ContractOutput, GatewayRegistrationAuth, LightningGateway,
+    LightningGatewayAnnouncement, LightningInput, LightningOutput, LightningOutputError,
+    MAX_GATEWAY_REGISTRATION_TTL,
 };
 use fedimint_server_core::bitcoin_rpc::{IServerBitcoinRpc, ServerBitcoinRpcMonitor};
 use fedimint_server_core::{ServerModule, ServerModuleInit};
@@ -35,7 +36,8 @@ use rand::rngs::OsRng;
 use tokio::sync::watch;
 
 use crate::db::{
-    ConsensusVersionVoteKey, ContractKey, LightningAuditItemKey, LightningGatewayKey, OfferKey,
+    BlockCountVoteKey, ConsensusVersionVoteKey, ContractKey, LightningAuditItemKey,
+    LightningGatewayKey, OfferKey,
 };
 use crate::{Lightning, LightningInit, create_gateway_registration_message};
 
@@ -92,7 +94,11 @@ impl IServerBitcoinRpc for MockBitcoinServerRpc {
 const MINTS: u16 = 4;
 
 fn build_configs() -> (Vec<LightningConfig>, LightningClientConfig) {
-    let peers = (0..MINTS).map(PeerId::from).collect::<Vec<_>>();
+    build_configs_for(MINTS)
+}
+
+fn build_configs_for(peer_count: u16) -> (Vec<LightningConfig>, LightningClientConfig) {
+    let peers = (0..peer_count).map(PeerId::from).collect::<Vec<_>>();
     let args = fedimint_server_core::ConfigGenModuleArgs {
         network: Network::Regtest,
         disable_base_fees: false,
@@ -187,13 +193,51 @@ fn mock_server(cfg: &LightningConfig, task_group: &TaskGroup) -> Lightning {
         our_peer_id: 0.into(),
         num_peers: NumPeers::from(usize::from(MINTS)),
         // No peer has reported a supported version, so no upgrade is ever
-        // proposed. None of these tests exercise version voting.
+        // proposed automatically.
         peer_supported_consensus_version: watch::channel(None).1,
         server_bitcoin_rpc_monitor: ServerBitcoinRpcMonitor::new(
             MockBitcoinServerRpc.into_dyn(),
             Duration::from_secs(1),
             task_group,
         ),
+    }
+}
+
+#[test_log::test(tokio::test)]
+async fn block_count_padding_switches_at_consensus_v22() {
+    let task_group = TaskGroup::new();
+    for (peer_count, old_median, new_median) in [(4, 2, 2), (5, 1, 2), (6, 2, 3)] {
+        let (configs, _) = build_configs_for(peer_count);
+        let mut server = mock_server(&configs[0], &task_group);
+        server.num_peers = NumPeers::from(configs.len());
+        let db = Database::new(MemDatabase::new(), ModuleRegistry::default());
+        let mut dbtx = db.begin_transaction_nc().await;
+        let mut tx = dbtx.to_ref_with_prefix_module_id(42).0.into_nc();
+
+        // Peer zero hasn't voted on the block count.
+        for peer in 1..peer_count {
+            tx.insert_new_entry(&BlockCountVoteKey(peer.into()), &u64::from(peer))
+                .await;
+        }
+        assert_eq!(server.consensus_block_count(&mut tx).await, old_median);
+
+        for peer in 0..peer_count {
+            tx.insert_new_entry(
+                &ConsensusVersionVoteKey(peer.into()),
+                &CONTRACT_FUNDED_ONCE_MODULE_CONSENSUS_VERSION,
+            )
+            .await;
+        }
+        assert_eq!(server.consensus_block_count(&mut tx).await, old_median);
+        for peer in 0..u16::try_from(server.num_peers.threshold()).unwrap() {
+            assert_eq!(server.consensus_block_count(&mut tx).await, old_median);
+            tx.insert_entry(
+                &ConsensusVersionVoteKey(peer.into()),
+                &BLOCK_COUNT_PEER_COUNT_MODULE_CONSENSUS_VERSION,
+            )
+            .await;
+        }
+        assert_eq!(server.consensus_block_count(&mut tx).await, new_median);
     }
 }
 

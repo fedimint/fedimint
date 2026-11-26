@@ -96,7 +96,10 @@ async fn served_handler_returns_complete_scoped_snapshot() {
     else {
         panic!("unexpected LNv1 status in {response:#?}");
     };
-    assert_eq!(*consensus_version, ModuleConsensusVersion::new(2, 1));
+    assert_eq!(
+        *consensus_version,
+        fedimint_ln_common::MODULE_CONSENSUS_VERSION
+    );
     assert!(*configured);
     assert_eq!(endpoints.len(), 1);
     assert!(matches!(
