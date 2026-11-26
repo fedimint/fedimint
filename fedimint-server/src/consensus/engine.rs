@@ -352,6 +352,7 @@ impl ConsensusEngine {
                     self.peer_activity.clone(),
                     signed_outcomes_sender,
                     signatures_sender,
+                    self.decoders(),
                     self.db.clone(),
                 ),
                 Keychain::new(&self.cfg),

@@ -7,7 +7,7 @@ use fedimint_core::config::P2PMessage;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::module::SerdeModuleEncoding;
-use fedimint_core::module::registry::ModuleRegistry;
+use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::net::{DynP2PConnections, Recipient};
 use fedimint_core::secp256k1::schnorr;
 use fedimint_core::session_outcome::SignedSessionOutcome;
@@ -20,6 +20,9 @@ use super::super::db::SignedSessionOutcomeKey;
 use super::super::peer_availability::PeerActivity;
 use super::data_provider::UnitData;
 use super::keychain::Keychain;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Hasher;
@@ -44,15 +47,20 @@ pub struct Network {
     peer_activity: Arc<Mutex<PeerActivity>>,
     signed_outcomes_sender: Sender<(PeerId, SignedSessionOutcome)>,
     signatures_sender: Sender<(PeerId, schnorr::Signature)>,
+    /// Decoders for module items and transactions in signed session outcomes.
+    decoders: ModuleDecoderRegistry,
     db: Database,
 }
 
 impl Network {
+    /// Connect the Aleph session to guardian P2P and the engine's catch-up
+    /// channels.
     pub fn new(
         connections: DynP2PConnections<P2PMessage>,
         peer_activity: Arc<Mutex<PeerActivity>>,
         signed_outcomes_sender: Sender<(PeerId, SignedSessionOutcome)>,
         signatures_sender: Sender<(PeerId, schnorr::Signature)>,
+        decoders: ModuleDecoderRegistry,
         db: Database,
     ) -> Self {
         Self {
@@ -60,6 +68,7 @@ impl Network {
             peer_activity,
             signed_outcomes_sender,
             signatures_sender,
+            decoders,
             db,
         }
     }
@@ -146,7 +155,7 @@ impl aleph_bft::Network<NetworkData> for Network {
                     }
                 }
                 P2PMessage::SignedSessionOutcome(encoded_outcome) => {
-                    match encoded_outcome.try_into_inner(&ModuleRegistry::default()) {
+                    match encoded_outcome.try_into_inner(&self.decoders) {
                         Ok(outcome) => {
                             // The unbounded session channel may close before Aleph stops.
                             let _ = self.signed_outcomes_sender.try_send((peer_id, outcome));
