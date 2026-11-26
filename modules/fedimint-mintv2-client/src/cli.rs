@@ -6,6 +6,7 @@ use fedimint_client_module::error::OperationLookupError;
 use fedimint_core::Amount;
 use fedimint_core::base32::{self, FEDIMINT_PREFIX, PrefixedDecodeError};
 use fedimint_core::core::Account;
+use fedimint_mintv2_common::Denomination;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -131,17 +132,31 @@ pub(crate) async fn handle_cli_command(
         } => {
             let ecash: ECash = base32::decode_prefixed(FEDIMINT_PREFIX, &ecash)?;
             let notes = ecash.notes();
+            let amount = checked_note_total(notes.iter().map(|note| note.denomination))?;
 
             Ok(serde_json::json!({
                 "federation_id": ecash.mint(),
                 "unit": ecash.unit(),
-                "amount": ecash.amount(),
+                "amount": amount,
                 "note_count": notes.len(),
                 "notes": notes.iter().map(SpendableNote::note).collect::<Vec<_>>(),
                 "invite": ecash.federation_invite(),
             }))
         }
     }
+}
+
+fn checked_note_total(
+    mut denominations: impl Iterator<Item = Denomination>,
+) -> Result<Amount, CliCommandError> {
+    denominations.try_fold(Amount::ZERO, |total, Denomination(exponent)| {
+        let msats = 1u64
+            .checked_shl(u32::from(exponent))
+            .ok_or(CliCommandError::UnrepresentableDenomination(exponent))?;
+        total
+            .checked_add(Amount::from_msats(msats))
+            .ok_or(CliCommandError::AmountOverflow)
+    })
 }
 
 fn json<T: Serialize>(value: T) -> Value {
@@ -171,6 +186,12 @@ pub(crate) enum CliCommandError {
     /// The e-cash string is not valid.
     #[error(transparent)]
     Decode(#[from] PrefixedDecodeError),
+
+    #[error("E-cash denomination 2^{0} does not fit in an amount")]
+    UnrepresentableDenomination(u8),
+
+    #[error("Total e-cash amount does not fit in an amount")]
+    AmountOverflow,
 
     /// The e-cash could not be received.
     #[error(transparent)]
