@@ -1,6 +1,9 @@
 pub mod dashboard;
 pub mod setup;
 
+#[cfg(test)]
+mod tests;
+
 pub(crate) const LOG_UI: &str = "fm::ui";
 
 // Common route constants

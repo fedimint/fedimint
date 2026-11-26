@@ -1,16 +1,16 @@
 use std::collections::BTreeSet;
 
-use axum::Router;
 use axum::extract::{DefaultBodyLimit, Multipart, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Redirect};
 use axum::routing::{get, post};
+use axum::{Router, middleware};
 use axum_extra::extract::Form;
 use axum_extra::extract::cookie::CookieJar;
 use fedimint_core::core::ModuleKind;
 use fedimint_server_core::setup_ui::DynSetupApi;
 use fedimint_ui_common::assets::WithStaticRoutesExt;
-use fedimint_ui_common::auth::UserAuth;
+use fedimint_ui_common::auth::{UserAuth, csrf_protection_middleware};
 use fedimint_ui_common::{
     CONNECTIVITY_CHECK_ROUTE, LOGIN_ROUTE, LoginInput, ROOT_ROUTE, UiState,
     connectivity_check_handler, copiable_text, login_form, login_submit_response,
@@ -369,7 +369,10 @@ async fn setup_form(
 }
 
 // GET handler for starting a new federation
-async fn start_federation_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoResponse {
+async fn start_federation_form(
+    State(state): State<UiState<DynSetupApi>>,
+    _auth: UserAuth,
+) -> impl IntoResponse {
     if state.api.setup_code().await.is_some() {
         return Redirect::to(FEDERATION_SETUP_ROUTE).into_response();
     }
@@ -454,7 +457,10 @@ async fn setup_submit(
 }
 
 // GET handler for restoring from backup
-async fn restore_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoResponse {
+async fn restore_form(
+    State(state): State<UiState<DynSetupApi>>,
+    _auth: UserAuth,
+) -> impl IntoResponse {
     if state.api.setup_code().await.is_some() {
         return Redirect::to(FEDERATION_SETUP_ROUTE).into_response();
     }
@@ -465,6 +471,7 @@ async fn restore_form(State(state): State<UiState<DynSetupApi>>) -> impl IntoRes
 
 async fn restore_submit(
     State(state): State<UiState<DynSetupApi>>,
+    _auth: UserAuth,
     mut multipart: Multipart,
 ) -> impl IntoResponse {
     let mut password = None;
@@ -866,6 +873,7 @@ pub fn router(api: DynSetupApi) -> Router {
 
     router
         .with_static_routes()
+        .layer(middleware::from_fn(csrf_protection_middleware))
         .with_state(UiState::new(api, requires_auth))
 }
 
