@@ -5211,6 +5211,7 @@ dependencies = [
  "fedimintd-envs",
  "futures",
  "serde_json",
+ "tempfile",
  "tikv-jemallocator",
  "tokio",
  "tracing",
