@@ -385,6 +385,24 @@ impl ServerOpts {
             .map_err(|_| anyhow::anyhow!("invalid API secrets"))
     }
 
+    /// Resolve the legacy fallback after explicit secret inputs have been
+    /// resolved.
+    fn resolve_ui_auth(&mut self) -> anyhow::Result<Option<ApiAuth>> {
+        if let Some(password) = self.password_ui.take() {
+            return Ok(Some(ApiAuth::new(password)));
+        }
+
+        let Ok(password) = std::fs::read_to_string(self.data_dir.join(PLAINTEXT_PASSWORD)) else {
+            return Ok(None);
+        };
+        let password = password.trim();
+        anyhow::ensure!(
+            !password.is_empty(),
+            "Guardian UI password file {PLAINTEXT_PASSWORD} must not be empty or whitespace-only"
+        );
+        Ok(Some(ApiAuth::new(password.to_owned())))
+    }
+
     pub fn get_bitcoind_url_and_password(&self) -> anyhow::Result<(SafeUrl, String)> {
         let url = self
             .bitcoind_url
@@ -452,6 +470,10 @@ pub async fn run(
             .expect("clap arg matches must be valid after parsing")
     };
     let force_api_secrets = server_opts.resolve_secrets()?;
+
+    // Without an explicit UI password, use the legacy on-disk password if
+    // available. With neither, the UI is passwordless.
+    let auth_ui = server_opts.resolve_ui_auth()?;
 
     let mut tracing_builder = TracingSetup::default();
 
@@ -579,17 +601,8 @@ pub async fn run(
 
     root_task_group.install_kill_handler();
 
-    // The UI password falls back to the legacy password.private file on disk
-    // if its env var is not set, since the UI defaults to a loopback bind.
-    // The API password never falls back: the public admin API is always
-    // network-reachable, so it must be enabled explicitly via its env var or
-    // else admin RPCs return 401. Absence of a password for a given plane opts
-    // that plane into passwordless mode (UI) or disabled admin RPCs (API).
-    let password_file = std::fs::read_to_string(server_opts.data_dir.join(PLAINTEXT_PASSWORD))
-        .ok()
-        .map(|s| s.trim().to_owned());
-
-    let auth_ui = server_opts.password_ui.or(password_file).map(ApiAuth::new);
+    // Public admin RPCs require an explicit password and never fall back to
+    // disk. Without one they return 401.
     let auth_api = server_opts.password_api.map(ApiAuth::new);
 
     let task_group = root_task_group.clone();
