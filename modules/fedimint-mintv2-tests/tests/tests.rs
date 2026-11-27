@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::pin::pin;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::ensure;
@@ -1031,4 +1032,26 @@ async fn accounts_hold_separate_balances() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Notes issued after `ClientHandle::restart` must be found by a recovery from
+/// the same root secret: <https://github.com/fedimint/fedimint/issues/9554>
+#[tokio::test(flavor = "multi_thread")]
+async fn notes_issued_after_restart_are_recovered() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+
+    let client = fed
+        .join_client_with_db(MemDatabase::new().into(), root_secret(&SEND_SK))
+        .await;
+    let client = Arc::new(
+        Arc::try_unwrap(client)
+            .map_err(|_| anyhow::anyhow!("the client handle must not be shared"))?
+            .restart()
+            .await?,
+    );
+
+    issue_ecash(&client, Amount::from_sats(10_000)).await?;
+
+    test_client_recovery(&fed, &client, root_secret(&SEND_SK)).await
 }

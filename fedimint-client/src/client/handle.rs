@@ -107,7 +107,7 @@ impl ClientHandle {
     /// Notably it will re-use the original [`fedimint_core::db::Database`]
     /// handle, and not attempt to open it again.
     pub async fn restart(self) -> Result<ClientHandle, ClientBuildError> {
-        let (builder, config, api_secret, root_secret, db, endpoints) = {
+        let (builder, config, api_secret, pre_root_secret, db, endpoints) = {
             let client = self
                 .inner
                 .as_ref()
@@ -115,11 +115,13 @@ impl ClientHandle {
             let builder = ClientBuilder::from_existing(client);
             let config = client.config().await;
             let api_secret = client.api_secret.clone();
-            let root_secret = client.root_secret.clone();
+            // `build` derives the federation key itself, so it must be given
+            // the secret from before that derivation, not `root_secret`.
+            let pre_root_secret = client.pre_root_secret.clone();
             let db = client.db().clone();
             let endpoints = client.endpoints().clone();
 
-            (builder, config, api_secret, root_secret, db, endpoints)
+            (builder, config, api_secret, pre_root_secret, db, endpoints)
         };
         self.shutdown().await;
 
@@ -127,7 +129,7 @@ impl ClientHandle {
             .build(
                 endpoints,
                 db,
-                root_secret,
+                pre_root_secret,
                 config,
                 api_secret,
                 false,

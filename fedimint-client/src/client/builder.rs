@@ -1088,6 +1088,7 @@ impl ClientBuilder {
             executor,
             api,
             secp_ctx: Secp256k1::new(),
+            pre_root_secret,
             root_secret,
             task_group,
             client_span,

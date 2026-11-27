@@ -232,6 +232,11 @@ pub struct Client {
     module_inits: ClientModuleInitRegistry,
     executor: Executor,
     pub(crate) api: DynGlobalApi,
+    /// The secret the client was built with, before the federation key was
+    /// derived from it. Kept so the client can be rebuilt with the same
+    /// `root_secret`.
+    pre_root_secret: DerivableSecret,
+    /// `pre_root_secret` with the federation key derived from it.
     root_secret: DerivableSecret,
     operation_log: OperationLog,
     secp_ctx: Secp256k1<secp256k1::All>,
