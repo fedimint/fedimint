@@ -23,10 +23,10 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.event.number }}
       cancel-in-progress: false
-    # Save the output from the create-pr step so it can be used in downstream jobs
-    # https://github.com/korthout/backport-action/blob/e53c7b292aa9985d372c178a89d416ef2176c091/README.md#outputs
+    # The action can report failed targets without failing the job.
     outputs:
       was_successful: ${{ steps.create-pr.outputs.was_successful }}
+      was_successful_by_target: ${{ steps.create-pr.outputs.was_successful_by_target }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -37,6 +37,29 @@ jobs:
         uses: korthout/backport-action@ad272ff24e4a8593bf18a951a154ae6af93b26b8 # v5.0.0
         with:
           github_token: ${{ secrets.BACKPORT_TOKEN }}
+  notifications:
+    name: Notify Discord of failed backports
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 1
+    needs: backport
+    if: >-
+      !cancelled() && github.repository == 'fedimint/fedimint' &&
+      (needs.backport.result == 'failure' || needs.backport.outputs.was_successful == 'false')
+    steps:
+      - name: Send backport failure to Discord
+        uses: sarisia/actions-status-discord@eb045afee445dc055c18d3d90bd0f244fd062708 # v1.16.0
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: failure
+          nofail: false
+          title: Backport failed
+          content: >-
+            Backport failed for ${{ github.repository }}#${{ github.event.number }}
+            (<${{ github.event.pull_request.html_url }}>).
+            Run: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}>.
+          description: |
+            Target results (`false` means the backport failed):
+            ${{ needs.backport.outputs.was_successful_by_target || 'Unavailable. See the workflow run for details.' }}
   open-issue:
     permissions:
       contents: read
@@ -44,7 +67,7 @@ jobs:
     name: Open issue for failed backports
     runs-on: [self-hosted, linux, x64]
     needs: backport
-    # Open an issue only if the backport job failed
+    # Open an issue when the action reports failed targets.
     if: ${{ needs.backport.outputs.was_successful == 'false' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
