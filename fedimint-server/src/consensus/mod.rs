@@ -259,7 +259,7 @@ pub async fn run(
 
     update_server_info_version_dbtx(&mut global_dbtx.to_ref_nc(), &code_version_str).await;
 
-    if is_running_in_test_env() {
+    if is_running_in_test_env!() {
         verify_server_db_integrity_dbtx(&mut global_dbtx.to_ref_nc()).await;
     }
     global_dbtx.commit_tx_result().await?;
@@ -279,7 +279,7 @@ pub async fn run(
 
     let bitcoin_rpc_connection = ServerBitcoinRpcMonitor::new(
         dyn_server_bitcoin_rpc,
-        if is_running_in_test_env() {
+        if is_running_in_test_env!() {
             Duration::from_millis(100)
         } else {
             Duration::from_mins(1)
@@ -304,7 +304,7 @@ pub async fn run(
                 .await?;
 
                 if let Some(used_db_prefixes) = module_init.used_db_prefixes()
-                    && is_running_in_test_env()
+                    && is_running_in_test_env!()
                 {
                     verify_module_db_integrity_dbtx(
                         &mut dbtx.to_ref_nc(),
@@ -363,9 +363,14 @@ pub async fn run(
         "Supported API versions",
     );
 
+    let availability = Arc::new(peer_availability::AvailabilityTracker::new(
+        cfg.local.identity,
+        fedimint_core::NumPeersExt::to_num_peers(&cfg.consensus.broadcast_public_keys),
+    ));
     let consensus_api = ConsensusApi {
         cfg: cfg.clone(),
         db: db.clone(),
+        availability: availability.clone(),
         modules: module_registry.clone(),
         client_cfg: client_cfg.clone(),
         submission_sender: submission_sender.clone(),
@@ -483,14 +488,9 @@ pub async fn run(
 
     let api_urls = get_api_urls(&db, &cfg.consensus).await;
 
-    let peer_activity = Arc::new(std::sync::Mutex::new(peer_availability::PeerActivity::new(
-        cfg.local.identity,
-        fedimint_core::NumPeersExt::to_num_peers(&cfg.consensus.broadcast_public_keys),
-    )));
-
     task_group.spawn_cancellable(
         "peer-availability",
-        peer_availability::persist_peer_availability(db.clone(), peer_activity.clone()),
+        peer_availability::persist_peer_availability(db.clone(), availability.clone()),
     );
 
     // FIXME: (@leonardo) How should this be handled ?
@@ -515,7 +515,7 @@ pub async fn run(
         data_dir,
         db_checkpoint_retention,
         session_timeout,
-        peer_activity,
+        peer_activity: availability.activity.clone(),
     }
     .run()
     .await?;
@@ -563,7 +563,7 @@ fn submit_module_ci_proposals(
     module: DynServerModule,
     submission_sender: Sender<ConsensusItem>,
 ) {
-    let mut interval = tokio::time::interval(if is_running_in_test_env() {
+    let mut interval = tokio::time::interval(if is_running_in_test_env!() {
         Duration::from_millis(100)
     } else {
         Duration::from_secs(1)

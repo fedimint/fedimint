@@ -301,7 +301,7 @@ impl ClientBuilder {
             )
             .await?;
             if let Some(used_db_prefixes) = init.used_db_prefixes()
-                && is_running_in_test_env()
+                && is_running_in_test_env!()
             {
                 verify_module_db_integrity_dbtx(
                     &mut dbtx.to_ref_nc(),
@@ -1012,14 +1012,16 @@ impl ClientBuilder {
 
         for (module_id, _kind, module) in modules.iter_modules() {
             match module.supports_being_primary() {
-                PrimaryModuleSupport::Any { priority } => {
+                PrimaryModuleSupport::Any { priority, .. } => {
                     primary_modules
                         .entry(priority)
                         .or_default()
                         .wildcard
                         .push(module_id);
                 }
-                PrimaryModuleSupport::Selected { priority, units } => {
+                PrimaryModuleSupport::Selected {
+                    priority, units, ..
+                } => {
                     for unit in units {
                         primary_modules
                             .entry(priority)

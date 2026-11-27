@@ -1,10 +1,14 @@
 pub mod audit;
+pub(crate) mod availability;
 pub mod bitcoin;
 pub(crate) mod consensus_explorer;
 pub mod general;
 pub mod invite;
 pub mod latency;
 pub mod modules;
+
+#[cfg(test)]
+mod tests;
 
 use axum::Router;
 use axum::body::Body;
@@ -13,7 +17,9 @@ use axum::http::{StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum_extra::extract::cookie::CookieJar;
+use chrono::{NaiveDate, Utc};
 use consensus_explorer::consensus_explorer_view;
+use fedimint_core::config::META_FEDERATION_NAME_KEY;
 use fedimint_metrics::{Encoder, REGISTRY, TextEncoder};
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
 use fedimint_ui_common::assets::WithStaticRoutesExt;
@@ -75,7 +81,13 @@ async fn download_backup(
         .api
         .download_guardian_config_backup(&user_auth.guardian_auth_token)
         .await;
-    let filename = "guardian-backup.tar";
+    let guardian_id = state.api.guardian_id().await;
+    let guardian_names = state.api.guardian_names().await;
+    let guardian_name = guardian_names
+        .get(&guardian_id)
+        .map(String::as_str)
+        .unwrap_or_default();
+    let filename = guardian_backup_filename(Utc::now().date_naive(), guardian_name);
 
     Response::builder()
         .header(header::CONTENT_TYPE, "application/x-tar")
@@ -85,6 +97,32 @@ async fn download_backup(
         )
         .body(Body::from(backup.tar_archive_bytes))
         .expect("Failed to build response")
+}
+
+/// Keep the peer component portable and safe inside a quoted HTTP filename.
+fn guardian_backup_filename(date: NaiveDate, peer_name: &str) -> String {
+    // Bound the component so the complete filename fits common filesystem limits.
+    let sanitized: String = peer_name
+        .chars()
+        .take(64)
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let peer_name = sanitized.trim_matches(['-', '_']);
+    let peer_name = if peer_name.is_empty() {
+        "guardian"
+    } else {
+        peer_name
+    };
+    format!(
+        "{}-{peer_name}-guardian-backup.tar",
+        date.format("%Y-%m-%d")
+    )
 }
 
 // Prometheus metrics handler
@@ -113,7 +151,12 @@ async fn dashboard_view(
     _auth: UserAuth,
 ) -> impl IntoResponse {
     let guardian_names = state.api.guardian_names().await;
-    let federation_name = state.api.federation_name().await;
+    let meta = if let Some(meta_module) = state.api.get_module::<fedimint_meta_server::Meta>() {
+        meta_module.get_consensus_json().await
+    } else {
+        None
+    };
+    let federation_name = resolve_federation_name(meta.as_ref(), state.api.federation_name().await);
     let session_count = state.api.session_count().await;
     let fedimintd_version = state.api.fedimintd_version().await;
     let fedimintd_version_hash = state.api.fedimintd_version_hash().await;
@@ -127,7 +170,7 @@ async fn dashboard_view(
     let content = html! {
         div class="row gy-4" {
             div class="col-md-6" {
-                (general::render(&federation_name, session_count, &guardian_names))
+                (general::render(federation_name.as_deref(), session_count, &guardian_names))
             }
 
             div class="col-md-6" {
@@ -142,6 +185,12 @@ async fn dashboard_view(
 
             div class="col-lg-6" {
                 (latency::render(consensus_ord_latency, &p2p_connection_status))
+            }
+        }
+
+        div class="row gy-4 mt-2" {
+            div class="col-12" {
+                (availability::loading())
             }
         }
 
@@ -221,6 +270,16 @@ async fn dashboard_view(
     .into_response()
 }
 
+fn resolve_federation_name(
+    meta: Option<&serde_json::Value>,
+    legacy_name: Option<String>,
+) -> Option<String> {
+    meta.and_then(|json| json.get(META_FEDERATION_NAME_KEY))
+        .and_then(|value| value.as_str())
+        .map(String::from)
+        .or(legacy_name)
+}
+
 pub fn router(api: DynDashboardApi) -> Router {
     let requires_auth = api.auth_ui().is_some();
 
@@ -230,6 +289,7 @@ pub fn router(api: DynDashboardApi) -> Router {
         .route(EXPLORER_IDX_ROUTE, get(consensus_explorer_view))
         .route(DOWNLOAD_BACKUP_ROUTE, get(download_backup))
         .route(METRICS_ROUTE, get(metrics_handler))
+        .route(availability::ROUTE, get(availability::view))
         .route(
             CONNECTIVITY_CHECK_ROUTE,
             get(connectivity_check_handler::<DynDashboardApi>),

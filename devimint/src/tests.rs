@@ -214,7 +214,9 @@ async fn latency_reissue(
             .to_owned();
 
         let start_time = Instant::now();
-        cmd!(client, "reissue", notes).run().await?;
+        cmd!(client, "module", "mint", "reissue", notes)
+            .run()
+            .await?;
         reissues.push(start_time.elapsed());
     }
     let reissue_stats = stats_for(reissues);
@@ -330,8 +332,10 @@ async fn latency_fm_pay(
     for _ in 0..iterations {
         let recv = cmd!(
             client,
-            "ln-invoice",
-            "--amount=1000000msat",
+            "module",
+            "ln",
+            "invoice",
+            "1000000msat",
             "--description=internal-swap-invoice",
             "--force-internal"
         )
@@ -348,7 +352,7 @@ async fn latency_fm_pay(
             .to_owned();
 
         let start_time = Instant::now();
-        cmd!(sender, "ln-pay", invoice, "--force-internal")
+        cmd!(sender, "module", "ln", "pay", invoice, "--force-internal")
             .run()
             .await?;
 
@@ -1022,7 +1026,9 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
         .unwrap();
 
         // Test we can reissue our own notes
-        cmd!(client, "reissue", notes).out_json().await?;
+        cmd!(client, "module", "mint", "reissue", notes)
+            .out_json()
+            .await?;
 
         let client_post_spend_balance = client.balance().await?;
         almost_equal(client_post_spend_balance, CLIENT_START_AMOUNT, 10_000).unwrap();
@@ -1045,7 +1051,7 @@ pub async fn cli_tests(dev_fed: DevFed) -> Result<()> {
             .as_str()
             .map(ToOwned::to_owned)
             .unwrap();
-        let client_reissue_amt = cmd!(client, "reissue", reissue_notes)
+        let client_reissue_amt = cmd!(client, "module", "mint", "reissue", reissue_notes)
             .out_json()
             .await?
             .as_u64()
@@ -1949,9 +1955,17 @@ pub async fn do_try_create_and_pay_invoice(
 
 async fn ln_pay(client: &Client, invoice: String, gw_id: String) -> anyhow::Result<String> {
     let payment_hash = *Bolt11Invoice::from_str(&invoice)?.payment_hash();
-    let value = cmd!(client, "ln-pay", invoice, "--gateway-id", gw_id,)
-        .out_json()
-        .await?;
+    let value = cmd!(
+        client,
+        "module",
+        "ln",
+        "pay",
+        invoice,
+        "--gateway-id",
+        gw_id,
+    )
+    .out_json()
+    .await?;
     let outcome = serde_json::from_value::<LightningPaymentOutcome>(value)
         .expect("Could not deserialize Lightning payment outcome");
     match outcome {
@@ -1981,8 +1995,9 @@ async fn ln_invoice(
 ) -> anyhow::Result<LnInvoiceResponse> {
     let ln_response_val = cmd!(
         client,
-        "ln-invoice",
-        "--amount",
+        "module",
+        "ln",
+        "invoice",
         amount.msats,
         format!("--description='{description}'"),
         "--gateway-id",
@@ -2456,7 +2471,9 @@ pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
     )
     .unwrap();
 
-    cmd!(client, "reissue", notes).out_json().await?;
+    cmd!(client, "module", "mint", "reissue", notes)
+        .out_json()
+        .await?;
     let client_post_reissue_balance = client.balance().await?;
     crate::util::almost_equal(client_post_reissue_balance, CLIENT_START_AMOUNT, 20_000).unwrap();
 
@@ -2478,9 +2495,15 @@ pub async fn cannot_replay_tx_test(dev_fed: DevFed) -> Result<()> {
     )
     .unwrap();
 
-    cmd!(double_spend_client, "reissue", double_spend_notes)
-        .assert_error_contains("The transaction had an invalid input")
-        .await?;
+    cmd!(
+        double_spend_client,
+        "module",
+        "mint",
+        "reissue",
+        double_spend_notes
+    )
+    .assert_error_contains("The transaction had an invalid input")
+    .await?;
 
     let double_spend_client_post_spend_balance = double_spend_client.balance().await?;
     crate::util::almost_equal(

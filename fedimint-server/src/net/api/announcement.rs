@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use fedimint_api_client::api::DynGlobalApi;
-use fedimint_connectors::ConnectorRegistry;
 use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::envs::is_running_in_test_env;
@@ -20,6 +19,7 @@ use tracing::debug;
 use super::guardian_metadata::GuardianMetadataPrefix;
 use crate::config::{ServerConfig, ServerConfigConsensus};
 use crate::db::DbKeyPrefix;
+use crate::net::iroh::guardian_connector_registry_builder;
 
 #[derive(Clone, Debug, Encodable, Decodable)]
 pub struct ApiAnnouncementKey(pub PeerId);
@@ -58,7 +58,10 @@ pub async fn start_api_announcement_service(
     // FIXME: (@leonardo) how should we handle the connector here ?
     let api_client = DynGlobalApi::new(
         // TODO: get from somewhere/unify?
-        ConnectorRegistry::build_from_server_env().bind().await,
+        guardian_connector_registry_builder()
+            .with_env_var_overrides()
+            .bind()
+            .await,
         get_api_urls(&db, &cfg.consensus).await,
         api_secret.as_deref(),
     );
@@ -114,7 +117,7 @@ pub async fn start_api_announcement_service(
 
             let auto_announcement_delay = if success {
                 Duration::from_secs(SUCCESS_RETRY_SECONDS)
-            } else if is_running_in_test_env() {
+            } else if is_running_in_test_env!() {
                 Duration::from_secs(3)
             } else {
                 Duration::from_secs(FAILURE_RETRY_SECONDS)

@@ -1,0 +1,24 @@
+id: silent-ok-discard
+language: rust
+severity: warning
+rule:
+  all:
+    - pattern: $EXPR.ok()
+    - inside:
+        kind: expression_statement
+        stopBy: neighbor
+    - not:
+        inside:
+          stopBy: end
+          any:
+            - kind: function_item
+              follows:
+                kind: attribute_item
+                regex: '(test|cfg\([^)]*test)'
+                stopBy: neighbor
+            - kind: mod_item
+              follows:
+                kind: attribute_item
+                regex: 'cfg\([^)]*test'
+                stopBy: neighbor
+message: Bare `.ok();` hides an error discard; handle or observe it, or use a documented `let _ = ...` policy.

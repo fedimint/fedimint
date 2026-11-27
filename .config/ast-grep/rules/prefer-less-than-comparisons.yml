@@ -1,0 +1,17 @@
+id: prefer-less-than-comparisons
+language: Rust
+severity: hint
+message: Put the lesser value on the left and use < or <= when comparing simple values.
+rule:
+  any:
+    - pattern: $LEFT > $RIGHT
+    - pattern: $LEFT >= $RIGHT
+constraints:
+  LEFT:
+    any:
+      - kind: identifier
+      - kind: integer_literal
+  RIGHT:
+    any:
+      - kind: identifier
+      - kind: integer_literal

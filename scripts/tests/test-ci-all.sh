@@ -183,6 +183,14 @@ function lnv2_mintv2_walletv2_lightning_payments() {
 }
 export -f lnv2_mintv2_walletv2_lightning_payments
 
+function lnv2_mintv2_walletv2_accounts() {
+  # v2 modules are not supported by older versions, so we skip for backwards-compatibility tests
+  if [ -z "${FM_BACKWARDS_COMPATIBILITY_TEST:-}" ]; then
+    fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=1 FM_ENABLE_MODULE_MINTV2=true FM_ENABLE_MODULE_MINT=false FM_ENABLE_MODULE_WALLETV2=true FM_ENABLE_MODULE_WALLET=false ./scripts/tests/lnv2-module-test.sh accounts
+  fi
+}
+export -f lnv2_mintv2_walletv2_accounts
+
 function lnv2_module_lnurl_pay() {
   fm-run-test "${FUNCNAME[0]}" env FM_OFFLINE_NODES=0 ./scripts/tests/lnv2-module-test.sh lnurl-pay
 }
@@ -511,6 +519,7 @@ tests_to_run_in_parallel+=(
   "lnv2_module_duplicate_payment"
   "lnv2_module_federation_outage"
   "lnv2_mintv2_walletv2_lightning_payments"
+  "lnv2_mintv2_walletv2_accounts"
   "lnv2_module_lnurl_pay"
   "lnv2_module_lnurl_recovery"
   "lnv2_module_direct_htlc"

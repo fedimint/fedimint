@@ -54,7 +54,7 @@ pub(crate) async fn run_api_announcement_refresh_task(client_inner: Arc<Client>)
             1,
             api,
             &guardian_pub_keys,
-            if is_running_in_test_env() {
+            if is_running_in_test_env!() {
                 Duration::from_millis(1)
             } else {
                 Duration::from_secs(30)
@@ -63,7 +63,7 @@ pub(crate) async fn run_api_announcement_refresh_task(client_inner: Arc<Client>)
         .await;
         store_api_announcements_updates_from_peers(client_inner.db(), &results).await;
 
-        let duration = if is_running_in_test_env() {
+        let duration = if is_running_in_test_env!() {
             Duration::from_secs(1)
         } else {
             // Check once an hour if there are new announcements
@@ -94,7 +94,11 @@ pub(crate) async fn fetch_api_announcements_from_at_least_num_of_peers(
     guardian_pub_keys: &BTreeMap<PeerId, bitcoin::secp256k1::PublicKey>,
     extra_response_wait: Duration,
 ) -> Vec<PeersSignedApiAnnouncements> {
-    let num_peers = guardian_pub_keys.to_num_peers();
+    let Ok(num_peers) = guardian_pub_keys.try_num_peers() else {
+        // Older or malformed configs may contain Some(empty) broadcast keys.
+        // Preserve the empty result without terminating the refresh task.
+        return Vec::new();
+    };
     // Keep trying, initially somewhat aggressively, but after a while retry very
     // slowly, because chances for response are getting lower and lower.
     let mut backoff = custom_backoff(Duration::from_millis(200), Duration::from_secs(600), None);

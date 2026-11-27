@@ -249,6 +249,7 @@ pub struct ConfigGenParams {
     pub iroh_p2p_sk: Option<iroh::SecretKey>,
     /// Endpoints of all servers
     pub peers: BTreeMap<PeerId, PeerSetupCode>,
+    /// (Retired, see <https://github.com/fedimint/fedimint/issues/7889>)
     /// Guardian-defined key-value pairs that will be passed to the client
     pub meta: BTreeMap<String, String>,
     /// Whether to disable base fees for this federation
@@ -318,7 +319,7 @@ impl ServerConfig {
             core_consensus: CORE_CONSENSUS_VERSION,
             api: MultiApiVersion::try_from_iter([ApiVersion {
                 major: 0,
-                minor: 10,
+                minor: 11,
             }])
             .expect("not version conflicts"),
         }
@@ -343,7 +344,7 @@ impl ServerConfig {
             ),
             version: CORE_CONSENSUS_VERSION,
             broadcast_public_keys,
-            broadcast_rounds_per_session: if is_running_in_test_env() {
+            broadcast_rounds_per_session: if is_running_in_test_env!() {
                 DEFAULT_TEST_BROADCAST_ROUNDS_PER_SESSION
             } else {
                 DEFAULT_BROADCAST_ROUNDS_PER_SESSION
@@ -362,7 +363,7 @@ impl ServerConfig {
             p2p_endpoints: params.p2p_urls(),
             identity,
             max_connections: DEFAULT_MAX_CLIENT_CONNECTIONS,
-            broadcast_round_delay_ms: if is_running_in_test_env() {
+            broadcast_round_delay_ms: if is_running_in_test_env!() {
                 DEFAULT_TEST_BROADCAST_ROUND_DELAY_MS
             } else {
                 DEFAULT_BROADCAST_ROUND_DELAY_MS

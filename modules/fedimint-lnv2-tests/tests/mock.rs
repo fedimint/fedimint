@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use bitcoin::hashes::{Hash, sha256};
@@ -69,13 +71,46 @@ pub fn signet_bolt_11_invoice() -> Bolt11Invoice {
     bolt_11_invoice(PAYABLE_PAYMENT_SECRET, Currency::Signet)
 }
 
-#[derive(Debug)]
+/// Consumes one planned failure, if any are left.
+fn take_failure(failures: &AtomicUsize) -> bool {
+    failures
+        .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
+        .is_ok()
+}
+
+fn dropped_connection() -> ServerError {
+    ServerError::Connection(anyhow::anyhow!("connection dropped").into())
+}
+
+#[derive(Debug, Clone)]
 pub struct MockGatewayConnection {
     keypair: Keypair,
     receive_enabled: bool,
+    /// Requests that fail before the mock answers, counted down per endpoint.
+    routing_info_failures: Arc<AtomicUsize>,
+    bolt11_invoice_failures: Arc<AtomicUsize>,
+    /// The payment hash of every invoice request, failed ones included.
+    invoice_payment_hashes: Arc<Mutex<Vec<sha256::Hash>>>,
 }
 
 impl MockGatewayConnection {
+    /// A gateway whose first `routing_info` and first `bolt11_invoice`
+    /// requests fail as if the connection dropped.
+    pub fn failing_first_requests() -> Self {
+        MockGatewayConnection {
+            routing_info_failures: Arc::new(AtomicUsize::new(1)),
+            bolt11_invoice_failures: Arc::new(AtomicUsize::new(1)),
+            ..Self::default()
+        }
+    }
+
+    pub fn invoice_payment_hashes(&self) -> Vec<sha256::Hash> {
+        self.invoice_payment_hashes
+            .lock()
+            .expect("lock poisoned")
+            .clone()
+    }
+
     /// A gateway that has turned off receives for the federation.
     pub fn with_receive_disabled() -> Self {
         MockGatewayConnection {
@@ -90,6 +125,9 @@ impl Default for MockGatewayConnection {
         MockGatewayConnection {
             keypair: gateway_keypair(),
             receive_enabled: true,
+            routing_info_failures: Arc::new(AtomicUsize::new(0)),
+            bolt11_invoice_failures: Arc::new(AtomicUsize::new(0)),
+            invoice_payment_hashes: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }
@@ -101,6 +139,10 @@ impl GatewayConnection for MockGatewayConnection {
         _gateway_api: SafeUrl,
         _federation_id: &FederationId,
     ) -> Result<Option<RoutingInfo>, ServerError> {
+        if take_failure(&self.routing_info_failures) {
+            return Err(dropped_connection());
+        }
+
         Ok(Some(RoutingInfo {
             lightning_public_key: self.keypair.public_key(),
             lightning_alias: Some("mock-gateway".to_string()),
@@ -127,6 +169,15 @@ impl GatewayConnection for MockGatewayConnection {
             PaymentImage::Hash(payment_hash) => payment_hash,
             PaymentImage::Point(..) => panic!("PaymentImage is not a payment hash"),
         };
+
+        self.invoice_payment_hashes
+            .lock()
+            .expect("lock poisoned")
+            .push(payment_hash);
+
+        if take_failure(&self.bolt11_invoice_failures) {
+            return Err(dropped_connection());
+        }
 
         Ok(InvoiceBuilder::new(Currency::Regtest)
             .description(String::new())

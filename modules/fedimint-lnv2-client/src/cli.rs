@@ -6,7 +6,7 @@ use bitcoin::secp256k1;
 use clap::{Parser, Subcommand};
 use fedimint_api_client::api::FederationError;
 use fedimint_client_module::error::OperationLookupError;
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::util::SafeUrl;
 use fedimint_core::{Amount, OutPoint, PeerId, TransactionId, hex};
 use fedimint_lnv2_common::contracts::{OutgoingContract, PaymentImage};
@@ -33,6 +33,8 @@ enum Opts {
         invoice: Bolt11Invoice,
         #[arg(long)]
         gateway: Option<SafeUrl>,
+        #[arg(long, default_value_t = Account::Primary)]
+        account: Account,
     },
     /// Await the final state of the send operation.
     AwaitSend { operation_id: OperationId },
@@ -43,6 +45,8 @@ enum Opts {
         amount: Amount,
         #[arg(long)]
         gateway: Option<SafeUrl>,
+        #[arg(long, default_value_t = Account::Primary)]
+        account: Account,
     },
     /// Await the final state of the receive operation.
     AwaitReceive { operation_id: OperationId },
@@ -70,6 +74,8 @@ enum HtlcOpts {
         payment_hash: Option<sha256::Hash>,
         #[arg(long)]
         payment_point: Option<PublicKey>,
+        #[arg(long, default_value_t = Account::Primary)]
+        account: Account,
     },
     /// Generate a random claim keypair to receive an HTLC with. The secret key
     /// is written as hex to a new file created with owner-only permissions and
@@ -100,6 +106,8 @@ enum HtlcOpts {
         /// Read the hex preimage from a file, or '-' for stdin.
         #[arg(long)]
         preimage_file: PathBuf,
+        #[arg(long, default_value_t = Account::Primary)]
+        account: Account,
     },
     /// Create a forfeit signature to fail an HTLC locked to our claim key
     /// cooperatively.
@@ -145,6 +153,8 @@ enum LnurlOpts {
         recurringd: SafeUrl,
         #[arg(long)]
         gateway: Option<SafeUrl>,
+        #[arg(long, default_value_t = Account::Primary)]
+        account: Account,
     },
 }
 
@@ -177,17 +187,28 @@ pub(crate) async fn handle_cli_command(
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("lnv2")).chain(args.iter()));
 
     let value = match opts {
-        Opts::Send { gateway, invoice } => {
-            json(lightning.send(invoice, gateway, Value::Null).await?)
-        }
+        Opts::Send {
+            gateway,
+            invoice,
+            account,
+        } => json(
+            lightning
+                .send(account, invoice, gateway, Value::Null)
+                .await?,
+        ),
         Opts::AwaitSend { operation_id } => json(
             lightning
                 .await_final_send_operation_state(operation_id)
                 .await?,
         ),
-        Opts::Receive { amount, gateway } => json(
+        Opts::Receive {
+            amount,
+            gateway,
+            account,
+        } => json(
             lightning
                 .receive(
+                    account,
                     amount,
                     3600,
                     Bolt11InvoiceDescription::Direct(String::new()),
@@ -205,7 +226,12 @@ pub(crate) async fn handle_cli_command(
             LnurlOpts::Generate {
                 recurringd,
                 gateway,
-            } => json(lightning.generate_lnurl(recurringd, gateway).await?),
+                account,
+            } => json(
+                lightning
+                    .generate_lnurl(account, recurringd, gateway)
+                    .await?,
+            ),
         },
         Opts::Gateways(gateway_opts) => match gateway_opts {
             #[allow(clippy::unit_arg)]
@@ -247,6 +273,7 @@ async fn handle_htlc_command(
             expiration_delta,
             payment_hash,
             payment_point,
+            account,
         } => {
             let payment_image = match (payment_hash, payment_point) {
                 (Some(hash), None) => PaymentImage::Hash(hash),
@@ -256,6 +283,7 @@ async fn handle_htlc_command(
 
             let (operation_id, outpoint, contract) = lightning
                 .create_htlc(
+                    account,
                     amount,
                     payment_image,
                     claim_pk,
@@ -294,6 +322,7 @@ async fn handle_htlc_command(
             contract,
             claim_sk_file,
             preimage_file,
+            account,
         } => {
             let contract = parse_contract(&contract)?;
 
@@ -305,6 +334,7 @@ async fn handle_htlc_command(
             json(
                 lightning
                     .claim_htlc(
+                        account,
                         outpoint(funding_txid, out_idx),
                         contract,
                         claim_sk.keypair(secp256k1::SECP256K1),

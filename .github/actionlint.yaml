@@ -1,0 +1,6 @@
+# Keep embedded-shell analysis enabled for new workflows while isolating
+# pre-existing debt in the legacy workflow below.
+paths:
+  ".github/workflows/ci-nix.yml":
+    ignore:
+      - "shellcheck reported issue in this script: SC(2046|2086|2155):"

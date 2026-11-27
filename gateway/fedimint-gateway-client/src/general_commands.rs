@@ -30,12 +30,21 @@ pub enum GeneralCommands {
     GetBalances,
     /// Register the gateway with a federation.
     ConnectFed {
-        /// Invite code to connect to the federation
-        invite_code: String,
+        /// Invite code (may contain an API secret). Prefer --invite-code-file.
+        #[clap(required_unless_present = "invite_code_file")]
+        invite_code: Option<String>,
+        /// Read the invite code from a file, or '-' for stdin
+        #[clap(long)]
+        invite_code_file: Option<std::path::PathBuf>,
         /// Activate usage of Tor (or not) as the connector for the federation
         /// client
         #[cfg(feature = "tor")]
         use_tor: Option<bool>,
+        /// Select Tor when using --invite-code-file (also supported with a
+        /// positional invite code). Do not combine with the positional boolean.
+        #[cfg(feature = "tor")]
+        #[clap(long = "use-tor")]
+        use_tor_option: Option<bool>,
         /// Indicates if the client should be recovered from a mnemonic
         #[clap(long)]
         recover: Option<bool>,
@@ -65,7 +74,12 @@ pub enum GeneralCommands {
     },
     /// Create a bcrypt hash of a password, for use in gateway deployment
     CreatePasswordHash {
-        password: String,
+        /// Password in process arguments (discouraged). Prefer --password-file.
+        #[clap(required_unless_present = "password_file")]
+        password: Option<String>,
+        /// Read the password from a file, or '-' for stdin
+        #[clap(long)]
+        password_file: Option<std::path::PathBuf>,
 
         /// The bcrypt cost factor to use when hashing the password
         #[clap(long)]
@@ -104,15 +118,20 @@ impl GeneralCommands {
                 invite_code,
                 #[cfg(feature = "tor")]
                 use_tor,
+                #[cfg(feature = "tor")]
+                use_tor_option,
                 recover,
+                ..
             } => {
+                let invite_code =
+                    invite_code.expect("required invite code source resolved before handling");
                 let response = connect_federation(
                     client,
                     base_url,
                     ConnectFedPayload {
                         invite_code,
                         #[cfg(feature = "tor")]
-                        use_tor,
+                        use_tor: use_tor_option.or(use_tor),
                         #[cfg(not(feature = "tor"))]
                         use_tor: None,
                         recover,
@@ -154,9 +173,12 @@ impl GeneralCommands {
                 .await?;
                 Ok(CliOutput::PaymentLog(payment_log))
             }
-            Self::CreatePasswordHash { password, cost } => {
-                let hash = bcrypt::hash(password, cost.unwrap_or(bcrypt::DEFAULT_COST))
-                    .expect("Unable to create bcrypt hash");
+            Self::CreatePasswordHash { password, cost, .. } => {
+                let password = password.expect("required password source resolved before handling");
+                let hash =
+                    bcrypt::hash(password, cost.unwrap_or(bcrypt::DEFAULT_COST)).map_err(|_| {
+                        ServerError::InvalidRequest("Unable to hash password".to_owned())
+                    })?;
                 Ok(CliOutput::PasswordHash(hash))
             }
             Self::PaymentSummary { start, end } => {

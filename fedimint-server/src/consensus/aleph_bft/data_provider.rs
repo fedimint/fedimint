@@ -104,7 +104,8 @@ impl aleph_bft::DataProvider<UnitData> for DataProvider {
         }
 
         if !self.is_recovery {
-            self.timestamp_sender.send(Instant::now()).await.ok();
+            // Submission timestamps are no longer needed after the consumer exits.
+            let _ = self.timestamp_sender.send(Instant::now()).await;
         }
 
         let bytes = items.consensus_encode_to_vec();

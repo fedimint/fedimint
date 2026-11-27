@@ -11,7 +11,7 @@ use fedimint_client::ClientHandleArc;
 use fedimint_client::secret::{PlainRootSecretStrategy, RootSecretStrategy};
 use fedimint_client_module::error::OperationLookupError;
 use fedimint_connectors::ConnectorRegistry;
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::db::{
     DatabaseError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped, IRawDatabaseExt,
@@ -25,12 +25,13 @@ use fedimint_dummy_server::DummyInit;
 use fedimint_server::core::ServerModule;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_testing::btc::BitcoinTest;
+use fedimint_testing::btc::mock::ProofSwappingRpc;
 use fedimint_testing::envs::{FM_TEST_BACKEND_BITCOIN_RPC_KIND_ENV, FM_TEST_USE_REAL_DAEMONS_ENV};
 use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use fedimint_testing_core::config::API_AUTH;
 use fedimint_wallet_client::api::WalletFederationApi;
-use fedimint_wallet_client::client_db::{SupportsSafeDepositKey, TweakIdx};
+use fedimint_wallet_client::client_db::{ClaimedPegInPrefix, SupportsSafeDepositKey, TweakIdx};
 use fedimint_wallet_client::{
     AllocateDepositOutcome, ConsensusVersionVotingError, DepositStateV2, MaybeNewAddress,
     PegInError, PegOutError, PegOutRequest, SubscribeDepositError, SubscribeWithdrawError,
@@ -55,6 +56,16 @@ fn fixtures() -> Fixtures {
     let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit);
     let wallet_client = WalletClientInit::new(fixtures.client_esplora_rpc());
     fixtures.with_module(wallet_client, WalletInit)
+}
+
+/// Fixtures whose wallet client talks to the backend through a
+/// [`ProofSwappingRpc`], so a test can make one proof request come back with a
+/// proof for a different transaction.
+fn fixtures_with_swappable_proofs() -> (Fixtures, std::sync::Arc<ProofSwappingRpc>) {
+    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit);
+    let rpc = ProofSwappingRpc::new(fixtures.client_esplora_rpc());
+    let wallet_client = WalletClientInit::new(rpc.clone());
+    (fixtures.with_module(wallet_client, WalletInit), rpc)
 }
 
 fn bsats(satoshi: u64) -> bitcoin::Amount {
@@ -92,7 +103,9 @@ async fn peg_in<'a>(
     finality_delay: u64,
     fed: &FederationTest,
 ) -> anyhow::Result<(BoxStream<'a, Amount>, bitcoin::Transaction)> {
-    let mut balance_sub = client.subscribe_balance_changes(AmountUnit::BITCOIN).await;
+    let mut balance_sub = client
+        .subscribe_balance_changes(AmountUnit::BITCOIN, Account::Primary)
+        .await;
     let initial_balance = balance_sub.ok().await?;
 
     await_consensus_upgrade(client, fed).await?;
@@ -128,7 +141,7 @@ async fn peg_in<'a>(
         .await_num_deposits_by_operation_id(op, 1)
         .await?;
     assert_eq!(
-        client.get_balance_for_btc().await?,
+        client.get_balance_for_btc(Account::Primary).await?,
         initial_balance + sats(PEG_IN_AMOUNT_SATS)
     );
     assert_eq!(
@@ -188,8 +201,8 @@ async fn await_consensus_upgrade(
     client: &ClientHandleArc,
     fed: &FederationTest,
 ) -> anyhow::Result<()> {
-    // we need all peers to be online for automatic consensus version voting, so we
-    // activate manual voting if the federation is degraded
+    // we need all peers to be online for automatic consensus version voting, so
+    // we activate manual voting if the federation is degraded
     if fed.is_degraded() {
         activate_manual_voting_for_online_peers(client, fed).await?;
     }
@@ -272,7 +285,7 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     await_consensus_to_catch_up(&client, 1).await?;
     await_consensus_upgrade(&client, &fed).await?;
 
-    assert_eq!(client.get_balance_for_btc().await?, sats(0));
+    assert_eq!(client.get_balance_for_btc(Account::Primary).await?, sats(0));
     let deposit_address = wallet_module
         .allocate_deposit_address_expert_only(())
         .await?;
@@ -335,8 +348,8 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
 
     bitcoin.mine_blocks(finality_delay).await;
 
-    // Afaik technically not necessary, but useful to speed up test (should probably
-    // just poll more often in tests?)
+    // Afaik technically not necessary, but useful to speed up test (should
+    // probably just poll more often in tests?)
     let await_update_while_rechecking = async {
         loop {
             wallet_module
@@ -365,9 +378,11 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
     );
 
     info!("Checking balance after deposit");
-    let mut balance_sub = client.subscribe_balance_changes(AmountUnit::BITCOIN).await;
+    let mut balance_sub = client
+        .subscribe_balance_changes(AmountUnit::BITCOIN, Account::Primary)
+        .await;
     assert_eq!(
-        client.get_balance_for_btc().await?,
+        client.get_balance_for_btc(Account::Primary).await?,
         sats(PEG_IN_AMOUNT_SATS)
     );
     assert_eq!(balance_sub.ok().await?, sats(PEG_IN_AMOUNT_SATS));
@@ -387,7 +402,10 @@ async fn on_chain_peg_in_and_peg_out_happy_case() -> anyhow::Result<()> {
 
     let balance_after_peg_out =
         sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees.amount().to_sat());
-    assert_eq!(client.get_balance_for_btc().await?, balance_after_peg_out);
+    assert_eq!(
+        client.get_balance_for_btc(Account::Primary).await?,
+        balance_after_peg_out
+    );
     assert_eq!(balance_sub.ok().await?, balance_after_peg_out);
 
     assert_matches!(
@@ -431,7 +449,7 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
     bitcoin.mine_blocks(finality_delay).await;
     await_consensus_to_catch_up(&client, 1).await?;
 
-    let starting_balance = client.get_balance_for_btc().await?;
+    let starting_balance = client.get_balance_for_btc(Account::Primary).await?;
     info!(?starting_balance, "Starting balance");
 
     await_consensus_upgrade(&client, &fed).await?;
@@ -464,7 +482,7 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
             .await_num_deposits_by_operation_id(op, 1)
             .await?;
         assert_eq!(
-            client.get_balance_for_btc().await?,
+            client.get_balance_for_btc(Account::Primary).await?,
             sats(PEG_IN_AMOUNT_SATS) + starting_balance
         );
         info!(?height, ?tx, "First peg-in transaction claimed");
@@ -489,11 +507,172 @@ async fn on_chain_peg_in_detects_multiple() -> anyhow::Result<()> {
         bitcoin.mine_blocks(finality_delay).await;
         wallet_module.await_num_deposits(tweak_idx, 2).await?;
         assert_eq!(
-            client.get_balance_for_btc().await?,
+            client.get_balance_for_btc(Account::Primary).await?,
             sats(PEG_IN_AMOUNT_SATS * 2) + starting_balance
         );
         info!(?height, ?tx, "Second peg-in transaction claimed");
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn deposit_progress_reaches_required_when_claimed() -> anyhow::Result<()> {
+    skip_if_not_wallet_test_group!("2");
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let bitcoin = fixtures.bitcoin();
+    let bitcoin = bitcoin.lock_exclusive().await;
+
+    let finality_delay: u64 = 10;
+    bitcoin.mine_blocks(finality_delay).await;
+    await_consensus_to_catch_up(&client, 1).await?;
+    await_consensus_upgrade(&client, &fed).await?;
+
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
+    let deposit_address = wallet_module
+        .allocate_deposit_address_expert_only(())
+        .await?;
+    let op = deposit_address.operation_id;
+    assert_eq!(wallet_module.deposit_progress(op).await?, vec![]);
+    assert_eq!(wallet_module.required_confirmations(), finality_delay + 1);
+
+    let value = bsats(PEG_IN_AMOUNT_SATS);
+    let (_proof, tx) = bitcoin
+        .send_and_mine_block(&deposit_address.address, value)
+        .await;
+    let tx_height = bitcoin
+        .get_tx_block_height(&tx.compute_txid())
+        .await
+        .context("expected tx to be mined")?;
+
+    // Consensus trails the tip by the finality delay, so the count only moves once
+    // consensus has caught up with the new tip.
+    for confirmations in [1, 2, 3, finality_delay] {
+        let tip_block_count = tx_height + confirmations;
+        let missing = tip_block_count.saturating_sub(bitcoin.get_block_count().await);
+        bitcoin.mine_blocks(missing).await;
+        await_consensus_to_catch_up(&client, tip_block_count - finality_delay).await?;
+
+        let deposits = wallet_module.deposit_progress(op).await?;
+        assert_eq!(deposits.len(), 1);
+        assert_eq!(deposits[0].outpoint.txid, tx.compute_txid());
+        assert_eq!(deposits[0].value, value);
+        assert_eq!(deposits[0].confirmations, confirmations);
+        assert_eq!(deposits[0].required, finality_delay + 1);
+    }
+
+    assert_eq!(
+        client.get_balance_for_btc(Account::Primary).await?,
+        Amount::ZERO,
+        "one confirmation short of the target must not be claimed"
+    );
+
+    bitcoin.mine_blocks(1).await;
+    wallet_module
+        .await_num_deposits_by_operation_id(op, 1)
+        .await?;
+    assert_eq!(wallet_module.deposit_progress(op).await?, vec![]);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_faulty_deposit_proof_is_retried_and_never_marked_claimed() -> anyhow::Result<()> {
+    skip_if_not_wallet_test_group!("2");
+    // Swapping one transaction's proof for another's needs the in-process
+    // backend.
+    if Fixtures::is_real_test() {
+        return Ok(());
+    }
+    let (fixtures, swappable_proofs) = fixtures_with_swappable_proofs();
+    let fed = fixtures.new_fed_degraded().await;
+    let client = fed.new_client().await;
+    let wallet_module = client.get_first_module::<WalletClientModule>()?;
+    let bitcoin = fixtures.bitcoin();
+    let bitcoin = bitcoin.lock_exclusive().await;
+    info!("Starting test a_faulty_deposit_proof_is_retried_and_never_marked_claimed");
+
+    let finality_delay = 10;
+    bitcoin.mine_blocks(finality_delay).await;
+    await_consensus_to_catch_up(&client, 1).await?;
+    await_consensus_upgrade(&client, &fed).await?;
+
+    let deposit = wallet_module
+        .allocate_deposit_address_expert_only(())
+        .await?;
+    let op = deposit.operation_id;
+
+    // An unrelated transaction in a block of its own, so there is a real proof
+    // that does not contain the deposit.
+    let unrelated_address = bitcoin.get_new_address().await;
+    let (_, unrelated_tx) = bitcoin
+        .send_and_mine_block(&unrelated_address, bsats(1000))
+        .await;
+
+    let (_, deposit_tx) = bitcoin
+        .send_and_mine_block(
+            &deposit.address,
+            bsats(PEG_IN_AMOUNT_SATS)
+                + bsats(wallet_module.get_fee_consensus().peg_in_abs.msats / 1000),
+        )
+        .await;
+    let deposit_txid = deposit_tx.compute_txid();
+
+    // Armed before the deposit is final, which is the only point at which the
+    // monitor asks for its proof.
+    swappable_proofs.answer_proof_of(deposit_txid, unrelated_tx.compute_txid());
+    bitcoin.mine_blocks(finality_delay).await;
+
+    // The monitor reads the federation's consensus block count, not bitcoin's,
+    // so the deposit is not final to it until consensus has caught up.
+    let block_count = bitcoin.get_block_count().await;
+    await_consensus_to_catch_up(&client, block_count.saturating_sub(finality_delay)).await?;
+
+    // The monitor has to be driven, and `await_num_deposits` is what drives it:
+    // each pass rechecks the address, which wakes the monitor. Waiting
+    // passively proves nothing, because the monitor checks once and then
+    // sleeps.
+    let claimed_with_faulty_proof = fedimint_core::runtime::timeout(
+        Duration::from_secs(60),
+        wallet_module.await_num_deposits_by_operation_id(op, 1),
+    )
+    .await;
+
+    assert!(
+        swappable_proofs.swapped_answers() > 0,
+        "the monitor never read the faulty proof, so this test would prove nothing"
+    );
+    assert!(
+        claimed_with_faulty_proof.is_err(),
+        "a proof that does not contain the deposit must not claim it"
+    );
+    assert_eq!(client.get_balance_for_btc(Account::Primary).await?, sats(0));
+    assert!(
+        wallet_module
+            .db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix(&ClaimedPegInPrefix)
+            .await
+            .next()
+            .await
+            .is_none(),
+        "a proof that does not contain the deposit must not mark it claimed"
+    );
+
+    // Once the backend answers properly the same output is claimed on a later
+    // pass, which is also what shows the monitor stayed alive through the
+    // failure rather than stopping at it.
+    swappable_proofs.stop_swapping();
+    wallet_module
+        .await_num_deposits_by_operation_id(op, 1)
+        .await?;
+    assert_eq!(
+        client.get_balance_for_btc(Account::Primary).await?,
+        sats(PEG_IN_AMOUNT_SATS)
+    );
 
     Ok(())
 }
@@ -540,7 +719,7 @@ async fn peg_out_fail_refund() -> anyhow::Result<()> {
     // Check that we get our money back if the peg-out fails
     assert_eq!(balance_sub.next().await.unwrap(), sats(PEG_IN_AMOUNT_SATS));
     assert_eq!(
-        client.get_balance_for_btc().await?,
+        client.get_balance_for_btc(Account::Primary).await?,
         sats(PEG_IN_AMOUNT_SATS)
     );
 
@@ -585,7 +764,7 @@ async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
     let balance_after_normal_peg_out =
         sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees.amount().to_sat());
     assert_eq!(
-        client.get_balance_for_btc().await?,
+        client.get_balance_for_btc(Account::Primary).await?,
         balance_after_normal_peg_out
     );
     assert_eq!(balance_sub.ok().await?, balance_after_normal_peg_out);
@@ -625,7 +804,7 @@ async fn rbf_withdrawals_are_rejected() -> anyhow::Result<()> {
             Some(100),
         ),
         || async {
-            let current_balance = client.get_balance_for_btc().await?;
+            let current_balance = client.get_balance_for_btc(Account::Primary).await?;
             if current_balance == balance_after_normal_peg_out {
                 Ok(())
             } else {
@@ -674,7 +853,10 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
         .await?;
     let balance_after_peg_out =
         sats(PEG_IN_AMOUNT_SATS - PEG_OUT_AMOUNT_SATS - fees1.amount().to_sat());
-    assert_eq!(client.get_balance_for_btc().await?, balance_after_peg_out);
+    assert_eq!(
+        client.get_balance_for_btc(Account::Primary).await?,
+        balance_after_peg_out
+    );
     assert_eq!(balance_sub.ok().await?, balance_after_peg_out);
 
     let sub = wallet_module.subscribe_withdraw_updates(op).await?;
@@ -726,7 +908,7 @@ async fn peg_outs_must_wait_for_available_utxos() -> anyhow::Result<()> {
             - fees2.amount().to_sat(),
     );
     assert_eq!(
-        client.get_balance_for_btc().await?,
+        client.get_balance_for_btc(Account::Primary).await?,
         balance_after_second_peg_out
     );
     assert_eq!(balance_sub.ok().await?, balance_after_second_peg_out);
@@ -845,7 +1027,8 @@ async fn peg_ins_that_are_unconfirmed_are_rejected() -> anyhow::Result<()> {
         }
     }
 
-    // For this transaction to be confirmed, we need to mine at least finality_delay
+    // For this transaction to be confirmed, we need to mine at least
+    // finality_delay
     bitcoin
         .mine_blocks((wallet_config.consensus.finality_delay).into())
         .await;
@@ -997,14 +1180,16 @@ async fn peg_in_claiming_an_already_tracked_utxo_is_rejected() -> anyhow::Result
 
     // Drop the claim record while leaving the UTXO tracked. This is the state a
     // recognized-as-ours output is in: `recognize_change_utxo` writes `UTXOKey`
-    // directly and matches on script over every output of the transaction, so it
-    // can track an outpoint that no `ClaimedPegInOutpoint` record covers.
+    // directly and matches on script over every output of the transaction, so
+    // it can track an outpoint that no `ClaimedPegInOutpoint` record
+    // covers.
     module_dbtx
         .remove_entry(&ClaimedPegInOutpointKey(outpoint))
         .await;
     drop(module_dbtx);
 
-    // Claiming it again must be rejected rather than overwrite the tracked UTXO.
+    // Claiming it again must be rejected rather than overwrite the tracked
+    // UTXO.
     assert_matches!(
         wallet
             .process_input(
@@ -1250,7 +1435,7 @@ async fn dust_deposits_are_ignored() -> anyhow::Result<()> {
     await_consensus_to_catch_up(&client, 1).await?;
     await_consensus_upgrade(&client, &fed).await?;
 
-    assert_eq!(client.get_balance_for_btc().await?, sats(0));
+    assert_eq!(client.get_balance_for_btc(Account::Primary).await?, sats(0));
     let deposit_address = wallet_module
         .allocate_deposit_address_expert_only(())
         .await?;
@@ -1279,8 +1464,8 @@ async fn dust_deposits_are_ignored() -> anyhow::Result<()> {
 
     bitcoin.mine_blocks(finality_delay).await;
 
-    // Afaik technically not necessary, but useful to speed up test (should probably
-    // just poll more often in tests?)
+    // Afaik technically not necessary, but useful to speed up test (should
+    // probably just poll more often in tests?)
     let await_update_while_rechecking = async {
         loop {
             wallet_module
@@ -1309,7 +1494,10 @@ async fn dust_deposits_are_ignored() -> anyhow::Result<()> {
     );
 
     info!("Checking balance after deposit");
-    assert_eq!(client.get_balance_for_btc().await?, Amount::ZERO);
+    assert_eq!(
+        client.get_balance_for_btc(Account::Primary).await?,
+        Amount::ZERO
+    );
     Ok(())
 }
 
@@ -1451,6 +1639,10 @@ async fn allocate_deposit_address_pooled_reuse_resets_monitoring_schedule() -> a
     let (original, outcome) = wallet_module.allocate_deposit_address_pooled(0).await?;
     assert_eq!(outcome, AllocateDepositOutcome::Fresh);
 
+    // Stop and join the monitor before seeding the stale schedule so it cannot
+    // race the fixture write or update the schedule before we inspect the reset.
+    client.task_group().clone().shutdown_join_all(None).await?;
+
     let distant_past = fedimint_core::time::now() - Duration::from_secs(24 * 60 * 60);
     {
         let mut dbtx = wallet_module.db.begin_transaction().await;
@@ -1484,8 +1676,7 @@ async fn allocate_deposit_address_pooled_reuse_resets_monitoring_schedule() -> a
         .await?;
     assert!(distant_past < data.creation_time);
     assert_eq!(data.last_check_time, None);
-    assert!(data.next_check_time.is_some());
-    assert!(distant_past < data.next_check_time.expect("next check time must be set"));
+    assert_eq!(data.next_check_time, Some(data.creation_time));
 
     Ok(())
 }
@@ -1623,8 +1814,8 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
             .iter()
             .enumerate()
             .find_map(|(idx, output)| {
-                // bitcoin core randomizes the change output index so we can't assume the fed's
-                // utxo is always index 0
+                // bitcoin core randomizes the change output index so we can't
+                // assume the fed's utxo is always index 0
                 if output.value.to_sat() == expected_peg_in_amount {
                     Some(TxOutputSummary {
                         outpoint: bitcoin::OutPoint {
@@ -1702,9 +1893,9 @@ async fn construct_wallet_summary() -> anyhow::Result<()> {
     info!(?mempool_tx);
 
     for input in mempool_tx.input {
-        // using `find` is clunky, however it's necessary since `getrawtransaction`
-        // doesn't include an amount with inputs so we cannot manually construct a
-        // TxOutputSummary
+        // using `find` is clunky, however it's necessary since
+        // `getrawtransaction` doesn't include an amount with inputs so
+        // we cannot manually construct a TxOutputSummary
         let consumed_utxo = expected_available_utxos
             .iter()
             .find(|utxo| utxo.outpoint == input.previous_output)
@@ -1937,7 +2128,8 @@ async fn submission_rejects_a_fee_rate_that_cannot_produce_a_real_fee() -> anyho
         )
     };
 
-    // A rate that wraps the fee computation is rejected before it can be signed.
+    // A rate that wraps the fee computation is rejected before it can be
+    // signed.
     assert_eq!(
         wallet
             .verify_output_submission(

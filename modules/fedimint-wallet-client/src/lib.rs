@@ -51,7 +51,9 @@ use fedimint_client_module::transaction::{
     TransactionBuilder, max_affordable_send_amount,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{
+    Account, Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
+};
 use fedimint_core::db::{
     Committable, Database, DatabaseError, DatabaseTransaction, IDatabaseTransactionOpsCoreTyped,
 };
@@ -91,8 +93,9 @@ use crate::client_db::{
 };
 use crate::deposit::DepositStateMachine;
 pub use crate::error::{
-    ConsensusVersionVotingError, DepositAddressError, MaxWithdrawableAmountError, PegInError,
-    PegOutError, SubscribeDepositError, SubscribeWithdrawError, WithdrawFeesError,
+    ConsensusVersionVotingError, DepositAddressError, DepositProgressError,
+    MaxWithdrawableAmountError, PegInError, PegOutError, SubscribeDepositError,
+    SubscribeWithdrawError, WithdrawFeesError,
 };
 use crate::withdraw::{CreatedWithdrawState, WithdrawStateMachine, WithdrawStates};
 
@@ -114,6 +117,20 @@ pub enum DepositStateV1 {
     Confirmed(BitcoinTransactionData),
     Claimed(BitcoinTransactionData),
     Failed(String),
+}
+
+/// How far an unclaimed deposit is from being claimable, as reported by
+/// [`WalletClientModule::deposit_progress`].
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct DepositProgress {
+    pub outpoint: bitcoin::OutPoint,
+    pub value: bitcoin::Amount,
+    /// Zero while unmined. Reaches `required` exactly when the deposit can be
+    /// claimed and stays there.
+    pub confirmations: u64,
+    /// Confirmations at which the deposit becomes claimable. A deposit that
+    /// does not cover the peg-in fee is never claimed.
+    pub required: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -914,6 +931,11 @@ impl WalletClientModule {
         self.cfg().finality_delay
     }
 
+    /// Confirmations a deposit needs before this client can claim it.
+    pub fn required_confirmations(&self) -> u64 {
+        pegin_monitor::required_confirmations(self.cfg().finality_delay)
+    }
+
     pub fn get_fee_consensus(&self) -> FeeConsensus {
         self.cfg().fee_consensus
     }
@@ -993,6 +1015,7 @@ impl WalletClientModule {
                     output_amount: Amounts::new_bitcoin(amount),
                     input_fee: Amounts::ZERO,
                     output_fee: Amounts::new_bitcoin(self.cfg().fee_consensus.peg_out_abs),
+                    account: Account::Primary,
                 },
             )
             .await
@@ -1267,6 +1290,7 @@ impl WalletClientModule {
                             .manual_operation_start_dbtx(
                                 dbtx,
                                 deposit_address.operation_id,
+                                Account::Primary,
                                 WalletCommonInit::KIND.as_str(),
                                 WalletOperationMeta {
                                     variant: WalletOperationMetaVariant::Deposit {
@@ -1386,6 +1410,7 @@ impl WalletClientModule {
                             .manual_operation_start_dbtx(
                                 dbtx,
                                 deposit_address.operation_id,
+                                Account::Primary,
                                 WalletCommonInit::KIND.as_str(),
                                 WalletOperationMeta {
                                     variant: WalletOperationMetaVariant::Deposit {
@@ -1680,6 +1705,29 @@ impl WalletClientModule {
         }}))
     }
 
+    /// The progress of every output the bitcoin backend reports paying the
+    /// address of this deposit operation that this client has no claim record
+    /// for, re-read from the backend and the federation on each call, so poll
+    /// it sparingly. An entry with no confirmations is not proof that its
+    /// transaction is in a mempool, and a reorged or replaced deposit stays
+    /// listed for as long as the backend keeps reporting it.
+    ///
+    /// Only for display: claiming stays with the peg-in monitor.
+    pub async fn deposit_progress(
+        &self,
+        operation_id: OperationId,
+    ) -> Result<Vec<DepositProgress>, DepositProgressError> {
+        let tweak_idx = self.find_tweak_idx_by_operation_id(operation_id).await?;
+        pegin_monitor::deposit_progress(
+            &self.data,
+            tweak_idx,
+            &self.rpc,
+            &self.module_api,
+            &self.db,
+        )
+        .await
+    }
+
     pub async fn list_peg_in_tweak_idxes(&self) -> BTreeMap<TweakIdx, PegInTweakIndexData> {
         self.client_ctx
             .module_db()
@@ -1931,13 +1979,13 @@ impl WalletClientModule {
 
             let withdraw_output =
                 self.create_withdraw_output(operation_id, address.clone(), amount, fee);
-            let tx_builder = TransactionBuilder::new()
+            let tx_builder = TransactionBuilder::new(Account::Primary)
                 .with_outputs(self.client_ctx.make_client_outputs(withdraw_output));
 
             let extra_meta =
                 serde_json::to_value(extra_meta).expect("Failed to serialize extra meta");
             self.client_ctx
-                .finalize_and_submit_transaction(
+                .finalize_and_submit_transaction_with_events(
                     operation_id,
                     WalletCommonInit::KIND.as_str(),
                     {
@@ -1953,23 +2001,13 @@ impl WalletClientModule {
                         }
                     },
                     tx_builder,
-                )
-                .await?;
-
-            let mut dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-            self.client_ctx
-                .log_event(
-                    &mut dbtx,
-                    SendPaymentEvent {
+                    vec![self.client_ctx.make_event(SendPaymentEvent {
                         operation_id,
                         amount: amount + fee.amount(),
                         fee: fee.amount(),
-                    },
+                    })],
                 )
-                .await;
-
-            dbtx.commit_tx().await;
+                .await?;
 
             Ok(operation_id)
         }
@@ -1991,7 +2029,7 @@ impl WalletClientModule {
         let operation_id = OperationId(thread_rng().r#gen());
 
         let withdraw_output = self.create_rbf_withdraw_output(operation_id, &rbf);
-        let tx_builder = TransactionBuilder::new()
+        let tx_builder = TransactionBuilder::new(Account::Primary)
             .with_outputs(self.client_ctx.make_client_outputs(withdraw_output));
 
         let extra_meta = serde_json::to_value(extra_meta).expect("Failed to serialize extra meta");
@@ -2119,7 +2157,7 @@ async fn poll_supports_safe_deposit_version(db: Database, module_api: DynModuleA
             break;
         }
 
-        if is_running_in_test_env() {
+        if is_running_in_test_env!() {
             // Even in tests we don't want to spam the federation with requests about it
             sleep(Duration::from_secs(10)).await;
         } else {

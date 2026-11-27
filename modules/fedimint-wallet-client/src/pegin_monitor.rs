@@ -1,4 +1,5 @@
 use std::cmp;
+use std::collections::BTreeSet;
 use std::convert::Infallible;
 use std::time::{Duration, SystemTime};
 
@@ -20,7 +21,7 @@ use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{BitcoinHash, TransactionId, secp256k1, time};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLET;
 use fedimint_wallet_common::WalletInput;
-use fedimint_wallet_common::txoproof::PegInProof;
+use fedimint_wallet_common::txoproof::{PegInProof, PegInProofError};
 use futures::StreamExt as _;
 use secp256k1::Keypair;
 use tokio::sync::watch;
@@ -31,8 +32,9 @@ use crate::client_db::{
     ClaimedPegInData, ClaimedPegInKey, PegInTweakIndexData, PegInTweakIndexKey,
     PegInTweakIndexPrefix, TweakIdx,
 };
+use crate::error::DepositProgressError;
 use crate::events::{DepositConfirmed, ReceivePaymentEvent};
-use crate::{WalletClientModule, WalletClientModuleData};
+use crate::{DepositProgress, WalletClientModule, WalletClientModuleData};
 
 /// A helper struct meant to combined data from all addresses/records
 /// into a single struct with all actionable data.
@@ -99,7 +101,7 @@ pub(crate) async fn run_peg_in_monitor(
     pegin_claimed_sender: watch::Sender<()>,
     mut wakeup_receiver: watch::Receiver<()>,
 ) {
-    let min_sleep: Duration = if is_running_in_test_env() {
+    let min_sleep: Duration = if is_running_in_test_env!() {
         Duration::from_millis(100)
     } else {
         Duration::from_secs(30)
@@ -296,7 +298,7 @@ impl CheckOutcome {
         match self {
             // Check again in time proportional to the expected block confirmation time
             CheckOutcome::Pending { num_blocks_needed } => {
-                if is_running_in_test_env() {
+                if is_running_in_test_env!() {
                     // In tests, we basically mine all blocks right away
                     Some(Duration::from_millis(1))
                 } else {
@@ -321,7 +323,7 @@ impl CheckOutcome {
         // on it yet, check again in time proportional to the age of the
         // address.
         if outcomes.is_empty() {
-            if is_running_in_test_env() {
+            if is_running_in_test_env!() {
                 // When testing we usually send deposits right away, so check more aggressively.
                 return Some(Duration::from_millis(100));
             }
@@ -354,6 +356,98 @@ impl CheckOutcome {
 
         res
     }
+}
+
+/// `tx_block_count` is the deposit's block height plus one.
+fn blocks_until_claimable(tx_block_count: u64, consensus_block_count: u64) -> u64 {
+    tx_block_count.saturating_sub(consensus_block_count)
+}
+
+/// Confirmations a deposit needs before it can be claimed: the block that mined
+/// it, plus the blocks guardians hold their vote back by.
+pub(crate) fn required_confirmations(finality_delay: u32) -> u64 {
+    u64::from(finality_delay) + 1
+}
+
+/// Confirmations shown for a deposit, counted so that they reach
+/// [`required_confirmations`] exactly when [`blocks_until_claimable`] reaches
+/// zero.
+fn deposit_confirmations(
+    tx_block_count: u64,
+    consensus_block_count: u64,
+    finality_delay: u32,
+) -> u64 {
+    required_confirmations(finality_delay).saturating_sub(blocks_until_claimable(
+        tx_block_count,
+        consensus_block_count,
+    ))
+}
+
+/// Progress of each output paying the address of `tweak_idx` that has no local
+/// claim record, read from the same sources as [`check_idx_pegins`].
+pub(crate) async fn deposit_progress(
+    data: &WalletClientModuleData,
+    tweak_idx: TweakIdx,
+    btc_rpc: &DynBitcoindRpc,
+    module_rpc: &DynModuleApi,
+    db: &Database,
+) -> Result<Vec<DepositProgress>, DepositProgressError> {
+    let consensus_block_count = module_rpc.fetch_consensus_block_count().await?;
+    let (script, ..) = data.derive_peg_in_script(tweak_idx);
+    let history = btc_rpc.get_script_history(&script).await?;
+
+    let mut deposits = vec![];
+    for (transaction, outpoint) in unique_deposit_outputs(history, &script) {
+        let claimed_peg_in_key = ClaimedPegInKey {
+            peg_in_index: tweak_idx,
+            btc_out_point: outpoint,
+        };
+        if db
+            .begin_transaction_nc()
+            .await
+            .get_value(&claimed_peg_in_key)
+            .await
+            .is_some()
+        {
+            continue;
+        }
+
+        let confirmations = match btc_rpc.get_tx_block_height(&outpoint.txid).await? {
+            Some(tx_block_height) => deposit_confirmations(
+                tx_block_height.saturating_add(1),
+                consensus_block_count,
+                data.cfg.finality_delay,
+            ),
+            None => 0,
+        };
+
+        deposits.push(DepositProgress {
+            outpoint,
+            value: transaction.output[outpoint.vout as usize].value,
+            confirmations,
+            required: required_confirmations(data.cfg.finality_delay),
+        });
+    }
+    Ok(deposits)
+}
+
+/// Each output in `history` that pays `script`, once, even when the backend
+/// lists its transaction more than once.
+fn unique_deposit_outputs(
+    history: Vec<bitcoin::Transaction>,
+    script: &ScriptBuf,
+) -> Vec<(bitcoin::Transaction, bitcoin::OutPoint)> {
+    let mut seen = BTreeSet::new();
+    filter_onchain_deposit_outputs(history.into_iter(), script)
+        .map(|(transaction, out_idx)| {
+            let outpoint = bitcoin::OutPoint {
+                txid: transaction.compute_txid(),
+                vout: out_idx,
+            };
+            (transaction, outpoint)
+        })
+        .filter(|(_, outpoint)| seen.insert(*outpoint))
+        .collect()
 }
 
 /// Query via btc rpc for a history of an address derived with `tweak_idx` and
@@ -415,7 +509,8 @@ async fn check_idx_pegins(
                 continue;
             };
 
-        let num_blocks_needed = tx_block_count.saturating_sub(current_consensus_block_count);
+        let num_blocks_needed =
+            blocks_until_claimable(tx_block_count, current_consensus_block_count);
 
         if 0 < num_blocks_needed {
             outcomes.push(CheckOutcome::Pending { num_blocks_needed });
@@ -466,14 +561,29 @@ async fn claim_peg_in(
         txout_proof: TxOutProof,
         operation_id: OperationId,
         federation_knows_utxo: bool,
-    ) -> Option<OutPointRange> {
+    ) -> Result<Option<OutPointRange>, CheckPegInsError> {
+        // A proof the Bitcoin backend built for a different transaction fails
+        // here without anyone forging anything, and the backend is federation
+        // suggested by default. Reporting the error leaves the deposit
+        // unclaimed so the monitor retries it; returning `None` instead would
+        // record it as claimed for good, since the caller writes
+        // `ClaimedPegInKey` either way and a claimed entry is never rechecked.
         let pegin_proof = PegInProof::new(
             txout_proof,
             btc_transaction.clone(),
             out_idx,
             tweak_key.public_key(),
         )
-        .expect("TODO: handle API returning faulty proofs");
+        .inspect_err(|error| {
+            warn!(
+                target: LOG_CLIENT_MODULE_WALLET,
+                error = %error.fmt_compact(),
+                txid = %btc_transaction.compute_txid(),
+                %out_idx,
+                "Bitcoin backend returned a proof that does not cover this deposit; leaving it unclaimed so it is retried"
+            );
+        })
+        .map_err(CheckPegInsError::FaultyProof)?;
 
         let amount = pegin_proof.tx_output().value.into();
         let wallet_input = if federation_knows_utxo {
@@ -490,7 +600,7 @@ async fn claim_peg_in(
 
         if amount <= client_ctx.self_ref().cfg().fee_consensus.peg_in_abs {
             warn!(target: LOG_CLIENT_MODULE_WALLET, "We won't claim a deposit lower than the deposit fee");
-            return None;
+            return Ok(None);
         }
 
         let txid = btc_transaction.compute_txid();
@@ -517,7 +627,7 @@ async fn claim_peg_in(
             )
             .await;
 
-        Some(
+        Ok(Some(
             client_ctx
                 .claim_inputs(
                     dbtx,
@@ -526,7 +636,7 @@ async fn claim_peg_in(
                 )
                 .await
                 .expect("Cannot claim input, additional funding needed"),
-        )
+        ))
     }
 
     let tx_out_proof = &tx_out_proof;
@@ -548,7 +658,7 @@ async fn claim_peg_in(
                         operation_id,
                         federation_knows_utxo,
                     )
-                    .await;
+                    .await?;
 
                     let claimed_pegin_data = if let Some(change_range) = maybe_change_range {
                         ClaimedPegInData {
@@ -571,7 +681,7 @@ async fn claim_peg_in(
                     )
                     .await;
 
-                    Ok::<_, Infallible>(())
+                    Ok::<_, CheckPegInsError>(())
                 })
             },
             Some(100),
@@ -585,7 +695,7 @@ async fn claim_peg_in(
                 attempts,
                 source: last_error,
             },
-            AutocommitError::ClosureError { error, .. } => match error {},
+            AutocommitError::ClosureError { error, .. } => error,
         })?;
 
     Ok(())
@@ -623,6 +733,12 @@ enum CheckPegInsError {
     #[error(transparent)]
     BitcoinRpc(#[from] BitcoinRpcError),
 
+    /// The Bitcoin backend answered with a proof that does not cover the
+    /// deposit it was asked about, so the deposit stays unclaimed and is
+    /// retried rather than recorded as claimed.
+    #[error("Bitcoin backend returned a proof that does not cover the deposit")]
+    FaultyProof(#[source] PegInProofError),
+
     /// The claim of a confirmed deposit could not be committed.
     #[error("Failed to commit after {attempts} attempts")]
     ClaimCommit {
@@ -631,3 +747,6 @@ enum CheckPegInsError {
         source: DatabaseError,
     },
 }
+
+#[cfg(test)]
+mod tests;

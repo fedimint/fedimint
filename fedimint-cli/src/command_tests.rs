@@ -1,12 +1,55 @@
 use std::io::Write;
+use std::time::Duration;
 
 use clap::Parser;
+use clap::error::ErrorKind;
 use fedimint_client::module_init::ClientModuleInitRegistry;
 use fedimint_core::config::FederationId;
 use fedimint_core::util::SafeUrl;
 
 use super::cli::{Command, DecodeType, DevCmd, EncodeType, Opts};
 use super::{CliOutput, FedimintCli, SALT_FILE, decrypt_config, encrypt_config};
+
+#[test]
+fn dev_wait_rejects_invalid_durations_during_argument_parsing() {
+    for seconds in ["NaN", "inf", "1e30", "-inf", "-1", "invalid"] {
+        // The delimiter also exercises negative values that clap would otherwise
+        // reject as unexpected flags.
+        let result = Opts::try_parse_from(["fedimint-cli", "dev", "wait", "--", seconds]);
+        match result {
+            Err(error) => {
+                assert_eq!(error.kind(), ErrorKind::ValueValidation, "{seconds}");
+                assert!(error.to_string().contains(seconds), "{error}");
+            }
+            Ok(_) => panic!("invalid duration {seconds} must fail during argument parsing"),
+        }
+    }
+    for seconds in ["NaN", "inf", "1e30"] {
+        assert!(Opts::try_parse_from(["fedimint-cli", "dev", "wait", seconds]).is_err());
+    }
+    match Opts::try_parse_from(["fedimint-cli", "dev", "wait", "-1"]) {
+        Err(error) => assert_eq!(error.kind(), ErrorKind::UnknownArgument),
+        Ok(_) => panic!("negative duration without a delimiter must remain an unexpected flag"),
+    }
+}
+
+#[test]
+fn dev_wait_preserves_optional_and_finite_durations() {
+    for (args, expected) in [
+        (vec![], None),
+        (vec!["0"], Some(Duration::ZERO)),
+        (vec!["1.5"], Some(Duration::from_millis(1500))),
+        (vec!["--", "1.5"], Some(Duration::from_millis(1500))),
+        (vec!["0.1"], Some(Duration::from_secs_f32(0.1))),
+    ] {
+        let opts = Opts::try_parse_from(["fedimint-cli", "dev", "wait"].into_iter().chain(args))
+            .expect("valid wait arguments");
+        match opts.command {
+            Command::Dev(DevCmd::Wait { seconds }) => assert_eq!(seconds, expected),
+            _ => panic!("expected dev wait"),
+        }
+    }
+}
 
 /// Build a CLI with no database so local commands cannot accidentally open one.
 fn local_cli() -> FedimintCli {
@@ -31,6 +74,7 @@ async fn invite_encoding_and_decoding_do_not_open_a_client() {
             federation_id,
             peer: 3.into(),
             api_secret: Some("secret".to_owned()),
+            api_secret_file: None,
         },
     });
     let Ok(CliOutput::InviteCode {
@@ -42,7 +86,8 @@ async fn invite_encoding_and_decoding_do_not_open_a_client() {
     assert_eq!(encoded.api_secret().as_deref(), Some("secret"));
     opts.command = Command::Dev(DevCmd::Decode {
         decode_type: DecodeType::InviteCode {
-            invite_code: encoded,
+            invite_code: Some(encoded.to_string()),
+            invite_code_file: None,
         },
     });
     match cli.handle_command(opts).await {
@@ -78,7 +123,8 @@ async fn join_secret_conflict_precedes_invite_parsing_and_database_access() {
     let mut opts = cli.cli_args.clone();
     opts.federation_secret_hex = Some("invalid secret".to_owned());
     opts.command = Command::Join {
-        invite_code: "invalid invite".to_owned(),
+        invite_code: Some("invalid invite".to_owned()),
+        invite_code_file: None,
     };
     match cli.handle_command(opts).await {
         Err(error) => assert_eq!(

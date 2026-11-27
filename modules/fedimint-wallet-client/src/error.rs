@@ -154,6 +154,31 @@ pub enum SubscribeDepositError {
     NonFinalOutcome,
 }
 
+/// A failure to report the progress of a deposit operation's unclaimed
+/// deposits.
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum DepositProgressError {
+    /// The operation has no deposit address.
+    #[error("The deposit address of the operation could not be found")]
+    Address(#[from] PegInError),
+
+    /// The federation could not report its consensus block count.
+    #[error("The consensus block count could not be fetched")]
+    Federation(#[source] Box<FederationError>),
+
+    /// The bitcoin backend could not report the address's history or a
+    /// deposit's block height.
+    #[error("The bitcoin backend could not report the deposits")]
+    BitcoinRpc(#[from] BitcoinRpcError),
+}
+
+impl From<FederationError> for DepositProgressError {
+    fn from(source: FederationError) -> Self {
+        Self::Federation(Box::new(source))
+    }
+}
+
 /// A failure to quote the on-chain fees of a peg-out.
 #[derive(Debug, Error)]
 #[non_exhaustive]

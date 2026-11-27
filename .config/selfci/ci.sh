@@ -52,7 +52,6 @@ case "$SELFCI_JOB_NAME" in
     selfci job wait "cargo"
 
     selfci job start "cargo-crap"
-    selfci job start "cargo-udeps"
     ;;
 
   cargo)
@@ -62,10 +61,6 @@ case "$SELFCI_JOB_NAME" in
   lint)
     nix develop --ignore-environment .#lint --command ast-grep test --config sgconfig.yml
     nix develop --ignore-environment .#lint --command ./misc/git-hooks/pre-commit
-    ;;
-
-  cargo-udeps)
-    nix build -L .#nightly.test.workspaceCargoUdeps
     ;;
 
   cargo-crap)

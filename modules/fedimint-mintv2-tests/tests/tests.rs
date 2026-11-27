@@ -1,4 +1,6 @@
+use std::collections::BTreeMap;
 use std::pin::pin;
+use std::time::Duration;
 
 use anyhow::ensure;
 use assert_matches::assert_matches;
@@ -10,7 +12,7 @@ use fedimint_client::{ClientHandleArc, ModuleRecoveryCompleted, RootSecret};
 use fedimint_core::Amount;
 use fedimint_core::base32::{self, FEDIMINT_PREFIX};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::db::mem_impl::MemDatabase;
 use fedimint_core::module::{AmountUnit, Amounts};
 use fedimint_core::secp256k1::{Keypair, SECP256K1};
@@ -28,6 +30,8 @@ use fedimint_testing::federation::FederationTest;
 use fedimint_testing::fixtures::Fixtures;
 use futures::StreamExt;
 use serde_json::Value;
+
+mod receive_atomicity;
 
 #[derive(Debug, PartialEq, Eq)]
 enum MintEvent {
@@ -95,7 +99,7 @@ async fn issue_ecash(client: &ClientHandleArc, amount: Amount) -> anyhow::Result
             operation_id,
             "Issue e-cash via dummy module",
             |_| (),
-            TransactionBuilder::new().with_inputs(dummy_input),
+            TransactionBuilder::new(Account::Primary).with_inputs(dummy_input),
         )
         .await?;
 
@@ -138,7 +142,12 @@ async fn send_and_receive() -> anyhow::Result<()> {
 
         let (operation_id, ecash) = client_send
             .get_first_module::<MintClientModule>()?
-            .send(Amount::from_sats(1_000), Value::Null, include_invite)
+            .send(
+                Account::Primary,
+                Amount::from_sats(1_000),
+                Value::Null,
+                include_invite,
+            )
             .await?;
 
         let Some(MintEvent::Send(send)) = send_events.next().await else {
@@ -166,7 +175,7 @@ async fn send_and_receive() -> anyhow::Result<()> {
 
         let operation_id = client_receive
             .get_first_module::<MintClientModule>()?
-            .receive(ecash, Value::Null)
+            .receive(Account::Primary, ecash, Value::Null)
             .await?;
 
         let state = client_receive
@@ -191,7 +200,7 @@ async fn send_and_receive() -> anyhow::Result<()> {
         test_client_recovery(&fed, &client_receive, root_secret(&RECEIVE_SK)).await?;
     }
 
-    ensure!(client_receive.get_balance_for_btc().await? >= Amount::from_sats(9900));
+    ensure!(client_receive.get_balance_for_btc(Account::Primary).await? >= Amount::from_sats(9900));
 
     Ok(())
 }
@@ -234,7 +243,12 @@ async fn receive_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
     for i in 0..5 {
         let (_operation_id, ecash) = client_send
             .get_first_module::<MintClientModule>()?
-            .send(Amount::from_sats(1_000), Value::Null, false)
+            .send(
+                Account::Primary,
+                Amount::from_sats(1_000),
+                Value::Null,
+                false,
+            )
             .await?;
         let ecash: ECash = base32::decode_prefixed(
             FEDIMINT_PREFIX,
@@ -245,10 +259,10 @@ async fn receive_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
         let mint = client_receive.get_first_module::<MintClientModule>()?;
         let ecash_value = ecash.amount();
 
-        let quote = mint.receive_fee_quote(&ecash).await?;
-        let before = client_receive.get_balance_for_btc().await?;
+        let quote = mint.receive_fee_quote(Account::Primary, &ecash).await?;
+        let before = client_receive.get_balance_for_btc(Account::Primary).await?;
 
-        let operation_id = mint.receive(ecash, Value::Null).await?;
+        let operation_id = mint.receive(Account::Primary, ecash, Value::Null).await?;
         let state = mint
             .await_final_receive_operation_state(operation_id)
             .await?;
@@ -276,7 +290,7 @@ async fn receive_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
             )
             .await?;
 
-        let after = client_receive.get_balance_for_btc().await?;
+        let after = client_receive.get_balance_for_btc(Account::Primary).await?;
         let actual_fee = ecash_value - (after - before);
 
         ensure!(
@@ -309,18 +323,25 @@ async fn send_fee_quote_matches_actual_fee() -> anyhow::Result<()> {
         // the send observe the same inventory.
         client.wait_for_all_active_state_machines().await;
 
-        let quote = mint.send_fee_quote(Amount::from_sats(1_000)).await?;
-        let before = client.get_balance_for_btc().await?;
+        let quote = mint
+            .send_fee_quote(Account::Primary, Amount::from_sats(1_000))
+            .await?;
+        let before = client.get_balance_for_btc(Account::Primary).await?;
 
         let (_operation_id, ecash) = mint
-            .send(Amount::from_sats(1_000), Value::Null, false)
+            .send(
+                Account::Primary,
+                Amount::from_sats(1_000),
+                Value::Null,
+                false,
+            )
             .await?;
         let sent_value = ecash.amount();
 
         // A send may trigger an internal reissue whose change notes are credited
         // by output state machines; wait for them before reading the balance.
         client.wait_for_all_active_state_machines().await;
-        let after = client.get_balance_for_btc().await?;
+        let after = client.get_balance_for_btc(Account::Primary).await?;
 
         // Value conservation: the wallet loses exactly the sent value plus the fee.
         let actual_fee = before - after - sent_value;
@@ -380,7 +401,7 @@ async fn test_client_recovery(
     // Wait for state machines to complete
     client.wait_for_all_active_state_machines().await;
 
-    let expected_balance = client.get_balance_for_btc().await?;
+    let expected_balance = client.get_balance_for_btc(Account::Primary).await?;
 
     assert_ne!(expected_balance, Amount::ZERO);
 
@@ -413,7 +434,9 @@ async fn test_client_recovery(
     // recovery, without it having to be reopened first.
     recovering_client.wait_for_all_active_state_machines().await;
 
-    let recovered_balance = recovering_client.get_balance_for_btc().await?;
+    let recovered_balance = recovering_client
+        .get_balance_for_btc(Account::Primary)
+        .await?;
 
     ensure!(
         recovered_balance == expected_balance,
@@ -428,7 +451,9 @@ async fn test_client_recovery(
 
     reopened_client.wait_for_all_active_state_machines().await;
 
-    let reopened_balance = reopened_client.get_balance_for_btc().await?;
+    let reopened_balance = reopened_client
+        .get_balance_for_btc(Account::Primary)
+        .await?;
 
     ensure!(
         reopened_balance == expected_balance,
@@ -452,7 +477,12 @@ async fn double_spend_is_rejected() -> anyhow::Result<()> {
 
     let (send_operation_id, ecash) = client_send
         .get_first_module::<MintClientModule>()?
-        .send(Amount::from_sats(1_000), Value::Null, false)
+        .send(
+            Account::Primary,
+            Amount::from_sats(1_000),
+            Value::Null,
+            false,
+        )
         .await?;
 
     let Some(MintEvent::Send(send)) = send_events.next().await else {
@@ -462,7 +492,7 @@ async fn double_spend_is_rejected() -> anyhow::Result<()> {
 
     let operation_id = client_send
         .get_first_module::<MintClientModule>()?
-        .receive(ecash.clone(), Value::Null)
+        .receive(Account::Primary, ecash.clone(), Value::Null)
         .await?;
 
     let state = client_send
@@ -485,7 +515,7 @@ async fn double_spend_is_rejected() -> anyhow::Result<()> {
 
     let operation_id = client_receive
         .get_first_module::<MintClientModule>()?
-        .receive(ecash, Value::Null)
+        .receive(Account::Primary, ecash, Value::Null)
         .await?;
 
     let state = client_receive
@@ -510,7 +540,7 @@ async fn double_spend_is_rejected() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> {
+async fn receive_rejects_invalid_signatures_before_starting_an_operation() -> anyhow::Result<()> {
     let fixtures = fixtures();
     let fed = fixtures.new_fed_not_degraded().await;
 
@@ -522,7 +552,12 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
 
     let (operation_id, ecash) = client
         .get_first_module::<MintClientModule>()?
-        .send(Amount::from_sats(1_000), Value::Null, false)
+        .send(
+            Account::Primary,
+            Amount::from_sats(1_000),
+            Value::Null,
+            false,
+        )
         .await?;
 
     let Some(MintEvent::Send(send)) = events.next().await else {
@@ -530,42 +565,53 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
     };
     assert_eq!(send.operation_id, operation_id);
 
-    let mut invalid_notes = ecash.notes();
-
-    for note in &mut invalid_notes {
+    let notes = ecash.notes();
+    assert!(notes.len() > 1, "exercise mixed valid and invalid notes");
+    let mut all_invalid = notes.clone();
+    for note in &mut all_invalid {
         note.signature = tbs::Signature(bls12_381::G1Affine::generator());
     }
+    let mut invalid_batches = vec![all_invalid];
+    // Check every position so a valid first note cannot hide an invalid later one.
+    for index in 0..notes.len() {
+        let mut mixed = notes.clone();
+        mixed[index].signature = tbs::Signature(bls12_381::G1Affine::generator());
+        invalid_batches.push(mixed);
+    }
+    // Even a real signature is invalid if it authenticates a different nonce.
+    let mut wrong_nonce = notes.clone();
+    wrong_nonce[0].keypair = Keypair::from_seckey_slice(SECP256K1, &[1u8; 32])?;
+    invalid_batches.push(wrong_nonce);
 
-    let invalid_ecash = ECash::new(ecash.mint().unwrap(), invalid_notes);
-
-    let operation_id = client
-        .get_first_module::<MintClientModule>()?
-        .receive(invalid_ecash, Value::Null)
-        .await?;
-
-    let state = client
-        .get_first_module::<MintClientModule>()?
-        .await_final_receive_operation_state(operation_id)
-        .await?;
-
-    assert_eq!(state, FinalReceiveOperationState::Rejected);
-
-    let Some(MintEvent::Receive(receive)) = events.next().await else {
-        panic!("Expected Receive event");
-    };
-    assert_eq!(receive.operation_id, operation_id);
-
-    let Some(MintEvent::ReceiveUpdate(update)) = events.next().await else {
-        panic!("Expected ReceiveUpdate event");
-    };
-    assert_eq!(update.operation_id, receive.operation_id);
-    assert_eq!(update.status, ReceivePaymentStatus::Rejected);
+    let balance_before = client.get_balance_for_btc(Account::Primary).await?;
+    for invalid_notes in invalid_batches {
+        let invalid_ecash = ECash::new(ecash.mint().unwrap(), invalid_notes);
+        let operation_id = OperationId::from_encodable(&invalid_ecash);
+        assert_matches!(
+            client
+                .get_first_module::<MintClientModule>()?
+                .receive(Account::Primary, invalid_ecash, Value::Null)
+                .await,
+            Err(ReceiveECashError::InvalidSignature)
+        );
+        assert!(
+            client
+                .operation_log()
+                .get_operation(operation_id)
+                .await
+                .is_none()
+        );
+        assert_eq!(
+            client.get_balance_for_btc(Account::Primary).await?,
+            balance_before
+        );
+    }
 
     let valid_ecash = ECash::new(ecash.mint().unwrap(), ecash.notes());
 
     let operation_id = client
         .get_first_module::<MintClientModule>()?
-        .receive(valid_ecash, Value::Null)
+        .receive(Account::Primary, valid_ecash, Value::Null)
         .await?;
 
     let state = client
@@ -575,6 +621,7 @@ async fn transaction_with_invalid_signature_is_rejected() -> anyhow::Result<()> 
 
     assert_eq!(state, FinalReceiveOperationState::Success);
 
+    // Invalid batches emitted no receive events; the next event is for valid ecash.
     let Some(MintEvent::Receive(receive)) = events.next().await else {
         panic!("Expected Receive event");
     };
@@ -599,7 +646,12 @@ async fn receive_rejects_ecash_from_another_federation() -> anyhow::Result<()> {
 
     let (_operation_id, ecash) = client
         .get_first_module::<MintClientModule>()?
-        .send(Amount::from_sats(1_000), Value::Null, false)
+        .send(
+            Account::Primary,
+            Amount::from_sats(1_000),
+            Value::Null,
+            false,
+        )
         .await?;
 
     // Re-wrap the same notes under a federation id that is not ours. `receive`
@@ -609,7 +661,7 @@ async fn receive_rejects_ecash_from_another_federation() -> anyhow::Result<()> {
     assert_matches!(
         client
             .get_first_module::<MintClientModule>()?
-            .receive(foreign_ecash, Value::Null)
+            .receive(Account::Primary, foreign_ecash, Value::Null)
             .await,
         Err(ReceiveECashError::WrongFederation)
     );
@@ -627,12 +679,17 @@ async fn receiving_the_same_ecash_twice_is_rejected() -> anyhow::Result<()> {
 
     let (_operation_id, ecash) = client
         .get_first_module::<MintClientModule>()?
-        .send(Amount::from_sats(1_000), Value::Null, false)
+        .send(
+            Account::Primary,
+            Amount::from_sats(1_000),
+            Value::Null,
+            false,
+        )
         .await?;
 
     let operation_id = client
         .get_first_module::<MintClientModule>()?
-        .receive(ecash.clone(), Value::Null)
+        .receive(Account::Primary, ecash.clone(), Value::Null)
         .await?;
 
     assert_eq!(
@@ -649,7 +706,7 @@ async fn receiving_the_same_ecash_twice_is_rejected() -> anyhow::Result<()> {
     assert_matches!(
         client
             .get_first_module::<MintClientModule>()?
-            .receive(ecash, Value::Null)
+            .receive(Account::Primary, ecash, Value::Null)
             .await,
         Err(ReceiveECashError::AlreadyReceived)
     );
@@ -677,10 +734,39 @@ async fn receive_rejects_notes_below_the_base_fee() -> anyhow::Result<()> {
     assert_matches!(
         client
             .get_first_module::<MintClientModule>()?
-            .receive(dust_ecash, Value::Null)
+            .receive(Account::Primary, dust_ecash, Value::Null)
             .await,
         Err(ReceiveECashError::UneconomicalDenomination)
     );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receive_rejects_notes_of_unissued_denominations() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+    let client = fed.new_client().await;
+
+    // The federation issues denominations 0 through 41. 42 is the first it
+    // does not issue, and 64 is the first whose amount overflows a u64.
+    for denomination in [Denomination(42), Denomination(64), Denomination(u8::MAX)] {
+        let note = SpendableNote {
+            denomination,
+            keypair: Keypair::from_seckey_slice(SECP256K1, &[1u8; 32])?,
+            signature: tbs::Signature(bls12_381::G1Affine::generator()),
+        };
+
+        let ecash = ECash::new(client.federation_id(), vec![note]);
+
+        assert_matches!(
+            client
+                .get_first_module::<MintClientModule>()?
+                .receive(Account::Primary, ecash, Value::Null)
+                .await,
+            Err(ReceiveECashError::InvalidDenomination)
+        );
+    }
 
     Ok(())
 }
@@ -696,7 +782,12 @@ async fn send_without_funds_reports_insufficient_balance() -> anyhow::Result<()>
     assert_matches!(
         client
             .get_first_module::<MintClientModule>()?
-            .send(Amount::from_sats(1_000), Value::Null, false)
+            .send(
+                Account::Primary,
+                Amount::from_sats(1_000),
+                Value::Null,
+                false
+            )
             .await
             .map(|(_operation_id, ecash)| ecash.amount()),
         Err(SendECashError::InsufficientBalance)
@@ -706,3 +797,238 @@ async fn send_without_funds_reports_insufficient_balance() -> anyhow::Result<()>
 }
 
 mod db;
+
+/// Receives `ecash` into `account` and waits until the reissued notes have
+/// been credited, so the balance read afterwards is the settled one.
+async fn receive_settled(
+    client: &ClientHandleArc,
+    account: Account,
+    ecash: ECash,
+) -> anyhow::Result<OperationId> {
+    let mint = client.get_first_module::<MintClientModule>()?;
+
+    let operation_id = mint.receive(account, ecash, Value::Null).await?;
+
+    let state = mint
+        .await_final_receive_operation_state(operation_id)
+        .await?;
+
+    ensure!(state == FinalReceiveOperationState::Success);
+
+    let MintOperationMeta::Receive {
+        change_outpoint_range,
+        ..
+    } = client
+        .operation_log()
+        .get_operation(operation_id)
+        .await
+        .expect("operation exists")
+        .meta::<MintOperationMeta>()
+    else {
+        panic!("expected a receive operation");
+    };
+
+    client
+        .await_primary_bitcoin_module_outputs(
+            operation_id,
+            change_outpoint_range.into_iter().collect(),
+        )
+        .await?;
+
+    Ok(operation_id)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+/// Every account is a balance of its own. Funding one leaves the others and
+/// their balance streams untouched, `send_max` empties exactly the one it is
+/// given, and a recovery puts each account's notes back where they were.
+async fn accounts_hold_separate_balances() -> anyhow::Result<()> {
+    let fixtures = fixtures();
+    let fed = fixtures.new_fed_not_degraded().await;
+
+    let client = fed
+        .join_client_with_db(MemDatabase::new().into(), root_secret(&SEND_SK))
+        .await;
+    let mint = client.get_first_module::<MintClientModule>()?;
+
+    issue_ecash(&client, Amount::from_sats(10_000)).await?;
+
+    let mut events = pin!(mint_event_stream(&client));
+
+    // Funds cross accounts the same way they cross wallets: a send out of one
+    // account and a receive into the other.
+    let (send_operation_id, ecash) = mint
+        .send(
+            Account::Primary,
+            Amount::from_sats(3_000),
+            Value::Null,
+            false,
+        )
+        .await?;
+
+    let Some(MintEvent::Send(send)) = events.next().await else {
+        panic!("Expected Send event");
+    };
+    assert_eq!(send.operation_id, send_operation_id);
+    assert_eq!(send.account, Account::Primary);
+
+    let primary_before = client.get_balance_for_btc(Account::Primary).await?;
+
+    let mut primary_balances = client
+        .subscribe_balance_changes(AmountUnit::BITCOIN, Account::Primary)
+        .await;
+    let mut secondary_balances = client
+        .subscribe_balance_changes(AmountUnit::BITCOIN, Account::Secondary)
+        .await;
+
+    assert_eq!(primary_balances.next().await, Some(primary_before));
+    assert_eq!(secondary_balances.next().await, Some(Amount::ZERO));
+
+    let fee = mint
+        .receive_fee_quote(Account::Secondary, &ecash)
+        .await?
+        .total()
+        .get_bitcoin();
+    let expected_secondary = ecash.amount() - fee;
+
+    let receive_operation_id = receive_settled(&client, Account::Secondary, ecash).await?;
+
+    let Some(MintEvent::Receive(receive)) = events.next().await else {
+        panic!("Expected Receive event");
+    };
+    assert_eq!(receive.operation_id, receive_operation_id);
+    assert_eq!(receive.account, Account::Secondary);
+
+    // The notes landed in secondary and nowhere else.
+    assert_eq!(
+        client.get_balance_for_btc(Account::Secondary).await?,
+        expected_secondary
+    );
+    assert_eq!(
+        client.get_balance_for_btc(Account::Primary).await?,
+        primary_before
+    );
+    for account in Account::ALL.into_iter().skip(2) {
+        assert_eq!(client.get_balance_for_btc(account).await?, Amount::ZERO);
+    }
+
+    // Secondary's stream reports the credit, while primary's stays quiet: a
+    // subscription is per account, not per wallet.
+    fedimint_core::runtime::timeout(Duration::from_secs(30), async {
+        while secondary_balances
+            .next()
+            .await
+            .expect("Balance stream never ends")
+            < expected_secondary
+        {}
+    })
+    .await?;
+
+    assert!(
+        fedimint_core::runtime::timeout(Duration::from_secs(2), primary_balances.next())
+            .await
+            .is_err(),
+        "primary's balance stream must not report a change to secondary"
+    );
+
+    // `send_max` hands out everything the account holds, and only that.
+    let (_, ecash) = mint
+        .send_max(Account::Secondary, Value::Null, false)
+        .await
+        .expect("secondary holds funds");
+
+    assert_eq!(ecash.amount(), expected_secondary);
+    assert_eq!(
+        client.get_balance_for_btc(Account::Secondary).await?,
+        Amount::ZERO
+    );
+    assert!(
+        mint.send_max(Account::Secondary, Value::Null, false)
+            .await
+            .is_none(),
+        "an emptied account has nothing left to send"
+    );
+
+    let fee = mint
+        .receive_fee_quote(Account::Primary, &ecash)
+        .await?
+        .total()
+        .get_bitcoin();
+
+    receive_settled(&client, Account::Primary, ecash).await?;
+
+    assert_eq!(
+        client.get_balance_for_btc(Account::Primary).await?,
+        primary_before + expected_secondary - fee
+    );
+
+    // Fund secondary again, and the last account for the first time, so the
+    // recovery has three accounts to tell apart, one of them at the far end
+    // of the derivation.
+    for (account, amount) in [
+        (Account::Secondary, Amount::from_sats(2_000)),
+        (Account::Quinary, Amount::from_sats(1_000)),
+    ] {
+        let (_, ecash) = mint
+            .send(Account::Primary, amount, Value::Null, false)
+            .await?;
+
+        receive_settled(&client, account, ecash).await?;
+    }
+
+    client.wait_for_all_active_state_machines().await;
+
+    let mut balances = BTreeMap::new();
+
+    for account in Account::ALL {
+        balances.insert(account, client.get_balance_for_btc(account).await?);
+    }
+
+    for account in [Account::Primary, Account::Secondary, Account::Quinary] {
+        assert_ne!(balances[&account], Amount::ZERO);
+    }
+    for account in [Account::Tertiary, Account::Quaternary] {
+        assert_eq!(balances[&account], Amount::ZERO);
+    }
+
+    // One seed restores every account; the notes come back in the account
+    // they were in, not pooled into primary.
+    let recovering_client = fed
+        .recover_client_with_db(MemDatabase::new().into(), root_secret(&SEND_SK))
+        .await;
+
+    recovering_client.wait_for_all_recoveries().await?;
+
+    assert_eq!(
+        mintv2_recovery_completed_amount(&recovering_client).await,
+        Some(balances.values().copied().sum())
+    );
+
+    recovering_client.wait_for_all_active_state_machines().await;
+
+    for account in Account::ALL {
+        assert_eq!(
+            recovering_client.get_balance_for_btc(account).await?,
+            balances[&account],
+            "{account} was not restored to its balance"
+        );
+    }
+
+    // Reopening must neither restart the recovery nor credit any account
+    // twice.
+    let reopened_client = fed
+        .open_client_with_db(recovering_client.db().clone(), root_secret(&SEND_SK))
+        .await;
+
+    reopened_client.wait_for_all_active_state_machines().await;
+
+    for account in Account::ALL {
+        assert_eq!(
+            reopened_client.get_balance_for_btc(account).await?,
+            balances[&account],
+            "{account} changed on reopen"
+        );
+    }
+
+    Ok(())
+}

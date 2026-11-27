@@ -47,8 +47,11 @@ use fedimint_client_module::transaction::{
     FeeQuoteRequest, TransactionBuilder, max_affordable_send_amount,
 };
 use fedimint_client_module::{DynGlobalClientContext, sm_enum_variant_translation};
+use fedimint_core::bolt11::{currency_for_network, currency_matches_network};
 use fedimint_core::config::FederationId;
-use fedimint_core::core::{Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId};
+use fedimint_core::core::{
+    Account, Decoder, IntoDynInstance, ModuleInstanceId, ModuleKind, OperationId,
+};
 use fedimint_core::db::{DatabaseTransaction, DatabaseVersion, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{
@@ -87,7 +90,7 @@ use futures::{Future, StreamExt, TryStreamExt as _};
 use incoming::IncomingSmError;
 use itertools::Itertools;
 use lightning_invoice::{
-    Bolt11Invoice, CreationError, Currency, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop,
+    Bolt11Invoice, CreationError, InvoiceBuilder, PaymentSecret, RouteHint, RouteHintHop,
     RoutingFees,
 };
 use pay::PayInvoicePayload;
@@ -847,11 +850,10 @@ impl LightningClientModule {
         ),
         PayBolt11InvoiceError,
     > {
-        let federation_currency: Currency = self.cfg.network.0.into();
         let invoice_currency = invoice.currency();
-        if federation_currency != invoice_currency {
+        if !currency_matches_network(&invoice_currency, self.cfg.network.0) {
             return Err(PayBolt11InvoiceError::WrongCurrency {
-                expected: federation_currency,
+                expected: currency_for_network(self.cfg.network.0),
                 found: invoice_currency,
             });
         }
@@ -859,7 +861,7 @@ impl LightningClientModule {
         let timelock_delta = invoice
             .min_final_cltv_expiry_delta()
             .saturating_add(OUTGOING_LN_CONTRACT_TIMELOCK - 1);
-        if timelock_delta > MAX_OUTGOING_CONTRACT_TIMELOCK_DELTA {
+        if MAX_OUTGOING_CONTRACT_TIMELOCK_DELTA < timelock_delta {
             return Err(PayBolt11InvoiceError::TimelockDeltaTooLarge {
                 found: timelock_delta,
                 max: MAX_OUTGOING_CONTRACT_TIMELOCK_DELTA,
@@ -1107,7 +1109,7 @@ impl LightningClientModule {
 
         let duration_since_epoch = fedimint_core::time::duration_since_epoch();
 
-        let mut invoice_builder = InvoiceBuilder::new(network.into())
+        let mut invoice_builder = InvoiceBuilder::new(currency_for_network(network))
             .amount_milli_satoshis(amount.msats)
             .invoice_description(description)
             .payment_hash(payment_hash)
@@ -1517,7 +1519,7 @@ impl LightningClientModule {
             vec![client_output_sm],
         ));
 
-        let tx = TransactionBuilder::new().with_outputs(output);
+        let tx = TransactionBuilder::new(Account::Primary).with_outputs(output);
         let extra_meta =
             serde_json::to_value(extra_meta).map_err(PayBolt11InvoiceError::ExtraMeta)?;
         let operation_meta_gen = move |change_range: OutPointRange| LightningOperationMeta {
@@ -1541,28 +1543,18 @@ impl LightningClientModule {
         dbtx.commit_tx_result().await?;
 
         self.client_ctx
-            .finalize_and_submit_transaction(
+            .finalize_and_submit_transaction_with_events(
                 operation_id,
                 LightningCommonInit::KIND.as_str(),
                 operation_meta_gen,
                 tx,
-            )
-            .await?;
-
-        let mut event_dbtx = self.client_ctx.module_db().begin_transaction().await;
-
-        self.client_ctx
-            .log_event(
-                &mut event_dbtx,
-                events::SendPaymentEvent {
+                vec![self.client_ctx.make_event(events::SendPaymentEvent {
                     operation_id,
                     amount: Amount::from_msats(amount_msat),
                     fee,
-                },
+                })],
             )
-            .await;
-
-        event_dbtx.commit_tx().await;
+            .await?;
 
         Ok(OutgoingLightningPayment {
             payment_type: pay_type,
@@ -1838,7 +1830,7 @@ impl LightningClientModule {
             keys: vec![key_pair],
         };
 
-        let tx = TransactionBuilder::new().with_inputs(
+        let tx = TransactionBuilder::new(Account::Primary).with_inputs(
             self.client_ctx
                 .make_client_inputs(ClientInputBundle::new_no_sm(vec![client_input])),
         );
@@ -1888,6 +1880,7 @@ impl LightningClientModule {
                     output_amount: Amounts::ZERO,
                     input_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.contract_input),
                     output_fee: Amounts::ZERO,
+                    account: Account::Primary,
                 },
             )
             .await
@@ -1916,6 +1909,7 @@ impl LightningClientModule {
                     output_amount: Amounts::new_bitcoin(amount),
                     input_fee: Amounts::ZERO,
                     output_fee: Amounts::new_bitcoin(self.cfg.fee_consensus.contract_output),
+                    account: Account::Primary,
                 },
             )
             .await
@@ -2087,8 +2081,8 @@ impl LightningClientModule {
             )
             .map_err(CreateBolt11InvoiceError::InvoiceCreation)?;
 
-        let tx =
-            TransactionBuilder::new().with_outputs(self.client_ctx.make_client_outputs(output));
+        let tx = TransactionBuilder::new(Account::Primary)
+            .with_outputs(self.client_ctx.make_client_outputs(output));
         let extra_meta = serde_json::to_value(extra_meta).expect("extra_meta is serializable");
         let operation_meta_gen = {
             let invoice = invoice.clone();
@@ -2214,6 +2208,7 @@ impl LightningClientModule {
             .manual_operation_start_dbtx(
                 &mut dbtx.to_ref_nc(),
                 reclaim_operation_id,
+                Account::Primary,
                 LightningCommonInit::KIND.as_str(),
                 operation_meta,
                 vec![self.client_ctx.make_dyn_state(state)],
