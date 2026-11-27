@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["CliCommandError","DevOpts","Opts"],"fn":["handle_cli_command","json","resolve_ecash"]};
+window.SIDEBAR_ITEMS = {"enum":["CliCommandError","DevOpts","Opts"],"fn":["checked_note_total","handle_cli_command","json","resolve_ecash"]};
