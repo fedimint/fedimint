@@ -36,3 +36,29 @@ modules/fedimint-wallet-server @fedimint/consensus
 ./fedimint-core/src/config.rs  @fedimint/consensus
 
 crypto/             @fedimint/crypto
+
+# Lightning clients retain the owners of overlapping infra and database paths.
+/modules/fedimint-ln-client/   @fedimint/firehose @fedimint/lightning
+/modules/fedimint-lnv2-client/ @fedimint/firehose @fedimint/lightning
+/modules/fedimint-ln-client/**/*.nix   @fedimint/infra @fedimint/lightning
+/modules/fedimint-ln-client/**/*.sh    @fedimint/infra @fedimint/lightning
+/modules/fedimint-lnv2-client/**/*.nix @fedimint/infra @fedimint/lightning
+/modules/fedimint-lnv2-client/**/*.sh  @fedimint/infra @fedimint/lightning
+/modules/fedimint-ln-client/**/.github/ @fedimint/infra @fedimint/lightning
+/modules/fedimint-lnv2-client/**/.github/ @fedimint/infra @fedimint/lightning
+/modules/fedimint-ln-client/**/misc/ @fedimint/infra @fedimint/lightning
+/modules/fedimint-lnv2-client/**/misc/ @fedimint/infra @fedimint/lightning
+/modules/fedimint-ln-client/**/scripts/ @fedimint/infra @fedimint/lightning
+/modules/fedimint-lnv2-client/**/scripts/ @fedimint/infra @fedimint/lightning
+/modules/fedimint-ln-client/**/gateway/ @fedimint/lightning
+/modules/fedimint-lnv2-client/**/gateway/ @fedimint/lightning
+/modules/fedimint-ln-client/**/fedimint-rocksdb/ @fedimint/database @fedimint/lightning
+/modules/fedimint-lnv2-client/**/fedimint-rocksdb/ @fedimint/database @fedimint/lightning
+/modules/fedimint-ln-client/**/fedimint-dbtool/ @fedimint/database @fedimint/lightning
+/modules/fedimint-lnv2-client/**/fedimint-dbtool/ @fedimint/database @fedimint/lightning
+/modules/fedimint-ln-client/**/db.rs   @fedimint/database @fedimint/lightning
+/modules/fedimint-ln-client/**/db/     @fedimint/database @fedimint/lightning
+/modules/fedimint-lnv2-client/**/db.rs @fedimint/database @fedimint/lightning
+/modules/fedimint-lnv2-client/**/db/   @fedimint/database @fedimint/lightning
+/modules/fedimint-ln-client/**/crypto/ @fedimint/crypto @fedimint/lightning
+/modules/fedimint-lnv2-client/**/crypto/ @fedimint/crypto @fedimint/lightning
