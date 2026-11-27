@@ -124,7 +124,7 @@ repository = "https://github.com/fedimint/fedimint"
 name = "fedimint"
 
 [workspace.dependencies]
-aleph-bft = { package = "fedimint-aleph-bft", version = "0.36.0", default-features = false }
+aleph-bft = { package = "fedimint-aleph-bft", version = "0.37.0", default-features = false }
 anyhow = "1.0.98"
 argon2 = "0.5.3"
 arti-client = { version = "0.38.0", default-features = false }

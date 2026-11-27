@@ -20,30 +20,45 @@ use std::time::Duration;
 
 use fedimint_core::db::{AutocommitResultExt, Database, IDatabaseTransactionOpsCoreTyped};
 use fedimint_core::encoding::{Decodable, DecodeError, Encodable};
-use fedimint_core::envs::is_running_in_test_env;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::peer_availability::{
     PEER_AVAILABILITY_WINDOWS_SECS, PeerAvailability, WindowAvailability,
 };
 use fedimint_core::task::sleep;
 use fedimint_core::time::duration_since_epoch;
-use fedimint_core::{NumPeers, PeerId};
+use fedimint_core::{NumPeers, PeerId, is_running_in_test_env};
 use fedimint_logging::LOG_CONSENSUS;
 use tracing::debug;
 
 use super::db::{PeerAvailabilityKey, PeerAvailabilityResetsKey};
 
-const SLOT_SECS: u64 = 60;
+#[derive(Clone, Copy)]
+struct AvailabilityTiming {
+    slot_secs: u64,
+    persist_interval: Duration,
+}
+
+impl AvailabilityTiming {
+    fn for_test_env(test_env: bool) -> Self {
+        if test_env {
+            Self {
+                slot_secs: 10,
+                persist_interval: Duration::from_secs(10),
+            }
+        } else {
+            Self {
+                slot_secs: 60,
+                persist_interval: Duration::from_secs(600),
+            }
+        }
+    }
+}
 
 /// Folds the [`PeerActivity`] into the persisted [`PeerAvailabilityState`]
 /// every 10 minutes, or every 10 seconds in tests. A restart loses at most one
 /// interval of activity.
 pub async fn persist_peer_availability(db: Database, tracker: Arc<AvailabilityTracker>) {
-    let interval = if is_running_in_test_env!() {
-        Duration::from_secs(10)
-    } else {
-        Duration::from_secs(600)
-    };
+    let interval = AvailabilityTiming::for_test_env(is_running_in_test_env!()).persist_interval;
 
     loop {
         sleep(interval).await;
@@ -60,8 +75,12 @@ pub struct AvailabilityTracker {
 
 impl AvailabilityTracker {
     pub fn new(identity: PeerId, num_peers: NumPeers) -> Self {
+        Self::with_activity(PeerActivity::new(identity, num_peers))
+    }
+
+    fn with_activity(activity: PeerActivity) -> Self {
         Self {
-            activity: Arc::new(Mutex::new(PeerActivity::new(identity, num_peers))),
+            activity: Arc::new(Mutex::new(activity)),
             writes: tokio::sync::Mutex::new(()),
         }
     }
@@ -188,6 +207,7 @@ pub async fn report_with_timestamp(db: &Database, now_secs: u64) -> (u64, PeerAv
 pub struct PeerActivity {
     identity: PeerId,
     num_peers: NumPeers,
+    slot_secs: u64,
     slot: u64,
     heard_in_slot: BTreeSet<PeerId>,
     observed_slots: u32,
@@ -209,9 +229,18 @@ pub struct ObservedActivity {
 
 impl PeerActivity {
     pub fn new(identity: PeerId, num_peers: NumPeers) -> Self {
+        Self::with_timing(
+            identity,
+            num_peers,
+            AvailabilityTiming::for_test_env(is_running_in_test_env!()),
+        )
+    }
+
+    fn with_timing(identity: PeerId, num_peers: NumPeers, timing: AvailabilityTiming) -> Self {
         Self {
             identity,
             num_peers,
+            slot_secs: timing.slot_secs,
             slot: 0,
             heard_in_slot: BTreeSet::new(),
             observed_slots: 0,
@@ -255,10 +284,10 @@ impl PeerActivity {
         }
 
         ObservedActivity {
-            observed_secs: u64::from(observed_slots) * SLOT_SECS,
+            observed_secs: u64::from(observed_slots) * self.slot_secs,
             peer_observed_secs: excluded
                 .keys()
-                .map(|peer| (*peer, u64::from(observed(*peer)) * SLOT_SECS))
+                .map(|peer| (*peer, u64::from(observed(*peer)) * self.slot_secs))
                 .collect(),
             availability: self
                 .num_peers
@@ -276,7 +305,7 @@ impl PeerActivity {
     /// Closes the current slot once `now_secs` is past it. Slots in which
     /// nothing at all arrived are not observed.
     fn advance(&mut self, now_secs: u64) {
-        let slot = now_secs / SLOT_SECS;
+        let slot = now_secs / self.slot_secs;
         if slot <= self.slot {
             return;
         }

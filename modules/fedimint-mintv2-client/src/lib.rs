@@ -69,6 +69,7 @@ use fedimint_derive_secret::DerivableSecret;
 use fedimint_mintv2_common::config::{FeeConsensus, MintClientConfig, client_denominations};
 use fedimint_mintv2_common::{
     Denomination, KIND, MintCommonInit, MintInput, MintModuleTypes, MintOutput, Note, RecoveryItem,
+    verify_note,
 };
 use futures::{StreamExt, pin_mut};
 use itertools::Itertools;
@@ -1318,12 +1319,34 @@ impl MintClientModule {
             return Err(ReceiveECashError::WrongFederation);
         }
 
+        // The federation rejects such notes anyway, but the client would first
+        // mint change for their face value, and `Denomination::amount` overflows
+        // for denominations of 64 and above.
+        if ecash
+            .notes()
+            .iter()
+            .any(|note| !self.cfg.tbs_agg_pks.contains_key(&note.denomination))
+        {
+            return Err(ReceiveECashError::InvalidDenomination);
+        }
+
         if ecash
             .notes()
             .iter()
             .any(|note| note.amount() <= self.cfg.fee_consensus.base_fee())
         {
             return Err(ReceiveECashError::UneconomicalDenomination);
+        }
+
+        for note in ecash.notes() {
+            let pk = self
+                .cfg
+                .tbs_agg_pks
+                .get(&note.denomination)
+                .expect("denominations were checked above");
+            if !verify_note(note.note(), *pk) {
+                return Err(ReceiveECashError::InvalidSignature);
+            }
         }
 
         let input =
@@ -1673,6 +1696,14 @@ pub enum ReceiveECashError {
     /// One of the notes is worth no more than the fee to reissue it.
     #[error("ECash contains an uneconomical denomination")]
     UneconomicalDenomination,
+
+    /// One of the notes has a denomination the federation does not issue.
+    #[error("ECash contains a denomination the federation does not issue")]
+    InvalidDenomination,
+
+    /// One of the notes has an invalid signature.
+    #[error("ECash contains a note with an invalid signature")]
+    InvalidSignature,
 
     /// The client cannot cover the fee the reissue costs.
     #[error("Receiving ecash requires additional funds")]

@@ -37,11 +37,36 @@ modules/fedimint-wallet-server @fedimint/consensus
 
 crypto/             @fedimint/crypto
 
-# Recurring payments
+# Lightning clients retain the owners of overlapping infra and database paths.
+/modules/fedimint-ln-client/   @fedimint/firehose @fedimint/lightning
+/modules/fedimint-lnv2-client/ @fedimint/firehose @fedimint/lightning
+/modules/fedimint-ln-client/**/*.nix   @fedimint/infra @fedimint/lightning
+/modules/fedimint-ln-client/**/*.sh    @fedimint/infra @fedimint/lightning
+/modules/fedimint-lnv2-client/**/*.nix @fedimint/infra @fedimint/lightning
+/modules/fedimint-lnv2-client/**/*.sh  @fedimint/infra @fedimint/lightning
+/modules/fedimint-ln-client/**/.github/ @fedimint/infra @fedimint/lightning
+/modules/fedimint-lnv2-client/**/.github/ @fedimint/infra @fedimint/lightning
+/modules/fedimint-ln-client/**/misc/ @fedimint/infra @fedimint/lightning
+/modules/fedimint-lnv2-client/**/misc/ @fedimint/infra @fedimint/lightning
+/modules/fedimint-ln-client/**/scripts/ @fedimint/infra @fedimint/lightning
+/modules/fedimint-lnv2-client/**/scripts/ @fedimint/infra @fedimint/lightning
+/modules/fedimint-ln-client/**/gateway/ @fedimint/lightning
+/modules/fedimint-lnv2-client/**/gateway/ @fedimint/lightning
+/modules/fedimint-ln-client/**/fedimint-rocksdb/ @fedimint/database @fedimint/lightning
+/modules/fedimint-lnv2-client/**/fedimint-rocksdb/ @fedimint/database @fedimint/lightning
+/modules/fedimint-ln-client/**/fedimint-dbtool/ @fedimint/database @fedimint/lightning
+/modules/fedimint-lnv2-client/**/fedimint-dbtool/ @fedimint/database @fedimint/lightning
+/modules/fedimint-ln-client/**/db.rs   @fedimint/database @fedimint/lightning
+/modules/fedimint-ln-client/**/db/     @fedimint/database @fedimint/lightning
+/modules/fedimint-lnv2-client/**/db.rs @fedimint/database @fedimint/lightning
+/modules/fedimint-lnv2-client/**/db/   @fedimint/database @fedimint/lightning
+/modules/fedimint-ln-client/**/crypto/ @fedimint/crypto @fedimint/lightning
+/modules/fedimint-lnv2-client/**/crypto/ @fedimint/crypto @fedimint/lightning
+
+# Recurring payments outside the Lightning clients
 /fedimint-recurringd/                  @fedimint/firehose @fedimint/lightning
 /fedimint-recurringd-tests/            @fedimint/firehose @fedimint/lightning
 /fedimint-recurringdv2/                @fedimint/firehose @fedimint/lightning
-/modules/fedimint-ln-client/src/recurring/ @fedimint/firehose @fedimint/lightning
 /devimint/src/recurringd.rs           @fedimint/firehose @fedimint/lightning
 /devimint/src/recurringdv2.rs          @fedimint/firehose @fedimint/lightning
 /docs/meta_fields/recurringd_api.md    @fedimint/firehose @fedimint/lightning
@@ -49,32 +74,24 @@ crypto/             @fedimint/crypto
 /fedimint-recurringd/**/*.nix @fedimint/infra @fedimint/lightning
 /fedimint-recurringd-tests/**/*.nix @fedimint/infra @fedimint/lightning
 /fedimint-recurringdv2/**/*.nix @fedimint/infra @fedimint/lightning
-/modules/fedimint-ln-client/src/recurring/**/*.nix @fedimint/infra @fedimint/lightning
 /fedimint-recurringd/**/*.sh @fedimint/infra @fedimint/lightning
 /fedimint-recurringd-tests/**/*.sh @fedimint/infra @fedimint/lightning
 /fedimint-recurringdv2/**/*.sh @fedimint/infra @fedimint/lightning
-/modules/fedimint-ln-client/src/recurring/**/*.sh @fedimint/infra @fedimint/lightning
 /fedimint-recurringd/**/.github/ @fedimint/infra @fedimint/lightning
 /fedimint-recurringd-tests/**/.github/ @fedimint/infra @fedimint/lightning
 /fedimint-recurringdv2/**/.github/ @fedimint/infra @fedimint/lightning
-/modules/fedimint-ln-client/src/recurring/**/.github/ @fedimint/infra @fedimint/lightning
 /fedimint-recurringd/**/misc/ @fedimint/infra @fedimint/lightning
 /fedimint-recurringd-tests/**/misc/ @fedimint/infra @fedimint/lightning
 /fedimint-recurringdv2/**/misc/ @fedimint/infra @fedimint/lightning
-/modules/fedimint-ln-client/src/recurring/**/misc/ @fedimint/infra @fedimint/lightning
 /fedimint-recurringd/**/scripts/ @fedimint/infra @fedimint/lightning
 /fedimint-recurringd-tests/**/scripts/ @fedimint/infra @fedimint/lightning
 /fedimint-recurringdv2/**/scripts/ @fedimint/infra @fedimint/lightning
-/modules/fedimint-ln-client/src/recurring/**/scripts/ @fedimint/infra @fedimint/lightning
 /fedimint-recurringd/**/db.rs @fedimint/database @fedimint/lightning
 /fedimint-recurringd-tests/**/db.rs @fedimint/database @fedimint/lightning
 /fedimint-recurringdv2/**/db.rs @fedimint/database @fedimint/lightning
-/modules/fedimint-ln-client/src/recurring/**/db.rs @fedimint/database @fedimint/lightning
 /fedimint-recurringd/**/db/ @fedimint/database @fedimint/lightning
 /fedimint-recurringd-tests/**/db/ @fedimint/database @fedimint/lightning
 /fedimint-recurringdv2/**/db/ @fedimint/database @fedimint/lightning
-/modules/fedimint-ln-client/src/recurring/**/db/ @fedimint/database @fedimint/lightning
 /fedimint-recurringd/**/crypto/ @fedimint/crypto @fedimint/lightning
 /fedimint-recurringd-tests/**/crypto/ @fedimint/crypto @fedimint/lightning
 /fedimint-recurringdv2/**/crypto/ @fedimint/crypto @fedimint/lightning
-/modules/fedimint-ln-client/src/recurring/**/crypto/ @fedimint/crypto @fedimint/lightning

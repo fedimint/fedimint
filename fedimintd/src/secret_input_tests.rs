@@ -1,0 +1,255 @@
+use std::io::Write as _;
+
+use clap::Parser as _;
+use fedimint_core::util::{write_new, write_overwrite};
+
+use super::{PLAINTEXT_PASSWORD, ServerOpts};
+
+fn opts(extra: &[&str]) -> ServerOpts {
+    ServerOpts::try_parse_from(
+        [
+            "fedimintd",
+            "--data-dir",
+            "unused",
+            "--esplora-url",
+            "http://localhost:5000",
+        ]
+        .into_iter()
+        .chain(extra.iter().copied()),
+    )
+    .unwrap_or_else(|_| panic!("test arguments must parse"))
+}
+
+fn credential_file(contents: &str) -> tempfile::NamedTempFile {
+    let mut file = tempfile::NamedTempFile::new().unwrap();
+    file.write_all(contents.as_bytes()).unwrap();
+    file
+}
+
+#[test]
+fn legacy_ui_password_distinguishes_missing_empty_and_nonempty_files() -> anyhow::Result<()> {
+    let data_dir = tempfile::tempdir()?;
+    let path = data_dir.path().join(PLAINTEXT_PASSWORD);
+    let mut opts = opts(&[]);
+    opts.data_dir = data_dir.path().to_owned();
+    opts.resolve_secrets()?;
+
+    assert!(opts.resolve_ui_auth()?.is_none());
+
+    for contents in ["", "\r\n", " \t\n"] {
+        write_overwrite(&path, contents)?;
+        let err = opts
+            .resolve_ui_auth()
+            .expect_err("an empty legacy file must stop startup");
+        assert_eq!(
+            err.to_string(),
+            "Guardian UI password file password.private must not be empty or whitespace-only"
+        );
+    }
+
+    write_overwrite(&path, "legacy password\r\n")?;
+    let auth = opts.resolve_ui_auth()?.expect("legacy UI authentication");
+    assert!(auth.verify("legacy password"));
+    Ok(())
+}
+
+#[test]
+fn explicit_ui_password_takes_precedence_over_empty_legacy_file() -> anyhow::Result<()> {
+    let data_dir = tempfile::tempdir()?;
+    write_new(data_dir.path().join(PLAINTEXT_PASSWORD), "\n")?;
+    let file = credential_file(" explicit password \n");
+
+    for args in [
+        ["--password-ui", " explicit password "],
+        ["--password-ui-file", file.path().to_str().unwrap()],
+    ] {
+        let mut opts = opts(&args);
+        opts.data_dir = data_dir.path().to_owned();
+        opts.resolve_secrets()?;
+        let auth = opts.resolve_ui_auth()?.expect("explicit UI authentication");
+        assert!(auth.verify(" explicit password "));
+    }
+    Ok(())
+}
+
+#[test]
+fn secret_sources_conflict_before_reading_files() {
+    for name in ["password-ui", "password-api", "force-api-secrets"] {
+        let direct = format!("--{name}");
+        let file = format!("--{name}-file");
+        let mut opts = opts(&[&direct, "sensitive-sentinel", &file, "missing"]);
+        let error = opts.resolve_secrets().unwrap_err().to_string();
+        assert!(error.contains("conflicts"));
+        assert!(!error.contains("sensitive-sentinel"));
+    }
+    let mut opts = opts(&[
+        "--bitcoind-url",
+        "http://localhost:8332",
+        "--bitcoind-username",
+        "test",
+        "--bitcoind-password",
+        "sensitive-sentinel",
+        "--bitcoind-password-file",
+        "missing",
+    ]);
+    let error = opts.resolve_secrets().unwrap_err().to_string();
+    assert!(error.contains("conflicts"));
+    assert!(!error.contains("sensitive-sentinel"));
+}
+
+#[test]
+fn daemons_reject_stdin_before_reading_any_file() {
+    let mut opts = opts(&["--password-ui-file", "missing", "--password-api-file", "-"]);
+    assert!(
+        opts.resolve_secrets()
+            .unwrap_err()
+            .to_string()
+            .contains("stdin")
+    );
+}
+
+#[test]
+fn invalid_api_secrets_are_redacted() {
+    let mut opts = opts(&["--force-api-secrets", "sensitive-sentinel,"]);
+    assert_eq!(
+        opts.resolve_secrets().unwrap_err().to_string(),
+        "invalid API secrets"
+    );
+}
+
+#[test]
+fn guardian_credential_files_must_not_be_empty_after_normalization() {
+    for contents in ["", "\n", "\r\n"] {
+        let file = credential_file(contents);
+        let path = file.path().to_str().unwrap();
+        for flag in [
+            "--force-api-secrets-file",
+            "--password-api-file",
+            "--password-ui-file",
+        ] {
+            let mut opts = opts(&[flag, path]);
+            assert_eq!(
+                opts.resolve_secrets().unwrap_err().to_string(),
+                format!("{flag} must not be empty"),
+                "file contents: {contents:?}",
+            );
+        }
+    }
+}
+
+#[test]
+fn guardian_credential_files_resolve_valid_values() {
+    let secrets = credential_file("active, previous\r\n");
+    let api = credential_file(" api password \n");
+    let ui = credential_file(" ui password \r\n");
+
+    let mut opts = opts(&[
+        "--force-api-secrets-file",
+        secrets.path().to_str().unwrap(),
+        "--password-api-file",
+        api.path().to_str().unwrap(),
+        "--password-ui-file",
+        ui.path().to_str().unwrap(),
+    ]);
+    assert_eq!(
+        opts.resolve_secrets().unwrap().get_all(),
+        ["active", "previous"],
+    );
+    assert_eq!(opts.password_api.as_deref(), Some(" api password "));
+    assert_eq!(opts.password_ui.as_deref(), Some(" ui password "));
+}
+
+#[test]
+fn empty_direct_guardian_credentials_keep_existing_semantics() {
+    let mut opts = opts(&[
+        "--force-api-secrets",
+        "",
+        "--password-api",
+        "",
+        "--password-ui",
+        "",
+    ]);
+    assert!(opts.resolve_secrets().unwrap().is_empty());
+    assert_eq!(opts.password_api.as_deref(), Some(""));
+    assert_eq!(opts.password_ui.as_deref(), Some(""));
+}
+
+#[test]
+fn legacy_password_sources_remain_optional() {
+    let mut opts = opts(&[]);
+    opts.resolve_secrets().unwrap();
+    assert!(opts.password_ui.is_none());
+    assert!(opts.password_api.is_none());
+}
+
+#[test]
+fn file_passwords_are_resolved_without_changing_absent_planes() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml");
+    let mut opts = opts(&["--password-api-file", path]);
+    opts.resolve_secrets().unwrap();
+    let expected = include_str!("../Cargo.toml").strip_suffix('\n').unwrap();
+    assert_eq!(opts.password_api.as_deref(), Some(expected));
+    assert!(opts.password_ui.is_none());
+}
+
+#[test]
+fn bitcoind_password_file_alias_is_compatible() {
+    for flag in ["--bitcoind-password-file", "--bitcoind-url-password-file"] {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml");
+        let mut opts = opts(&[
+            "--bitcoind-url",
+            "http://localhost:8332",
+            "--bitcoind-username",
+            "test",
+            flag,
+            path,
+        ]);
+        opts.resolve_secrets().unwrap();
+        assert_eq!(
+            opts.bitcoind_password.as_deref(),
+            Some(include_str!("../Cargo.toml").trim())
+        );
+    }
+}
+
+#[test]
+fn environment_source_conflicts_with_file() {
+    const CHILD: &str = "FM_SECRET_INPUT_TEST_CHILD";
+    if std::env::var_os(CHILD).is_some() {
+        let file = std::env::var(CHILD).unwrap();
+        let mut opts = opts(&[
+            "--bitcoind-url",
+            "http://localhost:8332",
+            "--bitcoind-username",
+            "test",
+            &file,
+            "missing",
+        ]);
+        let error = opts.resolve_secrets().unwrap_err().to_string();
+        assert!(error.contains("conflicts"));
+        assert!(!error.contains("sensitive-sentinel"));
+        return;
+    }
+    for (env, flag) in [
+        ("FM_PASSWORD_API", "--password-api-file"),
+        ("FM_PASSWORD_UI", "--password-ui-file"),
+        ("FM_FORCE_API_SECRETS", "--force-api-secrets-file"),
+        ("FM_BITCOIND_PASSWORD", "--bitcoind-password-file"),
+    ] {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "secret_input_tests::environment_source_conflicts_with_file",
+            ])
+            .env(CHILD, flag)
+            .env("FM_BITCOIND_PASSWORD", "test")
+            .env(env, "sensitive-sentinel")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+    }
+}

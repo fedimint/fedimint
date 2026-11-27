@@ -9,19 +9,14 @@ use tracing::info;
 use crate::LOG_CONSENSUS;
 use crate::consensus::db::{AlephUnitsKey, AlephUnitsPrefix};
 
-/// Identifies a unit in the backup by its encoding.
+/// Reads the AlephBFT backup, keeping one copy of each unit.
 ///
-/// AlephBFT passes every unit it adds to its DAG to the [`BackupWriter`],
-/// including the units it has just replayed from this backup. Storing those
-/// again appends a full copy of the session's units on every restart within a
-/// session, and a guardian that keeps restarting in a stalled session then
-/// loads every copy at once at its next start. The backup therefore holds each
-/// unit once: the writer skips units it already stored, and the reader skips
-/// copies written before this rule existed.
-fn unit_digest(unit: &[u8]) -> sha256::Hash {
-    sha256::Hash::hash(unit)
-}
-
+/// Before fedimint-aleph-bft 0.37.0, AlephBFT handed every unit it replayed
+/// from the backup to the writer again, so each restart within a session
+/// appended a full copy of the session's units. A guardian upgrading out of a
+/// stalled session can still hold such a backup, and decoding every copy at
+/// once can exhaust its memory before it gets to complete the session that
+/// deletes it.
 pub struct BackupReader {
     db: Database,
 }
@@ -47,7 +42,7 @@ impl aleph_bft::BackupReader for BackupReader {
 
             // Keep the first copy: it precedes every unit stored after it, so
             // the units still appear after their parents.
-            if loaded.insert(unit_digest(&unit)) {
+            if loaded.insert(sha256::Hash::hash(&unit)) {
                 backup.extend_from_slice(&unit);
             }
         }
@@ -65,47 +60,57 @@ impl aleph_bft::BackupReader for BackupReader {
     }
 }
 
+/// Writes the AlephBFT backup with one synced database transaction per unit
+/// of ours instead of one per unit.
+///
+/// AlephBFT only needs our own units to be durable before `append` returns,
+/// since it broadcasts them right after. The units of other peers are held in
+/// memory until then and written in the same transaction, which persists them
+/// before the unit of ours that may reference them. A crash therefore loses at
+/// most units of other peers newer than our last unit, which leaves the backup
+/// consistent and which we fetch from our peers again.
 pub struct BackupWriter {
     db: Database,
     units_index: u64,
-    stored: BTreeSet<sha256::Hash>,
+    buffer: Vec<Vec<u8>>,
 }
 
 impl BackupWriter {
     pub async fn new(db: Database) -> Self {
-        let mut units_index = 0;
-        let mut stored = BTreeSet::new();
-
-        {
-            let mut dbtx = db.begin_transaction_nc().await;
-            let mut units = dbtx.find_by_prefix(&AlephUnitsPrefix).await;
-            while let Some((key, unit)) = units.next().await {
-                units_index = units_index.max(key.0 + 1);
-                stored.insert(unit_digest(&unit));
-            }
-        }
+        let units_index = db
+            .begin_transaction_nc()
+            .await
+            .find_by_prefix_sorted_descending(&AlephUnitsPrefix)
+            .await
+            .next()
+            .await
+            .map_or(0, |entry| (entry.0.0) + 1);
 
         Self {
             db,
             units_index,
-            stored,
+            buffer: Vec::new(),
         }
     }
 }
 
 #[async_trait]
 impl aleph_bft::BackupWriter for BackupWriter {
-    async fn append(&mut self, data: &[u8]) -> std::io::Result<()> {
-        if !self.stored.insert(unit_digest(data)) {
+    async fn append(&mut self, data: &[u8], flush: bool) -> std::io::Result<()> {
+        self.buffer.push(data.to_owned());
+
+        if !flush {
             return Ok(());
         }
 
         let mut dbtx = self.db.begin_transaction().await;
 
-        dbtx.insert_new_entry(&AlephUnitsKey(self.units_index), &data.to_owned())
-            .await;
+        for unit in self.buffer.drain(..) {
+            dbtx.insert_new_entry(&AlephUnitsKey(self.units_index), &unit)
+                .await;
 
-        self.units_index += 1;
+            self.units_index += 1;
+        }
 
         dbtx.commit_tx_result()
             .await

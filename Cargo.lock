@@ -3060,9 +3060,9 @@ dependencies = [
 
 [[package]]
 name = "fedimint-aleph-bft"
-version = "0.36.0"
+version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b21015ab681cdddedd866fe4af9169901012e9a8bd4745da8423131cccae025"
+checksum = "fc8ca503f08b745f09a54d1e61123554918c97dc580c0feae81cb09f478df0b4"
 dependencies = [
  "aleph-bft-rmc",
  "aleph-bft-types 0.13.0",
@@ -3459,6 +3459,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.1",
+ "tempfile",
  "tokio",
  "tracing",
 ]
@@ -3636,6 +3637,7 @@ dependencies = [
  "lightning-invoice",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
@@ -4201,6 +4203,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tracing",
 ]
@@ -5208,6 +5211,7 @@ dependencies = [
  "fedimintd-envs",
  "futures",
  "serde_json",
+ "tempfile",
  "tikv-jemallocator",
  "tokio",
  "tracing",
@@ -10283,7 +10287,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -11390,10 +11394,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.6",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

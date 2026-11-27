@@ -20,43 +20,53 @@ async fn stored_rows(db: &Database) -> Vec<(u64, Vec<u8>)> {
         .await
 }
 
-/// AlephBFT hands every unit it replays from the backup to the writer again.
 #[tokio::test]
-async fn restarts_within_a_session_do_not_store_replayed_units_again() {
+async fn units_of_peers_are_written_with_our_next_unit() {
+    let db: Database = MemDatabase::new().into();
+    let mut writer = BackupWriter::new(db.clone()).await;
+
+    writer.append(&unit(1), false).await.unwrap();
+    writer.append(&unit(2), false).await.unwrap();
+    assert!(stored_rows(&db).await.is_empty());
+
+    writer.append(&unit(3), true).await.unwrap();
+    assert_eq!(
+        stored_rows(&db).await,
+        vec![(0, unit(1)), (1, unit(2)), (2, unit(3))]
+    );
+
+    writer.append(&unit(4), true).await.unwrap();
+    assert_eq!(stored_rows(&db).await.last(), Some(&(3, unit(4))));
+}
+
+#[tokio::test]
+async fn a_restarted_writer_continues_after_the_stored_units() {
     let db: Database = MemDatabase::new().into();
 
     let mut writer = BackupWriter::new(db.clone()).await;
-    for byte in [1, 2, 3] {
-        writer.append(&unit(byte)).await.unwrap();
-    }
+    writer.append(&unit(1), true).await.unwrap();
+    // Lost with the writer, like the units of peers held at a crash.
+    writer.append(&unit(2), false).await.unwrap();
+    drop(writer);
 
-    let mut stored = vec![1, 2, 3];
-    for restart in 0..3 {
-        assert_eq!(
-            BackupReader::new(db.clone()).read().await.unwrap(),
-            stored.iter().copied().flat_map(unit).collect::<Vec<_>>()
-        );
+    let mut writer = BackupWriter::new(db.clone()).await;
+    writer.append(&unit(3), true).await.unwrap();
 
-        // Replay everything loaded, as AlephBFT does after a restart.
-        let mut writer = BackupWriter::new(db.clone()).await;
-        for &byte in &stored {
-            writer.append(&unit(byte)).await.unwrap();
-        }
-        // The first restart also creates one new unit before the next crash.
-        if restart == 0 {
-            writer.append(&unit(4)).await.unwrap();
-            stored.push(4);
-        }
-    }
-
+    assert_eq!(stored_rows(&db).await, vec![(0, unit(1)), (1, unit(3))]);
     assert_eq!(
-        stored_rows(&db).await,
-        vec![(0, unit(1)), (1, unit(2)), (2, unit(3)), (3, unit(4))]
+        BackupReader::new(db.clone()).read().await.unwrap(),
+        [unit(1), unit(3)].concat()
+    );
+    assert!(
+        db.begin_transaction_nc()
+            .await
+            .get_value(&AlephUnitsKey(2))
+            .await
+            .is_none()
     );
 }
 
-/// Databases written before the writer skipped replayed units hold a copy of
-/// the session's units per restart.
+/// Older versions stored the replayed units again on every restart.
 #[tokio::test]
 async fn units_stored_more_than_once_are_loaded_once() {
     let db: Database = MemDatabase::new().into();
@@ -74,9 +84,7 @@ async fn units_stored_more_than_once_are_loaded_once() {
     );
 
     let mut writer = BackupWriter::new(db.clone()).await;
-    for byte in [1, 2, 3, 4] {
-        writer.append(&unit(byte)).await.unwrap();
-    }
+    writer.append(&unit(4), true).await.unwrap();
 
     let rows = stored_rows(&db).await;
     assert_eq!(rows.len(), 9);
