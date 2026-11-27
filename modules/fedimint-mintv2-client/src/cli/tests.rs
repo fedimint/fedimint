@@ -1,11 +1,36 @@
 use clap::Parser;
+use fedimint_core::Amount;
 use fedimint_core::config::FederationId;
 use fedimint_core::encoding::Encodable;
+use fedimint_mintv2_common::Denomination;
 
-use super::{ECash, FEDIMINT_PREFIX, Opts, base32, resolve_ecash};
+use super::{
+    CliCommandError, ECash, FEDIMINT_PREFIX, Opts, base32, checked_note_total, resolve_ecash,
+};
 
 fn ecash() -> ECash {
     ECash::new(FederationId::dummy(), vec![])
+}
+
+#[test]
+fn decoded_note_total_checks_amount_range() {
+    assert_eq!(
+        checked_note_total([Denomination(10), Denomination(11)].into_iter()).unwrap(),
+        Amount::from_msats(3072)
+    );
+    let top_bit = Denomination((u64::BITS - 1) as u8);
+    assert_eq!(
+        checked_note_total([top_bit].into_iter()).unwrap().msats,
+        1u64 << top_bit.0
+    );
+    assert!(matches!(
+        checked_note_total([Denomination(u64::BITS as u8)].into_iter()),
+        Err(CliCommandError::UnrepresentableDenomination(_))
+    ));
+    assert!(matches!(
+        checked_note_total([top_bit, top_bit].into_iter()),
+        Err(CliCommandError::AmountOverflow)
+    ));
 }
 
 #[test]
