@@ -893,13 +893,12 @@ impl IDashboardApi for ConsensusApi {
             .collect()
     }
 
-    async fn federation_name(&self) -> String {
+    async fn federation_name(&self) -> Option<String> {
         self.cfg
             .consensus
             .meta
             .get(META_FEDERATION_NAME_KEY)
             .cloned()
-            .expect("Federation name must be set")
     }
 
     async fn session_count(&self) -> u64 {
@@ -925,6 +924,22 @@ impl IDashboardApi for ConsensusApi {
         self.get_invite_code(self.get_active_api_secret())
             .await
             .to_string()
+    }
+
+    async fn peer_availability(
+        &self,
+    ) -> Option<fedimint_server_core::dashboard_ui::DashboardPeerAvailability> {
+        let (updated_at_secs, report) = super::peer_availability::report_with_timestamp(
+            &self.db,
+            fedimint_core::time::duration_since_epoch().as_secs(),
+        )
+        .await;
+        (updated_at_secs != 0).then_some(
+            fedimint_server_core::dashboard_ui::DashboardPeerAvailability {
+                updated_at_secs,
+                report,
+            },
+        )
     }
 
     async fn federation_audit(&self) -> AuditSummary {

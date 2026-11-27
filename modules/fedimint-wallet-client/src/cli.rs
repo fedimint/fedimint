@@ -6,7 +6,7 @@ use clap::Parser;
 use fedimint_api_client::api::FederationError;
 use fedimint_client_module::error::{ModuleLookupError, TransactionSubmitError};
 use fedimint_core::BitcoinAmountOrAll;
-use fedimint_core::core::OperationId;
+use fedimint_core::core::{Account, OperationId};
 use fedimint_core::encoding::Encodable;
 use futures::StreamExt;
 use serde::Serialize;
@@ -111,7 +111,10 @@ async fn withdraw(
         // fees. The returned fees are quoted at the returned amount, so they
         // must be used together.
         BitcoinAmountOrAll::All => {
-            let balance = module.client_ctx.get_balance_for_btc().await?;
+            let balance = module
+                .client_ctx
+                .get_balance_for_btc(Account::Primary)
+                .await?;
             module.max_withdrawable_amount(&address, balance).await?
         }
         BitcoinAmountOrAll::Amount(amount) => {

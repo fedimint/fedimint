@@ -4,5 +4,5 @@ includes = ["*.nix"]
 
 [formatter.rust]
 command = "rustfmt"
-options = ["--edition", "2024"]
+options = ["--edition", "2024", "--config", "skip_children=true"]
 includes = ["*.rs"]

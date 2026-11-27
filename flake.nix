@@ -213,9 +213,14 @@
             git.pre-commit.trailing_newline = false;
             git.pre-commit.hooks = {
               check_forbidden_dependencies = builtins.readFile ./nix/check-forbidden-deps.sh;
-            };
-            git.pre-commit.hooks = {
               cargo-sort = builtins.readFile ./nix/check-cargo-sort.sh;
+              repository_yaml = ''
+                git ls-files -z -- '*.yml' '*.yaml' \
+                  | xargs -0 yamllint -d '{rules: {key-duplicates: enable}}' --
+                actionlint
+                docker-compose -f docker/fedimintd/docker-compose.yaml config --quiet
+                docker-compose -f docker/gatewayd/docker-compose.yaml config --quiet
+              '';
             };
           };
         };
@@ -374,7 +379,6 @@
                 nativeBuildInputs =
                   craneMultiBuild.commonArgs.nativeBuildInputs
                   ++ [
-                    pkgs.cargo-udeps
                     pkgs.cargo-audit
                     pkgs.cargo-deny
                     pkgs.cargo-sort
@@ -398,6 +402,8 @@
                     # Nix
                     pkgs.nixfmt
                     pkgs.shellcheck
+                    pkgs.actionlint
+                    pkgs.yamllint
                     pkgs.nil
                     pkgs.convco
                     pkgs.bash-language-server
@@ -418,7 +424,7 @@
                   ${linkProjectSkills}/bin/link-project-skills "$REPO_ROOT" || exit $?
 
                   # workaround https://github.com/rust-lang/cargo/issues/11020
-                  cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,udeps,llvm-cov} 2>/dev/null) )
+                  cargo_cmd_bins=( $(ls $HOME/.cargo/bin/cargo-{clippy,llvm-cov} 2>/dev/null) )
                   if (( ''${#cargo_cmd_bins[@]} != 0 )); then
                     >&2 echo "⚠️  Detected binaries that might conflict with reproducible environment: ''${cargo_cmd_bins[@]}" 1>&2
                     >&2 echo "   Considering deleting them. See https://github.com/rust-lang/cargo/issues/11020 for details" 1>&2
@@ -492,8 +498,11 @@
 
             lint = flakeboxLib.mkLintShell {
               nativeBuildInputs = [
+                pkgs.actionlint
                 pkgs.cargo-sort
+                pkgs.docker-compose
                 pkgs.taplo
+                pkgs.yamllint
               ];
               env = {
                 FLAKEBOX_GIT_LS_IGNORE = "fedimint-ui-common/assets/";

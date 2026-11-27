@@ -46,6 +46,7 @@ impl State for ReceiveStateMachine {
         global_context: &DynGlobalClientContext,
     ) -> Vec<StateTransition<Self>> {
         let ctx = context.clone();
+        let global_context = global_context.clone();
 
         match &self.state {
             ReceiveSMState::Funding => {
@@ -54,6 +55,7 @@ impl State for ReceiveStateMachine {
                     move |dbtx, result, old_state| {
                         Box::pin(Self::transition_funding(
                             ctx.clone(),
+                            global_context.clone(),
                             dbtx,
                             result,
                             old_state,
@@ -82,10 +84,13 @@ impl ReceiveStateMachine {
 
     async fn transition_funding(
         context: WalletClientContext,
+        global_context: DynGlobalClientContext,
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         result: Result<(), String>,
         old_state: ReceiveStateMachine,
     ) -> ReceiveStateMachine {
+        let account = global_context.account(dbtx).await;
+
         match result {
             Ok(()) => {
                 context
@@ -95,6 +100,7 @@ impl ReceiveStateMachine {
                         ReceivePaymentUpdateEvent {
                             operation_id: old_state.common.operation_id,
                             status: ReceivePaymentStatus::Success,
+                            account,
                         },
                     )
                     .await;
@@ -109,6 +115,7 @@ impl ReceiveStateMachine {
                         ReceivePaymentUpdateEvent {
                             operation_id: old_state.common.operation_id,
                             status: ReceivePaymentStatus::Aborted,
+                            account,
                         },
                     )
                     .await;

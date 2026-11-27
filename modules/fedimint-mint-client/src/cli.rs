@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 use std::{ffi, iter};
@@ -26,7 +27,12 @@ use crate::{
 #[derive(Parser, Serialize)]
 enum Opts {
     /// Reissue out of band notes
-    Reissue { notes: OOBNotes },
+    Reissue {
+        notes: Option<OOBNotes>,
+        /// Read serialized notes from a file, or '-' for stdin.
+        #[clap(long)]
+        notes_file: Option<PathBuf>,
+    },
     /// Prepare notes to send to a third party as a payment
     Spend {
         /// The amount of e-cash to spend
@@ -46,11 +52,19 @@ enum Opts {
     },
     /// Splits a string containing multiple e-cash notes (e.g. from the `spend`
     /// command) into ones that contain exactly one.
-    Split { oob_notes: OOBNotes },
+    Split {
+        oob_notes: Option<OOBNotes>,
+        /// Read serialized notes from a file, or '-' for stdin.
+        #[clap(long)]
+        notes_file: Option<PathBuf>,
+    },
     /// Combines two or more serialized e-cash notes strings
     Combine {
-        #[clap(required = true)]
         oob_notes: Vec<OOBNotes>,
+        /// Read one serialized notes string per file. May be repeated; '-'
+        /// reads stdin once. Cannot be combined with positional notes.
+        #[clap(long)]
+        notes_file: Vec<PathBuf>,
     },
     /// Verifies the signatures of e-cash notes, if the online flag is specified
     /// it also checks with the mint if the notes were already spent
@@ -60,13 +74,64 @@ enum Opts {
         #[clap(long)]
         online: bool,
         /// E-Cash note to validate
-        oob_notes: OOBNotes,
+        oob_notes: Option<OOBNotes>,
+        /// Read serialized notes from a file, or '-' for stdin.
+        #[clap(long)]
+        notes_file: Option<PathBuf>,
     },
     /// Debugging commands querying the federation directly
     Dev {
         #[clap(subcommand)]
         command: DevOpts,
     },
+}
+
+#[cfg(not(target_family = "wasm"))]
+const MAX_NOTES_BYTES: usize = 16 * 1024 * 1024;
+
+fn read_notes_file(path: &Path) -> Result<OOBNotes, CliCommandError> {
+    #[cfg(not(target_family = "wasm"))]
+    {
+        let encoded = fedimint_core::util::read_secret_file(path, MAX_NOTES_BYTES)?;
+        encoded
+            .parse()
+            .map_err(|_| CliCommandError::InvalidSecretNotes)
+    }
+    #[cfg(target_family = "wasm")]
+    {
+        let _ = path;
+        Err(CliCommandError::UnsupportedSecretInput)
+    }
+}
+
+fn resolve_notes(
+    notes: Option<OOBNotes>,
+    file: Option<PathBuf>,
+) -> Result<OOBNotes, CliCommandError> {
+    match (notes, file) {
+        (Some(notes), None) => Ok(notes),
+        (None, Some(file)) => read_notes_file(&file),
+        (Some(_), Some(_)) => Err(CliCommandError::ConflictingNotes),
+        (None, None) => Err(CliCommandError::MissingNotes),
+    }
+}
+
+fn resolve_notes_list(
+    notes: Vec<OOBNotes>,
+    files: &[PathBuf],
+) -> Result<Vec<OOBNotes>, CliCommandError> {
+    if !notes.is_empty() && !files.is_empty() {
+        return Err(CliCommandError::ConflictingNotes);
+    }
+    if !notes.is_empty() {
+        return Ok(notes);
+    }
+    if files.is_empty() {
+        return Err(CliCommandError::MissingNotes);
+    }
+    #[cfg(not(target_family = "wasm"))]
+    fedimint_core::util::ensure_single_stdin(files.iter().map(PathBuf::as_path))?;
+    files.iter().map(|file| read_notes_file(file)).collect()
 }
 
 #[derive(Subcommand, Serialize)]
@@ -78,7 +143,10 @@ enum DevOpts {
     /// contains is checked.
     CheckNonce {
         /// Hex-encoded nonce or e-cash notes string
-        nonce: String,
+        nonce: Option<String>,
+        /// Read serialized notes from a file, or '-' for stdin.
+        #[clap(long)]
+        notes_file: Option<PathBuf>,
     },
     /// Ask every guardian if e-cash has already been issued for a blind nonce
     ///
@@ -89,6 +157,18 @@ enum DevOpts {
         /// Hex-encoded blind nonce
         blind_nonce: String,
     },
+}
+
+fn resolve_nonce_argument(
+    nonce: Option<String>,
+    file: Option<PathBuf>,
+) -> Result<String, CliCommandError> {
+    match (nonce, file) {
+        (Some(nonce), None) => Ok(nonce),
+        (None, Some(file)) => Ok(read_notes_file(&file)?.to_string()),
+        (Some(_), Some(_)) => Err(CliCommandError::ConflictingNonceArgument),
+        (None, None) => Err(CliCommandError::MissingNonceArgument),
+    }
 }
 
 /// A single guardian's answer to a nonce or blind nonce query
@@ -290,7 +370,8 @@ pub(crate) async fn handle_cli_command(
     let opts = Opts::parse_from(iter::once(&ffi::OsString::from("mint")).chain(args.iter()));
 
     match opts {
-        Opts::Reissue { notes } => {
+        Opts::Reissue { notes, notes_file } => {
+            let notes = resolve_notes(notes, notes_file)?;
             let amount = notes.total_amount();
 
             let operation_id = mint.reissue_external_notes(notes, ()).await?;
@@ -315,9 +396,20 @@ pub(crate) async fn handle_cli_command(
             timeout,
             include_invite,
         } => spend(mint, amount, allow_overpay, timeout, include_invite).await,
-        Opts::Split { oob_notes } => Ok(split(&oob_notes)),
-        Opts::Combine { oob_notes } => combine(&oob_notes),
-        Opts::Validate { oob_notes, online } => {
+        Opts::Split {
+            oob_notes,
+            notes_file,
+        } => Ok(split(&resolve_notes(oob_notes, notes_file)?)),
+        Opts::Combine {
+            oob_notes,
+            notes_file,
+        } => combine(&resolve_notes_list(oob_notes, &notes_file)?),
+        Opts::Validate {
+            oob_notes,
+            notes_file,
+            online,
+        } => {
+            let oob_notes = resolve_notes(oob_notes, notes_file)?;
             let amount = mint.validate_notes(&oob_notes)?;
 
             if online {
@@ -331,7 +423,9 @@ pub(crate) async fn handle_cli_command(
             }
         }
         Opts::Dev { command } => match command {
-            DevOpts::CheckNonce { nonce } => check_nonce(mint, &nonce).await,
+            DevOpts::CheckNonce { nonce, notes_file } => {
+                check_nonce(mint, &resolve_nonce_argument(nonce, notes_file)?).await
+            }
             DevOpts::CheckBlindNonce { blind_nonce } => check_blind_nonce(mint, &blind_nonce).await,
         },
     }
@@ -340,6 +434,23 @@ pub(crate) async fn handle_cli_command(
 /// A failure of a `mint` module command.
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum CliCommandError {
+    #[error("Provide either positional nonce/notes or --notes-file, not both")]
+    ConflictingNonceArgument,
+    #[error("Provide positional nonce/notes or --notes-file")]
+    MissingNonceArgument,
+    #[error("Provide either positional notes or --notes-file, not both")]
+    ConflictingNotes,
+    #[error("Provide positional notes or --notes-file")]
+    MissingNotes,
+    #[cfg(not(target_family = "wasm"))]
+    #[error("Invalid e-cash notes in secret input")]
+    InvalidSecretNotes,
+    #[cfg(not(target_family = "wasm"))]
+    #[error(transparent)]
+    SecretInput(#[from] fedimint_core::util::SecretInputError),
+    #[cfg(target_family = "wasm")]
+    #[error("Secret file input is not supported on this platform")]
+    UnsupportedSecretInput,
     /// The notes could not be reissued.
     #[error(transparent)]
     Reissue(#[from] ReissueExternalNotesError),

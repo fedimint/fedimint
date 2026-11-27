@@ -17,7 +17,9 @@ use fedimint_core::module::{
     ApiError, ApiMethod, ApiRequestErased, FEDIMINT_API_ALPN, FEDIMINT_GATEWAY_ALPN,
     IrohApiRequest, IrohGatewayRequest, IrohGatewayResponse,
 };
-use fedimint_core::net::iroh::{IROH_IDLE_TIMEOUT, IROH_KEEP_ALIVE_INTERVAL};
+use fedimint_core::net::iroh::{
+    DEFAULT_IROH_V1_RELAYS, IROH_IDLE_TIMEOUT, IROH_KEEP_ALIVE_INTERVAL,
+};
 
 /// The maximum number of bytes we are willing to buffer when reading an API
 /// response from an iroh QUIC stream. This must be large enough to accommodate
@@ -134,9 +136,11 @@ impl IrohConnector {
     pub(crate) async fn new(
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
+        iroh_p2p: bool,
         path_change: Arc<watch::Sender<u64>>,
     ) -> Result<Self, ConnectorError> {
-        let mut s = Self::new_no_overrides(iroh_dns, iroh_enable_dht, path_change).await?;
+        let mut s =
+            Self::new_no_overrides(iroh_dns, iroh_enable_dht, iroh_p2p, path_change).await?;
 
         // Overrides are `<node-id>=<socket-addr>` pairs: the node id is the key
         // and the value is a single direct address. iroh 1.0 no longer ships
@@ -160,6 +164,7 @@ impl IrohConnector {
     pub(crate) async fn new_no_overrides(
         iroh_dns: Option<SafeUrl>,
         iroh_enable_dht: bool,
+        iroh_p2p: bool,
         path_change: Arc<watch::Sender<u64>>,
     ) -> Result<Self, ConnectorError> {
         let endpoint_stable = Box::pin({
@@ -232,7 +237,23 @@ impl IrohConnector {
             // default (the iroh 1.0 publishers filter out direct addresses), so
             // the client must be able to dial via relays; `RelayMode::Disabled`
             // would disable dialing them, not just registration.
-            let mut builder = builder.relay_mode(iroh_next::RelayMode::Default);
+            let mut builder = builder.relay_mode(default_iroh_v1_relay_mode());
+
+            // Browsers have no IP transports to clear: wasm is always relay-only.
+            #[cfg(not(target_family = "wasm"))]
+            if !iroh_p2p {
+                builder = builder.clear_ip_transports();
+            }
+            #[cfg(target_family = "wasm")]
+            let _ = iroh_p2p;
+
+            // iOS prompts for Local Network access when the port mapper probes
+            // the router, and another crate can turn iroh's `portmapper` on.
+            #[cfg(target_os = "ios")]
+            {
+                builder =
+                    builder.portmapper_config(iroh_next::endpoint::PortmapperConfig::Disabled);
+            }
 
             #[cfg(not(target_family = "wasm"))]
             if iroh_enable_dht {
@@ -738,6 +759,24 @@ fn quic_transport_config_next() -> iroh_next::endpoint::QuicTransportConfig {
         ))
         .keep_alive_interval(IROH_KEEP_ALIVE_INTERVAL)
         .build()
+}
+
+/// Relay mode selecting the Fedimint-operated Iroh 1.0 relays.
+///
+/// `RelayMode::Default` would pick n0's public relays instead, so every
+/// `iroh_next` endpoint that has no operator-configured relay list uses this.
+/// Only the home-relay selection is constrained: iroh still dials peers via
+/// whatever relay URL their address record advertises, including relays absent
+/// from this map.
+pub fn default_iroh_v1_relay_mode() -> iroh_next::RelayMode {
+    iroh_next::RelayMode::Custom(
+        DEFAULT_IROH_V1_RELAYS
+            .into_iter()
+            .map(|url| {
+                iroh_next::RelayUrl::from_str(url).expect("default Iroh 1.0 relay URL is valid")
+            })
+            .collect(),
+    )
 }
 
 fn connectivity_from_iroh_conn_type(conn_type: &iroh::endpoint::ConnectionType) -> Connectivity {

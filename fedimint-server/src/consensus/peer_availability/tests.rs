@@ -4,7 +4,7 @@ use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::{NumPeers, PeerId};
 
-use super::{ObservedActivity, PeerActivity, PeerAvailabilityState, SLOT_SECS};
+use super::{AvailabilityTiming, ObservedActivity, PeerActivity, PeerAvailabilityState};
 
 const DAY: u64 = 86_400;
 
@@ -14,26 +14,45 @@ fn peer(id: u16) -> PeerId {
 
 #[test]
 fn counts_slots_per_peer_and_skips_slots_where_we_were_cut_off() {
+    for test_env in [false, true] {
+        counts_slots_with_timing(AvailabilityTiming::for_test_env(test_env));
+    }
+}
+
+#[test]
+fn production_and_test_timings() {
+    let production = AvailabilityTiming::for_test_env(false);
+    assert_eq!(production.slot_secs, 60);
+    assert_eq!(production.persist_interval.as_secs(), 600);
+
+    let test = AvailabilityTiming::for_test_env(true);
+    assert_eq!(test.slot_secs, 10);
+    assert_eq!(test.persist_interval.as_secs(), 10);
+}
+
+fn counts_slots_with_timing(timing: AvailabilityTiming) {
     // We are peer 0 of 4: a slot needs messages from 2 other peers
-    let mut activity = PeerActivity::new(peer(0), NumPeers::from(4));
+    let mut activity = PeerActivity::with_timing(peer(0), NumPeers::from(4), timing);
+    let slot_secs = timing.slot_secs;
+    let start = 100 * slot_secs;
 
     for slot in 0..10 {
-        let now = 1_000 + slot * SLOT_SECS;
+        let now = start + slot * slot_secs;
         activity.heard(peer(1), now);
         // Peer 2 only in the first half
         if slot < 5 {
             activity.heard(peer(2), now + 1);
         }
-        activity.heard(peer(3), now + 9);
+        activity.heard(peer(3), now + slot_secs - 1);
     }
     // 3 slots in which only peer 1 reached us: we were cut off
     for slot in 10..13 {
-        activity.heard(peer(1), 1_000 + slot * SLOT_SECS);
+        activity.heard(peer(1), start + slot * slot_secs);
     }
 
-    let observed = activity.take(1_000 + 13 * SLOT_SECS);
+    let observed = activity.take(start + 13 * slot_secs);
 
-    assert_eq!(observed.observed_secs, 10 * SLOT_SECS);
+    assert_eq!(observed.observed_secs, 10 * slot_secs);
     assert_eq!(
         observed.availability,
         BTreeMap::from([
@@ -43,14 +62,14 @@ fn counts_slots_per_peer_and_skips_slots_where_we_were_cut_off() {
             (peer(3), 1.0)
         ])
     );
-    assert_eq!(observed.last_heard_secs[&peer(1)], 1_000 + 12 * SLOT_SECS);
+    assert_eq!(observed.last_heard_secs[&peer(1)], start + 12 * slot_secs);
     assert_eq!(
         observed.last_heard_secs[&peer(2)],
-        1_000 + 4 * SLOT_SECS + 1
+        start + 4 * slot_secs + 1
     );
 
     // Taking again starts from zero
-    assert_eq!(activity.take(1_000 + 14 * SLOT_SECS).observed_secs, 0);
+    assert_eq!(activity.take(start + 14 * slot_secs).observed_secs, 0);
 }
 
 /// Updates `state` every 3 minutes from `from` to `to` with all observed
@@ -149,10 +168,20 @@ async fn reset_survives_writes_and_restart_and_only_uses_fresh_samples() {
     use fedimint_core::db::mem_impl::MemDatabase;
     use fedimint_core::db::{Database, IDatabaseTransactionOpsCoreTyped};
 
-    use super::{AvailabilityTracker, PeerAvailabilityKey, report};
+    use super::{AvailabilityTracker, PeerAvailabilityKey, report, report_with_timestamp};
 
     let db: Database = MemDatabase::new().into();
-    let tracker = AvailabilityTracker::new(peer(0), NumPeers::from(4));
+    assert_eq!(report_with_timestamp(&db, DAY).await.0, 0);
+    // The fixture below spans fixed 60-second observation slots.
+    let timing = AvailabilityTiming::for_test_env(false);
+    let new_tracker = || {
+        AvailabilityTracker::with_activity(PeerActivity::with_timing(
+            peer(0),
+            NumPeers::from(4),
+            timing,
+        ))
+    };
+    let tracker = new_tracker();
     // Start with the old database format and a full day of observations.
     let mut state = PeerAvailabilityState::default();
     run(&mut state, 180, DAY, true);
@@ -192,10 +221,10 @@ async fn reset_survives_writes_and_restart_and_only_uses_fresh_samples() {
     }
 
     // A new tracker models restart: the reset persists.
-    let tracker = AvailabilityTracker::new(peer(0), NumPeers::from(4));
+    let tracker = new_tracker();
     assert_eq!(report(&db, DAY + 120).await, empty);
     for slot in 2..12 {
-        let now = DAY + slot * SLOT_SECS;
+        let now = DAY + slot * timing.slot_secs;
         let mut activity = tracker.activity.lock().unwrap();
         activity.heard(peer(2), now);
         activity.heard(peer(3), now);
@@ -204,12 +233,15 @@ async fn reset_survives_writes_and_restart_and_only_uses_fresh_samples() {
         }
     }
     tracker.persist(&db, DAY + 720).await;
-    let fresh = report(&db, DAY + 720).await;
+    let (updated_at_secs, fresh) = report_with_timestamp(&db, DAY + 720).await;
+    assert_eq!(updated_at_secs, DAY + 720);
+    assert_eq!(fresh, report(&db, DAY + 720).await);
     assert_eq!(fresh.last_seen_secs[&peer(1)], DAY + 360);
     for window in &fresh.windows {
         assert_eq!(window.peers[&peer(1)], 5_000);
         let coverage = super::to_bps(1.0 - (-600.0 / window.window_secs as f64).exp());
         assert_eq!(window.peer_coverage_bps[&peer(1)], coverage);
+        assert!(coverage < window.coverage_bps);
     }
     // Resetting ourselves also clears only that peer, including synthetic
     // last-seen.

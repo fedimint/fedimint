@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests;
 
-use std::io::Cursor;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -9,6 +8,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use async_trait::async_trait;
+use bincode::Options as _;
 use bytes::{Bytes, BytesMut};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::registry::ModuleDecoderRegistry;
@@ -95,6 +95,20 @@ pub trait IP2PConnection<M>: Send + Sync + 'static {
     }
 }
 
+fn decode_frame<M: Decodable + DeserializeOwned>(bytes: &[u8]) -> anyhow::Result<M> {
+    if let Ok(message) = M::consensus_decode_whole(bytes, &ModuleDecoderRegistry::default()) {
+        return Ok(message);
+    }
+
+    // Keep the legacy wire format. Use the reader API because bincode 1.3's
+    // slice API ignores the configured limit.
+    Ok(bincode::options()
+        .with_fixint_encoding()
+        .allow_trailing_bytes()
+        .with_limit(bytes.len() as u64)
+        .deserialize_from(bytes)?)
+}
+
 /// Implementations of the IP2PFrame and IP2PConnection traits for TLS
 
 #[async_trait]
@@ -103,11 +117,7 @@ where
     M: Decodable + DeserializeOwned + Send + 'static,
 {
     async fn read_to_end(&mut self) -> anyhow::Result<M> {
-        if let Ok(message) = M::consensus_decode_whole(self, &ModuleDecoderRegistry::default()) {
-            return Ok(message);
-        }
-
-        Ok(bincode::deserialize_from(Cursor::new(&**self))?)
+        decode_frame(self)
     }
 }
 
@@ -195,11 +205,7 @@ where
     async fn read_to_end(&mut self) -> anyhow::Result<M> {
         let bytes = self.read_to_end(MAX_P2P_MESSAGE_SIZE).await?;
 
-        if let Ok(message) = M::consensus_decode_whole(&bytes, &ModuleDecoderRegistry::default()) {
-            return Ok(message);
-        }
-
-        Ok(bincode::deserialize_from(Cursor::new(&bytes))?)
+        decode_frame(&bytes)
     }
 }
 
@@ -240,11 +246,7 @@ where
     async fn read_to_end(&mut self) -> anyhow::Result<M> {
         let bytes = self.read_to_end(MAX_P2P_MESSAGE_SIZE).await?;
 
-        if let Ok(message) = M::consensus_decode_whole(&bytes, &ModuleDecoderRegistry::default()) {
-            return Ok(message);
-        }
-
-        Ok(bincode::deserialize_from(Cursor::new(&bytes))?)
+        decode_frame(&bytes)
     }
 }
 

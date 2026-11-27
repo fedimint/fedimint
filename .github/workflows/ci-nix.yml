@@ -35,7 +35,7 @@ jobs:
     name: Flake self-check
     runs-on: [self-hosted, linux, x64]
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check Nix flake inputs
         if: github.event_name == 'pull_request' && github.base_ref == 'master'
         uses: DeterminateSystems/flake-checker-action@786422608c7bded2bbc9741ad9f91356842bf520 # v14
@@ -49,7 +49,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dpc/nix-installer-action@c6e05d595d5ed6d6b7c46e42409ca2a126efe13d # dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
@@ -64,8 +64,8 @@ jobs:
           nix develop --ignore-environment .#lint --command ast-grep test --config sgconfig.yml
           nix develop --ignore-environment .#lint --command ./misc/git-hooks/pre-commit
 
-      - name: Check udeps
-        run: nix build -L .#nightly.test.workspaceCargoUdeps
+      - name: cargo-crap
+        run: nix build -L .#ci.crap
 
       - name: Check `nix flake show`
         run: nix flake show .#
@@ -99,7 +99,7 @@ jobs:
     timeout-minutes: ${{ matrix.timeout }}
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - uses: dpc/nix-installer-action@c6e05d595d5ed6d6b7c46e42409ca2a126efe13d # dpc/jj-vqymqvyntouw
@@ -141,7 +141,7 @@ jobs:
     timeout-minutes: ${{ matrix.timeout }}
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - name: Prepare
@@ -234,7 +234,7 @@ jobs:
     timeout-minutes: 60
     if: github.event_name == 'merge_group'
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dpc/nix-installer-action@c6e05d595d5ed6d6b7c46e42409ca2a126efe13d # dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
@@ -246,7 +246,7 @@ jobs:
         run: |
           nix build -L .#wasm32-unknown.ci.cargoCheckWasmNoDefaultFeatures
           nix build -L .#ci.cargoWorkspacesCheckNoDefaultFeatures
-          nix build -L .#nightly.ci.cargoWorkspacesCheckAllFeatures
+          nix build -L .#ci.cargoWorkspacesCheckAllFeatures
           nix build -L .#ci.cargoWorkspacesCheckDefaultFeatures
 
   audit:
@@ -258,7 +258,7 @@ jobs:
     # we don't want to stop the world because of it
     continue-on-error: true
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dpc/nix-installer-action@c6e05d595d5ed6d6b7c46e42409ca2a126efe13d # dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
@@ -311,7 +311,7 @@ jobs:
     timeout-minutes: ${{ matrix.timeout }}
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name != 'pull_request' || matrix.build-in-pr
 
       - uses: dpc/nix-installer-action@c6e05d595d5ed6d6b7c46e42409ca2a126efe13d # dpc/jj-vqymqvyntouw
@@ -351,16 +351,22 @@ jobs:
         container:
           - name: fedimintd
             image: fedimint/fedimintd
+            package: fedimint-pkgs
           - name: fedimint-cli
             image: fedimint/fedimint-cli
+            package: fedimint-pkgs
           - name: gatewayd
             image: fedimint/gatewayd
+            package: gateway-pkgs
           - name: gateway-cli
             image: fedimint/gateway-cli
+            package: gateway-pkgs
           - name: fedimint-recurringd
             image: fedimint/fedimint-recurringd
+            package: fedimint-recurringd-pkgs
           - name: fedimint-recurringdv2
             image: fedimint/fedimint-recurringdv2
+            package: fedimint-recurringdv2-pkgs
           - name: devtools
             image: fedimint/devtools
     runs-on: ${{ matrix.platform.runs-on }}
@@ -370,11 +376,11 @@ jobs:
     steps:
       - name: Checkout Code
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Prepare
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
         uses: ./.github/actions/prepare
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
       - uses: dpc/nix-installer-action@c6e05d595d5ed6d6b7c46e42409ca2a126efe13d # dpc/jj-vqymqvyntouw
         if: github.event_name != 'pull_request' || matrix.platform.run_in_pr
@@ -396,6 +402,20 @@ jobs:
             nix build -L .#container.${{ matrix.container.name }} --system ${{ matrix.platform.arch }}
           fi
           echo "container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
+
+      - name: Check production binary runtime closure
+        if: matrix.container.package != '' && (github.event_name != 'pull_request' || matrix.platform.run_in_pr)
+        shell: bash
+        run: |
+          # Query the binary output, not its derivation/build inputs or the image tarball.
+          closure=$(nix path-info --recursive .#${{ matrix.container.package }} --system ${{ matrix.platform.arch }})
+          # Full compiler outputs are forbidden; GCC/libgcc and glibc runtime libraries are not.
+          if grep -E '^/nix/store/[a-z0-9]{32}-(rust(c|-(mixed|minimal|default|stable|nightly|toolchain|std|src))(-.*)?|cargo(-.*)?|(gcc|clang|llvm|binutils)(-wrapper|-unwrapped)?-[0-9]+(\.[0-9]+)*|glibc-.*-dev|vendor-(cargo-deps|registry)(-.*)?)$' <<< "$closure"; then
+            echo "::error::Build-only dependencies in ${{ matrix.container.package }} runtime closure"
+            exit 1
+          else
+            test "$?" -eq 1
+          fi
 
       - name: Login to Docker Hub
         if: (github.ref_type == 'tag' || startsWith(github.ref, 'refs/heads/releases/')) && (github.event_name != 'pull_request' || matrix.platform.run_in_pr)
@@ -429,7 +449,7 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     steps:
       - name: Checkout Code
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Prepare
         uses: ./.github/actions/prepare
       - name: Login to Docker Hub
@@ -546,7 +566,7 @@ jobs:
         Please report any issues you encounter.
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dpc/nix-installer-action@c6e05d595d5ed6d6b7c46e42409ca2a126efe13d # dpc/jj-vqymqvyntouw
       - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
@@ -577,10 +597,15 @@ jobs:
               >&2 echo "Building: $bin"
               nix build -L .#$bin
 
-              closure_size=$(nix path-info -rS --json .#$bin | nix run nixpkgs#jq '. | to_entries[] | select(.value.ultimate == true) | .value.narSize')
+              closure_size=$(nix path-info -S --json "$(readlink -f result)" | nix run nixpkgs#jq -- -r 'if type == "array" then .[0] else (to_entries[0].value) end | .closureSize // empty')
               >&2 echo "$bin's Nix closure size: $closure_size"
 
-              if [ 300000000 -lt $closure_size ]; then
+              if ! [[ "$closure_size" =~ ^[0-9]+$ ]]; then
+                >&2 echo "Could not determine $bin's Nix closure size"
+                exit 1
+              fi
+
+              if [ 300000000 -lt "$closure_size" ]; then
                 >&2 echo "$bin's Nix closure size seems too big: $closure_size"
                 exit 1
               fi
@@ -682,13 +707,13 @@ jobs:
           done
 
       - name: Upload Binaries
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: "${{ matrix.build.flake-output}}-${{ matrix.platform.name }}"
           path: "bins/**"
 
       - name: Release Binaries
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         if: startsWith(github.ref, 'refs/tags/') && !matrix.platform.build-bundled
         with:
           files: "bins/**"
@@ -719,14 +744,14 @@ jobs:
 
       - name: Upload DEB packages
         if: matrix.platform.build-deb
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: "${{ matrix.build.flake-output }}-${{ matrix.platform.name }}-deb-bundle"
           path: "debs/**.deb"
 
       - name: Release DEB packages
         if: startsWith(github.ref, 'refs/tags/') && matrix.platform.build-deb && !matrix.platform.build-bundled
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           files: "debs/**.deb"
           prerelease: ${{ env.IS_PRERELEASE }}
@@ -734,14 +759,14 @@ jobs:
 
       - name: Upload RPM packages
         if: matrix.platform.build-rpm
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: "${{ matrix.build.flake-output }}-${{ matrix.platform.name }}-rpm-bundle"
           path: "rpms/**.rpm"
 
       - name: Release RPM packages
         if: startsWith(github.ref, 'refs/tags/') && matrix.platform.build-rpm && !matrix.platform.build-bundled
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           files: "rpms/**.rpm"
           prerelease: ${{ env.IS_PRERELEASE }}
@@ -784,7 +809,7 @@ jobs:
         Please report any issues you encounter.
     steps:
       - name: Download Linux bundles
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: "${{ matrix.build.flake-output }}-linux"
           path: bins
@@ -828,7 +853,7 @@ jobs:
 
       - name: Release Binaries
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           files: "bins/**"
           prerelease: ${{ env.IS_PRERELEASE }}
@@ -836,14 +861,14 @@ jobs:
 
       - name: Download DEB packages
         if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: "${{ matrix.build.flake-output }}-linux-deb-bundle"
           path: debs
 
       - name: Release DEB packages
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           files: "debs/**.deb"
           prerelease: ${{ env.IS_PRERELEASE }}
@@ -851,14 +876,14 @@ jobs:
 
       - name: Download RPM packages
         if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: "${{ matrix.build.flake-output }}-linux-rpm-bundle"
           path: rpms
 
       - name: Release RPM packages
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           files: "rpms/**.rpm"
           prerelease: ${{ env.IS_PRERELEASE }}

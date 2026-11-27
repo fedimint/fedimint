@@ -17,6 +17,7 @@ mod command_wait;
 mod db;
 pub mod envs;
 mod event_output;
+mod secret_input;
 mod utils;
 mod visualize;
 
@@ -412,7 +413,9 @@ fn decode_federation_secret_hex(federation_secret_hex: &str) -> CliResult<Deriva
         federation_secret_hex,
         &ModuleRegistry::default(),
     )
-    .map_err_cli_msg("invalid federation secret hex")
+    .map_err(|_| CliError {
+        error: "Invalid federation secret hex".to_owned(),
+    })
 }
 
 enum RecoverySecret {
@@ -812,7 +815,9 @@ impl FedimintCli {
 
         handle_version_hash_command(version_hash);
 
-        let cli_args = Opts::parse();
+        let mut cli_args = Opts::parse();
+        secret_input::check_module_stdin(&cli_args)?;
+        cli_args.resolve_secret_inputs()?;
         let base_level = if cli_args.verbose { "debug" } else { "info" };
         TracingSetup::default()
             .with_base_level(base_level)
@@ -1098,10 +1103,13 @@ impl FedimintCli {
 
                 Ok(CliOutput::InviteCode { invite_code })
             }
-            Command::Join { invite_code } => {
+            Command::Join { invite_code, .. } => {
+                let invite_code = invite_code.expect("secret inputs were resolved");
                 {
-                    let invite_code: InviteCode = InviteCode::from_str(&invite_code)
-                        .map_err_cli_msg("invalid invite code")?;
+                    let invite_code: InviteCode =
+                        InviteCode::from_str(&invite_code).map_err(|_| CliError {
+                            error: "Invalid invite code".to_owned(),
+                        })?;
 
                     // Build client and store config in DB
                     let _client = self.client_join(&cli, invite_code).await?;
@@ -1117,9 +1125,13 @@ impl FedimintCli {
             Command::Client(ClientCmd::Restore {
                 mnemonic,
                 invite_code,
+                ..
             }) => {
+                let invite_code = invite_code.expect("secret inputs were resolved");
                 let invite_code: InviteCode =
-                    InviteCode::from_str(&invite_code).map_err_cli_msg("invalid invite code")?;
+                    InviteCode::from_str(&invite_code).map_err(|_| CliError {
+                        error: "Invalid invite code".to_owned(),
+                    })?;
                 let recovery_secret = match (
                     mnemonic.as_deref(),
                     cli.federation_secret_hex.as_deref(),
@@ -1130,7 +1142,9 @@ impl FedimintCli {
                         });
                     }
                     (Some(mnemonic), None) => {
-                        let mnemonic = Mnemonic::from_str(mnemonic).map_err_cli()?;
+                        let mnemonic = Mnemonic::from_str(mnemonic).map_err(|_| CliError {
+                            error: "Invalid mnemonic".to_owned(),
+                        })?;
                         RecoverySecret::Mnemonic(mnemonic)
                     }
                     (None, Some(federation_secret_hex)) => {
@@ -1307,9 +1321,16 @@ impl FedimintCli {
                 password,
                 no_verify,
                 force,
+                ..
             } => {
-                self.handle_admin_auth(&cli, peer_id, password, no_verify, force)
-                    .await
+                self.handle_admin_auth(
+                    &cli,
+                    peer_id,
+                    password.expect("secret inputs were resolved"),
+                    no_verify,
+                    force,
+                )
+                .await
             }
             AdminCmd::Audit => {
                 let client = self.client_open(&cli).await?;
@@ -1473,11 +1494,10 @@ impl FedimintCli {
         } = request;
         //Parse params to JSON.
         //If fails, convert to JSON string.
-        let params = serde_json::from_str::<Value>(&params).unwrap_or_else(|err| {
+        let params = serde_json::from_str::<Value>(&params).unwrap_or_else(|_| {
             debug!(
                 target: LOG_CLIENT,
-                "Failed to serialize params:{}. Converting it to JSON string",
-                err
+                "Failed to parse params. Converting it to JSON string"
             );
 
             serde_json::Value::String(params)
@@ -1584,12 +1604,13 @@ impl FedimintCli {
                 peer_id,
                 password: auth,
                 module,
+                ..
             } => {
                 self.handle_api_request(
                     &cli,
                     ApiRequest {
                         method,
-                        params,
+                        params: params.unwrap_or_else(|| "null".to_owned()),
                         peer_id,
                         auth,
                         module,
@@ -1643,7 +1664,13 @@ impl FedimintCli {
                 invite_code,
                 path_timeout_seconds,
                 require_direct,
+                ..
             } => {
+                let invite_code =
+                    InviteCode::from_str(&invite_code.expect("secret inputs were resolved"))
+                        .map_err(|_| CliError {
+                            error: "Invalid invite code".to_owned(),
+                        })?;
                 let report = self
                     .federation_ip_query(
                         &cli,
@@ -1668,13 +1695,25 @@ impl FedimintCli {
                 out_file,
                 salt_file,
                 password,
-            } => decrypt_config(in_file, out_file, salt_file, &password),
+                ..
+            } => decrypt_config(
+                in_file,
+                out_file,
+                salt_file,
+                &password.expect("secret inputs were resolved"),
+            ),
             DevCmd::ConfigEncrypt {
                 in_file,
                 out_file,
                 salt_file,
                 password,
-            } => encrypt_config(in_file, out_file, salt_file, &password),
+                ..
+            } => encrypt_config(
+                in_file,
+                out_file,
+                salt_file,
+                &password.expect("secret inputs were resolved"),
+            ),
             DevCmd::ListOperationStates { operation_id } => {
                 #[derive(Serialize)]
                 struct ReactorLogState {

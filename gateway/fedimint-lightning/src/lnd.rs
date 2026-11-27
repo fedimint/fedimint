@@ -177,6 +177,25 @@ enum PaymentActionKind {
     Cancel,
 }
 
+fn channel_amounts_to_lnd(
+    channel_size_sats: u64,
+    push_amount_sats: u64,
+) -> Result<(i64, i64), LightningRpcError> {
+    let channel_size =
+        i64::try_from(channel_size_sats).map_err(|_| LightningRpcError::FailedToOpenChannel {
+            failure_reason: format!(
+                "channel_size_sats {channel_size_sats} does not fit in i64 (LND limit)"
+            ),
+        })?;
+    let push_amount =
+        i64::try_from(push_amount_sats).map_err(|_| LightningRpcError::FailedToOpenChannel {
+            failure_reason: format!(
+                "push_amount_sats {push_amount_sats} does not fit in i64 (LND limit)"
+            ),
+        })?;
+    Ok((channel_size, push_amount))
+}
+
 #[derive(Clone)]
 pub struct GatewayLndClient {
     /// LND client
@@ -229,7 +248,7 @@ impl GatewayLndClient {
     async fn connect(&self) -> Result<LndClient, LightningRpcError> {
         let mut retries = 0;
         let client = loop {
-            if retries >= MAX_LIGHTNING_RETRIES {
+            if MAX_LIGHTNING_RETRIES <= retries {
                 return Err(LightningRpcError::FailedToConnect);
             }
 
@@ -1672,6 +1691,9 @@ impl ILnRpcClient for GatewayLndClient {
             parts_per_million,
         }: crate::OpenChannelRequest,
     ) -> Result<OpenChannelResponse, LightningRpcError> {
+        let (local_funding_amount, push_sat) =
+            channel_amounts_to_lnd(channel_size_sats, push_amount_sats)?;
+
         let mut client = self.connect().await?;
 
         self.connect_peer_if_needed(&mut client, pubkey, host)
@@ -1681,8 +1703,8 @@ impl ILnRpcClient for GatewayLndClient {
         // protobuf defaults so LND falls back to its own configuration.
         let mut open_request = OpenChannelRequest {
             node_pubkey: pubkey.serialize().to_vec(),
-            local_funding_amount: channel_size_sats.try_into().expect("u64 -> i64"),
-            push_sat: push_amount_sats.try_into().expect("u64 -> i64"),
+            local_funding_amount,
+            push_sat,
             ..Default::default()
         };
         if let Some(rate) = fee_rate_sats_per_vbyte {
@@ -2131,6 +2153,12 @@ impl ILnRpcClient for GatewayLndClient {
             onchain_balance_sats: (wallet_balance_response.total_balance
                 + wallet_balance_response.reserved_balance_anchor_chan)
                 as u64,
+            // `send_onchain` spends unconfirmed outputs, and LND refuses a send
+            // that would leave less than the anchor-channel reserve.
+            spendable_onchain_balance_sats: wallet_balance_response
+                .total_balance
+                .saturating_sub(wallet_balance_response.reserved_balance_anchor_chan)
+                .max(0) as u64,
             lightning_balance_msats,
             inbound_lightning_liquidity_msats,
         })
@@ -2194,7 +2222,7 @@ impl ILnRpcClient for GatewayLndClient {
             .iter()
             .filter_map(|payment| {
                 let timestamp_secs = (payment.creation_time_ns / 1_000_000_000) as u64;
-                if timestamp_secs < start_secs || timestamp_secs >= end_secs {
+                if timestamp_secs < start_secs || end_secs <= timestamp_secs {
                     return None;
                 }
                 let payment_hash = sha256::Hash::from_str(&payment.payment_hash).ok();
@@ -2235,7 +2263,7 @@ impl ILnRpcClient for GatewayLndClient {
             .iter()
             .filter_map(|invoice| {
                 let timestamp_secs = invoice.settle_date as u64;
-                if timestamp_secs < start_secs || timestamp_secs >= end_secs {
+                if timestamp_secs < start_secs || end_secs <= timestamp_secs {
                     return None;
                 }
                 let status = match &invoice.state() {

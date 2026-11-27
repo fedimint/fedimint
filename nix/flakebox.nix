@@ -58,6 +58,7 @@ let
     ".*\\.rs"
     ".*\\.html"
     ".*/proto/.*"
+    "\\.clippy\\.toml"
     ".*/clippy\\.toml"
     "db/migrations/.*"
     "devimint/src/cfg/.*"
@@ -252,7 +253,14 @@ let
         bc
         bitcoind
         jq
-        lnd
+        (lnd.overrideAttrs (oldAttrs: {
+          postPatch = (oldAttrs.postPatch or "") + ''
+            cp ${./tests/lnd-taproot-check_test.go} chainreg/taproot_check_test.go
+          '';
+          postCheck = (oldAttrs.postCheck or "") + ''
+            go test ./chainreg -run '^TestBackendSupportsTaprootRPCCompatibility$' -count=1
+          '';
+        }))
         netcat
         perl
         esplora-electrs
@@ -585,24 +593,6 @@ in
         nativeBuildInputs = prev.nativeBuildInputs or [ ] ++ [ pkgs.pandoc ];
       }
     );
-
-    workspaceCargoUdepsDeps = craneLib.buildDepsOnly {
-      pname = "${commonArgs.pname}-udeps-deps";
-      nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ pkgs.cargo-udeps ];
-      # since we filtered all the actual project source, everything will definitely fail
-      # but we only run this step to cache the build artifacts, so we ignore failure with `|| true`
-      buildPhaseCargoCommand = "cargo udeps --workspace --all-targets --profile $CARGO_PROFILE || true";
-      doCheck = false;
-    };
-
-    workspaceCargoUdeps = craneLib.mkCargoDerivation {
-      pname = "fedimint-udeps";
-      cargoArtifacts = workspaceCargoUdepsDeps;
-      nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ pkgs.cargo-udeps ];
-      buildPhaseCargoCommand = "cargo udeps --workspace --all-targets --profile $CARGO_PROFILE";
-      doInstallCargoArtifacts = false;
-      doCheck = false;
-    };
 
     cargoWorkspacesCommand =
       { cmd, pnameSuffix }:

@@ -29,10 +29,25 @@ fn decoded_fee_consensus_is_validated() {
         );
     }
 
-    for malformed in [
-        (Amount::ZERO, 1),
+    for (base, parts_per_million) in [
+        (Amount::ZERO, 1_u64),
         (Amount::from_msats(99), 0),
+        (Amount::from_msats(100), 1_000),
+    ] {
+        let json = serde_json::json!({
+            "base": base,
+            "parts_per_million": parts_per_million,
+        });
+        assert!(serde_json::from_value::<FeeConsensus>(json).is_ok());
+
+        let encoded = (base, parts_per_million).consensus_encode_to_vec();
+        assert!(FeeConsensus::consensus_decode_whole(&encoded, &modules).is_ok());
+    }
+
+    for malformed in [
+        (Amount::from_msats(101), 0),
         (Amount::from_msats(100), 1_001),
+        (Amount::from_msats(u64::MAX), 0),
         (Amount::from_msats(u64::MAX), u64::MAX),
     ] {
         let json = serde_json::json!({

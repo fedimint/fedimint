@@ -420,7 +420,7 @@ async fn migrate_db_v0(
         }
     }
 
-    if double_issuances > 0 {
+    if 0 < double_issuances {
         warn!(target: LOG_MODULE_MINT, "{double_issuances} blind nonces were reused, money was burned by faulty user clients!");
     }
 

@@ -679,7 +679,7 @@ impl RecoveryStateV2 {
             .add(GAP_LIMIT)
             .saturating_sub(next_pending_note_idx);
 
-        if missing > 0 {
+        if 0 < missing {
             self.add_pending_nonces(amount, missing, secret);
         }
     }

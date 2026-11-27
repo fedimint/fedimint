@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use aleph_bft::{Keychain as _, NodeIndex};
+use aleph_bft::{Keychain as _, MultiKeychain as _, NodeCount, NodeIndex, NodeMap};
 use fedimint_core::encoding::Encodable;
 use fedimint_core::{PeerId, secp256k1};
 use secp256k1::{Keypair, SecretKey};
@@ -35,4 +35,12 @@ fn verify_rejects_out_of_range_node_index() {
     // return false rather than panic and take the consensus session down.
     assert!(!keychain.verify(b"message", &signature, NodeIndex(usize::from(u16::MAX) + 1)));
     assert!(!keychain.verify(b"message", &signature, NodeIndex(usize::MAX)));
+}
+
+#[test]
+fn incomplete_rejects_empty_public_key_set() {
+    let mut keychain = keychain();
+    keychain.pks.clear();
+
+    assert!(!keychain.is_complete(b"message", &NodeMap::with_size(NodeCount(0))));
 }

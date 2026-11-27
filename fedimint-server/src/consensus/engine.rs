@@ -290,7 +290,7 @@ impl ConsensusEngine {
             // In a test environment all peers are started in lockstep, so we
             // add jitter to the unit creation delay to break it; in production
             // the peers' timing drifts naturally.
-            let jitter = if is_running_in_test_env() {
+            let jitter = if is_running_in_test_env!() {
                 rand::thread_rng().gen_range(0.5..=1.5)
             } else {
                 1.0
@@ -383,8 +383,9 @@ impl ConsensusEngine {
 
         // We can terminate the session instead of waiting for other peers to complete
         // it since they can always download the signed session outcome from us
-        terminator_sender.send(()).ok();
-        aleph_handle.await.ok();
+        // Preserve best-effort shutdown, but always wait before removing the backup.
+        let _ = terminator_sender.send(());
+        let _ = aleph_handle.await;
 
         // This method removes the backup of the current session from the database
         // and therefore has to be called after we have waited for the session to

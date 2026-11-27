@@ -1,13 +1,10 @@
 name: Backport merged pull request
 on:
+  # Backports need write access even when the merged PR came from a fork.
+  # Keep this exception local to merged PRs with a backport target below.
   pull_request_target:
     # Run on merge (close) or if label is added after merging
     types: [closed, labeled]
-# Set concurrenty limit to a single backport workflow per branch
-# https://docs.github.com/en/actions/using-jobs/using-concurrency
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 permissions: {}
 jobs:
   backport:
@@ -16,27 +13,53 @@ jobs:
       pull-requests: write # so it can create pull requests
     name: Backport pull request
     runs-on: [self-hosted, linux, x64]
-    # Don't run on closed unmerged pull requests or if a non-backport label is added
-    if: |
+    if: >-
+      github.repository == 'fedimint/fedimint' &&
       github.event.pull_request.merged &&
-      (
-        github.event.action != 'labeled' ||
-        contains(github.event.label.name, 'backport')
-      )
-    # Save the output from the create-pr step so it can be used in downstream jobs
-    # https://github.com/korthout/backport-action/blob/e53c7b292aa9985d372c178a89d416ef2176c091/README.md#outputs
+      ((github.event.action == 'closed' &&
+        contains(toJSON(github.event.pull_request.labels.*.name), '"backport ')) ||
+       (github.event.action == 'labeled' &&
+        startsWith(github.event.label.name, 'backport ')))
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.number }}
+      cancel-in-progress: false
+    # The action can report failed targets without failing the job.
     outputs:
       was_successful: ${{ steps.create-pr.outputs.was_successful }}
+      was_successful_by_target: ${{ steps.create-pr.outputs.was_successful_by_target }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # check out the base branch (no fork code) so the fork-PR guard under pull_request_target passes
           ref: ${{ github.base_ref }}
       - id: create-pr
         name: Create backport pull requests
-        uses: korthout/backport-action@8560fb503c275d433c56f05a2f64850093baa9f7 # v4.7.0
+        uses: korthout/backport-action@ad272ff24e4a8593bf18a951a154ae6af93b26b8 # v5.0.0
         with:
           github_token: ${{ secrets.BACKPORT_TOKEN }}
+  notifications:
+    name: Notify Discord of failed backports
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 1
+    needs: backport
+    if: >-
+      !cancelled() && github.repository == 'fedimint/fedimint' &&
+      (needs.backport.result == 'failure' || needs.backport.outputs.was_successful == 'false')
+    steps:
+      - name: Send backport failure to Discord
+        uses: sarisia/actions-status-discord@eb045afee445dc055c18d3d90bd0f244fd062708 # v1.16.0
+        with:
+          webhook: ${{ secrets.DISCORD_WEBHOOK }}
+          status: failure
+          nofail: false
+          title: Backport failed
+          content: >-
+            Backport failed for ${{ github.repository }}#${{ github.event.number }}
+            (<${{ github.event.pull_request.html_url }}>).
+            Run: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}>.
+          description: |
+            Target results (`false` means the backport failed):
+            ${{ needs.backport.outputs.was_successful_by_target || 'Unavailable. See the workflow run for details.' }}
   open-issue:
     permissions:
       contents: read
@@ -44,22 +67,25 @@ jobs:
     name: Open issue for failed backports
     runs-on: [self-hosted, linux, x64]
     needs: backport
-    # Open an issue only if the backport job failed
+    # Open an issue when the action reports failed targets.
     if: ${{ needs.backport.outputs.was_successful == 'false' }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # check out the base branch (no fork code) so the fork-PR guard under pull_request_target passes
           ref: ${{ github.base_ref }}
       - name: Set SHORT_PR_TITLE env
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           # logic to truncate titles needs to be run in a previous step
           # https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#setting-an-environment-variable
           SHORT_PR_TITLE=$(
-            echo '${{ github.event.pull_request.title }}' \
+            printf '%s' "$PR_TITLE" \
+            | tr '\r\n' '  ' \
             | awk '{print (length($0) > 40) ? substr($0, 1, 40) "..." : $0}'
           )
-          echo "SHORT_PR_TITLE=$SHORT_PR_TITLE" >> "$GITHUB_ENV"
+          printf 'SHORT_PR_TITLE=%s\n' "$SHORT_PR_TITLE" >> "$GITHUB_ENV"
       - name: Create issue
         uses: JasonEtco/create-an-issue@1b14a70e4d8dc185e5cc76d3bec9eab20257b2c5 # v2.9.2
         env:

@@ -8,6 +8,7 @@ use std::borrow::Cow;
 use std::net::SocketAddr;
 
 use anyhow::Context as _;
+use fedimint_connectors::iroh::default_iroh_v1_relay_mode;
 use fedimint_core::envs::{
     FM_IROH_DHT_ENABLE_ENV, FM_IROH_N0_DISCOVERY_ENABLE_ENV, FM_IROH_PKARR_PUBLISHER_ENABLE_ENV,
     FM_IROH_PKARR_RESOLVER_ENABLE_ENV, FM_IROH_RELAYS_ENABLE_ENV, is_env_var_set,
@@ -22,6 +23,8 @@ use iroh_next::endpoint::{Builder, QuicTransportConfig};
 use iroh_next::{Endpoint, RelayMode, RelayUrl, SecretKey, TransportAddr};
 use tracing::{debug, info, warn};
 
+use crate::net::iroh::configure_iroh_ip_transports;
+
 /// Build and bind an Iroh 1.0 endpoint using guardian P2P policy.
 pub(super) async fn build_iroh_endpoint(
     secret_key: SecretKey,
@@ -34,7 +37,7 @@ pub(super) async fn build_iroh_endpoint(
         warn!(target: LOG_NET_IROH, "Iroh relays are disabled");
         RelayMode::Disabled
     } else if iroh_relays.is_empty() {
-        RelayMode::Default
+        default_iroh_v1_relay_mode()
     } else {
         RelayMode::Custom(
             iroh_relays
@@ -81,17 +84,15 @@ pub(super) async fn build_iroh_endpoint(
         .build();
 
     let endpoint = Box::pin(
-        builder
-            .relay_mode(relay_mode)
-            .secret_key(secret_key)
-            .alpns(vec![alpn.to_vec()])
-            .transport_config(transport_config)
-            // The Iroh builder defaults to wildcard IPv4 and IPv6 sockets.
-            // Clear both so the configured bind address remains authoritative.
-            .clear_ip_transports()
-            .bind_addr(bind_addr)
-            .context("Invalid Iroh bind address")?
-            .bind(),
+        configure_iroh_ip_transports(
+            builder
+                .relay_mode(relay_mode)
+                .secret_key(secret_key)
+                .alpns(vec![alpn.to_vec()])
+                .transport_config(transport_config),
+            bind_addr,
+        )?
+        .bind(),
     )
     .await
     .context("Failed to bind Iroh endpoint")?;

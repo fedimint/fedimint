@@ -1,10 +1,12 @@
 use std::net::SocketAddr;
 
 use anyhow::Context as _;
+use fedimint_connectors::iroh::default_iroh_v1_relay_mode;
+use fedimint_connectors::{ConnectorRegistry, ConnectorRegistryBuilder};
 use fedimint_core::envs::{
-    FM_IROH_DHT_ENABLE_ENV, FM_IROH_N0_DISCOVERY_ENABLE_ENV, FM_IROH_PKARR_PUBLISHER_ENABLE_ENV,
-    FM_IROH_PKARR_RESOLVER_ENABLE_ENV, FM_IROH_RELAYS_ENABLE_ENV, is_env_var_set,
-    is_env_var_set_opt,
+    FM_IROH_DHT_ENABLE_ENV, FM_IROH_N0_DISCOVERY_ENABLE_ENV, FM_IROH_P2P_ENABLE_ENV,
+    FM_IROH_PKARR_PUBLISHER_ENABLE_ENV, FM_IROH_PKARR_RESOLVER_ENABLE_ENV,
+    FM_IROH_RELAYS_ENABLE_ENV, is_env_var_set, is_env_var_set_opt,
 };
 use fedimint_core::net::iroh::{IROH_IDLE_TIMEOUT, IROH_KEEP_ALIVE_INTERVAL};
 use fedimint_core::secp256k1::SecretKey;
@@ -12,13 +14,40 @@ use fedimint_core::util::SafeUrl;
 use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_logging::LOG_NET_IROH;
 use iroh_next::address_lookup::{DnsAddressLookup, PkarrPublisher, PkarrResolver};
-use iroh_next::endpoint::QuicTransportConfig;
 use iroh_next::endpoint::presets::Minimal;
+use iroh_next::endpoint::{Builder, QuicTransportConfig};
 use iroh_next::{Endpoint, RelayMode};
 use tracing::{debug, info, warn};
 
 /// Child key used for the Iroh 1.0 API endpoint.
 const IROH_V1_API_CHILD_ID: ChildId = ChildId(0);
+
+fn direct_ip_transports_enabled() -> bool {
+    is_env_var_set_opt(FM_IROH_P2P_ENABLE_ENV).unwrap_or(true)
+}
+
+/// Apply the same local policy to guardian-origin API connections.
+pub(crate) fn guardian_connector_registry_builder() -> ConnectorRegistryBuilder {
+    ConnectorRegistry::build_from_server_defaults().iroh_p2p(direct_ip_transports_enabled())
+}
+
+/// Apply the local guardian IP transport policy to both Iroh 1.x listeners.
+pub(crate) fn configure_iroh_ip_transports(
+    builder: Builder,
+    bind_addr: SocketAddr,
+) -> anyhow::Result<Builder> {
+    // Remove the default wildcard sockets, including IPv6. Adding a bind
+    // address installs an IP transport again, so do that only when enabled.
+    let builder = builder.clear_ip_transports();
+    if direct_ip_transports_enabled() {
+        builder
+            .bind_addr(bind_addr)
+            .context("Invalid Iroh bind address")
+    } else {
+        info!(target: LOG_NET_IROH, "Guardian Iroh 1.x direct IP transports are disabled");
+        Ok(builder)
+    }
+}
 
 /// Derive the Iroh 1.0 API secret key from the guardian broadcast key.
 pub(crate) fn derive_iroh_v1_api_secret_key(broadcast_sk: &SecretKey) -> iroh_next::SecretKey {
@@ -35,7 +64,7 @@ pub(crate) async fn build_iroh_v1_endpoint(
     alpn: &[u8],
 ) -> anyhow::Result<Endpoint> {
     let relay_mode = if is_env_var_set_opt(FM_IROH_RELAYS_ENABLE_ENV).unwrap_or(true) {
-        RelayMode::Default
+        default_iroh_v1_relay_mode()
     } else {
         warn!(target: LOG_NET_IROH, "Iroh 1.0 relays are disabled");
         RelayMode::Disabled
@@ -87,15 +116,15 @@ pub(crate) async fn build_iroh_v1_endpoint(
         .build();
 
     let endpoint = Box::pin(
-        builder
-            .relay_mode(relay_mode)
-            .secret_key(secret_key)
-            .alpns(vec![alpn.to_vec()])
-            .transport_config(transport_config)
-            .clear_ip_transports()
-            .bind_addr(bind_addr)
-            .context("Invalid Iroh 1.0 bind address")?
-            .bind(),
+        configure_iroh_ip_transports(
+            builder
+                .relay_mode(relay_mode)
+                .secret_key(secret_key)
+                .alpns(vec![alpn.to_vec()])
+                .transport_config(transport_config),
+            bind_addr,
+        )?
+        .bind(),
     )
     .await
     .context("Failed to bind Iroh 1.0 endpoint")?;
