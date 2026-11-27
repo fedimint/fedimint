@@ -27,8 +27,9 @@ gateway-cli --rpcpassword-file /run/secrets/gateway-password cfg set-mnemonic --
 gateway-cli --rpcpassword-file /run/secrets/gateway-password ecash receive --notes-file - < ecash.txt
 ```
 
-In builds with Tor support, select it explicitly with
-`connect-fed --invite-code-file /run/secrets/invite-code --use-tor true`.
+In builds with Tor support,
+`connect-fed --invite-code-file /run/secrets/invite-code --use-tor true`
+sets `use_tor: true` in the serialized connection request.
 The legacy positional Tor boolean remains supported when the invite code is
 positional; do not combine that boolean with `--use-tor`.
 

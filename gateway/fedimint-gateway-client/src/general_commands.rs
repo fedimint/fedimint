@@ -36,12 +36,11 @@ pub enum GeneralCommands {
         /// Read the invite code from a file, or '-' for stdin
         #[clap(long)]
         invite_code_file: Option<std::path::PathBuf>,
-        /// Activate usage of Tor (or not) as the connector for the federation
-        /// client
+        /// Include the Tor preference in the federation connection request.
         #[cfg(feature = "tor")]
         use_tor: Option<bool>,
-        /// Select Tor when using --invite-code-file (also supported with a
-        /// positional invite code). Do not combine with the positional boolean.
+        /// Include the Tor preference in the federation connection request.
+        /// Do not combine with the positional boolean.
         #[cfg(feature = "tor")]
         #[clap(long = "use-tor")]
         use_tor_option: Option<bool>,
