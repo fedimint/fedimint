@@ -75,6 +75,17 @@ ignore = [
   # zstd-sys is used only by native RocksDB builds. The affected allocator
   # is wasm32-only; reassess before adding Zstd to a supported WASM build.
   "RUSTSEC-2026-0410",
+  # `chrono` unmaintained; no replacement release exists to upgrade to.
+  # Direct uses migrated to `jiff` per fedimint/fedimint#9579; the remaining
+  # pull is transitive via fedimint-ldk-node/lightning-liquidity, which is
+  # outside our control.
+  "RUSTSEC-2026-0543",
+  # `humantime` unmaintained (wraps chrono); no replacement release exists.
+  # Pulled in transitively, not used directly by any fedimint crate: via
+  # fedimint-connectors -> arti-client and the tor-* crate family (Tor
+  # connectivity support), and via fedimint-logging -> console-subscriber
+  # (tokio-console instrumentation).
+  "RUSTSEC-2026-0542",
 ]
 
 [output]

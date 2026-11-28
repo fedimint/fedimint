@@ -118,7 +118,7 @@ fn fixtures_with_gateway(gateway_conn: MockGatewayConnection) -> Fixtures {
             gateway_conn: Some(Arc::new(gateway_conn)),
             custom_meta_fn: Arc::new(|| {
                 serde_json::json!({
-                    "timestamp": chrono::Utc::now().timestamp(),
+                    "timestamp": jiff::Timestamp::now().as_second(),
                 })
             }),
         },

@@ -4,13 +4,15 @@ use std::sync::LazyLock;
 use axum::extract::{Form, FromRequest, Query, State};
 use axum::http::StatusCode;
 use axum::response::{Html, IntoResponse, Response};
-use chrono::NaiveDateTime;
 use fedimint_core::PeerId;
 use fedimint_core::module::serde_json::{self, Value};
 use fedimint_meta_server::Meta;
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
+use jiff::Timestamp;
+use jiff::civil::DateTime as CivilDateTime;
+use jiff::tz::TimeZone;
 use maud::{Markup, html};
 use serde::Serialize;
 use thiserror::Error;
@@ -298,9 +300,9 @@ fn format_value_for_display(key: &str, value: &Value) -> String {
                 if let Some(ts) = value
                     .as_str()
                     .and_then(|s| s.parse::<i64>().ok())
-                    .and_then(|t| chrono::DateTime::from_timestamp(t, 0))
+                    .and_then(|t| Timestamp::from_second(t).ok())
                 {
-                    return ts.format("%Y-%m-%d %H:%M UTC").to_string();
+                    return ts.strftime("%Y-%m-%d %H:%M UTC").to_string();
                 }
             }
             KeyType::Amount => {
@@ -672,7 +674,7 @@ fn render_value_input(key_type: &KeyType, current_value: &str) -> Markup {
         KeyType::DateTime => {
             // Pre-fill with today at 00:00 so the time portion isn't blank
             let val = if current_value.is_empty() {
-                chrono::Utc::now().format("%Y-%m-%dT00:00").to_string()
+                Timestamp::now().strftime("%Y-%m-%dT00:00").to_string()
             } else {
                 current_value.to_string()
             };
@@ -831,12 +833,18 @@ fn convert_input_value(raw: &str, key_type: &KeyType) -> RequestResult<Value> {
     match key_type {
         KeyType::DateTime => {
             // Browsers may send with or without seconds
-            let dt = NaiveDateTime::parse_from_str(raw, "%Y-%m-%dT%H:%M:%S")
-                .or_else(|_| NaiveDateTime::parse_from_str(raw, "%Y-%m-%dT%H:%M"))
+            let dt = CivilDateTime::strptime("%Y-%m-%dT%H:%M:%S", raw)
+                .or_else(|_| CivilDateTime::strptime("%Y-%m-%dT%H:%M", raw))
                 .map_err(|e| RequestError::BadRequest {
                     source: anyhow::anyhow!("Invalid datetime: {e}"),
                 })?;
-            Ok(Value::String(dt.and_utc().timestamp().to_string()))
+            let timestamp = dt
+                .to_zoned_datetime(TimeZone::UTC)
+                .map_err(|e| RequestError::BadRequest {
+                    source: anyhow::anyhow!("Invalid datetime: {e}"),
+                })?
+                .timestamp();
+            Ok(Value::String(timestamp.as_second().to_string()))
         }
         KeyType::Amount => {
             let _: u64 = raw.parse().map_err(|e| RequestError::BadRequest {

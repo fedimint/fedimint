@@ -19,6 +19,7 @@ use fedimint_mint_client::events::{OOBNotesReissued, OOBNotesSpent};
 use fedimint_ui_common::UiState;
 use fedimint_ui_common::auth::UserAuth;
 use fedimint_wallet_client::events::{DepositConfirmed, WithdrawRequest};
+use jiff::Timestamp;
 use maud::{Markup, PreEscaped, html};
 use serde::Deserialize;
 
@@ -516,13 +517,9 @@ where
 }
 
 fn format_timestamp(ts_usecs: u64) -> String {
-    let secs = ts_usecs / 1_000_000;
-    let nanos = (ts_usecs % 1_000_000) * 1_000;
+    let ts = Timestamp::from_microsecond(ts_usecs as i64).expect("timestamp in valid jiff range");
 
-    let ts = UNIX_EPOCH + Duration::new(secs, nanos as u32);
-    let dt: chrono::DateTime<chrono::Utc> = ts.into();
-
-    dt.format("%Y-%m-%d %H:%M:%S UTC").to_string()
+    ts.strftime("%Y-%m-%d %H:%M:%S UTC").to_string()
 }
 
 fn format_duration(d: Duration) -> String {

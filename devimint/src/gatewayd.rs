@@ -7,7 +7,6 @@ use std::time::{Duration, SystemTime};
 use anyhow::{Context, Result, anyhow};
 use bitcoin::Address;
 use bitcoin::hashes::sha256;
-use chrono::{DateTime, Utc};
 use esplora_client::Txid;
 use fedimint_core::config::FederationId;
 use fedimint_core::envs::is_env_var_set;
@@ -24,6 +23,7 @@ use fedimint_ln_server::common::lightning_invoice::Bolt11Invoice;
 use fedimint_lnv2_common::gateway_api::PaymentFee;
 use fedimint_logging::LOG_DEVIMINT;
 use fedimint_testing_core::node_type::LightningNodeType;
+use jiff::Timestamp;
 use semver::Version;
 use tracing::info;
 
@@ -670,16 +670,16 @@ impl<'a> GatewayClient {
         start: SystemTime,
         end: SystemTime,
     ) -> Result<Vec<PaymentDetails>> {
-        let start_datetime: DateTime<Utc> = start.into();
-        let end_datetime: DateTime<Utc> = end.into();
+        let start_datetime = Timestamp::try_from(start).expect("time in valid jiff range");
+        let end_datetime = Timestamp::try_from(end).expect("time in valid jiff range");
         let response = cmd!(
             self,
             "lightning",
             "list-transactions",
             "--start-time",
-            start_datetime.to_rfc3339(),
+            start_datetime.to_string(),
             "--end-time",
-            end_datetime.to_rfc3339()
+            end_datetime.to_string()
         )
         .out_json()
         .await?;

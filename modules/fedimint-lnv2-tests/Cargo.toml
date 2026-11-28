@@ -24,7 +24,6 @@ anyhow = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
 bitcoin = { workspace = true }
-chrono = { workspace = true }
 clap = { workspace = true }
 devimint = { workspace = true }
 fedimint-api-client = { workspace = true }
@@ -45,6 +44,7 @@ fedimint-server = { workspace = true }
 fedimint-testing = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 lightning-invoice = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

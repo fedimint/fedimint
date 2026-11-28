@@ -18,7 +18,6 @@ axum = { workspace = true, features = ["tracing"] }
 bitcoin = { workspace = true }
 bitcoincore-rpc = { workspace = true }
 bon = { workspace = true }
-chrono = { workspace = true }
 clap = { workspace = true }
 esplora-client = { workspace = true }
 fedimint-aead = { workspace = true }
@@ -48,6 +47,7 @@ iroh-base = { workspace = true, features = [
     "ticket",
 ], default-features = false }
 itertools = { workspace = true }
+jiff = { workspace = true }
 nix = { workspace = true, features = ["signal"] }
 rand = { workspace = true }
 reqwest = { workspace = true }
