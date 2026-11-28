@@ -208,4 +208,8 @@ where
         // Iroh 1.0 reports paths on live connections rather than the endpoint.
         None
     }
+
+    async fn shutdown(&self) {
+        self.endpoint.close().await;
+    }
 }

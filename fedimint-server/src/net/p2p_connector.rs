@@ -30,6 +30,9 @@ pub trait IP2PConnector<M>: Send + Sync + 'static {
     /// Get the connection type for a specific peer
     fn connection_type(&self, peer: PeerId) -> Option<ConnectionType>;
 
+    /// Gracefully shutdown the connector and close any underlying listening sockets/endpoints.
+    async fn shutdown(&self) {}
+
     fn into_dyn(self) -> DynP2PConnector<M>
     where
         Self: Sized,

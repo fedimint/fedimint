@@ -165,19 +165,33 @@ pub async fn start_iroh_endpoint(
         let tg_clone = task_group.clone();
         let handlers_clone = handlers.clone();
         info!("Spawning accept loop...");
-        task_group.spawn("Gateway Iroh", |_| async move {
-            while let Some(incoming) = iroh_endpoint.accept().await {
-                info!("Accepted new connection. Spawning handler...");
-                tg_clone.spawn_cancellable_silent(
-                    "handle endpoint accept",
-                    handle_incoming_iroh_request(
-                        incoming,
-                        gw_clone.clone(),
-                        handlers_clone.clone(),
-                        tg_clone.clone(),
-                    ),
-                );
+        task_group.spawn("Gateway Iroh", |handle| async move {
+            let mut shutdown_rx = handle.make_shutdown_rx();
+            loop {
+                tokio::select! {
+                    incoming_opt = iroh_endpoint.accept() => {
+                        match incoming_opt {
+                            Some(incoming) => {
+                                info!("Accepted new connection. Spawning handler...");
+                                tg_clone.spawn_cancellable_silent(
+                                    "handle endpoint accept",
+                                    handle_incoming_iroh_request(
+                                        incoming,
+                                        gw_clone.clone(),
+                                        handlers_clone.clone(),
+                                        tg_clone.clone(),
+                                    ),
+                                );
+                            }
+                            None => break,
+                        }
+                    }
+                    () = &mut shutdown_rx => {
+                        break;
+                    }
+                }
             }
+            iroh_endpoint.close().await;
         });
 
         info!(target: LOG_GATEWAY, "Successfully started iroh endpoint");
