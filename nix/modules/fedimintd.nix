@@ -472,8 +472,19 @@ in
               };
               locations.${cfg.nginx.path_ui} = {
                 proxyPass = "http://127.0.0.1:${builtins.toString cfg.ui.port}/";
+                # The recommended include sets Host to $host, which drops the port.
+                recommendedProxySettings = false;
                 extraConfig = ''
                   proxy_pass_header Authorization;
+                  # The UI compares Origin with the browser-facing Host.
+                  proxy_set_header Host $http_host;
+                ''
+                + lib.optionalString config.services.nginx.recommendedProxySettings ''
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_set_header X-Forwarded-Host $host;
+                  proxy_set_header X-Forwarded-Server $hostname;
                 '';
               };
             }

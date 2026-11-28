@@ -37,6 +37,7 @@ let
           services.nginx = {
             enable = true;
             enableReload = true;
+            recommendedProxySettings = true;
             virtualHosts."manual.example.com".enableACME = lib.mkForce false;
           };
           security.acme.acceptTerms = true;
@@ -70,6 +71,7 @@ let
   disabledEnvironment = evaluatedConfig.systemd.services."fedimintd-mainnet".environment;
   acmeOverrides = evaluatedConfig.services.fedimintd.mainnet.nginx.config;
   manualVhost = evaluatedConfig.services.nginx.virtualHosts."manual.example.com";
+  uiProxy = manualVhost.locations."/";
 in
 pkgs.testers.runNixOSTest {
   name = "fedimintd";
@@ -98,6 +100,9 @@ pkgs.testers.runNixOSTest {
     assert acmeOverrides.sslCertificateKey == null;
     assert manualVhost.sslCertificate == "/var/lib/certs/manual.crt";
     assert manualVhost.sslCertificateKey == "/var/lib/certs/manual.key";
+    assert !uiProxy.recommendedProxySettings;
+    assert pkgs.lib.hasInfix "proxy_set_header Host $http_host;" uiProxy.extraConfig;
+    assert pkgs.lib.hasInfix "proxy_set_header X-Forwarded-Proto $scheme;" uiProxy.extraConfig;
     assert evaluatedConfig.environment.etc."nginx/nginx.conf".source.drvPath != "";
     ''
       start_all()

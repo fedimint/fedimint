@@ -10,12 +10,12 @@ pub mod modules;
 #[cfg(test)]
 mod tests;
 
-use axum::Router;
 use axum::body::Body;
 use axum::extract::{Form, State};
 use axum::http::{StatusCode, header};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
+use axum::{Router, middleware};
 use axum_extra::extract::cookie::CookieJar;
 use chrono::{NaiveDate, Utc};
 use consensus_explorer::consensus_explorer_view;
@@ -23,7 +23,7 @@ use fedimint_core::config::META_FEDERATION_NAME_KEY;
 use fedimint_metrics::{Encoder, REGISTRY, TextEncoder};
 use fedimint_server_core::dashboard_ui::{DashboardApiModuleExt, DynDashboardApi};
 use fedimint_ui_common::assets::WithStaticRoutesExt;
-use fedimint_ui_common::auth::UserAuth;
+use fedimint_ui_common::auth::{UserAuth, csrf_protection_middleware};
 use fedimint_ui_common::{
     CONNECTIVITY_CHECK_ROUTE, LOGIN_ROUTE, LoginInput, ROOT_ROUTE, UiState,
     connectivity_check_handler, dashboard_layout, login_form, login_submit_response,
@@ -321,6 +321,6 @@ pub fn router(api: DynDashboardApi) -> Router {
             .route(meta::META_VALUE_INPUT_ROUTE, get(meta::get_value_input));
     }
 
-    // Finalize the router with state
-    app.with_state(UiState::new(api, requires_auth))
+    app.layer(middleware::from_fn(csrf_protection_middleware))
+        .with_state(UiState::new(api, requires_auth))
 }
