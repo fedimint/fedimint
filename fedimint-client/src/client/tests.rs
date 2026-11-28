@@ -190,6 +190,7 @@ async fn client_for_recovery_test(
         module_inits: ModuleInitRegistry::new(),
         executor,
         api: DynGlobalApi::new(connectors, BTreeMap::new(), None),
+        pre_root_secret: DerivableSecret::new_root(&[0; 32], &[0; 32]),
         root_secret: DerivableSecret::new_root(&[0; 32], &[0; 32]),
         operation_log: OperationLog::new(db),
         secp_ctx: Secp256k1::new(),
