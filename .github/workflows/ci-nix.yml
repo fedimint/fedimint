@@ -58,6 +58,11 @@ jobs:
         continue-on-error: true
       - uses: ./.github/actions/pin-nix-flake-inputs
 
+      - name: Test container image size guard
+        run: |
+          nix shell --inputs-from . nixpkgs#python3 --command \
+            python3 .github/scripts/test-check-container-size.py
+
       # run the same check that git `pre-commit` hook would, just in case
       - name: Commit check
         run: |
@@ -401,6 +406,9 @@ jobs:
           else
             nix build -L .#container.${{ matrix.container.name }} --system ${{ matrix.platform.arch }}
           fi
+          nix shell --inputs-from . nixpkgs#python3 --command \
+            python3 .github/scripts/check-container-size.py \
+              '${{ matrix.container.name }}' '${{ matrix.platform.arch }}' result
           echo "container_tag=$(docker load < result | awk '{ print $3 }')" >> $GITHUB_ENV
 
       - name: Check production binary runtime closure
