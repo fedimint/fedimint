@@ -445,6 +445,18 @@ impl ISetupApi for SetupApi {
         );
 
         ensure!(
+            info.name != local_params.name,
+            "Guardian name \"{}\" matches our own name",
+            info.name
+        );
+
+        ensure!(
+            !state.setup_codes.iter().any(|peer| peer.name == info.name),
+            "A guardian with name \"{}\" has already been added",
+            info.name
+        );
+
+        ensure!(
             discriminant(&info.endpoints) == discriminant(&local_params.endpoints),
             "Guardian has different endpoint variant (TCP/Iroh) than us.",
         );
@@ -515,6 +527,16 @@ impl ISetupApi for SetupApi {
         let our_setup_code = local_params.setup_code();
 
         state.setup_codes.insert(our_setup_code.clone());
+
+        let unique_names: BTreeSet<&str> = state
+            .setup_codes
+            .iter()
+            .map(|code| code.name.as_str())
+            .collect();
+        ensure!(
+            unique_names.len() == state.setup_codes.len(),
+            "All guardians must have unique names"
+        );
 
         for setup_code in &state.setup_codes {
             ensure_fedimint_version_matches(setup_code, &local_params.fedimint_version)?;
