@@ -13,4 +13,5 @@ pub mod federation;
 pub mod fixtures;
 pub mod ln;
 pub use fedimint_gateway_server::Gateway;
+pub use fedimint_testing_core::config::API_AUTH;
 pub use fedimint_testing_core::{db, envs};

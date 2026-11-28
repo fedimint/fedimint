@@ -11,6 +11,7 @@ pub mod dashboard_ui;
 mod init;
 pub mod migration;
 pub mod setup_ui;
+pub mod volume;
 
 use std::any::Any;
 use std::collections::BTreeMap;

@@ -43,16 +43,19 @@ use fedimint_lnv2_common::endpoint_constants::{
     ADD_GATEWAY_ENDPOINT, AWAIT_INCOMING_CONTRACT_ENDPOINT, AWAIT_INCOMING_CONTRACTS_ENDPOINT,
     AWAIT_PREIMAGE_ENDPOINT, CONSENSUS_BLOCK_COUNT_ENDPOINT, DECRYPTION_KEY_SHARE_ENDPOINT,
     GATEWAYS_ENDPOINT, OUTGOING_CONTRACT_EXPIRATION_ENDPOINT, REMOVE_GATEWAY_ENDPOINT,
+    VOLUME_STATS_ENDPOINT,
 };
 use fedimint_lnv2_common::{
     ContractId, LightningCommonInit, LightningConsensusItem, LightningInput, LightningInputError,
     LightningInputV0, LightningModuleTypes, LightningOutput, LightningOutputError,
-    LightningOutputOutcome, LightningOutputV0, MODULE_CONSENSUS_VERSION, OutgoingWitness,
+    LightningOutputOutcome, LightningOutputV0, LightningVolume, LightningVolumeStats,
+    MODULE_CONSENSUS_VERSION, OutgoingWitness,
 };
 use fedimint_logging::LOG_MODULE_LNV2;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
 use fedimint_server_core::config::{PeerHandleOps, eval_poly_g1};
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
+use fedimint_server_core::volume::{counted_whole_window, volume_bucket, volume_buckets};
 use fedimint_server_core::{
     ConfigGenModuleArgs, EnvVarDoc, ServerModule, ServerModuleInit, ServerModuleInitArgs,
 };
@@ -73,6 +76,7 @@ use crate::db::{
     IncomingContractOutpointPrefix, IncomingContractPrefix, IncomingContractStreamIndexKey,
     IncomingContractStreamKey, IncomingContractStreamPrefix, OutgoingContractKey,
     OutgoingContractPrefix, PreimageKey, PreimagePrefix, UnixTimeVoteKey, UnixTimeVotePrefix,
+    VolumeBucket, VolumeBucketKey, VolumeBucketPrefix, VolumeStartKey, VolumeStartPrefix,
 };
 use crate::metrics::{LN_FUNDED_CONTRACT_SATS, LN_OUTGOING_CONTRACT_SETTLED};
 
@@ -213,6 +217,26 @@ impl ModuleInit for LightningInit {
                         u64,
                         lightning,
                         "Lightning Incoming Contract Index"
+                    );
+                }
+                DbKeyPrefix::VolumeBucket => {
+                    push_db_pair_items!(
+                        dbtx,
+                        VolumeBucketPrefix,
+                        VolumeBucketKey,
+                        VolumeBucket,
+                        lightning,
+                        "Lightning Volume Buckets"
+                    );
+                }
+                DbKeyPrefix::VolumeStart => {
+                    push_db_pair_items!(
+                        dbtx,
+                        VolumeStartPrefix,
+                        VolumeStartKey,
+                        u64,
+                        lightning,
+                        "Lightning Volume Start"
                     );
                 }
             }
@@ -443,6 +467,15 @@ impl ServerModule for Lightning {
     ) -> anyhow::Result<()> {
         trace!(target: LOG_MODULE_LNV2, ?consensus_item, "Processing consensus item proposal");
 
+        // Consensus items arrive every session, so this marks the start of
+        // counting no later than the first session that counts. A payment can
+        // still settle earlier in that session, at the same clock value, which
+        // is why the bucket counting started in is never complete.
+        if dbtx.get_value(&VolumeStartKey).await.is_none() {
+            let now = self.consensus_block_count(dbtx).await;
+            dbtx.insert_new_entry(&VolumeStartKey, &now).await;
+        }
+
         match consensus_item {
             LightningConsensusItem::BlockCountVote(vote) => {
                 let current_vote = dbtx
@@ -485,7 +518,8 @@ impl ServerModule for Lightning {
 
                 let pub_key = match outgoing_witness {
                     OutgoingWitness::Claim(preimage) => {
-                        if contract.expiration <= self.consensus_block_count(dbtx).await {
+                        let block_count = self.consensus_block_count(dbtx).await;
+                        if contract.expiration <= block_count {
                             return Err(LightningInputError::Expired);
                         }
 
@@ -494,6 +528,16 @@ impl ServerModule for Lightning {
                         }
 
                         dbtx.insert_entry(&PreimageKey(*outpoint), preimage).await;
+
+                        Self::count_volume(
+                            dbtx,
+                            block_count,
+                            VolumeBucket {
+                                sent: contract.amount,
+                                received: Amount::ZERO,
+                            },
+                        )
+                        .await;
 
                         contract.claim_pk
                     }
@@ -547,7 +591,20 @@ impl ServerModule for Lightning {
                 }
 
                 let pub_key = match contract.decrypt_preimage(agg_decryption_key) {
-                    Some(..) => contract.commitment.claim_pk,
+                    Some(..) => {
+                        let block_count = self.consensus_block_count(dbtx).await;
+                        Self::count_volume(
+                            dbtx,
+                            block_count,
+                            VolumeBucket {
+                                sent: Amount::ZERO,
+                                received: contract.commitment.amount,
+                            },
+                        )
+                        .await;
+
+                        contract.commitment.claim_pk
+                    }
                     None => contract.commitment.refund_pk,
                 };
 
@@ -673,6 +730,16 @@ impl ServerModule for Lightning {
                     let mut dbtx = db.begin_transaction_nc().await;
 
                     Ok(module.consensus_block_count(&mut dbtx).await)
+                }
+            },
+            admin_api_endpoint! {
+                VOLUME_STATS_ENDPOINT,
+                ApiVersion::new(0, 1),
+                async |module: &Lightning, context, _params: ()| -> LightningVolumeStats {
+                    let db = context.db();
+                    let mut dbtx = db.begin_transaction_nc().await;
+
+                    Ok(module.volume_stats(&mut dbtx).await)
                 }
             },
             public_api_endpoint! {
@@ -817,6 +884,47 @@ impl Lightning {
         // confirmed by a threshold of peers.
 
         times.get(num_peers.threshold() - 1).copied().unwrap_or(0)
+    }
+
+    /// Add a settled payment to the current volume bucket.
+    async fn count_volume(
+        dbtx: &mut DatabaseTransaction<'_>,
+        block_count: u64,
+        delta: VolumeBucket,
+    ) {
+        let key = VolumeBucketKey(volume_bucket(block_count));
+        let mut bucket = dbtx.get_value(&key).await.unwrap_or_default();
+        bucket.accumulate(delta);
+        dbtx.insert_entry(&key, &bucket).await;
+    }
+
+    async fn volume_stats(&self, dbtx: &mut DatabaseTransaction<'_>) -> LightningVolumeStats {
+        let block_count = self.consensus_block_count(dbtx).await;
+        let start = dbtx.get_value(&VolumeStartKey).await;
+        // 7 and 30 buckets of 144 blocks.
+        let short = volume_buckets(block_count, 7);
+        let long = volume_buckets(block_count, 30);
+        let mut last_1008_blocks = VolumeBucket::default();
+        let mut last_4320_blocks = VolumeBucket::default();
+        let mut stream = dbtx
+            .find_by_range(VolumeBucketKey(long.start)..VolumeBucketKey(long.end))
+            .await;
+        while let Some((key, bucket)) = stream.next().await {
+            last_4320_blocks.accumulate(bucket);
+            if key.0 >= short.start {
+                last_1008_blocks.accumulate(bucket);
+            }
+        }
+        let report = |total: VolumeBucket, first_bucket: u64| LightningVolume {
+            received: total.received,
+            sent: total.sent,
+            complete: counted_whole_window(start, first_bucket),
+        };
+        LightningVolumeStats {
+            block_count,
+            last_1008_blocks: report(last_1008_blocks, short.start),
+            last_4320_blocks: report(last_4320_blocks, long.start),
+        }
     }
 
     async fn await_incoming_contract(

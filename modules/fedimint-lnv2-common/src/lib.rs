@@ -23,7 +23,9 @@ pub use fedimint_core::config::ExcessiveRelativeFeeError;
 use fedimint_core::core::{Decoder, ModuleInstanceId, ModuleKind};
 use fedimint_core::encoding::{Decodable, Encodable};
 use fedimint_core::module::{CommonModuleInit, ModuleCommon, ModuleConsensusVersion};
-use fedimint_core::{OutPoint, extensible_associated_module_type, plugin_types_trait_impl_common};
+use fedimint_core::{
+    Amount, OutPoint, extensible_associated_module_type, plugin_types_trait_impl_common,
+};
 pub use fedimint_ln_common::client::GatewayApi;
 use lightning_invoice::Bolt11Invoice;
 use serde::{Deserialize, Serialize};
@@ -31,6 +33,37 @@ use thiserror::Error;
 use tpe::AggregateDecryptionKey;
 
 use crate::contracts::{IncomingContract, OutgoingContract};
+
+/// The Lightning payments one guardian counted, as returned by
+/// [`endpoint_constants::VOLUME_STATS_ENDPOINT`].
+///
+/// The guardian admin endpoint sums 144-block buckets of this module's
+/// consensus block count. Each window holds the complete buckets before the
+/// current one, so it covers exactly its number of blocks and leaves out flows
+/// in the current bucket until that bucket ends.
+/// An amount of `u64::MAX` millisatoshis means at least that much.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct LightningVolumeStats {
+    /// The block count at this snapshot. Both windows end at the last multiple
+    /// of 144 at or below it.
+    pub block_count: u64,
+    pub last_1008_blocks: LightningVolume,
+    pub last_4320_blocks: LightningVolume,
+}
+
+/// The payments settled in one window. Refunded or cancelled payments are not
+/// counted. Amounts are the contract amounts, the ecash that left or entered
+/// the federation: a send includes the gateway's fee, a receive is net of it.
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct LightningVolume {
+    /// The amount of incoming contracts that their recipient claimed.
+    pub received: Amount,
+    /// The amount of outgoing contracts that the gateway claimed.
+    pub sent: Amount,
+    /// Whether this guardian counted for the whole window. This is true when
+    /// counting started when the federation formed, or before the window began.
+    pub complete: bool,
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Bolt11InvoiceDescription {

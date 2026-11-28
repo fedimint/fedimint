@@ -380,8 +380,8 @@ impl FederationTestBuilder {
             task_group.spawn("fedimintd", move |_| async move {
                 Box::pin(consensus::run(
                     ConnectorRegistry::build_from_testing_env().bind().await,
-                    Some(ApiAuth::new("pass".to_string())),
-                    Some(ApiAuth::new("pass".to_string())),
+                    Some(crate::API_AUTH.clone()),
+                    Some(crate::API_AUTH.clone()),
                     connections,
                     p2p_status_receivers,
                     api_bind,
