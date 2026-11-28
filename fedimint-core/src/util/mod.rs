@@ -157,12 +157,36 @@ impl SafeUrl {
     ///
     /// Unlike `Url::join` (RFC 3986), this never drops path
     /// segments from the base — it always appends.
+    ///
+    /// Mutates the underlying [`Url`] path in place so username,
+    /// password, query, and fragment on the base are preserved.
+    /// Going through [`Display`] would redact credentials and drop
+    /// query/fragment.
     pub fn join_path(&self, path: &str) -> Self {
-        let base = self.to_string();
-        let base = base.trim_end_matches('/');
-        let path = path.trim_start_matches('/');
-        Self::parse(&format!("{base}/{path}"))
-            .expect("appending a relative path to a valid URL should produce a valid URL")
+        let mut url = self.clone();
+        // Drop every trailing empty path segment (e.g. `/api///` → `/api`),
+        // matching the previous `trim_end_matches('/')` behavior. A single
+        // `pop_if_empty()` would leave `/api///lnv1` after appending.
+        // `path_segments_mut` fails only for cannot-be-a-base URLs
+        // (e.g. `data:`); SafeUrl callers use hierarchical schemes.
+        while {
+            let p = url.0.path();
+            p != "/" && p.ends_with('/')
+        } {
+            if let Ok(mut segments) = url.0.path_segments_mut() {
+                segments.pop_if_empty();
+            } else {
+                break;
+            }
+        }
+        if let Ok(mut segments) = url.0.path_segments_mut() {
+            for segment in path.trim_matches('/').split('/') {
+                if !segment.is_empty() {
+                    segments.push(segment);
+                }
+            }
+        }
+        url
     }
 
     // It can be removed to use `is_onion_address()` implementation,
