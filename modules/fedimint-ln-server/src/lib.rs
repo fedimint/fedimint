@@ -52,12 +52,12 @@ use fedimint_ln_common::federation_endpoint_constants::{
     REMOVE_GATEWAY_ENDPOINT, SUPPORTED_MODULE_CONSENSUS_VERSION_ENDPOINT,
 };
 use fedimint_ln_common::{
-    CONTRACT_FUNDED_ONCE_MODULE_CONSENSUS_VERSION, ContractAccount, LightningCommonInit,
-    LightningConsensusItem, LightningGatewayAnnouncement, LightningGatewayRegistration,
-    LightningInput, LightningInputError, LightningModuleTypes, LightningOutput,
-    LightningOutputError, LightningOutputOutcome, LightningOutputOutcomeV0, LightningOutputV0,
-    MODULE_CONSENSUS_VERSION, RemoveGatewayRequest, create_gateway_registration_message,
-    create_gateway_remove_message,
+    BLOCK_COUNT_PEER_COUNT_MODULE_CONSENSUS_VERSION, CONTRACT_FUNDED_ONCE_MODULE_CONSENSUS_VERSION,
+    ContractAccount, LightningCommonInit, LightningConsensusItem, LightningGatewayAnnouncement,
+    LightningGatewayRegistration, LightningInput, LightningInputError, LightningModuleTypes,
+    LightningOutput, LightningOutputError, LightningOutputOutcome, LightningOutputOutcomeV0,
+    LightningOutputV0, MODULE_CONSENSUS_VERSION, RemoveGatewayRequest,
+    create_gateway_registration_message, create_gateway_remove_message,
 };
 use fedimint_logging::LOG_MODULE_LN;
 use fedimint_server_core::bitcoin_rpc::ServerBitcoinRpcMonitor;
@@ -1192,7 +1192,17 @@ impl Lightning {
     }
 
     async fn consensus_block_count(&self, dbtx: &mut DatabaseTransaction<'_>) -> u64 {
-        let peer_count = 3 * (self.cfg.consensus.threshold() / 2) + 1;
+        // Keep the historical median until the federation activates 2.2.
+        let legacy_count = 3 * (self.cfg.consensus.threshold() / 2) + 1;
+        let configured_count = self.num_peers.total();
+        let peer_count = if configured_count == legacy_count
+            || self.consensus_module_consensus_version(dbtx).await
+                >= BLOCK_COUNT_PEER_COUNT_MODULE_CONSENSUS_VERSION
+        {
+            configured_count
+        } else {
+            legacy_count
+        };
 
         let mut counts = dbtx
             .find_by_prefix(&BlockCountVotePrefix)
