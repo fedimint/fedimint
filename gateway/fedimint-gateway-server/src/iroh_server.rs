@@ -7,7 +7,10 @@ use anyhow::anyhow;
 use axum::extract::{Path, Query};
 use axum::{Extension, Json};
 use bitcoin::hashes::sha256;
-use fedimint_core::module::{FEDIMINT_GATEWAY_ALPN, IrohGatewayRequest, IrohGatewayResponse};
+use fedimint_core::module::{
+    FEDIMINT_GATEWAY_ALPN, GatewayErrorCode, GatewayErrorResponse, IrohGatewayRequest,
+    IrohGatewayResponse,
+};
 use fedimint_core::net::iroh::build_iroh_endpoint;
 use fedimint_core::task::TaskGroup;
 use fedimint_core::util::FmtCompact as _;
@@ -264,6 +267,23 @@ async fn run_handler(
             err = %err.fmt_compact(),
             "Gateway API handler returned an error"
         );
+
+        if matches!(
+            err.downcast_ref::<GatewayError>(),
+            Some(GatewayError::Public(
+                PublicGatewayError::FederationUnreachable
+            ))
+        ) {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(
+                    serde_json::to_value(GatewayErrorResponse::new(
+                        GatewayErrorCode::FederationUnreachable,
+                    ))
+                    .expect("gateway error response serialization cannot fail"),
+                ),
+            );
+        }
 
         (StatusCode::INTERNAL_SERVER_ERROR, Json(json!(())))
     })
