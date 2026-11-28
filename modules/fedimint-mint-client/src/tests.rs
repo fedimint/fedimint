@@ -485,3 +485,119 @@ fn slice_recovery_extends_gap_window_from_latest_used_index() {
     assert_eq!(finalized.pending_notes.len(), 3);
     assert_eq!(finalized.next_note_idx.get(&amount), Some(&NoteIndex(201)));
 }
+
+#[derive(Debug)]
+struct NeverResolvingGlobalContext;
+
+#[fedimint_core::apply(fedimint_core::async_trait_maybe_send!)]
+impl fedimint_client_module::IGlobalClientContext for NeverResolvingGlobalContext {
+    fn module_api(&self) -> fedimint_core::module::DynModuleApi {
+        unimplemented!()
+    }
+    async fn client_config(&self) -> fedimint_core::config::ClientConfig {
+        unimplemented!()
+    }
+    fn api(&self) -> &fedimint_api_client::api::DynGlobalApi {
+        unimplemented!()
+    }
+    fn decoders(&self) -> &fedimint_core::module::registry::ModuleDecoderRegistry {
+        unimplemented!()
+    }
+    async fn claim_inputs_dyn(
+        &self,
+        _dbtx: &mut fedimint_client_module::db::ClientSMDatabaseTransaction<'_, '_>,
+        _input: fedimint_client_module::InstancelessDynClientInputBundle,
+    ) -> Result<
+        fedimint_client_module::module::OutPointRange,
+        fedimint_client_module::transaction::TransactionSubmitError,
+    > {
+        unimplemented!()
+    }
+    async fn fund_output_dyn(
+        &self,
+        _dbtx: &mut fedimint_client_module::db::ClientSMDatabaseTransaction<'_, '_>,
+        _outputs: fedimint_client_module::InstancelessDynClientOutputBundle,
+    ) -> Result<
+        fedimint_client_module::module::OutPointRange,
+        fedimint_client_module::transaction::TransactionSubmitError,
+    > {
+        unimplemented!()
+    }
+    async fn add_state_machine_dyn(
+        &self,
+        _dbtx: &mut fedimint_client_module::db::ClientSMDatabaseTransaction<'_, '_>,
+        _sm: Box<fedimint_core::maybe_add_send_sync!(dyn fedimint_client_module::sm::IState)>,
+    ) -> fedimint_client_module::AddStateMachinesResult {
+        unimplemented!()
+    }
+    async fn log_event_json(
+        &self,
+        _dbtx: &mut fedimint_client_module::db::ClientSMDatabaseTransaction<'_, '_>,
+        _kind: fedimint_eventlog::EventKind,
+        _module: Option<(
+            fedimint_core::core::ModuleKind,
+            fedimint_core::module::ModuleInstanceId,
+        )>,
+        _payload: serde_json::Value,
+        _persist: fedimint_eventlog::EventPersistence,
+    ) {
+        unimplemented!()
+    }
+    async fn log_event_json_no_dbtx(
+        &self,
+        _kind: fedimint_eventlog::EventKind,
+        _module_kind: Option<fedimint_core::core::ModuleKind>,
+        _payload: serde_json::Value,
+        _persist: fedimint_eventlog::EventPersistence,
+    ) {
+        unimplemented!()
+    }
+    async fn transaction_update_stream(
+        &self,
+    ) -> futures::stream::BoxStream<fedimint_client_module::transaction::sm::TxSubmissionStatesSM>
+    {
+        use futures::StreamExt as _;
+        futures::stream::pending().boxed()
+    }
+    async fn core_api_version(&self) -> fedimint_core::module::ApiVersion {
+        unimplemented!()
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn await_tx_rejected_aborts_on_timeout_when_tx_never_accepted() {
+    use crate::output::{MintOutputCommon, MintOutputStatesCreated, MintOutputStatesCreatedMulti};
+    use fedimint_client_module::DynGlobalClientContext;
+    use fedimint_client_module::module::OutPointRange;
+    use fedimint_core::TransactionId;
+    use fedimint_core::core::OperationId;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    let global_context = DynGlobalClientContext::from(Arc::new(NeverResolvingGlobalContext));
+    let common = MintOutputCommon {
+        operation_id: OperationId::new_random(),
+        out_point_range: OutPointRange::new_single(TransactionId::all_zeros(), 0)
+            .expect("Valid outpoint range"),
+    };
+
+    // Test MintOutputStatesCreated
+    let fut = MintOutputStatesCreated::await_tx_rejected(global_context.clone(), common);
+    tokio::pin!(fut);
+
+    tokio::time::advance(Duration::from_secs(301)).await;
+
+    tokio::time::timeout(Duration::from_secs(1), fut)
+        .await
+        .expect("await_tx_rejected must complete after 300s timeout instead of hanging");
+
+    // Test MintOutputStatesCreatedMulti
+    let fut_multi = MintOutputStatesCreatedMulti::await_tx_rejected(global_context, common);
+    tokio::pin!(fut_multi);
+
+    tokio::time::advance(Duration::from_secs(301)).await;
+
+    tokio::time::timeout(Duration::from_secs(1), fut_multi)
+        .await
+        .expect("await_tx_rejected for multi must complete after 300s timeout instead of hanging");
+}

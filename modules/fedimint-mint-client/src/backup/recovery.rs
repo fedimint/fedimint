@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::ops::Add;
 
+use crate::api::MintFederationApi as _;
 use fedimint_client_module::error::ClientModuleError;
 use fedimint_client_module::module::init::ClientModuleRecoverArgs;
 use fedimint_client_module::module::init::recovery::{
@@ -19,7 +20,7 @@ use fedimint_core::{
 };
 use fedimint_derive_secret::DerivableSecret;
 use fedimint_logging::{LOG_CLIENT_MODULE_MINT, LOG_CLIENT_RECOVERY, LOG_CLIENT_RECOVERY_MINT};
-use fedimint_mint_common::{MintInput, MintOutput, Nonce};
+use fedimint_mint_common::{BlindNonce, MintInput, MintOutput, Nonce};
 use serde::{Deserialize, Serialize};
 use tbs::{AggregatePublicKey, BlindedMessage, PublicKeyShare};
 use threshold_crypto::G1Affine;
@@ -161,6 +162,47 @@ impl RecoveryFromHistory for MintRecovery {
         _session_idx: u64,
     ) -> Result<(), ClientModuleError> {
         self.state.handle_output(out_point, output, &self.secret);
+        Ok(())
+    }
+
+    async fn pre_finalize(&mut self) -> Result<(), ClientModuleError> {
+        let pending = self.state.pending_outputs.clone();
+        for (nonce, (outpoint, _amount, issuance_request)) in pending {
+            let blind_nonce = BlindNonce(issuance_request.blinded_message());
+            match self
+                .client_ctx
+                .module_api()
+                .check_blind_nonce_used(blind_nonce)
+                .await
+            {
+                Ok(false) => {
+                    info!(
+                        target: LOG_CLIENT_RECOVERY_MINT,
+                        %outpoint,
+                        %blind_nonce,
+                        "Pruning unconfirmed note during recovery: blind nonce was never accepted by consensus"
+                    );
+                    self.state.pending_outputs.remove(&nonce);
+                }
+                Ok(true) => {
+                    debug!(
+                        target: LOG_CLIENT_RECOVERY_MINT,
+                        %outpoint,
+                        %blind_nonce,
+                        "Retaining unconfirmed note during recovery: confirmed used by consensus"
+                    );
+                }
+                Err(e) => {
+                    warn!(
+                        target: LOG_CLIENT_RECOVERY_MINT,
+                        %outpoint,
+                        %blind_nonce,
+                        %e,
+                        "Failed to check if blind nonce was used by consensus, keeping note"
+                    );
+                }
+            }
+        }
         Ok(())
     }
 
