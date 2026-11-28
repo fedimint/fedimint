@@ -885,11 +885,19 @@ impl MintClientModule {
                     Some(remaining_excess) => excess_input = remaining_excess,
                     None => match notes.next().await {
                         Some(note) => {
-                            if note.amount() <= d.amount() + fee.fee(d.amount()) {
+                            // Spending the note costs an input fee, which the caller adds
+                            // to the transaction's outputs, so only its net value funds
+                            // the new denomination.
+                            let note_value = note
+                                .amount()
+                                .checked_sub(fee.fee(note.amount()))
+                                .expect("All our notes are economical");
+
+                            if note_value <= d.amount() + fee.fee(d.amount()) {
                                 break;
                             }
 
-                            excess_input += note.amount() - (d.amount() + fee.fee(d.amount()));
+                            excess_input += note_value - (d.amount() + fee.fee(d.amount()));
 
                             input_notes.push(note.decode_own());
                         }
