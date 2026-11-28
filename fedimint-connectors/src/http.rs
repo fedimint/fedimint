@@ -1,7 +1,10 @@
 use std::sync::Arc;
+use std::time::Duration;
 
+use fedimint_core::task::timeout;
 use fedimint_core::util::{FmtCompact as _, SafeUrl};
 use fedimint_core::{apply, async_trait_maybe_send};
+use futures::StreamExt as _;
 use reqwest::{Method, StatusCode};
 use serde_json::Value;
 
@@ -10,6 +13,53 @@ use crate::{
     Connectivity, DynGatewayConnection, DynGuaridianConnection, IConnection, IGatewayConnection,
     ServerResult,
 };
+
+/// Structured gateway errors are tiny; never buffer an unbounded error body.
+const MAX_GATEWAY_ERROR_BYTES: usize = 4096;
+const GATEWAY_ERROR_READ_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Non-structured error bodies are surfaced to the caller, but only this much.
+const MAX_ERROR_EXCERPT_CHARS: usize = 256;
+
+/// Read a complete error body with both a byte limit and a total deadline.
+async fn gateway_error_body(response: reqwest::Response) -> Option<Vec<u8>> {
+    timeout(GATEWAY_ERROR_READ_TIMEOUT, async {
+        let mut body = Vec::new();
+        let chunks = response.bytes_stream();
+        futures::pin_mut!(chunks);
+        while let Some(chunk) = chunks.next().await {
+            let chunk = chunk.ok()?;
+            if MAX_GATEWAY_ERROR_BYTES.saturating_sub(body.len()) < chunk.len() {
+                return None;
+            }
+            body.extend_from_slice(&chunk);
+        }
+        Some(body)
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
+/// A printable, length-capped excerpt of an error body, or `None` if it has
+/// no text worth showing.
+fn error_body_excerpt(body: &[u8]) -> Option<String> {
+    let text = String::from_utf8_lossy(body);
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let mut chars = text.chars();
+    let mut excerpt: String = chars
+        .by_ref()
+        .take(MAX_ERROR_EXCERPT_CHARS)
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    if chars.next().is_some() {
+        excerpt.push_str("...");
+    }
+    Some(excerpt)
+}
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct HttpConnector {
@@ -96,9 +146,34 @@ impl IGatewayConnection for HttpConnection {
                 .json::<Value>()
                 .await
                 .map_err(|e| ServerError::InvalidResponse(e.fmt_compact().to_string()))?),
-            status => Err(ServerError::InvalidRequest(format!(
-                "HTTP request returned unexpected status: {status}"
-            ))),
+            status => {
+                let status = status.as_u16();
+                let body = gateway_error_body(response).await;
+                let json = body
+                    .as_deref()
+                    .and_then(|body| serde_json::from_slice::<Value>(body).ok());
+                let is_json = json.is_some();
+                if let Some(error) =
+                    json.and_then(|json| ServerError::from_gateway_response(status, json))
+                {
+                    return Err(error);
+                }
+
+                // An unrecognized structured body stays opaque; only plain text is shown.
+                let excerpt = body
+                    .as_deref()
+                    .filter(|_| !is_json)
+                    .and_then(error_body_excerpt);
+                Err(ServerError::InvalidRequest(match excerpt {
+                    Some(excerpt) => {
+                        format!("HTTP request returned unexpected status: {status}: {excerpt}")
+                    }
+                    None => format!("HTTP request returned unexpected status: {status}"),
+                }))
+            }
         }
     }
 }
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod http_tests;
