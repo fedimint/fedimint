@@ -15,7 +15,8 @@ use fedimint_core::module::Amounts;
 use fedimint_core::module::registry::ModuleDecoderRegistry;
 use fedimint_core::task::sleep;
 use fedimint_core::time::duration_since_epoch;
-use fedimint_core::util::FmtCompact as _;
+use fedimint_core::util::backoff_util::{api_networking_backoff, custom_backoff};
+use fedimint_core::util::{self, FmtCompact as _};
 use fedimint_core::{Amount, OutPoint, TransactionId, crit, secp256k1};
 use fedimint_ln_common::contracts::outgoing::OutgoingContractData;
 use fedimint_ln_common::contracts::{ContractId, FundedContract, IdentifiableContract};
@@ -24,16 +25,23 @@ use fedimint_ln_common::{LightningGateway, LightningInput, PrunedInvoice};
 use fedimint_logging::LOG_CLIENT_MODULE_LN;
 use futures::future::pending;
 use lightning_invoice::Bolt11Invoice;
-use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tracing::{info, warn};
+use tracing::info;
 
 pub use self::lightningpay::LightningPayStates;
 use crate::api::LnFederationApi;
 use crate::{LightningClientContext, PayType, set_payment_result};
 
 const RETRY_DELAY: Duration = Duration::from_secs(1);
+
+/// How long after funding the client may ask the gateway to start paying the
+/// invoice.
+const GATEWAY_PAY_TIMEOUT: Duration = Duration::from_mins(3);
+
+/// The longest wait between checks of whether the gateway claimed the
+/// outgoing contract.
+const GATEWAY_CLAIM_MAX_CHECK_INTERVAL: Duration = Duration::from_mins(10);
 
 /// `lightningpay` module is needed to suppress the deprecation warning on the
 /// enum declaration. Suppressing the deprecation warning on the enum
@@ -191,6 +199,8 @@ pub struct LightningPayFunded {
     pub payload: PayInvoicePayload,
     pub gateway: LightningGateway,
     pub timelock: u32,
+    /// Time at which the outgoing contract was funded. The client asks the
+    /// gateway to start paying only within `GATEWAY_PAY_TIMEOUT` of it.
     pub funding_time: SystemTime,
 }
 
@@ -268,7 +278,13 @@ impl LightningPayFunded {
         let timeout_context = context.clone();
         vec![
             StateTransition::new(
-                Self::gateway_pay_invoice(gateway, payload, context, self.funding_time),
+                Self::gateway_pay_invoice(
+                    gateway,
+                    payload,
+                    context,
+                    self.funding_time,
+                    await_gateway_claim(global_context.clone(), contract_id),
+                ),
                 move |dbtx, result, old_state| {
                     let success_context = success_context.clone();
                     Box::pin(Self::transition_outgoing_contract_execution(
@@ -317,25 +333,52 @@ impl LightningPayFunded {
         gateway: LightningGateway,
         payload: PayInvoicePayload,
         context: LightningClientContext,
-        start: SystemTime,
+        funding_time: SystemTime,
+        gateway_claimed: impl Future<Output = ()>,
     ) -> Result<String, GatewayPayError> {
-        const GATEWAY_INTERNAL_ERROR_RETRY_INTERVAL: Duration = Duration::from_secs(10);
-        const TIMEOUT_DURATION: Duration = Duration::from_mins(3);
+        // For `GATEWAY_PAY_TIMEOUT` after funding, ask the gateway to pay the
+        // invoice. After that, do not start a payment the gateway has not seen,
+        // because a payment that succeeds long after the user made it would be
+        // unintuitive. A client that restarts late can still have a payment the
+        // gateway made in time, though. Once the federation shows that the
+        // gateway claimed the contract, which the gateway does only after
+        // paying, ask the gateway again for the preimage. The gateway answers a
+        // repeated request for the same contract with the payment it already
+        // made, and it cannot start a new payment for a claimed contract. The
+        // other transitions of `LightningPayFunded` end the wait: the contract
+        // times out at `timelock`, or the gateway cancels it.
+        let can_start_payment = || {
+            fedimint_core::time::now()
+                .duration_since(funding_time)
+                .unwrap_or_default()
+                < GATEWAY_PAY_TIMEOUT
+        };
+        if let Some(result) =
+            Self::ask_gateway(&gateway, &payload, &context, can_start_payment).await
+        {
+            return result;
+        }
 
-        loop {
-            // We do not want to retry until the block timeout, since it will be unintuitive
-            // for users for their payment to succeed after awhile. We will try
-            // to pay the invoice until `TIMEOUT_DURATION` is hit, at which
-            // point this future will block and the user will be able
-            // to claim their funds once the block timeout is hit, or the gateway cancels
-            // the outgoing payment.
-            let elapsed = fedimint_core::time::now()
-                .duration_since(start)
-                .unwrap_or_default();
-            if TIMEOUT_DURATION < elapsed {
-                std::future::pending::<()>().await;
+        gateway_claimed.await;
+        Self::ask_gateway(&gateway, &payload, &context, || true)
+            .await
+            .expect("Asking the gateway only stops when told to")
+    }
+
+    /// Asks the gateway for the preimage until it returns one, retrying with a
+    /// backoff of up to 10 seconds between attempts, as the send state machine
+    /// of the `lnv2` client does. Returns `None` without asking again once
+    /// `keep_asking` returns false.
+    async fn ask_gateway(
+        gateway: &LightningGateway,
+        payload: &PayInvoicePayload,
+        context: &LightningClientContext,
+        keep_asking: impl Fn() -> bool,
+    ) -> Option<Result<String, GatewayPayError>> {
+        util::retry("gateway-pay-invoice", api_networking_backoff(), || async {
+            if !keep_asking() {
+                return Ok(None);
             }
-
             match context
                 .gateway_conn
                 .pay_invoice(gateway.clone(), payload.clone())
@@ -344,44 +387,16 @@ impl LightningPayFunded {
                     verify_gateway_preimage(&preimage, payload.payment_data.payment_hash())?;
                     Ok(preimage)
                 }) {
-                Ok(preimage) => return Ok(preimage),
-                Err(err) => {
-                    match err.clone() {
-                        GatewayPayError::GatewayInternalError {
-                            error_code,
-                            error_message,
-                        } => {
-                            // Retry faster if we could not contact the gateway
-                            if let Some(error_code) = error_code
-                                && error_code == StatusCode::NOT_FOUND.as_u16()
-                            {
-                                warn!(
-                                    %error_message,
-                                    ?payload,
-                                    ?gateway,
-                                    ?RETRY_DELAY,
-                                    "Could not contact gateway"
-                                );
-                                sleep(RETRY_DELAY).await;
-                                continue;
-                            }
-                        }
-                        GatewayPayError::OutgoingContractError => {
-                            return Err(err);
-                        }
-                    }
-
-                    warn!(
-                        err = %err.fmt_compact(),
-                        ?payload,
-                        ?gateway,
-                        ?GATEWAY_INTERNAL_ERROR_RETRY_INTERVAL,
-                        "Gateway Internal Error. Could not complete payment. Trying again..."
-                    );
-                    sleep(GATEWAY_INTERNAL_ERROR_RETRY_INTERVAL).await;
+                Ok(preimage) => Ok(Some(Ok(preimage))),
+                // Retrying cannot help when the federation has no such contract
+                Err(GatewayPayError::OutgoingContractError) => {
+                    Ok(Some(Err(GatewayPayError::OutgoingContractError)))
                 }
+                Err(err) => Err(err),
             }
-        }
+        })
+        .await
+        .expect("Number of retries has no limit")
     }
 
     async fn transition_outgoing_contract_execution(
@@ -404,7 +419,8 @@ impl LightningPayFunded {
                 )
                 .await;
 
-                // client_ctx is None for the gateway since it does not emit the client events
+                // client_ctx is None for the gateway since it does not emit the
+                // client events
                 if let Some(ref client_ctx) = context.client_ctx
                     && let Some(preimage_bytes) = fedimint_core::hex::decode(&preimage)
                         .ok()
@@ -517,8 +533,8 @@ fn verify_gateway_preimage(
 /// Waits for a contract with `contract_id` to be cancelled by the gateway.
 async fn await_contract_cancelled(contract_id: ContractId, global_context: DynGlobalClientContext) {
     loop {
-        // If we fail to get the contract from the federation, we need to keep retrying
-        // until we successfully do.
+        // If we fail to get the contract from the federation, we need to keep
+        // retrying until we successfully do.
         match global_context
             .module_api()
             .wait_outgoing_contract_cancelled(contract_id)
@@ -531,6 +547,37 @@ async fn await_contract_cancelled(contract_id: ContractId, global_context: DynGl
         }
 
         sleep(RETRY_DELAY).await;
+    }
+}
+
+/// Waits until the federation shows that the gateway claimed the outgoing
+/// contract, which leaves the contract with no funds. The gateway claims the
+/// contract only after paying the invoice.
+async fn await_gateway_claim(global_context: DynGlobalClientContext, contract_id: ContractId) {
+    let mut check_intervals = custom_backoff(
+        Duration::from_secs(1),
+        GATEWAY_CLAIM_MAX_CHECK_INTERVAL,
+        None,
+    );
+    loop {
+        match global_context
+            .module_api()
+            .fetch_contract(contract_id)
+            .await
+        {
+            Ok(Some(account)) if account.amount == Amount::ZERO => return,
+            Ok(_) => {}
+            Err(error) => {
+                info!(target: LOG_CLIENT_MODULE_LN, err = %error.fmt_compact(), %contract_id, "Error fetching the outgoing contract");
+            }
+        }
+
+        sleep(
+            check_intervals
+                .next()
+                .unwrap_or(GATEWAY_CLAIM_MAX_CHECK_INTERVAL),
+        )
+        .await;
     }
 }
 
@@ -577,7 +624,8 @@ async fn try_refund_outgoing_contract(
         .await
         .expect("Cannot claim input, additional funding needed");
 
-    // client_ctx is None for the gateway since it does not emit the client events
+    // client_ctx is None for the gateway since it does not emit the client
+    // events
     if let Some(ref client_ctx) = context.client_ctx {
         client_ctx
             .log_event(
@@ -697,3 +745,6 @@ impl PaymentData {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
