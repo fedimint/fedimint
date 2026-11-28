@@ -11,6 +11,7 @@ use fedimint_core::secp256k1::Keypair;
 use fedimint_core::time::duration_since_epoch;
 use fedimint_core::util::FmtCompact as _;
 use fedimint_core::{Amount, OutPoint};
+use fedimint_lightning::{LightningRpcError, PaymentFailureDiagnostics};
 use fedimint_lnv2_common::contracts::OutgoingContract;
 use fedimint_lnv2_common::{LightningInput, LightningInputV0, LightningInvoice, OutgoingWitness};
 use serde::{Deserialize, Serialize};
@@ -148,7 +149,7 @@ impl SendStateMachine {
     async fn send_payment(
         context: GatewayClientContextV2,
         common: SendSMCommon,
-    ) -> Result<PaymentResponse, Cancelled> {
+    ) -> Result<PaymentResponse, SendPaymentError> {
         let SendSMCommon {
             operation_id: _,
             outpoint,
@@ -166,11 +167,11 @@ impl SendStateMachine {
         // outgoing contract's expiration to claim it, the same race an HTLC
         // runs against the contract timelock.
         if max_delay == 0 {
-            return Err(Cancelled::TimeoutTooClose);
+            return Err(Cancelled::TimeoutTooClose.into());
         }
 
         let Some(max_fee) = contract.amount.checked_sub(min_contract_amount) else {
-            return Err(Cancelled::Underfunded);
+            return Err(Cancelled::Underfunded.into());
         };
 
         // The persisted `max_delay` was measured against the contract's
@@ -212,17 +213,18 @@ impl SendStateMachine {
                 .await;
             return match final_state {
                 Ok(Some(final_receive_state)) => match final_receive_state {
-                    FinalReceiveState::Rejected => Err(Cancelled::Rejected),
+                    FinalReceiveState::Rejected => Err(Cancelled::Rejected.into()),
                     FinalReceiveState::Success(preimage) => Ok(PaymentResponse {
                         preimage,
                         target_federation: Some(client.value().federation_id()),
                     }),
-                    FinalReceiveState::Refunded => Err(Cancelled::Refunded),
-                    FinalReceiveState::Failure => Err(Cancelled::Failure),
+                    FinalReceiveState::Refunded => Err(Cancelled::Refunded.into()),
+                    FinalReceiveState::Failure => Err(Cancelled::Failure.into()),
                 },
                 Ok(None) => Err(fresh_dispatch_refusal
-                    .expect("the relay only refuses a fresh dispatch when one was denied")),
-                Err(e) => Err(Cancelled::FinalizationError(e.fmt_compact().to_string())),
+                    .expect("the relay only refuses a fresh dispatch when one was denied")
+                    .into()),
+                Err(e) => Err(Cancelled::FinalizationError(e.fmt_compact().to_string()).into()),
             };
         }
 
@@ -246,17 +248,18 @@ impl SendStateMachine {
                     .await
                 {
                     Ok(Some(final_receive_state)) => match final_receive_state {
-                        FinalReceiveState::Rejected => Err(Cancelled::Rejected),
+                        FinalReceiveState::Rejected => Err(Cancelled::Rejected.into()),
                         FinalReceiveState::Success(preimage) => Ok(PaymentResponse {
                             preimage,
                             target_federation: Some(client.federation_id()),
                         }),
-                        FinalReceiveState::Refunded => Err(Cancelled::Refunded),
-                        FinalReceiveState::Failure => Err(Cancelled::Failure),
+                        FinalReceiveState::Refunded => Err(Cancelled::Refunded.into()),
+                        FinalReceiveState::Failure => Err(Cancelled::Failure.into()),
                     },
                     Ok(None) => Err(fresh_dispatch_refusal
-                        .expect("the relay only refuses a fresh dispatch when one was denied")),
-                    Err(e) => Err(Cancelled::FinalizationError(e.fmt_compact().to_string())),
+                        .expect("the relay only refuses a fresh dispatch when one was denied")
+                        .into()),
+                    Err(e) => Err(Cancelled::FinalizationError(e.fmt_compact().to_string()).into()),
                 }
             }
             None => {
@@ -269,14 +272,14 @@ impl SendStateMachine {
                         .outbound_payment_exists(*invoice.payment_hash())
                         .await
                 {
-                    return Err(refusal);
+                    return Err(refusal.into());
                 }
 
                 let preimage = context
                     .gateway
                     .pay(invoice, fresh_max_delay, max_fee)
                     .await
-                    .map_err(|e| Cancelled::LightningRpcError(e.to_string()))?;
+                    .map_err(SendPaymentError::from_lightning_error)?;
                 Ok(PaymentResponse {
                     preimage,
                     target_federation: None,
@@ -289,7 +292,7 @@ impl SendStateMachine {
         dbtx: &mut ClientSMDatabaseTransaction<'_, '_>,
         old_state: SendStateMachine,
         global_context: DynGlobalClientContext,
-        result: Result<PaymentResponse, Cancelled>,
+        result: Result<PaymentResponse, SendPaymentError>,
         client_ctx: GatewayClientContextV2,
     ) -> SendStateMachine {
         match result {
@@ -326,7 +329,10 @@ impl SendStateMachine {
                     outpoints,
                 }))
             }
-            Err(e) => {
+            Err(SendPaymentError {
+                cancelled,
+                diagnostics,
+            }) => {
                 client_ctx
                     .module
                     .client_ctx
@@ -334,11 +340,12 @@ impl SendStateMachine {
                         &mut dbtx.module_tx(),
                         OutgoingPaymentFailed {
                             payment_image: old_state.common.contract.payment_image.clone(),
-                            error: e.clone(),
+                            error: cancelled.clone(),
+                            lightning_failure_diagnostics: diagnostics,
                         },
                     )
                     .await;
-                old_state.update(SendSMState::Cancelled(e))
+                old_state.update(SendSMState::Cancelled(cancelled))
             }
         }
     }
