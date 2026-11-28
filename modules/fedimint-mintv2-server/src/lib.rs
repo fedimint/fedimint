@@ -35,13 +35,14 @@ use fedimint_mintv2_common::config::{
 };
 use fedimint_mintv2_common::endpoint_constants::{
     RECOVERY_COUNT_ENDPOINT, RECOVERY_SLICE_ENDPOINT, RECOVERY_SLICE_HASH_ENDPOINT,
-    SIGNATURE_SHARES_ENDPOINT, SIGNATURE_SHARES_RECOVERY_ENDPOINT,
+    RECOVERY_SLICE_SIZE, SIGNATURE_SHARES_ENDPOINT, SIGNATURE_SHARES_RECOVERY_ENDPOINT,
 };
 use fedimint_mintv2_common::{
     Denomination, MODULE_CONSENSUS_VERSION, MintCommonInit, MintConsensusItem, MintInput,
     MintInputError, MintModuleTypes, MintOutput, MintOutputError, MintOutputOutcome, RecoveryItem,
     verify_note,
 };
+use fedimint_server_core::api::validate_page_range;
 use fedimint_server_core::config::{PeerHandleOps, eval_poly_g2};
 use fedimint_server_core::migration::ServerModuleDbMigrationFn;
 use fedimint_server_core::{
@@ -550,6 +551,7 @@ impl ServerModule for Mint {
                 RECOVERY_SLICE_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, range: (u64, u64)| -> Vec<RecoveryItem> {
+                    validate_page_range(range, RECOVERY_SLICE_SIZE)?;
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
                     Ok(get_recovery_slice(&mut dbtx, range).await)
@@ -559,6 +561,7 @@ impl ServerModule for Mint {
                 RECOVERY_SLICE_HASH_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, range: (u64, u64)| -> bitcoin::hashes::sha256::Hash {
+                    validate_page_range(range, RECOVERY_SLICE_SIZE)?;
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
                     Ok(get_recovery_slice(&mut dbtx, range).await.consensus_hash())

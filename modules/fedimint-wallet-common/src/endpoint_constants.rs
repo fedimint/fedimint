@@ -10,3 +10,6 @@ pub const WALLET_SUMMARY_ENDPOINT: &str = "wallet_summary";
 pub const UTXO_CONFIRMED_ENDPOINT: &str = "utxo_confirmed";
 pub const RECOVERY_COUNT_ENDPOINT: &str = "recovery_count";
 pub const RECOVERY_SLICE_ENDPOINT: &str = "recovery_slice";
+
+/// Maximum page size for recovery items.
+pub const RECOVERY_SLICE_SIZE: u64 = 1_000;

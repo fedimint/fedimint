@@ -43,6 +43,7 @@ use fedimint_mint_common::{
     MintConsensusItem, MintInput, MintInputError, MintModuleTypes, MintOutput, MintOutputError,
     MintOutputOutcome,
 };
+use fedimint_server_core::api::validate_page_range;
 use fedimint_server_core::config::{PeerHandleOps, eval_poly_g2};
 use fedimint_server_core::migration::{
     ModuleHistoryItem, ServerModuleDbMigrationFn, ServerModuleDbMigrationFnContext,
@@ -71,6 +72,7 @@ use tracing::{debug, info, warn};
 use crate::common::endpoint_constants::{
     BLIND_NONCE_USED_ENDPOINT, NOTE_SPENT_ENDPOINT, RECOVERY_BLIND_NONCE_OUTPOINTS_ENDPOINT,
     RECOVERY_COUNT_ENDPOINT, RECOVERY_SLICE_ENDPOINT, RECOVERY_SLICE_HASH_ENDPOINT,
+    RECOVERY_SLICE_SIZE,
 };
 use crate::common::{BlindNonce, Nonce, RecoveryItem};
 use crate::db::{
@@ -806,6 +808,7 @@ impl ServerModule for Mint {
                 RECOVERY_SLICE_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, range: (u64, u64)| -> SerdeModuleEncodingBase64<Vec<RecoveryItem>> {
+                    validate_page_range(range, RECOVERY_SLICE_SIZE)?;
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
                     Ok((&get_recovery_slice(&mut dbtx, range).await).into())
@@ -815,6 +818,7 @@ impl ServerModule for Mint {
                 RECOVERY_SLICE_HASH_ENDPOINT,
                 ApiVersion::new(0, 1),
                 async |_module: &Mint, context, range: (u64, u64)| -> sha256::Hash {
+                    validate_page_range(range, RECOVERY_SLICE_SIZE)?;
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
                     Ok(get_recovery_slice(&mut dbtx, range).await.consensus_hash())

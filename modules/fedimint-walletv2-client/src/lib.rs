@@ -58,6 +58,7 @@ use fedimint_derive_secret::{ChildId, DerivableSecret};
 use fedimint_eventlog::{Event, EventLogId};
 use fedimint_logging::LOG_CLIENT_MODULE_WALLETV2;
 use fedimint_walletv2_common::config::WalletClientConfig;
+use fedimint_walletv2_common::endpoint_constants::OUTPUT_INFO_SLICE_SIZE;
 use fedimint_walletv2_common::{
     BLOCK_COUNT_VOTE_DELAY, KIND, OutputInfo, PendingOutput, PendingOutputs, StandardScript,
     TxInfo, WalletCommonInit, WalletInput, WalletInputV0, WalletModuleTypes, WalletOutput,
@@ -71,9 +72,6 @@ use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator as _;
 use thiserror::Error;
 use tracing::{debug, warn};
-
-/// Number of output info entries to scan per batch.
-const SLICE_SIZE: u64 = 1000;
 
 /// Number of event log entries to read per batch.
 const EVENT_LOG_PAGE_SIZE: u64 = 1000;
@@ -1209,7 +1207,10 @@ impl WalletClientModule {
 
         let outputs = self
             .module_api
-            .output_info_slice(next_output_index, next_output_index + SLICE_SIZE)
+            .output_info_slice(
+                next_output_index,
+                next_output_index + OUTPUT_INFO_SLICE_SIZE,
+            )
             .await?;
 
         let returned_num = outputs.len();
