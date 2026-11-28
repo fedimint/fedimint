@@ -69,12 +69,16 @@ impl GatewayConnection for ScriptedGatewayConnection {
     }
 }
 
-/// Runs the gateway transition of a `Funded` state whose contract was funded
-/// `funded_ago` before now, against `gateway_conn`, and returns its result.
-async fn run_gateway_transition(
+/// Builds a `Funded` state whose contract was funded `funded_ago` before now,
+/// with a client context that talks to `gateway_conn`.
+fn funded_state(
     gateway_conn: Arc<ScriptedGatewayConnection>,
     funded_ago: Duration,
-) -> Result<String, GatewayPayError> {
+) -> (
+    LightningPayFunded,
+    LightningPayCommon,
+    LightningClientContext,
+) {
     let payment_hash = sha256::Hash::hash(&PREIMAGE);
     let user_key = Keypair::new(SECP256K1, &mut rand::thread_rng());
     let gateway_key = Keypair::new(SECP256K1, &mut rand::thread_rng());
@@ -147,6 +151,18 @@ async fn run_gateway_transition(
         gateway_conn,
         client_ctx: None,
     };
+    (state, common, context)
+}
+
+/// Runs the gateway transition of a `Funded` state whose contract was funded
+/// `funded_ago` before now, against `gateway_conn`, and returns its result.
+/// The transition must not need the federation, so `funded_ago` has to be
+/// within `GATEWAY_PAY_TIMEOUT`.
+async fn run_gateway_transition(
+    gateway_conn: Arc<ScriptedGatewayConnection>,
+    funded_ago: Duration,
+) -> Result<String, GatewayPayError> {
+    let (state, common, context) = funded_state(gateway_conn, funded_ago);
 
     // The first transition asks the gateway for the preimage. The others wait
     // for a contract cancellation or timeout and are not polled here.
@@ -161,29 +177,72 @@ async fn run_gateway_transition(
     serde_json::from_value(output).expect("trigger output should decode")
 }
 
-/// A client that restarts more than three minutes after funding the outgoing
-/// contract must still ask the gateway for the preimage. Before the fix, the
-/// gateway transition of such a `Funded` state never resolved, so the payment
-/// could only end in a refund even when the gateway had paid.
+/// Asks the gateway for the preimage of a `Funded` state funded an hour ago, as
+/// a client does after a late restart. `gateway_claimed` stands in for the
+/// federation showing that the gateway claimed the contract.
+async fn gateway_pay_invoice_after_late_restart(
+    gateway_conn: Arc<ScriptedGatewayConnection>,
+    gateway_claimed: impl Future<Output = ()>,
+) -> Result<String, GatewayPayError> {
+    let (state, _common, context) = funded_state(gateway_conn, Duration::from_hours(1));
+    LightningPayFunded::gateway_pay_invoice(
+        state.gateway,
+        state.payload,
+        context,
+        state.funding_time,
+        gateway_claimed,
+    )
+    .await
+}
+
+/// A client that restarts more than three minutes after funding gets the
+/// preimage once the federation shows that the gateway claimed the contract.
+/// Before the fix, the gateway transition of such a `Funded` state never
+/// resolved, so the payment could only end in a refund, which the federation
+/// rejected because the gateway had already claimed the contract.
 #[tokio::test]
-async fn funded_state_resumed_long_after_funding_still_gets_preimage() {
+async fn late_restart_gets_preimage_once_gateway_claimed_the_contract() {
     let gateway = ScriptedGatewayConnection::new(vec![]);
 
-    let result = run_gateway_transition(gateway.clone(), Duration::from_hours(1)).await;
+    let result = timeout(
+        Duration::from_secs(10),
+        gateway_pay_invoice_after_late_restart(gateway.clone(), std::future::ready(())),
+    )
+    .await
+    .expect("the gateway request should resolve");
 
     assert_eq!(result, Ok(fedimint_core::hex::encode(PREIMAGE)));
     assert_eq!(gateway.requests(), 1);
+}
+
+/// After the three-minute window, a client does not start a payment the
+/// gateway has not seen: it sends no request until the gateway claims the
+/// contract.
+#[tokio::test]
+async fn late_restart_does_not_ask_gateway_before_it_claimed_the_contract() {
+    let gateway = ScriptedGatewayConnection::new(vec![]);
+
+    let result = timeout(
+        Duration::from_millis(200),
+        gateway_pay_invoice_after_late_restart(gateway.clone(), std::future::pending()),
+    )
+    .await;
+
+    assert!(result.is_err(), "the request should wait for the claim");
+    assert_eq!(gateway.requests(), 0);
 }
 
 /// A gateway that cannot be reached is asked again after a backoff, and the
 /// payment completes once the gateway returns the preimage.
 #[tokio::test]
 async fn unreachable_gateway_is_asked_again_until_it_returns_the_preimage() {
-    let not_found = GatewayPayError::GatewayInternalError {
-        error_code: Some(404),
-        error_message: "gateway not found".to_string(),
+    // `RealGatewayConnection` reports an unreachable gateway without a status
+    // code.
+    let unreachable = GatewayPayError::GatewayInternalError {
+        error_code: None,
+        error_message: "connection refused".to_string(),
     };
-    let gateway = ScriptedGatewayConnection::new(vec![not_found.clone(), not_found]);
+    let gateway = ScriptedGatewayConnection::new(vec![unreachable.clone(), unreachable]);
 
     let result = run_gateway_transition(gateway.clone(), Duration::ZERO).await;
 
