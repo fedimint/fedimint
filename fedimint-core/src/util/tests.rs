@@ -70,6 +70,48 @@ fn test_safe_url() {
     let _: SafeUrl = url::Url::parse("http://1.2.3.4:80/foo").unwrap().into();
 }
 
+#[test]
+fn join_path_preserves_credentials_query_and_fragment() {
+    let base = SafeUrl::parse("https://alice:s3cret@example.com:8443/api/v1?x=1#frag").unwrap();
+    let joined = base.join_path("lnv1/paycodes");
+
+    assert_eq!(joined.username(), "alice");
+    assert_eq!(joined.password(), Some("s3cret"));
+    assert_eq!(joined.path(), "/api/v1/lnv1/paycodes");
+    assert_eq!(
+        joined.as_str(),
+        "https://alice:s3cret@example.com:8443/api/v1/lnv1/paycodes?x=1#frag"
+    );
+    // Display still redacts secrets
+    assert_eq!(
+        format!("{joined}"),
+        "https://REDACTEDUSER:REDACTEDPASS@example.com:8443/api/v1/lnv1/paycodes"
+    );
+}
+
+#[test]
+fn join_path_appends_and_normalizes_slashes() {
+    let base = SafeUrl::parse("http://1.2.3.4:81/foo/").unwrap();
+    assert_eq!(base.join_path("bar").as_str(), "http://1.2.3.4:81/foo/bar");
+    assert_eq!(base.join_path("/bar").as_str(), "http://1.2.3.4:81/foo/bar");
+    assert_eq!(
+        base.join_path("bar/baz").as_str(),
+        "http://1.2.3.4:81/foo/bar/baz"
+    );
+    assert_eq!(
+        base.join_path("//bar//").as_str(),
+        "http://1.2.3.4:81/foo/bar"
+    );
+
+    let root = SafeUrl::parse("http://1.2.3.4/").unwrap();
+    assert_eq!(root.join_path("x").as_str(), "http://1.2.3.4/x");
+
+    // Multiple trailing slashes on the base must collapse like the old
+    // Display + trim_end_matches('/') path (not leave `/api///lnv1`).
+    let multi = SafeUrl::parse("http://1.2.3.4/api///").unwrap();
+    assert_eq!(multi.join_path("lnv1").as_str(), "http://1.2.3.4/api/lnv1");
+}
+
 #[tokio::test]
 async fn test_next_or_pending() {
     let mut stream = futures::stream::iter(vec![1, 2]);
