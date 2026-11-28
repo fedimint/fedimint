@@ -85,10 +85,6 @@ and solutions for variety of cases.
 * [Fedimint NixOS Deployment Repo](https://github.com/fedimint/nixos-deployment) - an example template for setting up Fedimint using NixOS server.
 
 
-## Hosted solutions
-
-* [Clovyr hosted Fedimint](https://clovyr.app/tag/fedimint)
-
 ## Help and support
 
 For help please try [Fedimint Github Discussions](https://github.com/fedimint/fedimint/discussions)

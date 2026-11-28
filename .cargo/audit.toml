@@ -37,6 +37,37 @@ ignore = [
   "RUSTSEC-2026-0118",
   # hickory-proto O(n²) name compression on message encoding; only affects encoding large DNS messages, which we do not do (we are a resolver consumer). Fix is in 0.26.1; transitive via iroh, can't update yet.
   "RUSTSEC-2026-0119",
+  # hickory-proto/hickory-resolver DNSSEC validation flaws (NSEC/NSEC3 proof
+  # handling, RRset/class checks). All are reachable only when DNSSEC
+  # validation is enabled (dnssec-ring/dnssec-aws-lc-rs), which our
+  # hickory-resolver dependency does not enable. No hickory-proto 0.25 fix
+  # exists; validation moved to hickory-net in 0.26.2. Transitive via iroh
+  # 0.35.0 (iroh-fedimint/iroh-relay), can't update yet.
+  "RUSTSEC-2026-0504",
+  "RUSTSEC-2026-0505",
+  "RUSTSEC-2026-0511",
+  "RUSTSEC-2026-0512",
+  "RUSTSEC-2026-0514",
+  "RUSTSEC-2026-0530",
+  "RUSTSEC-2026-0531",
+  "RUSTSEC-2026-0532",
+  "RUSTSEC-2026-0549",
+  "RUSTSEC-2026-0550",
+  "RUSTSEC-2026-0551",
+  # hickory-proto panics parsing malformed SVCB/HTTPS or zone-file text
+  # records. Only reachable when parsing zone files or record text from an
+  # untrusted source; we consume hickory only as a resolver over the wire
+  # format, which is unaffected. Fix is in 0.26.2; transitive via iroh
+  # 0.35.0, can't update yet.
+  "RUSTSEC-2026-0487",
+  "RUSTSEC-2026-0489",
+  "RUSTSEC-2026-0490",
+  # hickory-proto reserves vector capacity from unchecked header record
+  # counts when decoding a DNS message, so a crafted small packet can make
+  # a resolver over-allocate (~18MB) before failing. Low-severity DoS
+  # against our own DNS resolution path; fix is in 0.26.2; transitive via
+  # iroh 0.35.0, can't update yet.
+  "RUSTSEC-2026-0491",
   # h2 unbounded empty DATA frames. Fixed in 0.4.16, and h2 0.4 has been
   # updated to 0.4.17. The remaining hit is h2 0.3.26, which has no patched
   # release at all (the advisory is fixed only in >=0.4.16 and 0.3.27 is the
@@ -75,6 +106,20 @@ ignore = [
   # zstd-sys is used only by native RocksDB builds. The affected allocator
   # is wasm32-only; reassess before adding Zstd to a supported WASM build.
   "RUSTSEC-2026-0410",
+  # `lru` LruCache::pop() panic-safety unsoundness; fixed in 0.18.2. Our own
+  # fedimint-api-client dependency is updated past that, but lru 0.12.5/0.13.0
+  # remain pinned transitively via iroh-relay/lockable and mainline/pkarr
+  # (iroh 0.35.0 chain).
+  "RUSTSEC-2026-0253",
+  # `chrono` unmaintained; no replacement release exists to upgrade to.
+  # Migration to `jiff` tracked in fedimint/fedimint#9579.
+  "RUSTSEC-2026-0543",
+  # `humantime` unmaintained (wraps chrono); no replacement release exists.
+  # Pulled in transitively, not used directly by any fedimint crate: via
+  # fedimint-connectors -> arti-client and the tor-* crate family (Tor
+  # connectivity support), and via fedimint-logging -> console-subscriber
+  # (tokio-console instrumentation).
+  "RUSTSEC-2026-0542",
 ]
 
 [output]
