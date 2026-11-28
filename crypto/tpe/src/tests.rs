@@ -107,3 +107,36 @@ fn test_roundtrip_single_guardian() {
     assert!(verify_agg_dk(&dealer_agg_pk(), &agg_dk, &ct, &commitment));
     assert_eq!(preimage, decrypt_preimage(&ct, &agg_dk));
 }
+
+#[test]
+fn verification_rejects_a_different_commitment() {
+    let commitment = sha256::Hash::hash(b"contract");
+    let other = sha256::Hash::hash(b"another contract");
+    let seed = [7; 32];
+    let ct = encrypt_preimage(&dealer_agg_pk(), &seed, &[42; 32], &commitment);
+    let dk = derive_agg_dk(&dealer_agg_pk(), &seed);
+    let share = create_dk_share(&dealer_sk(1, 0), &ct);
+
+    assert!(!verify_ciphertext(&ct, &other));
+    assert!(!verify_agg_dk(&dealer_agg_pk(), &dk, &ct, &other));
+    assert!(!verify_dk_share(&dealer_pk(1, 0), &share, &ct, &other));
+}
+
+#[test]
+fn admission_requires_non_identity_points() {
+    let ct = encrypt_preimage(
+        &dealer_agg_pk(),
+        &[7; 32],
+        &[42; 32],
+        &sha256::Hash::hash(b"contract"),
+    );
+    assert!(ct.has_non_identity_points());
+
+    let mut changed = ct;
+    changed.pk.0 = crate::G1Affine::identity();
+    assert!(!changed.has_non_identity_points());
+
+    let mut changed = ct;
+    changed.signature.0 = crate::G2Affine::identity();
+    assert!(!changed.has_non_identity_points());
+}

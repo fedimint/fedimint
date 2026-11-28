@@ -564,6 +564,21 @@ impl ServerModule for Lightning {
         })
     }
 
+    async fn verify_output_submission<'a, 'b>(
+        &'a self,
+        _dbtx: &mut DatabaseTransaction<'b>,
+        output: &'a LightningOutput,
+        _outpoint: OutPoint,
+    ) -> Result<(), LightningOutputError> {
+        // process_output checks the pairing in both submission and consensus.
+        if let LightningOutputV0::Incoming(contract) = output.ensure_v0_ref()?
+            && !contract.ciphertext.has_non_identity_points()
+        {
+            return Err(LightningOutputError::InvalidContract);
+        }
+        Ok(())
+    }
+
     async fn process_output<'a, 'b>(
         &'a self,
         dbtx: &mut DatabaseTransaction<'b>,
@@ -580,7 +595,7 @@ impl ServerModule for Lightning {
                 contract.amount
             }
             LightningOutputV0::Incoming(contract) => {
-                if !contract.verify() {
+                if !contract.verify_consensus_v1() {
                     return Err(LightningOutputError::InvalidContract);
                 }
 

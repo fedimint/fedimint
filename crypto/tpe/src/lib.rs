@@ -122,18 +122,35 @@ fn hash_to_message(
     G2Projective::random(&mut ChaChaRng::from_seed(seed)).to_affine()
 }
 
-/// Verifying a ciphertext guarantees that it has not been malleated.
-pub fn verify_ciphertext(ct: &CipherText, commitment: &sha256::Hash) -> bool {
-    let message = hash_to_message(&ct.encrypted_preimage, &ct.pk.0, commitment);
+impl CipherText {
+    /// Checks the point restrictions for newly admitted ciphertexts.
+    pub fn has_non_identity_points(&self) -> bool {
+        !bool::from(self.pk.0.is_identity()) && !bool::from(self.signature.0.is_identity())
+    }
+}
 
-    pairing(&G1Affine::generator(), &ct.signature.0) == pairing(&ct.pk.0, &message)
+/// Checks a new ciphertext against its commitment.
+pub fn verify_ciphertext(ct: &CipherText, commitment: &sha256::Hash) -> bool {
+    ct.has_non_identity_points() && verify_ciphertext_consensus_v1(ct, commitment)
+}
+
+/// Checks the original LNv2 v1 consensus rule for ordered outputs and replay.
+pub fn verify_ciphertext_consensus_v1(ct: &CipherText, commitment: &sha256::Hash) -> bool {
+    let message = hash_to_message(&ct.encrypted_preimage, &ct.pk.0, commitment);
+    verify_signature(ct, &message)
+}
+
+fn verify_signature(ct: &CipherText, message: &G2Affine) -> bool {
+    pairing(&G1Affine::generator(), &ct.signature.0) == pairing(&ct.pk.0, message)
 }
 
 pub fn decrypt_preimage(ct: &CipherText, agg_dk: &AggregateDecryptionKey) -> [u8; 32] {
     xor_with_hash(ct.encrypted_preimage, agg_dk)
 }
 
-/// The function asserts that the ciphertext is valid.
+/// Verifies a decryption key for an existing ciphertext, including those
+/// accepted under the original consensus rule. Use [`verify_ciphertext`] for
+/// admission.
 pub fn verify_agg_dk(
     agg_pk: &AggregatePublicKey,
     agg_dk: &AggregateDecryptionKey,
@@ -142,10 +159,9 @@ pub fn verify_agg_dk(
 ) -> bool {
     let message = hash_to_message(&ct.encrypted_preimage, &ct.pk.0, commitment);
 
-    assert_eq!(
-        pairing(&G1Affine::generator(), &ct.signature.0),
-        pairing(&ct.pk.0, &message)
-    );
+    if !verify_signature(ct, &message) {
+        return false;
+    }
 
     // Since the ciphertext is valid its signature is the ecdh point of the message
     // and the ephemeral public key. Hence, the following equation holds if and only
@@ -159,7 +175,8 @@ pub fn create_dk_share(sks: &SecretKeyShare, ct: &CipherText) -> DecryptionKeySh
     DecryptionKeyShare(ct.pk.0.mul(sks.0).to_affine())
 }
 
-/// The function asserts that the ciphertext is valid.
+/// Verifies a share for an existing ciphertext under the same rules as
+/// [`verify_agg_dk`].
 pub fn verify_dk_share(
     pks: &PublicKeyShare,
     dks: &DecryptionKeyShare,
@@ -168,10 +185,9 @@ pub fn verify_dk_share(
 ) -> bool {
     let message = hash_to_message(&ct.encrypted_preimage, &ct.pk.0, commitment);
 
-    assert_eq!(
-        pairing(&G1Affine::generator(), &ct.signature.0),
-        pairing(&ct.pk.0, &message)
-    );
+    if !verify_signature(ct, &message) {
+        return false;
+    }
 
     // Since the ciphertext is valid its signature is the ecdh point of the message
     // and the ephemeral public key. Hence, the following equation holds if and only

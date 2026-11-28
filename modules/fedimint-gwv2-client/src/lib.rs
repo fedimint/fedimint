@@ -701,6 +701,10 @@ impl GatewayClientModuleV2 {
 
         let commitment = contract.commitment.clone();
         if plan == IncomingRelayPlan::CreateReceiveAndCompletion {
+            // A contract registered before an upgrade may still await funding.
+            if !contract.ciphertext.has_non_identity_points() {
+                return Err(RelayIncomingHtlcError::InvalidCiphertext);
+            }
             // Only gate fresh funding: the other plans resume an already
             // funded contract and must not be cancelled.
             //
@@ -842,6 +846,10 @@ impl GatewayClientModuleV2 {
 
         if !allow_fresh_dispatch {
             return Ok(None);
+        }
+
+        if !contract.ciphertext.has_non_identity_points() {
+            return Err(RelayDirectSwapError::InvalidCiphertext);
         }
 
         // A swap funds an incoming contract in this federation, so it is
@@ -1043,6 +1051,10 @@ pub enum GatewaySendPaymentError {
 /// Why the gateway did not relay an intercepted LNv2 HTLC.
 #[derive(Debug, Error)]
 pub enum RelayIncomingHtlcError {
+    /// The contract fails the current ciphertext admission policy.
+    #[error("Invalid incoming contract ciphertext")]
+    InvalidCiphertext,
+
     /// The federation liveness probe failed, so a fresh incoming contract is
     /// not funded.
     #[error("The federation did not answer the liveness probe")]
@@ -1082,6 +1094,10 @@ pub enum RelayIncomingHtlcError {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum RelayDirectSwapError {
+    /// The contract fails the current ciphertext admission policy.
+    #[error("Invalid incoming contract ciphertext")]
+    InvalidCiphertext,
+
     /// The operator has disabled receives for this federation, so no fresh
     /// swap is funded.
     #[error("Receiving payments is disabled for federation {federation_id}")]

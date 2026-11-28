@@ -98,8 +98,14 @@ impl IncomingContract {
         ContractId(self.consensus_hash())
     }
 
+    /// Checks whether to admit a new contract.
     pub fn verify(&self) -> bool {
         verify_ciphertext(&self.ciphertext, &self.commitment.consensus_hash())
+    }
+
+    /// Applies the original consensus rule when processing ordered outputs.
+    pub fn verify_consensus_v1(&self) -> bool {
+        tpe::verify_ciphertext_consensus_v1(&self.ciphertext, &self.commitment.consensus_hash())
     }
 
     pub fn verify_decryption_share(
