@@ -12,6 +12,7 @@
 
 pub mod db;
 pub mod envs;
+mod feerate;
 mod metrics;
 mod pending;
 
@@ -96,6 +97,7 @@ use crate::db::{
     BlockCountVoteKey, BlockCountVotePrefix, FeeRateVoteKey, FeeRateVotePrefix, TxInfoKey,
     TxInfoPrefix, UnconfirmedTxKey, UnconfirmedTxPrefix, UnsignedTxKey, UnsignedTxPrefix,
 };
+use crate::feerate::FeeRateUse;
 use crate::metrics::{
     WALLET_BLOCK_COUNT, WALLET_INOUT_FEES_SATS, WALLET_INOUT_SATS, WALLET_PEGIN_FEES_SATS,
     WALLET_PEGIN_SATS, WALLET_PEGOUT_FEES_SATS, WALLET_PEGOUT_SATS,
@@ -866,7 +868,7 @@ impl ServerModule for Wallet {
                 async |module: &Wallet, context, _params: ()| -> Option<Amount> {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
-                    Ok(module.send_fee(&mut dbtx).await)
+                    Ok(module.fee(&mut dbtx, module.cfg.consensus.send_tx_vbytes, FeeRateUse::Quote).await)
                 }
             },
             public_api_endpoint! {
@@ -875,7 +877,7 @@ impl ServerModule for Wallet {
                 async |module: &Wallet, context, _params: ()| -> Option<Amount> {
                     let db = context.db();
                     let mut dbtx = db.begin_transaction_nc().await;
-                    Ok(module.receive_fee(&mut dbtx).await)
+                    Ok(module.fee(&mut dbtx, module.cfg.consensus.receive_tx_vbytes, FeeRateUse::Quote).await)
                 }
             },
             public_api_endpoint! {
@@ -1238,6 +1240,15 @@ impl Wallet {
     }
 
     pub async fn consensus_feerate(&self, dbtx: &mut DatabaseTransaction<'_>) -> Option<u64> {
+        self.feerate(dbtx, FeeRateUse::Consensus, 0).await
+    }
+
+    async fn feerate(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        usage: FeeRateUse,
+        floor: u64,
+    ) -> Option<u64> {
         let num_peers = self.cfg.consensus.bitcoin_pks.to_num_peers();
 
         let mut rates = dbtx
@@ -1247,19 +1258,22 @@ impl Wallet {
             .collect::<Vec<u64>>()
             .await;
 
-        assert!(rates.len() <= num_peers.total());
-
-        rates.sort_unstable();
-
-        assert!(rates.first() <= rates.last());
-
-        rates.get(num_peers.threshold() - 1).copied()
+        usage.select(num_peers, &mut rates, floor)
     }
 
     pub async fn consensus_fee(
         &self,
         dbtx: &mut DatabaseTransaction<'_>,
         tx_vbytes: u64,
+    ) -> Option<Amount> {
+        self.fee(dbtx, tx_vbytes, FeeRateUse::Consensus).await
+    }
+
+    async fn fee(
+        &self,
+        dbtx: &mut DatabaseTransaction<'_>,
+        tx_vbytes: u64,
+        usage: FeeRateUse,
     ) -> Option<Amount> {
         // The minimum feerate is a protection against a catastrophic error in the
         // feerate estimation and limits the length of the pending transaction stack.
@@ -1281,10 +1295,8 @@ impl Wallet {
         // the `stack_vbytes` fold the `expect` below relies on.
         assert!(pending_txs.len() <= 32);
 
-        let feerate = self
-            .consensus_feerate(dbtx)
-            .await?
-            .max(self.cfg.consensus.feerate_base << pending_txs.len());
+        let floor = self.cfg.consensus.feerate_base << pending_txs.len();
+        let feerate = self.feerate(dbtx, usage, floor).await?;
 
         let tx_fee = tx_vbytes.saturating_mul(feerate).saturating_div(1000);
 
