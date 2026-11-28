@@ -142,13 +142,20 @@ pub enum GatewayPayInvoiceError {
     #[error("The gateway cannot pay the pruned invoice")]
     PrunedInvoiceRejected(#[source] GatewayClientV1Error),
 
-    /// Another operation already claimed the invoice's payment hash, and this
-    /// request has no matching funded contract this gateway can refund.
-    #[error("A payment for this payment hash was already accepted")]
-    PaymentHashAlreadyClaimed,
+    /// No live funded outgoing contract matches this gateway and payment hash.
+    #[error("No matching funded outgoing contract")]
+    NoMatchingContract,
 
-    /// The federation could not return the contract to refund.
-    #[error("Failed to fetch outgoing contract for refund")]
+    /// The federation has not agreed on a block count yet.
+    #[error("No consensus block count for outgoing payment")]
+    MissingBlockCount,
+
+    /// The gateway has no usable routing fee configuration for the federation.
+    #[error("Missing routing fees for outgoing payment")]
+    MissingRoutingFees,
+
+    /// The federation could not return the contract or block count.
+    #[error("Failed to fetch outgoing contract data")]
     ContractLookup(#[source] FederationError),
 
     /// A payment of this contract is already under way, and the request does

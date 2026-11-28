@@ -35,11 +35,12 @@ use fedimint_gateway_common::{PaymentLogPayload, SetFeesPayload, SetPaymentPolic
 use fedimint_gateway_server::{Gateway, GatewayState};
 use fedimint_gateway_ui::IAdminGateway;
 use fedimint_gw_client::pay::{
+    GatewayPayCommon, GatewayPayInvoice, GatewayPayStateMachine, GatewayPayStates,
     OutgoingContractError, OutgoingPaymentError, OutgoingPaymentErrorType,
 };
 use fedimint_gw_client::{
-    GatewayClientModule, GatewayExtPayStates, GatewayExtReceiveStates, GatewayMeta,
-    GatewayPayInvoiceError, HandleDirectSwapError, HandleInterceptedHtlcError, Htlc,
+    GatewayClientModule, GatewayClientStateMachines, GatewayExtPayStates, GatewayExtReceiveStates,
+    GatewayMeta, GatewayPayInvoiceError, HandleDirectSwapError, HandleInterceptedHtlcError, Htlc,
     SwapParameters,
 };
 use fedimint_gwv2_client::events::{
@@ -350,7 +351,7 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
                     let payload = PayInvoicePayload {
                         federation_id: user_client.federation_id(),
                         contract_id,
-                        payment_data: get_payment_data(Some(lightning_gateway), invoice),
+                        payment_data: get_payment_data(Some(lightning_gateway), invoice.clone()),
                         preimage_auth: Hash::hash(&[0; 32]),
                     };
 
@@ -381,6 +382,17 @@ async fn test_gateway_enforces_fees() -> anyhow::Result<()> {
                 _ => panic!("Expected Lightning payment!"),
             }
 
+            // A contract funded at the announced fee can still pay the same invoice.
+            let payer = fed.new_client().await;
+            payer
+                .get_first_module::<DummyClientModule>()?
+                .mock_receive(sats(1000), AmountUnit::BITCOIN)
+                .await;
+            payer
+                .get_first_module::<LightningClientModule>()?
+                .update_gateway_cache()
+                .await?;
+            gateway_pay_valid_invoice(invoice, &payer, &gateway_client, &gateway_id).await?;
             Ok(())
         },
     )
@@ -1239,6 +1251,16 @@ async fn lnv1_pay_resumes_expired_invoice_already_dispatched() -> anyhow::Result
             let payload =
                 funded_lnv1_pay_payload(&user_client, invoice.clone(), &gateway_id).await?;
 
+            assert!(
+                gateway_client
+                    .get_first_module::<GatewayClientModule>()?
+                    .lightning_manager
+                    .claim_payment_image(
+                        &PaymentImage::Hash(*invoice.payment_hash()),
+                        OperationId(payload.contract_id.to_byte_array())
+                    )
+                    .await
+            );
             // The pre-restart dispatch: the gateway's own node pays the
             // invoice, so its outbound store knows the payment hash the way
             // a real node would after a crash mid-payment.
@@ -1258,10 +1280,35 @@ async fn lnv1_pay_resumes_expired_invoice_already_dispatched() -> anyhow::Result
             // would make this test pass without exercising the gate at all.
             assert!(invoice.would_expire(duration_since_epoch()));
 
-            let gw_pay_op = gateway_client
-                .get_first_module::<GatewayClientModule>()?
-                .gateway_pay_bolt11_invoice(payload)
+            // Restore the already-admitted PayInvoice state, rather than asking
+            // the gateway to admit a new operation for an expired invoice.
+            let module = gateway_client.get_first_module::<GatewayClientModule>()?;
+            let gw_pay_op = OperationId(payload.contract_id.to_byte_array());
+            let mut dbtx = gateway_client.db().begin_transaction().await;
+            gateway_client
+                .operation_log()
+                .add_operation_log_entry_dbtx(
+                    &mut dbtx.to_ref_nc(),
+                    gw_pay_op,
+                    Account::Primary,
+                    fedimint_ln_common::KIND.as_str(),
+                    GatewayMeta::Pay {
+                        preimage_auth: payload.preimage_auth,
+                    },
+                )
+                .await;
+            let state = GatewayClientStateMachines::Pay(GatewayPayStateMachine {
+                common: GatewayPayCommon {
+                    operation_id: gw_pay_op,
+                },
+                state: GatewayPayStates::PayInvoice(GatewayPayInvoice {
+                    pay_invoice_payload: payload,
+                }),
+            });
+            gateway_client
+                .add_state_machines(&mut dbtx.to_ref_nc(), vec![state.into_dyn(module.id)])
                 .await?;
+            dbtx.commit_tx_result().await?;
             let mut gw_pay_sub = gateway_client
                 .get_first_module::<GatewayClientModule>()?
                 .gateway_subscribe_ln_pay(gw_pay_op)
