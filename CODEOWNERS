@@ -64,13 +64,13 @@ crypto/             @fedimint/crypto
 /modules/fedimint-lnv2-client/**/crypto/ @fedimint/crypto @fedimint/lightning
 
 # Recurring payments outside the Lightning clients
-/fedimint-recurringd/                  @fedimint/firehose @fedimint/lightning
-/fedimint-recurringd-tests/            @fedimint/firehose @fedimint/lightning
-/fedimint-recurringdv2/                @fedimint/firehose @fedimint/lightning
-/devimint/src/recurringd.rs           @fedimint/firehose @fedimint/lightning
-/devimint/src/recurringdv2.rs          @fedimint/firehose @fedimint/lightning
-/docs/meta_fields/recurringd_api.md    @fedimint/firehose @fedimint/lightning
-/scripts/tests/recurringd-test.sh      @fedimint/infra @fedimint/lightning
+/fedimint-recurringd/                   @fedimint/lightning
+/fedimint-recurringd-tests/             @fedimint/lightning
+/fedimint-recurringdv2/                 @fedimint/lightning
+/devimint/src/recurringd.rs             @fedimint/lightning
+/devimint/src/recurringdv2.rs           @fedimint/lightning
+/docs/meta_fields/recurringd_api.md     @fedimint/lightning
+/scripts/tests/recurringd-test.sh       @fedimint/infra @fedimint/lightning
 /fedimint-recurringd/**/*.nix @fedimint/infra @fedimint/lightning
 /fedimint-recurringd-tests/**/*.nix @fedimint/infra @fedimint/lightning
 /fedimint-recurringdv2/**/*.nix @fedimint/infra @fedimint/lightning
