@@ -160,6 +160,27 @@ async fn gateways_rank_the_majority_gateway_above_a_fast_single_guardian() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn gateways_return_ranked_results_as_soon_as_a_quorum_answers() {
+    // The third answer arrives before the grace period expires and breaks the
+    // tie in gateway support. The fourth guardian never answers.
+    let guardians = [
+        Guardian::Answers(secs(1), vec![gateway("single")]),
+        Guardian::Answers(secs(2), vec![gateway("majority")]),
+        Guardian::Answers(secs(3), vec![gateway("majority")]),
+        Guardian::Hangs,
+    ];
+
+    let start = Instant::now();
+    let gateways = MockApi::new(guardians)
+        .gateways()
+        .await
+        .expect("Three guardians answered");
+
+    assert_eq!(start.elapsed(), secs(3));
+    assert_eq!(gateways, vec![gateway("majority"), gateway("single")]);
+}
+
+#[tokio::test(start_paused = true)]
 async fn gateways_return_what_arrived_within_the_grace_period() {
     // Ten guardians need seven answers. The grace period runs from the first
     // answer and is not extended by later ones, so the answer arriving after
