@@ -43,6 +43,11 @@ use crate::{
     PaymentAction, SendOnchainRequest, SendOnchainResponse,
 };
 
+/// How often a payment waiter reads the node's payment store again while it
+/// waits for the payment's terminal event. See
+/// [`GatewayLdkClient::wait_for_terminal_payment`].
+const TERMINAL_PAYMENT_RECHECK_INTERVAL: Duration = Duration::from_secs(1);
+
 /// Forwards `ldk-node`'s log records into the gateway's `tracing` subscriber.
 ///
 /// By default `ldk-node` writes to its own append-only `ldk_node/ldk_node.log`
@@ -136,10 +141,11 @@ pub struct GatewayLdkClient {
     pending_channels: Arc<RwLock<BTreeMap<UserChannelId, PendingChannelSender>>>,
 
     /// Waiters for outgoing LDK payments that are woken by terminal payment
-    /// events (`PaymentSuccessful` / `PaymentFailed`). This lets `pay()` block
-    /// until the payment resolves instead of polling `node.payment()`. The
-    /// actual result is still read from `node.payment()` after the wakeup; this
-    /// map only signals that a terminal event has arrived.
+    /// events (`PaymentSuccessful` / `PaymentFailed`). This lets `pay()` and
+    /// `pay_offer()` block until the payment resolves instead of polling
+    /// `node.payment()`. The actual result is still read from `node.payment()`
+    /// after the wakeup; this map only signals that a terminal event has
+    /// arrived.
     pending_payments: Arc<RwLock<HashMap<PaymentId, oneshot::Sender<()>>>>,
 }
 
@@ -404,9 +410,9 @@ impl GatewayLdkClient {
         }
     }
 
-    /// Wakes the `pay()` waiter (if any) for `payment_id` once a terminal
-    /// payment event has been observed. The actual payment result is read from
-    /// `node.payment()` by the woken waiter.
+    /// Wakes the `pay()` or `pay_offer()` waiter (if any) for `payment_id` once
+    /// a terminal payment event has been observed. The actual payment result is
+    /// read from `node.payment()` by the woken waiter.
     async fn wake_pending_payment(
         pending_payments: &Arc<RwLock<HashMap<PaymentId, oneshot::Sender<()>>>>,
         payment_id: PaymentId,
@@ -420,6 +426,62 @@ impl GatewayLdkClient {
         } else {
             PendingPaymentWakeup::ReceiverDropped
         }
+    }
+
+    /// Waits until the outgoing payment `payment_id`, already handed to the
+    /// node, reaches a terminal status and returns what `terminal_result`
+    /// reads for it then. Returns `None` if a terminal event arrived but
+    /// `terminal_result` still finds no terminal status.
+    ///
+    /// The waiter is registered before the first check. `ldk-node` records a
+    /// payment's terminal status before it emits the terminal event, so either
+    /// that check sees the status or the event handler wakes the waiter later.
+    /// The event is only the fast path: the handler processes events one at a
+    /// time and can be held up by an unrelated event, for example while it
+    /// forwards an inbound HTLC to a full stream. So the status is also read
+    /// again every `recheck_interval`, and a terminal status recorded by the
+    /// node ends the wait even if its event has not been handled yet.
+    ///
+    /// There is deliberately no wall-clock timeout. `ldk-node` stops retrying
+    /// routes after `LDK_PAYMENT_RETRY_TIMEOUT` and LDK fails a BOLT12 invoice
+    /// request that is never answered, so a payment that is still pending has
+    /// an HTLC in flight, which its CLTV expiry bounds. Reporting such a
+    /// payment as failed would let a caller give up on a payment that can
+    /// still succeed.
+    ///
+    /// Restarts: the waiter lives only in memory. After a crash or restart the
+    /// interrupted request, this waiter and any per-offer lock are gone, while
+    /// `ldk-node` reloads the payment and its queued events, so the payment
+    /// can still settle. Nothing resumes the wait, and a lost reply means the
+    /// outcome is unknown, not that the payment failed. A caller has to check
+    /// the node's payment history before it retries.
+    async fn wait_for_terminal_payment<T>(
+        pending_payments: &Arc<RwLock<HashMap<PaymentId, oneshot::Sender<()>>>>,
+        payment_id: PaymentId,
+        recheck_interval: Duration,
+        terminal_result: impl Fn() -> Option<T>,
+    ) -> Option<T> {
+        let (payment_sender, mut payment_receiver) = oneshot::channel();
+        pending_payments
+            .write()
+            .await
+            .insert(payment_id, payment_sender);
+
+        let result = loop {
+            if let Some(result) = terminal_result() {
+                break Some(result);
+            }
+
+            tokio::select! {
+                // Woken by the terminal event. An error only means the sender
+                // was dropped, and the status is read again either way.
+                _ = &mut payment_receiver => break terminal_result(),
+                () = fedimint_core::runtime::sleep(recheck_interval) => {}
+            }
+        };
+
+        pending_payments.write().await.remove(&payment_id);
+        result
     }
 
     /// Returns the node's payment record for `payment_id`, but only when it is
@@ -1294,9 +1356,14 @@ impl ILnRpcClient for GatewayLdkClient {
             failure_reason: "Failed to parse Bolt12 Offer".to_string(),
         })?;
 
+        // Wait for a concurrent payment to the same offer without blocking the
+        // executor thread: `blocking_lock` panics when it has to wait inside
+        // the async runtime. The lock only serializes overlapping calls. It
+        // does not deduplicate them: every call sends a new payment.
         let _offer_lock_guard = self
             .outbound_offer_lock_pool
-            .blocking_lock(LdkOfferId(offer.id()));
+            .async_lock(LdkOfferId(offer.id()))
+            .await;
 
         let payment_id = if let Some(amount) = amount {
             self.node
@@ -1314,33 +1381,32 @@ impl ILnRpcClient for GatewayLdkClient {
                 })?
         };
 
-        loop {
-            if let Some(payment_details) = self.node.payment(&payment_id) {
-                match payment_details.status {
-                    PaymentStatus::Pending => {}
-                    PaymentStatus::Succeeded => match payment_details.kind {
-                        PaymentKind::Bolt12Offer {
-                            preimage: Some(preimage),
-                            ..
-                        } => {
-                            info!(target: LOG_LIGHTNING, offer = %offer, payment_id = %payment_id, preimage = %preimage, "Successfully paid offer");
-                            return Ok(Preimage(preimage.0));
-                        }
-                        _ => {
-                            return Err(LightningRpcError::FailedPayment {
-                                failure_reason: "Unexpected payment kind".to_string(),
-                            });
-                        }
-                    },
-                    PaymentStatus::Failed => {
-                        return Err(LightningRpcError::FailedPayment {
-                            failure_reason: "Bolt12 payment failed".to_string(),
-                        });
-                    }
-                }
-            }
-            fedimint_core::runtime::sleep(Duration::from_millis(100)).await;
-        }
+        let preimage = Self::wait_for_terminal_payment(
+            &self.pending_payments,
+            payment_id,
+            TERMINAL_PAYMENT_RECHECK_INTERVAL,
+            || {
+                self.node
+                    .payment(&payment_id)
+                    .and_then(|details| offer_payment_result(&details))
+            },
+        )
+        .await
+        .unwrap_or_else(|| {
+            Err(LightningRpcError::FailedPayment {
+                failure_reason: "LDK payment event fired without terminal payment status"
+                    .to_string(),
+            })
+        })?;
+
+        info!(
+            target: LOG_LIGHTNING,
+            offer = %offer,
+            payment_id = %payment_id,
+            preimage = %preimage,
+            "Successfully paid offer"
+        );
+        Ok(preimage)
     }
 
     fn sync_wallet(&self) -> Result<(), LightningRpcError> {
@@ -1433,7 +1499,8 @@ fn get_esplora_url(server_url: SafeUrl) -> Result<String, LdkClientInitError> {
     Ok(server_url)
 }
 
-/// Outcome of attempting to wake a `pay()` waiter for a terminal payment event.
+/// Outcome of attempting to wake a `pay()` or `pay_offer()` waiter for a
+/// terminal payment event.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum PendingPaymentWakeup {
     /// No waiter was registered for the payment id.
@@ -1465,6 +1532,28 @@ impl PartialOrd for UserChannelId {
 impl Ord for UserChannelId {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.0.0.cmp(&other.0.0)
+    }
+}
+
+/// Reads the result of a BOLT12 offer payment from its payment record.
+///
+/// Returns `None` while the payment is still pending, and `Some` once it has
+/// reached a terminal status.
+fn offer_payment_result(details: &PaymentDetails) -> Option<Result<Preimage, LightningRpcError>> {
+    match details.status {
+        PaymentStatus::Pending => None,
+        PaymentStatus::Succeeded => match details.kind {
+            PaymentKind::Bolt12Offer {
+                preimage: Some(preimage),
+                ..
+            } => Some(Ok(Preimage(preimage.0))),
+            _ => Some(Err(LightningRpcError::FailedPayment {
+                failure_reason: "Unexpected payment kind".to_string(),
+            })),
+        },
+        PaymentStatus::Failed => Some(Err(LightningRpcError::FailedPayment {
+            failure_reason: "Bolt12 payment failed".to_string(),
+        })),
     }
 }
 
