@@ -5,6 +5,7 @@
 mod federation_name;
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::Context;
@@ -53,7 +54,7 @@ use fedimint_gwv2_client::{
 use fedimint_lightning::{InterceptPaymentRequest, LightningRpcError};
 use fedimint_ln_client::api::LnFederationApi;
 use fedimint_ln_client::incoming::IncomingSmError;
-use fedimint_ln_client::pay::{PayInvoicePayload, PaymentData};
+use fedimint_ln_client::pay::{GatewayPayError, PayInvoicePayload, PaymentData};
 use fedimint_ln_client::{
     LightningClientInit, LightningClientModule, LightningOperationMeta,
     LightningOperationMetaVariant, LnPayState, LnReceiveState, MockGatewayConnection,
@@ -4231,6 +4232,198 @@ async fn lnv1_payout_refuses_lnv2_payment_of_same_hash() -> anyhow::Result<()> {
         gateway.send_payment_v2(payload).await.is_err(),
         "the LNv2 contract is refused without paying again"
     );
+
+    Ok(())
+}
+
+/// An LNv1 gateway connection that loses every reply until `reachable` is set,
+/// like a client that cannot reach its gateway after sending a payment.
+#[derive(Debug, Default)]
+struct UnreachableLnV1GatewayConnection {
+    reachable: AtomicBool,
+}
+
+#[apply(async_trait_maybe_send!)]
+impl fedimint_ln_client::GatewayConnection for UnreachableLnV1GatewayConnection {
+    async fn verify_gateway_availability(
+        &self,
+        _gateway: &LightningGateway,
+    ) -> Result<(), ServerError> {
+        Ok(())
+    }
+
+    async fn pay_invoice(
+        &self,
+        _gateway: LightningGateway,
+        _payload: PayInvoicePayload,
+    ) -> Result<String, GatewayPayError> {
+        if self.reachable.load(Ordering::SeqCst) {
+            // A gateway that already paid the invoice returns its preimage
+            // again
+            Ok(fedimint_core::hex::encode(MOCK_INVOICE_PREIMAGE))
+        } else {
+            Err(GatewayPayError::GatewayInternalError {
+                error_code: Some(404),
+                error_message: "Gateway unreachable".to_string(),
+            })
+        }
+    }
+}
+
+/// A client that cannot reach the gateway until the timelock of its outgoing
+/// contract must not refund a contract the gateway already claimed. The
+/// federation would reject that refund, and the paid payment would end in
+/// `UnexpectedError`. The client asks the gateway for the preimage instead.
+#[tokio::test(flavor = "multi_thread")]
+async fn lnv1_payment_claimed_while_gateway_unreachable_succeeds_after_timelock()
+-> anyhow::Result<()> {
+    if Fixtures::is_real_test() {
+        info!(
+            target: LOG_TEST,
+            "Skipping test as mining past the timelock is too slow in real bitcoind setup"
+        );
+        return Ok(());
+    }
+
+    let gateway_conn = Arc::new(UnreachableLnV1GatewayConnection::default());
+    let fixtures = Fixtures::new_primary(DummyClientInit, DummyInit)
+        .with_server_only_module(UnknownInit)
+        .with_module(
+            LightningClientInit {
+                gateway_conn: Some(gateway_conn.clone()),
+            },
+            LightningInit,
+        )
+        .with_module(
+            fedimint_lnv2_client::LightningClientInit::default(),
+            fedimint_lnv2_server::LightningInit,
+        );
+    let fed = fixtures.new_fed_degraded().await;
+    let gateway = fixtures.new_gateway().await;
+    fed.connect_gateway(&gateway).await;
+    let user_client = fed.new_client().await;
+    let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+    user_client
+        .get_first_module::<DummyClientModule>()?
+        .mock_receive(sats(1000), AmountUnit::BITCOIN)
+        .await;
+
+    let user_ln = user_client.get_first_module::<LightningClientModule>()?;
+    let gateway_id = gateway.http_gateway_id().await;
+    let invoice = FakeLightningTest::new().invoice(sats(250), None)?;
+    let OutgoingLightningPayment {
+        payment_type,
+        contract_id,
+        fee: _,
+    } = user_pay_invoice(&user_ln, invoice.clone(), &gateway_id).await?;
+    let PayType::Lightning(pay_op) = payment_type else {
+        panic!("Expected a Lightning payment");
+    };
+    let mut pay_sub = user_ln.subscribe_ln_pay(pay_op).await?.into_stream();
+    assert_eq!(pay_sub.ok().await?, LnPayState::Created);
+    let LnPayState::Funded {
+        block_height: timelock,
+    } = pay_sub.ok().await?
+    else {
+        panic!("Expected the outgoing contract to be funded");
+    };
+
+    // The gateway pays the invoice and claims the contract, but the client
+    // never gets its reply.
+    let payload = PayInvoicePayload {
+        federation_id: user_client.federation_id(),
+        contract_id,
+        payment_data: get_payment_data(user_ln.select_gateway(&gateway_id).await, invoice),
+        preimage_auth: Hash::hash(&[0; 32]),
+    };
+    let gateway_ln = gateway_client.get_first_module::<GatewayClientModule>()?;
+    let gateway_pay_op = gateway_ln.gateway_pay_bolt11_invoice(payload).await?;
+    let mut gateway_pay_sub = gateway_ln
+        .gateway_subscribe_ln_pay(gateway_pay_op)
+        .await?
+        .into_stream();
+    assert_eq!(gateway_pay_sub.ok().await?, GatewayExtPayStates::Created);
+    assert_matches!(
+        gateway_pay_sub.ok().await?,
+        GatewayExtPayStates::Preimage { .. }
+    );
+    assert_matches!(
+        gateway_pay_sub.ok().await?,
+        GatewayExtPayStates::Success { .. }
+    );
+    retry(
+        "waiting for the gateway's claim of the contract",
+        backoff_util::aggressive_backoff_long(),
+        || async {
+            let account = user_ln
+                .api
+                .fetch_contract(contract_id)
+                .await?
+                .context("The federation does not know the contract")?;
+            anyhow::ensure!(
+                account.amount == Amount::ZERO,
+                "The contract still holds {}",
+                account.amount
+            );
+            Ok(())
+        },
+    )
+    .await?;
+
+    // Let the federation pass the timelock, after which only the client can
+    // spend the contract.
+    let bitcoin = fixtures.bitcoin();
+    let blocks_to_timelock = u64::from(timelock).saturating_sub(bitcoin.get_block_count().await);
+    bitcoin.mine_blocks(blocks_to_timelock + 12).await;
+    retry(
+        "waiting for the federation to pass the timelock",
+        backoff_util::aggressive_backoff_long(),
+        || async {
+            let block_count = user_ln
+                .api
+                .fetch_consensus_block_count()
+                .await?
+                .context("The federation has no block count yet")?;
+            anyhow::ensure!(
+                u64::from(timelock) < block_count,
+                "Block count {block_count} has not passed the timelock {timelock}"
+            );
+            Ok(())
+        },
+    )
+    .await?;
+
+    // Restart the client, so its state machine asks for the block count again
+    // instead of waiting on a request made before the timelock passed. A
+    // client that refunds then reports it right away, while the gateway is
+    // still unreachable.
+    drop(pay_sub);
+    let user_client = Arc::new(
+        Arc::try_unwrap(user_client)
+            .map_err(|_| anyhow::anyhow!("The test holds the only client handle"))?
+            .restart()
+            .await?,
+    );
+    let user_ln = user_client.get_first_module::<LightningClientModule>()?;
+    let mut pay_sub = user_ln.subscribe_ln_pay(pay_op).await?.into_stream();
+    assert_eq!(pay_sub.ok().await?, LnPayState::Created);
+    assert_matches!(pay_sub.ok().await?, LnPayState::Funded { .. });
+    assert!(
+        timeout(Duration::from_secs(10), pay_sub.next())
+            .await
+            .is_err(),
+        "The client must not refund a contract the gateway claimed"
+    );
+
+    gateway_conn.reachable.store(true, Ordering::SeqCst);
+    let preimage = loop {
+        match pay_sub.ok().await? {
+            LnPayState::AwaitingChange => {}
+            LnPayState::Success { preimage } => break preimage,
+            state => panic!("Expected the payment to succeed, got {state:?}"),
+        }
+    };
+    assert_eq!(preimage, fedimint_core::hex::encode(MOCK_INVOICE_PREIMAGE));
 
     Ok(())
 }
