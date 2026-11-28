@@ -896,6 +896,22 @@ impl GatewayClientModule {
             .verify_pruned_invoice(pay_invoice_payload.payment_data)
             .await?;
 
+        // Only the first operation to claim a payment image may ever pay it out,
+        // across LNv1, LNv2 and all federations; see the LNv2 `send_payment`.
+        // The claim is taken before the operation is created, and a retry of the
+        // same contract finds its own claim.
+        anyhow::ensure!(
+            self.lightning_manager
+                .claim_payment_image(
+                    &fedimint_lnv2_common::contracts::PaymentImage::Hash(
+                        payload.payment_data.payment_hash(),
+                    ),
+                    OperationId(payload.contract_id.to_byte_array()),
+                )
+                .await,
+            "A payment for this payment hash was already accepted"
+        );
+
         self.client_ctx.module_db()
             .autocommit(
                 |dbtx, _| {
@@ -1340,4 +1356,12 @@ pub trait IGatewayClientV1: Debug + Send + Sync {
             ClientHandleArc,
         )>,
     >;
+
+    /// Claims the payment image for `operation_id` in the claim table shared
+    /// with LNv2, returning `false` if another operation already claimed it.
+    async fn claim_payment_image(
+        &self,
+        payment_image: &fedimint_lnv2_common::contracts::PaymentImage,
+        operation_id: OperationId,
+    ) -> bool;
 }

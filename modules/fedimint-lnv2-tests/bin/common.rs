@@ -30,7 +30,18 @@ pub async fn send(
     gateway: &str,
     invoice: &str,
 ) -> anyhow::Result<FinalSendOperationState> {
-    let send_op = serde_json::from_value::<OperationId>(
+    let send_op = start_send(client, gateway, invoice).await?;
+
+    await_send(client, send_op).await
+}
+
+/// Funds a send through `gateway` without waiting for its outcome.
+pub async fn start_send(
+    client: &Client,
+    gateway: &str,
+    invoice: &str,
+) -> anyhow::Result<OperationId> {
+    Ok(serde_json::from_value::<OperationId>(
         cmd!(
             client,
             "module",
@@ -42,9 +53,7 @@ pub async fn send(
         )
         .out_json()
         .await?,
-    )?;
-
-    await_send(client, send_op).await
+    )?)
 }
 
 /// Run `await-send` and parse the JSON, tolerating the pre-0.12 CLI output
