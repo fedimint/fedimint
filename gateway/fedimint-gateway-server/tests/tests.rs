@@ -3570,6 +3570,39 @@ async fn test_gateway_client_rejects_amountless_invoice() -> anyhow::Result<()> 
     .await
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn test_gateway_client_rejects_unknown_outgoing_contract() -> anyhow::Result<()> {
+    single_federation_test(|gateway, other_lightning_client, fed, user_client, _| async move {
+        let gateway_client = gateway.select_client(fed.id()).await?.into_value();
+        let contract_id = sha256(&[42; 32]).into();
+        let invoice = other_lightning_client.invoice(sats(1), None)?;
+        let error = gateway_client
+            .get_first_module::<GatewayClientModule>()?
+            .gateway_pay_bolt11_invoice(PayInvoicePayload {
+                federation_id: user_client.federation_id(),
+                contract_id,
+                payment_data: PaymentData::Invoice(invoice),
+                preimage_auth: Hash::hash(&[42; 32]),
+            })
+            .await
+            .expect_err("a contract the federation has not confirmed is rejected");
+
+        assert_matches!(error, GatewayPayInvoiceError::UnconfirmedContract { contract_id: rejected }
+            if rejected == contract_id);
+        assert!(
+            gateway_client
+                .operation_log()
+                .paginate_operations_rev(10, None)
+                .await
+                .is_empty(),
+            "a rejected contract must not create an operation"
+        );
+
+        Ok(())
+    })
+    .await
+}
+
 /// `pay_invoice` is unauthenticated and keys its operation on the contract id,
 /// but the state machine's dedupe key covers the whole payload, so a second
 /// request that differs only in `preimage_auth` slips past it. That used to
