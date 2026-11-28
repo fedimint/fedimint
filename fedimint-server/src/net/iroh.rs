@@ -16,10 +16,11 @@ use fedimint_logging::LOG_NET_IROH;
 use iroh_next::address_lookup::{DnsAddressLookup, PkarrPublisher, PkarrResolver};
 use iroh_next::endpoint::presets::Minimal;
 use iroh_next::endpoint::{Builder, QuicTransportConfig};
-use iroh_next::{Endpoint, RelayMode};
+use iroh_next::{Endpoint, RelayMode, RelayUrl};
 use tracing::{debug, info, warn};
 
-/// Child key used for the Iroh 1.0 API endpoint.
+/// Child key of the separate Iroh 1.0 API identity earlier releases
+/// advertised, which stays reachable for clients that stored it.
 const IROH_V1_API_CHILD_ID: ChildId = ChildId(0);
 
 fn direct_ip_transports_enabled() -> bool {
@@ -49,7 +50,8 @@ pub(crate) fn configure_iroh_ip_transports(
     }
 }
 
-/// Derive the Iroh 1.0 API secret key from the guardian broadcast key.
+/// Derive the transitional Iroh API secret key from the guardian broadcast
+/// key.
 pub(crate) fn derive_iroh_v1_api_secret_key(broadcast_sk: &SecretKey) -> iroh_next::SecretKey {
     let root = DerivableSecret::new_root(&broadcast_sk.secret_bytes(), b"fedimint-iroh-next");
     let seed: [u8; 32] = root.child_key(IROH_V1_API_CHILD_ID).to_random_bytes();
@@ -61,13 +63,21 @@ pub(crate) async fn build_iroh_v1_endpoint(
     secret_key: iroh_next::SecretKey,
     bind_addr: SocketAddr,
     iroh_dns: Option<SafeUrl>,
+    iroh_relays: Vec<SafeUrl>,
     alpn: &[u8],
 ) -> anyhow::Result<Endpoint> {
-    let relay_mode = if is_env_var_set_opt(FM_IROH_RELAYS_ENABLE_ENV).unwrap_or(true) {
-        default_iroh_v1_relay_mode()
-    } else {
+    let relay_mode = if !is_env_var_set_opt(FM_IROH_RELAYS_ENABLE_ENV).unwrap_or(true) {
         warn!(target: LOG_NET_IROH, "Iroh 1.0 relays are disabled");
         RelayMode::Disabled
+    } else if iroh_relays.is_empty() {
+        default_iroh_v1_relay_mode()
+    } else {
+        RelayMode::Custom(
+            iroh_relays
+                .into_iter()
+                .map(|url| RelayUrl::from(url.to_unsafe()))
+                .collect(),
+        )
     };
 
     let mut builder = Endpoint::builder(Minimal);

@@ -1,23 +1,16 @@
 use std::collections::BTreeSet;
-use std::net::SocketAddr;
 
-use anyhow::Context as _;
 use fedimint_metrics::prometheus::core::Collector;
 use fedimint_metrics::prometheus::proto::Metric;
 use futures::future::pending;
 use futures::{pin_mut, poll};
-use iroh_next::endpoint::presets::Minimal;
-use iroh_next::{EndpointAddr, RelayMode, SecretKey, TransportAddr};
 
 use super::{
     ApiError, ApiMethod, Arc, BTreeMap, Duration, IROH_API_REQUEST_DURATION_SECONDS,
     IROH_API_REQUEST_RESPONSE_CODE, ModuleInstanceId, Semaphore, UNKNOWN_METHOD,
-    VersionedIrohConnection, acquire_iroh_api_permit, metric_method, record_request_metrics,
-    run_handler,
+    acquire_iroh_api_permit, metric_method, record_request_metrics, run_handler,
 };
 use crate::net::api::API_ENDPOINT_TIMEOUT;
-
-const TEST_ALPN: &[u8] = b"fedimint-iroh-api-adapter-test";
 
 fn has_method_label(metric: &Metric, method: &str) -> bool {
     metric
@@ -332,75 +325,26 @@ async fn dropping_handler_wrapper_before_deadline_drops_pending_work() {
 }
 
 #[tokio::test]
-async fn shared_connection_limit_applies_across_versions() {
+async fn shared_connection_limit_applies_across_listeners() {
     let limit = Arc::new(Semaphore::new(1));
-    let legacy_permit = acquire_iroh_api_permit(&limit, 1, "0.35", "connection").await;
+    let default_permit = acquire_iroh_api_permit(&limit, 1, "default", "connection").await;
 
     assert!(
         tokio::time::timeout(
             Duration::from_millis(20),
-            acquire_iroh_api_permit(&limit, 1, "1.0", "connection"),
+            acquire_iroh_api_permit(&limit, 1, "next", "connection"),
         )
         .await
         .is_err()
     );
 
-    drop(legacy_permit);
+    drop(default_permit);
     let _permit = tokio::time::timeout(
         Duration::from_secs(1),
-        acquire_iroh_api_permit(&limit, 1, "1.0", "connection"),
+        acquire_iroh_api_permit(&limit, 1, "next", "connection"),
     )
     .await
-    .expect("v1 acquires the shared permit after the legacy connection releases it");
-}
-
-#[tokio::test]
-async fn iroh_v1_request_uses_shared_stream_adapter() -> anyhow::Result<()> {
-    let server = iroh_next::Endpoint::builder(Minimal)
-        .relay_mode(RelayMode::Disabled)
-        .secret_key(SecretKey::from_bytes(&[11; 32]))
-        .alpns(vec![TEST_ALPN.to_vec()])
-        .bind_addr(SocketAddr::from(([127, 0, 0, 1], 0)))?
-        .bind()
-        .await?;
-    let client = iroh_next::Endpoint::builder(Minimal)
-        .relay_mode(RelayMode::Disabled)
-        .bind()
-        .await?;
-    let server_addr = EndpointAddr::from_parts(
-        server.id(),
-        server.bound_sockets().into_iter().map(TransportAddr::Ip),
+    .expect(
+        "the transitional listener acquires the shared permit once the default one releases it",
     );
-    let (client_done_tx, client_done_rx) = tokio::sync::oneshot::channel();
-
-    let server_request = async {
-        let incoming = server.accept().await.context("server endpoint closed")?;
-        let connection = incoming.accept()?.await?;
-        let (send, mut recv) = VersionedIrohConnection::Next(connection)
-            .accept_bi()
-            .await?;
-        assert_eq!(recv.read_request().await?, b"request");
-        send.write_response(b"response").await?;
-        client_done_rx.await?;
-        anyhow::Ok(())
-    };
-    let client_request = async {
-        let connection = client.connect(server_addr, TEST_ALPN).await?;
-        let (mut send, mut recv) = connection.open_bi().await?;
-        send.write_all(b"request").await?;
-        send.finish()?;
-        let response = recv.read_to_end(100_000).await?;
-        anyhow::ensure!(response == b"response");
-        client_done_tx.send(()).expect("server is still running");
-        anyhow::Ok(())
-    };
-
-    tokio::time::timeout(Duration::from_secs(10), async {
-        tokio::try_join!(server_request, client_request)
-    })
-    .await
-    .context("Iroh v1 adapter test timed out")??;
-    client.close().await;
-    server.close().await;
-    Ok(())
 }

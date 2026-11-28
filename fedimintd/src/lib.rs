@@ -235,7 +235,9 @@ struct ServerOpts {
     #[arg(long, env = FM_IROH_DNS_ENV, requires = "enable_iroh")]
     iroh_dns: Option<SafeUrl>,
 
-    /// Optional URLs of the Iroh relays to use for registering
+    /// Optional URLs of the Iroh relays the client API listeners register on.
+    /// They must serve the Iroh 1.x relay protocol; the default relays are
+    /// used when none are set.
     #[arg(long, env = FM_IROH_RELAY_ENV, requires = "enable_iroh", value_delimiter = ',')]
     iroh_relays: Vec<SafeUrl>,
 
@@ -302,12 +304,16 @@ struct ServerOpts {
     #[arg(long = "iroh-api-max-requests-per-connection", env = FM_IROH_API_MAX_REQUESTS_PER_CONNECTION_ENV, default_value = "50")]
     iroh_api_max_requests_per_connection: usize,
 
-    /// Enable the transitional Iroh 1.0 API endpoint alongside Iroh 0.35.
+    /// Keep serving the separate Iroh API identity that earlier releases
+    /// advertised to clients.
     ///
-    /// For a federation configured with the legacy Iroh API, this is a runtime
-    /// setting independent of the DKG-only `--enable-iroh` option. It is
-    /// enabled by default. Once the endpoint is advertised, it must remain
-    /// enabled.
+    /// Clients that stored it keep connecting to it until they reopen and
+    /// learn that it is no longer advertised, and a client that stayed offline
+    /// through the migration can only learn that through this listener. For a
+    /// federation configured with the Iroh API, this is a runtime setting
+    /// independent of the DKG-only `--enable-iroh` option. It is enabled by
+    /// default; keep it enabled unless the federation never advertised the
+    /// identity.
     #[arg(
         long,
         env = FM_IROH_NEXT_ENABLE_ENV,
@@ -318,7 +324,7 @@ struct ServerOpts {
     )]
     enable_iroh_next: bool,
 
-    /// Bind address for the transitional Iroh 1.0 API endpoint
+    /// Bind address for the transitional Iroh API endpoint
     #[arg(long, env = FM_BIND_API_NEXT_ENV)]
     bind_api_next: Option<SocketAddr>,
 }

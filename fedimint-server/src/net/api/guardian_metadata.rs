@@ -14,38 +14,16 @@ use futures::stream::StreamExt;
 use tokio::select;
 use tracing::{debug, info};
 
-use crate::IrohNextApiSettings;
 use crate::config::ServerConfig;
 use crate::db::DbKeyPrefix;
-use crate::net::iroh::{derive_iroh_v1_api_secret_key, guardian_connector_registry_builder};
+use crate::net::iroh::guardian_connector_registry_builder;
 
-fn ensure_iroh_next_remains_available(
-    existing_endpoint: Option<&str>,
-    configured_endpoint: Option<&str>,
-) -> anyhow::Result<()> {
-    if let Some(existing_endpoint) = existing_endpoint {
-        anyhow::ensure!(
-            configured_endpoint == Some(existing_endpoint),
-            "Iroh 1.0 API endpoint {existing_endpoint} was previously advertised and must remain \
-             enabled unchanged; disabling or rotating it is unsupported"
-        );
-    }
-    Ok(())
-}
-
-fn reconcile_iroh_next_endpoint(
-    metadata: &mut GuardianMetadata,
-    configured_endpoint: Option<String>,
-) -> anyhow::Result<bool> {
-    ensure_iroh_next_remains_available(
-        metadata.iroh_next_endpoint.as_deref(),
-        configured_endpoint.as_deref(),
-    )?;
-    if metadata.iroh_next_endpoint == configured_endpoint {
-        return Ok(false);
-    }
-    metadata.iroh_next_endpoint = configured_endpoint;
-    Ok(true)
+/// Drops the separate Iroh 1.0 API identity that earlier releases advertised.
+/// The API identity from the config serves Iroh 1.x itself now, so clients
+/// that see the cleared field return to it. Returns whether the metadata
+/// changed.
+fn clear_iroh_next_endpoint(metadata: &mut GuardianMetadata) -> bool {
+    metadata.iroh_next_endpoint.take().is_some()
 }
 
 #[derive(Clone, Debug, Encodable, Decodable)]
@@ -175,15 +153,12 @@ pub fn start_guardian_metadata_service(
     });
 }
 
-/// Reconciles and signs the server-owned Iroh endpoint in guardian metadata.
+/// Signs our initial guardian metadata and clears the server-owned Iroh
+/// endpoint from existing metadata.
 ///
 /// Existing administrator-owned URLs and Pkarr ID are preserved. Returns `true`
 /// if metadata was inserted or updated and should be broadcast.
-pub async fn reconcile_guardian_metadata(
-    db: &Database,
-    cfg: &ServerConfig,
-    iroh_next_api_settings: Option<&IrohNextApiSettings>,
-) -> anyhow::Result<bool> {
+pub async fn reconcile_guardian_metadata(db: &Database, cfg: &ServerConfig) -> bool {
     let key = GuardianMetadataKey(cfg.local.identity);
     let mut dbtx = db.begin_transaction().await;
     let existing = dbtx.get_value(&key).await;
@@ -203,16 +178,9 @@ pub async fn reconcile_guardian_metadata(
         |existing| existing.guardian_metadata().clone(),
     );
 
-    let iroh_next_endpoint = iroh_next_api_settings.map(|_| {
-        derive_iroh_v1_api_secret_key(&cfg.private.broadcast_secret_key)
-            .public()
-            .to_string()
-    });
-
-    let endpoint_changed =
-        reconcile_iroh_next_endpoint(&mut guardian_metadata, iroh_next_endpoint)?;
-    if existing.is_some() && !endpoint_changed {
-        return Ok(false);
+    let endpoint_cleared = clear_iroh_next_endpoint(&mut guardian_metadata);
+    if existing.is_some() && !endpoint_cleared {
+        return false;
     }
 
     let now = fedimint_core::time::now()
@@ -235,7 +203,7 @@ pub async fn reconcile_guardian_metadata(
     dbtx.insert_entry(&key, &signed_metadata).await;
     dbtx.commit_tx().await;
 
-    Ok(true)
+    true
 }
 
 #[cfg(test)]

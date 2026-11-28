@@ -77,10 +77,11 @@ pub mod net;
 /// Fedimint toplevel config
 pub mod config;
 
-/// Requested settings for the transitional Iroh 1.0 API listener.
+/// Requested settings for the transitional Iroh API listener, which keeps
+/// serving the separate identity earlier releases advertised to clients.
 #[derive(Debug, Clone)]
 pub struct IrohNextApiSettings {
-    /// Optional explicit socket address on which to bind the Iroh 1.0 API
+    /// Optional explicit socket address on which to bind the transitional
     /// endpoint.
     bind: Option<SocketAddr>,
 }

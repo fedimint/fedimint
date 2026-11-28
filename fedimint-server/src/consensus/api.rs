@@ -783,7 +783,7 @@ impl ConsensusApi {
         &self,
         new_metadata: fedimint_core::net::guardian_metadata::GuardianMetadata,
     ) -> fedimint_core::net::guardian_metadata::SignedGuardianMetadata {
-        sign_guardian_metadata_preserving_iroh_endpoint(
+        sign_and_store_guardian_metadata(
             &self.db,
             self.cfg.local.identity,
             &self.cfg.private.broadcast_secret_key,
@@ -807,23 +807,22 @@ impl ConsensusApi {
     }
 }
 
-async fn sign_guardian_metadata_preserving_iroh_endpoint(
+async fn sign_and_store_guardian_metadata(
     db: &Database,
     identity: PeerId,
     broadcast_secret_key: &secp256k1::SecretKey,
-    new_metadata: fedimint_core::net::guardian_metadata::GuardianMetadata,
+    mut new_metadata: fedimint_core::net::guardian_metadata::GuardianMetadata,
 ) -> fedimint_core::net::guardian_metadata::SignedGuardianMetadata {
     use crate::net::api::guardian_metadata::GuardianMetadataKey;
 
+    // The server owns this field and no longer advertises a separate Iroh
+    // identity, see `reconcile_guardian_metadata`.
+    new_metadata.iroh_next_endpoint = None;
+
     db.autocommit(
         |dbtx, _| {
-            let mut new_metadata = new_metadata.clone();
+            let new_metadata = new_metadata.clone();
             Box::pin(async move {
-                new_metadata.iroh_next_endpoint = dbtx
-                    .get_value(&GuardianMetadataKey(identity))
-                    .await
-                    .and_then(|metadata| metadata.guardian_metadata().iroh_next_endpoint.clone());
-
                 let ctx = secp256k1::Secp256k1::new();
                 let signed_metadata = new_metadata.sign(&ctx, &broadcast_secret_key.keypair(&ctx));
 
